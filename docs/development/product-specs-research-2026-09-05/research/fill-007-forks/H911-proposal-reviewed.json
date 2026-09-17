@@ -1,0 +1,291 @@
+{
+  "schema_version": 2,
+  "product_id": "4251ecbe-f823-4c14-a3d6-dd0d4a22d484",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "9d7234df77ae9e0ecc7d73ec6f2c8bc13c511414dd3e144fe4deb523db02d007",
+    "fingerprints": {
+      "facts_sha256": "ef5688cf1ac5334573ea9b41b7416981a00e9383dd4ad373a60ec31caae6d3d6",
+      "product_sha256": "0891aa09c1cd298526176411c98d92745b55c62f73c3fb1d9ac19d4186cc60bf",
+      "template_sha256": "6bfd57d1fc26001edf965936beb8ad77bea1b8839ebcfd0164f6bf35a223832b",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 3,
+    "updated_at": "2026-09-15T00:05:52.550303+00:00",
+    "template_id": "0b4a3679-9485-5d3a-a14c-564c74c75492",
+    "contract_version": 43
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "AURON35 Boost EQ",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice Auron 35 EQ LO-RC 160mm 15X110mm y la ficha oficial SR Suntour documenta AURON35 Boost EQ (ø15-110, 130/140/150/160, LORC-PCS)."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.srsuntour.com/products/fork/AURON35-Boost-EQ-6563.html",
+      "unit": null,
+      "method": "URL de la ficha oficial consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente principal; los manuales generales van como evidencia propia",
+      "reason": "Fuente exigida por el contrato para las declaraciones."
+    },
+    {
+      "key": "fork_kind",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Suspensión (aire)",
+      "unit": null,
+      "method": "Ficha oficial: «Left Side: Air spring»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo AURON35 Boost EQ",
+      "reason": "Línea literal de la ficha."
+    },
+    {
+      "key": "steerer_fit",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Tapered 1 1/8\" – 1.5\"",
+      "unit": null,
+      "method": "Ficha oficial: «Steerer tube: 1.5\"to1-1/8\" tapered (CTS) Alloy»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo AURON35 Boost EQ",
+      "reason": "Línea literal de la ficha."
+    },
+    {
+      "key": "axle_type",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Eje pasante 15 mm",
+      "unit": null,
+      "method": "Ficha oficial: «Axle (Option): ø15-110 15QLC2Ti-110»; nombre guardado 15X110mm",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Modelo AURON35 Boost EQ",
+      "reason": "Única opción de eje de la ficha."
+    },
+    {
+      "key": "hub_old_mm",
+      "current": {
+        "value": "110",
+        "source": "name_reading",
+        "fact_id": "eb81d955-e0d3-4513-9cdc-301f743f2e56",
+        "fact_sha256": "da80a90af94843689927985cff401b9082d77da55368a17add267ebf4fb8d055",
+        "confirmed": false
+      },
+      "proposed": "110",
+      "unit": "mm",
+      "method": "Ficha oficial: «ø15-110»; nombre guardado 15X110mm",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Modelo AURON35 Boost EQ (Boost)",
+      "reason": "Línea literal de la ficha."
+    },
+    {
+      "key": "brake_mount",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Post Mount",
+      "unit": null,
+      "method": "Ficha oficial: «Brake Mount (Max Rotor DIA.): Postmount 180mm Direct»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo AURON35 Boost EQ",
+      "reason": "Línea literal de la ficha."
+    },
+    {
+      "key": "max_rotor_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "203",
+      "unit": "mm",
+      "method": "Manual general 2021, tabla «Maximum brake rotor size»: AURON35 29\"/27.5\" BT 35mm — 180 mm directo, máximo 203 mm",
+      "origin": "research",
+      "evidence": [
+        "manual-2021"
+      ],
+      "scope": "Modelo AURON35 Boost",
+      "reason": "Fila literal del manual."
+    },
+    {
+      "key": "stanchion_diameter_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "35",
+      "unit": "mm",
+      "method": "Ficha oficial: «Stanchion DIA. (Material): 35mm»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo AURON35 Boost EQ",
+      "reason": "Línea literal de la ficha."
+    },
+    {
+      "key": "travel_mm",
+      "current": {
+        "value": "160",
+        "source": "name_reading",
+        "fact_id": "c73f5bf8-1bab-408c-ae5e-6127ebd0dd85",
+        "fact_sha256": "e4a7e836f38715b50a24598ebc9e9d2b84acef46860d6e57ddacb09565ca4f3f",
+        "confirmed": false
+      },
+      "proposed": "160",
+      "unit": "mm",
+      "method": "Nombre guardado «160mm» sobre la ficha «Travel: 130/140/150/160»",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Presentación en stock (160 mm)",
+      "reason": "La ficha lista cuatro recorridos y el nombre fija 160."
+    },
+    {
+      "key": "lockout",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Nombre guardado «LO-RC» sobre la ficha «Right Side: RC2-PCS, RLRC-PCS, LORC-PCS»",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Presentación en stock (LORC-PCS: lockout)",
+      "reason": "La ficha publica la opción con bloqueo y el nombre la fija."
+    },
+    {
+      "key": "axle_to_crown_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "565.5",
+      "unit": "mm",
+      "method": "Ficha oficial: «Axle to Crown: 565.5mm»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo AURON35 Boost EQ (la ficha no dice a qué recorrido corresponde)",
+      "reason": "Línea literal de la ficha."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "SR Suntour (srsuntour.com)",
+      "locator": "https://www.srsuntour.com/products/fork/AURON35-Boost-EQ-6563.html",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial AURON35 Boost EQ",
+      "finding": "Travel 130/140/150/160; RC2-PCS, RLRC-PCS, LORC-PCS; Air spring; Stanchion 35mm; Magnesium; Postmount 180mm Direct; Steerer 1.5\"to1-1/8\" tapered; Axle ø15-110; Axle to Crown 565.5mm",
+      "artifact_path": "research/fill-007-forks/evidence/suntour-auron35-boost-eq-20260916.md",
+      "sha256": "a540c02da87aa863f38a5a99e7e330e5c5d66a6696b0d183a3fc448f9b022872"
+    },
+    {
+      "id": "manual-2021",
+      "kind": "oem_catalogue",
+      "source": "SR Suntour (srsuntour.com)",
+      "locator": "https://www.srsuntour.com/fileadmin/user_upload/Downloads/Consumer/Bike/Owners%20manuals/Archive/2021/General_Fork_Manual/EN_SR_SUNTOUR_fork_user_manual.pdf",
+      "consulted_on": "2026-09-16",
+      "scope": "Manual general 2021, tablas de neumático y rotor",
+      "finding": "AURON35 29\" BT 35mm 29\"x2.4\" (ancho y diámetro máximos en blanco en el PDF); AURON35 29\"/27.5\" BT 35mm 180mm 203mm",
+      "artifact_path": "research/fill-007-forks/evidence/suntour-general-fork-manual-2021-20260916.md",
+      "sha256": "af7ce5a03f7a720c6dbcd20d9bf2e19d8955d62a5fb5b75de22ded110261e539"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 4251ecbe-f823-4c14-a3d6-dd0d4a22d484",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante declarada en el nombre (rueda, recorrido, eje); no confirma presentación física",
+      "finding": "Horquilla Suntour 29 Auron 35 EQ LO-RC 160mm 15X110mm Blanco 2022",
+      "artifact_path": "research/fill-007-forks/evidence/auron35-saved-name-20260916.json",
+      "sha256": "4818bf407329694463c38ad79e16213175e5c6373d0029039e5a584bdbddbce4"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "a2f98a40cca0e2dfdab67a80eafb3115fc52253f04b0ecadcbc0be2e779efec8",
+    "notes": "AURON35 Boost EQ. Identidad: el 15x110 del nombre sólo calza con la variante Boost («ø15-110» única opción de eje de la ficha). Aire, cónico 1 1/8\"–1.5\", eje pasante 15, buje 110, Post Mount, barra 35 y axle-to-crown 565,5 son literales de la ficha; rotor 203 de la fila «AURON35 29\"/27.5\" BT 35mm 180mm 203mm»; travel 160 y lockout = true («LO-RC» sobre LORC-PCS) siguen el patrón aceptado. No declarar la fila de neumático es lo honesto: la fila 29\" del manual 2021 viene en blanco y la ficha no la publica. Evidencias sha ok; simulation.issues = []; hash corresponde."
+  }
+}

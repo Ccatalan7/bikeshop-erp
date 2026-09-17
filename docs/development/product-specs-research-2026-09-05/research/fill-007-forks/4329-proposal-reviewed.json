@@ -1,0 +1,268 @@
+{
+  "schema_version": 2,
+  "product_id": "8cf2e63c-501b-4319-a4f7-e17fdf39fd23",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "ec81294e7e2a8838e4fde639e3dd3f9bed73d355e6962d07c7344c9fb9dd945b",
+    "fingerprints": {
+      "facts_sha256": "bfc35160a8e38597b9e4478c9784010fda0c407c6d14e4b2096acd1539660287",
+      "product_sha256": "e03d6bff6b93f78ccadfcf54198aae1777ab214ffefa617cb130a7446b9bfc1b",
+      "template_sha256": "6bfd57d1fc26001edf965936beb8ad77bea1b8839ebcfd0164f6bf35a223832b",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 3,
+    "updated_at": "2026-09-15T00:07:23.6132+00:00",
+    "template_id": "0b4a3679-9485-5d3a-a14c-564c74c75492",
+    "contract_version": 43
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "XCM30",
+      "evidence": [
+        "product-name",
+        "oem",
+        "manual-2021"
+      ],
+      "reason": "El nombre guardado dice XCM30 29\"; la ficha oficial «XCM 29\"» declara barra de 30 mm y el manual general nombra la serie «XCM30 29\"/27.5\"/26\" 30mm»."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.srsuntour.com/products/fork/XCM-29-5616.html",
+      "unit": null,
+      "method": "URL de la ficha oficial consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente principal; los manuales generales van como evidencia propia",
+      "reason": "Fuente exigida por el contrato para las declaraciones."
+    },
+    {
+      "key": "fork_kind",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Suspensión (muelle)",
+      "unit": null,
+      "method": "Ficha oficial: «Left Side: Coil with Preload adjuster»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo XCM 29\"",
+      "reason": "La ficha declara muelle con precarga."
+    },
+    {
+      "key": "steerer_fit",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "1 1/8\" (28.6 mm)",
+      "unit": null,
+      "method": "Ficha oficial: «Steerer tube: 1.1/8\", STKM»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo XCM 29\"",
+      "reason": "Línea literal de la ficha."
+    },
+    {
+      "key": "axle_type",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Cierre rápido 9 mm (delantero)",
+      "unit": null,
+      "method": "Ficha oficial: «Axle (Option): 9mm» (única opción publicada)",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo XCM 29\"",
+      "reason": "Única opción de eje de la ficha."
+    },
+    {
+      "key": "brake_mount",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Post Mount",
+      "unit": null,
+      "method": "Ficha oficial: «Brake Mount (Max Rotor DIA.): Postmount 160mm»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo XCM 29\"",
+      "reason": "Línea literal de la ficha."
+    },
+    {
+      "key": "max_rotor_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "180",
+      "unit": "mm",
+      "method": "Manual general 2021, tabla «Maximum brake rotor size»: XCM30 29\"/27.5\"/26\" 30mm — 160 mm directo, máximo 180 mm",
+      "origin": "research",
+      "evidence": [
+        "manual-2021"
+      ],
+      "scope": "Serie XCM30",
+      "reason": "Fila literal del manual."
+    },
+    {
+      "key": "stanchion_diameter_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "30",
+      "unit": "mm",
+      "method": "Ficha oficial: «Upper: 30mm / STKM»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo XCM 29\"",
+      "reason": "Línea literal de la ficha."
+    },
+    {
+      "key": "lockout",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Nombre guardado «W/L» (with lockout) sobre las opciones de la ficha «Right Side: RL, LO, HLO, N/A»",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Presentación en stock: la ficha lista variantes con y sin bloqueo y el nombre vende la de bloqueo",
+      "reason": "La ficha publica la opción y el nombre guardado la fija."
+    },
+    {
+      "key": "fork_tire_clearance_configurations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "bsd-622",
+            "values": {
+              "bead_seat_diameter_mm": "622",
+              "max_tire_width_mm": "63",
+              "max_inflated_diameter_mm": "758",
+              "measurement_method": "Tabla «Suggested tire size» del manual general SR Suntour: XCM 29\" · 30mm · 29\" x 2.4\" · 63 mm · 758 mm (manual 2021)",
+              "source_url": "https://www.srsuntour.com/fileadmin/user_upload/Downloads/Consumer/Bike/Owners%20manuals/Archive/2021/General_Fork_Manual/EN_SR_SUNTOUR_fork_user_manual.pdf"
+            },
+            "sources": [
+              "https://www.srsuntour.com/fileadmin/user_upload/Downloads/Consumer/Bike/Owners%20manuals/Archive/2021/General_Fork_Manual/EN_SR_SUNTOUR_fork_user_manual.pdf"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Manual general SR Suntour, tabla «Suggested tire size»: XCM 29\" · 30mm · 29\" x 2.4\" · 63 mm · 758 mm (manual 2021)",
+      "origin": "research",
+      "evidence": [
+        "manual-2021"
+      ],
+      "scope": "Fila del modelo y rueda declarados por el nombre; ancho y diámetro exterior máximos tal como los publica el manual",
+      "reason": "Línea literal de la tabla del manual."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "SR Suntour (srsuntour.com)",
+      "locator": "https://www.srsuntour.com/products/fork/XCM-29-5616.html",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial XCM 29\"",
+      "finding": "Travel 100/80; RL, LO, HLO, N/A; Coil with Preload adjuster; Upper 30mm/STKM; Postmount 160mm; Steerer 1.1/8\" STKM; Axle 9mm",
+      "artifact_path": "research/fill-007-forks/evidence/suntour-xcm-29-20260916.md",
+      "sha256": "b3dee13e62fac8faec6305a37ac7d66692d8ea13fc8bc216817c1173784346d4"
+    },
+    {
+      "id": "manual-2021",
+      "kind": "oem_catalogue",
+      "source": "SR Suntour (srsuntour.com)",
+      "locator": "https://www.srsuntour.com/fileadmin/user_upload/Downloads/Consumer/Bike/Owners%20manuals/Archive/2021/General_Fork_Manual/EN_SR_SUNTOUR_fork_user_manual.pdf",
+      "consulted_on": "2026-09-16",
+      "scope": "Manual general 2021, tablas de neumático y rotor",
+      "finding": "XCM 29\" 30mm 29\"x2.4\" 63mm 758mm; XCM30 29\"/27.5\"/26\" 30mm 160mm 180mm",
+      "artifact_path": "research/fill-007-forks/evidence/suntour-general-fork-manual-2021-20260916.md",
+      "sha256": "af7ce5a03f7a720c6dbcd20d9bf2e19d8955d62a5fb5b75de22ded110261e539"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 8cf2e63c-501b-4319-a4f7-e17fdf39fd23",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante declarada en el nombre (rueda, recorrido, eje); no confirma presentación física",
+      "finding": "HORQUILLA 29\" SR SUNTOUR XCM30 ALUM. BLACK W/L",
+      "artifact_path": "research/fill-007-forks/evidence/xcm30-saved-name-20260916.json",
+      "sha256": "1c9199e4fd832da2f8ac0ab4371bddf950f867d6eba1a484dca36094688cabfa"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "c23c90a8d5f8253702ede90d5fd33294118e8f14dddeee3e0b1029f4e2fb625e",
+    "notes": "XCM30. Identidad sostenida por tres fuentes: el nombre dice «XCM30» literal, la ficha «XCM 29\"» declara barra 30 mm y el manual 2021 nombra «XCM30 29\"/27.5\"/26\" 30mm». Muelle, 1 1/8\", 9 mm, Post Mount y barra 30 literales de la ficha; rotor 180 literal del manual; fila 622 · 63 · 758 es la línea «XCM 29\" 30mm 29\"x2.4\" 63mm 758mm» del manual 2021 (bien no usar la del MY25, que es XCM32). lockout = true: «W/L» es una abreviatura minorista leída como «with lockout»; la acepto porque discrimina entre las opciones publicadas (RL/LO/HLO frente a N/A), no tiene otra lectura razonable y method lo declara. Evidencias sha ok; simulation.issues = []; hash corresponde."
+  }
+}

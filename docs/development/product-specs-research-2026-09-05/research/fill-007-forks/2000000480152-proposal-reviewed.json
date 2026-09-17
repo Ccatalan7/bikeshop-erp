@@ -1,0 +1,290 @@
+{
+  "schema_version": 2,
+  "product_id": "49f063f5-76c3-4b0e-8bb3-ee986a7bee66",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "24ef7a7774fc1022243e3d6d634eae3516552b05e748db0292d77992ef24d122",
+    "fingerprints": {
+      "facts_sha256": "12dec331578ad462bec1c0a9c3ece9a7ca013c3cace08feac4e91efb9050cfe3",
+      "product_sha256": "18f4ae01edcb4dac80055b91c064c5914ca75b580776f80f82530816c67f677b",
+      "template_sha256": "6bfd57d1fc26001edf965936beb8ad77bea1b8839ebcfd0164f6bf35a223832b",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 3,
+    "updated_at": "2026-09-15T00:05:53.629749+00:00",
+    "template_id": "0b4a3679-9485-5d3a-a14c-564c74c75492",
+    "contract_version": 43
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "XCR32",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice XCR 32 RLR Coil 26\" 120mm y la ficha oficial SR Suntour documenta XCR32 (barra 32 mm, recorrido 100/120, RLR)."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.srsuntour.com/products/fork/XCR32-5861.html",
+      "unit": null,
+      "method": "URL de la ficha oficial consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente principal; los manuales generales van como evidencia propia",
+      "reason": "Fuente exigida por el contrato para las declaraciones."
+    },
+    {
+      "key": "fork_kind",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Suspensión (muelle)",
+      "unit": null,
+      "method": "Nombre guardado «Coil» sobre la ficha «Left Side: Air spring / Coil with Preload adjuster»",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Presentación en stock (muelle)",
+      "reason": "La ficha lista aire o muelle y el nombre fija muelle."
+    },
+    {
+      "key": "axle_type",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Cierre rápido 9 mm (delantero)",
+      "unit": null,
+      "method": "Nombre guardado «9x100mm» sobre la ficha «Axle (Option): 15QLC32 / 9mm»",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Presentación en stock (9 mm)",
+      "reason": "La ficha lista las dos opciones y el nombre fija 9 mm."
+    },
+    {
+      "key": "hub_old_mm",
+      "current": {
+        "value": "100",
+        "source": "name_reading",
+        "fact_id": "8489818e-95f0-4129-9a1f-35dcfb3369c1",
+        "fact_sha256": "87bc570b92b76116c1ff2eb1b0f98ba946d14869a4794ef8c58eb935cd534623",
+        "confirmed": false
+      },
+      "proposed": "100",
+      "unit": "mm",
+      "method": "Nombre guardado «9x100mm»; la ficha publica el eje de 9 mm sin el ancho",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Presentación en stock; el ancho viene del nombre",
+      "reason": "El nombre declara 100 mm; la ficha sólo el eje."
+    },
+    {
+      "key": "brake_mount",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Post Mount",
+      "unit": null,
+      "method": "Ficha oficial: «Brake Mount (Max Rotor DIA.): Postmount 160mm»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo XCR32",
+      "reason": "Línea literal de la ficha."
+    },
+    {
+      "key": "max_rotor_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "180",
+      "unit": "mm",
+      "method": "Manual general 2021, tabla «Maximum brake rotor size»: XCR32 29\"/27.5\"/26\" 32mm — 160 mm directo, máximo 180 mm",
+      "origin": "research",
+      "evidence": [
+        "manual-2021"
+      ],
+      "scope": "Modelo XCR32 (no Boost)",
+      "reason": "Fila literal del manual."
+    },
+    {
+      "key": "stanchion_diameter_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "32",
+      "unit": "mm",
+      "method": "Ficha oficial: «Upper: 32mm / STKM»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo XCR32",
+      "reason": "Línea literal de la ficha."
+    },
+    {
+      "key": "travel_mm",
+      "current": {
+        "value": "120",
+        "source": "name_reading",
+        "fact_id": "23038a03-98cc-41fc-9ee9-a67f0a9be03a",
+        "fact_sha256": "5cbaf123077aa9e3f6158293cdad912c47a9e31f34c93e2d63e04025d8f16f31",
+        "confirmed": false
+      },
+      "proposed": "120",
+      "unit": "mm",
+      "method": "Nombre guardado «120mm» sobre la ficha «Travel: 100/120»",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Presentación en stock (120 mm)",
+      "reason": "La ficha lista 100 o 120 y el nombre fija 120."
+    },
+    {
+      "key": "lockout",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Nombre guardado «RLR» (remote lockout + rebound) sobre la ficha «Right Side: RL, LO, RLR, LOR»",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Presentación en stock (RLR)",
+      "reason": "La ficha publica la opción y el nombre la fija."
+    },
+    {
+      "key": "fork_tire_clearance_configurations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "bsd-559",
+            "values": {
+              "bead_seat_diameter_mm": "559",
+              "max_tire_width_mm": "58",
+              "max_inflated_diameter_mm": "684",
+              "measurement_method": "Tabla «Suggested tire size» del manual general SR Suntour: XCR32 26\" · 32mm · 26\" x 2.25\" · 58 mm · 684 mm (manual 2021)",
+              "source_url": "https://www.srsuntour.com/fileadmin/user_upload/Downloads/Consumer/Bike/Owners%20manuals/Archive/2021/General_Fork_Manual/EN_SR_SUNTOUR_fork_user_manual.pdf"
+            },
+            "sources": [
+              "https://www.srsuntour.com/fileadmin/user_upload/Downloads/Consumer/Bike/Owners%20manuals/Archive/2021/General_Fork_Manual/EN_SR_SUNTOUR_fork_user_manual.pdf"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Manual general SR Suntour, tabla «Suggested tire size»: XCR32 26\" · 32mm · 26\" x 2.25\" · 58 mm · 684 mm (manual 2021)",
+      "origin": "research",
+      "evidence": [
+        "manual-2021"
+      ],
+      "scope": "Fila del modelo y rueda declarados por el nombre; ancho y diámetro exterior máximos tal como los publica el manual",
+      "reason": "Línea literal de la tabla del manual."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "SR Suntour (srsuntour.com)",
+      "locator": "https://www.srsuntour.com/products/fork/XCR32-5861.html",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial XCR32",
+      "finding": "Travel 100/120; RL, LO, RLR, LOR; Air spring / Coil with Preload adjuster; Upper 32mm/STKM; Magnesium; Postmount 160mm; Steerer STKM 1.1/8\" or 1.5\" tapered; Axle 15QLC32 / 9mm",
+      "artifact_path": "research/fill-007-forks/evidence/suntour-xcr32-20260916.md",
+      "sha256": "2282b0219a28a3878f913e93bdafdddb616d7490e4e8f79d19165afcb94e66b5"
+    },
+    {
+      "id": "manual-2021",
+      "kind": "oem_catalogue",
+      "source": "SR Suntour (srsuntour.com)",
+      "locator": "https://www.srsuntour.com/fileadmin/user_upload/Downloads/Consumer/Bike/Owners%20manuals/Archive/2021/General_Fork_Manual/EN_SR_SUNTOUR_fork_user_manual.pdf",
+      "consulted_on": "2026-09-16",
+      "scope": "Manual general 2021, tablas de neumático y rotor",
+      "finding": "XCR32 26\" 32mm 26\"x2.25\" 58mm 684mm; XCR32 29\"/27.5\"/26\" 32mm 160mm 180mm",
+      "artifact_path": "research/fill-007-forks/evidence/suntour-general-fork-manual-2021-20260916.md",
+      "sha256": "af7ce5a03f7a720c6dbcd20d9bf2e19d8955d62a5fb5b75de22ded110261e539"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 49f063f5-76c3-4b0e-8bb3-ee986a7bee66",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante declarada en el nombre (rueda, recorrido, eje); no confirma presentación física",
+      "finding": "Horquilla Suntour 26\" XCR 32 RLR Coil 120mm 9x100mm Negro 2022",
+      "artifact_path": "research/fill-007-forks/evidence/xcr32-saved-name-20260916.json",
+      "sha256": "dc2f897a27991353abb816de6d5e6d52591d1f93b5fd121026d27ee7ecf4b8e0"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "3b4295c185e5459159655ce8c22fa38cd3f3334b8a82effa6ffe20c6aa9f3200",
+    "notes": "XCR32. Identidad literal. Es el mejor caso del patrón «el nombre fija una opción de la ficha»: «Coil», «120mm», «9x100mm» y «RLR» son tokens que aparecen literalmente en las dos fuentes. hub_old_mm 100 viene sólo del nombre y así lo declaran method y scope, con el nombre archivado como name_quote: mismo criterio que BSA/122,5 en BB-UN300. Post Mount y barra 32 literales; rotor 180 de la fila no Boost; fila 559 · 58 · 684 es «XCR32 26\" 32mm 26\"x2.25\" 58mm 684mm». No declarar el tubo de dirección es correcto. Evidencias sha ok; simulation.issues = []; hash corresponde."
+  }
+}

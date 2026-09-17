@@ -1813,5 +1813,19 @@
   "tooling": [
    "simulate_product_spec_research.py brand_requires_canonical_command"
   ]
+ },
+ "research_fill_007_2026_09_16": {
+  "batch": "fill-007-forks",
+  "products": 4,
+  "facts": 34,
+  "applications": [
+   "4199d107-8566-501d-a1f1-0f902e7c9681",
+   "a5859ddd-cd16-55a7-bf21-97c6344d92c3",
+   "39d028b2-c338-55fd-afca-1def72093310",
+   "120b6479-6bc8-5910-bb94-c975eddf3b70"
+  ],
+  "reviewer": "claude-peer",
+  "rounds": 1,
+  "record": "fill-007-record-2026-09-16.md"
  }
 }

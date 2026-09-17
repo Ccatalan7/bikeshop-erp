@@ -1,0 +1,259 @@
+{
+  "schema_version": 2,
+  "product_id": "7227e000-a539-48bf-9274-a922918b8b6c",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "67c7502aa6ecbf69e489feef69cc60cfad72066957d76cdf129c5fd866cc449e",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "9f5dead36de04d59eb6ccdeafe684ff0042cea058675134d3b8e8204578300d1",
+      "template_sha256": "6bfd57d1fc26001edf965936beb8ad77bea1b8839ebcfd0164f6bf35a223832b",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 1,
+    "updated_at": "2026-09-15T00:07:20.000578+00:00",
+    "template_id": "0b4a3679-9485-5d3a-a14c-564c74c75492",
+    "contract_version": 43
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "XCT30",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice Xct30 y la ficha oficial SR Suntour documenta XCT30."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.srsuntour.com/products/fork/XCT30-6011.html",
+      "unit": null,
+      "method": "URL de la ficha oficial consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente principal; los manuales generales van como evidencia propia",
+      "reason": "Fuente exigida por el contrato para las declaraciones."
+    },
+    {
+      "key": "fork_kind",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Suspensión (muelle)",
+      "unit": null,
+      "method": "Ficha oficial: «Left Side: Coil with Preload adjuster»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo XCT30",
+      "reason": "La ficha declara muelle con precarga."
+    },
+    {
+      "key": "steerer_fit",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "1 1/8\" (28.6 mm)",
+      "unit": null,
+      "method": "Ficha oficial: «Steerer tube: 1.1/8\", STKM»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo XCT30",
+      "reason": "Línea literal de la ficha."
+    },
+    {
+      "key": "axle_type",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Cierre rápido 9 mm (delantero)",
+      "unit": null,
+      "method": "Ficha oficial: «Axle (Option): 9mm» (única opción publicada)",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo XCT30",
+      "reason": "Única opción de eje de la ficha."
+    },
+    {
+      "key": "brake_mount",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Post Mount",
+      "unit": null,
+      "method": "Ficha oficial: «Brake Mount (Max Rotor DIA.): Postmount 160mm»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo XCT30",
+      "reason": "Línea literal de la ficha."
+    },
+    {
+      "key": "max_rotor_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "180",
+      "unit": "mm",
+      "method": "Manual general (2021 y MY25), tabla «Maximum brake rotor size»: XCT30 29\"/27.5\" — 160 mm con caliper directo, máximo 180 mm",
+      "origin": "research",
+      "evidence": [
+        "manual-2021",
+        "manual-my25"
+      ],
+      "scope": "Modelo XCT30 29\"/27.5\"",
+      "reason": "Filas literales de las dos ediciones del manual."
+    },
+    {
+      "key": "stanchion_diameter_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "30",
+      "unit": "mm",
+      "method": "Ficha oficial: «Upper: 30mm / STKM»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo XCT30",
+      "reason": "Línea literal de la ficha."
+    },
+    {
+      "key": "fork_tire_clearance_configurations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "bsd-622",
+            "values": {
+              "bead_seat_diameter_mm": "622",
+              "max_tire_width_mm": "58",
+              "max_inflated_diameter_mm": "750",
+              "measurement_method": "Tabla «Suggested tire size» del manual general SR Suntour: XCT30 29\" · 29\" x 2.25\" (57-622) · 58 mm · 750 mm",
+              "source_url": "https://www.srsuntour.com/fileadmin/user_upload/Downloads/Consumer/Bike/Owners%20manuals/MY_25_Suspension_Fork_Manuals/MY25_General_Fork_Manual_w_5TA__English_20240628.pdf"
+            },
+            "sources": [
+              "https://www.srsuntour.com/fileadmin/user_upload/Downloads/Consumer/Bike/Owners%20manuals/MY_25_Suspension_Fork_Manuals/MY25_General_Fork_Manual_w_5TA__English_20240628.pdf"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Manual general SR Suntour, tabla «Suggested tire size»: XCT30 29\" · 29\" x 2.25\" (57-622) · 58 mm · 750 mm",
+      "origin": "research",
+      "evidence": [
+        "manual-my25"
+      ],
+      "scope": "Fila del modelo y rueda declarados por el nombre; ancho y diámetro exterior máximos tal como los publica el manual",
+      "reason": "Línea literal de la tabla del manual."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "SR Suntour (srsuntour.com)",
+      "locator": "https://www.srsuntour.com/products/fork/XCT30-6011.html",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial XCT30",
+      "finding": "Travel 100/80; Coil with Preload adjuster; Upper 30mm/STKM; Postmount 160mm; Steerer 1.1/8\" STKM; Axle 9mm",
+      "artifact_path": "research/fill-007-forks/evidence/suntour-xct30-20260916.md",
+      "sha256": "00f3bc38695e5c91dce9ce713442c9bc2281e858b1c2c8631e77c001c68eedf1"
+    },
+    {
+      "id": "manual-2021",
+      "kind": "oem_catalogue",
+      "source": "SR Suntour (srsuntour.com)",
+      "locator": "https://www.srsuntour.com/fileadmin/user_upload/Downloads/Consumer/Bike/Owners%20manuals/Archive/2021/General_Fork_Manual/EN_SR_SUNTOUR_fork_user_manual.pdf",
+      "consulted_on": "2026-09-16",
+      "scope": "Manual general 2021, tablas de neumático y rotor",
+      "finding": "XCT30 29\" 30mm 29\"x2.25\" 58mm 750mm; XCT30 29\"/27.5\" 30mm 160mm 180mm",
+      "artifact_path": "research/fill-007-forks/evidence/suntour-general-fork-manual-2021-20260916.md",
+      "sha256": "af7ce5a03f7a720c6dbcd20d9bf2e19d8955d62a5fb5b75de22ded110261e539"
+    },
+    {
+      "id": "manual-my25",
+      "kind": "oem_catalogue",
+      "source": "SR Suntour (srsuntour.com)",
+      "locator": "https://www.srsuntour.com/fileadmin/user_upload/Downloads/Consumer/Bike/Owners%20manuals/MY_25_Suspension_Fork_Manuals/MY25_General_Fork_Manual_w_5TA__English_20240628.pdf",
+      "consulted_on": "2026-09-16",
+      "scope": "Manual general MY25, tablas de neumático y rotor",
+      "finding": "XCT30 29\" 29\"x2.25\" 57-622 58mm 750mm; XCT30 29\"/27.5\" 160mm 180mm",
+      "artifact_path": "research/fill-007-forks/evidence/suntour-general-fork-manual-my25-20260916.md",
+      "sha256": "8424dd4368cc3cc3132214cf9e16d456df396d73ee216d995f70f3548d88dd01"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 7227e000-a539-48bf-9274-a922918b8b6c",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante declarada en el nombre (rueda, recorrido, eje); no confirma presentación física",
+      "finding": "Horquilla 29 Suntour Xct30 Negro Metalico Disco",
+      "artifact_path": "research/fill-007-forks/evidence/xct30-saved-name-20260916.json",
+      "sha256": "d90f74df168e9ad126622849ede1186a61e8556cee88e85a9e7f2614e06a7cb5"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "08a38575d27f3ad066d6d10858bd2844029206ce54b80d7d58cb6a5ebf9d50c3",
+    "notes": "XCT30. Identidad literal («Xct30» en el nombre, ficha XCT30). Muelle, 1 1/8\", cierre rápido 9 mm (única opción de eje), Post Mount, barra 30 son literales de la ficha; rotor máximo 180 sale de la fila «XCT30 29\"/27.5\" 30mm 160mm 180mm» en las dos ediciones del manual; la fila 622 · 58 mm · 750 mm es la línea «XCT30 29\" 29\"x2.25\" 57-622 58mm 750mm» del MY25, con la rueda 29 fijada por el nombre. No declarar recorrido, bloqueo, rosca ni ancho de buje es correcto. Cuatro evidencias con sha correcto; simulation.issues = [] y sim.proposal_sha256 corresponde a este v1."
+  }
+}
