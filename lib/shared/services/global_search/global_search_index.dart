@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../modules/messaging/utils/conversation_channel_presentation.dart';
+import '../right_toolbar_service.dart';
 import '../../utils/bike_finder_search.dart';
 import '../authority_scoped_cache.dart';
 import '../tenant_service.dart';
@@ -175,9 +177,22 @@ class GlobalSearchIndex extends ChangeNotifier {
         'messaging_attachments',
         'id, conversation_id, storage_path, original_filename, extension, '
             'declared_mime_type, attached_at, '
-            'conversations(title, counterparty_type, channel)',
+            'conversations(title, counterparty_type, channel, '
+            'whatsapp_conversation_bindings(contact_name, '
+            'supplier_contacts(name)))',
         tenantId,
         onlyAttached: true,
+      ),
+      // Las conversaciones abiertas. Se embeben el vínculo de WhatsApp y su
+      // contacto porque **el hilo no se llama sólo como se titula**: el de
+      // TeknoBike se pide como «el de Diego», y ese nombre vive en el vínculo,
+      // no en la conversación.
+      _selectOrEmpty(
+        'conversations',
+        'id, title, type, channel, counterparty_type, status, last_message_at, '
+            'whatsapp_conversation_bindings(contact_name, '
+            'external_phone_number, supplier_contacts(name, role))',
+        tenantId,
       ),
       _selectOrEmpty(
         'purchase_invoices',
@@ -198,8 +213,9 @@ class GlobalSearchIndex extends ChangeNotifier {
     final bikes = results[4];
     final suppliers = results[5];
     final employees = results[6];
-    final purchases = results[8];
     final attachments = results[7];
+    final conversations = results[8];
+    final purchases = results[9];
 
     markIfTruncated(GlobalSearchKind.customer, customers);
     markIfTruncated(GlobalSearchKind.product, products);
@@ -210,6 +226,7 @@ class GlobalSearchIndex extends ChangeNotifier {
     markIfTruncated(GlobalSearchKind.employee, employees);
     markIfTruncated(GlobalSearchKind.purchase, purchases);
     markIfTruncated(GlobalSearchKind.attachment, attachments);
+    markIfTruncated(GlobalSearchKind.conversation, conversations);
 
     // El dueño de la bicicleta y el de la pega se resuelven acá, en memoria:
     // una bicicleta sin su dueño en el texto no aparece cuando alguien la
@@ -250,6 +267,10 @@ class GlobalSearchIndex extends ChangeNotifier {
     }
     for (final row in attachments) {
       final entry = globalSearchAttachmentEntry(row);
+      if (entry != null) entries.add(entry);
+    }
+    for (final row in conversations) {
+      final entry = globalSearchConversationEntry(row);
       if (entry != null) entries.add(entry);
     }
 
@@ -595,19 +616,24 @@ GlobalSearchEntry? globalSearchAttachmentEntry(Map<String, dynamic> row) {
   final name = _text(row['original_filename']);
   if (path == null || name == null) return null;
 
-  final conversation = row['conversations'];
-  final counterparty =
-      conversation is Map ? _text(conversation['title']) : null;
-  final channel = conversation is Map ? _text(conversation['channel']) : null;
+  final conversation = _firstMap(row['conversations']);
+  final counterparty = _text(conversation?['title']);
+  final channel = _text(conversation?['channel']);
+  final person = _conversationPersonName(conversation);
   final extension =
       (_text(row['extension']) ?? name.split('.').last).toLowerCase();
   final attachedAt = _timestamp(row['attached_at']);
 
-  // «De TeknoBike, por WhatsApp» es exactamente la pista que pidió el dueño:
-  // saber de dónde salió el archivo sin abrir la conversación.
+  // **La pista nombra la conversación entera, no sólo la empresa.** «TeknoBike»
+  // dice de qué proveedor vino; en el taller ese hilo se piensa como «el de
+  // Diego», y es a Diego a quien uno le pidió el catálogo. Se dice igual que lo
+  // dice el encabezado del chat —«TeknoBike · Diego Muñoz»— para que el archivo
+  // y su conversación se lean con las mismas palabras.
   final origin = <String>[
     if (counterparty != null) counterparty,
-    if (channel != null) _channelLabel(channel),
+    if (person != null && person != counterparty) person,
+    if (channel != null)
+      ConversationChannelPresentation.shortLabelForChannel(channel),
   ].join(' · ');
 
   return GlobalSearchEntry(
@@ -631,17 +657,119 @@ GlobalSearchEntry? globalSearchAttachmentEntry(Map<String, dynamic> row) {
     ),
     fields: <BikeFinderSearchField>[
       BikeFinderSearchField(name, weight: 135),
+      // De quién vino pesa como campo y **no** como nombre: el archivo no se
+      // llama Diego, viene de Diego. Alcanza para que «diego» traiga lo que
+      // mandó, sin que un catálogo compita con las personas que sí se llaman
+      // así.
       BikeFinderSearchField(counterparty, weight: 110),
+      BikeFinderSearchField(person, weight: 110),
       BikeFinderSearchField(extension, weight: 70),
     ],
   );
 }
 
-String _channelLabel(String channel) => switch (channel.toLowerCase()) {
-      'whatsapp' => 'WhatsApp',
-      'email' => 'Correo',
-      _ => channel,
-    };
+/// Convierte una conversación en un resultado que se abre en su hilo.
+///
+/// **Un hilo responde a más de un nombre.** Se titula con la empresa —el chat
+/// de TeknoBike se llama «TeknoBike»— pero en el taller se pide por la persona
+/// con la que uno habla: «el de Diego». Ese nombre ya está en el registro, en
+/// el vínculo de WhatsApp (`contact_name`, el perfil con que llegó) y en la
+/// ficha del contacto del proveedor (`supplier_contacts.name`, como lo escribió
+/// alguien acá). Los dos entran como nombre de la fila, no como sinónimo
+/// inventado: nadie escribió «diego significa TeknoBike», es que ese hilo se
+/// llama de las dos maneras.
+///
+/// Devuelve `null` cuando la fila no alcanza para abrir un hilo.
+@visibleForTesting
+GlobalSearchEntry? globalSearchConversationEntry(Map<String, dynamic> row) {
+  final id = _text(row['id']);
+  if (id == null) return null;
+
+  final binding = _firstMap(row['whatsapp_conversation_bindings']);
+  final supplierContact =
+      binding == null ? null : _firstMap(binding['supplier_contacts']);
+
+  // La misma regla que usa el adjunto para decir de dónde vino: una sola.
+  final contact = _conversationPersonName(row);
+  final phone = _text(binding?['external_phone_number']);
+  final channel = _text(row['channel']);
+  final channelLabel =
+      ConversationChannelPresentation.shortLabelForChannel(channel);
+  final lastMessageAt = _timestamp(row['last_message_at']);
+
+  // Un hilo sin título se llama como la persona; sin ninguno de los dos, por su
+  // canal — que es lo único cierto que queda.
+  final title = _text(row['title']) ?? contact ?? 'Conversación · $channelLabel';
+
+  final normalizedTitle = normalizeBikeFinderSearch(title);
+  final showsContact =
+      contact != null && normalizeBikeFinderSearch(contact) != normalizedTitle;
+
+  return GlobalSearchEntry(
+    kind: GlobalSearchKind.conversation,
+    id: 'conversation:$id',
+    title: title,
+    // El número **es** el identificador del hilo: no tiene otro. Así lo
+    // encuentra quien pega «+56 9 7701 4463» desde WhatsApp, porque el calce de
+    // identificador compara sin separadores y no palabra por palabra.
+    identifier: phone,
+    subtitle: <String>[
+      if (showsContact) contact,
+      channelLabel,
+      if (lastMessageAt != null) _shortDate(lastMessageAt),
+    ].join(' · '),
+    // La ruta queda como respaldo —y como lo que se copia o se comparte—, pero
+    // el resultado abre el panel del rail: ver abajo.
+    route: Uri(
+      path: '/chat',
+      queryParameters: <String, String>{'conversation': id},
+    ).toString(),
+    conversationId: id,
+    // Proveedores y clientes son dos bandejas distintas. Cuál es, lo dice la
+    // fila que ya se leyó: no hace falta preguntarle al módulo de mensajería
+    // —que puede no estar cargado— ni caer a la general y que se resuelva sola.
+    toolbarTool: _text(row['counterparty_type']) == 'supplier'
+        ? ToolbarTool.supplierMessages
+        : ToolbarTool.messages,
+    icon: ConversationChannelPresentation.iconForChannel(channel),
+    updatedAt: lastMessageAt,
+    alsoNamed: <String>{if (contact != null) contact},
+    fields: <BikeFinderSearchField>[
+      BikeFinderSearchField(title, weight: 135),
+      // La persona pesa como el título porque **es** el otro nombre del hilo.
+      BikeFinderSearchField(contact, weight: 132),
+      BikeFinderSearchField(phone, weight: 120),
+      BikeFinderSearchField(_compactIdentity(phone), weight: 120),
+      BikeFinderSearchField(_text(supplierContact?['role']), weight: 70),
+      // Se puede escribir, no se muestra: «proveedor», «cliente», «interno».
+      BikeFinderSearchField(_text(row['counterparty_type']), weight: 55),
+      BikeFinderSearchField(channelLabel, weight: 55),
+    ],
+  );
+}
+
+/// Con quién se habla en esa conversación, si se sabe.
+///
+/// El nombre de la ficha del contacto manda sobre el del perfil de WhatsApp:
+/// «Diego Muñoz» lo escribió alguien de la tienda, «Diego» es como se puso él.
+String? _conversationPersonName(Map<String, dynamic>? conversation) {
+  final binding = _firstMap(conversation?['whatsapp_conversation_bindings']);
+  if (binding == null) return null;
+  return _text(_firstMap(binding['supplier_contacts'])?['name']) ??
+      _text(binding['contact_name']);
+}
+
+/// PostgREST devuelve un embed uno-a-muchos como lista y uno-a-uno como mapa.
+/// Se aceptan las dos formas para no depender de cómo resolvió la relación.
+Map<String, dynamic>? _firstMap(dynamic value) {
+  if (value is Map) return Map<String, dynamic>.from(value);
+  if (value is List) {
+    for (final item in value) {
+      if (item is Map) return Map<String, dynamic>.from(item);
+    }
+  }
+  return null;
+}
 
 const List<String> _monthsEs = <String>[
   'ene',

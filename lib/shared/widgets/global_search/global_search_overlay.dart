@@ -292,7 +292,16 @@ class _GlobalSearchPanelState extends State<_GlobalSearchPanel> {
 
     final tool = entry.toolbarTool;
     if (tool != null) {
-      context.read<RightToolbarService>().openTool(tool);
+      final toolbar = context.read<RightToolbarService>();
+      // Un hilo se abre **dentro** de su bandeja, ya seleccionado. Abrir la
+      // bandeja y dejar al operador buscándolo otra vez es devolverle el
+      // trabajo que acababa de hacer.
+      final conversationId = entry.conversationId;
+      if (conversationId != null) {
+        toolbar.openConversation(tool: tool, conversationId: conversationId);
+      } else {
+        toolbar.openTool(tool);
+      }
       return;
     }
     final workspaces = context.read<WorkspaceManager>();

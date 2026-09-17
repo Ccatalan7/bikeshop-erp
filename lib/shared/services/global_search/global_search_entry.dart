@@ -15,6 +15,7 @@ enum GlobalSearchKind {
   job,
   bike,
   product,
+  conversation,
   attachment,
   salesInvoice,
   purchase,
@@ -31,6 +32,7 @@ extension GlobalSearchKindPresentation on GlobalSearchKind {
         GlobalSearchKind.job => 'Trabajos',
         GlobalSearchKind.bike => 'Bicicletas',
         GlobalSearchKind.product => 'Productos',
+        GlobalSearchKind.conversation => 'Conversaciones',
         GlobalSearchKind.attachment => 'Archivos recibidos',
         GlobalSearchKind.salesInvoice => 'Facturas de venta',
         GlobalSearchKind.purchase => 'Documentos de compra',
@@ -45,6 +47,7 @@ extension GlobalSearchKindPresentation on GlobalSearchKind {
         GlobalSearchKind.job => Icons.build_outlined,
         GlobalSearchKind.bike => Icons.pedal_bike_outlined,
         GlobalSearchKind.product => Icons.inventory_2_outlined,
+        GlobalSearchKind.conversation => Icons.forum_outlined,
         GlobalSearchKind.attachment => Icons.attach_file_rounded,
         GlobalSearchKind.salesInvoice => Icons.receipt_long_outlined,
         GlobalSearchKind.purchase => Icons.shopping_cart_outlined,
@@ -60,6 +63,7 @@ extension GlobalSearchKindPresentation on GlobalSearchKind {
         GlobalSearchKind.job => '/taller/pegas',
         GlobalSearchKind.bike => '/taller/bicicletas',
         GlobalSearchKind.product => '/inventory/products',
+        GlobalSearchKind.conversation => '/chat',
         GlobalSearchKind.attachment => null,
         GlobalSearchKind.salesInvoice => '/sales/invoices',
         GlobalSearchKind.purchase => '/purchases',
@@ -124,6 +128,8 @@ class GlobalSearchEntry {
     this.moduleWords = const <String>{},
     this.isModuleFrontDoor = false,
     this.attachment,
+    this.conversationId,
+    Set<String> alsoNamed = const <String>{},
     List<BikeFinderSearchField> fields = const <BikeFinderSearchField>[],
   })  : fields = fields.isEmpty
             ? <BikeFinderSearchField>[BikeFinderSearchField(title)]
@@ -137,10 +143,15 @@ class GlobalSearchEntry {
             ? null
             : normalizeBikeFinderSearch(identifier)
                 .replaceAll(RegExp(r'[^a-z0-9]'), ''),
-        titleWords = normalizeBikeFinderSearch(title)
-            .split(RegExp(r'[^a-z0-9]+'))
-            .where((word) => word.isNotEmpty)
-            .toSet();
+        titleWords = <String>{
+          for (final word in normalizeBikeFinderSearch(title)
+              .split(RegExp(r'[^a-z0-9]+')))
+            if (word.isNotEmpty) word,
+          for (final alias in alsoNamed)
+            for (final word in normalizeBikeFinderSearch(alias)
+                .split(RegExp(r'[^a-z0-9]+')))
+              if (word.isNotEmpty) word,
+        };
 
   static String _buildHaystack(List<BikeFinderSearchField> fields) {
     final buffer = StringBuffer();
@@ -189,9 +200,16 @@ class GlobalSearchEntry {
   final String haystack;
   final String? normalizedIdentifier;
 
-  /// Las palabras del **título**, plegadas. Escribir una entera es una señal
-  /// distinta de que el texto la contenga en alguna parte: ver el bono de
-  /// palabra exacta en el motor.
+  /// Las palabras por las que esta fila **se llama**, plegadas. Escribir una
+  /// entera es una señal distinta de que el texto la contenga en alguna parte:
+  /// ver el bono de palabra exacta en el motor.
+  ///
+  /// Salen del título y de `alsoNamed`, porque **una cosa puede responder a más
+  /// de un nombre**. El chat con TeknoBike se titula «TeknoBike» y en el taller
+  /// se pide como «el de Diego»: los dos son su nombre, y ninguno es un
+  /// sinónimo inventado — los dos están en el registro. Lo que no entra acá es
+  /// el contexto (el dueño de una bicicleta no es el nombre de la bicicleta):
+  /// eso pesa como campo, no como nombre.
   final Set<String> titleWords;
 
   /// Las palabras del **módulo** al que pertenece este destino, plegadas.
@@ -204,6 +222,15 @@ class GlobalSearchEntry {
 
   /// El archivo que abre este resultado, cuando el destino es un adjunto.
   final GlobalSearchAttachment? attachment;
+
+  /// El hilo que abre este resultado, cuando el destino es una conversación.
+  ///
+  /// Va junto con [toolbarTool], que dice **en qué bandeja** — proveedores o
+  /// clientes—. El hilo se abre en el panel del rail y no en el módulo porque
+  /// ahí es donde se contesta: el módulo completo es para sentarse a revisar,
+  /// el panel es para responderle a alguien sin soltar la pantalla en la que
+  /// uno estaba, que es exactamente lo que interrumpe una búsqueda.
+  final String? conversationId;
 
   /// Esta es la **primera** pantalla de su módulo, es decir su puerta de
   /// entrada.

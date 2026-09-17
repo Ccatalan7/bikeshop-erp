@@ -20,6 +20,12 @@ void main() {
       'title': 'TeknoBike',
       'counterparty_type': 'supplier',
       'channel': 'whatsapp',
+      'whatsapp_conversation_bindings': <Map<String, dynamic>>[
+        <String, dynamic>{
+          'contact_name': 'Diego',
+          'supplier_contacts': <String, dynamic>{'name': 'Diego Muñoz'},
+        },
+      ],
     },
   }) =>
       <String, dynamic>{
@@ -33,12 +39,30 @@ void main() {
         'conversations': conversation,
       };
 
-  test('el resultado dice de quién vino y por dónde llegó', () {
+  test('el resultado nombra la conversación entera, no sólo la empresa', () {
+    // «TeknoBike» dice de qué proveedor vino; a quien uno le pidió el catálogo
+    // es a Diego, y así se lee el encabezado del chat.
     final entry = globalSearchAttachmentEntry(row())!;
     expect(entry.kind, GlobalSearchKind.attachment);
     expect(entry.title, 'PEDALES GINEYEA JUN 26.pdf');
-    expect(entry.subtitle, startsWith('TeknoBike · WhatsApp'));
-    expect(entry.attachment!.origin, 'TeknoBike · WhatsApp');
+    expect(entry.subtitle, startsWith('TeknoBike · Diego Muñoz · WhatsApp'));
+    expect(entry.attachment!.origin, 'TeknoBike · Diego Muñoz · WhatsApp');
+  });
+
+  test('«diego» trae lo que Diego mandó', () {
+    final outcome = rankGlobalSearch(
+      query: GlobalSearchQuery.parse('diego'),
+      entries: <GlobalSearchEntry>[globalSearchAttachmentEntry(row())!],
+    );
+    expect(outcome.flattened.single.entry.id, 'attachment:a1');
+  });
+
+  test('pero el archivo no se LLAMA Diego: viene de Diego', () {
+    // La distinción decide el orden: un catálogo no compite de igual a igual
+    // con las personas que sí se llaman así.
+    final entry = globalSearchAttachmentEntry(row())!;
+    expect(entry.titleWords, isNot(contains('diego')));
+    expect(entry.haystack, contains('diego'));
   });
 
   test('el adjunto trae lo justo para abrir el visor sin el módulo de chat',

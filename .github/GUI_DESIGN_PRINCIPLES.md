@@ -1583,3 +1583,42 @@ cobra una decisión a nadie. De ahí sale el tercer estado que había que nombra
 se guarda una copia «por si acaso», y no se felicita por algo que no pasó. Por
 eso la función devuelve los tres casos —guardado en una ruta, entregado al
 navegador, cancelado— en vez de un `String?` que los confunde.
+
+### Una cosa responde a más de un nombre, y se abre donde se contesta (2026-09-17)
+
+El dueño buscó `diego` —el vendedor de TeknoBike, con quien hay una conversación
+abierta— y el buscador no encontró el chat. No era un problema de puntaje: las
+conversaciones no estaban indexadas, y aunque lo hubieran estado, ese hilo se
+titula **TeknoBike**. La palabra que él usa para pedirlo no era el nombre del
+registro.
+
+- **El nombre de una fila no es siempre uno solo.** El hilo se titula con la
+  empresa y se pide por la persona; las dos cosas ya están en el registro —el
+  perfil con que llegó el contacto y la ficha que alguien escribió acá— y las
+  dos son su nombre. Indexarlas no es una tabla de sinónimos: nadie escribió
+  «diego significa TeknoBike», es que ese hilo se llama de las dos maneras. Por
+  eso una fila puede declarar `alsoNamed`, y esas palabras cuentan como nombre.
+- **Nombre y contexto no son lo mismo, y la diferencia decide el orden.** El
+  dueño de una bicicleta no es el nombre de la bicicleta, y el remitente de un
+  PDF no es el nombre del PDF: eso pesa como campo, para que aparezca, no como
+  nombre, para que no compita de igual a igual con las personas que sí se llaman
+  así. La prueba está escrita al revés a propósito: el adjunto **no** tiene
+  «diego» entre sus palabras de nombre, pero sí en su texto buscable.
+- **Cuando una fila tiene dos nombres, la segunda línea muestra el otro.** El
+  resultado dice «TeknoBike / Diego Muñoz · WhatsApp», que es exactamente lo que
+  dice el encabezado del chat. Si el buscador inventara un tercer rótulo, el
+  mismo hilo se llamaría distinto en dos pantallas.
+- **Y un resultado se abre donde el operador contesta, no donde el dato vive.**
+  Corrección del dueño, literal: *«debería abrir la conversación en el right
+  toolbar, casi nunca uso el módulo de mensajes»*. Navegar al módulo completo
+  reemplaza la pantalla en la que estaba —que es justo lo que una búsqueda no
+  debería costarle— mientras que el panel del rail abre el hilo encima y deja
+  todo lo demás montado. La bandeja correcta la dice el propio dato indexado
+  (`counterparty_type`), no una consulta a un módulo que puede no estar cargado
+  ni un «si no sé, la general».
+
+La regla de alcance, otra vez la misma: **un índice que mira una tabla contesta
+«no existe» sobre cosas que sí existen.** Primero faltaron las herramientas del
+rail, después los archivos recibidos, ahora las conversaciones. Al agregar una
+superficie de búsqueda, la pregunta no es «¿qué tablas tengo?» sino «¿qué cosas
+abre la gente en este ERP?».
