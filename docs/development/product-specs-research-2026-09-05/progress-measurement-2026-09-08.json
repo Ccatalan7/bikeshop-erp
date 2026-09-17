@@ -1956,16 +1956,15 @@
  },
  "research_fill_017_misc_2026_09_16": {
   "batch": "fill-017-misc",
-  "products": 1,
-  "facts": 3,
+  "products": 2,
+  "facts": 5,
   "applications": [
-   "832ec866-548c-57ae-a7f9-7cf94d38d45b"
+   "832ec866-548c-57ae-a7f9-7cf94d38d45b",
+   "65c0aa09-c3fb-5a67-af4b-0c64a9ca7c14"
   ],
   "reviewer": "claude-peer",
-  "rounds": 1,
+  "rounds": 2,
   "record": "fill-017-record-2026-09-16.md",
-  "pending": [
-   "a0f51a2d VPE-536 v2 en revisión"
-  ]
+  "origin": "segunda pasada por marca sobre la lista de taller"
  }
 }

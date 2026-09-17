@@ -1,0 +1,118 @@
+{
+  "schema_version": 2,
+  "product_id": "a0f51a2d-339c-4d14-ac16-71accf77aacb",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "0dc68e4fd339196f2bce46515d5108b79d28749edf5af41f3181bf67f7f8c9ab",
+    "fingerprints": {
+      "facts_sha256": "297c197bfc0e0423e3daaf31587f67dd1cdbad77f3c03de0aab940a78520d652",
+      "product_sha256": "2c1c8f602fa5131b5a969d6b34b59d1488818e1786ee36ef7de55f3706a3e32e",
+      "template_sha256": "63d75d1b8ac1c7df0cc6d3c3aca7319343fe0148532e05b6c0a1177868c0eeda",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 5,
+    "updated_at": "2026-09-15T00:07:27.922402+00:00",
+    "template_id": "e8072f73-3257-5f63-b0ed-a0f3054ed209",
+    "contract_version": 26
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "VPE-536",
+      "evidence": [
+        "product-name",
+        "oem",
+        "oem-list"
+      ],
+      "reason": "El nombre guardado dice «Pedal VP 536 Plataforma, Resina, 9/16, Black». El listado oficial archivado del menú de pedales de vpcomponents.com numera con los prefijos VP-, VPE- y VX-, y el número 536 aparece una sola vez, como VPE-536 (no existe VP-536); la ficha VPE-536 («One-piece nylon body») coincide con «Plataforma, Resina». Identidad por eliminación literal sobre el listado archivado."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.vpcomponents.com/vpe-536",
+      "unit": null,
+      "method": "URL de la ficha oficial de VP Components consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "body_material",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Plástico / nylon",
+      "unit": null,
+      "method": "Ficha VPE-536: «BODY: One-piece nylon body»; nombre guardado «Resina».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "VPE-536",
+      "reason": "Literal."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "VP Components (vpcomponents.com)",
+      "locator": "https://www.vpcomponents.com/vpe-536",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial VPE-536",
+      "finding": "SIZE 113 X 105 mm; BEARING EPB system; BODY One-piece nylon body; AXLE 7mm boron steel; REFLECTOR Fineline Included(TW); WEIGHT 278g",
+      "artifact_path": "research/fill-017-misc/evidence/vp-vpe-536-20260916.md",
+      "sha256": "250981355dc7be707bf5b55e34466e6f111123167d855ff438cc150c42005f1b"
+    },
+    {
+      "id": "oem-list",
+      "kind": "oem_page",
+      "source": "VP Components (vpcomponents.com)",
+      "locator": "https://www.vpcomponents.com/pedal",
+      "consulted_on": "2026-09-16",
+      "scope": "Listado oficial de pedales (menú PRODUCT › BIKE PEDALS)",
+      "finding": "Prefijos VP-, VPE- y VX-; el 536 sólo existe como VPE-536; VP-538/VP-539/VPE-533/VPE-537 son otros modelos",
+      "artifact_path": "research/fill-017-misc/evidence/vp-pedal-listing-20260916.md",
+      "sha256": "267566690221357310e3360e752626bc60ac6b2d41a4b3f0c2babde8d7133f3a"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product a0f51a2d-339c-4d14-ac16-71accf77aacb",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Pedal VP 536 Plataforma, Resina, 9/16, Black",
+      "artifact_path": "research/fill-017-misc/evidence/vp-vpe-536-saved-name-20260916.json",
+      "sha256": "9b7275e6957673880fde216f353d5994c88661deafc551a20dac7f5b8ea16a4d"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "f1dd3e9c0bcb260aa9c3b9e11ca9b6be86546c6c87dd9dca8a27d1a48ac48c36",
+    "notes": "Revisión par (sesión Look dude), v2 aceptada sobre 3071e9898cde2edab594e9f2ef66f165aac27bdc23546f922b680597d301f6ac: identidad VPE-536 por eliminación literal sobre el listado oficial archivado (prefijos VP-/VPE-/VX-; 536 aparece una sola vez). body_material «Plástico / nylon» literal de «One-piece nylon body». Abstenciones correctas."
+  }
+}

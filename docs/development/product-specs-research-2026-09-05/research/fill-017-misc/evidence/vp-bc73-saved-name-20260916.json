@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "6d66efa0-1b58-4a9f-961e-2d7689193fda",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Motor VP BC73 Sellado 122,5x68mm",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "975f92f3990fddcb0854d31c5fc2b2dbc880b1e9d04345dbe5071332d2249133",
+  "product_sha256": "040124415267252890279acdb8723a6159486e6cc2f7c45f74d97cac9b367420",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

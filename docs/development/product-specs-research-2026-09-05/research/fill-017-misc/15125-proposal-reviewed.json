@@ -1,0 +1,165 @@
+{
+  "schema_version": 2,
+  "product_id": "6d66efa0-1b58-4a9f-961e-2d7689193fda",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "975f92f3990fddcb0854d31c5fc2b2dbc880b1e9d04345dbe5071332d2249133",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "040124415267252890279acdb8723a6159486e6cc2f7c45f74d97cac9b367420",
+      "template_sha256": "ca86afea426b43be3508bb456c11fbee17c5be265c7272ad1dd98e9d247787aa",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 1,
+    "updated_at": "2026-09-15T01:26:32.851332+00:00",
+    "template_id": "a4f78fa2-219f-44c6-82c4-d7d63e79cb1d",
+    "contract_version": 36
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "VP-BC73",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «Motor VP BC73»; la ficha oficial de VP Components documenta VP-BC73 (pedalier de cartucho con rosca BC1.37” x 24T). Las variantes C/A/E/T de la misma ficha llevan sufijo y el nombre no lo trae."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.vpcomponents.com/vp-bc73",
+      "unit": null,
+      "method": "URL de la ficha oficial de VP Components consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "includes_spindle",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Ficha VP-BC73: «AXLE: Boron steel» (el pedalier trae su eje); nombre guardado «Sellado 122,5x68mm».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "VP-BC73",
+      "reason": "Pedalier de cartucho con eje propio."
+    },
+    {
+      "key": "bb_shell_ports",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "drive",
+            "values": {
+              "port": "Copa lado motriz",
+              "side": "Lado motriz",
+              "mates_with": "Caja del cuadro",
+              "form": "Rosca medida",
+              "diameter": "1.37",
+              "diameter_unit": "in",
+              "pitch": "24",
+              "pitch_unit": "tpi",
+              "source_scope": "Ficha VP-BC73: «THREAD: BC1.37” x 24T.» (sentido de rosca por lado no publicado)",
+              "source_url": "https://www.vpcomponents.com/vp-bc73"
+            },
+            "sources": [
+              "https://www.vpcomponents.com/vp-bc73"
+            ]
+          },
+          {
+            "id": "non-drive",
+            "values": {
+              "port": "Copa lado no motriz",
+              "side": "Lado no motriz",
+              "mates_with": "Caja del cuadro",
+              "form": "Rosca medida",
+              "diameter": "1.37",
+              "diameter_unit": "in",
+              "pitch": "24",
+              "pitch_unit": "tpi",
+              "source_scope": "Ficha VP-BC73: «THREAD: BC1.37” x 24T.» (sentido de rosca por lado no publicado)",
+              "source_url": "https://www.vpcomponents.com/vp-bc73"
+            },
+            "sources": [
+              "https://www.vpcomponents.com/vp-bc73"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha VP-BC73: «THREAD: BC1.37” x 24T.» — diámetro 1,37 in y paso 24 tpi, literal; el sentido de cada rosca no está escrito y no se declara.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "VP-BC73",
+      "reason": "Rosca de caja publicada por el fabricante."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "VP Components (vpcomponents.com)",
+      "locator": "https://www.vpcomponents.com/vp-bc73",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial VP-BC73",
+      "finding": "THREAD BC1.37” x 24T; AXLE Boron steel; FINISH Phosphated cups, anodized sheath; WEIGHT 155g",
+      "artifact_path": "research/fill-017-misc/evidence/vp-bc73-20260916.md",
+      "sha256": "073a0d07cdf1d79c5f25532ad832073a713f2793a8f30013b13a4452f08949ab"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 6d66efa0-1b58-4a9f-961e-2d7689193fda",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Motor VP BC73 Sellado 122,5x68mm",
+      "artifact_path": "research/fill-017-misc/evidence/vp-bc73-saved-name-20260916.json",
+      "sha256": "b837c110dea01ffda5234d8e1997c08a819fa3176b19d0271ab050d8237b00f1"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "3d776e24b2cdec521b254c2e00bee9e0a0e376d967819f0ee05ccb29473cdb3a",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 56453625e1389f987df2aa754cb56a5a39f0d58f79ab60a5fc5ce0352ccfa608: modelo VP-BC73 (el nombre trae el código completo; la ficha nombra las variantes C/A/E/T con sufijo y el menú del sitio lista BC63/BC75T/BC77P/BC79, todos distintos). includes_spindle true por «AXLE: Boron steel» listado como pieza. Copas «Rosca medida» 1,37 in × 24 tpi literal de «BC1.37” x 24T.»; sentido de rosca sin declarar. 122,5 y 68 del nombre dejados al editor por evidence_requirements."
+  }
+}

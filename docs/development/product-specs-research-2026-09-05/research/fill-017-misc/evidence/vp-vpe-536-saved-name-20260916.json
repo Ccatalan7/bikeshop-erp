@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "a0f51a2d-339c-4d14-ac16-71accf77aacb",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Pedal VP 536 Plataforma, Resina, 9/16, Black",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "0dc68e4fd339196f2bce46515d5108b79d28749edf5af41f3181bf67f7f8c9ab",
+  "product_sha256": "2c1c8f602fa5131b5a969d6b34b59d1488818e1786ee36ef7de55f3706a3e32e",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}
