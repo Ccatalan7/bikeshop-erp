@@ -1,0 +1,142 @@
+{
+  "schema_version": 2,
+  "product_id": "487db3f8-73d0-4868-82e5-d7596524dcb6",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "afd6d6279d7f9624f0b30b6f123d0257c206c8c31c7dce146b63b4a2f1e08531",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "8893e9134a17a7468d5514289c1583808bd5b807b0f3d046f53e465908cd44b1",
+      "template_sha256": "8e3fb62fae5be95a481f648666c3f1701981ea3337f81f3b565cdf8b2ecfdaa1",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 1,
+    "updated_at": "2026-09-15T00:30:27.889431+00:00",
+    "template_id": "9fa846f3-8544-5fdf-9220-9f86e196ddb0",
+    "contract_version": 17
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "TB-1906-L",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «MACHO PEDAL IZQUIERDA … 9/16 MOD. 1906-L» y la ficha oficial documenta TB-1906-L para pedal izquierdo 9/16\" x 20."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.superbiketool.com/en/product/detail/Frame_Fork/TB_1906_L__TB_1906_R",
+      "unit": null,
+      "method": "URL de la ficha oficial consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos de esta propuesta",
+      "reason": "Fuente exigida por el contrato para las declaraciones."
+    },
+    {
+      "key": "tool_kind",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Otra",
+      "unit": null,
+      "method": "Ficha oficial: «Pedal Taps»; la lista de tipos no tiene macho de roscar",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Modelo TB-1906-L",
+      "reason": "Un macho de roscar no está entre los tipos nombrados; se registra como «Otra»."
+    },
+    {
+      "key": "tool_capabilities",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "lh-9-16",
+            "values": {
+              "operation": "Otra",
+              "target_standard": "Rosca de pedal izquierda 9/16\" x 20 en biela de aluminio o acero (limpiar o restaurar la rosca)",
+              "supported": true,
+              "source_url": "https://www.superbiketool.com/en/product/detail/Frame_Fork/TB_1906_L__TB_1906_R",
+              "interface_measure_kind": "Rosca de pedal"
+            },
+            "sources": [
+              "https://www.superbiketool.com/en/product/detail/Frame_Fork/TB_1906_L__TB_1906_R"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha oficial: «TB-1906-L: For 9/16\" x 20 left pedal», «Clean out or restore damaged threads in crank arms», «Suitable for alloy or steel crank»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo TB-1906-L",
+      "reason": "Líneas literales de la ficha; la operación «restaurar rosca» no está entre las nombradas y va como «Otra»."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Super B (superbiketool.com)",
+      "locator": "https://www.superbiketool.com/en/product/detail/Frame_Fork/TB_1906_L__TB_1906_R",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial TB-1906-L / TB-1906-R",
+      "finding": "Pedal Taps; high carbon steel; TB-1906-L: For 9/16\" x 20 left pedal; suitable for alloy or steel crank",
+      "artifact_path": "research/fill-006-tools/evidence/superb-tb-1906-20260916.md",
+      "sha256": "8e1920c0945bed039b233416762c3a6e475f3d3eff32a6b2b0d4991ff3e5f044"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 487db3f8-73d0-4868-82e5-d7596524dcb6",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial declarada en el nombre; no confirma presentación física",
+      "finding": "MACHO PEDAL IZQUIERDA SUPER B 9/16 MOD. 1906-L",
+      "artifact_path": "research/fill-006-tools/evidence/tb-1906-l-saved-name-20260916.json",
+      "sha256": "14405959ea5542f8e4b655e37f45ccaba67316ac11008ad041f9f03d7adf5987"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "2fa4cc0d943041ca8288679a5ce5c0b26a19e78d22b689889f0a5d264a46b754",
+    "notes": "TB-1906-L. La ficha es conjunta L/R pero trae la línea propia «TB-1906-L: For 9/16\" x 20 left pedal» y el nombre archivado fija «IZQUIERDA 9/16 MOD. 1906-L», así que la identidad es literal por las dos fuentes. tool_kind «Otra» correcto (no hay macho de roscar); fila operación «Otra» con «Clean out or restore damaged threads», «alloy or steel crank»: literal. Evidencias sha ok; simulation.issues = []; hash corresponde."
+  }
+}

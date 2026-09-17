@@ -102,6 +102,12 @@ class ResearchSimulationTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.inspect()
 
+    def test_brand_is_not_a_research_identity_patch(self):
+        self.proposal['identity'].append({'field': 'brand', 'current': None, 'proposed': 'Synthetic',
+                                          'evidence': ['oem'], 'reason': 'Synthetic brand'})
+        self.sign_record()
+        self.assertIn({'code': 'brand_requires_canonical_command', 'field': 'brand'}, self.inspect()['issues'])
+
     def test_evidence_kind_must_satisfy_the_contract(self):
         contract = self.snapshot['editor']['template']['form_contract']
         contract['evidence_requirements'] = {'amount': 'oem_spec'}

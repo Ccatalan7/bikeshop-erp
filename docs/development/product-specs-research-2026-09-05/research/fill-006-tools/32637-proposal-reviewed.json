@@ -1,0 +1,187 @@
+{
+  "schema_version": 2,
+  "product_id": "4a1f8fcc-bda3-46cd-b885-02c617d25c19",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "318dd95ec0cf4e7564c8a5cca828bcaa89aaa75ba72df25d8ef804d5f0fc1cb8",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "196ed9577197bf48c17356fc37ee65b5a741e259e5a2ac61fb94426674478ed6",
+      "template_sha256": "8e3fb62fae5be95a481f648666c3f1701981ea3337f81f3b565cdf8b2ecfdaa1",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 1,
+    "updated_at": "2026-09-15T00:30:29.044616+00:00",
+    "template_id": "9fa846f3-8544-5fdf-9220-9f86e196ddb0",
+    "contract_version": 17
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "TB-PF35",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice TB-PF35 y la ficha oficial Super B documenta TB-PF35."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.superbiketool.com/en/product/detail/Wheel_Spoke/TB_PF35",
+      "unit": null,
+      "method": "URL de la ficha oficial consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos de esta propuesta",
+      "reason": "Fuente exigida por el contrato para las declaraciones."
+    },
+    {
+      "key": "tool_kind",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Otra",
+      "unit": null,
+      "method": "Ficha oficial: «Professional mechanic wheel truing stand»; la lista de tipos no tiene centrador de ruedas",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Modelo TB-PF35",
+      "reason": "Un centrador de ruedas no está entre los tipos nombrados; se registra como «Otra» sin inventar un tipo."
+    },
+    {
+      "key": "tool_capabilities",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "wheels",
+            "values": {
+              "operation": "Centrar / alinear",
+              "target_standard": "Ruedas de 20\" a 29\"",
+              "supported": true,
+              "source_url": "https://www.superbiketool.com/en/product/detail/Wheel_Spoke/TB_PF35",
+              "interface_measure_kind": "Diámetro nominal de rueda (pulgadas)"
+            },
+            "sources": [
+              "https://www.superbiketool.com/en/product/detail/Wheel_Spoke/TB_PF35"
+            ]
+          },
+          {
+            "id": "hub-175",
+            "values": {
+              "operation": "Centrar / alinear",
+              "target_standard": "Bujes de hasta 175 mm de ancho",
+              "supported": true,
+              "source_url": "https://www.superbiketool.com/en/product/detail/Wheel_Spoke/TB_PF35",
+              "interface_measure_kind": "Ancho de buje",
+              "interface_measure_mm": "175"
+            },
+            "sources": [
+              "https://www.superbiketool.com/en/product/detail/Wheel_Spoke/TB_PF35"
+            ]
+          },
+          {
+            "id": "hub-210",
+            "values": {
+              "operation": "Centrar / alinear",
+              "target_standard": "Bujes de hasta 210 mm de ancho con extensión de brazos",
+              "supported": true,
+              "source_url": "https://www.superbiketool.com/en/product/detail/Wheel_Spoke/TB_PF35",
+              "adapter_required": true,
+              "adapter_model": "TB-PF26",
+              "interface_measure_kind": "Ancho de buje",
+              "interface_measure_mm": "210"
+            },
+            "sources": [
+              "https://www.superbiketool.com/en/product/detail/Wheel_Spoke/TB_PF35"
+            ]
+          },
+          {
+            "id": "thru-axle",
+            "values": {
+              "operation": "Centrar / alinear",
+              "target_standard": "Ruedas con buje de eje pasante de 10 a 20 mm (adaptadores incluidos)",
+              "supported": true,
+              "source_url": "https://www.superbiketool.com/en/product/detail/Wheel_Spoke/TB_PF35",
+              "interface_measure_kind": "Diámetro de eje pasante",
+              "interface_diameter_min_mm": "10",
+              "interface_diameter_max_mm": "20"
+            },
+            "sources": [
+              "https://www.superbiketool.com/en/product/detail/Wheel_Spoke/TB_PF35"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha oficial: «Measures wheels from 20\" thru 29\"», «hub width up to 175 mm and … 210 mm if use with upright extension TB-PF26», «thru axle adaptors … between 10 mm ~ 20 mm»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo TB-PF35 (versión actualizada)",
+      "reason": "Líneas literales de la ficha."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Super B (superbiketool.com)",
+      "locator": "https://www.superbiketool.com/en/product/detail/Wheel_Spoke/TB_PF35",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial TB-PF35",
+      "finding": "Professional mechanic wheel truing stand; wheels 20\" thru 29\"; hub width up to 175 mm, 210 mm with TB-PF26; thru axle adaptors 10–20 mm",
+      "artifact_path": "research/fill-006-tools/evidence/superb-tb-pf35-20260916.md",
+      "sha256": "50b2a00ac3fc543d366cf7978c184e8a4bc6f7c7801816c449cb4f5ab46e7ebf"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 4a1f8fcc-bda3-46cd-b885-02c617d25c19",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial declarada en el nombre; no confirma presentación física",
+      "finding": "CENTRADOR DE RUEDA SUPER B PROFESSIONAL TB-PF35",
+      "artifact_path": "research/fill-006-tools/evidence/tb-pf35-saved-name-20260916.json",
+      "sha256": "292f28c73664827af8750668550a40bf9bd32b6bb5e6c9dac43f55896ebc9a1f"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "25c6ad485e376e0bce9be3a03dbee839879594a9cf6873efa68c109b61f59a3a",
+    "notes": "TB-PF35. Identidad literal. tool_kind «Otra» es lo honesto: la lista no tiene centrador de ruedas. Las cuatro filas son literales: 20\"–29\", buje hasta 175 mm, hasta 210 mm con adapter_required = true y adapter_model TB-PF26, eje pasante 10–20 mm en diameter_min/max (par ordenado válido). Evidencias sha ok; simulation.issues = []; hash corresponde."
+  }
+}

@@ -1,0 +1,167 @@
+{
+  "schema_version": 2,
+  "product_id": "9446d1cd-8c33-4080-897d-15e8aafb2749",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "3b2d6dcec66954227b15a53e58b021ba1eb0ea0ec8667d3ec55b32c5a47be6e5",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "f299ed9e408d9e5cca1a9653307eceec46317749be52e4467398816e5e4bd767",
+      "template_sha256": "8e3fb62fae5be95a481f648666c3f1701981ea3337f81f3b565cdf8b2ecfdaa1",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 1,
+    "updated_at": "2026-09-15T00:31:17.698013+00:00",
+    "template_id": "9fa846f3-8544-5fdf-9220-9f86e196ddb0",
+    "contract_version": 17
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "04D2",
+      "evidence": [
+        "product-sku",
+        "product-name",
+        "oem"
+      ],
+      "reason": "El sku guardado «19004D2» contiene el código 04D2 y la ficha oficial IceToolz documenta 04D2; el nombre guardado describe el mismo producto sin nombrar el código."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.icetoolz.com/ec99/rwd1111/product.asp?prodid=04d2",
+      "unit": null,
+      "method": "URL de la ficha oficial consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos de esta propuesta",
+      "reason": "Fuente exigida por el contrato para las declaraciones."
+    },
+    {
+      "key": "tool_kind",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Extractor de biela",
+      "unit": null,
+      "method": "Ficha oficial: «04D2 Crank Extractor»",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Modelo 04D2",
+      "reason": "La ficha lo titula extractor de biela."
+    },
+    {
+      "key": "tool_capabilities",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "square",
+            "values": {
+              "operation": "Extraer",
+              "target_standard": "Biela de eje cuadrado (adaptador intercambiable)",
+              "supported": true,
+              "source_url": "https://www.icetoolz.com/ec99/rwd1111/product.asp?prodid=04d2",
+              "drive_size": "Llave de tubo 14x15 mm y llave hexagonal 8 mm incluidas"
+            },
+            "sources": [
+              "https://www.icetoolz.com/ec99/rwd1111/product.asp?prodid=04d2"
+            ]
+          },
+          {
+            "id": "hollow",
+            "values": {
+              "operation": "Extraer",
+              "target_standard": "Biela de eje hueco (adaptador intercambiable)",
+              "supported": true,
+              "source_url": "https://www.icetoolz.com/ec99/rwd1111/product.asp?prodid=04d2",
+              "drive_size": "Llave de tubo 14x15 mm y llave hexagonal 8 mm incluidas"
+            },
+            "sources": [
+              "https://www.icetoolz.com/ec99/rwd1111/product.asp?prodid=04d2"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha oficial: «Interchangeable adaptor fits both square & hollow axles», «Contains 14x15mm sockets & 8mm hex key for crank bolt and crank arm removal»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo 04D2",
+      "reason": "Líneas literales de la ficha; la ficha dice «hollow axles» sin nombrar Octalink/ISIS y así se registra."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "IceToolz / Lifu Bicycle Co. (icetoolz.com)",
+      "locator": "https://www.icetoolz.com/ec99/rwd1111/product.asp?prodid=04d2",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial 04D2",
+      "finding": "Crank Extractor; 14x15 mm sockets & 8 mm hex key; interchangeable adaptor square & hollow axles; 0.147 kg",
+      "artifact_path": "research/fill-006-tools/evidence/icetoolz-04d2-20260916.md",
+      "sha256": "247705b3836d57d07341f7acd58808f6ff2cad0833a8f16ee2c2abdf0f39bfea"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 9446d1cd-8c33-4080-897d-15e8aafb2749",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "El nombre dice «[Adaptador para OCTALINK]»; la ficha no nombra Octalink",
+      "finding": "Extractor de bielas IceToolz [Adaptador para OCTALINK]",
+      "artifact_path": "research/fill-006-tools/evidence/04d2-saved-name-20260916.json",
+      "sha256": "5a2a6f0dd9a58905dc0c51670af43b818fdc1f4b53adf5349fab8f96947a0eae"
+    },
+    {
+      "id": "product-sku",
+      "kind": "name_quote",
+      "source": "ERP product 9446d1cd-8c33-4080-897d-15e8aafb2749",
+      "locator": "products.sku",
+      "consulted_on": "2026-09-16",
+      "scope": "SKU guardado; contiene el código 04D2 del fabricante",
+      "finding": "19004D2",
+      "artifact_path": "research/fill-006-tools/evidence/04d2-saved-sku-20260916.json",
+      "sha256": "477d16b37585560450e676f76016dce91d7e9880d56c9f1bd48df206c62a5224"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "523155f99c89214f565239b10d4258f6efd96abc25904a7901751a4ccff5862a",
+    "notes": "04D2, proposal-v3.json. Diff v2→v3: desaparece sólo la entrada identity brand = «IceToolz» y la nota explica que la marca va por el comando canónico de identidad de marca. Modelo 04D2 (sku archivado «19004D2», nombre, ficha), tool_kind «Extractor de biela» y las dos filas quedan idénticos a lo aceptado en la ronda 2; las tres evidencias con sha correcto; simulation.issues = [] y sim.proposal_sha256 corresponde a este v3. La marca queda pendiente en su flujo, como dice la nota."
+  }
+}

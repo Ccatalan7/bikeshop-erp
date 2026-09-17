@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "39f01ac9-31ab-424c-b79f-26e7f9fdcecb",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "sku",
+  "value": "19062M1",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "f36d6513bce82d4dc3bd4daa56a8303c68e43d995495c8beefe12ff29aa5fef2",
+  "product_sha256": "0e05c76bcb1c3673e9679187a23df9ec37878d1783d149161338e6de166e1618",
+  "scope": "SKU guardado en ERP; no verifica variante física ni presentación."
+}

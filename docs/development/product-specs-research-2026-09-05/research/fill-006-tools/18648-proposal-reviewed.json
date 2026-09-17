@@ -1,0 +1,142 @@
+{
+  "schema_version": 2,
+  "product_id": "5be04f8f-3982-43a8-900a-8b3b9c964f61",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "1c76fd4f9b3b33c5642194ead3743fc2adfc952e0bc48ff995df7f42bc0c6017",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "acdd6425785dbda9fe7a9a79a35df781e69d7b9b672e824116b3efd8fdf3f5d1",
+      "template_sha256": "8e3fb62fae5be95a481f648666c3f1701981ea3337f81f3b565cdf8b2ecfdaa1",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 1,
+    "updated_at": "2026-09-15T00:30:32.464405+00:00",
+    "template_id": "9fa846f3-8544-5fdf-9220-9f86e196ddb0",
+    "contract_version": 17
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "PRTLB051",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «PRO BIKEGEAR TOOL BRAKE PISTON LEVER … (PRTLB051)»; la ficha oficial de PRO documenta el Brake Piston Lever (la página no muestra el código en el texto visible)."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.pro-bikegear.com/global/tools-maintenance/tools/brake-piston-lever",
+      "unit": null,
+      "method": "URL de la ficha oficial consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos de esta propuesta",
+      "reason": "Fuente exigida por el contrato para las declaraciones."
+    },
+    {
+      "key": "tool_kind",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Otra",
+      "unit": null,
+      "method": "Ficha oficial: «Brake Piston Lever … designed to separate disc brake pads within the callipers»; la lista de tipos no tiene separador de pistones",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "PRO Brake Piston Lever",
+      "reason": "Un separador de pastillas/pistones no está entre los tipos nombrados; se registra como «Otra»."
+    },
+    {
+      "key": "tool_capabilities",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "disc-pads",
+            "values": {
+              "operation": "Centrar / alinear",
+              "target_standard": "Pastillas de freno de disco dentro del caliper (separar y realinear)",
+              "supported": true,
+              "source_url": "https://www.pro-bikegear.com/global/tools-maintenance/tools/brake-piston-lever",
+              "brand_scope": "Universal: compatible con todos los sistemas de freno de disco según la ficha"
+            },
+            "sources": [
+              "https://www.pro-bikegear.com/global/tools-maintenance/tools/brake-piston-lever"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha oficial: «designed to separate disc brake pads within the callipers», «compatible with all disc brake systems», «realign or separate disc brake pads, without damaging them»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "PRO Brake Piston Lever",
+      "reason": "Líneas literales de la ficha."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "PRO Bikegear (pro-bikegear.com)",
+      "locator": "https://www.pro-bikegear.com/global/tools-maintenance/tools/brake-piston-lever",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial PRO Brake Piston Lever",
+      "finding": "Separate/realign disc brake pads within the callipers; compatible with all disc brake systems; dual compound grip",
+      "artifact_path": "research/fill-006-tools/evidence/pro-prtlb051-20260916.md",
+      "sha256": "274d3e02405eef85d1212598bf88fa5ad7589515379b85a295d72f7bdc41b3ab"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 5be04f8f-3982-43a8-900a-8b3b9c964f61",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "El código PRTLB051 sólo aparece en el nombre guardado",
+      "finding": "HERRAMIENTA PRO BIKEGEAR TOOL BRAKE PISTON LEVER BLACK (PRTLB051)",
+      "artifact_path": "research/fill-006-tools/evidence/prtlb051-saved-name-20260916.json",
+      "sha256": "792c49ba663f44dc565d617320b18da2a57fb74c2ed417c92037ad9764657321"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "f850ab6b7c15eaf12bff0a8680c4b77f5617bee69feb6ede32c5ccf1dbaf16bb",
+    "notes": "PRTLB051. El código está sólo en el nombre guardado archivado «… BRAKE PISTON LEVER BLACK (PRTLB051)» y la ficha PRO documenta exactamente ese producto («PRO Brake Piston Lever»); con el nombre como fuente literal del código y la ficha como fuente del producto, la identidad se sostiene y reason lo dice sin exagerar. tool_kind «Otra» correcto; fila «Centrar / alinear» por «separate and align disc brake pads … within the brake callipers» con brand_scope universal literal. Evidencias sha ok; simulation.issues = []; hash corresponde."
+  }
+}

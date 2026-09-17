@@ -1,0 +1,142 @@
+{
+  "schema_version": 2,
+  "product_id": "23f76410-7c70-40db-81f9-2fff7538ac73",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "3330f50c01bb5a89fd47ee39595304b8d5ce458dd6338b05b9dee36e4b5b6d61",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "546ebac81c0f80be0a055216cc22de2bc92651fa06e98277ef99cfd7ce11fb72",
+      "template_sha256": "8e3fb62fae5be95a481f648666c3f1701981ea3337f81f3b565cdf8b2ecfdaa1",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 1,
+    "updated_at": "2026-09-15T00:30:21.24947+00:00",
+    "template_id": "9fa846f3-8544-5fdf-9220-9f86e196ddb0",
+    "contract_version": 17
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "TB-6616",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice TB-6616 y la ficha oficial Super B documenta TB-6616."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.superbiketool.com/en/product/detail/Bottom_Crank_tool/TB_6616",
+      "unit": null,
+      "method": "URL de la ficha oficial consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos de esta propuesta",
+      "reason": "Fuente exigida por el contrato para las declaraciones."
+    },
+    {
+      "key": "tool_kind",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Extractor de biela",
+      "unit": null,
+      "method": "Ficha oficial: «Cotterless Crank Tool»",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Modelo TB-6616",
+      "reason": "La ficha lo titula extractor de biela."
+    },
+    {
+      "key": "tool_capabilities",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "square",
+            "values": {
+              "operation": "Extraer",
+              "target_standard": "Biela de eje cuadrado (standard square type crank)",
+              "supported": true,
+              "source_url": "https://www.superbiketool.com/en/product/detail/Bottom_Crank_tool/TB_6616",
+              "drive_size": "Llave hexagonal 8 mm o llave de 15 mm"
+            },
+            "sources": [
+              "https://www.superbiketool.com/en/product/detail/Bottom_Crank_tool/TB_6616"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha oficial: «For standard square type crank», «Use with a 8 mm hex wrench or 15 mm wrench»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo TB-6616",
+      "reason": "Líneas literales de la ficha."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Super B (superbiketool.com)",
+      "locator": "https://www.superbiketool.com/en/product/detail/Bottom_Crank_tool/TB_6616",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial TB-6616",
+      "finding": "Cotterless Crank Tool; For standard square type crank; Use with a 8 mm hex wrench or 15 mm wrench",
+      "artifact_path": "research/fill-006-tools/evidence/superb-tb-6616-20260916.md",
+      "sha256": "9ffcfd5840923155d1c424e1d51a07077f167e63b273f9428a79d9e6e6807c06"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 23f76410-7c70-40db-81f9-2fff7538ac73",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial declarada en el nombre; no confirma presentación física",
+      "finding": "EXTRACTOR DE VOLANTE SUPER B TB-6616 FOR STANDARD SQUARE TYPE",
+      "artifact_path": "research/fill-006-tools/evidence/tb-6616-saved-name-20260916.json",
+      "sha256": "0c77e01200d1d784c37bc0f188eac912ccc38c67015c7f37b4cc8db5b99341f2"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "52d131509d80a37f1e3a3668687986465623a7c5327f1e9e79628f31dbaabcec",
+    "notes": "TB-6616. Identidad literal en nombre y ficha. «Extractor de biela» por «Cotterless Crank Tool»; fila Extraer / «standard square type crank» con drive «8 mm hex wrench or 15 mm wrench»: líneas literales, tokens válidos, columnas requeridas presentes. Evidencias sha ok, product_sha del nombre coincide con el snapshot; simulation.issues = [] y sim.proposal_sha256 es el compact-sorted sin review de este v1."
+  }
+}

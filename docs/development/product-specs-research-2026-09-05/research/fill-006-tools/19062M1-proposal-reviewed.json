@@ -1,0 +1,197 @@
+{
+  "schema_version": 2,
+  "product_id": "39f01ac9-31ab-424c-b79f-26e7f9fdcecb",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "f36d6513bce82d4dc3bd4daa56a8303c68e43d995495c8beefe12ff29aa5fef2",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "0e05c76bcb1c3673e9679187a23df9ec37878d1783d149161338e6de166e1618",
+      "template_sha256": "8e3fb62fae5be95a481f648666c3f1701981ea3337f81f3b565cdf8b2ecfdaa1",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 1,
+    "updated_at": "2026-09-15T00:30:26.651191+00:00",
+    "template_id": "9fa846f3-8544-5fdf-9220-9f86e196ddb0",
+    "contract_version": 17
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "62M1",
+      "evidence": [
+        "product-sku",
+        "product-name",
+        "oem"
+      ],
+      "reason": "El sku guardado «19062M1» contiene el código 62M1 y la ficha oficial IceToolz documenta 62M1; el nombre guardado describe el mismo producto sin nombrar el código."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.icetoolz.com/ec99/rwd1111/product.asp?prodid=62m1&category_id=75",
+      "unit": null,
+      "method": "URL de la ficha oficial consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos de esta propuesta",
+      "reason": "Fuente exigida por el contrato para las declaraciones."
+    },
+    {
+      "key": "tool_kind",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Corta cadena",
+      "unit": null,
+      "method": "Ficha oficial: «62M1 Pro Shop Chain Tool for Shimano Chains»",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Modelo 62M1",
+      "reason": "La ficha lo titula corta cadena."
+    },
+    {
+      "key": "chain_tool_speeds",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": [
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12"
+      ],
+      "unit": null,
+      "method": "Ficha oficial: «Perfect for 5, 6,7, 8, 9, 10, 11 and 12-speed chains»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo 62M1",
+      "reason": "Línea literal de la ficha."
+    },
+    {
+      "key": "tool_capabilities",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "hg",
+            "values": {
+              "operation": "Cortar / extraer remache",
+              "target_standard": "Cadenas compatibles Shimano HG/UG/IG de 5 a 12 velocidades",
+              "supported": true,
+              "source_url": "https://www.icetoolz.com/ec99/rwd1111/product.asp?prodid=62m1&category_id=75",
+              "speeds_min": "5",
+              "speeds_max": "12",
+              "brand_scope": "Shimano® compatible HG/UG/IG"
+            },
+            "sources": [
+              "https://www.icetoolz.com/ec99/rwd1111/product.asp?prodid=62m1&category_id=75"
+            ]
+          },
+          {
+            "id": "campagnolo-ultra-link",
+            "values": {
+              "operation": "Instalar remache",
+              "target_standard": "Campagnolo Ultra Link (con el tornillo apretado, según el diagrama de la ficha)",
+              "supported": true,
+              "source_url": "https://www.icetoolz.com/ec99/rwd1111/product.asp?prodid=62m1&category_id=75",
+              "brand_scope": "Campagnolo Ultra Link"
+            },
+            "sources": [
+              "https://www.icetoolz.com/ec99/rwd1111/product.asp?prodid=62m1&category_id=75"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha oficial: «For Shimano ® compatible HG/UG/IG chains», «Perfect for 5, 6,7, 8, 9, 10, 11 and 12-speed chains», «When installing the Campagnolo Ultra Link, please fasten the screw…»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo 62M1",
+      "reason": "Líneas literales de la ficha."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "IceToolz / Lifu Bicycle Co. (icetoolz.com)",
+      "locator": "https://www.icetoolz.com/ec99/rwd1111/product.asp?prodid=62m1&category_id=75",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial 62M1",
+      "finding": "Pro Shop Chain Tool for Shimano Chains; HG/UG/IG; 5–12 speed; Cr-Mo steel; 0.375 kg",
+      "artifact_path": "research/fill-006-tools/evidence/icetoolz-62m1-20260916.md",
+      "sha256": "feea4a2239e1f7dd91eade5cbdf8a84f6aa1f37db8b65f66047b4f1b4b85f983"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 39f01ac9-31ab-424c-b79f-26e7f9fdcecb",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial declarada en el nombre; no confirma presentación física",
+      "finding": "CORTA CADENA HASTA 12 VEL",
+      "artifact_path": "research/fill-006-tools/evidence/62m1-saved-name-20260916.json",
+      "sha256": "55aa4664f0b19d0d35026bd98d842982a8211ba1764d16bd7f840f1b6cab615d"
+    },
+    {
+      "id": "product-sku",
+      "kind": "name_quote",
+      "source": "ERP product 39f01ac9-31ab-424c-b79f-26e7f9fdcecb",
+      "locator": "products.sku",
+      "consulted_on": "2026-09-16",
+      "scope": "SKU guardado; contiene el código 62M1 del fabricante",
+      "finding": "19062M1",
+      "artifact_path": "research/fill-006-tools/evidence/62m1-saved-sku-20260916.json",
+      "sha256": "d0d113b52f453d2b76147b72e1c2d4d8ea8584db929553e5e42458da634655c4"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "be100eabd5e6fe8f04bf8db3b109f1a48200def92559e9a9bba40f4689494d2b",
+    "notes": "62M1, proposal-v2.json. El sku quedó archivado como saved_product_identity (62m1-saved-sku-20260916.json, field sku, valor «19062M1», sha coincide, product_sha256 igual al del snapshot); «62M1» es substring literal de ese sku y la ficha IceToolz documenta 62M1. Diff v1→v2 sólo en identity.evidence, identity.reason y la evidencia nueva; hechos sin cambios. simulation.issues = [] y sim.proposal_sha256 corresponde a este v2."
+  }
+}

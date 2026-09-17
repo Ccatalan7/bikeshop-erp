@@ -1,0 +1,207 @@
+{
+  "schema_version": 2,
+  "product_id": "3de3b0ce-af1c-48ea-a8b5-e97e4a9b0c69",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "675710837860603c0e7cdba501cad4f594771310fde541299f4535b36cb9c5a8",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "c0646e8dde76cf64ba6560c39e74996b588c4874b0deb95f96bdb3863cadd9c6",
+      "template_sha256": "8e3fb62fae5be95a481f648666c3f1701981ea3337f81f3b565cdf8b2ecfdaa1",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 1,
+    "updated_at": "2026-09-15T00:30:27.28987+00:00",
+    "template_id": "9fa846f3-8544-5fdf-9220-9f86e196ddb0",
+    "contract_version": 17
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "TPS-SP26",
+      "evidence": [
+        "product-sku",
+        "ean-listing",
+        "oem",
+        "product-name"
+      ],
+      "reason": "El sku guardado es el código de barras 4712511832037; el listado archivado lo ata al «Topeak Threadless Saw Guide» y la ficha oficial de ese producto lleva ART NO TPS-SP26. El nombre guardado («Guía Topeak para cortar espigas») describe el mismo producto."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.topeak.com/global/en/product/574-THREADLESS-SAW-GUIDE",
+      "unit": null,
+      "method": "URL de la ficha oficial consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos de esta propuesta",
+      "reason": "Fuente exigida por el contrato para las declaraciones."
+    },
+    {
+      "key": "tool_kind",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Guía de corte",
+      "unit": null,
+      "method": "Ficha oficial: «Threadless Saw Guide provides straight cut on steer tubes»",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Modelo TPS-SP26",
+      "reason": "La ficha lo titula guía de corte."
+    },
+    {
+      "key": "tool_capabilities",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "steer-1",
+            "values": {
+              "operation": "Otra",
+              "target_standard": "Tubo de dirección sin rosca de 1\" (guiar el corte recto)",
+              "supported": true,
+              "interface_measure_kind": "Diámetro nominal del tubo de dirección (pulgadas)",
+              "source_url": "https://www.topeak.com/global/en/product/574-THREADLESS-SAW-GUIDE"
+            },
+            "sources": [
+              "https://www.topeak.com/global/en/product/574-THREADLESS-SAW-GUIDE"
+            ]
+          },
+          {
+            "id": "steer-1-1-8",
+            "values": {
+              "operation": "Otra",
+              "target_standard": "Tubo de dirección sin rosca de 1-1/8\" (guiar el corte recto)",
+              "supported": true,
+              "interface_measure_kind": "Diámetro nominal del tubo de dirección (pulgadas)",
+              "source_url": "https://www.topeak.com/global/en/product/574-THREADLESS-SAW-GUIDE"
+            },
+            "sources": [
+              "https://www.topeak.com/global/en/product/574-THREADLESS-SAW-GUIDE"
+            ]
+          },
+          {
+            "id": "steer-1-1-4",
+            "values": {
+              "operation": "Otra",
+              "target_standard": "Tubo de dirección sin rosca de 1-1/4\" (guiar el corte recto)",
+              "supported": true,
+              "interface_measure_kind": "Diámetro nominal del tubo de dirección (pulgadas)",
+              "source_url": "https://www.topeak.com/global/en/product/574-THREADLESS-SAW-GUIDE"
+            },
+            "sources": [
+              "https://www.topeak.com/global/en/product/574-THREADLESS-SAW-GUIDE"
+            ]
+          },
+          {
+            "id": "carbon-spacer",
+            "values": {
+              "member": "Separador de 2 mm para hojas de sierra de carbono (incluido; hoja no incluida)",
+              "operation": "Otra",
+              "target_standard": "Tubo de dirección de carbono: corte con hoja para carbono usando el separador de 2 mm",
+              "supported": true,
+              "interface_measure_kind": "Espesor del separador",
+              "interface_measure_mm": "2",
+              "source_url": "https://www.topeak.com/global/en/product/574-THREADLESS-SAW-GUIDE"
+            },
+            "sources": [
+              "https://www.topeak.com/global/en/product/574-THREADLESS-SAW-GUIDE"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha oficial: «Accommodates 1”, 1-1/8” and 1-1/4” treadless steer tubes», «Includes 2 mm Saw Guide Spacer for carbon saw blades (saw blades not included)»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo TPS-SP26",
+      "reason": "Líneas literales de la ficha; la operación «guiar un corte» no está entre las nombradas y va como «Otra»."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Topeak (topeak.com)",
+      "locator": "https://www.topeak.com/global/en/product/574-THREADLESS-SAW-GUIDE",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial Threadless Saw Guide",
+      "finding": "ART NO TPS-SP26; 1”, 1-1/8”, 1-1/4” threadless steer tubes; 2 mm spacer for carbon saw blades; hardened steel; 257 g",
+      "artifact_path": "research/fill-006-tools/evidence/topeak-threadless-saw-guide-20260916.md",
+      "sha256": "2972c07fdf5ad83a2699bcff76c9471a3215abcbe1ce9b640551298660945072"
+    },
+    {
+      "id": "ean-listing",
+      "kind": "distributor",
+      "source": "Rarewaves (rarewaves.com)",
+      "locator": "https://www.rarewaves.com/products/4712511832037-topk-threadless-saw-guide",
+      "consulted_on": "2026-09-16",
+      "scope": "Sólo ata el código de barras 4712511832037 al Topeak Threadless Saw Guide; no aporta specs",
+      "finding": "Topeak Threadless Saw Guide · Barcode: 4712511832037",
+      "artifact_path": "research/fill-006-tools/evidence/rarewaves-topeak-saw-guide-ean-20260916.md",
+      "sha256": "00af2f26a8f33c236922c7128af93849d388924423d311ac4ee017342956688b"
+    },
+    {
+      "id": "product-sku",
+      "kind": "name_quote",
+      "source": "ERP product 3de3b0ce-af1c-48ea-a8b5-e97e4a9b0c69",
+      "locator": "products.sku",
+      "consulted_on": "2026-09-16",
+      "scope": "SKU guardado = código de barras",
+      "finding": "4712511832037",
+      "artifact_path": "research/fill-006-tools/evidence/topeak-saw-guide-saved-sku-20260916.json",
+      "sha256": "7fe738953b8322441ce0d69623897372dd51d641c35fe854563a0ea5f76ee3da"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 3de3b0ce-af1c-48ea-a8b5-e97e4a9b0c69",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Nombre guardado; describe el producto sin código",
+      "finding": "Guia Topeak Para Cortar Espigas",
+      "artifact_path": "research/fill-006-tools/evidence/topeak-saw-guide-saved-name-20260916.json",
+      "sha256": "72b5bccedc34e24e1d0ebf3d36da5ce4ca5397dbbab02d5bd0ec7eafe04c8ea2"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "868550d4020d59c3ffe40ae4c0fb95e36c2c7b40dd097ec6e10eb78e9292c448",
+    "notes": "TPS-SP26. Cadena de identidad literal y archivada: sku guardado = código de barras 4712511832037 (saved-sku), listado Rarewaves que ata ese barcode a «Topeak Threadless Saw Guide» (kind distributor, usado sólo para eso), ficha Topeak con «ART NO: TPS-SP26», y nombre guardado coherente. «Guía de corte» es token válido y literal; filas 1\", 1-1/8\", 1-1/4\" y el separador de 2 mm para hojas de carbono, literales. Observación sin efecto: la fila del separador usa la columna member, rotulada para piezas de multiherramienta; es texto libre y describe una pieza incluida, aceptable. Evidencias sha ok (cuatro); simulation.issues = []; hash corresponde."
+  }
+}

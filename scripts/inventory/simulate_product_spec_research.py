@@ -178,6 +178,10 @@ def inspect_proposal(proposal, snapshot, evidence_root=RESEARCH):
     for field, change in identities.items():
         if not same(change['current'], product.get(field)):
             issue('identity_preimage', field)
+        # The preparer refuses a brand patch (brand travels through the
+        # canonical brand identity command); say so before any review.
+        if field == 'brand':
+            issue('brand_requires_canonical_command', field)
     for key, change in facts.items():
         definition = fields.get(key)
         if definition is None or template['form_contract'].get('roles', {}).get(key) == 'legacy':

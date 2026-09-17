@@ -1,0 +1,157 @@
+{
+  "schema_version": 2,
+  "product_id": "8c6f500c-c6b8-4514-a80e-d26d9a608caa",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "63a9486396bea4d273db505b59fae3c386dfddf1e697ff7825fabb8d1f12b95c",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "1cbae6996d62e755120d274b9475a859fc4c7cf10043a66c36aeafb4e275fef4",
+      "template_sha256": "8e3fb62fae5be95a481f648666c3f1701981ea3337f81f3b565cdf8b2ecfdaa1",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 1,
+    "updated_at": "2026-09-15T00:31:17.39272+00:00",
+    "template_id": "9fa846f3-8544-5fdf-9220-9f86e196ddb0",
+    "contract_version": 17
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "TB-6617",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice TB-6617 y la ficha oficial Super B documenta TB-6617."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.superbiketool.com/en/product/detail/Bottom_Crank_tool/TB_6617",
+      "unit": null,
+      "method": "URL de la ficha oficial consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos de esta propuesta",
+      "reason": "Fuente exigida por el contrato para las declaraciones."
+    },
+    {
+      "key": "tool_kind",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Extractor de biela",
+      "unit": null,
+      "method": "Ficha oficial: «Cotterless Crank Tool»",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Modelo TB-6617",
+      "reason": "La ficha lo titula extractor de biela."
+    },
+    {
+      "key": "tool_capabilities",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "octalink",
+            "values": {
+              "operation": "Extraer",
+              "target_standard": "Biela Shimano Octalink",
+              "supported": true,
+              "source_url": "https://www.superbiketool.com/en/product/detail/Bottom_Crank_tool/TB_6617",
+              "drive_size": "Llave hexagonal 8 mm o llave de 15 mm",
+              "brand_scope": "Shimano® Octalink"
+            },
+            "sources": [
+              "https://www.superbiketool.com/en/product/detail/Bottom_Crank_tool/TB_6617"
+            ]
+          },
+          {
+            "id": "isis",
+            "values": {
+              "operation": "Extraer",
+              "target_standard": "Biela ISIS Drive",
+              "supported": true,
+              "source_url": "https://www.superbiketool.com/en/product/detail/Bottom_Crank_tool/TB_6617",
+              "drive_size": "Llave hexagonal 8 mm o llave de 15 mm",
+              "brand_scope": "ISIS Drive®"
+            },
+            "sources": [
+              "https://www.superbiketool.com/en/product/detail/Bottom_Crank_tool/TB_6617"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha oficial: «For Shimano® Octalink and ISIS Drive® system», «Used with a 8 mm hex wrench or 15 mm spanner»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo TB-6617",
+      "reason": "Líneas literales de la ficha."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Super B (superbiketool.com)",
+      "locator": "https://www.superbiketool.com/en/product/detail/Bottom_Crank_tool/TB_6617",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial TB-6617",
+      "finding": "Cotterless Crank Tool; For Shimano® Octalink and ISIS Drive® system; Used with a 8 mm hex wrench or 15 mm spanner",
+      "artifact_path": "research/fill-006-tools/evidence/superb-tb-6617-20260916.md",
+      "sha256": "9ed3eba404a9c479f87f79f68d815c05772cde0b132b939039bdf4955f946504"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 8c6f500c-c6b8-4514-a80e-d26d9a608caa",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial declarada en el nombre; no confirma presentación física",
+      "finding": "EXTRACTOR DE VOLANTE SUPER B TB-6617 FOR SHIMANO OCTALINK AND ISIS F",
+      "artifact_path": "research/fill-006-tools/evidence/tb-6617-saved-name-20260916.json",
+      "sha256": "8e0f4fbfa9b8540030d9683267939f93d93fa021c824661ecde82fca57eb546b"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "4e701eee1ba3100870dc2d16017c4d32f3cf80213155a7628043933771f6b526",
+    "notes": "TB-6617. Identidad literal. Dos filas Extraer para «Shimano® Octalink» e «ISIS Drive®» con el mismo drive literal («8 mm hex wrench or 15 mm spanner»); brand_scope tomado de la misma línea. Evidencias sha ok; simulation.issues = []; hash corresponde."
+  }
+}

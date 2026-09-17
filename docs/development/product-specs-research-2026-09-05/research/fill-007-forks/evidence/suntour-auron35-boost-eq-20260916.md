@@ -1,0 +1,3 @@
+# SR Suntour AURON35 Boost EQ — https://www.srsuntour.com/products/fork/AURON35-Boost-EQ-6563.html
+Consultada 2026-09-16 (curl del HTML público; pares rótulo: valor literales de la tabla «specs» de la ficha oficial).
+Travel: 130/140/150/160 · Right Side: RC2-PCS, RLRC-PCS, LORC-PCS · Left Side: Air spring · Crown/Steerer: A6000 series, Forged · Stanchion DIA. (Material): 35mm · Pitch: 145mm · Bottom Case Material: Magnesium · Brake Mount (Max Rotor DIA.): Postmount 180mm Direct · Steerer tube: 1.5"to1-1/8" tapered (CTS) Alloy · Weight: starting from 2100g · Stanchion tube finish: A7000, Hard anodized Black · Axle (Option): ø15-110 15QLC2Ti-110 (Learn more) · Suggested Category: Enduro, Trail · Axle to Crown: 565.5mm

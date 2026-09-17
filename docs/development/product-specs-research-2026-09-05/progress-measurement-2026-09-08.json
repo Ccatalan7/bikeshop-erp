@@ -1788,5 +1788,30 @@
   "in_stock_researched": 105,
   "in_stock_pending": 401,
   "note": "measured before fill-005 applied (8 more researched since)"
+ },
+ "research_fill_006_2026_09_16": {
+  "batch": "fill-006-tools",
+  "products": 9,
+  "facts": 28,
+  "applications": [
+   "54fc5334-d571-5585-bb78-cb64fa5c7f8e",
+   "9a2c4a02-f662-58eb-a07b-0613c8addb07",
+   "564d9316-eb65-54d9-bafc-e8bc92eb55d0",
+   "f90a7685-2afa-50fa-9d1e-dfe5585424c0",
+   "81ba2a3f-74b0-5787-8ccd-2cd73e5c12d1",
+   "af15f168-a378-58b9-80f9-cbdf0ded9691",
+   "de8aaf47-96dd-54a3-a8eb-be176ea08b88",
+   "57093158-48ae-5cab-ae2b-5783832ecb71",
+   "a5461efe-6776-5fec-91df-ee563a15cba4"
+  ],
+  "reviewer": "claude-peer",
+  "rounds": 3,
+  "excluded": {
+   "no_oem_sheet_or_model": 12
+  },
+  "record": "fill-006-record-2026-09-16.md",
+  "tooling": [
+   "simulate_product_spec_research.py brand_requires_canonical_command"
+  ]
  }
 }

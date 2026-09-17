@@ -1,0 +1,181 @@
+{
+  "schema_version": 2,
+  "product_id": "828fe818-d161-4a23-9571-512ea1be5cff",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "1bb554f29c80b4bd5ed84a995c8f264921b179acac4d02ab0feac9aea32011be",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "cb05c2fea71e23ba124fe2ca9ba80a7ef7c68c3d3378cd3a347cfd7ec5142f6e",
+      "template_sha256": "8e3fb62fae5be95a481f648666c3f1701981ea3337f81f3b565cdf8b2ecfdaa1",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 1,
+    "updated_at": "2026-09-15T00:30:37.671095+00:00",
+    "template_id": "9fa846f3-8544-5fdf-9220-9f86e196ddb0",
+    "contract_version": 17
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "TB-1925",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice TB-1925 y la ficha oficial Super B documenta TB-1925."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.superbiketool.com/en/product/detail/Frame_Fork/TB_1925",
+      "unit": null,
+      "method": "URL de la ficha oficial consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos de esta propuesta",
+      "reason": "Fuente exigida por el contrato para las declaraciones."
+    },
+    {
+      "key": "tool_kind",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Extractor de cono de dirección",
+      "unit": null,
+      "method": "Ficha oficial: «Crown Race Remover … to remove the headset crown race from the fork»",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Modelo TB-1925",
+      "reason": "La ficha lo titula extractor de cono de horquilla."
+    },
+    {
+      "key": "tool_capabilities",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "fork-1",
+            "values": {
+              "operation": "Extraer",
+              "target_standard": "Cono de dirección (crown race) de horquilla 1\"",
+              "supported": true,
+              "source_url": "https://www.superbiketool.com/en/product/detail/Frame_Fork/TB_1925",
+              "interface_measure_kind": "Diámetro nominal de horquilla (pulgadas)"
+            },
+            "sources": [
+              "https://www.superbiketool.com/en/product/detail/Frame_Fork/TB_1925"
+            ]
+          },
+          {
+            "id": "fork-1-1-8",
+            "values": {
+              "operation": "Extraer",
+              "target_standard": "Cono de dirección (crown race) de horquilla 1-1/8\"",
+              "supported": true,
+              "source_url": "https://www.superbiketool.com/en/product/detail/Frame_Fork/TB_1925",
+              "interface_measure_kind": "Diámetro nominal de horquilla (pulgadas)"
+            },
+            "sources": [
+              "https://www.superbiketool.com/en/product/detail/Frame_Fork/TB_1925"
+            ]
+          },
+          {
+            "id": "fork-1-1-4",
+            "values": {
+              "operation": "Extraer",
+              "target_standard": "Cono de dirección (crown race) de horquilla 1-1/4\"",
+              "supported": true,
+              "source_url": "https://www.superbiketool.com/en/product/detail/Frame_Fork/TB_1925",
+              "interface_measure_kind": "Diámetro nominal de horquilla (pulgadas)"
+            },
+            "sources": [
+              "https://www.superbiketool.com/en/product/detail/Frame_Fork/TB_1925"
+            ]
+          },
+          {
+            "id": "fork-1-1-2",
+            "values": {
+              "operation": "Extraer",
+              "target_standard": "Cono de dirección (crown race) de horquilla 1-1/2\"",
+              "supported": true,
+              "source_url": "https://www.superbiketool.com/en/product/detail/Frame_Fork/TB_1925",
+              "interface_measure_kind": "Diámetro nominal de horquilla (pulgadas)"
+            },
+            "sources": [
+              "https://www.superbiketool.com/en/product/detail/Frame_Fork/TB_1925"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha oficial: «For 1\", 1-1/8\", 1-1/4\" and 1-1/2\" fork to remove the headset crown race from the fork», «will work on both ridged and suspension forks»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo TB-1925",
+      "reason": "Líneas literales de la ficha; las medidas quedan en pulgadas como las publica la ficha."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Super B (superbiketool.com)",
+      "locator": "https://www.superbiketool.com/en/product/detail/Frame_Fork/TB_1925",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial TB-1925",
+      "finding": "Crown Race Remover; for 1\", 1-1/8\", 1-1/4\" and 1-1/2\" fork; rigid and suspension forks",
+      "artifact_path": "research/fill-006-tools/evidence/superb-tb-1925-20260916.md",
+      "sha256": "e49609f958aa3bcc3039453ff9f7245917cec97e1bf5e677462dab4b79dcf629"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 828fe818-d161-4a23-9571-512ea1be5cff",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial declarada en el nombre; no confirma presentación física",
+      "finding": "LLAVE EXTRACTOR CONO SUPER B DIRECCION TB-1925",
+      "artifact_path": "research/fill-006-tools/evidence/tb-1925-saved-name-20260916.json",
+      "sha256": "ed38fd594d88cd5dc74df1b73cd3e9e41e5a9aa69cb33258401179b15b64c12d"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "0b173edb37cf41d99c44ba66dca7219c5bb7cfc9a1d6ce45e432beb8f24e0276",
+    "notes": "TB-1925. Identidad literal. «Extractor de cono de dirección» por «Crown Race Remover … remove the headset crown race from the fork»; cuatro filas 1\", 1-1/8\", 1-1/4\", 1-1/2\" tal como las publica la ficha, en pulgadas y sin convertir. Evidencias sha ok; simulation.issues = []; hash corresponde."
+  }
+}
