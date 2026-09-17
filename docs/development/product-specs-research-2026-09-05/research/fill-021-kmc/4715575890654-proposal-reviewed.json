@@ -1,0 +1,379 @@
+{
+  "schema_version": 2,
+  "product_id": "69dcf998-040c-4337-8d7b-0eef2e9d3f24",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "1bfcefdb1309f7332714ea95c35afda4a6205ab21c88de8cfa8f5ce900fc6e69",
+    "fingerprints": {
+      "facts_sha256": "a236e91491c36bba6d0e2be8c9897f47aa1f03730eb3a5f48632759f3982c4d8",
+      "product_sha256": "7d0fdba9c273121bd44cf7049ed315798c6d587966d85ac906200bcfe6968bdd",
+      "template_sha256": "116f235acd81e5019c5823922c9b13a4ea53de091bf50273ac359e0a194f4f5a",
+      "references_sha256": "ecfbc36e5431cc517d141900304efe06d322582e21142a7513f604df06ba2974"
+    },
+    "spec_revision": 0,
+    "updated_at": "2026-05-29T21:44:24.907734+00:00",
+    "template_id": "a9d0494f-08b5-42df-9836-42e302d2d9f5",
+    "contract_version": 45
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "X8",
+      "evidence": [
+        "product-name",
+        "eu",
+        "com"
+      ],
+      "reason": "El nombre guardado nombra el modelo «X8» literal y la ficha oficial de KMC documenta ese modelo."
+    },
+    {
+      "field": "manufacturer_sku",
+      "current": null,
+      "proposed": "BX08NG114",
+      "evidence": [
+        "product-name",
+        "eu"
+      ],
+      "reason": "El nombre guardado dice «Kmc X8 Plata/Gris»; la ficha oficial X8 Silver/Grey publica Art.nr. BX08NG114 (la otra variante publicada, X8 Silver, es BX08NP114)."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.kmcchain.eu/products/x8-silver-grey",
+      "unit": null,
+      "method": "URL de la ficha oficial de KMC consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "eu",
+        "com"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "chain_pitch_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "12.7",
+      "unit": "mm",
+      "method": "Tamaño publicado «1/2\" X 3/32\"»: paso de 1/2 pulgada = 12,7 mm.",
+      "origin": "research",
+      "evidence": [
+        "eu",
+        "com"
+      ],
+      "scope": "Paso",
+      "reason": "Paso literal de la ficha (1/2\")."
+    },
+    {
+      "key": "chain_speeds",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": [
+        "6",
+        "7",
+        "8"
+      ],
+      "unit": null,
+      "method": "Ficha kmcchain.eu X8 Silver/Grey: «Compatible with all 6-, 7- and 8-speed systems»; kmcchain.com X8: «8 Speed», «1x8, 2x8, 3x8».",
+      "origin": "research",
+      "evidence": [
+        "eu",
+        "com"
+      ],
+      "scope": "Velocidades",
+      "reason": "Velocidades declaradas por el fabricante."
+    },
+    {
+      "key": "drivetrain_mode",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Derailleur",
+      "unit": null,
+      "method": "Ficha KMC: «Compatible with all 6-, 7- and 8-speed systems».",
+      "origin": "research",
+      "evidence": [
+        "eu",
+        "com"
+      ],
+      "scope": "Tipo de transmisión",
+      "reason": "Tipo de transmisión declarado."
+    },
+    {
+      "key": "chain_outer_width_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "7.3",
+      "unit": "mm",
+      "method": "Ficha kmcchain.eu: «Pin length: 7.3 mm» (largo de pasador = ancho externo de la cadena; el catálogo distingue 8/9/10/11 v por este valor).",
+      "origin": "research",
+      "evidence": [
+        "eu"
+      ],
+      "scope": "Ancho externo",
+      "reason": "Ancho externo publicado por el fabricante."
+    },
+    {
+      "key": "chain_mass_declarations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "w110",
+            "values": {
+              "weighing_identity": "X8 Nickel plated Silver/Grey (BX08NG114) — 110 eslabones",
+              "weight_g": "316",
+              "basis_links": "110",
+              "basis_description": "Weight per 110 links (dato publicado por KMC por 110 eslabones)",
+              "source_document": "kmcchain.eu — ficha X8 Silver/Grey (consultada 2026-09-17)",
+              "source_url": "https://www.kmcchain.eu/products/x8-silver-grey"
+            },
+            "sources": [
+              "https://www.kmcchain.eu/products/x8-silver-grey"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha kmcchain.eu: «Weight per 110 links: 316 g».",
+      "origin": "research",
+      "evidence": [
+        "eu"
+      ],
+      "scope": "Peso declarado",
+      "reason": "Peso publicado sobre una base de 110 eslabones."
+    },
+    {
+      "key": "link_count",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "114",
+      "unit": "eslabones",
+      "method": "Ficha kmcchain.eu: «Length: 114 links».",
+      "origin": "research",
+      "evidence": [
+        "eu"
+      ],
+      "scope": "Eslabones",
+      "reason": "Largo de venta publicado."
+    },
+    {
+      "key": "quick_link_included",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Ficha kmcchain.eu: «Includes a MissingLink».",
+      "origin": "research",
+      "evidence": [
+        "eu"
+      ],
+      "scope": "Conector incluido",
+      "reason": "Conector incluido según el fabricante."
+    },
+    {
+      "key": "chain_quick_links_supplied",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "ql",
+            "values": {
+              "connector_identity": "MissingLink incluido con la cadena X8",
+              "quantity": "1",
+              "brand": "KMC",
+              "model": "MissingLink",
+              "source_document": "kmcchain.eu — ficha X8 Silver/Grey (consultada 2026-09-17)",
+              "source_url": "https://www.kmcchain.eu/products/x8-silver-grey"
+            },
+            "sources": [
+              "https://www.kmcchain.eu/products/x8-silver-grey"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha kmcchain.eu: «Includes a MissingLink» (un conector por cadena).",
+      "origin": "research",
+      "evidence": [
+        "eu"
+      ],
+      "scope": "Conectores incluidos",
+      "reason": "Conector incluido según el fabricante."
+    },
+    {
+      "key": "chain_application_declarations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "sys6",
+            "values": {
+              "claim_identity": "KMC X8 · sistema de 6 velocidades",
+              "scope_kind": "Sistema documentado",
+              "target_system": "Compatible with all 6-, 7- and 8-speed systems",
+              "verdict": "Admitido por la fuente",
+              "drive_kind": "Desviador externo",
+              "rear_sprockets": "6",
+              "conditions": "Línea de compatibilidad publicada por KMC: «Compatible with all 6-, 7- and 8-speed systems»; una fila por conteo de piñones (columna decimal).",
+              "source_document": "kmcchain.eu — ficha X8 Silver/Grey (consultada 2026-09-17)",
+              "source_url": "https://www.kmcchain.eu/products/x8-silver-grey"
+            },
+            "sources": [
+              "https://www.kmcchain.eu/products/x8-silver-grey"
+            ]
+          },
+          {
+            "id": "sys7",
+            "values": {
+              "claim_identity": "KMC X8 · sistema de 7 velocidades",
+              "scope_kind": "Sistema documentado",
+              "target_system": "Compatible with all 6-, 7- and 8-speed systems",
+              "verdict": "Admitido por la fuente",
+              "drive_kind": "Desviador externo",
+              "rear_sprockets": "7",
+              "conditions": "Línea de compatibilidad publicada por KMC: «Compatible with all 6-, 7- and 8-speed systems»; una fila por conteo de piñones (columna decimal).",
+              "source_document": "kmcchain.eu — ficha X8 Silver/Grey (consultada 2026-09-17)",
+              "source_url": "https://www.kmcchain.eu/products/x8-silver-grey"
+            },
+            "sources": [
+              "https://www.kmcchain.eu/products/x8-silver-grey"
+            ]
+          },
+          {
+            "id": "sys8",
+            "values": {
+              "claim_identity": "KMC X8 · sistema de 8 velocidades",
+              "scope_kind": "Sistema documentado",
+              "target_system": "Compatible with all 6-, 7- and 8-speed systems",
+              "verdict": "Admitido por la fuente",
+              "drive_kind": "Desviador externo",
+              "rear_sprockets": "8",
+              "conditions": "Línea de compatibilidad publicada por KMC: «Compatible with all 6-, 7- and 8-speed systems»; una fila por conteo de piñones (columna decimal).",
+              "source_document": "kmcchain.eu — ficha X8 Silver/Grey (consultada 2026-09-17)",
+              "source_url": "https://www.kmcchain.eu/products/x8-silver-grey"
+            },
+            "sources": [
+              "https://www.kmcchain.eu/products/x8-silver-grey"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Línea de compatibilidad publicada: «Compatible with all 6-, 7- and 8-speed systems».",
+      "origin": "research",
+      "evidence": [
+        "eu",
+        "com"
+      ],
+      "scope": "Sistemas declarados",
+      "reason": "Sistemas declarados por el fabricante."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "eu",
+      "kind": "oem_page",
+      "source": "KMC Chain Europe (kmcchain.eu, sitio oficial)",
+      "locator": "https://www.kmcchain.eu/products/x8-silver-grey",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial X8 Silver/Grey",
+      "finding": "Compatible with all 6-, 7- and 8-speed systems; Art.nr. BX08NG114; Size 1/2\" X 3/32\"; Pin length 7.3 mm; Weight per 110 links 316 g; Length 114 links",
+      "artifact_path": "research/fill-021-kmc/evidence/kmc-x8-silver-grey-20260917.md",
+      "sha256": "de2db6bc388df26219d9aa7cb947a27cd0c0b6b768d452b6204c50fef89d4faf"
+    },
+    {
+      "id": "com",
+      "kind": "oem_page",
+      "source": "KMC Chain Industrial (kmcchain.com, sitio oficial global)",
+      "locator": "https://www.kmcchain.com/en/product/bicycle-chain-x8-8-speed",
+      "consulted_on": "2026-09-17",
+      "scope": "Página oficial del modelo X8",
+      "finding": "8 Speed; Size 1/2\"x3/32\" | Compatibility : SHIMANO, SRAM and all other 8 speed drivetrains | 1x8, 2x8 , 3x8",
+      "artifact_path": "research/fill-021-kmc/evidence/kmc-com-x8-8-speed-20260917.md",
+      "sha256": "37a25262ffdfcaada43518e758f45a7445b043e1a0a04f8a0c84319da8d4f026"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 69dcf998-040c-4337-8d7b-0eef2e9d3f24",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Cadena 1/2\" X 3/32\" Kmc X8 Plata/Gris",
+      "artifact_path": "research/fill-021-kmc/evidence/kmc-x8-plata-gris-saved-name-20260917.json",
+      "sha256": "d29477a934742d5b9ceeca751cc805039ce51cb8bc49c2cfb27d631b6c437a46"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "36640046c6445c6af8d3216770ae9b189028bfc71221d934c12e597a1b1e18dc",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 765e78f268c1459a05b128f66bd02d8b18b36db7fbd719fd6f3087e7a79c54a8: «Plata/Gris» → X8 Silver/Grey BX08NG114; la única hermana archivada es X8 Silver (BX08NP114), sin variante Long: identidad fijada. Valores literales. Opcional: chain_width_family 3/32."
+  }
+}

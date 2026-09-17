@@ -1,0 +1,125 @@
+{
+  "schema_version": 2,
+  "product_id": "84afe266-da40-48b5-ad48-bebd6b491706",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "21ab9256d04d9e5e5c6e6aef126f42b22bb2f5fae52ba2f1224e93a52d79c2c7",
+    "fingerprints": {
+      "facts_sha256": "c8f7fd062437fceafcc1894b99aaf4c386995b96874be1b86d2fc82e8a2e417b",
+      "product_sha256": "f1547fae35a64bb068df0e519cd7cbb5bc53c14ba507708663f20440284ca7c4",
+      "template_sha256": "c9c12ef9de5da2f893445f1910c3cbdebe2daad22315ccc4e3310cb8ef173342",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-06-16T19:39:15.323494+00:00",
+    "template_id": "4d5edd21-5818-4c98-827a-7154d1eebfe4",
+    "contract_version": 38
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "H-5134",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado trae el código «H-5134» y la ficha oficial de Chaoyang documenta el modelo COUGAR bajo ese código."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.chaoyangtire.com/index.php/pro/pro-details/5/359?type=ALL+MOUNTAIN&name=COUGAR",
+      "unit": null,
+      "method": "URL de la ficha oficial del fabricante consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "tire_etrto",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "54-559",
+      "unit": null,
+      "method": "Ficha oficial Chaoyang COUGAR (H-5134): todas las filas publicadas de 26×2.25 (W108143 Shark Skin 2C-MTB 60 TPI foldable 610 g, W108140 Single 30 TPI wire 690 g) llevan ETRTO «54-559»; el nombre guardado fija modelo y medida pero no la pieza.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Medida ETRTO",
+      "reason": "Valor común a todas las filas publicadas de la medida."
+    },
+    {
+      "key": "tire_use",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "MTB",
+      "unit": null,
+      "method": "Ficha oficial Chaoyang COUGAR: categoría «ALL MOUNTAIN» en la ruta de la página (PRODUCT > ALL MOUNTAIN > COUGAR).",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Uso",
+      "reason": "Categoría de uso declarada por el fabricante para el modelo."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Chaoyang (chaoyangtire.com, sitio oficial de Zhongce Rubber)",
+      "locator": "https://www.chaoyangtire.com/index.php/pro/pro-details/5/359?type=ALL+MOUNTAIN&name=COUGAR",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial del modelo COUGAR (tabla Specification)",
+      "finding": "26×2.25: W108143 Shark Skin 2C-MTB 60 TPI foldable 610 g, W108140 Single 30 TPI wire 690 g; categoría «ALL MOUNTAIN»",
+      "artifact_path": "research/fill-020-tires/evidence/chaoyang-cougar-20260917.md",
+      "sha256": "5108213ae8e0c10f4b4bb4addf34af8c46907d08c5e51674b5b420b8074437f7"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 84afe266-da40-48b5-ad48-bebd6b491706",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "NEUMATICO CHAOYANG COUGAR 26X2.25 H-5134",
+      "artifact_path": "research/fill-020-tires/evidence/chaoyang-cougar-84afe266-saved-name-20260917.json",
+      "sha256": "27de1f7bd100ffd5597c37b1ccbc6ca256ef1c37817954b3e22648dc03f48518"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "4dee413c687bb20d42fb280fefb8c91001257704a2acddfd6f7485849a4c7ec7",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre a538bb413109842f6c1938992f1b73f003bd1295a66578299d1f2c089647c845. Validador mecánico (tokens, filas, based_on, sha de evidencias, name_quote, simulación) y cotejo literal de cada valor contra el archivo citado."
+  }
+}

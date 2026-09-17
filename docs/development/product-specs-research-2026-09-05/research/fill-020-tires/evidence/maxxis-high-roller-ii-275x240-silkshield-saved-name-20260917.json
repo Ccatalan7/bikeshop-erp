@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "4ff4dc02-c8b3-453a-98b2-0def9cbfd7ca",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Maxxis Kevlar 27.5 x 2.40 High Roller II Ebike/Silkshield",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "a7b0f53a091c9f8931242985e37e398f07c807dd3837057ce414045b6f1f67d1",
+  "product_sha256": "d1e942bdba4a7b5c6266f0b742051e18b1865a7bfce1e8bf351d636ae38d8f5e",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

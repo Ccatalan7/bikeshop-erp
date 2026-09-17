@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "8e7109e3-8472-4dc2-848c-97f4fc5a8e74",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "VOLANTE SHIMANO TY501 GAROZZO",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "78fb2857a6928b9b5a7e3642112d79ca112d8c9f014e375d6684698b45e8c03a",
+  "product_sha256": "9d84b28a0b70df66246432fa76a3d7aace818a88f419b245dd85f506246a2d62",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

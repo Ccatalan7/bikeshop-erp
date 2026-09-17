@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "e4ecec44-4d6e-459b-b068-4925e0aaa97f",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Cassette Shimano Cs-hg200 8v. (12-32)",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "93321ec2be28680f7b98ee97515cb7bfa6a81b654a918378bb5f4d826dd9a705",
+  "product_sha256": "8f8b16e373cb5c2695e48dd9b961154cf3fc2e675afe0f4bb075d75a36eef4ec",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

@@ -1,0 +1,251 @@
+{
+  "schema_version": 2,
+  "product_id": "e84a0bc0-d153-43f6-82d2-f45f480f5c27",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "1b63ca4c879a541e929ebdd7b16f93edffe28adc16c51f655a9255d8ff2d3ef0",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "392536a54ae69d7338d5948007a7e9a733863ff7485c90217d95d12a9d2fce7f",
+      "template_sha256": "e48fe12aecdb34ba5053c7fdbd2c4c243d525073a4b45b908e8004130a1dec57",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 0,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "590232e5-d21a-4a47-9419-1bf42e6b1922",
+    "contract_version": 36
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "FD-R2000-B",
+      "evidence": [
+        "product-name",
+        "oem",
+        "oem-f"
+      ],
+      "reason": "El nombre guardado dice «Desviador Delantero Shimano Claris R2000 2x8 31.8-34.9». productinfo publica dos desviadores Claris R2000 (archivados): FD-R2000-F (brazed-on, sin abrazadera: «Clamp band 28.6 -, 31.8 -, 34.9 -; Brazed-on ✔») y FD-R2000-B (abrazadera: «34.9 ✔; 31.8 ✔ (w/ M size adapter); 28.6 ✔ (w/ S size adapter)»). Las abrazaderas 31,8 y 34,9 del nombre sólo existen en la B. Identidad por eliminación sobre las dos fichas archivadas."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/FD-R2000-B",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-17 y archivada con hash; la ficha hermana FD-R2000-F está archivada aparte",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "front_derailleur_mount_type",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Abrazadera",
+      "unit": null,
+      "method": "Ficha FD-R2000-B: «Mount — Clamp band (mm): 28.6 ✔ (w/ S size adapter), 31.8 ✔ (w/ M size adapter), 34.9 ✔»; nombre guardado «31.8-34.9».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "FD-R2000-B",
+      "reason": "Literal."
+    },
+    {
+      "key": "front_derailleur_clamp_options",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 2,
+        "rows": [
+          {
+            "id": "band-34-9",
+            "values": {
+              "option_identity": "Abrazadera directa 34,9 mm",
+              "attachment_method": "Abrazadera directa",
+              "direct_tube_diameter_mm": "34.9",
+              "source_document": "productinfo.shimano.com — ficha FD-R2000-B (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/FD-R2000-B",
+              "conditions": "Celda «34.9 ✔» sin adaptador."
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/FD-R2000-B"
+            ]
+          },
+          {
+            "id": "band-31-8",
+            "values": {
+              "option_identity": "Abrazadera 34,9 con casquillo a 31,8 mm (M size adapter)",
+              "attachment_method": "Abrazadera con casquillo reductor",
+              "reduced_tube_diameter_mm": "31.8",
+              "unreduced_clamp_diameter_mm": "34.9",
+              "adapter_reference": "M size adapter",
+              "source_document": "productinfo.shimano.com — ficha FD-R2000-B (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/FD-R2000-B",
+              "conditions": "Celda «31.8 ✔ (w/ M size adapter)»; la ficha no dice si el casquillo viene incluido."
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/FD-R2000-B"
+            ]
+          },
+          {
+            "id": "band-28-6",
+            "values": {
+              "option_identity": "Abrazadera 34,9 con casquillo a 28,6 mm (S size adapter)",
+              "attachment_method": "Abrazadera con casquillo reductor",
+              "reduced_tube_diameter_mm": "28.6",
+              "unreduced_clamp_diameter_mm": "34.9",
+              "adapter_reference": "S size adapter",
+              "source_document": "productinfo.shimano.com — ficha FD-R2000-B (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/FD-R2000-B",
+              "conditions": "Celda «28.6 ✔ (w/ S size adapter)»; la ficha no dice si el casquillo viene incluido."
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/FD-R2000-B"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Fila «Mount — Clamp band (mm)» de la ficha FD-R2000-B: 34,9 directa; 31,8 y 28,6 con casquillo (M y S).",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "FD-R2000-B",
+      "reason": "Tres opciones de abrazadera publicadas; el nombre nombra dos de ellas."
+    },
+    {
+      "key": "front_derailleur_swing",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Down swing",
+      "unit": null,
+      "method": "Ficha: «Action — TOP SWING -; Down swing ✔».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "FD-R2000-B",
+      "reason": "Literal."
+    },
+    {
+      "key": "front_derailleur_application_configurations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "2x8",
+            "values": {
+              "configuration_identity": "2x8 (FD-R2000-B)",
+              "front_chainring_count": "2",
+              "rear_sprocket_count": "8",
+              "chain_declaration": "HG 8/7/6-speed",
+              "top_chainring_min_teeth": "46",
+              "top_chainring_max_teeth": "52",
+              "total_capacity_teeth": "16",
+              "chainline_mm": "43.5",
+              "chainstay_angle_min_deg": "61",
+              "chainstay_angle_max_deg": "66",
+              "source_document": "productinfo.shimano.com — ficha FD-R2000-B (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/FD-R2000-B",
+              "conditions": "Ficha: «Front speeds 2»; «Rear speeds 8»; «Top gear teeth 46-52T»; «Total capacity 16T»; «Chain line (mm) 43.5»; «Chainstay angle (deg.) 61-66»; «Compatible chain HG 8/7/6-speed»."
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/FD-R2000-B"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Tabla productinfo: Front speeds 2, Rear speeds 8, Top gear teeth 46-52T, Total capacity 16T, Chain line 43.5, Chainstay angle 61-66, Compatible chain.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "FD-R2000-B",
+      "reason": "Una configuración publicada (doble de 8 velocidades)."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/FD-R2000-B",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial FD-R2000-B",
+      "finding": "CLARIS; Front 2; Rear 8; Down swing; Clamp band 34.9 ✔, 31.8 ✔ (M adapter), 28.6 ✔ (S adapter); Chain line 43.5; 46-52T; cap. 16T; 61-66°",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-fd-r2000-b-20260917.md",
+      "sha256": "f39e8b2c823b9a5e08fb0ab498c60c7b5074a5160d9de666d610a2a1cfda1701"
+    },
+    {
+      "id": "oem-f",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/FD-R2000-F",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha hermana FD-R2000-F",
+      "finding": "Brazed-on ✔; Clamp band 28.6/31.8/34.9 -",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-fd-r2000-f-20260917.md",
+      "sha256": "ce27af1b2cca55382db4fc5caef2e5177492a3eaa9b9a515ababa39f3e1dc462"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product e84a0bc0-d153-43f6-82d2-f45f480f5c27",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Desviador Delantero Shimano Claris R2000 2x8 31.8-34.9",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-fd-r2000-b-saved-name-20260917.json",
+      "sha256": "c0d9cfeae6a221208444c14d31870433a34b654ae56b48e80849161eea0948eb"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "6c36026333188d3981fbad3b60326e0a4a163c8c2043fc2d27996bc6ac6e2136",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 120f189747073efffea305a82b8cd45519857f19f14e65ca72e271700976bdf8: FD-R2000-B por eliminación entre F (brazed-on ✔, abrazaderas -) y B (34.9 ✔, 31.8 ✔ M adapter, 28.6 ✔ S adapter) archivadas; «31.8-34.9» del nombre; 2x8: 46-52T, 16T, 43.5, 61-66; ruta sin declarar («Top-pull exclusive -»), correcto."
+  }
+}

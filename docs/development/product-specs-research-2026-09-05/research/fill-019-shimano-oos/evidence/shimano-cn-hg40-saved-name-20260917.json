@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "4961cdc3-6910-4e41-b220-66633602dc97",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "CADENA SHIMANO CN-HG40",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "564602909142e84bba9caf1ca100e7f20e60d913e98e45b434d5a6d0ae0d8da8",
+  "product_sha256": "8031dbb912fcee05624e43b393d02a9b80ff8f7f189c2844f9cb322b48e84fd5",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

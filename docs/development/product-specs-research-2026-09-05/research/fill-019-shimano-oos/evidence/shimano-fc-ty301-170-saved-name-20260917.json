@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "f6a85b2f-e042-4305-9375-87202a220508",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "VOLANTE SHIMANO FC-TY301 6/7/8V 170MM 42X34X24T",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "5e63bfdfa3c242051d40bea1f47fdab52d34bec13166576087ba084210d6fdcb",
+  "product_sha256": "56aac7ec8a7973e7396502ac84fde06b7ba46414a89b58fbd94a72a045e520f1",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

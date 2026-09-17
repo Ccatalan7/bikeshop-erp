@@ -1,0 +1,250 @@
+{
+  "schema_version": 2,
+  "product_id": "70d1700d-56a9-4464-8567-073825d2e82a",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "cecee9d68a36ceb1af62a28d3f5ddf638a6de7d65bf6f5e352212b6d72065c99",
+    "fingerprints": {
+      "facts_sha256": "bf1b41bdd83187b90737e5be3d56bd68292486d7b7fb51e863380ab516e7aabd",
+      "product_sha256": "bb6191be21961719fa67cb4a4da4512735288e164e6ad0f58cecae0382f8ca6d",
+      "template_sha256": "58726a04a069141adc7c38416084e1e6ed3e6c8645bbe2886254753fb9737835",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "c97799a4-b611-43c5-83f1-de4a407dd8f6",
+    "contract_version": 28
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "MF-TZ500-6",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «MF-TZ500-6» y «6V. (14-28) MF-TZ500-6»; la ficha oficial documenta MF-TZ500-6 con «Rear speeds 6» y la combinación 14-28T."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/MF-TZ500-6",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-17 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "sprocket_count",
+      "current": {
+        "value": "6",
+        "source": "name_reading",
+        "fact_id": "5e5b6c69-fcb9-40ff-865e-687377eebe39",
+        "fact_sha256": "93fc98d99d1a9ac5e3255156fc1fdb14027ccce174229d33c5430abdda293e4e",
+        "confirmed": false
+      },
+      "proposed": "6",
+      "unit": null,
+      "method": "Ficha MF-TZ500-6: «Rear speeds 6»; nombre guardado «6V. (14-28) MF-TZ500-6».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "MF-TZ500-6",
+      "reason": "Literal; sustituye la lectura de nombre."
+    },
+    {
+      "key": "cog_sequence",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "p1",
+            "values": {
+              "position": "1",
+              "teeth": "14"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/MF-TZ500-6"
+            ]
+          },
+          {
+            "id": "p2",
+            "values": {
+              "position": "2",
+              "teeth": "16"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/MF-TZ500-6"
+            ]
+          },
+          {
+            "id": "p3",
+            "values": {
+              "position": "3",
+              "teeth": "18"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/MF-TZ500-6"
+            ]
+          },
+          {
+            "id": "p4",
+            "values": {
+              "position": "4",
+              "teeth": "21"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/MF-TZ500-6"
+            ]
+          },
+          {
+            "id": "p5",
+            "values": {
+              "position": "5",
+              "teeth": "24"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/MF-TZ500-6"
+            ]
+          },
+          {
+            "id": "p6",
+            "values": {
+              "position": "6",
+              "teeth": "28"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/MF-TZ500-6"
+            ]
+          }
+        ]
+      },
+      "unit": "T",
+      "method": "Ficha MF-TZ500-6, «Combination»: 14-28T: 14-16-18-21-24-28T.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "MF-TZ500-6",
+      "reason": "Secuencia publicada de la combinación que nombra el ERP."
+    },
+    {
+      "key": "smallest_cog_teeth",
+      "current": {
+        "value": "14",
+        "source": "supplier_text",
+        "fact_id": "61a9b838-d637-4b04-8bc7-46b762fb50f8",
+        "fact_sha256": "d909f7ef3ac6108f80c8d1a2f624feea102ffb37db853366823c0c2d641c84a0",
+        "confirmed": false
+      },
+      "proposed": "14",
+      "unit": "T",
+      "method": "Primer piñón de la combinación 14-28T; nombre guardado «6V. (14-28) MF-TZ500-6».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "MF-TZ500-6",
+      "reason": "Literal."
+    },
+    {
+      "key": "largest_cog_teeth",
+      "current": {
+        "value": "28",
+        "source": "supplier_text",
+        "fact_id": "27e86107-5724-426d-97cb-29139ddbf362",
+        "fact_sha256": "bfd358d93b2166707fc322d6806617f5a8e93019cbb6dde0232d9f4fa2110880",
+        "confirmed": false
+      },
+      "proposed": "28",
+      "unit": "T",
+      "method": "Último piñón de la combinación 14-28T; nombre guardado «6V. (14-28) MF-TZ500-6».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "MF-TZ500-6",
+      "reason": "Literal."
+    },
+    {
+      "key": "published_variant_label",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "14-28T",
+      "unit": null,
+      "method": "Ficha MF-TZ500-6, «Combination name (Group name)»: 14-28T; nombre guardado «6V. (14-28) MF-TZ500-6».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "MF-TZ500-6",
+      "reason": "Variante publicada que corresponde al nombre."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/MF-TZ500-6",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial MF-TZ500-6",
+      "finding": "Type HG/UG; Rear speeds 6; 14-28T: 14-16-18-21-24-28T; Spoke protector w/ ✔ w/o ✔",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-mf-tz500-6-20260917.md",
+      "sha256": "f7ad15e9eba56ac683a7725abd0bb2028674c563beb21b7efd0f861c1a03069d"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 70d1700d-56a9-4464-8567-073825d2e82a",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "PIÑON SHIMANO ATORNILLADO 6V. (14-28) MF-TZ500-6, IND.PACK AMFTZ5006428",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-mf-tz500-6-saved-name-20260917.json",
+      "sha256": "c0d9b31054ad9041c7efa4c4141d6340f8c9072a7753ec31f45c36fe8687c591"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "d72e26379bccc5f33191e259f50e4f9a374b1fc18213b2381faedc76705e69b0",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 05204b140021d4bd4cd415f9ddbe713aa948c25c86757284d8cb3d912ef3894d: MF-TZ500-6: «14-16-18-21-24-28T», Rear speeds 6; rosca y extractor sin declarar, correcto."
+  }
+}

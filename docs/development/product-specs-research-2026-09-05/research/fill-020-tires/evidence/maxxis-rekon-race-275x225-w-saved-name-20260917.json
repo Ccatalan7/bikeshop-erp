@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "3459d2f7-33cd-447c-86f2-68b58975f694",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "MAXXIS ALAMBRE 27.5X2.25 REKON RACE",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "6b0522a8ba2e6a56c421164620f13c7d60bb6a4116487727ad7a4e13dd6bb761",
+  "product_sha256": "0754ba77a1b31cb97cb9f3aee4e5744563f4d9eb2a974bf8fb455990cb5d8a9a",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

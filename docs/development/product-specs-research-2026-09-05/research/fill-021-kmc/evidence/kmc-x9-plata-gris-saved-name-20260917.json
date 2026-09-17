@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "e6c82d94-000c-4c44-9186-d5d89cafb756",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Cadena Kmc X9 1/2\" X11/28\" Plata/Gris",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "680100fcb5bdaa68300d445619ab81f2bc90728add71e74732c34502c88040c0",
+  "product_sha256": "d52c538e3afe154f7aed924ad58d1ba1c95159037adb16d93e57d613af48c1cd",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

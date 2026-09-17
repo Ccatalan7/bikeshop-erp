@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "77ea8429-9473-4a39-9221-445467ffba33",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "CAMBIO TRASERO SHIMANO RD-TY300 TOURNEY 6/7-SPEED DIRECT ATTACHM",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "841c7e0e2e7789a093ab0b3975eed31731752815abc5dce736aab3b95b64b576",
+  "product_sha256": "a0ec98564d426c9ce3981a65ca9cedb1a71bae6c82ec31dc9a347e0e104bafa2",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

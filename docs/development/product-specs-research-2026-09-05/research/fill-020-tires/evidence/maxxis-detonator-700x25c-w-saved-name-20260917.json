@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "fbe03d6a-eb8a-4046-b505-cee50e38fa87",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "MAXXIS ALAMBRE 700x25c DETONATOR",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "2390ec2eb7e12088418eeff2f00e709c0457d016d48d0e63ec75e7975f2b0157",
+  "product_sha256": "92265d235ab4a6b0ef84f74cfb363286734798329f5f634ba60c17d8871eca8d",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

@@ -1,0 +1,205 @@
+{
+  "schema_version": 2,
+  "product_id": "7745beec-c4b0-439c-bdd6-99cfc28b286e",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "f260d90156f92d85b6de7bbc6b27ffa88711f47487d22933a31f8f1e04d75d3c",
+    "fingerprints": {
+      "facts_sha256": "0a6db0f9544c81c4be775e0513aff3b31e9d59557e01a68ed9f70f49b87c4bb2",
+      "product_sha256": "53aa76a19b9b82dde52139f6e6fa76f39f3e3a89bf9a0a24a68b70712f5d9011",
+      "template_sha256": "944d2fc9c55724dd3af499184f96a524950e093dbdcec89079f2859781430953",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 8,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "0750e4ac-4615-4ad4-862e-95ac102b12f7",
+    "contract_version": 42
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "RD-TZ500-GS",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «RD-TZ500 TZ GS CON PATA W/RIVETED ADAPTER(ROAD)» y sku ARDTZ500GSB; la ficha oficial documenta RD-TZ500-GS."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/RD-TZ500-GS",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-17 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "derailleur_cage_length",
+      "current": {
+        "value": "Media (GS)",
+        "source": "name_reading",
+        "fact_id": "f5f7b616-6e3d-4db8-a47a-ebfccfa1ac96",
+        "fact_sha256": "c4cd7aea9016c70027157227cd1dc31f87b444f2e8c929596ea163e8dfde603f",
+        "confirmed": false
+      },
+      "proposed": "Media (GS)",
+      "unit": null,
+      "method": "Ficha «Model no. RD-TZ500-GS»: sufijo GS de jaula; nombre guardado «GS».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "RD-TZ500-GS",
+      "reason": "Sufijo de jaula del modelo publicado."
+    },
+    {
+      "key": "rear_derailleur_mount_type",
+      "current": {
+        "value": "Con uña / claw",
+        "source": "name_reading",
+        "fact_id": "5cfd5800-925b-49c3-b407-3d94e7ccc152",
+        "fact_sha256": "a0bf793a7282362c8e14b3a6605542c99b683508246a5d8c14ad09b0d0d2eb7d",
+        "confirmed": false
+      },
+      "proposed": "Con uña / claw",
+      "unit": null,
+      "method": "Ficha: «Applicable derailleur hanger — SHIMANO MTB type: Direct attachment (conventional) ✔» y «Riveted adapter: ROAD type ✔»; el nombre guardado «CON PATA W/RIVETED ADAPTER(ROAD)» fija la presentación con uña remachada.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "RD-TZ500-GS",
+      "reason": "Montaje declarado por el fabricante; el nombre fija la presentación."
+    },
+    {
+      "key": "rear_derailleur_supplied_mount_adapter",
+      "current": {
+        "value": true,
+        "source": "name_reading",
+        "fact_id": "8cdeb6ab-ff6b-4ec3-ad9d-2004631c8e86",
+        "fact_sha256": "bf9738d4f0f94b46d9d7b12382c224ff9f84e21428fb411d2b3315c9f21c9e1a",
+        "confirmed": false
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Ficha: «Riveted adapter — ROAD type ✔»; nombre guardado «CON PATA W/RIVETED ADAPTER(ROAD)».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "RD-TZ500-GS",
+      "reason": "La presentación con uña remachada tipo ROAD, publicada y nombrada."
+    },
+    {
+      "key": "rear_derailleur_supplied_adapter_reference",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Riveted adapter (ROAD type)",
+      "unit": null,
+      "method": "Ficha: «Riveted adapter — ROAD type ✔»; nombre guardado «CON PATA W/RIVETED ADAPTER(ROAD)».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "RD-TZ500-GS",
+      "reason": "Designación de la ficha para la uña incluida."
+    },
+    {
+      "key": "rear_derailleur_compatibility_claims",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "chain-0",
+            "values": {
+              "claim_identity": "Cadena HG 8/7/6-speed",
+              "scope_kind": "Interfaz o estándar documentado",
+              "declared_interface": "HG 8/7/6-speed",
+              "source_document": "productinfo.shimano.com — ficha RD-TZ500-GS (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/RD-TZ500-GS",
+              "target_component": "Cadena",
+              "declaration_result": "Compatible declarado",
+              "conditions": "Fila «Compatible chain» de la ficha RD-TZ500-GS."
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/RD-TZ500-GS"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Fila «Compatible chain: HG 8/7/6-speed» de la ficha.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "RD-TZ500-GS",
+      "reason": "Clases de cadena declaradas."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/RD-TZ500-GS",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial RD-TZ500-GS",
+      "finding": "TOURNEY TZ; Rear 6; MTB Direct attachment ✔; Riveted adapter ROAD ✔; Max. front difference 20T; cap. 34T; Low 28T; Top 14T",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-rd-tz500-gs-20260917.md",
+      "sha256": "3f60009d047bc30ba1b46f9ccd4fb4c927bcf04c4f1b5e5b95cabe85caf4f7ec"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 7745beec-c4b0-439c-bdd6-99cfc28b286e",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "CAMBIO SHIMANO 6V. RD-TZ500 TZ GS CON PATA W/RIVETED ADAPTER(ROAD), BULK. ARDTZ500GSB",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-rd-tz500-gs-pata-saved-name-20260917.json",
+      "sha256": "aac8a0b8483ede302ecba0f46b8efa2076c6ba7a6bcc036820d2e5ed9bf825cd"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "d1a688710400f72f410d7964ac7a207757b6551ba4aafe624d541f5b9dc383a5",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 6eb39d3d64970ee847b38f7a745970095d1b6044dc191ee563a48fc85eead660: RD-TZ500-GS con uña: «Riveted adapter ROAD type ✔» + «CON PATA W/RIVETED ADAPTER(ROAD)» → uña, adaptador incluido y referencia; GS literal."
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "85d7f228-e3fc-4ab5-8a2b-1f0fd475c90a",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "NEUMATICO CHAOYANG 26X2.10 60TPI VICTORY H-5129 HIPO SKIN",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "338cb204fafe261d58b238cedc260d5953646065156b02ccfae2be05d6098085",
+  "product_sha256": "1b0e75a01fcc65a46fcf8f9c812d435892c1b6b8182565cb80eb5fc46bb5a309",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

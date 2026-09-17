@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "af32de00-23b0-4bf5-a286-0c70df8c9f53",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Llanta Weinmann ZAC19 26\" Ojetillos 36H Schrader Negro",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "1d9610630164c2dd2cbb4f56ec3b1872316d9193e3a4eab8f2813c13386e52f4",
+  "product_sha256": "5dcbaf7602ed2e03e946e070b9cfed5df22c9f14e794389167311134d04ed40c",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

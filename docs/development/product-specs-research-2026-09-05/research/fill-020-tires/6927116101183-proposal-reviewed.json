@@ -1,0 +1,134 @@
+{
+  "schema_version": 2,
+  "product_id": "165ba027-558f-4837-89c4-3c377cad092c",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "b9e055950bbf7bbd9e76a155cc59c051b5848983c623d027dbebbbaff7010beb",
+    "fingerprints": {
+      "facts_sha256": "09237d0f95d258a04bbb2528401a36cbd1e2433d75160b85e4d52fd35be28137",
+      "product_sha256": "be729a5ecce280b2b3a71fbdf168360ab78572dbde1dcfd2773fcf7b436a2e27",
+      "template_sha256": "c9c12ef9de5da2f893445f1910c3cbdebe2daad22315ccc4e3310cb8ef173342",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "4d5edd21-5818-4c98-827a-7154d1eebfe4",
+    "contract_version": 38
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "Mount Emmons",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado nombra el modelo «Mount Emmons» literal y la ficha oficial de Arisun lo documenta con ese nombre."
+    },
+    {
+      "field": "manufacturer_sku",
+      "current": null,
+      "proposed": "T010304",
+      "evidence": [
+        "product-name"
+      ],
+      "reason": "El nombre guardado dice «(T010304)», código de pieza Arisun; la ficha vigente no lista esa pieza (la fila wire 26x2.10 publicada es T010305), por eso se toma sólo del nombre."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.arisun-bicycletire.com/product_show.php?action=show&id=F555iQ6ySyQ5J5J6",
+      "unit": null,
+      "method": "URL de la ficha oficial del fabricante consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "tire_etrto",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "52-559",
+      "unit": null,
+      "method": "Ficha oficial Arisun MOUNT EMMONS: las 6 filas publicadas de 26x2.10 (T010305 wire 60 TPI 670 g, T010306/T010322/T010315/T010325/T010324 aramid 60-120 TPI) llevan todas ETRTO «52-559»; el nombre guardado fija modelo y medida pero no la pieza.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Medida ETRTO",
+      "reason": "Valor común a todas las filas publicadas de la medida."
+    },
+    {
+      "key": "tire_use",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "MTB",
+      "unit": null,
+      "method": "Ficha oficial Arisun MOUNT EMMONS: categoría «CROSS COUNTRY» bajo el nombre del modelo.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Uso",
+      "reason": "Categoría de uso declarada por el fabricante para el modelo."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Arisun (arisun-bicycletire.com, sitio oficial de Zhongce Rubber)",
+      "locator": "https://www.arisun-bicycletire.com/product_show.php?action=show&id=F555iQ6ySyQ5J5J6",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial del modelo MOUNT EMMONS (tabla SPECS/CONFIGURATIONS)",
+      "finding": "26x2.10: T010305 wire 60 TPI 670 g, T010306/T010322/T010315/T010325/T010324 aramid 60-120 TPI; categoría «CROSS COUNTRY»",
+      "artifact_path": "research/fill-020-tires/evidence/arisun-mount-emmons-20260917.md",
+      "sha256": "baaf3d9117bdc229455d638102fdc89a56807e7a4a399a8b735a1144f02a9318"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 165ba027-558f-4837-89c4-3c377cad092c",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "NEUMATICO ARISUN 26 X 2.10 MOUNT EMMONS ALAMBRE (T010304)",
+      "artifact_path": "research/fill-020-tires/evidence/arisun-mount-emmons-165ba027-saved-name-20260917.json",
+      "sha256": "811ec4f974708a59a0c9b0db21aa49feb259c0036496c80a545bafe3a78cee45"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "56181c37beb0dd024c44f169feb275b6914664ef2f045a4e30baa0c41cc0aef7",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 0e0c517599668632b5f6a5889504413bf933c443dd2b4d77bd46a2d88b0777d6. Validador mecánico (tokens, filas, based_on, sha de evidencias, name_quote, simulación) y cotejo literal de cada valor contra el archivo citado."
+  }
+}

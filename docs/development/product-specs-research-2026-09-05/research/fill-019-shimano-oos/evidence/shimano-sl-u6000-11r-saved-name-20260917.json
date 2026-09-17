@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "a142ba96-3162-4aa3-894e-831e25703bc2",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Shimano CUES SL-U6000-11R",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "1bf62ac316d26f34b1d8cfe34b9e41faeea91e24c2731c8b96679ad02bd5bee2",
+  "product_sha256": "68760c21a937a1cdac13deb764579ec52d2b56d3b4a8289a6156f6360d24cc76",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

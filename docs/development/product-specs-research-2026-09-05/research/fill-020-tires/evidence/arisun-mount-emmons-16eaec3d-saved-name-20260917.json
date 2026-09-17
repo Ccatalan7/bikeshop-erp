@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "16eaec3d-89a7-467a-b107-9258a2b937e7",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Neumatico Bicicleta 26 X 2.10 Mount Emmons K-Rubber Arisun",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "e0ac166803b22cba7a25a421a119e2eb351da3f4462f2b9f797d20ef3d3f0e46",
+  "product_sha256": "78761cb082010167339b9c6d3fad02f74e235361f7c6eda07065aab3d10f9dd1",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

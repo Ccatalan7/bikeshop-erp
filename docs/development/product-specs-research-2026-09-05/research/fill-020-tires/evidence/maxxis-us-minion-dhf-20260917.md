@@ -1,0 +1,65 @@
+# Maxxis Minion DHF — tabla de especificaciones oficial (maxxis.com/us)
+
+- URL: https://www.maxxis.com/us/tire/minion-dhf/
+- Consultada: 2026-09-17 (descarga directa del HTML; filas `.specs_wrap .grid-row` copiadas literal, una por variante)
+- Encabezado de la página: «Minion DHF»
+- Filas: 51
+
+Texto descriptivo de la página:
+- Category: Trail, Enduro, Downhill
+- Recommended use: All trail conditions
+- Recommended installation: Front
+
+| Part # | Size | ETRTO | TPI | Bead | Weight (g) | Compound | Max PSI | Tech | Color |
+|---|---|---|---|---|---|---|---|---|---|
+| TB00327300 | 20X2.40 | 61-406 | 60 | FOLDABLE | 648 | DUAL | 65 |  | Black |
+| TB00327200 | 20X2.40 | 61-406 | 60 | WIRE | 708 | DUAL | 65 |  | Black |
+| TB50614000 | 24X2.40 | 61-507 | 60X2 | WIRE | 1,158 | 3C MAXX GRIP | 65 | 3G/DH | Black |
+| TB00153100 | 24X2.40 | 61-507 | 60 | FOLDABLE | 745 | DUAL | 65 |  | Black |
+| TB00017600 | 24X2.40 | 61-507 | 120 | FOLDABLE | 801 | 3C MAXX TERRA | 60 | 3T/EXO/TR | Black |
+| TB00699400 | 24X2.40 | 61-507 | 120 | FOLDABLE | 810 | MAXXTERRA | 60 |  | Black |
+| TB00139500 | 24X2.40 | 61-507 | 60 | FOLDABLE | 819 | DUAL | 60 | EXO/TR | Black |
+| TB73550800 | 26X2.35 | 52-559 | 60 | FOLDABLE | 759 | SINGLE | 65 |  | Black |
+| TB74265700 | 26X2.50 | 55-559 | 60X2 | WIRE | 1,184 | SINGLE | 65 | DH | Black |
+| TB73305200 | 26X2.30 | 58-559 | 60 | FOLDABLE | 910 | 3C MAXX TERRA | 60 | 3T/EXO/TR | Black |
+| TB73305100 | 26X2.30 | 58-559 | 60 | FOLDABLE | 924 | DUAL | 60 | EXO/TR | Black |
+| TB74284100 | 26X2.50 | 63-559 | 60 | FOLDABLE | 965 | DUAL | 50 | EXO/TR | Black |
+| TB74284000 | 26X2.50 | 63-559 | 60 | FOLDABLE | 984 | 3C MAXX TERRA | 50 | 3T/EXO/TR | Black |
+| TB00333300 | 27.5X2.30 | 58-584 | 60 | FOLDABLE | 929 | 3C MAXX TERRA | 60 | 3T/EXO/TR | Tan Wall |
+| TB85925100 | 27.5X2.30 | 58-584 | 60 | FOLDABLE | 945 | 3C MAXX TERRA | 60 | 3T/EXO/TR | Black |
+| TB85925400 | 27.5X2.30 | 58-584 | 60 | FOLDABLE | 959 | DUAL | 60 | EXO/TR | Black |
+| TB00681500 | 27.5X2.50 | 63-584 | 60 | FOLDABLE | 1,096 | MAXX TERRA | 50 | MT/EXO+/TR | Black |
+| TB85975300 | 27.5X2.50 | 63-584 | 120 | FOLDABLE | 1,232 | 3C MAXX GRIP | 50 | 3G/DD/TR | Black |
+| TB00472900 | 27.5X2.50 | 63-584 | 60X2 | FOLDABLE | 1,335 | 3C MAXX GRIP |  | 3G/DH/TR/E50 | Black |
+| TB85975000 | 27.5X2.50 | 63-584 | 60 | FOLDABLE | 1,004 | DUAL | 50 | EXO/TR | Black |
+| TB85975200 | 27.5X2.50 | 63-584 | 60 | FOLDABLE | 1,015 | 3C MAXX GRIP | 50 | 3G/EXO/TR | Black |
+| TB00681400 | 27.5X2.50 | 63-584 | 60 | FOLDABLE | 1,032 | MAXX TERRA | 50 | MT/EXO/TR | Black |
+| TB85975700 | 27.5X2.50 | 63-584 | 60X2 | FOLDABLE | 1,243 | 3C MAXX GRIP | 50 | 3G/DH/TR | Black |
+| TB00447200 | 27.5X2.50 | 63-584 | 60 | FOLDABLE | 1,085 | 3C MAXX GRIP | 50 | 3G/EXO+/TR | Black |
+| TB00219900 | 27.5X2.50 | 64-584 | 60 | FOLDABLE | 984 | DUAL | 50 | EXO/TR | Tan Wall |
+| TB91146200 | 27.5X2.60 | 66-584 | 60 | FOLDABLE | 1,051 | DUAL | 40 | EXO/TR | Black |
+| TB91146300 | 27.5X2.60 | 66-584 | 120 | FOLDABLE | 1,025 | 3C MAXX TERRA | 40 | 3T/EXO/TR | Black |
+| TB00093700 | 27.5X2.60 | 66-584 | 60 | FOLDABLE | 1,137 | 3C MAXX TERRA | 40 | 3T/EXO+/TR | Black |
+| TB96908000 | 27.5X2.80 | 71-584 | 120 | FOLDABLE | 1,081 | 3C MAXX TERRA | 35 | 3T/EXO/TR | Black |
+| TB00093800 | 27.5X2.80 | 71-584 | 60 | FOLDABLE | 1,196 | 3C MAXX TERRA | 35 | 3T/EXO+/TR | Black |
+| TB96908100 | 27.5X2.80 | 71-584 | 60 | FOLDABLE | 1,110 | DUAL | 35 | EXO/TR | Black |
+| TB96785000 | 29X2.30 | 58-622 | 60 | FOLDABLE | 1,031 | DUAL | 60 | EXO/TR | Black |
+| TB96785100 | 29X2.30 | 58-622 | 60 | FOLDABLE | 1,015 | 3C MAXX TERRA | 60 | 3T/EXO/TR | Black |
+| TB96785400 | 29X2.30 | 58-622 | 120X2 | FOLDABLE | 1,231 | 3C MAXX TERRA | 60 | 3T/DD/TR | Black |
+| TB96800600 | 29X2.50 | 63-622 | 120 | FOLDABLE | 1,314 | 3C MAXX TERRA | 50 | 3T/DD/TR | Black |
+| TB96800000 | 29X2.50 | 63-662 | 60 | FOLDABLE | 1,099 | DUAL | 50 | EXO/TR | Black |
+| TB96800300 | 29X2.50 | 63-622 | 60 | FOLDABLE | 1,099 | 3C MAXX TERRA | 50 | 3T/EXO/TR | Black |
+| TB96800700 | 29X2.50 | 63-622 | 60X2 | FOLDABLE | 1,423 | 3C MAXX GRIP | 50 | 3G/DH/TR | Black |
+| TB00676400 | 29X2.50 | 63-622 | 60 | FOLDABLE | 1,163 | MAXX TERRA | 50 | MT/EXO+/TR | Black |
+| TB00676300 | 29X2.50 | 63-622 | 60 | FOLDABLE | 1,105 | MAXX TERRA | 50 | MT/EXO/TR | Black |
+| TB00472800 | 29X2.50 | 63-622 | 60X2 | FOLDABLE | 1,423 | 3C MAXX GRIP |  | 3G/DH/TR/E50 | Black |
+| TB00447300 | 29X2.50 | 63-622 | 60 | FOLDABLE | 1,162 | 3C MAXX GRIP | 50 | 3G/EXO+/TR | Black |
+| TB00435600 | 29X2.50 | 63-622 | 60X2 | WIRE | 1,521 | DUAL | 50 | BIKEPARK/DH/TR | Black |
+| TB00144000 | 29X2.50 | 63-622 | 60 | FOLDABLE | 1,092 | 3C MAXX GRIP | 50 | 3G/EXO/TR | Black |
+| TB00132600 | 29X2.50 | 63-622 | 120X2 | FOLDABLE | 1,313 | 3C MAXX GRIP | 50 | 3G/DD/TR | Black |
+| TB00220100 | 29X2.50 | 64-622 | 60 | FOLDABLE | 1,060 | DUAL | 50 | EXO/TR | Tan Wall |
+| TB00699500 | 29X2.60 | 66-622 | 120 | FOLDABLE | 1,116 | MAXX TERRA | 40 | MT/EXO/TR | Black |
+| TB00686800 | 29X2.60 | 66-622 | 60 | FOLDABLE | 1,231 | MAXX TERRA | 40 | MT/EXO+/TR | Black |
+| TB00220000 | 29X2.60 | 66-622 | 60 | FOLDABLE | 1,107 | DUAL | 40 | EXO/TR | Tan Wall |
+| TB00032800 | 29X2.60 | 66-622 | 60 | FOLDABLE | 1,125 | DUAL | 40 | EXO/TR | Black |
+| TB96834000 | 29X3.00 | 76-622 | 120 | FOLDABLE | 1,305 | 3C MAXX TERRA | 30 | 3T/EXO/TR | Black |

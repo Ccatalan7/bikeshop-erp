@@ -1,0 +1,105 @@
+{
+  "schema_version": 2,
+  "product_id": "7327b760-4e00-4950-9ff1-8d9b6d92e4a0",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "8bf85c75f7b4aad9d82bed5f4033432d27f78c914d46f021e847f115a2980198",
+    "fingerprints": {
+      "facts_sha256": "2c79f03f21116baaf0d5638487d803540009cc1de363f315e3241c58b8dfb79d",
+      "product_sha256": "f04bbdf4fea112099f40c4a795a80fc00f0ce4a970664d8c6d32f0621ffe2fc6",
+      "template_sha256": "c9c12ef9de5da2f893445f1910c3cbdebe2daad22315ccc4e3310cb8ef173342",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "4d5edd21-5818-4c98-827a-7154d1eebfe4",
+    "contract_version": 38
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "Ardent",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado nombra el modelo «Ardent» literal y la página oficial de Maxxis documenta ese modelo con ese nombre."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.maxxis.com/ca/tire/ardent/",
+      "unit": null,
+      "method": "URL de la ficha oficial del fabricante consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "tire_use",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "MTB",
+      "unit": null,
+      "method": "Página oficial de Maxxis del modelo Ardent: «Category: Trail» (categoría de bicicleta de montaña del catálogo Maxxis).",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Uso",
+      "reason": "Categoría de uso declarada por el fabricante para el modelo."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Maxxis (maxxis.com/ca, sitio oficial)",
+      "locator": "https://www.maxxis.com/ca/tire/ardent/",
+      "consulted_on": "2026-09-17",
+      "scope": "Página oficial del modelo Ardent (tabla de especificaciones y categoría)",
+      "finding": "Category: Trail",
+      "artifact_path": "research/fill-020-tires/evidence/maxxis-ca-ardent-20260917.md",
+      "sha256": "2a5df51fd6d737227726d63731f799bd87d0f07f8d47c70ae62b627be7ebec91"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 7327b760-4e00-4950-9ff1-8d9b6d92e4a0",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "MAXXIS ALAMBRE ARDENT 29X2.4 M315P W DK62 BK 458 2PLHO 3YL",
+      "artifact_path": "research/fill-020-tires/evidence/maxxis-ardent-29x24-w-m315p-saved-name-20260917.json",
+      "sha256": "5c1e7255e1912487488a3268ef9450b10f90470b2f8227761eb170f9e827f937"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "b5322a978aa4c2ed695f19d7c5b17bc2f8861b3088fb6aa3051b887265ba1cfb",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 1ee6d1c572d8c76b4308b097f55b586b3a31f87f436df575455b9f208a20945e. Validador mecánico (tokens, filas, based_on, sha de evidencias, name_quote, simulación) y cotejo literal de cada valor contra el archivo citado."
+  }
+}

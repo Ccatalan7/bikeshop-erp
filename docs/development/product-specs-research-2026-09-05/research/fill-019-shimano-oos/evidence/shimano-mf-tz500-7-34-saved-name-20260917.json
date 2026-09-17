@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "67b595bd-0b48-4437-8fab-3701a764a4ca",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Piñon Shimano 7 V. Mf-Tz500-7 (14/34) 14-16-18-20-22-24-34T Granel Megarange",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "2b9e1f919e9776c1ad065a481822b6374bdc0aae087ef9a75e72a978524431a2",
+  "product_sha256": "933d4b5bde5a3acf557ee658e7d984659ede304b3336a404c022474b25c11650",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

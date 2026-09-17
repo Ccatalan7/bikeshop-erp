@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "c51cdb87-839f-4d62-97e1-e32354c2dd6a",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Cambio Shimano 9V. Rd-M370-L Sgs Altus Negro",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "b0c4a0b2fb9cc8c3c8552aca522ee868b4560af0c04394197b3b0da0d3a2bb2c",
+  "product_sha256": "777fd7d892e7fcfeefd02ff348181df0cfc57727f01f1857531a16835a21293e",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "84afe266-da40-48b5-ad48-bebd6b491706",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "NEUMATICO CHAOYANG COUGAR 26X2.25 H-5134",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "21ab9256d04d9e5e5c6e6aef126f42b22bb2f5fae52ba2f1224e93a52d79c2c7",
+  "product_sha256": "f1547fae35a64bb068df0e519cd7cbb5bc53c14ba507708663f20440284ca7c4",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

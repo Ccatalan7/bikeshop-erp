@@ -1,0 +1,353 @@
+{
+  "schema_version": 2,
+  "product_id": "890b3a92-a63d-4d23-bd7e-84c1638be408",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "0da0f06caea10343c4e9e774b77d5dbaa25cb9e74d3bc7b86468ade84b39444e",
+    "fingerprints": {
+      "facts_sha256": "79dd127a883cdf56e071dcda7e279bfc8df52e7e7c1fab1e8002f15ffc1cb942",
+      "product_sha256": "30c5cb783a67403f09708d9767d33c251e3b0ded3b32dac338c4db722ba2028a",
+      "template_sha256": "0a473028d1a837cf9476d7ba194bcca7b6f0cac5ab0d403c71edd8f8cda53a6c",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "91a0c6d5-9c0a-443f-b2e9-2e0ab5f431ce",
+    "contract_version": 60
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "FC-A070",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice literalmente «fc-a070» con «50x34t» y «170mm»; la ficha oficial documenta FC-A070 con la combinación 50-34T y el largo 170 ✔ (165 ✔)."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/FC-A070",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-17 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "included_chainring_count",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "2",
+      "unit": null,
+      "method": "Ficha FC-A070: «Chainring combination 50-34T» (2 platos); nombre guardado.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "FC-A070",
+      "reason": "2 platos publicados."
+    },
+    {
+      "key": "chainring_teeth_rows",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "exterior",
+            "values": {
+              "ring_identity": "Outer ring 50T",
+              "position": "Exterior",
+              "teeth": "50",
+              "removable": false,
+              "member_designation": "Outer ring — Steel, Painted (P.C.D. Riveted)",
+              "source_document": "productinfo.shimano.com — ficha FC-A070 (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/FC-A070"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/FC-A070"
+            ]
+          },
+          {
+            "id": "interior",
+            "values": {
+              "ring_identity": "Inner ring 34T",
+              "position": "Interior",
+              "teeth": "34",
+              "removable": false,
+              "member_designation": "Inner ring — Steel, Painted (P.C.D. Riveted)",
+              "source_document": "productinfo.shimano.com — ficha FC-A070 (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/FC-A070"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/FC-A070"
+            ]
+          }
+        ]
+      },
+      "unit": "T",
+      "method": "Ficha FC-A070: combinación 50-34T; «Outer/…/Inner ring: Steel, Painted»; «P.C.D. (mm): Riveted».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "FC-A070",
+      "reason": "Un plato por fila; remachados, no desmontables."
+    },
+    {
+      "key": "chainring_mounting",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Platos remachados no desmontables",
+      "unit": null,
+      "method": "Ficha FC-A070: «P.C.D. (mm): Riveted»; «Outer/middle ring fixing bolt: -»; «Inner ring fixing screw: -».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "FC-A070",
+      "reason": "Literal."
+    },
+    {
+      "key": "spindle_included",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": false,
+      "unit": null,
+      "method": "Ficha FC-A070: «Compatible bottom bracket type: Square ✔ (Outboard -, OCTALINK -)»; «Recommended bottom bracket: BB-UN300»; «HOLLOWTECH II -», «2-PIECE CRANKSET -»; peso «w/o bottom bracket». El eje pertenece al pedalier cuadrado recomendado, que va aparte.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "FC-A070",
+      "reason": "Biela de tres piezas para pedalier de cartucho cuadrado."
+    },
+    {
+      "key": "bottom_bracket_included",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": false,
+      "unit": null,
+      "method": "Ficha FC-A070: el pedalier figura como «Recommended bottom bracket» (BB-UN300) y el peso se publica «w/o bottom bracket»; el nombre guardado no menciona pedalier.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "FC-A070",
+      "reason": "Pedalier recomendado aparte, no incluido."
+    },
+    {
+      "key": "crankset_construction",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Tres piezas (motor aparte)",
+      "unit": null,
+      "method": "Ficha FC-A070: «2-PIECE CRANKSET -», «HOLLOWTECH II -», «Compatible bottom bracket type: Square ✔» con pedalier recomendado aparte.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "FC-A070",
+      "reason": "Dos brazos más pedalier independiente."
+    },
+    {
+      "key": "crank_axle_interface_declarations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "square",
+            "values": {
+              "interface_identity": "Cuadradillo (Square)",
+              "junction_role": "Asiento que recibe el eje",
+              "axle_owner": "Pedalier con eje independiente",
+              "designation": "Compatible bottom bracket type: Square ✔; Axle length of BB-UN/ES: MM110",
+              "interface_geometry": "Cuadradillo",
+              "conditions": "Ficha: OCTALINK -, Outboard -; estándar de cuadradillo (JIS/ISO) no publicado.",
+              "source_document": "productinfo.shimano.com — ficha FC-A070 (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/FC-A070"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/FC-A070"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha FC-A070: «Compatible bottom bracket type: Square ✔».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "FC-A070",
+      "reason": "La biela recibe un eje cuadrado de un pedalier aparte."
+    },
+    {
+      "key": "bottom_bracket_required",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "bb0",
+            "values": {
+              "requirement_identity": "BB-UN300, eje MM110, caja roscada de 68 mm (línea de cadena 43.5 mm)",
+              "bb_shell_interface": "BSA roscado",
+              "bb_model_code": "BB-UN300",
+              "resulting_chainline_mm": "43.5",
+              "configuration_code": "MM110",
+              "conditions": "Ficha: «Recommended bottom bracket — Threaded (normal): BB-UN300»; «Threaded bottom bracket shell width (mm): 68 ✔, 70 ✔»; «Axle length of BB-UN/ES (mm): MM110»; «Chain line (mm): 43.5». Esta fila cubre la caja roscada de 68 mm (BSA); la de 70 mm va en la fila bb1. El largo de eje se publica por código, no en mm.",
+              "source_document": "productinfo.shimano.com — ficha FC-A070 (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/FC-A070",
+              "bb_shell_width_mm": "68"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/FC-A070"
+            ]
+          },
+          {
+            "id": "bb1",
+            "values": {
+              "requirement_identity": "BB-UN300, eje MM110, caja roscada de 70 mm (línea de cadena 43.5 mm)",
+              "bb_shell_interface": "Otro",
+              "bb_model_code": "BB-UN300",
+              "resulting_chainline_mm": "43.5",
+              "configuration_code": "MM110",
+              "conditions": "Ficha: «Threaded bottom bracket shell width (mm): 68 ✔, 70 ✔»; «Recommended bottom bracket — Threaded (normal): BB-UN300»; «Axle length of BB-UN/ES (mm): MM110»; «Chain line (mm): 43.5». Caja roscada de 70 mm (rosca italiana): el contrato no tiene token para rosca italiana, por eso «Otro». El largo de eje se publica por código, no en mm.",
+              "source_document": "productinfo.shimano.com — ficha FC-A070 (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/FC-A070",
+              "bb_shell_width_mm": "70"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/FC-A070"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha FC-A070: Recommended bottom bracket, shell width (68 ✔ y 70 ✔, una fila por caja: 68 mm = BSA roscado; 70 mm = rosca italiana, sin token → «Otro»), Axle length (código MM110) y Chain line.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "FC-A070",
+      "reason": "Combinaciones publicadas por largo de eje."
+    },
+    {
+      "key": "crank_arm_length_mm",
+      "current": {
+        "value": "170",
+        "source": "name_reading",
+        "fact_id": "cc8fa359-fb99-41fb-b836-d11503149a8f",
+        "fact_sha256": "3d478bbc2b6998e96ebd3d1be1fe295c861c719b48b4bff7163c8707a5298f18",
+        "confirmed": false
+      },
+      "proposed": "170",
+      "unit": "mm",
+      "method": "Ficha FC-A070: «Crank arm length (mm)»: 170 ✔; nombre guardado «170».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "FC-A070",
+      "reason": "El nombre fija una de las opciones publicadas; sustituye la lectura de nombre."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/FC-A070",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial FC-A070",
+      "finding": "Rear 8/7; 50-34T; BB-UN300; MM110; chain line 43.5; Riveted; Square",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-fc-a070-20260917.md",
+      "sha256": "bf5b46a29fb076862b9879908673b341c6b3fa89a37bae43f76a30705c8b4f25"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 890b3a92-a63d-4d23-bd7e-84c1638be408",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "volante ruta shimano fc-a070 50x34t 170mm",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-fc-a070-saved-name-20260917.json",
+      "sha256": "67ad85163a48fb90750632c34bd272ec6d1da690b2e7d9392e0529b07c49f45b"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "e05275225adbe943754d34a893437e62ed172273212436e370db18d99f20d5a4",
+    "notes": "Revisión par (sesión Look dude), v2 aceptada sobre 4cffeafe19b1219b21c12cf40e2617a75ec1757fe6b837c0bd9b2bc9a4184976: bb0 «BSA roscado» acotada a la caja de 68 mm (bb_shell_width_mm 68) y bb1 «Otro» para la de 70 mm con la condición «rosca italiana, sin token»; ambas con BB-UN300, MM110 y 43.5 literales de la ficha; sólo cambió bottom_bracket_required respecto de la v1 (rechazada por representar la caja de 70 mm como BSA)."
+  }
+}

@@ -1,0 +1,105 @@
+{
+  "schema_version": 2,
+  "product_id": "fdc03f1b-6783-43cc-a9fd-3f0c5d8973cc",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "d14b9b9da00d846ea669756b565771ecb957e0a41fc7e2675cb1231dd4937412",
+    "fingerprints": {
+      "facts_sha256": "9b242ad741bf836ffe4e7904e8db68a9cdb5c6e9de5fa7bd85b94580436a996e",
+      "product_sha256": "af8196cefb55060c702c1e3ec54a18d0e860afd172aa0daa635851872ca937aa",
+      "template_sha256": "c9c12ef9de5da2f893445f1910c3cbdebe2daad22315ccc4e3310cb8ef173342",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-06-05T19:31:19.81988+00:00",
+    "template_id": "4d5edd21-5818-4c98-827a-7154d1eebfe4",
+    "contract_version": 38
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "Ouster",
+      "evidence": [
+        "product-name",
+        "shop"
+      ],
+      "reason": "El nombre guardado nombra el modelo «OUSTER» literal y el registro oficial de CST lo documenta con ese nombre."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://shop.csttires.com/products/ouster-1",
+      "unit": null,
+      "method": "URL de la ficha oficial del fabricante consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "shop"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "tire_use",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "MTB",
+      "unit": null,
+      "method": "Descripción oficial del Ouster: «THE OUSTER FROM CST WAS BUILT FOR THE MOUNTAINS. This tire lives and breathes singletrack».",
+      "origin": "research",
+      "evidence": [
+        "shop"
+      ],
+      "scope": "Uso",
+      "reason": "Categoría de uso declarada por el fabricante."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "shop",
+      "kind": "oem_page",
+      "source": "CST Tires USA (shop.csttires.com, tienda oficial de CST)",
+      "locator": "https://shop.csttires.com/products/ouster-1",
+      "consulted_on": "2026-09-17",
+      "scope": "Registro oficial del producto con descripción y variantes publicadas",
+      "finding": "Registro con una sola variante sin medida («Default Title», TB96787000); descripción: «built for the mountains», «available in wire or folding bead in 26 and 29 sizes»",
+      "artifact_path": "research/fill-020-tires/evidence/cst-ouster-20260917.md",
+      "sha256": "896e8049a6f488f204d4ae708fc214321658ee608ea408be8f76ef3fa8420591"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product fdc03f1b-6783-43cc-a9fd-3f0c5d8973cc",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Neumatico CST OUSTER, 29x2.25. Black.",
+      "artifact_path": "research/fill-020-tires/evidence/cst-ouster-29x225-saved-name-20260917.json",
+      "sha256": "bd30fc2701a4342f2bee252363d06e125978ee8fe56e1e2c73a71479402c8fbb"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "ec79416b0128fef365397bb270a047fa7ce41becda4fd99297f835dd018f1caa",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre e785e809bc35b5d9451d4f49bc28466c7a8f3e0ab30076e5e6a3779bf88c4345. Validador mecánico (tokens, filas, based_on, sha de evidencias, name_quote, simulación) y cotejo literal de cada valor contra el archivo citado."
+  }
+}

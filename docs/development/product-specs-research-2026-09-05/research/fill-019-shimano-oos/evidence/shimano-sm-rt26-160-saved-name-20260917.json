@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "416cb816-18e0-4b15-858d-2ee9db27e153",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Disco freno Shimano RT26 160MM",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "30ef524ad92fadbd10d12fe7867781a9d27096f81c20df3a40649352005fe48e",
+  "product_sha256": "d96d09ad33a0a6d7be53cf0188be9c1f294df2a3bfcecc38f6acfd3943c481ed",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

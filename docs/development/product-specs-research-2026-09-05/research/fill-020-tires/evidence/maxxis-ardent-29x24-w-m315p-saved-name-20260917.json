@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "7327b760-4e00-4950-9ff1-8d9b6d92e4a0",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "MAXXIS ALAMBRE ARDENT 29X2.4 M315P W DK62 BK 458 2PLHO 3YL",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "8bf85c75f7b4aad9d82bed5f4033432d27f78c914d46f021e847f115a2980198",
+  "product_sha256": "f04bbdf4fea112099f40c4a795a80fc00f0ce4a970664d8c6d32f0621ffe2fc6",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

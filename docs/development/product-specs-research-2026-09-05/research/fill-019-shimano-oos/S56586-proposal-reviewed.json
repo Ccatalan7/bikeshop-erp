@@ -1,0 +1,144 @@
+{
+  "schema_version": 2,
+  "product_id": "cf5a6069-51e4-43d6-ae15-b0c426d804de",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "000b00318ed90a73965ec184e7fd9b7052110730143f750e2aa07966efe7d580",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "8f6f02169ae30747369702d5704b3721dd7ae08c45ff3c7da26d3a5a874b1604",
+      "template_sha256": "0811411cc3a3bd1a287240ea43606f4ee1efe6f08fc42e1adeddbbd454d7bb2b",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 0,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "3a76d564-008d-487b-bd70-0c6179dec598",
+    "contract_version": 22
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "BR-T4000",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice literalmente «Br-T4000»; la ficha oficial documenta BR-T4000 (V-BRAKE, zapata S65T, tornillos de fijación 16/25 mm)."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/BR-T4000",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-17 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "brake_presentation",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Un mecanismo (un extremo)",
+      "unit": null,
+      "method": "Nombre guardado «Herradura V-Brake … Trasera … W/O Inn(er cable)»: un mecanismo de freno para una rueda; la ficha BR-T4000 describe un mecanismo V-BRAKE (brazos, zapata S65T, tornillos), sin maneta ni cable.",
+      "origin": "research",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "scope": "BR-T4000",
+      "reason": "Un extremo, sin maneta."
+    },
+    {
+      "key": "kit_members",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "arms",
+            "values": {
+              "member_role": "cáliper",
+              "family": "brake_caliper",
+              "quantity": "1",
+              "position": "Trasero",
+              "identity_brand": "Shimano",
+              "identity_model": "BR-T4000"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/BR-T4000"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Un mecanismo BR-T4000 (V-BRAKE) en posición trasera según el nombre guardado «Trasera»; zapata S65T y tornillos de fijación forman parte del mecanismo según la ficha. Familia «brake_caliper»: el contrato de rim_brake admite en kit_members sólo brake_caliper/brake_lever/brake_pad/control_cable/control_housing; el mecanismo V-brake es el cáliper del sistema.",
+      "origin": "research",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "scope": "BR-T4000",
+      "reason": "Una pieza física con su modelo publicado."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/BR-T4000",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial BR-T4000",
+      "finding": "Brake type V-BRAKE; Brake shoe S65T (options M65T4/M65T3); Arch size 107 mm; Spacer X/Y ✔; lead pipe 45/90/135°; Fixing screw 16 ✔ / 25 ✔; POWER MODULATOR SM-PM40",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-br-t4000-20260917.md",
+      "sha256": "492739801cb5b882498f100f1424416fd133b1075ac7550ed97ddc8a0b09cced"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product cf5a6069-51e4-43d6-ae15-b0c426d804de",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Herradura V-Brake Shimano Br-T4000, X-Type Trasera S65T Shoe, 16.0Mm Fixing Bolts, W/O Inner Cable L",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-br-t4000-saved-name-20260917.json",
+      "sha256": "1ba3fc0254edfb7480a068054a163e811d694d813891f7b653f7bae7b8493e73"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "821e3a5a318236ef8f5a679354d291ac78e078de8fd6c3a04cf82998ff51d061",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 75b55466a7abd0a21aa98733dd942df2714cba8b823a365d71425782fbf9d041: BR-T4000: «Brake type V-BRAKE», «Brake shoe S65T», «Fixing screw length 16 ✔ 25 ✔»; un mecanismo trasero por «Trasera»; familia brake_caliper por el contrato y respaldada por la propia fila «V-arm/caliper» de la ficha."
+  }
+}

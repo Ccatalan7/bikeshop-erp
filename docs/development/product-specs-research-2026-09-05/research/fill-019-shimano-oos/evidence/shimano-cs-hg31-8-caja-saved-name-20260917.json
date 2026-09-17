@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "8ce111d0-dc2b-4603-956f-8a6e7a75ae15",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "PIÑON SHIMANO CASSETTE 8V. (11-34) CS-HG31 (CAJA) ECSHG318134",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "89cfe67c5769b4b1e28484aacffe01c9c45c3ca36a48a1e426cf958ca3a4cf14",
+  "product_sha256": "8c17bd208f1e2c1fc7cec9fe934bbbbd9d74d62ffb5e560dd161e27c6fb19d82",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

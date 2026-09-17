@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "810fb8e6-b196-4843-b004-2cd93fc4d7a8",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Piñón Shimano Cs-Hg200-7 7-Speed 12-14-16-18-21-26-32 Ind.Pack",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "546b02d68eea55dce791d9eaca5a0a97ea444fa8077c9d3754e57c8a9647ee3a",
+  "product_sha256": "c5817f5c55828aaecf53f5a824a3081757b97bf5af09d0b19333d2307e20ddbd",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

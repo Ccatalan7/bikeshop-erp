@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "0cc4a595-6878-411c-9842-53d34113a9a8",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Desviador Trasero Shimano Deore RD-M6100 SGS 12v",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "1ecb095ff875a0e8fcf2d99f86aff5af8076206529df333b0779f72e977d57b4",
+  "product_sha256": "b82e914fea43e6fb6064d083f984e42679be95e512eedd31ff7eb8d9c0a167cb",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

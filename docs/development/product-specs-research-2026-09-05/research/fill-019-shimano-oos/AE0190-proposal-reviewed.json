@@ -1,0 +1,416 @@
+{
+  "schema_version": 2,
+  "product_id": "07169e33-ae66-4964-ac34-8dab293f15ea",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "fb07b00bb8466c94414ee1a6cc2a610c2ae6bd4698765b7b99119ef823903092",
+    "fingerprints": {
+      "facts_sha256": "26e5022ba11899f4bb3ca4d7e7322a84ac43992890aa974b27000a403a885029",
+      "product_sha256": "18844d64714a5fc11643e8ef3c5443bb624dd061f0ef7e9c9d8a96ce431fbbf1",
+      "template_sha256": "19d2ae8cfd39797cf25f509b15d53e8f8fbdf98c188bd6f992d626cc00d56a1b",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "6a02a0c2-b139-46ef-86d8-bba3797252bd",
+    "contract_version": 24
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "CS-R7101-12",
+      "evidence": [
+        "product-name",
+        "oem",
+        "no-results"
+      ],
+      "reason": "El nombre guardado dice «Cassette Shimano 105 CS-R7100 12V 11-34T». R7100 es la designación de la serie 105 de 12 velocidades; productinfo no tiene ficha para «CS-R7100» ni «CS-R7100-12» (archivado en el registro de «No results») y el único cassette 105 de 12 velocidades con 11-34T es CS-R7101-12 (Series «SHIMANO 105», «Rear speeds 12», «11-34T»). Identidad por eliminación sobre la ficha y el registro archivados."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/CS-R7101-12",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-17 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "sprocket_count",
+      "current": {
+        "value": "12",
+        "source": "name_reading",
+        "fact_id": "e4da02a9-f9a9-4691-a9a2-ef6db82f0808",
+        "fact_sha256": "15e65a9b885e965143f0668309a66ee4b645b02da8caa1dc59d2a0d1208702b6",
+        "confirmed": false
+      },
+      "proposed": "12",
+      "unit": null,
+      "method": "Ficha CS-R7101-12: «Rear speeds 12», «Steel gear QTY (pcs) 12»; nombre guardado «105 CS-R7100 12V 11-34T».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-R7101-12",
+      "reason": "Literal; sustituye la lectura de nombre."
+    },
+    {
+      "key": "cog_sequence",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "p1",
+            "values": {
+              "position": "1",
+              "teeth": "11"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-R7101-12"
+            ]
+          },
+          {
+            "id": "p2",
+            "values": {
+              "position": "2",
+              "teeth": "12"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-R7101-12"
+            ]
+          },
+          {
+            "id": "p3",
+            "values": {
+              "position": "3",
+              "teeth": "13"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-R7101-12"
+            ]
+          },
+          {
+            "id": "p4",
+            "values": {
+              "position": "4",
+              "teeth": "14"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-R7101-12"
+            ]
+          },
+          {
+            "id": "p5",
+            "values": {
+              "position": "5",
+              "teeth": "15"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-R7101-12"
+            ]
+          },
+          {
+            "id": "p6",
+            "values": {
+              "position": "6",
+              "teeth": "17"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-R7101-12"
+            ]
+          },
+          {
+            "id": "p7",
+            "values": {
+              "position": "7",
+              "teeth": "19"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-R7101-12"
+            ]
+          },
+          {
+            "id": "p8",
+            "values": {
+              "position": "8",
+              "teeth": "21"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-R7101-12"
+            ]
+          },
+          {
+            "id": "p9",
+            "values": {
+              "position": "9",
+              "teeth": "24"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-R7101-12"
+            ]
+          },
+          {
+            "id": "p10",
+            "values": {
+              "position": "10",
+              "teeth": "27"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-R7101-12"
+            ]
+          },
+          {
+            "id": "p11",
+            "values": {
+              "position": "11",
+              "teeth": "30"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-R7101-12"
+            ]
+          },
+          {
+            "id": "p12",
+            "values": {
+              "position": "12",
+              "teeth": "34"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-R7101-12"
+            ]
+          }
+        ]
+      },
+      "unit": "T",
+      "method": "Ficha CS-R7101-12, «Combination»: 11-34T: 11-12-13-14-15-17-19-21-24-27-30-34T.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-R7101-12",
+      "reason": "Secuencia publicada de la combinación que nombra el ERP."
+    },
+    {
+      "key": "smallest_cog_teeth",
+      "current": {
+        "value": "11",
+        "source": "supplier_text",
+        "fact_id": "95961844-30ae-4bda-ad56-51270dab5ade",
+        "fact_sha256": "0a22aceebf49377a6b8698d858fdd0e9b1ea7b095522b1a125327b145991cf95",
+        "confirmed": false
+      },
+      "proposed": "11",
+      "unit": "T",
+      "method": "Primer piñón de la combinación 11-34T; nombre guardado «105 CS-R7100 12V 11-34T».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-R7101-12",
+      "reason": "Literal."
+    },
+    {
+      "key": "largest_cog_teeth",
+      "current": {
+        "value": "34",
+        "source": "supplier_text",
+        "fact_id": "fd17534d-7dc0-4de9-9b3e-f1a156f75fbb",
+        "fact_sha256": "0e3694e3689a8cf9fda6cf4eb903cd386f49761d4fe29ad9a89c08b6325bcf80",
+        "confirmed": false
+      },
+      "proposed": "34",
+      "unit": "T",
+      "method": "Último piñón de la combinación 11-34T; nombre guardado «105 CS-R7100 12V 11-34T».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-R7101-12",
+      "reason": "Literal."
+    },
+    {
+      "key": "cassette_spline_standard",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Shimano HG spline L2 (ROAD 12v dedicado)",
+      "unit": null,
+      "method": "Ficha CS-R7101-12, «Spline type»: «Shimano HG spline L2 ✔»; las demás filas de estriado con «-».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CS-R7101-12",
+      "reason": "Declaración del fabricante."
+    },
+    {
+      "key": "shift_technology",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "HYPERGLIDE",
+      "unit": null,
+      "method": "Ficha CS-R7101-12: «Type: HG»; HG es la abreviatura Shimano de HYPERGLIDE (misma sigla del código de modelo y de las filas «HG spline»).",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CS-R7101-12",
+      "reason": "Tecnología declarada por su sigla."
+    },
+    {
+      "key": "freehub_bodies_accepted",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "fh",
+            "values": {
+              "rear_drive_interface": "Shimano HG spline L2 (ROAD 12v dedicado)",
+              "spacer_requirement": "No publicado",
+              "status": "Compatible declarado",
+              "conditions": "Fila «Spline type» de la tabla productinfo de CS-R7101-12: «Shimano HG spline L2 ✔»; separador no mencionado.",
+              "source_scope": "Tabla de compatibilidad OEM",
+              "source_url": "https://productinfo.shimano.com/en/product/CS-R7101-12"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-R7101-12"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Fila «Spline type» de la ficha CS-R7101-12.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CS-R7101-12",
+      "reason": "Núcleo declarado por el fabricante; sin dato de separador."
+    },
+    {
+      "key": "published_variant_label",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "11-34T",
+      "unit": null,
+      "method": "Ficha CS-R7101-12, «Combination name (Group name)»: 11-34T; nombre guardado «105 CS-R7100 12V 11-34T».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-R7101-12",
+      "reason": "Variante publicada que corresponde al nombre."
+    },
+    {
+      "key": "lockring_included",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Ficha CS-R7101-12 lista «Lock ring: Material …, Finish …» entre las piezas del producto.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CS-R7101-12",
+      "reason": "Pieza listada en la ficha del producto."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/CS-R7101-12",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial CS-R7101-12",
+      "finding": "Type HG; Rear speeds 12; 11-34T: 11-12-13-14-15-17-19-21-24-27-30-34T; Shimano HG spline L2 ✔; Lock ring",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-cs-r7101-12-20260917.md",
+      "sha256": "ac56923cb3d6c3be14c85661fb4d15ce8eaa46dfff033d7e16216957275f0792"
+    },
+    {
+      "id": "no-results",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/CS-R7100-12",
+      "consulted_on": "2026-09-17",
+      "scope": "Registro de consultas sin ficha en productinfo (2026-09-17)",
+      "finding": "«No results»: CS-R7100-12, CS-R7100",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-productinfo-sin-resultado-20260917.md",
+      "sha256": "41018aa06d2edc6865aad1c45c0f67b15a38a5623cacae03df75e9e821bcfec8"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 07169e33-ae66-4964-ac34-8dab293f15ea",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Cassette Shimano 105 CS-R7100 12V 11-34T",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-cs-r7101-12-saved-name-20260917.json",
+      "sha256": "f34719239899b57fb49dc5de3ac2c8ef453c67ef6af3709849e8727fb0575099"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "c071040dcaaa9961a818749dfe1dca2bdd566d39d5febded7e16f36842072fd7",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre e88e3e6738e7359b30b856a0f77de0b7a5c72aa16980f773289cbdcafab7e63f: CS-R7101-12 por eliminación: «No results» archivados para CS-R7100 y CS-R7100-12; ficha «Series SHIMANO 105», «Rear speeds 12», «11-34T», secuencia 11-12-13-14-15-17-19-21-24-27-30-34T, «HG spline L2 ✔», Lock ring Steel. Residual: no hay listado archivado de cassettes 105 12v; el código R71 del nombre sólo lo cumple esta ficha."
+  }
+}

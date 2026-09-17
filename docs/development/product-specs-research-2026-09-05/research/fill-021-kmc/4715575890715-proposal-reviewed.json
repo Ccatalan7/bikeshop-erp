@@ -1,0 +1,185 @@
+{
+  "schema_version": 2,
+  "product_id": "ebfdc050-cd9d-432a-a170-8b156b8ee797",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "0735cd2df251b9aac268412c9ad3a850f395d27780ad3fd9e1e6c659c99ca3fa",
+    "fingerprints": {
+      "facts_sha256": "bdb6326a8aea504b2712bc9fbdf0a7e388931367cd602af40fc16a981732fdd1",
+      "product_sha256": "88447a416431106fbdee3ed75f4c72b3a8f59e651b3c7cbee4320ce7ca4c46ad",
+      "template_sha256": "116f235acd81e5019c5823922c9b13a4ea53de091bf50273ac359e0a194f4f5a",
+      "references_sha256": "ecfbc36e5431cc517d141900304efe06d322582e21142a7513f604df06ba2974"
+    },
+    "spec_revision": 0,
+    "updated_at": "2026-05-29T21:44:24.602195+00:00",
+    "template_id": "a9d0494f-08b5-42df-9836-42e302d2d9f5",
+    "contract_version": 45
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "Z8.3",
+      "evidence": [
+        "product-name",
+        "com"
+      ],
+      "reason": "El nombre guardado nombra el modelo «Z8.3» literal y la ficha oficial de KMC documenta ese modelo."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.kmcchain.com/en/product/bicycle-chain-z83-8-speed",
+      "unit": null,
+      "method": "URL de la ficha oficial de KMC consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "com"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "chain_pitch_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "12.7",
+      "unit": "mm",
+      "method": "Tamaño publicado «1/2\"x3/32\"»: paso de 1/2 pulgada = 12,7 mm.",
+      "origin": "research",
+      "evidence": [
+        "com"
+      ],
+      "scope": "Paso",
+      "reason": "Paso literal de la ficha (1/2\")."
+    },
+    {
+      "key": "chain_speeds",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": [
+        "8"
+      ],
+      "unit": null,
+      "method": "Página oficial kmcchain.com Z8.3: «8 Speed», «Compatibility : all other 8 speed drivetrains | 1x8, 2x8 , 3x8»; el nombre guardado dice «Z8.3 Gris» (colour «Gray/ Gray» en la página).",
+      "origin": "research",
+      "evidence": [
+        "com"
+      ],
+      "scope": "Velocidades",
+      "reason": "Velocidades declaradas por el fabricante."
+    },
+    {
+      "key": "drivetrain_mode",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Derailleur",
+      "unit": null,
+      "method": "Ficha KMC: 8 Speed.",
+      "origin": "research",
+      "evidence": [
+        "com"
+      ],
+      "scope": "Tipo de transmisión",
+      "reason": "Tipo de transmisión declarado."
+    },
+    {
+      "key": "chain_application_declarations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "sys8",
+            "values": {
+              "claim_identity": "KMC Z8.3 · sistema de 8 velocidades",
+              "scope_kind": "Sistema documentado",
+              "target_system": "Compatibility : all other 8 speed drivetrains | 1x8, 2x8 , 3x8",
+              "verdict": "Admitido por la fuente",
+              "drive_kind": "Desviador externo",
+              "rear_sprockets": "8",
+              "conditions": "Línea de compatibilidad publicada por KMC: «Compatibility : all other 8 speed drivetrains | 1x8, 2x8 , 3x8»; una fila por conteo de piñones (columna decimal).",
+              "source_document": "kmcchain.com — página Z8.3 (consultada 2026-09-17)",
+              "source_url": "https://www.kmcchain.com/en/product/bicycle-chain-z83-8-speed"
+            },
+            "sources": [
+              "https://www.kmcchain.com/en/product/bicycle-chain-z83-8-speed"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Línea de compatibilidad publicada: «Compatibility : all other 8 speed drivetrains | 1x8, 2x8 , 3x8».",
+      "origin": "research",
+      "evidence": [
+        "com"
+      ],
+      "scope": "Sistemas declarados",
+      "reason": "Sistemas declarados por el fabricante."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "com",
+      "kind": "oem_page",
+      "source": "KMC Chain Industrial (kmcchain.com, sitio oficial global)",
+      "locator": "https://www.kmcchain.com/en/product/bicycle-chain-z83-8-speed",
+      "consulted_on": "2026-09-17",
+      "scope": "Página oficial del modelo Z8.3",
+      "finding": "8 Speed; Size 1/2\"x3/32\" | Compatibility : all other 8 speed drivetrains | 1x8, 2x8 , 3x8",
+      "artifact_path": "research/fill-021-kmc/evidence/kmc-com-z83-8-speed-20260917.md",
+      "sha256": "4b7c88c6f1962c90f08893ed94b36bdb8197855bdb94520f9ddd082dc6f2eb0e"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product ebfdc050-cd9d-432a-a170-8b156b8ee797",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Cadena 1/2 X 3/32 Kmc Z8.3 Gris",
+      "artifact_path": "research/fill-021-kmc/evidence/kmc-z8-3-gris-saved-name-20260917.json",
+      "sha256": "ae27c7ca62859a42a616da685a1e833496cd1e43488eff7c898efbcbe7e13d73"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "4a8ab4e2241bc1b14263de1ee7ee665c5a949c835258b76ae5f2306e2a494e4c",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 817474939fc1453e311465c9fa7b9988d5ade3a9279295474fb9e41b9c4017fd: Sólo la página kmcchain.com del Z8.3, literal; correcto no tomar el «Z8» de kmcchain.eu."
+  }
+}

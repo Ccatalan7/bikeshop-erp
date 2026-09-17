@@ -1,0 +1,145 @@
+{
+  "schema_version": 2,
+  "product_id": "e8413b00-3481-486d-9292-5c8fcc2db95b",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "517f593f29874f6429546db0d9d206831651c2b73e9d39962c0bd0b1c518c505",
+    "fingerprints": {
+      "facts_sha256": "21727c57886e39e68cd71ae838416060222695b51a009f2b992f3a500fdc9dee",
+      "product_sha256": "568b0a998bdbb233adf78831e6efece475d995703f7293f9ac5f1020e9c8fb2a",
+      "template_sha256": "c9c12ef9de5da2f893445f1910c3cbdebe2daad22315ccc4e3310cb8ef173342",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-07-02T16:52:37.525+00:00",
+    "template_id": "4d5edd21-5818-4c98-827a-7154d1eebfe4",
+    "contract_version": 38
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "Berm Grabber",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado nombra el modelo «Berm Grabber» literal y la ficha oficial de Arisun lo documenta con ese nombre."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.arisun-bicycletire.com/product_show.php?action=show&id=lSXyS6JiXxJiS6PG",
+      "unit": null,
+      "method": "URL de la ficha oficial del fabricante consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "tire_etrto",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "57-406",
+      "unit": null,
+      "method": "Ficha oficial Arisun BERM GRABBER: las 2 filas publicadas de 20x2.25 (T080103 wire 545 g y T080106 aramid 520 g: ambas 57-406, durómetro 68, 60 TPI) llevan todas ETRTO «57-406»; el nombre guardado fija modelo y medida pero no la pieza.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Medida ETRTO",
+      "reason": "Valor común a todas las filas publicadas de la medida."
+    },
+    {
+      "key": "tire_tpi",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "60",
+      "unit": "TPI",
+      "method": "Ficha oficial Arisun BERM GRABBER: las 2 filas publicadas de 20x2.25 (T080103 wire 545 g y T080106 aramid 520 g: ambas 57-406, durómetro 68, 60 TPI) llevan todas TPI «60».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "TPI",
+      "reason": "Valor común a todas las filas publicadas de la medida."
+    },
+    {
+      "key": "tire_use",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "BMX",
+      "unit": null,
+      "method": "Ficha oficial Arisun BERM GRABBER: categoría «BMX-ALL PURPOSE» bajo el nombre del modelo.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Uso",
+      "reason": "Categoría de uso declarada por el fabricante para el modelo."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Arisun (arisun-bicycletire.com, sitio oficial de Zhongce Rubber)",
+      "locator": "https://www.arisun-bicycletire.com/product_show.php?action=show&id=lSXyS6JiXxJiS6PG",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial del modelo BERM GRABBER (tabla SPECS/CONFIGURATIONS)",
+      "finding": "20x2.25: T080103 wire 545 g y T080106 aramid 520 g: ambas 57-406, durómetro 68, 60 TPI; categoría «BMX-ALL PURPOSE»",
+      "artifact_path": "research/fill-020-tires/evidence/arisun-berm-grabber-20260917.md",
+      "sha256": "e355187c1a9da84796ffd54eee504936759b9015bb1626bd2de1033482d87af3"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product e8413b00-3481-486d-9292-5c8fcc2db95b",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Neumatico Bicicleta Aro 20 X 2.25 Berm Grabber Arisun",
+      "artifact_path": "research/fill-020-tires/evidence/arisun-berm-grabber-e8413b00-saved-name-20260917.json",
+      "sha256": "dfe13e1f40b3b0cdb0991e30842ae625f1bcc77adbc22a7c1afa518e3df83326"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "408c9b977f019e95f5147de673b60145605aaa0afa73c919bab7f96682c6b185",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre eceef85728798c2b0b703699dd59d25858612f3324af8c7017c9094351886eba. Validador mecánico (tokens, filas, based_on, sha de evidencias, name_quote, simulación) y cotejo literal de cada valor contra el archivo citado."
+  }
+}

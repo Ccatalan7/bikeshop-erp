@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "665759a2-24eb-4323-b812-32b1ceeebb9e",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "CAMBIO SHIMANO TOURNEY RD-TY300 6/7-SPEED, W/RIVETED ADAPTER (BMX-TRACK), BULK ARDTY300MB",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "1f7551c3e27b48e5e5d3f7d26c0d726e8a47d630bc5c6afb7229c8df06c9d010",
+  "product_sha256": "a703bff5e187b749bf5b472b1f308c51a284cd9ee8356b00b59245757d1347df",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

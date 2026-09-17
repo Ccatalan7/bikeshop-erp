@@ -1,0 +1,217 @@
+{
+  "schema_version": 2,
+  "product_id": "665759a2-24eb-4323-b812-32b1ceeebb9e",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "1f7551c3e27b48e5e5d3f7d26c0d726e8a47d630bc5c6afb7229c8df06c9d010",
+    "fingerprints": {
+      "facts_sha256": "ec00d6fb59457f9849f7aa5af0addf5a2b887855558ea2ec3bfdd4a5086da94d",
+      "product_sha256": "a703bff5e187b749bf5b472b1f308c51a284cd9ee8356b00b59245757d1347df",
+      "template_sha256": "944d2fc9c55724dd3af499184f96a524950e093dbdcec89079f2859781430953",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 3,
+    "updated_at": "2026-07-07T14:02:50.956407+00:00",
+    "template_id": "0750e4ac-4615-4ad4-862e-95ac102b12f7",
+    "contract_version": 42
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "RD-TY300-SGS",
+      "evidence": [
+        "product-name",
+        "oem",
+        "no-results"
+      ],
+      "reason": "El nombre guardado dice «RD-TY300 6/7-SPEED, W/RIVETED ADAPTER (BMX-TRACK)» y sku ARDTY300MB sin sufijo de jaula. productinfo publica RD-TY300-SGS; RD-TY300-GS y RD-TY300-SS devuelven «No results» (archivado). Identidad por eliminación sobre las consultas archivadas."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/RD-TY300-SGS",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-17 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "derailleur_cage_length",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Larga (SGS)",
+      "unit": null,
+      "method": "Ficha «Model no. RD-TY300-SGS»: sufijo SGS de jaula; único RD-TY300 publicado (GS y SS sin ficha, archivado).",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "RD-TY300-SGS",
+      "reason": "Sufijo de jaula del modelo publicado."
+    },
+    {
+      "key": "rear_derailleur_mount_type",
+      "current": {
+        "value": "Con uña / claw",
+        "source": "name_reading",
+        "fact_id": "86ac6645-f440-49e2-9f73-aa97a563e622",
+        "fact_sha256": "77cd6bdd97c73fadc6a7f9d596edf7576fbdd390036792b18c673af99798ce03",
+        "confirmed": false
+      },
+      "proposed": "Con uña / claw",
+      "unit": null,
+      "method": "Ficha: «Applicable derailleur hanger — SHIMANO MTB type: Direct attachment (conventional) ✔» y «Riveted adapter: ROAD type ✔, BMX-track type ✔»; el nombre guardado «W/RIVETED ADAPTER (BMX-TRACK)» fija la uña BMX-track.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "RD-TY300-SGS",
+      "reason": "Montaje declarado por el fabricante; el nombre fija la presentación."
+    },
+    {
+      "key": "rear_derailleur_supplied_mount_adapter",
+      "current": {
+        "value": true,
+        "source": "name_reading",
+        "fact_id": "3ee19032-4be9-4758-81f0-52a70121380f",
+        "fact_sha256": "f06e1fa255f99a71a37c741ba5fbb3ed138f840d4b6489bdd3a8a7e7602ed1c5",
+        "confirmed": false
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Ficha: «Riveted adapter — BMX-track type ✔»; nombre guardado «W/RIVETED ADAPTER (BMX-TRACK)».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "RD-TY300-SGS",
+      "reason": "La presentación con uña remachada BMX-track, publicada y nombrada."
+    },
+    {
+      "key": "rear_derailleur_supplied_adapter_reference",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Riveted adapter (BMX-track type)",
+      "unit": null,
+      "method": "Ficha: «Riveted adapter — BMX-track type ✔»; nombre guardado «W/RIVETED ADAPTER (BMX-TRACK)».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "RD-TY300-SGS",
+      "reason": "Designación de la ficha para la uña incluida."
+    },
+    {
+      "key": "rear_derailleur_compatibility_claims",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "chain-0",
+            "values": {
+              "claim_identity": "Cadena HG 8/7/6-speed",
+              "scope_kind": "Interfaz o estándar documentado",
+              "declared_interface": "HG 8/7/6-speed",
+              "source_document": "productinfo.shimano.com — ficha RD-TY300-SGS (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/RD-TY300-SGS",
+              "target_component": "Cadena",
+              "declaration_result": "Compatible declarado",
+              "conditions": "Fila «Compatible chain» de la ficha RD-TY300-SGS."
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/RD-TY300-SGS"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Fila «Compatible chain: HG 8/7/6-speed» de la ficha.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "RD-TY300-SGS",
+      "reason": "Clases de cadena declaradas."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/RD-TY300-SGS",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial RD-TY300-SGS",
+      "finding": "TOURNEY; Rear 7/6; MTB Direct attachment ✔; Riveted adapter ROAD ✔ BMX-track ✔; Max. front difference 20T; cap. 43T; Low 28-34T; Top 11-14T",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-rd-ty300-sgs-20260917.md",
+      "sha256": "4a5787983d7341604320243e2f2120b629af40a39672cf76a14e8849384dd13d"
+    },
+    {
+      "id": "no-results",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/RD-TY300-GS",
+      "consulted_on": "2026-09-17",
+      "scope": "Registro de consultas sin ficha en productinfo (2026-09-17)",
+      "finding": "«No results»: RD-TY300-GS, RD-TY300-SS",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-productinfo-sin-resultado-20260917.md",
+      "sha256": "41018aa06d2edc6865aad1c45c0f67b15a38a5623cacae03df75e9e821bcfec8"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 665759a2-24eb-4323-b812-32b1ceeebb9e",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "CAMBIO SHIMANO TOURNEY RD-TY300 6/7-SPEED, W/RIVETED ADAPTER (BMX-TRACK), BULK ARDTY300MB",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-rd-ty300-sgs-bmx-saved-name-20260917.json",
+      "sha256": "abbadf42d37ef8b15338cb0aef43497c332c048c468c3da16c6f8f94f05bfcba"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "b13483259b1ed29361b35a2afbb15b6e92f904a25cd2973c6871b7e1a1f85de5",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre ce6d772b5a419b47b23aecc5ef8c6bfdc4a9b7a1663daf2589ff769faae4b461: RD-TY300-SGS por eliminación: «No results» archivados para -GS y -SS; «Riveted adapter BMX-track type ✔» + «W/RIVETED ADAPTER (BMX-TRACK)» → uña, adaptador incluido y referencia; configuraciones no declaradas (20T sin número de platos)."
+  }
+}

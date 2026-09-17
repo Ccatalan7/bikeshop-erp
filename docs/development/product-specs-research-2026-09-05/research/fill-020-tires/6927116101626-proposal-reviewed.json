@@ -1,0 +1,145 @@
+{
+  "schema_version": 2,
+  "product_id": "f3956a10-ef4a-4d1d-8485-10fed60c8f36",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "93c57e6d8e8c55c94a2bddd88c1bba5e3044c191603eb7ef400c4d257053d316",
+    "fingerprints": {
+      "facts_sha256": "981264303f77e347f43be5c47fa87471f3e9701a6079b17af2ce1389a6157645",
+      "product_sha256": "0712bb8324b9036f219c9ab3c2bc18037473267b370b4a718046d77d152768b1",
+      "template_sha256": "c9c12ef9de5da2f893445f1910c3cbdebe2daad22315ccc4e3310cb8ef173342",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 1,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "4d5edd21-5818-4c98-827a-7154d1eebfe4",
+    "contract_version": 38
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "Rapide",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado nombra el modelo «Rapide» literal y la ficha oficial de Arisun lo documenta con ese nombre."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.arisun-bicycletire.com/product_show.php?action=show&id=ly5JS544SxJy46U6",
+      "unit": null,
+      "method": "URL de la ficha oficial del fabricante consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "tire_etrto",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "23-622",
+      "unit": null,
+      "method": "Ficha oficial Arisun RAPIDE: las 5 filas publicadas de 700x23C (T050202, T050225, T050204, T050206, T050208: todas 23-622, 60 TPI, Aramid) llevan todas ETRTO «23-622»; el nombre guardado fija modelo y medida pero no la pieza.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Medida ETRTO",
+      "reason": "Valor común a todas las filas publicadas de la medida."
+    },
+    {
+      "key": "tire_tpi",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "60",
+      "unit": "TPI",
+      "method": "Ficha oficial Arisun RAPIDE: las 5 filas publicadas de 700x23C (T050202, T050225, T050204, T050206, T050208: todas 23-622, 60 TPI, Aramid) llevan todas TPI «60».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "TPI",
+      "reason": "Valor común a todas las filas publicadas de la medida."
+    },
+    {
+      "key": "tire_use",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Ruta",
+      "unit": null,
+      "method": "Ficha oficial Arisun RAPIDE: categoría «ROAD SPORT TRAINING» bajo el nombre del modelo.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Uso",
+      "reason": "Categoría de uso declarada por el fabricante para el modelo."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Arisun (arisun-bicycletire.com, sitio oficial de Zhongce Rubber)",
+      "locator": "https://www.arisun-bicycletire.com/product_show.php?action=show&id=ly5JS544SxJy46U6",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial del modelo RAPIDE (tabla SPECS/CONFIGURATIONS)",
+      "finding": "700x23C: T050202, T050225, T050204, T050206, T050208: todas 23-622, 60 TPI, Aramid; categoría «ROAD SPORT TRAINING»",
+      "artifact_path": "research/fill-020-tires/evidence/arisun-rapide-20260917.md",
+      "sha256": "9116429babc2f30fb174f74637a83bacb1b3928d4a4e2e4db35dc9ac66255147"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product f3956a10-ef4a-4d1d-8485-10fed60c8f36",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "NEUMATICO ARISUN 700 X 23C RAPIDE NEGRO KEVLAR",
+      "artifact_path": "research/fill-020-tires/evidence/arisun-rapide-f3956a10-saved-name-20260917.json",
+      "sha256": "dfed4a7eeca6499f540c45f104f89d136ec3ff1aac31eee499dfb00e606132cc"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "e032a3bbb20d5e371687a65246ae90d0231921e205ef0023288e65b4315e98ad",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre f531d0f3092c622fb1bbbf27a814f42cc1d280cc68a695f2bd0b6d4c75e99880. Validador mecánico (tokens, filas, based_on, sha de evidencias, name_quote, simulación) y cotejo literal de cada valor contra el archivo citado."
+  }
+}

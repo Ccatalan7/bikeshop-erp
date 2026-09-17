@@ -1,0 +1,165 @@
+{
+  "schema_version": 2,
+  "product_id": "051eb363-e158-4df8-9c46-5ec44cc221d8",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "8713923fe5dafb856b01f3d21335de2f6c38fd9a9d4da2b9347261a684c8d455",
+    "fingerprints": {
+      "facts_sha256": "cfe8b518ca15b0bddea333ea2e71d86b7c3df41d1ad20c36f63e4aa7982cf050",
+      "product_sha256": "dfd873a18f1252e10c01f71c14ffcc3839bd901ec9ca3f6a7b63d19cc2a7d8e0",
+      "template_sha256": "c9c12ef9de5da2f893445f1910c3cbdebe2daad22315ccc4e3310cb8ef173342",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 6,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "4d5edd21-5818-4c98-827a-7154d1eebfe4",
+    "contract_version": 38
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "Metro Runner",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado nombra el modelo «Metro Runner» literal y la ficha oficial de Arisun lo documenta con ese nombre."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.arisun-bicycletire.com/product_show.php?action=show&id=lXxJ6JX466xQxxPU",
+      "unit": null,
+      "method": "URL de la ficha oficial del fabricante consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "tire_etrto",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "32-622",
+      "unit": null,
+      "method": "Ficha oficial Arisun METRO RUNNER: las 3 filas publicadas de 700x32C (T070202 (KD), T070203 (KD, Reflective Stripe), T070204 (PD): todas 32-622, 60 TPI, Wire) llevan todas ETRTO «32-622»; el nombre guardado fija modelo y medida pero no la pieza.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Medida ETRTO",
+      "reason": "Valor común a todas las filas publicadas de la medida."
+    },
+    {
+      "key": "tire_tpi",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "60",
+      "unit": "TPI",
+      "method": "Ficha oficial Arisun METRO RUNNER: las 3 filas publicadas de 700x32C (T070202 (KD), T070203 (KD, Reflective Stripe), T070204 (PD): todas 32-622, 60 TPI, Wire) llevan todas TPI «60».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "TPI",
+      "reason": "Valor común a todas las filas publicadas de la medida."
+    },
+    {
+      "key": "tire_bead_type",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Alambre",
+      "unit": null,
+      "method": "Ficha oficial Arisun METRO RUNNER: las 3 filas publicadas de 700x32C (T070202 (KD), T070203 (KD, Reflective Stripe), T070204 (PD): todas 32-622, 60 TPI, Wire) llevan todas BEAD «Wire».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Talón",
+      "reason": "Valor común a todas las filas publicadas de la medida."
+    },
+    {
+      "key": "tire_use",
+      "current": {
+        "value": "Ruta",
+        "source": "name_reading",
+        "fact_id": "45669888-efe9-4389-807f-8bce8fdbc350",
+        "fact_sha256": "07c386f3daefd2231efa02f55c0a984f307eeef8e3719b596d47836b12bd1f0f",
+        "confirmed": false
+      },
+      "proposed": "Urbano / híbrido",
+      "unit": null,
+      "method": "Ficha oficial Arisun METRO RUNNER: categoría «CITY URBAN TREKKING TIRE» bajo el nombre del modelo.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Uso",
+      "reason": "Categoría de uso declarada por el fabricante para el modelo."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Arisun (arisun-bicycletire.com, sitio oficial de Zhongce Rubber)",
+      "locator": "https://www.arisun-bicycletire.com/product_show.php?action=show&id=lXxJ6JX466xQxxPU",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial del modelo METRO RUNNER (tabla SPECS/CONFIGURATIONS)",
+      "finding": "700x32C: T070202 (KD), T070203 (KD, Reflective Stripe), T070204 (PD): todas 32-622, 60 TPI, Wire; categoría «CITY URBAN TREKKING TIRE»",
+      "artifact_path": "research/fill-020-tires/evidence/arisun-metro-runner-20260917.md",
+      "sha256": "a11c017d4fe079a70f731d30817fea375b91a50f1c7fbc405e81969d598f2fdc"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 051eb363-e158-4df8-9c46-5ec44cc221d8",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Neumatico Ruta Bicicleta Aro 700 X 32C Metro Runner Arisun",
+      "artifact_path": "research/fill-020-tires/evidence/arisun-metro-runner-051eb363-saved-name-20260917.json",
+      "sha256": "6a4b7cbb9df0183786f5c9b809c27e8f7f3e1cb917c2fb8c16d96e8aca34f9a4"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "0ed69d35d0e84e2675a12c8658e76c9f68e1a0c882e74e6e3d13b5605b135612",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 66ea487c4842a90097babb738317d3a63c0b01c1e8663800d78e87d15ef4fa1c. Validador mecánico (tokens, filas, based_on, sha de evidencias, name_quote, simulación) y cotejo literal de cada valor contra el archivo citado."
+  }
+}

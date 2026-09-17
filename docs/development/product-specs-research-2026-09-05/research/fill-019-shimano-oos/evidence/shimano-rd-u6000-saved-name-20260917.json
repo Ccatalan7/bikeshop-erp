@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "08167220-dbe6-4515-b84a-370c3e35be61",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Desviador Trasero Shimano Cues RD-U6000 10v/11v",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "d8e9c1482404eb813da8185bf47e400def81cdaf608e9a535aa706cd38aa8ee8",
+  "product_sha256": "acc4c988a2ed5b980a572c2370ef690b51fe2f905cf2b6f47e4c5a01349558ef",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

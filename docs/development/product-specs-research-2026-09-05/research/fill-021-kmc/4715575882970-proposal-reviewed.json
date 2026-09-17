@@ -1,0 +1,373 @@
+{
+  "schema_version": 2,
+  "product_id": "f81391b4-84e2-4cf4-9b5f-09d4e9ceef2a",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "2ab610e4052b8bbd84cbbf6e6a5aa12fb307e485ea0be0cbe6747d07df408eec",
+    "fingerprints": {
+      "facts_sha256": "af57bb06817a77b46ae0d81de047fb638ef349c6b60133d19fea525c35b13a0a",
+      "product_sha256": "eaf4da55af192688bf01271f44d598c50bbee6cc1398a54b643588bb096d8224",
+      "template_sha256": "116f235acd81e5019c5823922c9b13a4ea53de091bf50273ac359e0a194f4f5a",
+      "references_sha256": "ecfbc36e5431cc517d141900304efe06d322582e21142a7513f604df06ba2974"
+    },
+    "spec_revision": 0,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "a9d0494f-08b5-42df-9836-42e302d2d9f5",
+    "contract_version": 45
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "Z6",
+      "evidence": [
+        "product-name",
+        "eu",
+        "com"
+      ],
+      "reason": "El nombre guardado nombra el modelo «Z6» literal y la ficha oficial de KMC documenta ese modelo."
+    },
+    {
+      "field": "manufacturer_sku",
+      "current": null,
+      "proposed": "BZ06G0114",
+      "evidence": [
+        "product-name",
+        "eu",
+        "listing"
+      ],
+      "reason": "El nombre guardado dice «Z6 Gris»; la única Z6 del listado oficial kmcchain.eu es Z6 Grey, Art.nr. BZ06G0114."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.kmcchain.eu/products/z6-grey",
+      "unit": null,
+      "method": "URL de la ficha oficial de KMC consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "eu",
+        "com",
+        "listing"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "chain_pitch_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "12.7",
+      "unit": "mm",
+      "method": "Tamaño publicado «1/2\" X 3/32\"»: paso de 1/2 pulgada = 12,7 mm.",
+      "origin": "research",
+      "evidence": [
+        "eu",
+        "com"
+      ],
+      "scope": "Paso",
+      "reason": "Paso literal de la ficha (1/2\")."
+    },
+    {
+      "key": "chain_speeds",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": [
+        "5",
+        "6"
+      ],
+      "unit": null,
+      "method": "Ficha kmcchain.eu Z6 Grey: «Compatible with all 5- and 6-speed derailleur systems»; kmcchain.com Z6: «6 Speed» (su línea de compatibilidad dice «7 speed», errata del sitio, no se cita).",
+      "origin": "research",
+      "evidence": [
+        "eu",
+        "com"
+      ],
+      "scope": "Velocidades",
+      "reason": "Velocidades declaradas por el fabricante."
+    },
+    {
+      "key": "drivetrain_mode",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Derailleur",
+      "unit": null,
+      "method": "Ficha KMC: «Compatible with all 5- and 6-speed derailleur systems ».",
+      "origin": "research",
+      "evidence": [
+        "eu",
+        "com"
+      ],
+      "scope": "Tipo de transmisión",
+      "reason": "Tipo de transmisión declarado."
+    },
+    {
+      "key": "chain_outer_width_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "7.3",
+      "unit": "mm",
+      "method": "Ficha kmcchain.eu: «Pin length: 7.3 mm» (largo de pasador = ancho externo de la cadena; el catálogo distingue 8/9/10/11 v por este valor).",
+      "origin": "research",
+      "evidence": [
+        "eu"
+      ],
+      "scope": "Ancho externo",
+      "reason": "Ancho externo publicado por el fabricante."
+    },
+    {
+      "key": "chain_mass_declarations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "w110",
+            "values": {
+              "weighing_identity": "Z6 Grey (BZ06G0114) — 110 eslabones",
+              "weight_g": "337",
+              "basis_links": "110",
+              "basis_description": "Weight per 110 links (dato publicado por KMC por 110 eslabones)",
+              "source_document": "kmcchain.eu — ficha Z6 Grey (consultada 2026-09-17)",
+              "source_url": "https://www.kmcchain.eu/products/z6-grey"
+            },
+            "sources": [
+              "https://www.kmcchain.eu/products/z6-grey"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha kmcchain.eu: «Weight per 110 links: 337 g».",
+      "origin": "research",
+      "evidence": [
+        "eu"
+      ],
+      "scope": "Peso declarado",
+      "reason": "Peso publicado sobre una base de 110 eslabones."
+    },
+    {
+      "key": "link_count",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "114",
+      "unit": "eslabones",
+      "method": "Ficha kmcchain.eu: «Length: 114 links».",
+      "origin": "research",
+      "evidence": [
+        "eu"
+      ],
+      "scope": "Eslabones",
+      "reason": "Largo de venta publicado."
+    },
+    {
+      "key": "quick_link_included",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Ficha kmcchain.eu: «Includes a MissingLink».",
+      "origin": "research",
+      "evidence": [
+        "eu"
+      ],
+      "scope": "Conector incluido",
+      "reason": "Conector incluido según el fabricante."
+    },
+    {
+      "key": "chain_quick_links_supplied",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "ql",
+            "values": {
+              "connector_identity": "MissingLink incluido con la cadena Z6",
+              "quantity": "1",
+              "brand": "KMC",
+              "model": "MissingLink",
+              "source_document": "kmcchain.eu — ficha Z6 Grey (consultada 2026-09-17)",
+              "source_url": "https://www.kmcchain.eu/products/z6-grey"
+            },
+            "sources": [
+              "https://www.kmcchain.eu/products/z6-grey"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha kmcchain.eu: «Includes a MissingLink» (un conector por cadena).",
+      "origin": "research",
+      "evidence": [
+        "eu"
+      ],
+      "scope": "Conectores incluidos",
+      "reason": "Conector incluido según el fabricante."
+    },
+    {
+      "key": "chain_application_declarations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "sys5",
+            "values": {
+              "claim_identity": "KMC Z6 · sistema de 5 velocidades",
+              "scope_kind": "Sistema documentado",
+              "target_system": "Compatible with all 5- and 6-speed derailleur systems",
+              "verdict": "Admitido por la fuente",
+              "drive_kind": "Desviador externo",
+              "rear_sprockets": "5",
+              "conditions": "Línea de compatibilidad publicada por KMC: «Compatible with all 5- and 6-speed derailleur systems»; una fila por conteo de piñones (columna decimal).",
+              "source_document": "kmcchain.eu — ficha Z6 Grey (consultada 2026-09-17)",
+              "source_url": "https://www.kmcchain.eu/products/z6-grey"
+            },
+            "sources": [
+              "https://www.kmcchain.eu/products/z6-grey"
+            ]
+          },
+          {
+            "id": "sys6",
+            "values": {
+              "claim_identity": "KMC Z6 · sistema de 6 velocidades",
+              "scope_kind": "Sistema documentado",
+              "target_system": "Compatible with all 5- and 6-speed derailleur systems",
+              "verdict": "Admitido por la fuente",
+              "drive_kind": "Desviador externo",
+              "rear_sprockets": "6",
+              "conditions": "Línea de compatibilidad publicada por KMC: «Compatible with all 5- and 6-speed derailleur systems»; una fila por conteo de piñones (columna decimal).",
+              "source_document": "kmcchain.eu — ficha Z6 Grey (consultada 2026-09-17)",
+              "source_url": "https://www.kmcchain.eu/products/z6-grey"
+            },
+            "sources": [
+              "https://www.kmcchain.eu/products/z6-grey"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Línea de compatibilidad publicada: «Compatible with all 5- and 6-speed derailleur systems».",
+      "origin": "research",
+      "evidence": [
+        "eu"
+      ],
+      "scope": "Sistemas declarados",
+      "reason": "Sistemas declarados por el fabricante."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "eu",
+      "kind": "oem_page",
+      "source": "KMC Chain Europe (kmcchain.eu, sitio oficial)",
+      "locator": "https://www.kmcchain.eu/products/z6-grey",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial Z6 Grey",
+      "finding": "Compatible with all 5- and 6-speed derailleur systems ; Art.nr. BZ06G0114; Size 1/2\" X 3/32\"; Pin length 7.3 mm; Weight per 110 links 337 g; Length 114 links",
+      "artifact_path": "research/fill-021-kmc/evidence/kmc-z6-grey-20260917.md",
+      "sha256": "59925e60e677ab1d18248f552280166e259fff4f0f6a3f7f6af5ce9ce401c3c7"
+    },
+    {
+      "id": "com",
+      "kind": "oem_page",
+      "source": "KMC Chain Industrial (kmcchain.com, sitio oficial global)",
+      "locator": "https://www.kmcchain.com/en/product/bicycle-chain-z6-6-speed",
+      "consulted_on": "2026-09-17",
+      "scope": "Página oficial del modelo Z6",
+      "finding": "6 Speed; Size 1/2\" x3/32\"| Compatibility : all other 7 speed drivetrains | 1x6, 2x6, 3x6",
+      "artifact_path": "research/fill-021-kmc/evidence/kmc-com-z6-6-speed-20260917.md",
+      "sha256": "93866bfdc2dcffca0f34521c65ef560597106775774a8ae111f8557db66e9237"
+    },
+    {
+      "id": "listing",
+      "kind": "oem_page",
+      "source": "KMC Chain Europe (kmcchain.eu)",
+      "locator": "https://www.kmcchain.eu/bike-solutions/derailleur",
+      "consulted_on": "2026-09-17",
+      "scope": "Listado oficial de cadenas de desviador",
+      "finding": "Un solo Z6 (z6-grey) y un solo Z7 (z7-grey-brown) en el listado",
+      "artifact_path": "research/fill-021-kmc/evidence/kmc-listado-derailleur-20260917.md",
+      "sha256": "6a2ed76b3d4350649e2a30b48d364361ca8170d977e41dd4921519b5431d77b1"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product f81391b4-84e2-4cf4-9b5f-09d4e9ceef2a",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Cadena 1/2\" X 3/32\" Kmc Z6 Gris",
+      "artifact_path": "research/fill-021-kmc/evidence/kmc-z6-gris-saved-name-20260917.json",
+      "sha256": "ad09583d0e07c177372d66bb0e177cd5485f7f056ee887e03803bd3ebc7f647f"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "d3a1ccc63a7f32934d832c0ef7a0db7b4f5d9326857a615f541bbcfa50ad7e9d",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre e6dd2ddcc78f9c8744baf60729c510df71062c58cb50f02ff76d6cbd04bd8803: Z6 única en el listado archivado; velocidades 5 y 6 de la ficha kmcchain.eu (bien no citar el «7 speed» errado de kmcchain.com). Opcional: chain_width_family 3/32."
+  }
+}

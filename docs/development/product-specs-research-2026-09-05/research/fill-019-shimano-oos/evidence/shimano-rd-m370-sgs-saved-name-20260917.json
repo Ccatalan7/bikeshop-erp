@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "cecb09d2-6eac-4bd7-99ce-fbfb9670351b",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Desviador Shimano Altus 9V RD-M370 SGS Negro",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "c0e08f628910af3342021073be0273962c117ecff14d8df499e1c258837e8465",
+  "product_sha256": "639a510abde6fea307f73894679816eb9c750591f9f87b78123ebedfbc9bd41c",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

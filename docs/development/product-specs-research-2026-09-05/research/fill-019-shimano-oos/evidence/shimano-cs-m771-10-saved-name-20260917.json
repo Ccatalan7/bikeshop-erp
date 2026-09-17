@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "fc082196-ffcc-4000-b112-fae51a3e26e7",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "piñón shimano xt cs-m771-10 10v. (11-36)",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "1aea201554f4845edabf7889438d0a7ad2a4b7e199ab85ed9b857855400a154f",
+  "product_sha256": "dc4a7b07d8db9edbdcd5112599430508161a275558d66719d0942fc2435786ca",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

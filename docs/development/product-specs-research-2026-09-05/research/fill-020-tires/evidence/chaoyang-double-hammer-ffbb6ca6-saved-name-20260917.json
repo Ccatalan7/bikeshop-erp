@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "ffbb6ca6-84b4-43bb-aa9c-612a8d91fe6c",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "NEUMATICO 29X2.25 27TPI H-5177 CHAOYANG DOBLE HAMMER",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "8dc257e1999439c6af3b69e5b851cbbbc9a9486933be863ad935868475843c0a",
+  "product_sha256": "7d86981a1b2eaa36e904d8d79a9dea70642cadb4dabbdfe931ca17f83180acb6",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

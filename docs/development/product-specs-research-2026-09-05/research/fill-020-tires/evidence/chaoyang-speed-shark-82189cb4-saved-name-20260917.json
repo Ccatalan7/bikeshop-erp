@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "82189cb4-68bf-4e08-9ab1-3872aa1c8188",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Neumático Chaoyang 700x25c Speed Shark",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "3ae1d2a9ef6aceef8bc07baa2113a99ef0aedc72c4583eed6a4ac2bf9cd7085a",
+  "product_sha256": "4247288623ab8ce6799aa8b8f7e534ddc5eb2a856e8ed55abe7582a6b7d225f6",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

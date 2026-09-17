@@ -1,0 +1,249 @@
+{
+  "schema_version": 2,
+  "product_id": "dc5a279f-f0d3-4007-a14b-178aadc8cfdc",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "1bb4c4f8ef95043db07efb3958186e7eb13ceb543556d0337c6a939aa1330fe3",
+    "fingerprints": {
+      "facts_sha256": "6c9ed4702ee4f091899c3bae448a85c5c6edc457fe984d6bde717ad0c4f6afa6",
+      "product_sha256": "f3a6b730badad3a7721cbcdbbf50e32ee9cd0af4a870c623f4f246b7e8b014ff",
+      "template_sha256": "e48fe12aecdb34ba5053c7fdbd2c4c243d525073a4b45b908e8004130a1dec57",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 5,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "590232e5-d21a-4a47-9419-1bf42e6b1922",
+    "contract_version": 36
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "FD-TZ510-DS6",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice literalmente «fd-tz510-ds6»; la ficha oficial documenta FD-TZ510-DS6."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/FD-TZ510-DS6",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-17 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "front_derailleur_mount_type",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Abrazadera",
+      "unit": null,
+      "method": "Ficha: «Mount — Clamp band (mm): 28.6 ✔, 31.8 ✔, 34.9 -; E-type -; Direct mount -; Brazed-on -».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "FD-TZ510-DS6",
+      "reason": "Literal."
+    },
+    {
+      "key": "front_derailleur_clamp_options",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 2,
+        "rows": [
+          {
+            "id": "band-31-8",
+            "values": {
+              "option_identity": "Abrazadera directa 31,8 mm",
+              "attachment_method": "Abrazadera directa",
+              "direct_tube_diameter_mm": "31.8",
+              "source_document": "productinfo.shimano.com — ficha FD-TZ510-DS6 (consultada 2026-09-17) y nombre guardado «31.8mm»",
+              "source_url": "https://productinfo.shimano.com/en/product/FD-TZ510-DS6",
+              "conditions": "La ficha publica 28,6 ✔ y 31,8 ✔ como abrazaderas del modelo (34,9 -); el nombre guardado fija 31,8 mm. Sin casquillo reductor mencionado."
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/FD-TZ510-DS6"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Fila «Mount — Clamp band (mm)» de la ficha; el nombre fija la variante de 31,8 mm.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "FD-TZ510-DS6",
+      "reason": "Una abrazadera directa; la cifra del nombre coincide con una opción publicada."
+    },
+    {
+      "key": "front_derailleur_swing",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Down swing",
+      "unit": null,
+      "method": "Ficha: «Action — TOP SWING -; Down swing ✔; SIDE SWING -».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "FD-TZ510-DS6",
+      "reason": "Literal."
+    },
+    {
+      "key": "front_derailleur_cable_pull",
+      "current": {
+        "value": "Tiro arriba (top pull)",
+        "source": "name_reading",
+        "fact_id": "482a05ff-11c6-48ef-80a1-51f848a2d8f0",
+        "fact_sha256": "e2e916f082813b011bd1be24939078b0d6b0d84b23deebb9b74ff0e9b5bc47ac",
+        "confirmed": false
+      },
+      "proposed": "Tiro arriba (top pull)",
+      "unit": null,
+      "method": "Ficha: «Cable route type — Dual-pull -; Top-pull exclusive ✔; Down-pull exclusive ✔; Front-pull -» (el modelo existe en las dos rutas exclusivas); nombre guardado «T/ARRIBA» fija la de tiro arriba.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "FD-TZ510-DS6",
+      "reason": "El nombre fija una de las dos opciones publicadas; sustituye la lectura de nombre."
+    },
+    {
+      "key": "front_derailleur_application_configurations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "3x7",
+            "values": {
+              "configuration_identity": "3x7 (FD-TZ510-DS6)",
+              "front_chainring_count": "3",
+              "rear_sprocket_count": "7",
+              "chain_declaration": "HG 8/7/6-speed",
+              "top_chainring_min_teeth": "48",
+              "top_chainring_max_teeth": "48",
+              "total_capacity_teeth": "20",
+              "chainline_mm": "47.5",
+              "chainstay_angle_min_deg": "66",
+              "chainstay_angle_max_deg": "69",
+              "source_document": "productinfo.shimano.com — ficha FD-TZ510-DS6 (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/FD-TZ510-DS6",
+              "conditions": "Ficha: «Front speeds 3 (friction)»; «Rear speeds 7/6»; «Top gear teeth 48T»; «Total capacity 20T»; «Applicable top-mid tooth difference 10T»; «Chain line (mm) 47.5»; «Chainstay angle (deg.) 66-69».",
+              "top_middle_difference_teeth": "10"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/FD-TZ510-DS6"
+            ]
+          },
+          {
+            "id": "3x6",
+            "values": {
+              "configuration_identity": "3x6 (FD-TZ510-DS6)",
+              "front_chainring_count": "3",
+              "rear_sprocket_count": "6",
+              "chain_declaration": "HG 8/7/6-speed",
+              "top_chainring_min_teeth": "48",
+              "top_chainring_max_teeth": "48",
+              "total_capacity_teeth": "20",
+              "chainline_mm": "47.5",
+              "chainstay_angle_min_deg": "66",
+              "chainstay_angle_max_deg": "69",
+              "source_document": "productinfo.shimano.com — ficha FD-TZ510-DS6 (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/FD-TZ510-DS6",
+              "conditions": "Ficha: «Front speeds 3 (friction)»; «Rear speeds 7/6»; «Top gear teeth 48T»; «Total capacity 20T»; «Applicable top-mid tooth difference 10T»; «Chain line (mm) 47.5»; «Chainstay angle (deg.) 66-69».",
+              "top_middle_difference_teeth": "10"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/FD-TZ510-DS6"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Tabla productinfo: Front speeds, Rear speeds 7/6, Top gear teeth, Total capacity, Applicable top-mid tooth difference, Chain line, Chainstay angle, Compatible chain.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "FD-TZ510-DS6",
+      "reason": "Dos configuraciones traseras publicadas (7 y 6) con los mismos límites."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/FD-TZ510-DS6",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial FD-TZ510-DS6",
+      "finding": "TOURNEY TZ; Front 3 (friction); Rear 7/6; Down swing; Clamp band 28.6/31.8; Top-pull/Down-pull exclusive; Chain line 47.5; 48T; cap. 20T; 66-69°",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-fd-tz510-ds6-20260916.md",
+      "sha256": "b0cde9106eca3fe53af037a3311584fe6d630bf73836ca06d4bb33263291522c"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product dc5a279f-f0d3-4007-a14b-178aadc8cfdc",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "cambiador shimano fd-tz510-ds6 3 (friction) x7/6 31.8mm T/ARRIBA",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-fd-tz510-ds6-arriba-saved-name-20260917.json",
+      "sha256": "b67ea2cad979bef47d9e6104b1f805722d0ceee2700422d0f7990b259ba55a93"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "1a2b87aef37f19105906bd23dc02fcc59ba27c44f4bbb843853f8c8af11c1bcc",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre fbc5488413796ff1bb0999326244666279e2e37ab179ad1add2dfb5c4d6e2cab: FD-TZ510-DS6 T/ARRIBA (ficha fill-016): 31.8 fijado por el nombre; «T/ARRIBA» fija Top-pull sobre las dos rutas exclusivas (misma lectura que el name_reading); 48T, 20T, 10T, 47.5, 66-69."
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "8eb28626-e65d-4b18-b0c0-1db5aadfd94d",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "CASSETTE SHIMANO 8V. (11-34) CS-HG31 AE",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "e56e2c75e8940a3063883db54bbd400e9e1443f68957d1c2c13c32f384b747a3",
+  "product_sha256": "2f800a580c1c5b2be04c2f8d615776b05b74e7afc065e1f8197e997cfc70d98e",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

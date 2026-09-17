@@ -1,0 +1,207 @@
+{
+  "schema_version": 2,
+  "product_id": "e926483c-380f-4379-9ac5-8ef73ed47272",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "99361062af1dde741e8a600e33e89fd62482bace856470aa70babef66d1ac0f8",
+    "fingerprints": {
+      "facts_sha256": "74732664a810ceac02d83f41cabd67eed7443d3072ec650e8ac2530bc0f3c4cd",
+      "product_sha256": "e17086bae462a87a7d984b98fdda1174ef4a87f4775850ee1f0f6c72d41036dc",
+      "template_sha256": "116f235acd81e5019c5823922c9b13a4ea53de091bf50273ac359e0a194f4f5a",
+      "references_sha256": "ecfbc36e5431cc517d141900304efe06d322582e21142a7513f604df06ba2974"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "a9d0494f-08b5-42df-9836-42e302d2d9f5",
+    "contract_version": 45
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "CN-HG54",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice literalmente «CN-HG54»; la ficha oficial documenta CN-HG54 (HG-X 10-speed)."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/CN-HG54",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-17 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "chain_speeds",
+      "current": {
+        "value": [
+          "10"
+        ],
+        "source": "supplier_text",
+        "fact_id": "9625f227-44dd-49e4-af79-b088922e2777",
+        "fact_sha256": "040381454703ba6ae8b40bca61d21719b3e1f09591c9a053d3758e9420dc16e6",
+        "confirmed": false
+      },
+      "proposed": [
+        "10"
+      ],
+      "unit": null,
+      "method": "Ficha CN-HG54: «Type: HG-X 10-speed».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CN-HG54",
+      "reason": "Velocidades traseras publicadas en el tipo de cadena."
+    },
+    {
+      "key": "drivetrain_mode",
+      "current": {
+        "value": "Derailleur",
+        "source": "name_reading",
+        "fact_id": "64eba9d1-23f0-435a-a66c-895db062dacc",
+        "fact_sha256": "e56276213c96cbae78205e1d913205cbd1bcb7cc7665e7ec8544f37158cdb3ed",
+        "confirmed": false
+      },
+      "proposed": "Derailleur",
+      "unit": null,
+      "method": "Ficha CN-HG54: «Type: HG-X 10-speed» (cadena HG para transmisiones de 10 velocidades con cambio externo); nombre guardado «CN-HG54 10V.».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CN-HG54",
+      "reason": "Cadena de cambio externo por su tipo publicado."
+    },
+    {
+      "key": "chain_application_declarations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "hg",
+            "values": {
+              "claim_identity": "CN-HG54 · HG-X 10-speed",
+              "scope_kind": "Sistema documentado",
+              "target_system": "HG-X 10-speed",
+              "verdict": "Admitido por la fuente",
+              "drive_kind": "Desviador externo",
+              "rear_sprockets": "10",
+              "chain_class": "HG-X 10-speed",
+              "source_document": "productinfo.shimano.com — ficha CN-HG54 (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/CN-HG54",
+              "conditions": "Fila «Type: HG-X 10-speed» de la tabla productinfo."
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CN-HG54"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Fila «Type: HG-X 10-speed» de la ficha CN-HG54.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CN-HG54",
+      "reason": "Sistema declarado por el fabricante."
+    },
+    {
+      "key": "chain_mass_declarations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "w114",
+            "values": {
+              "weighing_identity": "CN-HG54 — 114 eslabones",
+              "weight_g": "273",
+              "basis_links": "114",
+              "basis_description": "Average weight (g) (114 links)",
+              "source_document": "productinfo.shimano.com — ficha CN-HG54 (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/CN-HG54"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CN-HG54"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha CN-HG54: «Average weight (g) (114 links) 273».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CN-HG54",
+      "reason": "Peso publicado sobre una base de 114 eslabones."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/CN-HG54",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial CN-HG54",
+      "finding": "Type HG-X 10-speed; E-BIKE -; Average weight (114 links) 273 g",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-cn-hg54-20260917.md",
+      "sha256": "fd3a98bbbe7a5737819d9080060ba311aeeaefed21c22061e8f670f5a5aafce5"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product e926483c-380f-4379-9ac5-8ef73ed47272",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "CADENA SHIMANO DEORE CN-HG54 10V. ICNHG54116I (CAJA) SSC",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-cn-hg54-saved-name-20260917.json",
+      "sha256": "ca09bbd210035b3e743fc7d957a05c02b6f4e865bbecf17b699834d01531af38"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "8770808f3bfbf0017707b2ac5838f0e413dbf9d47e3fb27b4d693cd520fbf17a",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 98f45060489316e40c73bfd8f3dc744b309e72513bc9bc74a2694069c42cb4c8: CN-HG54: «HG-X 10-speed», 273 g/114; 116 eslabones dejados como lectura de nombre."
+  }
+}

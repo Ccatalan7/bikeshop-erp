@@ -1,0 +1,384 @@
+{
+  "schema_version": 2,
+  "product_id": "6b8afa81-0fd5-4521-a6f6-fc90beafab77",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "48c94d02910b0b12a621e10b8d6d206b54e58df5444b058166533c3c9fbb96fc",
+    "fingerprints": {
+      "facts_sha256": "d05fb89536c43965936bc63cdacfe7767f62abbf4ef404aaf1d93b4a599e156b",
+      "product_sha256": "a9df5efdb3525457601aa2079f222355568ef3f1e86d100a6bbae01d3968cfab",
+      "template_sha256": "19d2ae8cfd39797cf25f509b15d53e8f8fbdf98c188bd6f992d626cc00d56a1b",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "6a02a0c2-b139-46ef-86d8-bba3797252bd",
+    "contract_version": 24
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "CS-M4100-10",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «CS-M4100-10» (o su forma sin sufijo de velocidades) y «CS-M4100 11-46T» y «10s»; la ficha oficial documenta CS-M4100-10 con «Rear speeds 10» y la combinación 11-46T."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/CS-M4100-10",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-17 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "sprocket_count",
+      "current": {
+        "value": "10",
+        "source": "name_reading",
+        "fact_id": "55c0b07e-727d-41f3-91f5-9c4be6db4f18",
+        "fact_sha256": "408dcbdb1b44a9be243f18625282523714b58e2595fd05f774537a5dd124a64e",
+        "confirmed": false
+      },
+      "proposed": "10",
+      "unit": null,
+      "method": "Ficha CS-M4100-10: «Rear speeds 10», «Steel gear QTY (pcs) 10»; nombre guardado «CS-M4100 11-46T» y «10s».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-M4100-10",
+      "reason": "Literal; sustituye la lectura de nombre."
+    },
+    {
+      "key": "cog_sequence",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "p1",
+            "values": {
+              "position": "1",
+              "teeth": "11"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-M4100-10"
+            ]
+          },
+          {
+            "id": "p2",
+            "values": {
+              "position": "2",
+              "teeth": "13"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-M4100-10"
+            ]
+          },
+          {
+            "id": "p3",
+            "values": {
+              "position": "3",
+              "teeth": "15"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-M4100-10"
+            ]
+          },
+          {
+            "id": "p4",
+            "values": {
+              "position": "4",
+              "teeth": "18"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-M4100-10"
+            ]
+          },
+          {
+            "id": "p5",
+            "values": {
+              "position": "5",
+              "teeth": "21"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-M4100-10"
+            ]
+          },
+          {
+            "id": "p6",
+            "values": {
+              "position": "6",
+              "teeth": "24"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-M4100-10"
+            ]
+          },
+          {
+            "id": "p7",
+            "values": {
+              "position": "7",
+              "teeth": "28"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-M4100-10"
+            ]
+          },
+          {
+            "id": "p8",
+            "values": {
+              "position": "8",
+              "teeth": "32"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-M4100-10"
+            ]
+          },
+          {
+            "id": "p9",
+            "values": {
+              "position": "9",
+              "teeth": "37"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-M4100-10"
+            ]
+          },
+          {
+            "id": "p10",
+            "values": {
+              "position": "10",
+              "teeth": "46"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-M4100-10"
+            ]
+          }
+        ]
+      },
+      "unit": "T",
+      "method": "Ficha CS-M4100-10, «Combination»: 11-46T: 11-13-15-18-21-24-28-32-37-46T. La ficha publica además 11-42T; el nombre fija 11-46.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-M4100-10",
+      "reason": "Secuencia publicada de la combinación que nombra el ERP."
+    },
+    {
+      "key": "smallest_cog_teeth",
+      "current": {
+        "value": "11",
+        "source": "supplier_text",
+        "fact_id": "f26491fa-b41c-492c-8766-b8a9fbd470a3",
+        "fact_sha256": "f7b923f2d7c2efbba1f36840eb71cd364075ec9e8b96c3439ec369fd0652ccaa",
+        "confirmed": false
+      },
+      "proposed": "11",
+      "unit": "T",
+      "method": "Primer piñón de la combinación 11-46T; nombre guardado «CS-M4100 11-46T» y «10s».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-M4100-10",
+      "reason": "Literal."
+    },
+    {
+      "key": "largest_cog_teeth",
+      "current": {
+        "value": "46",
+        "source": "supplier_text",
+        "fact_id": "7855dc69-acfc-4f6a-ac69-6338107f57e7",
+        "fact_sha256": "a58fca9de5439167863ffa894935eea4c1359d7507904997f887b6c99b76a05a",
+        "confirmed": false
+      },
+      "proposed": "46",
+      "unit": "T",
+      "method": "Último piñón de la combinación 11-46T; nombre guardado «CS-M4100 11-46T» y «10s».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-M4100-10",
+      "reason": "Literal."
+    },
+    {
+      "key": "cassette_spline_standard",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+      "unit": null,
+      "method": "Ficha CS-M4100-10, «Spline type»: «Shimano HG spline M ✔»; las demás filas de estriado con «-».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CS-M4100-10",
+      "reason": "Declaración del fabricante."
+    },
+    {
+      "key": "shift_technology",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "HYPERGLIDE",
+      "unit": null,
+      "method": "Ficha CS-M4100-10: «Type: HG»; HG es la abreviatura Shimano de HYPERGLIDE (misma sigla del código de modelo y de las filas «HG spline»).",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CS-M4100-10",
+      "reason": "Tecnología declarada por su sigla."
+    },
+    {
+      "key": "freehub_bodies_accepted",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "fh",
+            "values": {
+              "rear_drive_interface": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+              "spacer_requirement": "No publicado",
+              "status": "Compatible declarado",
+              "conditions": "Fila «Spline type» de la tabla productinfo de CS-M4100-10: «Shimano HG spline M ✔»; separador no mencionado.",
+              "source_scope": "Tabla de compatibilidad OEM",
+              "source_url": "https://productinfo.shimano.com/en/product/CS-M4100-10"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-M4100-10"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Fila «Spline type» de la ficha CS-M4100-10.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CS-M4100-10",
+      "reason": "Núcleo declarado por el fabricante; sin dato de separador."
+    },
+    {
+      "key": "published_variant_label",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "11-46T",
+      "unit": null,
+      "method": "Ficha CS-M4100-10, «Combination name (Group name)»: 11-46T; nombre guardado «CS-M4100 11-46T» y «10s».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-M4100-10",
+      "reason": "Variante publicada que corresponde al nombre."
+    },
+    {
+      "key": "lockring_included",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Ficha CS-M4100-10 lista «Lock ring: Material …, Finish …» entre las piezas del producto.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CS-M4100-10",
+      "reason": "Pieza listada en la ficha del producto."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/CS-M4100-10",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial CS-M4100-10",
+      "finding": "Type HG; Rear speeds 10; 11-46T: 11-13-15-18-21-24-28-32-37-46T; Shimano HG spline M ✔; Lock ring",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-cs-m4100-10-20260917.md",
+      "sha256": "0d7ff033c710cabc2f46286cc728dccc6135308cad5d3fde2d51e983b1c838e2"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 6b8afa81-0fd5-4521-a6f6-fc90beafab77",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Cassette Shimano Deore 10s CS-M4100 11-46T",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-cs-m4100-10-saved-name-20260917.json",
+      "sha256": "39e2241016448b3163e561cf0db4b0b4bef3de42a7c8fdfa6265a6c1862f8ed0"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "98f7c983c17e3a54cda63490ac001e961cb9cb55bf332c355b50410d9477e8ba",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre bedafcb82f57b55d09aacaf0d844e8daefee5f65303dbec6bfa2ab3d63ec6418: CS-M4100-10 11-46T: 11-13-15-18-21-24-28-32-37-46T fijada por el nombre sobre {11-42, 11-46}; HG spline M ✔."
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "2681e863-3722-4ccc-bf45-5b06474c125b",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "neumático arisun bmx 20x2.25 60tpi cutting edge b. alambre t080303",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "89471655d6bf5ff1a854217366128fdbeb4fd904a1d8c50130db62becb5e566d",
+  "product_sha256": "d558960dd2c37857c48b296431f6969e031cb1d3143ce871e6f0b73586116d90",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

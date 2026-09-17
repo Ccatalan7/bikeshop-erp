@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "1995eb4c-39f4-41b3-9298-06840b66cf5f",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Cadena 1/2\" X 3/32\" Kmc Z7",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "8333bd3a4fb1e552efb1351407f920e36d0775e03cb796f197cbc181927c308f",
+  "product_sha256": "918f17a153f3d5a5e2fc83906d5994b8bb866a4b6b01a01f43a4da328c25d930",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

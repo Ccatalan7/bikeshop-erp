@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "8f29bd7f-7927-4424-a8f7-91241d7958aa",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "MAXXIS ALAMBRE 29X2.25 M315P ARDENT",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "cfebb0d483e64fa17507b763f29de4846c7580c3a466207c1d873b069180717b",
+  "product_sha256": "cee37268e6b735e0d3471a64cefb1cb8dcdc3d656b8dbb5eb69a503afdd8f8fd",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

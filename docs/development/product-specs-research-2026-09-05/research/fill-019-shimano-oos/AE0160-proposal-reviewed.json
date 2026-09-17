@@ -1,0 +1,144 @@
+{
+  "schema_version": 2,
+  "product_id": "0367a62f-b039-497f-a0df-eed2cda78396",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "ac5b91cf6687bfd6db78ca1d751c450a4eb984c4a6e1bea09c044717f899afd6",
+    "fingerprints": {
+      "facts_sha256": "4ff630c3e1d557ee6536c1f7c486b74171c218e84caa7d531d8b4d7d033496a7",
+      "product_sha256": "3dea043171d7100c323d3578778a74a3c6c9536eb6b416e659cb74d95e305efa",
+      "template_sha256": "47b56ca6e31877ebb7113592c4090c331eb4da7a3642c97d5df5253d720b29a0",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-08-18T16:50:15.437022+00:00",
+    "template_id": "a2ba0aad-9c5c-4563-a4f5-75cf2611a43a",
+    "contract_version": 35
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "SM-RT56",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «RT56 180MM»; la ficha oficial documenta SM-RT56 con 180 ✔, 160 ✔ (220/203/200/140 -)."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/SM-RT56",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-17 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "rotor_diameter_mm_value",
+      "current": {
+        "value": "180",
+        "source": "name_reading",
+        "fact_id": "6d65bd3e-421d-4312-af66-724c0b0396d0",
+        "fact_sha256": "3a17846b840413e6ad4787c579896c8602d08436b8b79fbea9364a22d43b9e2f",
+        "confirmed": false
+      },
+      "proposed": "180",
+      "unit": "mm",
+      "method": "Ficha SM-RT56: «Outside diameter (mm)»: 180 ✔, 160 ✔ (220/203/200/140 -); nombre guardado «RT56 180MM».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "SM-RT56",
+      "reason": "El nombre fija una de las medidas publicadas; sustituye la lectura de nombre."
+    },
+    {
+      "key": "rotor_material",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Acero Inoxidable",
+      "unit": null,
+      "method": "Ficha SM-RT56: «Rotor — Material: Stainless steel».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "SM-RT56",
+      "reason": "Literal."
+    },
+    {
+      "key": "rotor_nominal_thickness_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "1.75",
+      "unit": "mm",
+      "method": "Ficha SM-RT56: «Rotor thickness — Standard 1.75(mm) ✔; Thick 2.2(mm) -».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "SM-RT56",
+      "reason": "Espesor nominal publicado."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/SM-RT56",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial SM-RT56",
+      "finding": "Outside diameter 180 ✔, 160 ✔ (220/203/200/140 -); Stainless steel; 1.75 mm; Pad Resin ✔ Metal -; Note: With anti loosen tightening plate",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-sm-rt56-20260917.md",
+      "sha256": "e3e35318292c3df8968596150d2e7ba3931f1da34681a69e063e44fe8f94ce3e"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 0367a62f-b039-497f-a0df-eed2cda78396",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Disco freno Shimano Deore RT56 180MM",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-sm-rt56-180-saved-name-20260917.json",
+      "sha256": "3f1389792b4166b5bf3eefcbe28eac106f1e14d7dc1a8cdfd2d8a781cd1b78ad"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "62cc443154c32c2eb90077770363bfaeb3e8deea13b3a564bbc5fa632c07d777",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 6057adf1b1fdd244368377cbc690bf22f8b48c93cf3b3210a8643f4edd512dbe: SM-RT56 180: «Outside diameter 180 ✔», «Stainless steel», «Standard 1.75(mm) ✔»; RT56 sin otra lectura; montaje sin declarar, correcto."
+  }
+}

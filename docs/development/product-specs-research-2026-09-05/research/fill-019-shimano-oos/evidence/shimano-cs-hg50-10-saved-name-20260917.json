@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "f0b93cad-4ba9-4026-b7fe-a0373b1432f7",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "PIÑON SHIMANO CASSETTE 10V. (11-36) CS-HG50-10 (10 UNIDADES) GRANEL IN SEMI-BULK PACK ICSHG5010136S",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "65f642e5fab0066c02a5f45082814eb952e4d0bdfbcaec4701db872c7630dedd",
+  "product_sha256": "39b2fd89601ff11591af2af6d477a2c344e210fe7740e07026758cd1dbaf3284",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

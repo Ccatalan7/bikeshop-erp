@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "a9da66aa-694b-4c58-bfc7-c64bf0b3dd86",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Neumático MAXXIS ALAMBRE 29X2.25 REKON RACE",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "ae67e69e6c41f128cfb6f5430c9c21cebc50324a6d8df2eb7fb428c6b232e0a2",
+  "product_sha256": "e63e246dd0bb8e9228c2a72551be4b98ad54ae84fcd7ec7e531ac200b600925c",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

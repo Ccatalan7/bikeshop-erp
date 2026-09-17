@@ -1,0 +1,144 @@
+{
+  "schema_version": 2,
+  "product_id": "2c2b1d24-5537-4bc8-b80c-3687d3f1c7ea",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "7847205b5924e60fa65988008b9734773ab36290ee062c5a61e360c6f8af13a4",
+    "fingerprints": {
+      "facts_sha256": "0e39482b54c86d356f59d8764ebddc7f90735003512fde7ffbc7326841b39b3e",
+      "product_sha256": "22f7f27e5c5cb7369c6699481004df7f7f00ddc4cc61e3020d4bcf008f6de64e",
+      "template_sha256": "19de5fe98c4c840eb76b93f0a6ac501734bb047322c4e5f551c3f9357f4eccab",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "81547e3f-433c-462e-9dbe-a141aef745c9",
+    "contract_version": 65
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "U28",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado trae «U28» literal y la ficha oficial de Weinmann documenta el modelo U28 DISC."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.weinmanntek.com/product/2/5/46",
+      "unit": null,
+      "method": "URL de la ficha oficial del fabricante consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "rim_erd_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "563.55",
+      "unit": "mm",
+      "method": "Ficha oficial Weinmann U28 DISC: «SIZE: 559(26\"),584(650B),622(700C=29ER)» y «ERD: 538.53,563.55,601.95» en el mismo orden posicional; la medida 27.5 (650B = 584) del nombre guardado corresponde al ERD 563.55.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "ERD",
+      "reason": "ERD publicado por el fabricante para la medida nombrada."
+    },
+    {
+      "key": "brake_track",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": false,
+      "unit": null,
+      "method": "Ficha oficial Weinmann U28 DISC: «BRAKE: DISC BRAKE».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Pista de freno",
+      "reason": "Uso de freno declarado por el fabricante."
+    },
+    {
+      "key": "rim_eyelet_type",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Ojetillo simple",
+      "unit": null,
+      "method": "Ficha oficial Weinmann U28 DISC: «EYELET: SINGLE EYELET».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Ojetillos",
+      "reason": "Ojetillo declarado por el fabricante."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Weinmann Metal Products (weinmanntek.com, sitio oficial)",
+      "locator": "https://www.weinmanntek.com/product/2/5/46",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial U28 DISC",
+      "finding": "SIZE 559(26\"),584(650B),622(700C=29ER); ERD 538.53,563.55,601.95; SPOKE HOLES 24H 28H 32H 36H(2Hx14 or 16); BRAKE DISC BRAKE; EYELET SINGLE EYELET",
+      "artifact_path": "research/fill-022-misc/evidence/weinmann-u28-disc-20260917.md",
+      "sha256": "098139b9f23e8f1a045bad79cdbe636b150cbe7c400eea30267e8353a3d20d82"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 2c2b1d24-5537-4bc8-b80c-3687d3f1c7ea",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Llanta Weinmann U28 27.5\" Ojetillos 36H Schrader Negro",
+      "artifact_path": "research/fill-022-misc/evidence/weinmann-u28-275-36h-saved-name-20260917.json",
+      "sha256": "ed1b303e4195d7b1c0f767abf8efa83a4132c169a08eb0540407730ccdf5ed92"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "6cc65cbc2d96724b2492e89415caf9146ac227214ea68675af797fedacef99d4",
+    "notes": "Revisión par (sesión Look dude), v1 aceptada sobre 0b37f8e2b4f515dd2d9863d9466274e10b84fbce0367780e89db13ddc55b08b7: ERD 563.55 por posición «584(650B)» ↔ «563.55» (27.5\" = 650B = ISO 584 es nomenclatura fija, no está escrita en la ficha); brake_track false por «DISC BRAKE»; «SINGLE EYELET» literal; model «U28» es el título de la página oficial (subtítulo U28 DISC, categoría MTB DISC, comprobado en vivo). rim_erd_datum y rim_bead_profile quedan pendientes por contrato."
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "165ba027-558f-4837-89c4-3c377cad092c",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "NEUMATICO ARISUN 26 X 2.10 MOUNT EMMONS ALAMBRE (T010304)",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "b9e055950bbf7bbd9e76a155cc59c051b5848983c623d027dbebbbaff7010beb",
+  "product_sha256": "be729a5ecce280b2b3a71fbdf168360ab78572dbde1dcfd2773fcf7b436a2e27",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

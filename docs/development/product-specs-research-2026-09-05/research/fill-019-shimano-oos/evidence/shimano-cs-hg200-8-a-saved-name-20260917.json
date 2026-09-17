@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "5fb5a5d9-16e4-4027-9c0b-29b6c54a30de",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Cassette Shimano Cs-Hg200 8V 12-32T AE",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "543bf2342a7fb6ddc08690c917bceaf5513afa3b29c51d95132c9ed05c952c30",
+  "product_sha256": "c60cc198281109f14cab245c53f0bd2755fa42e4018602b5610e9fdfe535a9f0",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

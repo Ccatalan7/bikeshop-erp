@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "07169e33-ae66-4964-ac34-8dab293f15ea",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Cassette Shimano 105 CS-R7100 12V 11-34T",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "fb07b00bb8466c94414ee1a6cc2a610c2ae6bd4698765b7b99119ef823903092",
+  "product_sha256": "18844d64714a5fc11643e8ef3c5443bb624dd061f0ef7e9c9d8a96ce431fbbf1",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

@@ -1,0 +1,146 @@
+{
+  "schema_version": 2,
+  "product_id": "4ff4dc02-c8b3-453a-98b2-0def9cbfd7ca",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "a7b0f53a091c9f8931242985e37e398f07c807dd3837057ce414045b6f1f67d1",
+    "fingerprints": {
+      "facts_sha256": "6dcca80347e662321aa7f62e763ba50e89d2df1f562776906568abc9d21051be",
+      "product_sha256": "d1e942bdba4a7b5c6266f0b742051e18b1865a7bfce1e8bf351d636ae38d8f5e",
+      "template_sha256": "c9c12ef9de5da2f893445f1910c3cbdebe2daad22315ccc4e3310cb8ef173342",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "4d5edd21-5818-4c98-827a-7154d1eebfe4",
+    "contract_version": 38
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "High Roller II",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado nombra el modelo «High Roller II» literal y la página oficial de Maxxis documenta ese modelo con ese nombre."
+    },
+    {
+      "field": "manufacturer_sku",
+      "current": null,
+      "proposed": "TB85914800",
+      "evidence": [
+        "product-name",
+        "shop"
+      ],
+      "reason": "El código de barras 4717784032108 del registro oficial coincide con el sku guardado; la pieza Maxxis de esa variante es TB85914800."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://shop.maxxis.com/products/high-roller-ii",
+      "unit": null,
+      "method": "URL de la ficha oficial del fabricante consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "shop"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "tire_tpi",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "60",
+      "unit": "TPI",
+      "method": "Registro oficial shop.maxxis.com del High Roller II: la variante cuyo código de barras 4717784032108 es el sku guardado del producto publica «27.5X2.40 | 60TPI | FOLDABLE | SilkShield/eBike | Black | TB85914800».",
+      "origin": "research",
+      "evidence": [
+        "shop"
+      ],
+      "scope": "TPI",
+      "reason": "Carcasa publicada por el fabricante."
+    },
+    {
+      "key": "tire_use",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "MTB",
+      "unit": null,
+      "method": "Página oficial de Maxxis del modelo High Roller™ II: «Category: Trail, Enduro» (categoría de bicicleta de montaña del catálogo Maxxis).",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Uso",
+      "reason": "Categoría de uso declarada por el fabricante para el modelo."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Maxxis (maxxis.com/us, sitio oficial)",
+      "locator": "https://www.maxxis.com/us/tire/high-roller-ii/",
+      "consulted_on": "2026-09-17",
+      "scope": "Página oficial del modelo High Roller™ II (tabla de especificaciones y categoría)",
+      "finding": "Category: Trail, Enduro",
+      "artifact_path": "research/fill-020-tires/evidence/maxxis-us-high-roller-ii-20260917.md",
+      "sha256": "4fcc85d51e4513c0f12e8bad05cb00d9e6e8f4c6c1fb956d29b390d39c18528c"
+    },
+    {
+      "id": "shop",
+      "kind": "oem_page",
+      "source": "Maxxis Tires USA (shop.maxxis.com, tienda oficial de Maxxis)",
+      "locator": "https://shop.maxxis.com/products/high-roller-ii",
+      "consulted_on": "2026-09-17",
+      "scope": "Registro oficial del producto High Roller II con sus variantes publicadas",
+      "finding": "Variante «27.5X2.40 | 60TPI | FOLDABLE | SilkShield/eBike | Black | TB85914800», barcode 4717784032108 = sku guardado",
+      "artifact_path": "research/fill-020-tires/evidence/maxxis-shop-high-roller-ii-20260917.md",
+      "sha256": "2f09d5c8c7620e70f9a5743fc1d4a8a8064094b582a79ad3b1c880982ce9916b"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 4ff4dc02-c8b3-453a-98b2-0def9cbfd7ca",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Maxxis Kevlar 27.5 x 2.40 High Roller II Ebike/Silkshield",
+      "artifact_path": "research/fill-020-tires/evidence/maxxis-high-roller-ii-275x240-silkshield-saved-name-20260917.json",
+      "sha256": "576e62d49d375c9dc265919e04ec4888df37ce66269df2c9035cbf5822128ef3"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "52940e3f2e469c1762dd776b72166b0660dc5d01e53ca550c27c097cc2d3a0ff",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 4e2813929ae4251dfe75517dc72aa5e5a9fd3768b1b9597f35a4cb8a8b78835c: Barcode 4717784032108 = sku guardado → TB85914800 «27.5X2.40 | 60TPI | FOLDABLE | SilkShield/eBike»; verificado."
+  }
+}

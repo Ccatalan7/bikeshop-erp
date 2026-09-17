@@ -1,0 +1,32 @@
+# KMC — listado oficial «Bike solutions › Hub Gear / Single speed» (kmcchain.eu)
+
+- URL: https://www.kmcchain.eu/bike-solutions/nabenschaltung-single-speed
+- Consultada: 2026-09-17 (descarga directa del HTML; slugs de producto tomados literal de los enlaces `/products/…` del listado)
+
+- b1-wide-black
+- e1-ept-110
+- e1-ept-waxed
+- e1-ept-waxed-long
+- e101-ept
+- e101-ept-waxed
+- hl1-wide-silver
+- k1-narrow-silver
+- k1-wide-silver-black
+- k1sl-narrow-gold
+- k1sl-narrow-silver
+- k1sl-wide-gold
+- k1sl-wide-silver
+- s1-wide-brown
+- s1-wide-rb
+- x101-gold
+- x101-silver
+- z1-narrow-brown
+- z1-narrow-ept
+- z1-wide-brown
+- z1-wide-ept
+- z1-wide-ept-long
+- z1-wide-gold
+- z1-wide-silver
+- z1ehx-narrow-ept
+- z1ehx-narrow-ept-long
+- z1ehx-wide-ept

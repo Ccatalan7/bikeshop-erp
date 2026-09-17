@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "8c066cc0-1df8-429b-a04b-64e2806e2e3c",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "NEUM (W) 700 x 32C \"KENDA \" KWICK TRAX K1053 BK/",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "57d0db7703d56415a4d4fcf264844360cf7e01a060c3e0e13d0a2471b74403de",
+  "product_sha256": "ec244414b263a88dd1e2a4fee7d248e1b7fc10fbc9090f67fca867da06361b3b",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

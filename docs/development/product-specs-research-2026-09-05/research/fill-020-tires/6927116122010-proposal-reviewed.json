@@ -1,0 +1,125 @@
+{
+  "schema_version": 2,
+  "product_id": "82189cb4-68bf-4e08-9ab1-3872aa1c8188",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "3ae1d2a9ef6aceef8bc07baa2113a99ef0aedc72c4583eed6a4ac2bf9cd7085a",
+    "fingerprints": {
+      "facts_sha256": "4bd35ded7b203769ba69f4a8acb874c4893510ebc57f75b06380ac359f3f9bb6",
+      "product_sha256": "4247288623ab8ce6799aa8b8f7e534ddc5eb2a856e8ed55abe7582a6b7d225f6",
+      "template_sha256": "c9c12ef9de5da2f893445f1910c3cbdebe2daad22315ccc4e3310cb8ef173342",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 1,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "4d5edd21-5818-4c98-827a-7154d1eebfe4",
+    "contract_version": 38
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "SPEED SHARK",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado nombra el modelo «SPEED SHARK» literal y la ficha oficial de Chaoyang lo documenta con ese nombre (código H-419)."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.chaoyangtire.com/index.php/pro/pro-details/1/185?type=ROAD&name=SPEEDSHARK",
+      "unit": null,
+      "method": "URL de la ficha oficial del fabricante consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "tire_etrto",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "25-622",
+      "unit": null,
+      "method": "Ficha oficial Chaoyang SPEED SHARK (H-419): todas las filas publicadas de 700×25C (W311028 Shark Skin 60 TPI wire 370 g, W311029 Shark Skin 60 TPI foldable 305 g, W211102 Rhino Skin 60 TPI wire 530 g, W311026 30 TPI wire 365 g) llevan ETRTO «25-622»; el nombre guardado fija modelo y medida pero no la pieza.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Medida ETRTO",
+      "reason": "Valor común a todas las filas publicadas de la medida."
+    },
+    {
+      "key": "tire_use",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Ruta",
+      "unit": null,
+      "method": "Ficha oficial Chaoyang SPEED SHARK: categoría «ROAD» en la ruta de la página (PRODUCT > ROAD > SPEED SHARK).",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Uso",
+      "reason": "Categoría de uso declarada por el fabricante para el modelo."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Chaoyang (chaoyangtire.com, sitio oficial de Zhongce Rubber)",
+      "locator": "https://www.chaoyangtire.com/index.php/pro/pro-details/1/185?type=ROAD&name=SPEEDSHARK",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial del modelo SPEED SHARK (tabla Specification)",
+      "finding": "700×25C: W311028 Shark Skin 60 TPI wire 370 g, W311029 Shark Skin 60 TPI foldable 305 g, W211102 Rhino Skin 60 TPI wire 530 g, W311026 30 TPI wire 365 g; categoría «ROAD»",
+      "artifact_path": "research/fill-020-tires/evidence/chaoyang-speed-shark-20260917.md",
+      "sha256": "b53a8f83695ac537b12eb1af908a1966a7c7cff9703e5af91767e7c35cc47fa2"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 82189cb4-68bf-4e08-9ab1-3872aa1c8188",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Neumático Chaoyang 700x25c Speed Shark",
+      "artifact_path": "research/fill-020-tires/evidence/chaoyang-speed-shark-82189cb4-saved-name-20260917.json",
+      "sha256": "39646a76eab56f8c098e51407b0a418d61310c40ae4832ef7448e79a86c863e7"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "8b45f5cc55d8712c6ed27471f70e8d2b48e6ed66386216b843cdd0f5505c9780",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 8e474cfb6465e0944225fb50690cf8b823f635699fc2b62b0644710c09c4357b. Validador mecánico (tokens, filas, based_on, sha de evidencias, name_quote, simulación) y cotejo literal de cada valor contra el archivo citado."
+  }
+}

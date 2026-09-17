@@ -1,0 +1,125 @@
+{
+  "schema_version": 2,
+  "product_id": "af3b5f40-0964-4304-b72e-816539e3e001",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "e0443f1aeebf791db82073215b9b8c2b58d52b49d9516a879590fdd9c52d6014",
+    "fingerprints": {
+      "facts_sha256": "64b365d46d29b52f4dcbffb50b074f6e68561128684938e5b4a6e0d05fee40a4",
+      "product_sha256": "573ff84aabffb62a436952465db6420c21b4a3e332e553447e65f3a87750c994",
+      "template_sha256": "c9c12ef9de5da2f893445f1910c3cbdebe2daad22315ccc4e3310cb8ef173342",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "4d5edd21-5818-4c98-827a-7154d1eebfe4",
+    "contract_version": 38
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "Mount Bona",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado nombra el modelo «Mount Bona» literal y la ficha oficial de Arisun lo documenta con ese nombre."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.arisun-bicycletire.com/product_show.php?action=show&id=Fxi55ixJQQ5yxs",
+      "unit": null,
+      "method": "URL de la ficha oficial del fabricante consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "tire_etrto",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "52-559",
+      "unit": null,
+      "method": "Ficha oficial Arisun MOUNT BONA: las 3 filas publicadas de 26x2.10 (T020105 wire 60 TPI, T020106 aramid 60 TPI, T020113 aramid 120 TPI: todas 52-559) llevan todas ETRTO «52-559»; el nombre guardado fija modelo y medida pero no la pieza.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Medida ETRTO",
+      "reason": "Valor común a todas las filas publicadas de la medida."
+    },
+    {
+      "key": "tire_use",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "MTB",
+      "unit": null,
+      "method": "Ficha oficial Arisun MOUNT BONA: categoría «ALL MOUNTAIN» bajo el nombre del modelo.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Uso",
+      "reason": "Categoría de uso declarada por el fabricante para el modelo."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Arisun (arisun-bicycletire.com, sitio oficial de Zhongce Rubber)",
+      "locator": "https://www.arisun-bicycletire.com/product_show.php?action=show&id=Fxi55ixJQQ5yxs",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial del modelo MOUNT BONA (tabla SPECS/CONFIGURATIONS)",
+      "finding": "26x2.10: T020105 wire 60 TPI, T020106 aramid 60 TPI, T020113 aramid 120 TPI: todas 52-559; categoría «ALL MOUNTAIN»",
+      "artifact_path": "research/fill-020-tires/evidence/arisun-mount-bona-20260917.md",
+      "sha256": "4f21c5532a0bd119c7ca9c22c0c95db3d4b76e91fa123709c9e91e4e10d75946"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product af3b5f40-0964-4304-b72e-816539e3e001",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Neumatico Bicicleta Aro 26 X 2.10 Mount Bona Arisun",
+      "artifact_path": "research/fill-020-tires/evidence/arisun-mount-bona-af3b5f40-saved-name-20260917.json",
+      "sha256": "ed80a2259ff0319c21a4ddc8dfad6a0129742e398929a63faba0d4d361397a6c"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "6482fd102d5764190a49c78e3fef75f763a2f2f16367e885608681bea6abe836",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 80f8fd70a964461e7d8f8b8ef9bbf484dc48a0c764208239d19121fa8697196c. Validador mecánico (tokens, filas, based_on, sha de evidencias, name_quote, simulación) y cotejo literal de cada valor contra el archivo citado."
+  }
+}

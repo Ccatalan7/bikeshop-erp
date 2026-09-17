@@ -1,0 +1,165 @@
+{
+  "schema_version": 2,
+  "product_id": "5c1637ec-4dda-4850-b54e-4b5772a6708b",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "2cef30741a445d6174a18069dbefc7fcc252125a42ac2b23a04147c07bd30e89",
+    "fingerprints": {
+      "facts_sha256": "881425c2b0d1d6d74dc7bc86eb13c31f4830e5ff4d0f314fc1acc70848b1379d",
+      "product_sha256": "3b157c82135a60a089bf6c68d40ee4d1ec12ad8e1ed954b9f582230160ab8635",
+      "template_sha256": "c9c12ef9de5da2f893445f1910c3cbdebe2daad22315ccc4e3310cb8ef173342",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 6,
+    "updated_at": "2026-06-16T19:39:16.139989+00:00",
+    "template_id": "4d5edd21-5818-4c98-827a-7154d1eebfe4",
+    "contract_version": 38
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "Metro Cruiser",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado nombra el modelo «Metro Cruiser» literal y la ficha oficial de Arisun lo documenta con ese nombre."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.arisun-bicycletire.com/product_show.php?action=show&id=lx5J6456S5y5QXPP",
+      "unit": null,
+      "method": "URL de la ficha oficial del fabricante consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "tire_etrto",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "32-622",
+      "unit": null,
+      "method": "Ficha oficial Arisun METRO CRUISER: las 3 filas publicadas de 700x32C (T070102 (KD), T070103 (KD, Reflective Stripe), T070104 (PD): todas 32-622, 60 TPI, Wire) llevan todas ETRTO «32-622»; el nombre guardado fija modelo y medida pero no la pieza.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Medida ETRTO",
+      "reason": "Valor común a todas las filas publicadas de la medida."
+    },
+    {
+      "key": "tire_tpi",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "60",
+      "unit": "TPI",
+      "method": "Ficha oficial Arisun METRO CRUISER: las 3 filas publicadas de 700x32C (T070102 (KD), T070103 (KD, Reflective Stripe), T070104 (PD): todas 32-622, 60 TPI, Wire) llevan todas TPI «60».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "TPI",
+      "reason": "Valor común a todas las filas publicadas de la medida."
+    },
+    {
+      "key": "tire_bead_type",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Alambre",
+      "unit": null,
+      "method": "Ficha oficial Arisun METRO CRUISER: las 3 filas publicadas de 700x32C (T070102 (KD), T070103 (KD, Reflective Stripe), T070104 (PD): todas 32-622, 60 TPI, Wire) llevan todas BEAD «Wire».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Talón",
+      "reason": "Valor común a todas las filas publicadas de la medida."
+    },
+    {
+      "key": "tire_use",
+      "current": {
+        "value": "Ruta",
+        "source": "name_reading",
+        "fact_id": "36434fe9-c703-4785-9024-38fb62664b09",
+        "fact_sha256": "1dd1e8508d9a72b3143abde9e2586a54e22041c5fb68a21f26ed17a64d009bf3",
+        "confirmed": false
+      },
+      "proposed": "Urbano / híbrido",
+      "unit": null,
+      "method": "Ficha oficial Arisun METRO CRUISER: categoría «CITY URBAN TREKKING TIRE» bajo el nombre del modelo.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Uso",
+      "reason": "Categoría de uso declarada por el fabricante para el modelo."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Arisun (arisun-bicycletire.com, sitio oficial de Zhongce Rubber)",
+      "locator": "https://www.arisun-bicycletire.com/product_show.php?action=show&id=lx5J6456S5y5QXPP",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial del modelo METRO CRUISER (tabla SPECS/CONFIGURATIONS)",
+      "finding": "700x32C: T070102 (KD), T070103 (KD, Reflective Stripe), T070104 (PD): todas 32-622, 60 TPI, Wire; categoría «CITY URBAN TREKKING TIRE»",
+      "artifact_path": "research/fill-020-tires/evidence/arisun-metro-cruiser-20260917.md",
+      "sha256": "d5d5ed826139e42944a2cc45856b92d6271cb904608a5fc80419dbbd06c2a1d3"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 5c1637ec-4dda-4850-b54e-4b5772a6708b",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Neumatico Ruta Bicicleta Aro 700 X 32C Metro Cruiser Arisun",
+      "artifact_path": "research/fill-020-tires/evidence/arisun-metro-cruiser-5c1637ec-saved-name-20260917.json",
+      "sha256": "1a8903c9ed9f6c7f6d1629f63c205a9e287bc62f728aad254d42a3cb451a12cc"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "842cfb74657667c9ea3807d82d57a30c0d56750c577da5ab9b5c106fca9e3d10",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 2761b5517f1b1ade0b52abde092cc883b3b002274090eb7643441c4049c35c07. Validador mecánico (tokens, filas, based_on, sha de evidencias, name_quote, simulación) y cotejo literal de cada valor contra el archivo citado."
+  }
+}

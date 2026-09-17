@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "1ac2583f-0b27-4a4d-9c89-faba82a8ab39",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Cadena 1/2x11/128\" Kmc Mod Z9 - 9 V.",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "6cfe7ebb85765b4c67ba516af5bd1188d83c8f6f9ad138f2df722b0dfceda3a8",
+  "product_sha256": "7fa11617aad103e8f57de61db899d94ef0303b2e99045d6072b8a2e3fc44cd95",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

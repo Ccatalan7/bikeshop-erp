@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "890b3a92-a63d-4d23-bd7e-84c1638be408",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "volante ruta shimano fc-a070 50x34t 170mm",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "0da0f06caea10343c4e9e774b77d5dbaa25cb9e74d3bc7b86468ade84b39444e",
+  "product_sha256": "30c5cb783a67403f09708d9767d33c251e3b0ded3b32dac338c4db722ba2028a",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

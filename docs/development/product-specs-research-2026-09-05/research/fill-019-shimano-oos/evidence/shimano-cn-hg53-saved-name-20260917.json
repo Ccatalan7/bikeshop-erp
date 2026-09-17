@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "f8dcbeff-0d83-4428-a5c3-ba6c408b70b6",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "CADENA SHIMANO CN-HG53 116L",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "bbccc3958e47edff5edf18aa7bca6da08f2a95273328e45f54619fb35c45456f",
+  "product_sha256": "88fbcc2e79a336892473787afb30294d75d28086168da60231aa07f5591d1c92",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

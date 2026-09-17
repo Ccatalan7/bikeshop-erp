@@ -1,0 +1,125 @@
+{
+  "schema_version": 2,
+  "product_id": "888ce9dc-4c59-4b92-b20e-5701ff0865ca",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "34db5ea87983e5f2a83104263cd1b00919a25c07415d47d19a0388cfddefa170",
+    "fingerprints": {
+      "facts_sha256": "fdf968af3d25d25ed98379419342858f58ac0e03000d46220f10634e06f3bb21",
+      "product_sha256": "465e74cd5668a7cd1bc319213eb960ae80d069b8f39c81f64e2fe1a5fd27c01a",
+      "template_sha256": "c9c12ef9de5da2f893445f1910c3cbdebe2daad22315ccc4e3310cb8ef173342",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "4d5edd21-5818-4c98-827a-7154d1eebfe4",
+    "contract_version": 38
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "Mount Cameron",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado nombra el modelo «Mount Cameron» literal y la ficha oficial de Arisun lo documenta con ese nombre."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.arisun-bicycletire.com/product_show.php?action=show&id=FSy6ixSSyxXXx8",
+      "unit": null,
+      "method": "URL de la ficha oficial del fabricante consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "tire_etrto",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "52-559",
+      "unit": null,
+      "method": "Ficha oficial Arisun MOUNT CAMERON: las 5 filas publicadas de 26x2.10 (T020402 wire 60 TPI, T020403/T020404/T020406/T020408 aramid 60-120 TPI) llevan todas ETRTO «52-559»; el nombre guardado fija modelo y medida pero no la pieza.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Medida ETRTO",
+      "reason": "Valor común a todas las filas publicadas de la medida."
+    },
+    {
+      "key": "tire_use",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "MTB",
+      "unit": null,
+      "method": "Ficha oficial Arisun MOUNT CAMERON: categoría «ALL MOUNTAIN» bajo el nombre del modelo.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Uso",
+      "reason": "Categoría de uso declarada por el fabricante para el modelo."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Arisun (arisun-bicycletire.com, sitio oficial de Zhongce Rubber)",
+      "locator": "https://www.arisun-bicycletire.com/product_show.php?action=show&id=FSy6ixSSyxXXx8",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial del modelo MOUNT CAMERON (tabla SPECS/CONFIGURATIONS)",
+      "finding": "26x2.10: T020402 wire 60 TPI, T020403/T020404/T020406/T020408 aramid 60-120 TPI; categoría «ALL MOUNTAIN»",
+      "artifact_path": "research/fill-020-tires/evidence/arisun-mount-cameron-20260917.md",
+      "sha256": "b145c03c016ac5359e458d1499c0d204db6e5d0a3c98f9cdff56bac4352bae5c"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 888ce9dc-4c59-4b92-b20e-5701ff0865ca",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "NEUMATICO ARISUN 26 X 2.10 MOUNT CAMERON",
+      "artifact_path": "research/fill-020-tires/evidence/arisun-mount-cameron-888ce9dc-saved-name-20260917.json",
+      "sha256": "73c5779d360d5b580f166d04a3178b1528986cb03f934e873efd0b80652d5584"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "e87fdb6a8e9fe77f4ffca3b082a8840b2fd746c033a72c3f79ed9dcdb3a12639",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 124a6a2ae2af59cffcd5a9f8c60b020f63bd9449ed274eb1f1988d042e427f9f. Validador mecánico (tokens, filas, based_on, sha de evidencias, name_quote, simulación) y cotejo literal de cada valor contra el archivo citado."
+  }
+}

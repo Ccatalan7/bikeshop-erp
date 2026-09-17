@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "73e76cff-cb68-44d4-945d-09ec1d696057",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "CASSETTE SHIMANO 9V. (11-32) HG200 AE",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "46cbe9a50c68d599430d80d5590a2a76545cc382c982391cd0c5d306bafa1280",
+  "product_sha256": "b044597ceac3f5d659a74e4bb71759a044fdbdda3499811100cf89ea2468beed",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

@@ -1,0 +1,165 @@
+{
+  "schema_version": 2,
+  "product_id": "cecb09d2-6eac-4bd7-99ce-fbfb9670351b",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "c0e08f628910af3342021073be0273962c117ecff14d8df499e1c258837e8465",
+    "fingerprints": {
+      "facts_sha256": "160833a3f11de373fba1c913654ab66a802b8fa7a91a3b99ff73d4bc5ae72f51",
+      "product_sha256": "639a510abde6fea307f73894679816eb9c750591f9f87b78123ebedfbc9bd41c",
+      "template_sha256": "944d2fc9c55724dd3af499184f96a524950e093dbdcec89079f2859781430953",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 5,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "0750e4ac-4615-4ad4-862e-95ac102b12f7",
+    "contract_version": 42
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "RD-M370-SGS",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «Altus 9V RD-M370 SGS Negro»; la ficha oficial documenta RD-M370-SGS (colores Black / Silver; el nombre dice Negro)."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/RD-M370-SGS",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-17 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "derailleur_cage_length",
+      "current": {
+        "value": "Larga (SGS)",
+        "source": "name_reading",
+        "fact_id": "a2645be9-773c-4537-8225-230b0a80d78e",
+        "fact_sha256": "79e689cc8642fb67f7963cef03431eb9e3a5ea7c3feadf6beb1fe8f2e5fdf73a",
+        "confirmed": false
+      },
+      "proposed": "Larga (SGS)",
+      "unit": null,
+      "method": "Ficha «Model no. RD-M370-SGS»: sufijo SGS de jaula; nombre guardado «SGS».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "RD-M370-SGS",
+      "reason": "Sufijo de jaula del modelo publicado."
+    },
+    {
+      "key": "rear_derailleur_mount_type",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Pata/postiza estándar",
+      "unit": null,
+      "method": "Ficha: «Applicable derailleur hanger — SHIMANO MTB type: Direct attachment (conventional) ✔» (Direct mount -, UDH -, Riveted adapter -).",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "RD-M370-SGS",
+      "reason": "Montaje declarado por el fabricante; el nombre fija la presentación."
+    },
+    {
+      "key": "rear_derailleur_compatibility_claims",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "chain-0",
+            "values": {
+              "claim_identity": "Cadena HG 9-speed",
+              "scope_kind": "Interfaz o estándar documentado",
+              "declared_interface": "HG 9-speed",
+              "source_document": "productinfo.shimano.com — ficha RD-M370-SGS (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/RD-M370-SGS",
+              "target_component": "Cadena",
+              "declaration_result": "Compatible declarado",
+              "conditions": "Fila «Compatible chain» de la ficha RD-M370-SGS."
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/RD-M370-SGS"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Fila «Compatible chain: HG 9-speed» de la ficha.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "RD-M370-SGS",
+      "reason": "Clases de cadena declaradas."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/RD-M370-SGS",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial RD-M370-SGS",
+      "finding": "ALTUS; Rear 9; HG 9-speed; MTB Direct attachment ✔; Max. front difference 22T; cap. 45T; Low 28-34T; Top 11T",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-rd-m370-sgs-20260917.md",
+      "sha256": "b147074c7b0b0a05494e10219ebac7e034bebf88f1da47759c7a483f9d4f4925"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product cecb09d2-6eac-4bd7-99ce-fbfb9670351b",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Desviador Shimano Altus 9V RD-M370 SGS Negro",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-rd-m370-sgs-saved-name-20260917.json",
+      "sha256": "43ec0fd3658606c7682edb42e58f1e333778bef00434e120ac2e49231d655f4e"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "09ef0431b689bf3412775476baef5471731cfd71aa6006dda6d65cc93112668c",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre ed70e37a850479ea9acf5960cd7337a8bcec92cf3027707613240f326cd9dad3: RD-M370-SGS: igual que c51cdb87 sin sufijo extra."
+  }
+}

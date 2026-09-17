@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "9417403f-c55d-428e-b10f-2fbe6865ed14",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Cadena Kmc S1 Rb 1/2 X 1/8 Anti Oxido Gris",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "73ef48b36800b8f9f7753b74d8a611b9c832b124bec2f0ca7dc45a2a909c8f88",
+  "product_sha256": "dcbe7c4268d0ab6d1246bc43a7f855d0cec2cf90935c42daf3a8f9111caafdb3",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

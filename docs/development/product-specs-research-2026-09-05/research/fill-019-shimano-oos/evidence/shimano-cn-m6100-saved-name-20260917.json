@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "6d9c79c6-7b79-44d5-8c5a-5ebd3a1ad851",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Cadena Shimano CN-M6100 12v",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "ef19213552b672d6da8435289560e2835685c763eadc1a2a75a7bd296e0cf235",
+  "product_sha256": "a78c71c29141c29d25ea04ea2e2fed0aa4b892f2bfa80a9afae61d61968eaeca",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

@@ -1,0 +1,145 @@
+{
+  "schema_version": 2,
+  "product_id": "1ac2583f-0b27-4a4d-9c89-faba82a8ab39",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "6cfe7ebb85765b4c67ba516af5bd1188d83c8f6f9ad138f2df722b0dfceda3a8",
+    "fingerprints": {
+      "facts_sha256": "dbad163ae311059e4b5b018b425eec94446db6200b2e3d4515abc69faafdaaeb",
+      "product_sha256": "7fa11617aad103e8f57de61db899d94ef0303b2e99045d6072b8a2e3fc44cd95",
+      "template_sha256": "116f235acd81e5019c5823922c9b13a4ea53de091bf50273ac359e0a194f4f5a",
+      "references_sha256": "ecfbc36e5431cc517d141900304efe06d322582e21142a7513f604df06ba2974"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "a9d0494f-08b5-42df-9836-42e302d2d9f5",
+    "contract_version": 45
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "Z9",
+      "evidence": [
+        "product-name",
+        "com"
+      ],
+      "reason": "El nombre guardado nombra el modelo «Z9» literal y la ficha oficial de KMC documenta ese modelo."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.kmcchain.com/en/product/bicycle-chain-z9-9-speed",
+      "unit": null,
+      "method": "URL de la ficha oficial de KMC consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "com"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "chain_pitch_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "12.7",
+      "unit": "mm",
+      "method": "Tamaño publicado «1/2\"x11/128\"»: paso de 1/2 pulgada = 12,7 mm.",
+      "origin": "research",
+      "evidence": [
+        "com"
+      ],
+      "scope": "Paso",
+      "reason": "Paso literal de la ficha (1/2\")."
+    },
+    {
+      "key": "chain_application_declarations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "sys9",
+            "values": {
+              "claim_identity": "KMC Z9 · sistema de 9 velocidades",
+              "scope_kind": "Sistema documentado",
+              "target_system": "Compatibility : SHIMANO, Campagnolo, SRAM and all other 9 speed drivetrains | 1x9, 2x9 , 3x9",
+              "verdict": "Admitido por la fuente",
+              "drive_kind": "Desviador externo",
+              "rear_sprockets": "9",
+              "conditions": "Línea de compatibilidad publicada por KMC: «Compatibility : SHIMANO, Campagnolo, SRAM and all other 9 speed drivetrains | 1x9, 2x9 , 3x9»; una fila por conteo de piñones (columna decimal).",
+              "source_document": "kmcchain.com — página Z9 (consultada 2026-09-17)",
+              "source_url": "https://www.kmcchain.com/en/product/bicycle-chain-z9-9-speed"
+            },
+            "sources": [
+              "https://www.kmcchain.com/en/product/bicycle-chain-z9-9-speed"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Línea de compatibilidad publicada: «Compatibility : SHIMANO, Campagnolo, SRAM and all other 9 speed drivetrains | 1x9, 2x9 , 3x9».",
+      "origin": "research",
+      "evidence": [
+        "com"
+      ],
+      "scope": "Sistemas declarados",
+      "reason": "Sistemas declarados por el fabricante."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "com",
+      "kind": "oem_page",
+      "source": "KMC Chain Industrial (kmcchain.com, sitio oficial global)",
+      "locator": "https://www.kmcchain.com/en/product/bicycle-chain-z9-9-speed",
+      "consulted_on": "2026-09-17",
+      "scope": "Página oficial del modelo Z9",
+      "finding": "9 Speed; Size 1/2\"x11/128\" | Compatibility : SHIMANO, Campagnolo, SRAM and all other 9 speed drivetrains | 1x9, 2x9 , 3x9",
+      "artifact_path": "research/fill-021-kmc/evidence/kmc-com-z9-9-speed-20260917.md",
+      "sha256": "6fa5450ee0a39249992e3ca805d6b3c0c447c7c7ea34c0856cbdbed62af5452b"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 1ac2583f-0b27-4a4d-9c89-faba82a8ab39",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Cadena 1/2x11/128\" Kmc Mod Z9 - 9 V.",
+      "artifact_path": "research/fill-021-kmc/evidence/kmc-z9-9v-saved-name-20260917.json",
+      "sha256": "1c0359bd6885a40e19282f7682b2904467e4612701a0e525b9a1bf93fd8fa23a"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "f9d2ffc86e7faab509a16118719001a5ebf2a8e010223ab54c2b4cb02e3ef5b4",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 286c6f83da95a4a017f85158f57de047aeaca0d274b273006a1e5a96b3b59753: Fila de 9 v literal de kmcchain.com; opcional: chain_speeds 9, drivetrain_mode y chain_width_family 11/128 de la misma página."
+  }
+}

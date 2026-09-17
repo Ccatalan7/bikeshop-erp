@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "061e7c9b-2dcf-4bd3-99ca-5b68caaf19fc",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Cadena Kmc X10 1/2x11/128\" 10v Ti-dorada",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "98876560d991034eb9f4e6d8a7d5c49a2a78d9cb222dff76567eea0bef738e4a",
+  "product_sha256": "268a5ea22b79e0df6ede2b922c405088f3f0c76e221473fd30e9ad8f3726e549",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

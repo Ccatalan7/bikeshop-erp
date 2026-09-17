@@ -1,0 +1,374 @@
+{
+  "schema_version": 2,
+  "product_id": "73e76cff-cb68-44d4-945d-09ec1d696057",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "46cbe9a50c68d599430d80d5590a2a76545cc382c982391cd0c5d306bafa1280",
+    "fingerprints": {
+      "facts_sha256": "fd95c051ae0bef4aef73fad23d94d9d25d5efb37c6d15c55b013acd5f033e027",
+      "product_sha256": "b044597ceac3f5d659a74e4bb71759a044fdbdda3499811100cf89ea2468beed",
+      "template_sha256": "19d2ae8cfd39797cf25f509b15d53e8f8fbdf98c188bd6f992d626cc00d56a1b",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "6a02a0c2-b139-46ef-86d8-bba3797252bd",
+    "contract_version": 24
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "CS-HG200-9",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «CASSETTE SHIMANO 9V. (11-32) HG200»: HG200 y 9 velocidades sólo corresponden a CS-HG200-9 (la ficha lo documenta con «Rear speeds 9» y la combinación 11-32T (bo))."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/CS-HG200-9",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-17 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "sprocket_count",
+      "current": {
+        "value": "9",
+        "source": "name_reading",
+        "fact_id": "ba21dbad-629e-4a6e-8a41-dd1afb46668f",
+        "fact_sha256": "06e3feaf6027022c9f40bb4cf2ef04e6f5746f76f8ecfd7e157610ff48b0e6d5",
+        "confirmed": false
+      },
+      "proposed": "9",
+      "unit": null,
+      "method": "Ficha CS-HG200-9: «Rear speeds 9», «Steel gear QTY (pcs) 9»; nombre guardado «9V. (11-32) HG200».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-HG200-9",
+      "reason": "Literal; sustituye la lectura de nombre."
+    },
+    {
+      "key": "cog_sequence",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "p1",
+            "values": {
+              "position": "1",
+              "teeth": "11"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG200-9"
+            ]
+          },
+          {
+            "id": "p2",
+            "values": {
+              "position": "2",
+              "teeth": "13"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG200-9"
+            ]
+          },
+          {
+            "id": "p3",
+            "values": {
+              "position": "3",
+              "teeth": "15"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG200-9"
+            ]
+          },
+          {
+            "id": "p4",
+            "values": {
+              "position": "4",
+              "teeth": "17"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG200-9"
+            ]
+          },
+          {
+            "id": "p5",
+            "values": {
+              "position": "5",
+              "teeth": "19"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG200-9"
+            ]
+          },
+          {
+            "id": "p6",
+            "values": {
+              "position": "6",
+              "teeth": "21"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG200-9"
+            ]
+          },
+          {
+            "id": "p7",
+            "values": {
+              "position": "7",
+              "teeth": "24"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG200-9"
+            ]
+          },
+          {
+            "id": "p8",
+            "values": {
+              "position": "8",
+              "teeth": "28"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG200-9"
+            ]
+          },
+          {
+            "id": "p9",
+            "values": {
+              "position": "9",
+              "teeth": "32"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG200-9"
+            ]
+          }
+        ]
+      },
+      "unit": "T",
+      "method": "Ficha CS-HG200-9, «Combination»: 11-32T (bo): 11-13-15-17-19-21-24-28-32T. La ficha publica además 11-34T (bn) y 11-36T (bw); el nombre fija 11-32.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-HG200-9",
+      "reason": "Secuencia publicada de la combinación que nombra el ERP."
+    },
+    {
+      "key": "smallest_cog_teeth",
+      "current": {
+        "value": "11",
+        "source": "supplier_text",
+        "fact_id": "4994d56f-1839-4873-b204-c4418244be49",
+        "fact_sha256": "daaebb8a74144a44a59d8650201f3cec9d3abff272f134f6c8dc78900f9c6ffb",
+        "confirmed": false
+      },
+      "proposed": "11",
+      "unit": "T",
+      "method": "Primer piñón de la combinación 11-32T (bo); nombre guardado «9V. (11-32) HG200».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-HG200-9",
+      "reason": "Literal."
+    },
+    {
+      "key": "largest_cog_teeth",
+      "current": {
+        "value": "32",
+        "source": "supplier_text",
+        "fact_id": "d405dda8-e5d0-4531-87f0-78fe1a2cb24f",
+        "fact_sha256": "28d0dca86084c9fdd1c608d2855100b754d0954e117e3558917ebe849b7881ac",
+        "confirmed": false
+      },
+      "proposed": "32",
+      "unit": "T",
+      "method": "Último piñón de la combinación 11-32T (bo); nombre guardado «9V. (11-32) HG200».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-HG200-9",
+      "reason": "Literal."
+    },
+    {
+      "key": "cassette_spline_standard",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+      "unit": null,
+      "method": "Ficha CS-HG200-9, «Spline type»: «Shimano HG spline M ✔»; las demás filas de estriado con «-».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CS-HG200-9",
+      "reason": "Declaración del fabricante."
+    },
+    {
+      "key": "shift_technology",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "HYPERGLIDE",
+      "unit": null,
+      "method": "Ficha CS-HG200-9: «Type: HG»; HG es la abreviatura Shimano de HYPERGLIDE (misma sigla del código de modelo y de las filas «HG spline»).",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CS-HG200-9",
+      "reason": "Tecnología declarada por su sigla."
+    },
+    {
+      "key": "freehub_bodies_accepted",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "fh",
+            "values": {
+              "rear_drive_interface": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+              "spacer_requirement": "No publicado",
+              "status": "Compatible declarado",
+              "conditions": "Fila «Spline type» de la tabla productinfo de CS-HG200-9: «Shimano HG spline M ✔»; separador no mencionado.",
+              "source_scope": "Tabla de compatibilidad OEM",
+              "source_url": "https://productinfo.shimano.com/en/product/CS-HG200-9"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG200-9"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Fila «Spline type» de la ficha CS-HG200-9.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CS-HG200-9",
+      "reason": "Núcleo declarado por el fabricante; sin dato de separador."
+    },
+    {
+      "key": "published_variant_label",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "11-32T (bo)",
+      "unit": null,
+      "method": "Ficha CS-HG200-9, «Combination name (Group name)»: 11-32T (bo); nombre guardado «9V. (11-32) HG200».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-HG200-9",
+      "reason": "Variante publicada que corresponde al nombre."
+    },
+    {
+      "key": "lockring_included",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Ficha CS-HG200-9 lista «Lock ring: Material …, Finish …» entre las piezas del producto.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CS-HG200-9",
+      "reason": "Pieza listada en la ficha del producto."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/CS-HG200-9",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial CS-HG200-9",
+      "finding": "Type HG; Rear speeds 9; 11-32T (bo): 11-13-15-17-19-21-24-28-32T; Shimano HG spline M ✔; Lock ring",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-cs-hg200-9-20260917.md",
+      "sha256": "d099eeef37d94f4c62a203b30ede17bcf526f2d66ba16bab8e104f75b0948c35"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 73e76cff-cb68-44d4-945d-09ec1d696057",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "CASSETTE SHIMANO 9V. (11-32) HG200 AE",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-cs-hg200-9-32-saved-name-20260917.json",
+      "sha256": "0842c11af3ad611fd9e78a7c7fc9d1b152d7e3a5ff1d6cf9b4f97f581225f44f"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "7bab186d2e2afe6a5d6627ef97e2a6254a8f15a9946460b3e66bc827e0d77b75",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 92f600eff9c72862618811ec1fba705ca42ac17f576bd2d1f06c7132b09fdf41: CS-HG200-9 11-32T (bo): 11-13-15-17-19-21-24-28-32T fijada por el nombre sobre {bo, bn, bw}."
+  }
+}

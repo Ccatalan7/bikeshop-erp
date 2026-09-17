@@ -1,0 +1,334 @@
+{
+  "schema_version": 2,
+  "product_id": "e6c82d94-000c-4c44-9186-d5d89cafb756",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "680100fcb5bdaa68300d445619ab81f2bc90728add71e74732c34502c88040c0",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "d52c538e3afe154f7aed924ad58d1ba1c95159037adb16d93e57d613af48c1cd",
+      "template_sha256": "116f235acd81e5019c5823922c9b13a4ea53de091bf50273ac359e0a194f4f5a",
+      "references_sha256": "ecfbc36e5431cc517d141900304efe06d322582e21142a7513f604df06ba2974"
+    },
+    "spec_revision": 0,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "a9d0494f-08b5-42df-9836-42e302d2d9f5",
+    "contract_version": 45
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "X9",
+      "evidence": [
+        "product-name",
+        "eu",
+        "com"
+      ],
+      "reason": "El nombre guardado nombra el modelo «X9» literal y la ficha oficial de KMC documenta ese modelo."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.kmcchain.eu/products/x9-silver-grey",
+      "unit": null,
+      "method": "URL de la ficha oficial de KMC consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "eu",
+        "com"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "chain_pitch_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "12.7",
+      "unit": "mm",
+      "method": "Tamaño publicado «1/2\" X 11/128\"»: paso de 1/2 pulgada = 12,7 mm.",
+      "origin": "research",
+      "evidence": [
+        "eu",
+        "com"
+      ],
+      "scope": "Paso",
+      "reason": "Paso literal de la ficha (1/2\")."
+    },
+    {
+      "key": "chain_speeds",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": [
+        "9"
+      ],
+      "unit": null,
+      "method": "Ficha kmcchain.eu X9 Silver/Grey: «Compatible with all 9-speed systems»; kmcchain.com X9: «9 Speed», «1x9, 2x9 , 3x9».",
+      "origin": "research",
+      "evidence": [
+        "eu",
+        "com"
+      ],
+      "scope": "Velocidades",
+      "reason": "Velocidades declaradas por el fabricante."
+    },
+    {
+      "key": "drivetrain_mode",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Derailleur",
+      "unit": null,
+      "method": "Ficha KMC: «Compatible with all 9-speed systems».",
+      "origin": "research",
+      "evidence": [
+        "eu",
+        "com"
+      ],
+      "scope": "Tipo de transmisión",
+      "reason": "Tipo de transmisión declarado."
+    },
+    {
+      "key": "chain_width_family",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "11/128",
+      "unit": null,
+      "method": "Tamaño publicado «1/2\" X 11/128\"».",
+      "origin": "research",
+      "evidence": [
+        "eu",
+        "com"
+      ],
+      "scope": "Ancho de cadena",
+      "reason": "Ancho literal de la ficha."
+    },
+    {
+      "key": "chain_outer_width_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "6.6",
+      "unit": "mm",
+      "method": "Ficha kmcchain.eu: «Pin length: 6.6 mm» (largo de pasador = ancho externo de la cadena; el catálogo distingue 8/9/10/11 v por este valor).",
+      "origin": "research",
+      "evidence": [
+        "eu"
+      ],
+      "scope": "Ancho externo",
+      "reason": "Ancho externo publicado por el fabricante."
+    },
+    {
+      "key": "chain_mass_declarations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "w110",
+            "values": {
+              "weighing_identity": "X9 Nickel plated Silver/Grey — 110 eslabones",
+              "weight_g": "287",
+              "basis_links": "110",
+              "basis_description": "Weight per 110 links (dato publicado por KMC por 110 eslabones)",
+              "source_document": "kmcchain.eu — ficha X9 Silver/Grey (consultada 2026-09-17)",
+              "source_url": "https://www.kmcchain.eu/products/x9-silver-grey"
+            },
+            "sources": [
+              "https://www.kmcchain.eu/products/x9-silver-grey"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha kmcchain.eu X9 Silver/Grey: «Weight per 110 links: 287 g».",
+      "origin": "research",
+      "evidence": [
+        "eu"
+      ],
+      "scope": "Peso declarado",
+      "reason": "Peso publicado sobre una base de 110 eslabones."
+    },
+    {
+      "key": "quick_link_included",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Ficha kmcchain.eu X9 Silver/Grey: «Includes a MissingLink».",
+      "origin": "research",
+      "evidence": [
+        "eu"
+      ],
+      "scope": "Conector incluido",
+      "reason": "Conector incluido según el fabricante."
+    },
+    {
+      "key": "chain_quick_links_supplied",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "ql",
+            "values": {
+              "connector_identity": "MissingLink incluido con la cadena X9",
+              "quantity": "1",
+              "brand": "KMC",
+              "model": "MissingLink",
+              "source_document": "kmcchain.eu — ficha X9 Silver/Grey (consultada 2026-09-17)",
+              "source_url": "https://www.kmcchain.eu/products/x9-silver-grey"
+            },
+            "sources": [
+              "https://www.kmcchain.eu/products/x9-silver-grey"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha kmcchain.eu X9 Silver/Grey: «Includes a MissingLink» (un conector por cadena).",
+      "origin": "research",
+      "evidence": [
+        "eu"
+      ],
+      "scope": "Conectores incluidos",
+      "reason": "Conector incluido según el fabricante."
+    },
+    {
+      "key": "chain_application_declarations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "sys9",
+            "values": {
+              "claim_identity": "KMC X9 · sistema de 9 velocidades",
+              "scope_kind": "Sistema documentado",
+              "target_system": "Compatibility : SHIMANO, SRAM and all other 9 speed drivetrains | 1x9, 2x9 , 3x9",
+              "verdict": "Admitido por la fuente",
+              "drive_kind": "Desviador externo",
+              "conditions": "Línea de compatibilidad publicada por KMC: «Compatibility : SHIMANO, SRAM and all other 9 speed drivetrains | 1x9, 2x9 , 3x9»; una fila por conteo de piñones (columna decimal).",
+              "source_document": "kmcchain.eu — ficha X9 Silver/Grey (consultada 2026-09-17)",
+              "source_url": "https://www.kmcchain.eu/products/x9-silver-grey",
+              "rear_sprockets": "9"
+            },
+            "sources": [
+              "https://www.kmcchain.eu/products/x9-silver-grey"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Línea de compatibilidad publicada: «Compatibility : SHIMANO, SRAM and all other 9 speed drivetrains | 1x9, 2x9 , 3x9».",
+      "origin": "research",
+      "evidence": [
+        "eu",
+        "com"
+      ],
+      "scope": "Sistemas declarados",
+      "reason": "Sistemas declarados por el fabricante."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "eu",
+      "kind": "oem_page",
+      "source": "KMC Chain Europe (kmcchain.eu, sitio oficial)",
+      "locator": "https://www.kmcchain.eu/products/x9-silver-grey",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial X9 Silver/Grey",
+      "finding": "Compatible with all 9-speed systems; Art.nr. BX09NG114; Size 1/2\" X 11/128\"; Pin length 6.6 mm; Weight per 110 links 287 g; Length 114 links",
+      "artifact_path": "research/fill-021-kmc/evidence/kmc-x9-silver-grey-20260917.md",
+      "sha256": "dd78609a89c8cbcf5b801083d77249cf57e0b155b0519dfc43f00cd8cdf9eb76"
+    },
+    {
+      "id": "com",
+      "kind": "oem_page",
+      "source": "KMC Chain Industrial (kmcchain.com, sitio oficial global)",
+      "locator": "https://www.kmcchain.com/en/product/bicycle-chain-x9-9-speed",
+      "consulted_on": "2026-09-17",
+      "scope": "Página oficial del modelo X9",
+      "finding": "9 Speed; Size 1/2\"x11/128\" | Compatibility : SHIMANO, SRAM and all other 9 speed drivetrains | 1x9, 2x9 , 3x9",
+      "artifact_path": "research/fill-021-kmc/evidence/kmc-com-x9-9-speed-20260917.md",
+      "sha256": "4321bb278cf45937814b50715300fd2629ed83bd76a44541ecfac4450daa6f8c"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product e6c82d94-000c-4c44-9186-d5d89cafb756",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Cadena Kmc X9 1/2\" X11/28\" Plata/Gris",
+      "artifact_path": "research/fill-021-kmc/evidence/kmc-x9-plata-gris-saved-name-20260917.json",
+      "sha256": "9a8375c5f3c7e19c84e80442eb0a19569e3cf2104b95beddd6e68ac3a66f4e43"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "14293ecf01994a0bd2fa66abad7fb0307d61d139ae72b130c46fad3dff67b2fe",
+    "notes": "Revisión par (sesión Look dude), v2 aceptada sobre 15f4e058b906e0d244b430cade50bb079b7766783f027f94f50808ef6399da6d: v2: manufacturer_sku y link_count retirados; weighing_identity sin Art.nr.; el resto igual, citando la ficha X9 Silver/Grey que publica cada valor. Verificado por diff."
+  }
+}

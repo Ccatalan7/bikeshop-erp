@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "e926483c-380f-4379-9ac5-8ef73ed47272",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "CADENA SHIMANO DEORE CN-HG54 10V. ICNHG54116I (CAJA) SSC",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "99361062af1dde741e8a600e33e89fd62482bace856470aa70babef66d1ac0f8",
+  "product_sha256": "e17086bae462a87a7d984b98fdda1174ef4a87f4775850ee1f0f6c72d41036dc",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

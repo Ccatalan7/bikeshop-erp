@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "e8413b00-3481-486d-9292-5c8fcc2db95b",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Neumatico Bicicleta Aro 20 X 2.25 Berm Grabber Arisun",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "517f593f29874f6429546db0d9d206831651c2b73e9d39962c0bd0b1c518c505",
+  "product_sha256": "568b0a998bdbb233adf78831e6efece475d995703f7293f9ac5f1020e9c8fb2a",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

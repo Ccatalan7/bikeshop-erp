@@ -1,0 +1,105 @@
+{
+  "schema_version": 2,
+  "product_id": "9bbd969f-bf10-4c64-97f4-f40c619081e6",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "76cb7c57f701cf80896b2139c62d41ad0f3e07b3eda813c97505097f5cebf5fa",
+    "fingerprints": {
+      "facts_sha256": "22c6571a5774a41d9018ac7922c42a61731e0c054da0020720b02a551561fbfd",
+      "product_sha256": "6d3a9e4cc8eabfd8f73f695a6bc756951c6a5c30ac8643d53981dd61f1a345f5",
+      "template_sha256": "c9c12ef9de5da2f893445f1910c3cbdebe2daad22315ccc4e3310cb8ef173342",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "4d5edd21-5818-4c98-827a-7154d1eebfe4",
+    "contract_version": 38
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "Assegai",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado nombra el modelo «Assegai» literal y la página oficial de Maxxis documenta ese modelo con ese nombre."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.maxxis.com/us/tire/assegai/",
+      "unit": null,
+      "method": "URL de la ficha oficial del fabricante consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "tire_use",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "MTB",
+      "unit": null,
+      "method": "Página oficial de Maxxis del modelo Assegai: «Category: Trail, Enduro, Downhill» (categoría de bicicleta de montaña del catálogo Maxxis).",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Uso",
+      "reason": "Categoría de uso declarada por el fabricante para el modelo."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Maxxis (maxxis.com/us, sitio oficial)",
+      "locator": "https://www.maxxis.com/us/tire/assegai/",
+      "consulted_on": "2026-09-17",
+      "scope": "Página oficial del modelo Assegai (tabla de especificaciones y categoría)",
+      "finding": "Category: Trail, Enduro, Downhill",
+      "artifact_path": "research/fill-020-tires/evidence/maxxis-us-assegai-20260917.md",
+      "sha256": "a2d4fcd3052dd80ccbcb0c5d6987e019a39f7f6976bce8899d6d3d3192bc2b81"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 9bbd969f-bf10-4c64-97f4-f40c619081e6",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "MAXXIS KEVLAR 29X1.50 WT ASSEGAI EXO/TR",
+      "artifact_path": "research/fill-020-tires/evidence/maxxis-assegai-29-wt-exo-tr-saved-name-20260917.json",
+      "sha256": "e873afe70f07e3d135f6c57c6e2201aa0c24c60fee33f908597a63dfc8c7f6f5"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "abc84164b0727347e39c7a5b9bd87b1334953b939bc29c512bbe01e0b663862f",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 7e7ef537409f00a47a146d2a015bcf4ac5037060ba223225439ba006a7bf8be7. Validador mecánico (tokens, filas, based_on, sha de evidencias, name_quote, simulación) y cotejo literal de cada valor contra el archivo citado."
+  }
+}

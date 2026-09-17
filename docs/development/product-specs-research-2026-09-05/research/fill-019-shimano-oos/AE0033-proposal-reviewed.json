@@ -1,0 +1,243 @@
+{
+  "schema_version": 2,
+  "product_id": "4961cdc3-6910-4e41-b220-66633602dc97",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "564602909142e84bba9caf1ca100e7f20e60d913e98e45b434d5a6d0ae0d8da8",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "8031dbb912fcee05624e43b393d02a9b80ff8f7f189c2844f9cb322b48e84fd5",
+      "template_sha256": "116f235acd81e5019c5823922c9b13a4ea53de091bf50273ac359e0a194f4f5a",
+      "references_sha256": "ecfbc36e5431cc517d141900304efe06d322582e21142a7513f604df06ba2974"
+    },
+    "spec_revision": 0,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "a9d0494f-08b5-42df-9836-42e302d2d9f5",
+    "contract_version": 45
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "CN-HG40",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice literalmente «CN-HG40»; la ficha oficial documenta CN-HG40 (HG 8/7/6-speed)."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/CN-HG40",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-17 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "chain_speeds",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": [
+        "8",
+        "7",
+        "6"
+      ],
+      "unit": null,
+      "method": "Ficha CN-HG40: «Type: HG 8/7/6-speed».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CN-HG40",
+      "reason": "Velocidades traseras publicadas en el tipo de cadena."
+    },
+    {
+      "key": "drivetrain_mode",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Derailleur",
+      "unit": null,
+      "method": "Ficha CN-HG40: «Type: HG 8/7/6-speed» (cadena HG para transmisiones de 8/7/6 velocidades con cambio externo); nombre guardado «CN-HG40».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CN-HG40",
+      "reason": "Cadena de cambio externo por su tipo publicado."
+    },
+    {
+      "key": "chain_application_declarations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "hg8",
+            "values": {
+              "claim_identity": "CN-HG40 · HG 8-speed (HG 8/7/6-speed)",
+              "scope_kind": "Sistema documentado",
+              "target_system": "HG 8/7/6-speed",
+              "verdict": "Admitido por la fuente",
+              "drive_kind": "Desviador externo",
+              "rear_sprockets": "8",
+              "chain_class": "HG 8/7/6-speed",
+              "source_document": "productinfo.shimano.com — ficha CN-HG40 (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/CN-HG40",
+              "conditions": "Fila «Type: HG 8/7/6-speed» de la tabla productinfo; una fila por conteo de piñones (columna decimal)."
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CN-HG40"
+            ]
+          },
+          {
+            "id": "hg7",
+            "values": {
+              "claim_identity": "CN-HG40 · HG 7-speed (HG 8/7/6-speed)",
+              "scope_kind": "Sistema documentado",
+              "target_system": "HG 8/7/6-speed",
+              "verdict": "Admitido por la fuente",
+              "drive_kind": "Desviador externo",
+              "rear_sprockets": "7",
+              "chain_class": "HG 8/7/6-speed",
+              "source_document": "productinfo.shimano.com — ficha CN-HG40 (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/CN-HG40",
+              "conditions": "Fila «Type: HG 8/7/6-speed» de la tabla productinfo; una fila por conteo de piñones (columna decimal)."
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CN-HG40"
+            ]
+          },
+          {
+            "id": "hg6",
+            "values": {
+              "claim_identity": "CN-HG40 · HG 6-speed (HG 8/7/6-speed)",
+              "scope_kind": "Sistema documentado",
+              "target_system": "HG 8/7/6-speed",
+              "verdict": "Admitido por la fuente",
+              "drive_kind": "Desviador externo",
+              "rear_sprockets": "6",
+              "chain_class": "HG 8/7/6-speed",
+              "source_document": "productinfo.shimano.com — ficha CN-HG40 (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/CN-HG40",
+              "conditions": "Fila «Type: HG 8/7/6-speed» de la tabla productinfo; una fila por conteo de piñones (columna decimal)."
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CN-HG40"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Fila «Type: HG 8/7/6-speed» de la ficha CN-HG40, desglosada en 8, 7 y 6 piñones (la columna rear_sprockets es decimal).",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CN-HG40",
+      "reason": "Sistema declarado por el fabricante."
+    },
+    {
+      "key": "chain_mass_declarations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "w114",
+            "values": {
+              "weighing_identity": "CN-HG40 — 114 eslabones",
+              "weight_g": "324",
+              "basis_links": "114",
+              "basis_description": "Average weight (g) (114 links)",
+              "source_document": "productinfo.shimano.com — ficha CN-HG40 (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/CN-HG40"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CN-HG40"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha CN-HG40: «Average weight (g) (114 links) 324».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CN-HG40",
+      "reason": "Peso publicado sobre una base de 114 eslabones."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/CN-HG40",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial CN-HG40",
+      "finding": "Type HG 8/7/6-speed; E-BIKE -; Average weight (114 links) 324 g",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-cn-hg40-20260917.md",
+      "sha256": "1077370db7d161fd0454cdea75d86f79f9586f6d2917348ea492eaaf45867e31"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 4961cdc3-6910-4e41-b220-66633602dc97",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "CADENA SHIMANO CN-HG40",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-cn-hg40-saved-name-20260917.json",
+      "sha256": "675bc9315fee2ba63e49597480fb4e6548ff0bb64cf00a701a3c7b6314cf7414"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "69edf0227a15924ba9ef87d22c7d9e4d1c67c3a710f7b20600d96752606c5056",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 564125bb44d90bf3bf60248f128b46c828cff456ca2445154286ffb3504affa1: CN-HG40: «HG 8/7/6-speed» en tres filas por conteo (columna decimal), 324 g/114; sin quick link ni e-bike, correcto."
+  }
+}

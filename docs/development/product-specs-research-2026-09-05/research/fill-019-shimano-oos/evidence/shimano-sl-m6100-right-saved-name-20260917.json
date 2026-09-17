@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "cc077708-f60b-41ca-b3dd-3ad4112b5ead",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Shifter 12v Shimano Deore SL-M6100 Right",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "44fe4bfc0da8ce2975c235a6720a6ea1eb3e3c5e3166f60146713f75657fc8d7",
+  "product_sha256": "ef9af7f990e5fadb81b5b3c35d22b7acb8afd848bbcf2646868901cf273ae7dd",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

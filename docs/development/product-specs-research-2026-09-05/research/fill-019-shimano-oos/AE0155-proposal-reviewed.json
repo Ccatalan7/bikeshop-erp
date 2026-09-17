@@ -1,0 +1,144 @@
+{
+  "schema_version": 2,
+  "product_id": "7d81f6bf-8f3d-4185-8a61-7b55e91278f4",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "da28990e6b7707d9528f8c6180f3b48c7a891bb82929f73e65f63470edde6166",
+    "fingerprints": {
+      "facts_sha256": "671cb0d5a9ba7749b41a27107594456a6df513431e2e7ca68d0b5cba9ab970c6",
+      "product_sha256": "dd41d9af1cc77f0b6c0a427cf9204597cae91cf68a41de93dc248ab96071b546",
+      "template_sha256": "47b56ca6e31877ebb7113592c4090c331eb4da7a3642c97d5df5253d720b29a0",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-08-04T19:27:18.188191+00:00",
+    "template_id": "a2ba0aad-9c5c-4563-a4f5-75cf2611a43a",
+    "contract_version": 35
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "SM-RT56",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «RT56 160MM»; la ficha oficial documenta SM-RT56 con 180 ✔, 160 ✔ (220/203/200/140 -)."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/SM-RT56",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-17 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "rotor_diameter_mm_value",
+      "current": {
+        "value": "160",
+        "source": "name_reading",
+        "fact_id": "d0dafab8-16e7-4083-83b7-bb1e65a5a914",
+        "fact_sha256": "865ab36d1f64373097cd3a8d62198c90a4d8c3699b39498baa6984bc4e6d2c2a",
+        "confirmed": false
+      },
+      "proposed": "160",
+      "unit": "mm",
+      "method": "Ficha SM-RT56: «Outside diameter (mm)»: 180 ✔, 160 ✔ (220/203/200/140 -); nombre guardado «RT56 160MM».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "SM-RT56",
+      "reason": "El nombre fija una de las medidas publicadas; sustituye la lectura de nombre."
+    },
+    {
+      "key": "rotor_material",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Acero Inoxidable",
+      "unit": null,
+      "method": "Ficha SM-RT56: «Rotor — Material: Stainless steel».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "SM-RT56",
+      "reason": "Literal."
+    },
+    {
+      "key": "rotor_nominal_thickness_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "1.75",
+      "unit": "mm",
+      "method": "Ficha SM-RT56: «Rotor thickness — Standard 1.75(mm) ✔; Thick 2.2(mm) -».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "SM-RT56",
+      "reason": "Espesor nominal publicado."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/SM-RT56",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial SM-RT56",
+      "finding": "Outside diameter 180 ✔, 160 ✔ (220/203/200/140 -); Stainless steel; 1.75 mm; Pad Resin ✔ Metal -; Note: With anti loosen tightening plate",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-sm-rt56-20260917.md",
+      "sha256": "e3e35318292c3df8968596150d2e7ba3931f1da34681a69e063e44fe8f94ce3e"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 7d81f6bf-8f3d-4185-8a61-7b55e91278f4",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Disco freno Shimano Deore RT56 160MM",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-sm-rt56-160-saved-name-20260917.json",
+      "sha256": "9228449cfcc03d96fb9505b3fbd2c44bdd0340a7f121912c2f5d7c9bd67f4a6a"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "a9237540863def09018fc9833ba9943e8b9eee22221c61913f7644b882fc8016",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 49e8789f3289992af7ae9c9f5ac8cce778f48148ba426a8dfedf021b56e830a1: SM-RT56 160: 160 ✔; igual que 0367a62f."
+  }
+}

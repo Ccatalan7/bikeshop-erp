@@ -1,0 +1,144 @@
+{
+  "schema_version": 2,
+  "product_id": "af32de00-23b0-4bf5-a286-0c70df8c9f53",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "1d9610630164c2dd2cbb4f56ec3b1872316d9193e3a4eab8f2813c13386e52f4",
+    "fingerprints": {
+      "facts_sha256": "3c5f84ef6582366f0acccd8c38bb4e5669ece2662f2fa1ec3a2ded92cbd661af",
+      "product_sha256": "5dcbaf7602ed2e03e946e070b9cfed5df22c9f14e794389167311134d04ed40c",
+      "template_sha256": "19de5fe98c4c840eb76b93f0a6ac501734bb047322c4e5f551c3f9357f4eccab",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-08-15T14:57:00.795535+00:00",
+    "template_id": "81547e3f-433c-462e-9dbe-a141aef745c9",
+    "contract_version": 65
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "ZAC19",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado trae «ZAC19» literal y la ficha oficial de Weinmann documenta el modelo ZAC19."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.weinmanntek.com/product/4/61",
+      "unit": null,
+      "method": "URL de la ficha oficial del fabricante consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "rim_erd_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "540.33",
+      "unit": "mm",
+      "method": "Ficha oficial Weinmann ZAC19: «SIZE: 406(20\"),507(24\"),559(26\"),622(29\")» y «ERD: 387.13，488.83，540.33，603.83» en el mismo orden posicional; la medida 26\" (559) del nombre guardado corresponde al ERD 540.33.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "ERD",
+      "reason": "ERD publicado por el fabricante para la medida nombrada."
+    },
+    {
+      "key": "brake_track",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Ficha oficial Weinmann ZAC19: «BRAKE: RIM BRAKE».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Pista de freno",
+      "reason": "Uso de freno declarado por el fabricante."
+    },
+    {
+      "key": "rim_eyelet_type",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Ojetillo simple",
+      "unit": null,
+      "method": "Ficha oficial Weinmann ZAC19: «EYELET: SINGLE EYELET».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Ojetillos",
+      "reason": "Ojetillo declarado por el fabricante."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Weinmann Metal Products (weinmanntek.com, sitio oficial)",
+      "locator": "https://www.weinmanntek.com/product/4/61",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial ZAC19",
+      "finding": "SIZE 406(20\"),507(24\"),559(26\"),622(29\"); ERD 387.13，488.83，540.33，603.83; SPOKE HOLES 20H,24H,28H,32H,36H; BRAKE RIM BRAKE; EYELET SINGLE EYELET",
+      "artifact_path": "research/fill-022-misc/evidence/weinmann-zac19-20260917.md",
+      "sha256": "2cd9ba929fac727bc360c2160efa845c73a9a945182f2939f44a91517efe8a17"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product af32de00-23b0-4bf5-a286-0c70df8c9f53",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Llanta Weinmann ZAC19 26\" Ojetillos 36H Schrader Negro",
+      "artifact_path": "research/fill-022-misc/evidence/weinmann-zac19-26-36h-saved-name-20260917.json",
+      "sha256": "0ef3754dd70d7f3e90fe46030521f61d4a8e824707ddf1b0632ebe806e7f30f7"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "0fa4b76b6f83fd1a600dd1d434d3c4c93466b7d4aa625791d02d393c568940ec",
+    "notes": "Revisión par (sesión Look dude), v1 aceptada sobre 32265e555fc1fdb470a405a7bcae448e363f5fcf43c2bbee90e8f33bb07dddca: ERD 540.33 por posición «559(26\")» ↔ tercera entrada de «387.13，488.83，540.33，603.83» (comas de ancho completo copiadas literal); brake_track true por «RIM BRAKE»; «SINGLE EYELET» literal; model ZAC19 literal."
+  }
+}

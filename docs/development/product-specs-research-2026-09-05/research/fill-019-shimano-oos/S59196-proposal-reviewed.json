@@ -1,0 +1,384 @@
+{
+  "schema_version": 2,
+  "product_id": "f0b93cad-4ba9-4026-b7fe-a0373b1432f7",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "65f642e5fab0066c02a5f45082814eb952e4d0bdfbcaec4701db872c7630dedd",
+    "fingerprints": {
+      "facts_sha256": "63bd911288fcc0195ac403c7bda1a2980b996292edf6ed4a275010e8aa35b80d",
+      "product_sha256": "39b2fd89601ff11591af2af6d477a2c344e210fe7740e07026758cd1dbaf3284",
+      "template_sha256": "19d2ae8cfd39797cf25f509b15d53e8f8fbdf98c188bd6f992d626cc00d56a1b",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-08-19T18:35:23.384361+00:00",
+    "template_id": "6a02a0c2-b139-46ef-86d8-bba3797252bd",
+    "contract_version": 24
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "CS-HG50-10",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «CS-HG50-10» (o su forma sin sufijo de velocidades) y «10V. (11-36) CS-HG50-10»; la ficha oficial documenta CS-HG50-10 con «Rear speeds 10» y la combinación 11-36T (bk)."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/CS-HG50-10",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-17 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "sprocket_count",
+      "current": {
+        "value": "10",
+        "source": "name_reading",
+        "fact_id": "3dcb8f4c-4a67-41e5-9360-a1e6591c58f1",
+        "fact_sha256": "bb47a5d584c092c6f3ab694dbc0fc3f64c4c465bc6b8c20c6b591d459af15189",
+        "confirmed": false
+      },
+      "proposed": "10",
+      "unit": null,
+      "method": "Ficha CS-HG50-10: «Rear speeds 10», «Steel gear QTY (pcs) 10»; nombre guardado «10V. (11-36) CS-HG50-10».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-HG50-10",
+      "reason": "Literal; sustituye la lectura de nombre."
+    },
+    {
+      "key": "cog_sequence",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "p1",
+            "values": {
+              "position": "1",
+              "teeth": "11"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG50-10"
+            ]
+          },
+          {
+            "id": "p2",
+            "values": {
+              "position": "2",
+              "teeth": "13"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG50-10"
+            ]
+          },
+          {
+            "id": "p3",
+            "values": {
+              "position": "3",
+              "teeth": "15"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG50-10"
+            ]
+          },
+          {
+            "id": "p4",
+            "values": {
+              "position": "4",
+              "teeth": "17"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG50-10"
+            ]
+          },
+          {
+            "id": "p5",
+            "values": {
+              "position": "5",
+              "teeth": "19"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG50-10"
+            ]
+          },
+          {
+            "id": "p6",
+            "values": {
+              "position": "6",
+              "teeth": "21"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG50-10"
+            ]
+          },
+          {
+            "id": "p7",
+            "values": {
+              "position": "7",
+              "teeth": "24"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG50-10"
+            ]
+          },
+          {
+            "id": "p8",
+            "values": {
+              "position": "8",
+              "teeth": "28"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG50-10"
+            ]
+          },
+          {
+            "id": "p9",
+            "values": {
+              "position": "9",
+              "teeth": "32"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG50-10"
+            ]
+          },
+          {
+            "id": "p10",
+            "values": {
+              "position": "10",
+              "teeth": "36"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG50-10"
+            ]
+          }
+        ]
+      },
+      "unit": "T",
+      "method": "Ficha CS-HG50-10, «Combination»: 11-36T (bk): 11-13-15-17-19-21-24-28-32-36T.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-HG50-10",
+      "reason": "Secuencia publicada de la combinación que nombra el ERP."
+    },
+    {
+      "key": "smallest_cog_teeth",
+      "current": {
+        "value": "11",
+        "source": "supplier_text",
+        "fact_id": "7b74c917-8282-4ef7-94e6-15dd2c79e18b",
+        "fact_sha256": "5ac4492177d42b5b9eafe8668aa1ce0fe5f36bc2abcdefa2706e57a4e0c1141f",
+        "confirmed": false
+      },
+      "proposed": "11",
+      "unit": "T",
+      "method": "Primer piñón de la combinación 11-36T (bk); nombre guardado «10V. (11-36) CS-HG50-10».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-HG50-10",
+      "reason": "Literal."
+    },
+    {
+      "key": "largest_cog_teeth",
+      "current": {
+        "value": "36",
+        "source": "supplier_text",
+        "fact_id": "3b5edd78-e4d8-4956-b534-51f4b0981749",
+        "fact_sha256": "6fbe79dc1fa5fb6b60b7e8dfda664cafc50c608d167ece11c1c9bef355f17e9f",
+        "confirmed": false
+      },
+      "proposed": "36",
+      "unit": "T",
+      "method": "Último piñón de la combinación 11-36T (bk); nombre guardado «10V. (11-36) CS-HG50-10».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-HG50-10",
+      "reason": "Literal."
+    },
+    {
+      "key": "cassette_spline_standard",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+      "unit": null,
+      "method": "Ficha CS-HG50-10, «Spline type»: «Shimano HG spline M ✔»; las demás filas de estriado con «-».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CS-HG50-10",
+      "reason": "Declaración del fabricante."
+    },
+    {
+      "key": "shift_technology",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "HYPERGLIDE",
+      "unit": null,
+      "method": "Ficha CS-HG50-10: «Type: HG»; HG es la abreviatura Shimano de HYPERGLIDE (misma sigla del código de modelo y de las filas «HG spline»).",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CS-HG50-10",
+      "reason": "Tecnología declarada por su sigla."
+    },
+    {
+      "key": "freehub_bodies_accepted",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "fh",
+            "values": {
+              "rear_drive_interface": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+              "spacer_requirement": "No publicado",
+              "status": "Compatible declarado",
+              "conditions": "Fila «Spline type» de la tabla productinfo de CS-HG50-10: «Shimano HG spline M ✔»; separador no mencionado.",
+              "source_scope": "Tabla de compatibilidad OEM",
+              "source_url": "https://productinfo.shimano.com/en/product/CS-HG50-10"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG50-10"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Fila «Spline type» de la ficha CS-HG50-10.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CS-HG50-10",
+      "reason": "Núcleo declarado por el fabricante; sin dato de separador."
+    },
+    {
+      "key": "published_variant_label",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "11-36T (bk)",
+      "unit": null,
+      "method": "Ficha CS-HG50-10, «Combination name (Group name)»: 11-36T (bk); nombre guardado «10V. (11-36) CS-HG50-10».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-HG50-10",
+      "reason": "Variante publicada que corresponde al nombre."
+    },
+    {
+      "key": "lockring_included",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Ficha CS-HG50-10 lista «Lock ring: Material …, Finish …» entre las piezas del producto.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CS-HG50-10",
+      "reason": "Pieza listada en la ficha del producto."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/CS-HG50-10",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial CS-HG50-10",
+      "finding": "Type HG; Rear speeds 10; 11-36T (bk): 11-13-15-17-19-21-24-28-32-36T; Shimano HG spline M ✔; Lock ring",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-cs-hg50-10-20260917.md",
+      "sha256": "cd00fb97564fab4f5ea945041bc1d4d65da41bd1c1d32bb02cad834edc824217"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product f0b93cad-4ba9-4026-b7fe-a0373b1432f7",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "PIÑON SHIMANO CASSETTE 10V. (11-36) CS-HG50-10 (10 UNIDADES) GRANEL IN SEMI-BULK PACK ICSHG5010136S",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-cs-hg50-10-saved-name-20260917.json",
+      "sha256": "623e1aeca6dac80cf8965471158a30740eb091a858579e254c10166aad94b8d8"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "3c66c6e383c089e75b6a3790e27f65599a09d20fb9ed86154464bd22348dd10a",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 611d800dbb0f59a5bb6b5b1456b14fb7a31707c2ccc06525ac2a14677eb3b931: CS-HG50-10 11-36T (bk): 11-13-15-17-19-21-24-28-32-36T; HG spline M ✔; Lock ring Steel."
+  }
+}

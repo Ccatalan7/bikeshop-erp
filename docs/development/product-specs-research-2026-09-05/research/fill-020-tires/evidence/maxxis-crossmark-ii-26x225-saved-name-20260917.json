@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "cc9eae36-e5be-45f5-b9a0-1c366b45ecf3",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Maxxis Crossmark II 26 x 2.25",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "fc503b34b81a82cacd81152695deb7c8fdf8ab5ee956871e6a76ea78a89bbd0f",
+  "product_sha256": "2a3fc57b53afc417e7626eea25a83266d033583a0e8f93864a47507a4b14fe24",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

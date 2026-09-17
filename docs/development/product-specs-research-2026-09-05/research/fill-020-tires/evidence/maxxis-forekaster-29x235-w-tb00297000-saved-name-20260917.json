@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "f1f0b1f3-985a-4bae-8558-04e1e6a4080d",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "MAXXIS ALAMBRE 29X2.35 FOREKASTER",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "59aefb8b4a47b381ef716ac681760f8272fdfe763d829812863c53e4bcfe2e44",
+  "product_sha256": "c6db1f090511eb1fd8f97f636b0cb0ed87f4b12943845109279cd9b4c0ed568e",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

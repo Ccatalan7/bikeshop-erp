@@ -1,0 +1,136 @@
+{
+  "schema_version": 2,
+  "product_id": "a9da66aa-694b-4c58-bfc7-c64bf0b3dd86",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "ae67e69e6c41f128cfb6f5430c9c21cebc50324a6d8df2eb7fb428c6b232e0a2",
+    "fingerprints": {
+      "facts_sha256": "27157e7489103f4add6b9bd67d5ecaeec04dca8f7bf4808cc124903633e5093d",
+      "product_sha256": "e63e246dd0bb8e9228c2a72551be4b98ad54ae84fcd7ec7e531ac200b600925c",
+      "template_sha256": "c9c12ef9de5da2f893445f1910c3cbdebe2daad22315ccc4e3310cb8ef173342",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-08-19T18:35:23.384361+00:00",
+    "template_id": "4d5edd21-5818-4c98-827a-7154d1eebfe4",
+    "contract_version": 38
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "Rekon Race",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado nombra el modelo «Rekon Race» literal y la página oficial de Maxxis documenta ese modelo con ese nombre."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://shop.maxxis.com/products/rekon-race",
+      "unit": null,
+      "method": "URL de la ficha oficial del fabricante consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "shop"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "tire_tpi",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "60",
+      "unit": "TPI",
+      "method": "Registro oficial shop.maxxis.com del Rekon Race: las dos variantes 29X2.25 de talón WIRE publican 60 TPI; el nombre guardado dice «ALAMBRE 29X2.25 REKON RACE».",
+      "origin": "research",
+      "evidence": [
+        "shop"
+      ],
+      "scope": "TPI",
+      "reason": "Carcasa publicada por el fabricante."
+    },
+    {
+      "key": "tire_use",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "MTB",
+      "unit": null,
+      "method": "Página oficial de Maxxis del modelo Rekon Race: «Category: XC Race, XC» (categoría de bicicleta de montaña del catálogo Maxxis).",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Uso",
+      "reason": "Categoría de uso declarada por el fabricante para el modelo."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Maxxis (maxxis.com/us, sitio oficial)",
+      "locator": "https://www.maxxis.com/us/tire/rekon-race/",
+      "consulted_on": "2026-09-17",
+      "scope": "Página oficial del modelo Rekon Race (tabla de especificaciones y categoría)",
+      "finding": "Category: XC Race, XC",
+      "artifact_path": "research/fill-020-tires/evidence/maxxis-us-rekon-race-20260917.md",
+      "sha256": "8a269bb4f30998ec6350b82b2ec123dcaf36afccb4e00a3e26bbee86da2134b9"
+    },
+    {
+      "id": "shop",
+      "kind": "oem_page",
+      "source": "Maxxis Tires USA (shop.maxxis.com, tienda oficial de Maxxis)",
+      "locator": "https://shop.maxxis.com/products/rekon-race",
+      "consulted_on": "2026-09-17",
+      "scope": "Registro oficial del producto Rekon Race con sus variantes publicadas",
+      "finding": "Variantes 29X2.25 WIRE: «60 TPI | WIRE | TW | Tan Wall | TB00415100» y «60TPI | WIRE | EXO/TR | Black | TB00543300»",
+      "artifact_path": "research/fill-020-tires/evidence/maxxis-shop-rekon-race-20260917.md",
+      "sha256": "df70405b5c88449cd8bb2d921c9ad163adbcd8d5f74e4b86f0e72e57b31f629d"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product a9da66aa-694b-4c58-bfc7-c64bf0b3dd86",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Neumático MAXXIS ALAMBRE 29X2.25 REKON RACE",
+      "artifact_path": "research/fill-020-tires/evidence/maxxis-rekon-race-29x225-w-saved-name-20260917.json",
+      "sha256": "ea0d4af7417e067a26d2c155df6dd72d4c50215dbb7fa72ead3f08274ed9ab02"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "77d77d2ef23c5348d45c655639e1216fd016ceff77b742ae95e5ad9a266b5704",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 09eda319552d924e20f38acb86b09b633911d957a59bfdd8b96c48a4784114cc: Dos variantes 29X2.25 WIRE de la tienda (TB00415100, TB00543300), ambas 60 TPI; verificado."
+  }
+}

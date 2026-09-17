@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "88ff31d3-e440-498c-8eae-c18e1ea1752d",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "CAMBIO 9V. RD-R3000 SORA DIRECTO (CAJA) ERDR3000SS",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "4b91f658a0a5b3aea954b4c68496f0a54eab99f23dbfbe55eb81afd69b2fe651",
+  "product_sha256": "a8f0cdaabefaeeb8b911a9bdd8997b47a7f56d94a8f93316dc208853150e1cd1",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

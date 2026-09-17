@@ -1,0 +1,342 @@
+{
+  "schema_version": 2,
+  "product_id": "9417403f-c55d-428e-b10f-2fbe6865ed14",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "73ef48b36800b8f9f7753b74d8a611b9c832b124bec2f0ca7dc45a2a909c8f88",
+    "fingerprints": {
+      "facts_sha256": "f893a4bb20fb79ff83a7f47dfc14d62b12ab190347c6b163c1d8c4d64a6694cb",
+      "product_sha256": "dcbe7c4268d0ab6d1246bc43a7f855d0cec2cf90935c42daf3a8f9111caafdb3",
+      "template_sha256": "116f235acd81e5019c5823922c9b13a4ea53de091bf50273ac359e0a194f4f5a",
+      "references_sha256": "ecfbc36e5431cc517d141900304efe06d322582e21142a7513f604df06ba2974"
+    },
+    "spec_revision": 0,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "a9d0494f-08b5-42df-9836-42e302d2d9f5",
+    "contract_version": 45
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "S1",
+      "evidence": [
+        "product-name",
+        "eu",
+        "com"
+      ],
+      "reason": "El nombre guardado nombra el modelo «S1» literal y la ficha oficial de KMC documenta ese modelo."
+    },
+    {
+      "field": "manufacturer_sku",
+      "current": null,
+      "proposed": "BS1WRB112",
+      "evidence": [
+        "product-name",
+        "eu"
+      ],
+      "reason": "El nombre guardado dice «S1 Rb … Anti Oxido»; la ficha oficial S1 Wide RB (RB = anti-rust) publica Art.nr. BS1WRB112."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.kmcchain.eu/products/s1-wide-rb",
+      "unit": null,
+      "method": "URL de la ficha oficial de KMC consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "eu",
+        "com"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "chain_pitch_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "12.7",
+      "unit": "mm",
+      "method": "Tamaño publicado «1/2\" X 1/8\"»: paso de 1/2 pulgada = 12,7 mm.",
+      "origin": "research",
+      "evidence": [
+        "eu",
+        "com"
+      ],
+      "scope": "Paso",
+      "reason": "Paso literal de la ficha (1/2\")."
+    },
+    {
+      "key": "chain_speeds",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": [
+        "1"
+      ],
+      "unit": null,
+      "method": "Ficha kmcchain.eu S1 Wide RB: «Single / internal / BMX / track / fixed gear»; kmcchain.com S1: «Single Speed», «All single speed drivetrains».",
+      "origin": "research",
+      "evidence": [
+        "eu",
+        "com"
+      ],
+      "scope": "Velocidades",
+      "reason": "Velocidades declaradas por el fabricante."
+    },
+    {
+      "key": "drivetrain_mode",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Single speed / BMX / IGH",
+      "unit": null,
+      "method": "Ficha KMC: «Single / internal / BMX / track / fixed gear».",
+      "origin": "research",
+      "evidence": [
+        "eu",
+        "com"
+      ],
+      "scope": "Tipo de transmisión",
+      "reason": "Tipo de transmisión declarado."
+    },
+    {
+      "key": "chain_outer_width_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "8.6",
+      "unit": "mm",
+      "method": "Ficha kmcchain.eu: «Pin length: 8.6 mm» (largo de pasador = ancho externo de la cadena; el catálogo distingue 8/9/10/11 v por este valor).",
+      "origin": "research",
+      "evidence": [
+        "eu"
+      ],
+      "scope": "Ancho externo",
+      "reason": "Ancho externo publicado por el fabricante."
+    },
+    {
+      "key": "chain_mass_declarations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "w110",
+            "values": {
+              "weighing_identity": "S1 Matt Silver (BS1WRB112) — 110 eslabones",
+              "weight_g": "350",
+              "basis_links": "110",
+              "basis_description": "Weight per 110 links (dato publicado por KMC por 110 eslabones)",
+              "source_document": "kmcchain.eu — ficha S1 Wide RB (consultada 2026-09-17)",
+              "source_url": "https://www.kmcchain.eu/products/s1-wide-rb"
+            },
+            "sources": [
+              "https://www.kmcchain.eu/products/s1-wide-rb"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha kmcchain.eu: «Weight per 110 links: 350 g».",
+      "origin": "research",
+      "evidence": [
+        "eu"
+      ],
+      "scope": "Peso declarado",
+      "reason": "Peso publicado sobre una base de 110 eslabones."
+    },
+    {
+      "key": "link_count",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "112",
+      "unit": "eslabones",
+      "method": "Ficha kmcchain.eu: «Length: 112 links».",
+      "origin": "research",
+      "evidence": [
+        "eu"
+      ],
+      "scope": "Eslabones",
+      "reason": "Largo de venta publicado."
+    },
+    {
+      "key": "quick_link_included",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Ficha kmcchain.eu: «Includes a Snap On».",
+      "origin": "research",
+      "evidence": [
+        "eu"
+      ],
+      "scope": "Conector incluido",
+      "reason": "Conector incluido según el fabricante."
+    },
+    {
+      "key": "chain_quick_links_supplied",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "ql",
+            "values": {
+              "connector_identity": "Snap On incluido con la cadena S1",
+              "quantity": "1",
+              "brand": "KMC",
+              "model": "Snap On",
+              "source_document": "kmcchain.eu — ficha S1 Wide RB (consultada 2026-09-17)",
+              "source_url": "https://www.kmcchain.eu/products/s1-wide-rb"
+            },
+            "sources": [
+              "https://www.kmcchain.eu/products/s1-wide-rb"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha kmcchain.eu: «Includes a Snap On» (un conector por cadena).",
+      "origin": "research",
+      "evidence": [
+        "eu"
+      ],
+      "scope": "Conectores incluidos",
+      "reason": "Conector incluido según el fabricante."
+    },
+    {
+      "key": "chain_application_declarations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "single",
+            "values": {
+              "claim_identity": "KMC S1 · Single / internal / BMX / track / fixed gear",
+              "scope_kind": "Sistema documentado",
+              "target_system": "Single / internal / BMX / track / fixed gear",
+              "verdict": "Admitido por la fuente",
+              "drive_kind": "Una relación sin cambio interno",
+              "conditions": "Línea publicada por KMC: «Single / internal / BMX / track / fixed gear» (single speed, BMX, pista y piñón fijo; la misma línea nombra el cambio interno). Sin conteo de piñones: una relación.",
+              "source_document": "kmcchain.eu — ficha S1 Wide RB (consultada 2026-09-17)",
+              "source_url": "https://www.kmcchain.eu/products/s1-wide-rb"
+            },
+            "sources": [
+              "https://www.kmcchain.eu/products/s1-wide-rb"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Línea de compatibilidad publicada: «Single / internal / BMX / track / fixed gear».",
+      "origin": "research",
+      "evidence": [
+        "eu",
+        "com"
+      ],
+      "scope": "Sistemas declarados",
+      "reason": "Sistemas declarados por el fabricante."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "eu",
+      "kind": "oem_page",
+      "source": "KMC Chain Europe (kmcchain.eu, sitio oficial)",
+      "locator": "https://www.kmcchain.eu/products/s1-wide-rb",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial S1 Wide RB",
+      "finding": "Single / internal / BMX / track / fixed gear; Art.nr. BS1WRB112; Size 1/2\" X 1/8\"; Pin length 8.6 mm; Weight per 110 links 350 g; Length 112 links",
+      "artifact_path": "research/fill-021-kmc/evidence/kmc-s1-wide-rb-20260917.md",
+      "sha256": "8d39f1678311a7fcab17a4df5651224a6e45661ba290def5a757bb577e9c2a5b"
+    },
+    {
+      "id": "com",
+      "kind": "oem_page",
+      "source": "KMC Chain Industrial (kmcchain.com, sitio oficial global)",
+      "locator": "https://www.kmcchain.com/en/product/bicycle-chain-s1-single-speed",
+      "consulted_on": "2026-09-17",
+      "scope": "Página oficial del modelo S1",
+      "finding": "Single Speed; Size 1/2\"x1/8\" | Compatibility : All single speed drivetrains",
+      "artifact_path": "research/fill-021-kmc/evidence/kmc-com-s1-single-speed-20260917.md",
+      "sha256": "f3b1b809053aa49c552c1be63121a6f9a786aa4b6869bb2889ad85ea043febd0"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 9417403f-c55d-428e-b10f-2fbe6865ed14",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Cadena Kmc S1 Rb 1/2 X 1/8 Anti Oxido Gris",
+      "artifact_path": "research/fill-021-kmc/evidence/kmc-s1-rb-saved-name-20260917.json",
+      "sha256": "e73386ac0603edf5eb69b544e86225596aa959ec69f54b719caa8221bfca53a1"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "a2cbd650a5dc694d0d6c0baa0f3f2d77b8c1a9b5804eac10cb98750616a5cc15",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 41b94f895819aa9eee8c03fd388a0f586422c0a232f87d37c537122981932e33: «S1 Rb» → S1 Wide RB BS1WRB112 (RB = Anti-Rust en kmcchain.com; la otra es S1 Wide Brown). Valores literales; Snap On como conector incluido. Opcional: chain_width_family 1/8 y una segunda fila «Cambio interno». Contrato: 8,6 mm no está en la lista sugerida de chain_outer_width_mm."
+  }
+}

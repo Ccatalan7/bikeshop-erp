@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "fdc03f1b-6783-43cc-a9fd-3f0c5d8973cc",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Neumatico CST OUSTER, 29x2.25. Black.",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "d14b9b9da00d846ea669756b565771ecb957e0a41fc7e2675cb1231dd4937412",
+  "product_sha256": "af8196cefb55060c702c1e3ec54a18d0e860afd172aa0daa635851872ca937aa",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

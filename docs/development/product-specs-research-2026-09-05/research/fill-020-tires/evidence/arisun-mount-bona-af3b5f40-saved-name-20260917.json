@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "af3b5f40-0964-4304-b72e-816539e3e001",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Neumatico Bicicleta Aro 26 X 2.10 Mount Bona Arisun",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "e0443f1aeebf791db82073215b9b8c2b58d52b49d9516a879590fdd9c52d6014",
+  "product_sha256": "573ff84aabffb62a436952465db6420c21b4a3e332e553447e65f3a87750c994",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

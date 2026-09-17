@@ -1,0 +1,260 @@
+{
+  "schema_version": 2,
+  "product_id": "bfd5eb6a-56e8-46cd-baee-53e28c87acc4",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "43613250a7043cbb76658ef40e3a1214861a880e8a92fe22102e9a8d81ce77fb",
+    "fingerprints": {
+      "facts_sha256": "40fa0cdee2c09234197d507993f233295594785e1a5b63677967f759c3e25e8b",
+      "product_sha256": "87fd1b5b563be0c0e511966b8d8ab77d253b4c0e71b24556a2183839d92705bf",
+      "template_sha256": "58726a04a069141adc7c38416084e1e6ed3e6c8645bbe2886254753fb9737835",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-09-07T13:25:57.195204+00:00",
+    "template_id": "c97799a4-b611-43c5-83f1-de4a407dd8f6",
+    "contract_version": 28
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "MF-TZ500-7",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «MF-TZ500-7» y «7V. (14-28) MF-TZ500-7 … 14-16-18-20-22-24-28T»; la ficha oficial documenta MF-TZ500-7 con «Rear speeds 7» y la combinación 14-28T."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/MF-TZ500-7",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-17 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "sprocket_count",
+      "current": {
+        "value": "7",
+        "source": "name_reading",
+        "fact_id": "6a125349-f027-4901-a9e4-33cb1b0b2429",
+        "fact_sha256": "d2c9705e2698a0de0dafa89184cd4a77dc2e5b366b22fb5b230863b28b932d17",
+        "confirmed": false
+      },
+      "proposed": "7",
+      "unit": null,
+      "method": "Ficha MF-TZ500-7: «Rear speeds 7»; nombre guardado «7V. (14-28) MF-TZ500-7 … 14-16-18-20-22-24-28T».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "MF-TZ500-7",
+      "reason": "Literal; sustituye la lectura de nombre."
+    },
+    {
+      "key": "cog_sequence",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "p1",
+            "values": {
+              "position": "1",
+              "teeth": "14"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/MF-TZ500-7"
+            ]
+          },
+          {
+            "id": "p2",
+            "values": {
+              "position": "2",
+              "teeth": "16"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/MF-TZ500-7"
+            ]
+          },
+          {
+            "id": "p3",
+            "values": {
+              "position": "3",
+              "teeth": "18"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/MF-TZ500-7"
+            ]
+          },
+          {
+            "id": "p4",
+            "values": {
+              "position": "4",
+              "teeth": "20"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/MF-TZ500-7"
+            ]
+          },
+          {
+            "id": "p5",
+            "values": {
+              "position": "5",
+              "teeth": "22"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/MF-TZ500-7"
+            ]
+          },
+          {
+            "id": "p6",
+            "values": {
+              "position": "6",
+              "teeth": "24"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/MF-TZ500-7"
+            ]
+          },
+          {
+            "id": "p7",
+            "values": {
+              "position": "7",
+              "teeth": "28"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/MF-TZ500-7"
+            ]
+          }
+        ]
+      },
+      "unit": "T",
+      "method": "Ficha MF-TZ500-7, «Combination»: 14-28T: 14-16-18-20-22-24-28T. La ficha publica además 14-34T; el nombre fija 14-28.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "MF-TZ500-7",
+      "reason": "Secuencia publicada de la combinación que nombra el ERP."
+    },
+    {
+      "key": "smallest_cog_teeth",
+      "current": {
+        "value": "14",
+        "source": "supplier_text",
+        "fact_id": "16eafe8d-7290-49bc-96b2-1fb122dbc1e8",
+        "fact_sha256": "7ac251060bd4b411e54c4e59b5a739332b9816fb8c986dc7e17b0768f565f9f9",
+        "confirmed": false
+      },
+      "proposed": "14",
+      "unit": "T",
+      "method": "Primer piñón de la combinación 14-28T; nombre guardado «7V. (14-28) MF-TZ500-7 … 14-16-18-20-22-24-28T».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "MF-TZ500-7",
+      "reason": "Literal."
+    },
+    {
+      "key": "largest_cog_teeth",
+      "current": {
+        "value": "24",
+        "source": "supplier_text",
+        "fact_id": "d4a2e928-b983-4da9-a3ef-b1c80be42661",
+        "fact_sha256": "3ebf4f905b716a3cb7bc3c6c95d61b59970c6fc9325bb81fb319e846f14be300",
+        "confirmed": false
+      },
+      "proposed": "28",
+      "unit": "T",
+      "method": "Último piñón de la combinación 14-28T; nombre guardado «7V. (14-28) MF-TZ500-7 … 14-16-18-20-22-24-28T».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "MF-TZ500-7",
+      "reason": "Literal."
+    },
+    {
+      "key": "published_variant_label",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "14-28T",
+      "unit": null,
+      "method": "Ficha MF-TZ500-7, «Combination name (Group name)»: 14-28T; nombre guardado «7V. (14-28) MF-TZ500-7 … 14-16-18-20-22-24-28T».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "MF-TZ500-7",
+      "reason": "Variante publicada que corresponde al nombre."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/MF-TZ500-7",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial MF-TZ500-7",
+      "finding": "Type HG/UG; Rear speeds 7; 14-28T: 14-16-18-20-22-24-28T; Spoke protector w/ ✔ w/o ✔",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-mf-tz500-7-20260917.md",
+      "sha256": "71f689291d93d5e51e297ad8272ef82237a0fad96ac18d997746f9cccf0e87c4"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product bfd5eb6a-56e8-46cd-baee-53e28c87acc4",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "PIÑON SHIMANO ATORNILLADO 7V. (14-28) MF-TZ500-7,7-SPEED, 14-16-18-20-22-24-28T, IND. PACK EMFTZ5007",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-mf-tz500-7-28-saved-name-20260917.json",
+      "sha256": "4d8476b1f7978d045ee0192f84f20fe3da22d3c8e75bc011e31c524939e321af"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "528abf425ec26192b1a1c764c35a5133963983636614a0a5c10882d030a436db",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 42595c61a97b3b1eb94ce47fbfc118c65e798378186d3c71ad0afba0684ba3f4: MF-TZ500-7 14-28T: «14-16-18-20-22-24-28T» literal en el nombre y en la ficha; sobreescribe supplier_text largest_cog_teeth=24 (no confirmado): correcto y anotado."
+  }
+}

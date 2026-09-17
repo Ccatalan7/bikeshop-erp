@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "41dcb4b1-a15d-4476-8731-13f584d7fadb",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Piñon Shimano Cs-Hg200 8V. (12-32)",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "6ddbb75eb95cf377fcb9498e2fd506b9bf4e9d4b1d8a591621e105f23cf88cea",
+  "product_sha256": "ec9fb8b45a09f38b9cb586e221640cb7e27acdac9e314b3eb17fbe95ca576d7f",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

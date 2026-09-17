@@ -1,0 +1,169 @@
+# Kenda — registro de modelos publicados en bicycle.kendatire.com (sin ficha para Kadre K1027, Aptor K1153, Koyote, Kinetic, Kosmos/Cosmos K184, K1176)
+
+- Consultado: 2026-09-17 (navegador integrado; listados «Find a Tire» renderizados por JavaScript, enlaces `a[href*="find-a-tire/bicycle/"]` recogidos tras cargar la página completa)
+- sitemap.xml del sitio: 404. /en-us/find-a-tire/bicycle/commuter/kwick-trax/: 404 (la edición vi-vn sí la sirve, archivada aparte).
+
+## https://bicycle.kendatire.com/en-us/find-a-tire/ (89 enlaces)
+
+- downhill-gravity/double-black
+- downhill-gravity/pinner-pro
+- downhill-gravity/hellkat-pro
+- downhill-gravity/gran-mudda-pro
+- cross-country-downcountry/k-series-dagger
+- cross-country-downcountry/rush
+- cross-country-downcountry/karma-2-pro
+- cross-country-downcountry/booster-pro
+- cross-country-downcountry/regolith
+- cross-country-downcountry/saber-pro
+- dirt-jump-park-slopestyle/3-sixty-pro
+- dirt-jump-park-slopestyle/booster-pro
+- gravel-adventure/crusher
+- gravel-adventure/4titude
+- gravel-adventure/alluvium-pro
+- gravel-adventure/booster-pro
+- gravel-adventure/flintridge-pro
+- road/valkyrie
+- road/4titude
+- road/kountach
+- road/kadence
+- road/kountach-endurance
+- road/kriterium-endurance
+- city-trekking/kenda-e-venture-e-bike-tire
+- city-trekking/kenda-e-ventureplus-e-bike-tire
+- city-trekking/kenda-e-venture-cargo-e-bike-tire
+- city-trekking/kwick-drumlin
+- city-trekking/kwick-drumlin-cargo
+- city-trekking/kwick-journey
+- city-trekking/kwick-nine-sport
+- city-trekking/kwick-seven5-sport
+- city-trekking/kwick-six-sport
+- city-trekking/kwick-four-sport
+- city-trekking/kwick-two-sport
+- bmx/kudos-pro
+- bmx/konversion-pro
+- bmx/kompact-pro
+- fat-plus-tires/juggernaut-pro
+- fat-plus-tires/havok-pro
+- fat-plus-tires/krusade-sport
+- e-bike/kenda-e-venture-e-bike-tire
+- e-bike/kenda-e-ventureplus-e-bike-tire
+- e-bike/kenda-e-venture-cargo-e-bike-tire
+- e-bike/hellkat-emc
+- e-bike/nevegal-2-emc
+- e-bike/regolith-emc
+- e-bike/havok-emc
+- e-bike/kwick-drumlin
+- e-bike/kwick-journey
+- e-bike/kwick-nine
+- e-bike/kwick-seven5
+- e-bike/4titude
+- preferred/piedmont
+- preferred/regio
+- preferred/amrak
+- preferred/el-capo
+- legacy-archive/nevegal-pro
+- legacy-archive/nevegal-x-pro
+- legacy-archive/nevegal-x-pro-emc
+- legacy-archive/honey-badger-dh-pro
+- legacy-archive/honey-badger-dh-emc
+- legacy-archive/honey-badger-pro
+- legacy-archive/honey-badger-xc-pro
+- legacy-archive/kozmik-lite-ii-pro
+- legacy-archive/karma-pro
+- legacy-archive/happy-medium-pro
+- legacy-archive/small-block-eight-pro
+- legacy-archive/slant-six-pro
+- legacy-archive/kommando-x-pro-cx
+- legacy-archive/cholla-pro-cx
+- legacy-archive/slant-six-pro-cx
+- legacy-archive/happy-medium-pro-cx
+- legacy-archive/small-block-eight-pro-cx
+- legacy-archive/kriterium
+- legacy-archive/kwick-tendril-endurance
+- legacy-archive/kwick-tendril
+- legacy-archive/kwick-bitumen
+- legacy-archive/admiral
+- legacy-archive/coupe
+- legacy-archive/kid-block
+- legacy-archive/k-rad
+- legacy-archive/kranium
+- legacy-archive/kontact-elite
+- all-mountain-trail/pinner-pro
+- all-mountain-trail/regolith
+- all-mountain-trail/nevegal-2
+- studded-tires/klondike-wide
+- studded-tires/klondike-standard
+- studded-tires/klondike-skinny-cross
+
+## https://bicycle.kendatire.com/en-eu/find-a-tire/
+
+- 45 enlaces bajo /en-eu/find-a-tire/bicycle/ (mtb/booster, mtb/saber, mtb/regolith, mtb/nevegal-2, mtb/hellkat, mtb/pinner-pro, mtb/gran-mudda, mtb/karma-2, mtb/rush, mtb/k-series-dagger, …); ninguno con kadre, kwick-trax, aptor, koyote, kinetic, cosmos/kosmos, k1176 ni kwest.
+
+## https://bicycle.kendatire.com/vi-vn/tìm-thấy-một-lốp-xe/ (60 enlaces)
+
+- road/valkyrie
+- road/kountach
+- road/kadence
+- road/kaliente-pro
+- road/kaliente
+- road/4titude
+- cyclocross-gravel/flintridge-pro
+- cyclocross-gravel/cholla-pro
+- cyclocross-gravel/kommando-x-pro
+- cyclocross-gravel/happy-medium-pro
+- cyclocross-gravel/small-block-eight-pro
+- cyclocross-gravel/slant-six-pro
+- cyclocross-gravel/kwicker-pro
+- cyclocross-gravel/kommando-pro
+- cross-country-marathon/saber-pro
+- cross-country-marathon/kozmik-lite-ii-pro
+- cross-country-marathon/honey-badger-xc-pro
+- cross-country-marathon/kaos
+- cross-country-marathon/slant-six-pro
+- cross-country-marathon/small-block-eight-pro
+- cross-country-marathon/karma-pro
+- cross-country-marathon/turnbull-canyon-pro
+- cross-country-marathon/24seven-race-pro
+- cross-country-marathon/booster
+- enduro-all-mountain/nevegal-2
+- enduro-all-mountain/havok-pro
+- enduro-all-mountain/honey-badger-pro
+- enduro-all-mountain/nevegal-x-pro
+- enduro-all-mountain/happy-medium-pro
+- enduro-all-mountain/bbg-pro
+- enduro-all-mountain/h-factor-pro
+- enduro-all-mountain/regolith
+- downhillgravity/hellkat-pro
+- downhillgravity/honey-badger-dh-pro
+- downhillgravity/nexcavator-pro
+- downhillgravity/nevegal-pro
+- downhillgravity/excavator-pro
+- fat-tires/juggernaut-pro
+- studded-tires/klondike-wide
+- studded-tires/klondike-standard
+- studded-tires/klondike-skinny-cross
+- bmx-street-park/admiral
+- bmx-street-park/coupe
+- bmx-street-park/kid-block
+- bmx-street-park/k-rad
+- bmx-street-park/kranium
+- bmx-street-park/kassette
+- bmx-street-park/kiniption
+- bmx-race/konversion
+- bmx-race/kontact-elite
+- bmx-race/kompact-race
+- bmx-race/small-block-8-pro
+- commuter/kwick-journey
+- commuter/kwick-drumlin
+- commuter/kwick-nine
+- commuter/kwick-seven5
+- commuter/kwick-tendril
+- commuter/kwick-bitumen
+- commuter/kwick-trax
+- commuter/kwick-roller-sport
+
+## https://bicycle.kendatire.com/zh-tw/find-a-tire/
+
+- Error (página corporativa «Kenda Tire | Corporate | Error»).
+
+Conclusión: en ninguna edición del sitio oficial aparece Kadre (K1027), Aptor (K1153), Koyote, Kinetic, Kosmos/Cosmos (K184) ni K1176; Kwick Trax (K1053) sólo en la edición vi-vn.

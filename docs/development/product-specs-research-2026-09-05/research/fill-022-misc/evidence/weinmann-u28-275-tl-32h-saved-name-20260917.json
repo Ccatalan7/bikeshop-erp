@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "5a587ba7-26ff-4b23-b25d-f1f35d975e67",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Llanta Weinmann 27.5 U28 Tl Negra 32h Fv",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "0a5115f33b5601980a15038eaec4897c867e5573398572aca6bffe12d8264ebf",
+  "product_sha256": "9a0895f06faacd6583354321958fb40b6822c087fda8d7eed06b51e092187c8e",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

@@ -1,0 +1,145 @@
+{
+  "schema_version": 2,
+  "product_id": "6a1a3c31-0865-4e68-b0b1-7b00088b16de",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "3c8d78d4b6026d9f9b3a450a1669f4a80a23c76ddc15afcd2f93dd6c238e8629",
+    "fingerprints": {
+      "facts_sha256": "1b7f9864fd17039f4a53b40dff80c016491c2059127686433f3090fb9abe78a6",
+      "product_sha256": "5e749c1902affb59484d78f82f19f9ab78373238c6e0b4af69ce64b2c31ddbea",
+      "template_sha256": "897f7a80d1467e264027141f719316691249ac29533bfebb3b7038eb92e650be",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 0,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "a4f78fa2-219f-44c6-82c4-d7d63e79cb1d",
+    "contract_version": 44
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "VP-BC73",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado trae «VP-BC73» completo; la ficha oficial de VP Components documenta ese modelo (variantes C/A/E/T con sufijo; fill-017 aceptó la misma identidad para el gemelo de 68 mm)."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.vpcomponents.com/vp-bc73",
+      "unit": null,
+      "method": "URL de la ficha oficial de VP Components consultada el 2026-09-16 (fill-017) y archivada con hash; reutilizada sin nueva consulta.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "bb_shell_ports",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "drive",
+            "values": {
+              "port": "Copa lado motriz",
+              "side": "Lado motriz",
+              "mates_with": "Caja del cuadro",
+              "form": "Rosca medida",
+              "diameter": "1.37",
+              "diameter_unit": "in",
+              "pitch": "24",
+              "pitch_unit": "tpi",
+              "source_scope": "Ficha VP-BC73: «THREAD: BC1.37” x 24T.» (sentido de rosca por lado no publicado)",
+              "source_url": "https://www.vpcomponents.com/vp-bc73"
+            },
+            "sources": [
+              "https://www.vpcomponents.com/vp-bc73"
+            ]
+          },
+          {
+            "id": "non-drive",
+            "values": {
+              "port": "Copa lado no motriz",
+              "side": "Lado no motriz",
+              "mates_with": "Caja del cuadro",
+              "form": "Rosca medida",
+              "diameter": "1.37",
+              "diameter_unit": "in",
+              "pitch": "24",
+              "pitch_unit": "tpi",
+              "source_scope": "Ficha VP-BC73: «THREAD: BC1.37” x 24T.» (sentido de rosca por lado no publicado)",
+              "source_url": "https://www.vpcomponents.com/vp-bc73"
+            },
+            "sources": [
+              "https://www.vpcomponents.com/vp-bc73"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha VP-BC73: «THREAD: BC1.37” x 24T.» — diámetro 1,37 in y paso 24 tpi, literal; el sentido de cada rosca no está escrito y no se declara. (Misma ficha VP-BC73 archivada el 2026-09-16 para fill-017; producto gemelo con caja de 73 mm según el nombre.)",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Puertos de caja",
+      "reason": "Rosca de las copas publicada por el fabricante."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "VP Components (vpcomponents.com, sitio oficial)",
+      "locator": "https://www.vpcomponents.com/vp-bc73",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial VP-BC73 (archivada en fill-017 el 2026-09-16)",
+      "finding": "THREAD BC1.37” x 24T; AXLE Boron steel; FINISH Phosphated cups, anodized sheath; WEIGHT 155g",
+      "artifact_path": "research/fill-017-misc/evidence/vp-bc73-20260916.md",
+      "sha256": "073a0d07cdf1d79c5f25532ad832073a713f2793a8f30013b13a4452f08949ab"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 6a1a3c31-0865-4e68-b0b1-7b00088b16de",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "MOTOR SELLADO (73) VP 122.5MM VP-BC73 ACERO",
+      "artifact_path": "research/fill-022-misc/evidence/vp-bc73-73-saved-name-20260917.json",
+      "sha256": "bb7ae5efdc5669a4fbfa09eb80cfb735edb91e7ca6da35f461746d762ef9686b"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "a2bb7d292c3227dd06aa177695846d3a2258d1b8a7a565e72e03bc6fac109bbb",
+    "notes": "Revisión par (sesión Look dude), v1 aceptada sobre 03bcf1a65bad7b4327d6d1aa65fecb334c2c3ca2382645ce2f48211e9f9cab80: Ficha VP-BC73 de fill-017 (sha 073a0d07…) reutilizada con fecha del 2026-09-16 dicha en el método; dos filas de rosca «BC1.37” x 24T» literales, sentido de rosca sin declarar (pendiente como en el gemelo de 68 mm)."
+  }
+}

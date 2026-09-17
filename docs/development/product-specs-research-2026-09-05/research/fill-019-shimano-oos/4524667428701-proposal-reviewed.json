@@ -1,0 +1,384 @@
+{
+  "schema_version": 2,
+  "product_id": "fc082196-ffcc-4000-b112-fae51a3e26e7",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "1aea201554f4845edabf7889438d0a7ad2a4b7e199ab85ed9b857855400a154f",
+    "fingerprints": {
+      "facts_sha256": "b40e99b5c3bfc7c04a1889087e805f056b8848d22fbb0cd42cc52cda9dcc2130",
+      "product_sha256": "dc4a7b07d8db9edbdcd5112599430508161a275558d66719d0942fc2435786ca",
+      "template_sha256": "19d2ae8cfd39797cf25f509b15d53e8f8fbdf98c188bd6f992d626cc00d56a1b",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-07-14T22:22:42.213673+00:00",
+    "template_id": "6a02a0c2-b139-46ef-86d8-bba3797252bd",
+    "contract_version": 24
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "CS-M771-10",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «CS-M771-10» (o su forma sin sufijo de velocidades) y «cs-m771-10 10v. (11-36)»; la ficha oficial documenta CS-M771-10 con «Rear speeds 10» y la combinación 11-36T (bk)."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/CS-M771-10",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-17 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "sprocket_count",
+      "current": {
+        "value": "10",
+        "source": "name_reading",
+        "fact_id": "c7884c05-1074-42f8-9533-6e04c65bc995",
+        "fact_sha256": "e06ec2bf4826b63aad4a0af20faa5b719877543de06d218bdc9b3da7f9011450",
+        "confirmed": false
+      },
+      "proposed": "10",
+      "unit": null,
+      "method": "Ficha CS-M771-10: «Rear speeds 10», «Steel gear QTY (pcs) 10»; nombre guardado «cs-m771-10 10v. (11-36)».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-M771-10",
+      "reason": "Literal; sustituye la lectura de nombre."
+    },
+    {
+      "key": "cog_sequence",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "p1",
+            "values": {
+              "position": "1",
+              "teeth": "11"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-M771-10"
+            ]
+          },
+          {
+            "id": "p2",
+            "values": {
+              "position": "2",
+              "teeth": "13"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-M771-10"
+            ]
+          },
+          {
+            "id": "p3",
+            "values": {
+              "position": "3",
+              "teeth": "15"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-M771-10"
+            ]
+          },
+          {
+            "id": "p4",
+            "values": {
+              "position": "4",
+              "teeth": "17"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-M771-10"
+            ]
+          },
+          {
+            "id": "p5",
+            "values": {
+              "position": "5",
+              "teeth": "19"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-M771-10"
+            ]
+          },
+          {
+            "id": "p6",
+            "values": {
+              "position": "6",
+              "teeth": "21"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-M771-10"
+            ]
+          },
+          {
+            "id": "p7",
+            "values": {
+              "position": "7",
+              "teeth": "24"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-M771-10"
+            ]
+          },
+          {
+            "id": "p8",
+            "values": {
+              "position": "8",
+              "teeth": "28"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-M771-10"
+            ]
+          },
+          {
+            "id": "p9",
+            "values": {
+              "position": "9",
+              "teeth": "32"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-M771-10"
+            ]
+          },
+          {
+            "id": "p10",
+            "values": {
+              "position": "10",
+              "teeth": "36"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-M771-10"
+            ]
+          }
+        ]
+      },
+      "unit": "T",
+      "method": "Ficha CS-M771-10, «Combination»: 11-36T (bk): 11-13-15-17-19-21-24-28-32-36T. La ficha publica además 11-32T (bL) y 11-34T (bJ); el nombre fija 11-36.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-M771-10",
+      "reason": "Secuencia publicada de la combinación que nombra el ERP."
+    },
+    {
+      "key": "smallest_cog_teeth",
+      "current": {
+        "value": "11",
+        "source": "supplier_text",
+        "fact_id": "db1563a8-bc35-437f-bae2-a697a24d61b2",
+        "fact_sha256": "cf9e32f8f416f11045f393864bcb0649eb3a2fc7ab509059a39c9edc9c68b33c",
+        "confirmed": false
+      },
+      "proposed": "11",
+      "unit": "T",
+      "method": "Primer piñón de la combinación 11-36T (bk); nombre guardado «cs-m771-10 10v. (11-36)».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-M771-10",
+      "reason": "Literal."
+    },
+    {
+      "key": "largest_cog_teeth",
+      "current": {
+        "value": "36",
+        "source": "supplier_text",
+        "fact_id": "bb72eaba-7558-41e8-87a5-4de8b678287d",
+        "fact_sha256": "52244f782bdd26bf2161dfcba31207edc00f4ceb014b65cda20e89505155f272",
+        "confirmed": false
+      },
+      "proposed": "36",
+      "unit": "T",
+      "method": "Último piñón de la combinación 11-36T (bk); nombre guardado «cs-m771-10 10v. (11-36)».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-M771-10",
+      "reason": "Literal."
+    },
+    {
+      "key": "cassette_spline_standard",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+      "unit": null,
+      "method": "Ficha CS-M771-10, «Spline type»: «Shimano HG spline M ✔»; las demás filas de estriado con «-».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CS-M771-10",
+      "reason": "Declaración del fabricante."
+    },
+    {
+      "key": "shift_technology",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "HYPERGLIDE",
+      "unit": null,
+      "method": "Ficha CS-M771-10: «Type: HG»; HG es la abreviatura Shimano de HYPERGLIDE (misma sigla del código de modelo y de las filas «HG spline»).",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CS-M771-10",
+      "reason": "Tecnología declarada por su sigla."
+    },
+    {
+      "key": "freehub_bodies_accepted",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "fh",
+            "values": {
+              "rear_drive_interface": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+              "spacer_requirement": "No publicado",
+              "status": "Compatible declarado",
+              "conditions": "Fila «Spline type» de la tabla productinfo de CS-M771-10: «Shimano HG spline M ✔»; separador no mencionado.",
+              "source_scope": "Tabla de compatibilidad OEM",
+              "source_url": "https://productinfo.shimano.com/en/product/CS-M771-10"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-M771-10"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Fila «Spline type» de la ficha CS-M771-10.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CS-M771-10",
+      "reason": "Núcleo declarado por el fabricante; sin dato de separador."
+    },
+    {
+      "key": "published_variant_label",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "11-36T (bk)",
+      "unit": null,
+      "method": "Ficha CS-M771-10, «Combination name (Group name)»: 11-36T (bk); nombre guardado «cs-m771-10 10v. (11-36)».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-M771-10",
+      "reason": "Variante publicada que corresponde al nombre."
+    },
+    {
+      "key": "lockring_included",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Ficha CS-M771-10 lista «Lock ring: Material …, Finish …» entre las piezas del producto.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CS-M771-10",
+      "reason": "Pieza listada en la ficha del producto."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/CS-M771-10",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial CS-M771-10",
+      "finding": "Type HG; Rear speeds 10; 11-36T (bk): 11-13-15-17-19-21-24-28-32-36T; Shimano HG spline M ✔; Lock ring",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-cs-m771-10-20260917.md",
+      "sha256": "25e59ef6a02cd319e5bded0b19b45855d9ee88000e7f565204c4da6c5ed50599"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product fc082196-ffcc-4000-b112-fae51a3e26e7",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "piñón shimano xt cs-m771-10 10v. (11-36)",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-cs-m771-10-saved-name-20260917.json",
+      "sha256": "cfbc9e88aa01a3672f94ca1d3841f6b098e5bd0ec1a6cccce052cfbf8dd7a9bb"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "e2f9a9b2e95b99114ac79ba736e29e7feca0241ede4f36a701b7a509c6ff011f",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre e2071cf3580594c4cb36dac1f2e0c8eb982a231e6f46ffa62fb9025e6ec88a92: CS-M771-10 11-36T (bk): 11-13-15-17-19-21-24-28-32-36T fijada por el nombre sobre {bL, bJ, bk}; Lock ring Aluminum listado."
+  }
+}

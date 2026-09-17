@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "9bbd969f-bf10-4c64-97f4-f40c619081e6",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "MAXXIS KEVLAR 29X1.50 WT ASSEGAI EXO/TR",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "76cb7c57f701cf80896b2139c62d41ad0f3e07b3eda813c97505097f5cebf5fa",
+  "product_sha256": "6d3a9e4cc8eabfd8f73f695a6bc756951c6a5c30ac8643d53981dd61f1a345f5",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

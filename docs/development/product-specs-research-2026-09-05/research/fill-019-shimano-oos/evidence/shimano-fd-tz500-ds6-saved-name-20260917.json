@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "2c35f669-6afc-496b-8f5a-0db24a08d4f8",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "cambiador shimano fd-tz500-ds6 del 3 (friction) x7/6 28.6mm",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "b227d1b0d18ddc3ff038e93c11adb583fa9fcf3c5fdc9e7cc527c164fd9268f1",
+  "product_sha256": "96e4d023c866943ad7101a6f663fb35264faea145681f3230c1ea23ded4330a3",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

@@ -1,0 +1,27 @@
+# KMC X10 Silver/Black — ficha oficial (kmcchain.eu, KMC Chain Europe)
+
+- URL: https://www.kmcchain.eu/products/x10-silver-black
+- Consultada: 2026-09-17 (descarga directa del HTML; texto de la ficha copiado literal, una línea por dato)
+
+```
+X10 Silver/Black
+Compatible with all 10-speed systems
+Includes a MissingLink
+Perfect shifting thanks to Double X-Bridge
+Durability:
+Art.nr.: BX10NB114
+Size: 1/2" X 11/128"
+Colour: Nickel plated Silver/Black
+Pin length: 5.88 mm
+Weight per 110 links: 263 g
+Length: 114 links
+X10 EPT
+BX10EP114
+X10 Silver/Black Long
+BX10NB122
+X10 Grey
+BX10GG114
+x-series
+The KMC X-Series was developed with the specific characteristics of the Shimano, SRAM and Campagnolo systems in mind. Thanks to precisely chamfered plates, the X-Bridge technology enables perfect shifting and smooth propulsion in all riding situations. The X- Series enjoys the trust of many top athletes in professional cycling.
+read more >
+```

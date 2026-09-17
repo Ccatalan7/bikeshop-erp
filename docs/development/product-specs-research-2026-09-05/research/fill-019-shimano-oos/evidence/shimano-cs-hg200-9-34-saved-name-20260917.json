@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "6a655eac-a82f-4bd3-9d2f-575f4d298041",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Cassette Shimano HG200 Altus 9V 11-34T",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "2a9641d8c05410c14dc2dcf5084fcbc19190145c878ef17f4274f8bde85baae8",
+  "product_sha256": "27003700703285374d6cbbf7e61eba0abe44255c410d8eda4fcb45bd49b506a2",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

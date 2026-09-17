@@ -1,0 +1,246 @@
+{
+  "schema_version": 2,
+  "product_id": "3c1a8558-f007-42c3-8c7b-bde6f8076f2f",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "5360e0486f1acacccfa9392130c42a4b400365437f8768f87ed87d6d4d61b8e5",
+    "fingerprints": {
+      "facts_sha256": "b92b891aa75b13730076a73e247ca5704763d4403c0491495ee87e76dfab733e",
+      "product_sha256": "7e52b0058c6a864feb8b833d9b13bfb548fe519345991715c88b9b9a4c6dfe5f",
+      "template_sha256": "116f235acd81e5019c5823922c9b13a4ea53de091bf50273ac359e0a194f4f5a",
+      "references_sha256": "ecfbc36e5431cc517d141900304efe06d322582e21142a7513f604df06ba2974"
+    },
+    "spec_revision": 3,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "a9d0494f-08b5-42df-9836-42e302d2d9f5",
+    "contract_version": 45
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "CN-M7100",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice literalmente «CN-M7100»; la ficha oficial documenta CN-M7100 (HG 12-speed)."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/CN-M7100",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-17 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "chain_speeds",
+      "current": {
+        "value": [
+          "12"
+        ],
+        "source": "supplier_text",
+        "fact_id": "617c2de6-177e-4c46-a460-ee881e0727ee",
+        "fact_sha256": "85095bdb9e562eb83dafdca673e01eeb3907c9884e78b872fea367a83a4c2f1d",
+        "confirmed": false
+      },
+      "proposed": [
+        "12"
+      ],
+      "unit": null,
+      "method": "Ficha CN-M7100: «Type: HG 12-speed».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CN-M7100",
+      "reason": "Velocidades traseras publicadas en el tipo de cadena."
+    },
+    {
+      "key": "drivetrain_mode",
+      "current": {
+        "value": "Derailleur",
+        "source": "name_reading",
+        "fact_id": "234d41d8-874e-4162-aae4-254b2ffa54a9",
+        "fact_sha256": "8d85fc60cfaf6d3936e82ea502f02df2a631129025e0db4d665372e6a4e1c837",
+        "confirmed": false
+      },
+      "proposed": "Derailleur",
+      "unit": null,
+      "method": "Ficha CN-M7100: «Type: HG 12-speed» (cadena HG para transmisiones de 12 velocidades con cambio externo); nombre guardado «CN-M7100 … W/QUICK-LINK».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CN-M7100",
+      "reason": "Cadena de cambio externo por su tipo publicado."
+    },
+    {
+      "key": "chain_application_declarations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "hg",
+            "values": {
+              "claim_identity": "CN-M7100 · HG 12-speed",
+              "scope_kind": "Sistema documentado",
+              "target_system": "HG 12-speed",
+              "verdict": "Admitido por la fuente",
+              "drive_kind": "Desviador externo",
+              "rear_sprockets": "12",
+              "chain_class": "HG 12-speed",
+              "source_document": "productinfo.shimano.com — ficha CN-M7100 (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/CN-M7100",
+              "conditions": "Fila «Type: HG 12-speed» de la tabla productinfo."
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CN-M7100"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Fila «Type: HG 12-speed» de la ficha CN-M7100.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CN-M7100",
+      "reason": "Sistema declarado por el fabricante."
+    },
+    {
+      "key": "chain_mass_declarations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "w114",
+            "values": {
+              "weighing_identity": "CN-M7100 — 114 eslabones",
+              "weight_g": "252",
+              "basis_links": "114",
+              "basis_description": "Average weight (g) (114 links)",
+              "source_document": "productinfo.shimano.com — ficha CN-M7100 (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/CN-M7100"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CN-M7100"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha CN-M7100: «Average weight (g) (114 links) 252».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CN-M7100",
+      "reason": "Peso publicado sobre una base de 114 eslabones."
+    },
+    {
+      "key": "chain_ebike_rated",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Ficha CN-M7100: «E-BIKE rear derailleur system compatible ✔».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CN-M7100",
+      "reason": "Literal."
+    },
+    {
+      "key": "quick_link_included",
+      "current": {
+        "value": true,
+        "source": "name_reading",
+        "fact_id": "dc51b963-8ce0-4cab-802a-6585724effae",
+        "fact_sha256": "fb75cd253a8471d47ac72a5baaed999e4f6246c0d9239e973cc91bed3bfa5a9f",
+        "confirmed": false
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Ficha CN-M7100: «Note: QUICK-LINK»; nombre guardado «CN-M7100 … W/QUICK-LINK».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CN-M7100",
+      "reason": "El fabricante anota el conector QUICK-LINK en la ficha del producto."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/CN-M7100",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial CN-M7100",
+      "finding": "Type HG 12-speed; E-BIKE ✔; Average weight (114 links) 252 g; Note QUICK-LINK",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-cn-m7100-20260917.md",
+      "sha256": "d212aef944e7a0a0a5aa4a688d47cd1dfdb630cd260fc00915fbba46de8c557b"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 3c1a8558-f007-42c3-8c7b-bde6f8076f2f",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "CADENA SHIMANO 12V. CN-M7100, SLX, 126LINKS FOR HG 12-SPEED, W/QUICK-LINK, IND.PACK ICNM7100126Q",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-cn-m7100-saved-name-20260917.json",
+      "sha256": "b600a4908c3855e792a0bad7d78a4dc38d7e498a7b2898347d1c560342c0a8b9"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "acbcf416c1b3cc94c37a872195fe537c132416ffba9902ece46182a4a147e63e",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 1df94fb4fb39eaf8003bf3e27f983178c4db935d23e62b200b1d78211f1ab853: CN-M7100: «HG 12-speed», «E-BIKE … ✔», «Average weight (114 links) 252», «Note QUICK-LINK» + «W/QUICK-LINK» del nombre; 126 eslabones dejados como lectura de nombre."
+  }
+}

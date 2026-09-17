@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "6d664c95-d0c2-4162-8791-e78496f7fd3d",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "MAXXIS KEVLAR 27.5X2.5 MINION DHF EXO/TR",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "bbf378b2458bd598ceccaa767e18ed8652bc876c772df6e5f33f0a0c3e88c74b",
+  "product_sha256": "3a99223198817a0424dbc176e97923d43160d9a212da1f107c6ff7e57df1b0e0",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

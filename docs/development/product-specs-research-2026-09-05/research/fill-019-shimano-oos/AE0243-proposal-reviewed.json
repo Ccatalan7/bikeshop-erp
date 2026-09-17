@@ -1,0 +1,374 @@
+{
+  "schema_version": 2,
+  "product_id": "6a655eac-a82f-4bd3-9d2f-575f4d298041",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "2a9641d8c05410c14dc2dcf5084fcbc19190145c878ef17f4274f8bde85baae8",
+    "fingerprints": {
+      "facts_sha256": "4081ec09a4ea96247590dd5ea5770e0307670e0623c8627f2e016e34fc7d4533",
+      "product_sha256": "27003700703285374d6cbbf7e61eba0abe44255c410d8eda4fcb45bd49b506a2",
+      "template_sha256": "19d2ae8cfd39797cf25f509b15d53e8f8fbdf98c188bd6f992d626cc00d56a1b",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "6a02a0c2-b139-46ef-86d8-bba3797252bd",
+    "contract_version": 24
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "CS-HG200-9",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «Cassette Shimano HG200 Altus 9V 11-34T»: HG200 y 9 velocidades sólo corresponden a CS-HG200-9 (ficha con «Rear speeds 9» y combinación 11-34T (bn))."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/CS-HG200-9",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-17 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "sprocket_count",
+      "current": {
+        "value": "9",
+        "source": "name_reading",
+        "fact_id": "79029d7d-a643-4b80-8bfb-f8d0b3684514",
+        "fact_sha256": "53b02a86f9f15b49dab77666c8b61c67e7110ae7720e09cb0b187377d9ab2839",
+        "confirmed": false
+      },
+      "proposed": "9",
+      "unit": null,
+      "method": "Ficha CS-HG200-9: «Rear speeds 9», «Steel gear QTY (pcs) 9»; nombre guardado «HG200 Altus 9V 11-34T».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-HG200-9",
+      "reason": "Literal; sustituye la lectura de nombre."
+    },
+    {
+      "key": "cog_sequence",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "p1",
+            "values": {
+              "position": "1",
+              "teeth": "11"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG200-9"
+            ]
+          },
+          {
+            "id": "p2",
+            "values": {
+              "position": "2",
+              "teeth": "13"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG200-9"
+            ]
+          },
+          {
+            "id": "p3",
+            "values": {
+              "position": "3",
+              "teeth": "15"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG200-9"
+            ]
+          },
+          {
+            "id": "p4",
+            "values": {
+              "position": "4",
+              "teeth": "17"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG200-9"
+            ]
+          },
+          {
+            "id": "p5",
+            "values": {
+              "position": "5",
+              "teeth": "20"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG200-9"
+            ]
+          },
+          {
+            "id": "p6",
+            "values": {
+              "position": "6",
+              "teeth": "23"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG200-9"
+            ]
+          },
+          {
+            "id": "p7",
+            "values": {
+              "position": "7",
+              "teeth": "26"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG200-9"
+            ]
+          },
+          {
+            "id": "p8",
+            "values": {
+              "position": "8",
+              "teeth": "30"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG200-9"
+            ]
+          },
+          {
+            "id": "p9",
+            "values": {
+              "position": "9",
+              "teeth": "34"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG200-9"
+            ]
+          }
+        ]
+      },
+      "unit": "T",
+      "method": "Ficha CS-HG200-9, «Combination»: 11-34T (bn): 11-13-15-17-20-23-26-30-34T. La ficha publica además 11-32T (bo) y 11-36T (bw); el nombre fija 11-34.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-HG200-9",
+      "reason": "Secuencia publicada de la combinación que nombra el ERP."
+    },
+    {
+      "key": "smallest_cog_teeth",
+      "current": {
+        "value": "11",
+        "source": "supplier_text",
+        "fact_id": "3dc46f3d-4c75-4618-afe2-d01d3ca13b7f",
+        "fact_sha256": "bc740b4d23c610f4944da23ffe214189bf0c0e63effeb1749297ad22407a916d",
+        "confirmed": false
+      },
+      "proposed": "11",
+      "unit": "T",
+      "method": "Primer piñón de la combinación 11-34T (bn); nombre guardado «HG200 Altus 9V 11-34T».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-HG200-9",
+      "reason": "Literal."
+    },
+    {
+      "key": "largest_cog_teeth",
+      "current": {
+        "value": "34",
+        "source": "supplier_text",
+        "fact_id": "1748b6d3-4590-4c18-9c32-ba8bbbcdb4da",
+        "fact_sha256": "3ad1118027345edba873c0d6bd471e6d9cc783785e43c83779fde4b1974c8f9d",
+        "confirmed": false
+      },
+      "proposed": "34",
+      "unit": "T",
+      "method": "Último piñón de la combinación 11-34T (bn); nombre guardado «HG200 Altus 9V 11-34T».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-HG200-9",
+      "reason": "Literal."
+    },
+    {
+      "key": "cassette_spline_standard",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+      "unit": null,
+      "method": "Ficha CS-HG200-9, «Spline type»: «Shimano HG spline M ✔»; las demás filas de estriado con «-».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CS-HG200-9",
+      "reason": "Declaración del fabricante."
+    },
+    {
+      "key": "shift_technology",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "HYPERGLIDE",
+      "unit": null,
+      "method": "Ficha CS-HG200-9: «Type: HG»; HG es la abreviatura Shimano de HYPERGLIDE (misma sigla del código de modelo y de las filas «HG spline»).",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CS-HG200-9",
+      "reason": "Tecnología declarada por su sigla."
+    },
+    {
+      "key": "freehub_bodies_accepted",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "fh",
+            "values": {
+              "rear_drive_interface": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+              "spacer_requirement": "No publicado",
+              "status": "Compatible declarado",
+              "conditions": "Fila «Spline type» de la tabla productinfo de CS-HG200-9: «Shimano HG spline M ✔»; separador no mencionado.",
+              "source_scope": "Tabla de compatibilidad OEM",
+              "source_url": "https://productinfo.shimano.com/en/product/CS-HG200-9"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG200-9"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Fila «Spline type» de la ficha CS-HG200-9.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CS-HG200-9",
+      "reason": "Núcleo declarado por el fabricante; sin dato de separador."
+    },
+    {
+      "key": "published_variant_label",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "11-34T (bn)",
+      "unit": null,
+      "method": "Ficha CS-HG200-9, «Combination name (Group name)»: 11-34T (bn); nombre guardado «HG200 Altus 9V 11-34T».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-HG200-9",
+      "reason": "Variante publicada que corresponde al nombre."
+    },
+    {
+      "key": "lockring_included",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Ficha CS-HG200-9 lista «Lock ring: Material …, Finish …» entre las piezas del producto.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CS-HG200-9",
+      "reason": "Pieza listada en la ficha del producto."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/CS-HG200-9",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial CS-HG200-9",
+      "finding": "Type HG; Rear speeds 9; 11-34T (bn): 11-13-15-17-20-23-26-30-34T; Shimano HG spline M ✔; Lock ring",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-cs-hg200-9-20260917.md",
+      "sha256": "d099eeef37d94f4c62a203b30ede17bcf526f2d66ba16bab8e104f75b0948c35"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 6a655eac-a82f-4bd3-9d2f-575f4d298041",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Cassette Shimano HG200 Altus 9V 11-34T",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-cs-hg200-9-34-saved-name-20260917.json",
+      "sha256": "c154328658630feeb8c7b144b66d56b1d3d6965ebf37f85cc987fd5480118188"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "3caecab270d1795a027b23c129cfde2df74f1e2cb18bec6f9e54370f71cfe460",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre db0760601da8522277072855cf30f1e8e08b332460fdc2bbbefcf3073bd9e93f: CS-HG200-9 11-34T (bn): 11-13-15-17-20-23-26-30-34T; HG spline M ✔; Lock ring Steel."
+  }
+}

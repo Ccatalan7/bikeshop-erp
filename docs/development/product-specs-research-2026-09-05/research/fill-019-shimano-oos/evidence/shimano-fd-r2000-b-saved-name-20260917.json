@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "e84a0bc0-d153-43f6-82d2-f45f480f5c27",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Desviador Delantero Shimano Claris R2000 2x8 31.8-34.9",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "1b63ca4c879a541e929ebdd7b16f93edffe28adc16c51f655a9255d8ff2d3ef0",
+  "product_sha256": "392536a54ae69d7338d5948007a7e9a733863ff7485c90217d95d12a9d2fce7f",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

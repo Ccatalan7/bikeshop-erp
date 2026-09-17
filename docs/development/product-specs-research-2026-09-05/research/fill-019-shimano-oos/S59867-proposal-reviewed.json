@@ -1,0 +1,202 @@
+{
+  "schema_version": 2,
+  "product_id": "e5a61d81-3a89-4940-9cc8-04e2ba91f7df",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "83c3fddf7c2c95ad0d603a1da273460907e108d6823da3246bc9827d178ce3d3",
+    "fingerprints": {
+      "facts_sha256": "c254857c521a8f8afbdd6d7741a62b24e80bb4f1f03dafa253ebe834ee25353d",
+      "product_sha256": "e7e9793396d6cc2421bd2d0e56420d34773f103a4f46ad2c0b61f2760a8c69b5",
+      "template_sha256": "f5eeb6b53a09a29b814885c7db9d6233c7dfacc87ef6207322b2d3220e39e63d",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 5,
+    "updated_at": "2026-07-21T21:04:48.228794+00:00",
+    "template_id": "61005a7e-a107-49f3-96c3-2fa2796d3299",
+    "contract_version": 51
+  },
+  "identity": [],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/SL-TX30-7R",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-17 y archivada con hash; el mando izquierdo del par cita su propia ficha en la fila",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "shifter_unit_count",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "2",
+      "unit": null,
+      "method": "Nombre guardado «(par) 7r&l(friction)»: dos mandos; una ficha oficial por mando (SL-TX30-7R y SL-TX30-LN).",
+      "origin": "research",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "scope": "Par SL-TX30 7v",
+      "reason": "El contrato exige 2 para un par."
+    },
+    {
+      "key": "shifter_units",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "right",
+            "values": {
+              "unit_identity": "SL-TX30-7R",
+              "unit_side": "Derecho (trasero)",
+              "control_style": "Palanca de pulgar",
+              "actuation_mode": "Indexado",
+              "indexed_positions": "7",
+              "declared_speeds": "Rear speeds 7",
+              "source_document": "productinfo.shimano.com — ficha SL-TX30-7R (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/SL-TX30-7R"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/SL-TX30-7R"
+            ]
+          },
+          {
+            "id": "left",
+            "values": {
+              "unit_identity": "SL-TX30-LN",
+              "unit_side": "Izquierdo (delantero)",
+              "control_style": "Palanca de pulgar",
+              "actuation_mode": "Fricción",
+              "declared_speeds": "Front speeds 3 (friction)",
+              "source_document": "productinfo.shimano.com — ficha SL-TX30-LN (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/SL-TX30-LN"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/SL-TX30-LN"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Derecho: el nombre fija «7v», «7r» y la serie sl-tx30; la ficha SL-TX30-7R dice «Rear speeds 7», «Max. multiple shifts 6», sin la marca «(friction)» que estas tablas usan para fricción → indexado. Izquierdo: «l(friction)» y el único izquierdo publicado de la serie es SL-TX30-LN («Front speeds 3 (friction)»; SL-TX30-L devuelve «No results», archivado). Ambos «Thumb shifter Plus».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "no-results",
+        "product-name"
+      ],
+      "scope": "Par SL-TX30 7v",
+      "reason": "Un mando por fila con su ficha; el izquierdo no declara posiciones porque es de fricción."
+    },
+    {
+      "key": "shifter_unit_compatibility_claims",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "rd7",
+            "values": {
+              "unit_reference": "right",
+              "claim_identity": "Cambio trasero MTB 7-speed",
+              "scope_kind": "Interfaz o estándar documentado",
+              "declared_interface": "MTB 7-speed",
+              "source_document": "productinfo.shimano.com — ficha SL-TX30-7R (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/SL-TX30-7R",
+              "target_component": "Cambio trasero",
+              "declaration_result": "Compatible declarado",
+              "conditions": "Fila «Compatible rear derailleur type: MTB 7-speed» de la ficha SL-TX30-7R."
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/SL-TX30-7R"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Fila «Compatible rear derailleur type: MTB 7-speed» de la ficha del mando derecho.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Mando derecho del par",
+      "reason": "Declaración publicada, atada al mando derecho."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/SL-TX30-7R",
+      "consulted_on": "2026-09-17",
+      "scope": "Fichas oficiales SL-TX30-7R, SL-TX30-6R y SL-TX30-LN (un archivo)",
+      "finding": "SL-TX30-7R: Thumb shifter Plus; Rear speeds 7; MTB 7-speed. SL-TX30-LN: Front speeds 3 (friction)",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-sl-tx30-20260916.md",
+      "sha256": "08203f6c6a3c68c9a8293a339234a71b1707deb2db38c43f7a9ff5d8eabbd3a8"
+    },
+    {
+      "id": "no-results",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/SL-TX30-L",
+      "consulted_on": "2026-09-17",
+      "scope": "Registro de consultas sin ficha en productinfo (2026-09-16)",
+      "finding": "SL-TX30-L y SL-TX30-8R: «No results»",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-productinfo-sin-resultado-20260916.md",
+      "sha256": "8a19cb8360705c0ad71db21d80ca9d457fcb66b7e8082888b17febf075b65f22"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product e5a61d81-3a89-4940-9cc8-04e2ba91f7df",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "manilla cambio 7v shimano sl-tx30 (par) 7r&l(friction)",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-sl-tx30-7v-par-saved-name-20260917.json",
+      "sha256": "fb123da551234c34f8ac709e1e8c2a8d43e27bc715b02188418e990e62f8adbe"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "f52f0b0a0ec92b0d81893bce8074d1a0b2bf1aba22a7e0a645601edce80de169",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre ff9b2899b93c2fafad3ab9d7b9b6ca94555ab6d20d8fddf9e5f9e499de37d244: Par SL-TX30 sin modelo raíz: unidades 7R («Rear speeds 7», multi-shift 6, sin marca) y LN («Front speeds 3 (friction)», único izquierdo con ficha, L «No results» archivado); «Par» existente satisface la compuerta."
+  }
+}

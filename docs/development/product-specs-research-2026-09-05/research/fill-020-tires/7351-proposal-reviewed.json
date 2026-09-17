@@ -1,0 +1,191 @@
+{
+  "schema_version": 2,
+  "product_id": "fbe03d6a-eb8a-4046-b505-cee50e38fa87",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "2390ec2eb7e12088418eeff2f00e709c0457d016d48d0e63ec75e7975f2b0157",
+    "fingerprints": {
+      "facts_sha256": "0aa8f8e673e0c8e26d6db1be69ec2bb9dab0c971e81f3fde7e85127c253eb84f",
+      "product_sha256": "92265d235ab4a6b0ef84f74cfb363286734798329f5f634ba60c17d8871eca8d",
+      "template_sha256": "c9c12ef9de5da2f893445f1910c3cbdebe2daad22315ccc4e3310cb8ef173342",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 1,
+    "updated_at": "2026-06-16T19:39:12.379906+00:00",
+    "template_id": "4d5edd21-5818-4c98-827a-7154d1eebfe4",
+    "contract_version": 38
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "Detonator",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado nombra el modelo «Detonator» literal y la página oficial de Maxxis documenta ese modelo con ese nombre."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://shop.maxxis.com/products/detonator",
+      "unit": null,
+      "method": "URL de la ficha oficial del fabricante consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "shop"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "tire_tpi",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "27",
+      "unit": "TPI",
+      "method": "Tabla (grid) del registro oficial shop.maxxis.com del Detonator: la única fila 700X25C de talón WIRE es «TB86365100 | 700X25C | 25-622 | 27 | WIRE | 320 | DUAL | 120 | | Blue | ROAD»; el nombre guardado dice «ALAMBRE 700x25c DETONATOR». La copia completa de maxxis.com/us publica la misma fila.",
+      "origin": "research",
+      "evidence": [
+        "shop"
+      ],
+      "scope": "TPI",
+      "reason": "Carcasa publicada por el fabricante."
+    },
+    {
+      "key": "tire_etrto",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "25-622",
+      "unit": null,
+      "method": "Tabla (grid) de shop.maxxis.com: las tres filas 700X25C publican «25-622» (también en la copia completa de maxxis.com/us).",
+      "origin": "research",
+      "evidence": [
+        "shop"
+      ],
+      "scope": "Medida ETRTO",
+      "reason": "ETRTO publicado por el fabricante."
+    },
+    {
+      "key": "tire_general_max_pressures",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "max-psi",
+            "values": {
+              "pressure_unit": "psi",
+              "max_pressure_value": "120",
+              "declared_scope": "Sin condición de llanta en el documento",
+              "source_document": "maxxis.com — página oficial Detonator (consultada 2026-09-17)",
+              "source_url": "https://www.maxxis.com/us/tire/detonator/"
+            },
+            "sources": [
+              "https://www.maxxis.com/us/tire/detonator/"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Tabla (grid) de shop.maxxis.com: las tres filas 700X25C publican «Max PSI 120» (también en la copia completa de maxxis.com/us). Fila de presión declarada sin condición de llanta (la tabla no la condiciona).",
+      "origin": "research",
+      "evidence": [
+        "shop"
+      ],
+      "scope": "Presiones declaradas",
+      "reason": "Presión máxima publicada por el fabricante."
+    },
+    {
+      "key": "tire_use",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Ruta",
+      "unit": null,
+      "method": "Tabla (grid) de shop.maxxis.com del Detonator: columna «Application: ROAD» en todas las filas (también en la copia completa de maxxis.com/us).",
+      "origin": "research",
+      "evidence": [
+        "shop"
+      ],
+      "scope": "Uso",
+      "reason": "Categoría de uso declarada por el fabricante para el modelo."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Maxxis (maxxis.com/us, sitio oficial)",
+      "locator": "https://www.maxxis.com/us/tire/detonator/",
+      "consulted_on": "2026-09-17",
+      "scope": "Página oficial del modelo Detonator (tabla de especificaciones y categoría)",
+      "finding": "Copia completa de la tabla maxxis.com/us: filas 700X25C TB86365100 (25-622, 27 TPI, WIRE, 320 g, DUAL, 120 psi, Blue, ROAD), TB86367000 y TB86367500 (25-622, 60 TPI, FOLDABLE, 120 psi, ROAD)",
+      "artifact_path": "research/fill-020-tires/evidence/maxxis-us-detonator-completa-20260917.md",
+      "sha256": "651b2c3f0dc56e11d8872bd5d55455623940ec63739a8a212063e885274d663e"
+    },
+    {
+      "id": "shop",
+      "kind": "oem_page",
+      "source": "Maxxis Tires USA (shop.maxxis.com, tienda oficial de Maxxis)",
+      "locator": "https://shop.maxxis.com/products/detonator",
+      "consulted_on": "2026-09-17",
+      "scope": "Registro oficial del producto Detonator con sus variantes publicadas",
+      "finding": "Tabla (grid) de la página shop.maxxis.com/products/detonator: «TB86365100 | 700X25C | 25-622 | 27 | WIRE | 320 | DUAL | 120 | | Blue | ROAD»; 25-622 y 120 en las tres filas 700X25C; Application ROAD en todas",
+      "artifact_path": "research/fill-020-tires/evidence/maxxis-shop-detonator-20260917.md",
+      "sha256": "9ee69cbc6d735c17636614012d70a56340aa2d9fa41367a1995b1732b3c8ee75"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product fbe03d6a-eb8a-4046-b505-cee50e38fa87",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "MAXXIS ALAMBRE 700x25c DETONATOR",
+      "artifact_path": "research/fill-020-tires/evidence/maxxis-detonator-700x25c-w-saved-name-20260917.json",
+      "sha256": "586e58f9f630c8e3c9edc576609e33fc8c6919f63c503e42ef580530857214cb"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "5bae46f3278fb0cf5e1c00e240d9626c5a4203551bf94bd02e281142ef943671",
+    "notes": "Revisión par (sesión Look dude), v2 aceptada sobre ac2e5736b6d4fe95df9f22cb6bbb8d7009316434ec5fd93af081ba39ed3a251c: v2 con evidence shop (maxxis-shop-detonator-20260917.md, sha 9ee69cbc…) y oem = maxxis-us-detonator-completa-20260917.md (sha 651b2c3f…): TB86365100 | 700X25C | 25-622 | 27 | WIRE | 320 | DUAL | 120 | | Blue | ROAD; 25-622 y 120 en las tres filas 700X25C, ROAD en todas. Mismos valores que la v1. Nota: la fila de presión cita source_url de maxxis.com/us mientras el hecho cita `shop`; ambos archivos traen 120, alinear en el registro."
+  }
+}

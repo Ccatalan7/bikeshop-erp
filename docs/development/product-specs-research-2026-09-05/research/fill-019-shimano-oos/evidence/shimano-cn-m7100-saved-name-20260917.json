@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "3c1a8558-f007-42c3-8c7b-bde6f8076f2f",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "CADENA SHIMANO 12V. CN-M7100, SLX, 126LINKS FOR HG 12-SPEED, W/QUICK-LINK, IND.PACK ICNM7100126Q",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "5360e0486f1acacccfa9392130c42a4b400365437f8768f87ed87d6d4d61b8e5",
+  "product_sha256": "7e52b0058c6a864feb8b833d9b13bfb548fe519345991715c88b9b9a4c6dfe5f",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

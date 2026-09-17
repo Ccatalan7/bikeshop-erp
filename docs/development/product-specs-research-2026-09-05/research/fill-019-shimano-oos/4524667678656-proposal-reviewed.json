@@ -1,0 +1,165 @@
+{
+  "schema_version": 2,
+  "product_id": "88ff31d3-e440-498c-8eae-c18e1ea1752d",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "4b91f658a0a5b3aea954b4c68496f0a54eab99f23dbfbe55eb81afd69b2fe651",
+    "fingerprints": {
+      "facts_sha256": "a75b216a82c981708835876d2d5f8605655abff4d14d88864d9539008c64d5cf",
+      "product_sha256": "a8f0cdaabefaeeb8b911a9bdd8997b47a7f56d94a8f93316dc208853150e1cd1",
+      "template_sha256": "944d2fc9c55724dd3af499184f96a524950e093dbdcec89079f2859781430953",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "0750e4ac-4615-4ad4-862e-95ac102b12f7",
+    "contract_version": 42
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "RD-R3000-SS",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «RD-R3000 SORA» con el sku Shimano ERDR3000SS, cuyo sufijo SS nombra la jaula; la ficha oficial documenta RD-R3000-SS."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/RD-R3000-SS",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-17 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "derailleur_cage_length",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Corta (SS)",
+      "unit": null,
+      "method": "Ficha «Model no. RD-R3000-SS»: el sufijo SS es la designación Shimano de la jaula, y la opción del contrato lo lleva literal; sku ERDR3000SS.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "RD-R3000-SS",
+      "reason": "Sufijo de jaula del modelo publicado."
+    },
+    {
+      "key": "rear_derailleur_mount_type",
+      "current": {
+        "value": "Pata/postiza estándar",
+        "source": "name_reading",
+        "fact_id": "96bf6b9b-93d9-4d0f-b3f7-089c8364e717",
+        "fact_sha256": "4ee3c5e9814d4349f1c678875ae04d910a4a471e88a002060ae93a1470d49744",
+        "confirmed": false
+      },
+      "proposed": "Pata/postiza estándar",
+      "unit": null,
+      "method": "Ficha: «SHIMANO ROAD type: Direct attachment (conventional) ✔» (MTB type -, Direct mount -, UDH -, Riveted adapter -); nombre guardado «DIRECTO».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "RD-R3000-SS",
+      "reason": "Montaje declarado por el fabricante; el nombre fija la presentación."
+    },
+    {
+      "key": "rear_derailleur_compatibility_claims",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "chain-0",
+            "values": {
+              "claim_identity": "Cadena HG 9-speed",
+              "scope_kind": "Interfaz o estándar documentado",
+              "declared_interface": "HG 9-speed",
+              "source_document": "productinfo.shimano.com — ficha RD-R3000-SS (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/RD-R3000-SS",
+              "target_component": "Cadena",
+              "declaration_result": "Compatible declarado",
+              "conditions": "Fila «Compatible chain» de la ficha RD-R3000-SS."
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/RD-R3000-SS"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Fila «Compatible chain: HG 9-speed» de la ficha.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "RD-R3000-SS",
+      "reason": "Clases de cadena declaradas."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/RD-R3000-SS",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial RD-R3000-SS",
+      "finding": "SORA; Rear speeds 9; HG 9-speed; ROAD Direct attachment ✔; Max. front difference 16T; Total capacity 37T; Low 25-32T; Top 11-14T",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-rd-r3000-ss-20260917.md",
+      "sha256": "b6f1da1830d461055b62209140196c61230cf1cdaa0328978dcac38b1b62840f"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 88ff31d3-e440-498c-8eae-c18e1ea1752d",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "CAMBIO 9V. RD-R3000 SORA DIRECTO (CAJA) ERDR3000SS",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-rd-r3000-ss-saved-name-20260917.json",
+      "sha256": "cd2d39344c4dde2f166bcb0dbda77b773550e8162c9a3f55426e7ae658716ad7"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "d79e0f42ec7b8932d3686d42f9bdd32ff398b62c63cdc4179197fb6b24d51027",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre eccf6142d89402a775026a52b365cdfb322cc52f8c3fed1593d5ac482cd5e041: RD-R3000-SS: SS del sku Shimano ERDR3000SS; «Rear speeds 9», «HG 9-speed», ROAD Direct attachment ✔ + «DIRECTO»; configuraciones no declaradas (16T sin número de platos)."
+  }
+}

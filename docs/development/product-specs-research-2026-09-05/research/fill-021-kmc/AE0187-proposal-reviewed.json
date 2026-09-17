@@ -1,0 +1,375 @@
+{
+  "schema_version": 2,
+  "product_id": "9182f238-7e49-4ae8-9af5-adc9b5c9038a",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "90130f6c72a2e94104e752ef31fa59243d18bce7f3dfb69c854b5596a848ed45",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "a4b205ffc15c2fa30a28fddec2a184e324d6b3a0dcdfb0a139a60fec5382b831",
+      "template_sha256": "116f235acd81e5019c5823922c9b13a4ea53de091bf50273ac359e0a194f4f5a",
+      "references_sha256": "ecfbc36e5431cc517d141900304efe06d322582e21142a7513f604df06ba2974"
+    },
+    "spec_revision": 1,
+    "updated_at": "2026-09-15T01:28:28.573369+00:00",
+    "template_id": "a9d0494f-08b5-42df-9836-42e302d2d9f5",
+    "contract_version": 45
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "X10",
+      "evidence": [
+        "product-name",
+        "com"
+      ],
+      "reason": "El nombre guardado nombra el modelo «X10» literal y la ficha oficial de KMC documenta ese modelo."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.kmcchain.com/en/product/bicycle-chain-x10-10-speed",
+      "unit": null,
+      "method": "URL de la ficha oficial de KMC consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "eu1",
+        "eu2",
+        "eu3",
+        "com"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "chain_pitch_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "12.7",
+      "unit": "mm",
+      "method": "Tamaño publicado «1/2\"x11/128\"»: paso de 1/2 pulgada = 12,7 mm.",
+      "origin": "research",
+      "evidence": [
+        "eu1",
+        "eu2",
+        "eu3",
+        "com"
+      ],
+      "scope": "Paso",
+      "reason": "Paso literal de la ficha (1/2\")."
+    },
+    {
+      "key": "chain_speeds",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": [
+        "10"
+      ],
+      "unit": null,
+      "method": "Página oficial kmcchain.com X10: «10 Speed»; fichas kmcchain.eu X10 Grey / Silver-Black / EPT: «Compatible with all 10-speed systems».",
+      "origin": "research",
+      "evidence": [
+        "eu1",
+        "eu2",
+        "eu3",
+        "com"
+      ],
+      "scope": "Velocidades",
+      "reason": "Velocidades declaradas por el fabricante."
+    },
+    {
+      "key": "drivetrain_mode",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Derailleur",
+      "unit": null,
+      "method": "Ficha KMC: 10 Speed.",
+      "origin": "research",
+      "evidence": [
+        "eu1",
+        "eu2",
+        "eu3",
+        "com"
+      ],
+      "scope": "Tipo de transmisión",
+      "reason": "Tipo de transmisión declarado."
+    },
+    {
+      "key": "chain_width_family",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "11/128",
+      "unit": null,
+      "method": "Tamaño publicado «1/2\"x11/128\"».",
+      "origin": "research",
+      "evidence": [
+        "eu1",
+        "eu2",
+        "eu3",
+        "com"
+      ],
+      "scope": "Ancho de cadena",
+      "reason": "Ancho literal de la ficha."
+    },
+    {
+      "key": "chain_outer_width_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "5.88",
+      "unit": "mm",
+      "method": "Ficha kmcchain.eu: «Pin length: 5.88 mm» (largo de pasador = ancho externo de la cadena; el catálogo distingue 8/9/10/11 v por este valor) — común a las 3 variantes con ficha archivada (X10 Grey, X10 Silver/Black, X10 EPT); la variante X10 Silver/Black Long (BX10NB122), nombrada en esas fichas, no está archivada y por eso no se afirma «todas» ni se declara el largo.",
+      "origin": "research",
+      "evidence": [
+        "eu1",
+        "eu2",
+        "eu3"
+      ],
+      "scope": "Ancho externo",
+      "reason": "Ancho externo publicado por el fabricante."
+    },
+    {
+      "key": "chain_mass_declarations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "w110",
+            "values": {
+              "weighing_identity": "X10 (variantes con ficha archivada) — 110 eslabones",
+              "weight_g": "263",
+              "basis_links": "110",
+              "basis_description": "Weight per 110 links (dato publicado por KMC por 110 eslabones)",
+              "source_document": "kmcchain.eu — ficha X10 Grey (consultada 2026-09-17)",
+              "source_url": "https://www.kmcchain.eu/products/x10-grey"
+            },
+            "sources": [
+              "https://www.kmcchain.eu/products/x10-grey"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha kmcchain.eu X10 Grey: «Weight per 110 links: 263 g» — común a las 3 variantes con ficha archivada (X10 Grey, X10 Silver/Black, X10 EPT); la variante X10 Silver/Black Long (BX10NB122), nombrada en esas fichas, no está archivada y por eso no se afirma «todas» ni se declara el largo.",
+      "origin": "research",
+      "evidence": [
+        "eu1",
+        "eu2",
+        "eu3"
+      ],
+      "scope": "Peso declarado",
+      "reason": "Peso publicado sobre una base de 110 eslabones."
+    },
+    {
+      "key": "quick_link_included",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Ficha kmcchain.eu X10 Grey: «Includes a MissingLink» — común a las 3 variantes con ficha archivada (X10 Grey, X10 Silver/Black, X10 EPT); la variante X10 Silver/Black Long (BX10NB122), nombrada en esas fichas, no está archivada y por eso no se afirma «todas» ni se declara el largo.",
+      "origin": "research",
+      "evidence": [
+        "eu1",
+        "eu2",
+        "eu3"
+      ],
+      "scope": "Conector incluido",
+      "reason": "Conector incluido según el fabricante."
+    },
+    {
+      "key": "chain_quick_links_supplied",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "ql",
+            "values": {
+              "connector_identity": "MissingLink incluido con la cadena X10",
+              "quantity": "1",
+              "brand": "KMC",
+              "model": "MissingLink",
+              "source_document": "kmcchain.eu — ficha X10 Grey (consultada 2026-09-17)",
+              "source_url": "https://www.kmcchain.eu/products/x10-grey"
+            },
+            "sources": [
+              "https://www.kmcchain.eu/products/x10-grey"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha kmcchain.eu X10 Grey: «Includes a MissingLink» (un conector por cadena) — común a las 3 variantes con ficha archivada (X10 Grey, X10 Silver/Black, X10 EPT); la variante X10 Silver/Black Long (BX10NB122), nombrada en esas fichas, no está archivada y por eso no se afirma «todas» ni se declara el largo.",
+      "origin": "research",
+      "evidence": [
+        "eu1",
+        "eu2",
+        "eu3"
+      ],
+      "scope": "Conectores incluidos",
+      "reason": "Conector incluido según el fabricante."
+    },
+    {
+      "key": "chain_application_declarations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "sys10",
+            "values": {
+              "claim_identity": "KMC X10 · sistema de 10 velocidades",
+              "scope_kind": "Sistema documentado",
+              "target_system": "Compatibility: SHIMANO, Campagnolo and SRAM 10 speed drivetrain systems | 1x10 , 2x10 , 3x10",
+              "verdict": "Admitido por la fuente",
+              "drive_kind": "Desviador externo",
+              "conditions": "Línea de compatibilidad publicada por KMC: «Compatibility: SHIMANO, Campagnolo and SRAM 10 speed drivetrain systems | 1x10 , 2x10 , 3x10»; una fila por conteo de piñones (columna decimal).",
+              "source_document": "kmcchain.com — página X10 (consultada 2026-09-17)",
+              "source_url": "https://www.kmcchain.com/en/product/bicycle-chain-x10-10-speed",
+              "rear_sprockets": "10"
+            },
+            "sources": [
+              "https://www.kmcchain.com/en/product/bicycle-chain-x10-10-speed"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Línea de compatibilidad publicada: «Compatibility: SHIMANO, Campagnolo and SRAM 10 speed drivetrain systems | 1x10 , 2x10 , 3x10».",
+      "origin": "research",
+      "evidence": [
+        "eu1",
+        "eu2",
+        "eu3",
+        "com"
+      ],
+      "scope": "Sistemas declarados",
+      "reason": "Sistemas declarados por el fabricante."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "eu1",
+      "kind": "oem_page",
+      "source": "KMC Chain Europe (kmcchain.eu, sitio oficial)",
+      "locator": "https://www.kmcchain.eu/products/x10-grey",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial X10 Grey",
+      "finding": "Compatible with all 10-speed systems; Art.nr. BX10GG114; Size 1/2\" X 11/128\"; Pin length 5.88 mm; Weight per 110 links 263 g; Length 114 links",
+      "artifact_path": "research/fill-021-kmc/evidence/kmc-x10-grey-20260917.md",
+      "sha256": "f7ac9063632cfdc95bfdef95e0877fe91407827a852845143405b365294735f2"
+    },
+    {
+      "id": "eu2",
+      "kind": "oem_page",
+      "source": "KMC Chain Europe (kmcchain.eu, sitio oficial)",
+      "locator": "https://www.kmcchain.eu/products/x10-silver-black",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial X10 Silver/Black",
+      "finding": "Compatible with all 10-speed systems; Art.nr. BX10NB114; Size 1/2\" X 11/128\"; Pin length 5.88 mm; Weight per 110 links 263 g; Length 114 links",
+      "artifact_path": "research/fill-021-kmc/evidence/kmc-x10-silver-black-20260917.md",
+      "sha256": "b3c4de931da8a157c1cf756e510b0517ac7ebf73849982b51df36f8371e8191d"
+    },
+    {
+      "id": "eu3",
+      "kind": "oem_page",
+      "source": "KMC Chain Europe (kmcchain.eu, sitio oficial)",
+      "locator": "https://www.kmcchain.eu/products/x10-ept",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial X10 EPT",
+      "finding": "Compatible with all 10-speed systems; Art.nr. BX10EP114; Size 1/2\" X 11/128\"; Pin length 5.88 mm; Weight per 110 links 263 g; Length 114 links",
+      "artifact_path": "research/fill-021-kmc/evidence/kmc-x10-ept-20260917.md",
+      "sha256": "69c1aacb2cb924580ccdfbb33d9760b457d4c78d6783abcf6bafa89bb86b9ae2"
+    },
+    {
+      "id": "com",
+      "kind": "oem_page",
+      "source": "KMC Chain Industrial (kmcchain.com, sitio oficial global)",
+      "locator": "https://www.kmcchain.com/en/product/bicycle-chain-x10-10-speed",
+      "consulted_on": "2026-09-17",
+      "scope": "Página oficial del modelo X10",
+      "finding": "10 Speed; Size 1/2\"x11/128\" | Compatibility: SHIMANO, Campagnolo and SRAM 10 speed drivetrain systems | 1x10 , 2x10 , 3x10",
+      "artifact_path": "research/fill-021-kmc/evidence/kmc-com-x10-10-speed-20260917.md",
+      "sha256": "09f0d737cf014cc7d80e3845aae7b1293d7f5f18548688978ba4d44653539144"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 9182f238-7e49-4ae8-9af5-adc9b5c9038a",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Cadena KMC X10",
+      "artifact_path": "research/fill-021-kmc/evidence/kmc-x10-saved-name-20260917.json",
+      "sha256": "02995ff543d8617f27af32e9f090e609ac9abff7c26491a1bca798bf24918108"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "737fba5276263ee0cfda2a13ef18eee27b827be87ecfba97eae678a54c0bed44",
+    "notes": "Revisión par (sesión Look dude), v2 aceptada sobre 9aa1b486b23e6d330b4c6496a30d7bfb8a6b91512bf0d7f862eec16bb9cb24f1: v2: link_count retirado; filas de peso y conector citan kmcchain.eu X10 Grey (publica 263 g/110 y «Includes a MissingLink»); método «3 con ficha archivada; Silver/Black Long BX10NB122 no archivada». Verificado por diff contra la v1."
+  }
+}

@@ -1,0 +1,374 @@
+{
+  "schema_version": 2,
+  "product_id": "1995eb4c-39f4-41b3-9298-06840b66cf5f",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "8333bd3a4fb1e552efb1351407f920e36d0775e03cb796f197cbc181927c308f",
+    "fingerprints": {
+      "facts_sha256": "78a02f951676711e047b0e6de676bec7c40e36c4f4bfce1f36d37178d36aa067",
+      "product_sha256": "918f17a153f3d5a5e2fc83906d5994b8bb866a4b6b01a01f43a4da328c25d930",
+      "template_sha256": "116f235acd81e5019c5823922c9b13a4ea53de091bf50273ac359e0a194f4f5a",
+      "references_sha256": "ecfbc36e5431cc517d141900304efe06d322582e21142a7513f604df06ba2974"
+    },
+    "spec_revision": 0,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "a9d0494f-08b5-42df-9836-42e302d2d9f5",
+    "contract_version": 45
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "Z7",
+      "evidence": [
+        "product-name",
+        "eu",
+        "com"
+      ],
+      "reason": "El nombre guardado nombra el modelo «Z7» literal y la ficha oficial de KMC documenta ese modelo."
+    },
+    {
+      "field": "manufacturer_sku",
+      "current": null,
+      "proposed": "BZ07GB114",
+      "evidence": [
+        "product-name",
+        "eu",
+        "listing"
+      ],
+      "reason": "El nombre guardado no dice color; el listado oficial kmcchain.eu (archivado) tiene una sola Z7, Z7 Grey/Brown, Art.nr. BZ07GB114: identidad por eliminación sobre el listado archivado."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.kmcchain.eu/products/z7-grey-brown",
+      "unit": null,
+      "method": "URL de la ficha oficial de KMC consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "eu",
+        "com",
+        "listing"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "chain_pitch_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "12.7",
+      "unit": "mm",
+      "method": "Tamaño publicado «1/2\" X 3/32\"»: paso de 1/2 pulgada = 12,7 mm.",
+      "origin": "research",
+      "evidence": [
+        "eu",
+        "com"
+      ],
+      "scope": "Paso",
+      "reason": "Paso literal de la ficha (1/2\")."
+    },
+    {
+      "key": "chain_speeds",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": [
+        "6",
+        "7"
+      ],
+      "unit": null,
+      "method": "Ficha kmcchain.eu Z7 Grey/Brown: «Compatible with all 6- and 7-speed systems»; kmcchain.com Z7: «7 Speed», «1x7, 2x7 , 3x7».",
+      "origin": "research",
+      "evidence": [
+        "eu",
+        "com"
+      ],
+      "scope": "Velocidades",
+      "reason": "Velocidades declaradas por el fabricante."
+    },
+    {
+      "key": "drivetrain_mode",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Derailleur",
+      "unit": null,
+      "method": "Ficha KMC: «Compatible with all 6- and 7-speed systems».",
+      "origin": "research",
+      "evidence": [
+        "eu",
+        "com"
+      ],
+      "scope": "Tipo de transmisión",
+      "reason": "Tipo de transmisión declarado."
+    },
+    {
+      "key": "chain_outer_width_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "7.3",
+      "unit": "mm",
+      "method": "Ficha kmcchain.eu: «Pin length: 7.3 mm» (largo de pasador = ancho externo de la cadena; el catálogo distingue 8/9/10/11 v por este valor).",
+      "origin": "research",
+      "evidence": [
+        "eu"
+      ],
+      "scope": "Ancho externo",
+      "reason": "Ancho externo publicado por el fabricante."
+    },
+    {
+      "key": "chain_mass_declarations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "w110",
+            "values": {
+              "weighing_identity": "Z7 Grey/Brown (BZ07GB114) — 110 eslabones",
+              "weight_g": "337",
+              "basis_links": "110",
+              "basis_description": "Weight per 110 links (dato publicado por KMC por 110 eslabones)",
+              "source_document": "kmcchain.eu — ficha Z7 Grey/Brown (consultada 2026-09-17)",
+              "source_url": "https://www.kmcchain.eu/products/z7-grey-brown"
+            },
+            "sources": [
+              "https://www.kmcchain.eu/products/z7-grey-brown"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha kmcchain.eu: «Weight per 110 links: 337 g».",
+      "origin": "research",
+      "evidence": [
+        "eu"
+      ],
+      "scope": "Peso declarado",
+      "reason": "Peso publicado sobre una base de 110 eslabones."
+    },
+    {
+      "key": "link_count",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "114",
+      "unit": "eslabones",
+      "method": "Ficha kmcchain.eu: «Length: 114 links».",
+      "origin": "research",
+      "evidence": [
+        "eu"
+      ],
+      "scope": "Eslabones",
+      "reason": "Largo de venta publicado."
+    },
+    {
+      "key": "quick_link_included",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Ficha kmcchain.eu: «Includes a MissingLink».",
+      "origin": "research",
+      "evidence": [
+        "eu"
+      ],
+      "scope": "Conector incluido",
+      "reason": "Conector incluido según el fabricante."
+    },
+    {
+      "key": "chain_quick_links_supplied",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "ql",
+            "values": {
+              "connector_identity": "MissingLink incluido con la cadena Z7",
+              "quantity": "1",
+              "brand": "KMC",
+              "model": "MissingLink",
+              "source_document": "kmcchain.eu — ficha Z7 Grey/Brown (consultada 2026-09-17)",
+              "source_url": "https://www.kmcchain.eu/products/z7-grey-brown"
+            },
+            "sources": [
+              "https://www.kmcchain.eu/products/z7-grey-brown"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha kmcchain.eu: «Includes a MissingLink» (un conector por cadena).",
+      "origin": "research",
+      "evidence": [
+        "eu"
+      ],
+      "scope": "Conectores incluidos",
+      "reason": "Conector incluido según el fabricante."
+    },
+    {
+      "key": "chain_application_declarations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "sys6",
+            "values": {
+              "claim_identity": "KMC Z7 · sistema de 6 velocidades",
+              "scope_kind": "Sistema documentado",
+              "target_system": "Compatible with all 6- and 7-speed systems",
+              "verdict": "Admitido por la fuente",
+              "drive_kind": "Desviador externo",
+              "rear_sprockets": "6",
+              "conditions": "Línea de compatibilidad publicada por KMC: «Compatible with all 6- and 7-speed systems»; una fila por conteo de piñones (columna decimal).",
+              "source_document": "kmcchain.eu — ficha Z7 Grey/Brown (consultada 2026-09-17)",
+              "source_url": "https://www.kmcchain.eu/products/z7-grey-brown"
+            },
+            "sources": [
+              "https://www.kmcchain.eu/products/z7-grey-brown"
+            ]
+          },
+          {
+            "id": "sys7",
+            "values": {
+              "claim_identity": "KMC Z7 · sistema de 7 velocidades",
+              "scope_kind": "Sistema documentado",
+              "target_system": "Compatible with all 6- and 7-speed systems",
+              "verdict": "Admitido por la fuente",
+              "drive_kind": "Desviador externo",
+              "rear_sprockets": "7",
+              "conditions": "Línea de compatibilidad publicada por KMC: «Compatible with all 6- and 7-speed systems»; una fila por conteo de piñones (columna decimal).",
+              "source_document": "kmcchain.eu — ficha Z7 Grey/Brown (consultada 2026-09-17)",
+              "source_url": "https://www.kmcchain.eu/products/z7-grey-brown"
+            },
+            "sources": [
+              "https://www.kmcchain.eu/products/z7-grey-brown"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Línea de compatibilidad publicada: «Compatible with all 6- and 7-speed systems».",
+      "origin": "research",
+      "evidence": [
+        "eu",
+        "com"
+      ],
+      "scope": "Sistemas declarados",
+      "reason": "Sistemas declarados por el fabricante."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "eu",
+      "kind": "oem_page",
+      "source": "KMC Chain Europe (kmcchain.eu, sitio oficial)",
+      "locator": "https://www.kmcchain.eu/products/z7-grey-brown",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial Z7 Grey/Brown",
+      "finding": "Compatible with all 6- and 7-speed systems; Art.nr. BZ07GB114; Size 1/2\" X 3/32\"; Pin length 7.3 mm; Weight per 110 links 337 g; Length 114 links",
+      "artifact_path": "research/fill-021-kmc/evidence/kmc-z7-grey-brown-20260917.md",
+      "sha256": "c9bf8843faf341286cfadb4db609554e27d2f1855df6d3b9cef8acc042cbb4c2"
+    },
+    {
+      "id": "com",
+      "kind": "oem_page",
+      "source": "KMC Chain Industrial (kmcchain.com, sitio oficial global)",
+      "locator": "https://www.kmcchain.com/en/product/bicycle-chain-z7-7-speed",
+      "consulted_on": "2026-09-17",
+      "scope": "Página oficial del modelo Z7",
+      "finding": "7 Speed; Size 1/2\"x3/32\" | Compatibility : all other 7 speed drivetrains | 1x7, 2x7 , 3x7",
+      "artifact_path": "research/fill-021-kmc/evidence/kmc-com-z7-7-speed-20260917.md",
+      "sha256": "7727a0f6a79746f1b81530d4949452e5ee8eb7185c4dec86f8f60d8716726f99"
+    },
+    {
+      "id": "listing",
+      "kind": "oem_page",
+      "source": "KMC Chain Europe (kmcchain.eu)",
+      "locator": "https://www.kmcchain.eu/bike-solutions/derailleur",
+      "consulted_on": "2026-09-17",
+      "scope": "Listado oficial de cadenas de desviador",
+      "finding": "Un solo Z7 (z7-grey-brown) en el listado",
+      "artifact_path": "research/fill-021-kmc/evidence/kmc-listado-derailleur-20260917.md",
+      "sha256": "6a2ed76b3d4350649e2a30b48d364361ca8170d977e41dd4921519b5431d77b1"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 1995eb4c-39f4-41b3-9298-06840b66cf5f",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Cadena 1/2\" X 3/32\" Kmc Z7",
+      "artifact_path": "research/fill-021-kmc/evidence/kmc-z7-saved-name-20260917.json",
+      "sha256": "4aab445ae91241c5ec3908a30847e5074c2eb2389908129f09b9358083d2533c"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "bac73167084c5e012ef8f4212861bb9453505e6f41b0f1b1c19afad3ed984463",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre de278b1c1996cc650db7bb10ad036fe9ceeae518dd88824981246dc9296b0ff3: Z7 única en el listado archivado (z7-grey-brown) y color único en kmcchain.com («Gray/ Brown»): BZ07GB114 por eliminación válida. Diez hechos literales de la ficha kmcchain.eu."
+  }
+}

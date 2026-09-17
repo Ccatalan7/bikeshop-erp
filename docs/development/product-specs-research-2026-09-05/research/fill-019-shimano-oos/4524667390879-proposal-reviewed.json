@@ -1,0 +1,216 @@
+{
+  "schema_version": 2,
+  "product_id": "fc38b751-68d5-42e6-8301-4ddd63a2eb24",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "d5e5da50685cf44468aff546522f2b589a637d15320cb99fc06fd2370398ce63",
+    "fingerprints": {
+      "facts_sha256": "82f4afedea5a54a83939add28a041c31baf2bbe2077cae2158ae141261681972",
+      "product_sha256": "9a0335f0d80115ab5f2c4e9f3662ba65ea7218748035601ff693316ea03bb186",
+      "template_sha256": "f5eeb6b53a09a29b814885c7db9d6233c7dfacc87ef6207322b2d3220e39e63d",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 9,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "61005a7e-a107-49f3-96c3-2fa2796d3299",
+    "contract_version": 51
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "SL-TZ500-7R",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice literalmente «Sl-Tz500-7R»; la ficha oficial documenta SL-TZ500-7R (Thumb shifter, 7 velocidades traseras)."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/SL-TZ500-7R",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-17 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "shifter_position",
+      "current": {
+        "value": "Derecho (trasero)",
+        "source": "name_reading",
+        "fact_id": "e5f57f62-e9f3-4a52-818a-de13e144a6f9",
+        "fact_sha256": "491118fcbaa1e363eeec5ee65a26ebd1fd41f69ff8bd4273387e6fa6e1142078",
+        "confirmed": false
+      },
+      "proposed": "Derecho (trasero)",
+      "unit": null,
+      "method": "Ficha SL-TZ500-7R: «Rear speeds 7», «Front speeds -»; nombre guardado «Manilla Derecha».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "SL-TZ500-7R",
+      "reason": "Literal en ficha y nombre."
+    },
+    {
+      "key": "shifter_control_style",
+      "current": {
+        "value": "Palanca de pulgar",
+        "source": "name_reading",
+        "fact_id": "fe1a2a6f-c45d-4698-bd67-c936f245db39",
+        "fact_sha256": "5a0f05a35cf4453e822d0bfe47deffe89ea829667639d06ff38056b6a6f83e42",
+        "confirmed": false
+      },
+      "proposed": "Palanca de pulgar",
+      "unit": null,
+      "method": "Ficha SL-TZ500-7R: «Shifter type: Thumb shifter»; nombre guardado «Thumb Shifter».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "SL-TZ500-7R",
+      "reason": "Literal."
+    },
+    {
+      "key": "shifter_actuation_mode",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Indexado",
+      "unit": null,
+      "method": "Tabla productinfo: «Rear speeds 7», «Compatible rear derailleur type MTB 7-speed» y «Max. multiple shifts (main lever/rear) 6». La celda de velocidades no lleva la marca «(friction)» que estas tablas usan para los mandos de fricción («3 (friction)» en SL-TX30-LN y en FD-TZ510-DS6, archivadas), y los cambios múltiples por palanca presuponen posiciones. Además «OPTICAL GEAR DISPLAY: With ✔ *1 Gear Position Indicator» (indicador de posición).",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "oem-tx30"
+      ],
+      "scope": "SL-TZ500-7R",
+      "reason": "Siete posiciones traseras sin marca de fricción."
+    },
+    {
+      "key": "shifter_indexed_positions",
+      "current": {
+        "value": "7",
+        "source": "name_reading",
+        "fact_id": "ad583e3f-7427-41d0-9d7c-f97aac027c91",
+        "fact_sha256": "15fdcf9830abef4b1883af9c185dce12602cc821abee3cd0dcbaddfcf44d06fb",
+        "confirmed": false
+      },
+      "proposed": "7",
+      "unit": null,
+      "method": "Ficha SL-TZ500-7R: «Rear speeds 7»; nombre guardado «7-Speed».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "SL-TZ500-7R",
+      "reason": "Literal en ficha y nombre; sustituye la lectura de nombre."
+    },
+    {
+      "key": "shifter_compatibility_claims",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "rd",
+            "values": {
+              "claim_identity": "Cambio trasero MTB 7-speed",
+              "scope_kind": "Interfaz o estándar documentado",
+              "declared_interface": "MTB 7-speed",
+              "source_document": "productinfo.shimano.com — ficha SL-TZ500-7R (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/SL-TZ500-7R",
+              "target_component": "Cambio trasero",
+              "declaration_result": "Compatible declarado",
+              "conditions": "Fila «Compatible rear derailleur type: MTB 7-speed» de la tabla productinfo."
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/SL-TZ500-7R"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Fila «Compatible rear derailleur type: MTB 7-speed».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "SL-TZ500-7R",
+      "reason": "Declaración publicada."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/SL-TZ500-7R",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial SL-TZ500-7R",
+      "finding": "TOURNEY TZ; Thumb shifter; Rear speeds 7; MTB 7-speed; Clamp band; Max. multiple shifts 6; OT-SIS40",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-sl-tz500-7r-20260917.md",
+      "sha256": "67dc645f461d8919ffed3aafabd23cd7038e25236a9ea57573bdef03035b1cee"
+    },
+    {
+      "id": "oem-tx30",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/SL-TX30-LN",
+      "consulted_on": "2026-09-17",
+      "scope": "Fichas SL-TX30: cómo marcan la fricción estas tablas",
+      "finding": "SL-TX30-LN: «Front speeds 3 (friction)»",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-sl-tx30-20260916.md",
+      "sha256": "08203f6c6a3c68c9a8293a339234a71b1707deb2db38c43f7a9ff5d8eabbd3a8"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product fc38b751-68d5-42e6-8301-4ddd63a2eb24",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Shift Lever Shimano Sl-Tz500-7R Tz Manilla Derecha 7-Speed Thumb Shifter 2050Mm Granel Asl",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-sl-tz500-7r-saved-name-20260917.json",
+      "sha256": "0ad2b8128cec6b6d08b1ef5d0f8ee9e70f676cd515a98cbcac05ae068d8ec863"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "bca54c70efa5732caf06ea66151f9aad06a2c2c1adc2b285c5ab8bd340a0d8e4",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 7a259515c7f0408557fb82804ae79b0f1225ee4cc56aa1db80d3034f4ccedbda: SL-TZ500-7R: «Shifter type Thumb shifter», «Rear speeds 7», «MTB 7-speed», «Max. multiple shifts 6» sin marca de fricción; «Manilla Derecha» y «Thumb Shifter» en el nombre."
+  }
+}

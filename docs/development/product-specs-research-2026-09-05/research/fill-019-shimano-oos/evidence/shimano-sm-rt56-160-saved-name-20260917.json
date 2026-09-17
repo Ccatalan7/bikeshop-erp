@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "7d81f6bf-8f3d-4185-8a61-7b55e91278f4",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Disco freno Shimano Deore RT56 160MM",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "da28990e6b7707d9528f8c6180f3b48c7a891bb82929f73e65f63470edde6166",
+  "product_sha256": "dd41d9af1cc77f0b6c0a427cf9204597cae91cf68a41de93dc248ab96071b546",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

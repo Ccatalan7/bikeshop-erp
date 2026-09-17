@@ -1,0 +1,232 @@
+{
+  "schema_version": 2,
+  "product_id": "8c066cc0-1df8-429b-a04b-64e2806e2e3c",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "57d0db7703d56415a4d4fcf264844360cf7e01a060c3e0e13d0a2471b74403de",
+    "fingerprints": {
+      "facts_sha256": "b30d6ebe3de631bed395a7ab78428a239171f1e011fde1ff501ae388462d1002",
+      "product_sha256": "ec244414b263a88dd1e2a4fee7d248e1b7fc10fbc9090f67fca867da06361b3b",
+      "template_sha256": "c9c12ef9de5da2f893445f1910c3cbdebe2daad22315ccc4e3310cb8ef173342",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 1,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "4d5edd21-5818-4c98-827a-7154d1eebfe4",
+    "contract_version": 38
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "K1053",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado trae «KWICK TRAX K1053» y la ficha oficial de Kenda documenta el modelo Kwick Trax bajo el código K1053."
+    },
+    {
+      "field": "manufacturer_sku",
+      "current": null,
+      "proposed": "212205",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "La ficha oficial publica una sola pieza 700x32c del Kwick Trax K1053: 212205."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://bicycle.kendatire.com/vi-vn/t%C3%ACm-th%E1%BA%A5y-m%E1%BB%99t-l%E1%BB%91p-xe/bicycle/commuter/kwick-trax/",
+      "unit": null,
+      "method": "URL de la ficha oficial del fabricante consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "tire_etrto",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "32-622",
+      "unit": null,
+      "method": "Ficha oficial Kenda Kwick Trax K1053: el nombre guardado dice «(W) 700 x 32C … KWICK TRAX K1053» y la única fila 700x32c es la pieza 212205: «700x32c (32-622)».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Medida ETRTO",
+      "reason": "ETRTO publicado para la pieza."
+    },
+    {
+      "key": "tire_tpi",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "60",
+      "unit": "TPI",
+      "method": "Ficha oficial Kenda Kwick Trax K1053: el nombre guardado dice «(W) 700 x 32C … KWICK TRAX K1053» y la única fila 700x32c es la pieza 212205: «TPI 60».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "TPI",
+      "reason": "Carcasa publicada para la pieza."
+    },
+    {
+      "key": "tire_general_max_pressures",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "max-psi",
+            "values": {
+              "pressure_unit": "psi",
+              "max_pressure_value": "85",
+              "declared_scope": "Sin condición de llanta en el documento",
+              "source_document": "bicycle.kendatire.com — ficha oficial Kwick Trax K1053 (consultada 2026-09-17)",
+              "source_url": "https://bicycle.kendatire.com/vi-vn/t%C3%ACm-th%E1%BA%A5y-m%E1%BB%99t-l%E1%BB%91p-xe/bicycle/commuter/kwick-trax/"
+            },
+            "sources": [
+              "https://bicycle.kendatire.com/vi-vn/t%C3%ACm-th%E1%BA%A5y-m%E1%BB%99t-l%E1%BB%91p-xe/bicycle/commuter/kwick-trax/"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha oficial Kenda Kwick Trax K1053: el nombre guardado dice «(W) 700 x 32C … KWICK TRAX K1053» y la única fila 700x32c es la pieza 212205: «Max PSI 85». Fila de presión declarada sin condición de llanta.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Presiones declaradas",
+      "reason": "Presión máxima publicada para la pieza."
+    },
+    {
+      "key": "tire_weight_g",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "495",
+      "unit": "g",
+      "method": "Ficha oficial Kenda Kwick Trax K1053: el nombre guardado dice «(W) 700 x 32C … KWICK TRAX K1053» y la única fila 700x32c es la pieza 212205: peso «495±25»; se declara el valor nominal 495 (tolerancia ±25 publicada).",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Peso",
+      "reason": "Peso nominal publicado para la pieza."
+    },
+    {
+      "key": "tire_bead_type",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Alambre",
+      "unit": null,
+      "method": "Ficha oficial Kenda Kwick Trax K1053: el nombre guardado dice «(W) 700 x 32C … KWICK TRAX K1053» y la única fila 700x32c es la pieza 212205: talón «WIRE»; el nombre lleva «(W)».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Talón",
+      "reason": "Talón publicado para la pieza."
+    },
+    {
+      "key": "tire_use",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Urbano / híbrido",
+      "unit": null,
+      "method": "Ficha oficial Kenda Kwick Trax: modelo listado bajo la categoría «commuter» del sitio y descrito como «The commuters dream tire … take to the streets».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Uso",
+      "reason": "Categoría de uso declarada por el fabricante."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Kenda (bicycle.kendatire.com, sitio oficial; edición vi-vn)",
+      "locator": "https://bicycle.kendatire.com/vi-vn/t%C3%ACm-th%E1%BA%A5y-m%E1%BB%99t-l%E1%BB%91p-xe/bicycle/commuter/kwick-trax/",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial Kwick Trax K1053 (tabla de especificaciones)",
+      "finding": "Fila 212205: 700x32c (32-622), Max PSI 85, TPI 60, SRC, IRON CAP, WIRE, 495±25 g",
+      "artifact_path": "research/fill-020-tires/evidence/kenda-kwick-trax-k1053-20260917.md",
+      "sha256": "82c05720f6744ae7e479a953a876728efacdf668accc6101a65f96c81a6fbe0d"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 8c066cc0-1df8-429b-a04b-64e2806e2e3c",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "NEUM (W) 700 x 32C \"KENDA \" KWICK TRAX K1053 BK/",
+      "artifact_path": "research/fill-020-tires/evidence/kenda-kwick-trax-k1053-700x32c-saved-name-20260917.json",
+      "sha256": "584a3ba412bb2d88382afdbf6b1ba3b120b4d452ed96da4d1e76d0a1ad2a4d8d"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "cb7b9c9afb10a8a2233e2d1307eebb2625fd123377222ab07d1fbacad982c71a",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 0760ffcee705ab1c815c59eb1118d3da9ca58489a432d03b0fc3d350ffe5fb65: Fila 212205 de la ficha vi-vn verificada literal (700x32c (32-622), Max PSI 85, TPI 60, WIRE, 495±25); «commuter» → Urbano / híbrido según tu criterio 5."
+  }
+}

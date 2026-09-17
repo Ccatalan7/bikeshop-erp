@@ -1,0 +1,136 @@
+{
+  "schema_version": 2,
+  "product_id": "2681e863-3722-4ccc-bf45-5b06474c125b",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "89471655d6bf5ff1a854217366128fdbeb4fd904a1d8c50130db62becb5e566d",
+    "fingerprints": {
+      "facts_sha256": "2508cd87d4638c6c447d3ace9d03857b1d686d4399933f2a5157b66e0ed3a1be",
+      "product_sha256": "d558960dd2c37857c48b296431f6969e031cb1d3143ce871e6f0b73586116d90",
+      "template_sha256": "c9c12ef9de5da2f893445f1910c3cbdebe2daad22315ccc4e3310cb8ef173342",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 9,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "4d5edd21-5818-4c98-827a-7154d1eebfe4",
+    "contract_version": 38
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "Cutting Edge",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado nombra el modelo «Cutting Edge» literal y la ficha oficial de Arisun lo documenta con ese nombre."
+    },
+    {
+      "field": "manufacturer_sku",
+      "current": null,
+      "proposed": "T080303",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «cutting edge b. alambre t080303» y la ficha oficial CUTTING EDGE publica la pieza T080303 en 20x2.25 wire."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.arisun-bicycletire.com/product_show.php?action=show&id=lQyiyxQy5yx4Sx4W",
+      "unit": null,
+      "method": "URL de la ficha oficial del fabricante consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "tire_etrto",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "57-406",
+      "unit": null,
+      "method": "Ficha oficial Arisun CUTTING EDGE: fila de la pieza T080303 (T080303: 57-406, 20x2.25, durómetro 68, 60 TPI, Black, N/A, Wire, 560 g). ETRTO «57-406».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Medida ETRTO",
+      "reason": "ETRTO publicado para la pieza que nombra el ERP."
+    },
+    {
+      "key": "tire_weight_g",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "560",
+      "unit": "g",
+      "method": "Ficha oficial Arisun CUTTING EDGE: fila de la pieza T080303 (T080303: 57-406, 20x2.25, durómetro 68, 60 TPI, Black, N/A, Wire, 560 g). WEIGHT(gr) «560».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Peso",
+      "reason": "Peso publicado para la pieza que nombra el ERP."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Arisun (arisun-bicycletire.com, sitio oficial de Zhongce Rubber)",
+      "locator": "https://www.arisun-bicycletire.com/product_show.php?action=show&id=lQyiyxQy5yx4Sx4W",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial del modelo CUTTING EDGE (tabla SPECS/CONFIGURATIONS)",
+      "finding": "20x2.25: T080303: 57-406, 20x2.25, durómetro 68, 60 TPI, Black, N/A, Wire, 560 g; categoría «BMX-FREESTYLE / FLATLAND»",
+      "artifact_path": "research/fill-020-tires/evidence/arisun-cutting-edge-20260917.md",
+      "sha256": "bb889f4b2e086f90b3430b03397418e1f3e61064023040b4efb5a3f7dcf47da7"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 2681e863-3722-4ccc-bf45-5b06474c125b",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "neumático arisun bmx 20x2.25 60tpi cutting edge b. alambre t080303",
+      "artifact_path": "research/fill-020-tires/evidence/arisun-cutting-edge-2681e863-saved-name-20260917.json",
+      "sha256": "1b4728ac885a737a511bbf319fd58fdd8556ca6da682ef1499d2dcff42371b35"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "478b5c21c901c818060189f2107e1de6646720dde52bd9ebeca29fafc3498737",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre ae3cc0c33e70d7ca9d362f8c103a259a9473bf10803c8fbe5ea567ada2322079. Validador mecánico (tokens, filas, based_on, sha de evidencias, name_quote, simulación) y cotejo literal de cada valor contra el archivo citado."
+  }
+}

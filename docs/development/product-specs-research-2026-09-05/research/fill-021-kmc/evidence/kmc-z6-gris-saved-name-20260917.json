@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "f81391b4-84e2-4cf4-9b5f-09d4e9ceef2a",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Cadena 1/2\" X 3/32\" Kmc Z6 Gris",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "2ab610e4052b8bbd84cbbf6e6a5aa12fb307e485ea0be0cbe6747d07df408eec",
+  "product_sha256": "eaf4da55af192688bf01271f44d598c50bbee6cc1398a54b643588bb096d8224",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

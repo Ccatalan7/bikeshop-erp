@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "a2a80bcc-5555-4427-9a59-e277e0cedd0a",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "PIÑON CASSETTE SHIMANO CS-HG200-7, 7-SPEED, 12-14-16-18-21-26-32, BULK ACSHG2007232T",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "8434ee8605e918331d0f33ab5c16c3436e464cb4dff9730c159445cb2f983fda",
+  "product_sha256": "9c67f826692bcb1aee364f9fb00a5bcda891a56b33bc50c72f699c8cd152901e",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

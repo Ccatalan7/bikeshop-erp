@@ -1,0 +1,209 @@
+{
+  "schema_version": 2,
+  "product_id": "0cc4a595-6878-411c-9842-53d34113a9a8",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "1ecb095ff875a0e8fcf2d99f86aff5af8076206529df333b0779f72e977d57b4",
+    "fingerprints": {
+      "facts_sha256": "3a32e1d1c940a3e97f72c454b023c0615344c1d4422305dd87e46c3c39742892",
+      "product_sha256": "b82e914fea43e6fb6064d083f984e42679be95e512eedd31ff7eb8d9c0a167cb",
+      "template_sha256": "944d2fc9c55724dd3af499184f96a524950e093dbdcec89079f2859781430953",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 5,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "0750e4ac-4615-4ad4-862e-95ac102b12f7",
+    "contract_version": 42
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "RD-M6100-SGS",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «Deore RD-M6100 SGS 12v»; la ficha oficial documenta RD-M6100-SGS."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/RD-M6100-SGS",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-17 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "derailleur_cage_length",
+      "current": {
+        "value": "Larga (SGS)",
+        "source": "name_reading",
+        "fact_id": "6ac9b168-206d-4009-8f05-fd846852e501",
+        "fact_sha256": "54e4f90101b5490b59fb81dc404e036e6e7e9af9cfb36264d40d4ef9b9a15e12",
+        "confirmed": false
+      },
+      "proposed": "Larga (SGS)",
+      "unit": null,
+      "method": "Ficha «Model no. RD-M6100-SGS»: sufijo SGS de jaula; nombre guardado «SGS».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "RD-M6100-SGS",
+      "reason": "Sufijo de jaula del modelo publicado."
+    },
+    {
+      "key": "rear_derailleur_mount_type",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Pata/postiza estándar",
+      "unit": null,
+      "method": "Ficha: «Applicable derailleur hanger — SHIMANO MTB type: Direct attachment (conventional) ✔» (UDH standard ✔ como segunda interfaz publicada; Direct mount -).",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "RD-M6100-SGS",
+      "reason": "Montaje declarado por el fabricante; el nombre fija la presentación."
+    },
+    {
+      "key": "rear_derailleur_application_configurations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "1x12",
+            "values": {
+              "configuration_identity": "1x12 (RD-M6100-SGS)",
+              "front_chainring_count": "1",
+              "rear_sprocket_count": "12",
+              "chain_declaration": "HG 12-speed",
+              "smallest_sprocket_min_teeth": "10",
+              "smallest_sprocket_max_teeth": "10",
+              "largest_sprocket_min_teeth": "51",
+              "largest_sprocket_max_teeth": "51",
+              "total_capacity_teeth": "41",
+              "max_front_difference_teeth": "0",
+              "source_document": "productinfo.shimano.com — ficha RD-M6100-SGS (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/RD-M6100-SGS",
+              "conditions": "Ficha: «Rear speeds 12»; «Max. front difference 0T»; «Total capacity 41T»; «Low sprocket Max. 51T / Min. 51T»; «Top sprocket Max. 10T / Min. 10T»."
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/RD-M6100-SGS"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Tabla productinfo: Rear speeds 12, Max. front difference 0T (un plato), Total capacity, Low sprocket, Top sprocket, Compatible chain.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "RD-M6100-SGS",
+      "reason": "Configuraciones publicadas con sus límites."
+    },
+    {
+      "key": "rear_derailleur_compatibility_claims",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "chain-0",
+            "values": {
+              "claim_identity": "Cadena HG 12-speed",
+              "scope_kind": "Interfaz o estándar documentado",
+              "declared_interface": "HG 12-speed",
+              "source_document": "productinfo.shimano.com — ficha RD-M6100-SGS (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/RD-M6100-SGS",
+              "target_component": "Cadena",
+              "declaration_result": "Compatible declarado",
+              "conditions": "Fila «Compatible chain» de la ficha RD-M6100-SGS."
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/RD-M6100-SGS"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Fila «Compatible chain: HG 12-speed» de la ficha.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "RD-M6100-SGS",
+      "reason": "Clases de cadena declaradas."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/RD-M6100-SGS",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial RD-M6100-SGS",
+      "finding": "DEORE; Rear 12; HG 12-speed; SHADOW RD+; MTB Direct attachment ✔; UDH ✔; cap. 41T; Low 51T; Top 10T",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-rd-m6100-sgs-20260917.md",
+      "sha256": "4becfd5f7e65aaae62dbb2574aa16bc3d6e82b9325f2907b26db75a04d590a51"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 0cc4a595-6878-411c-9842-53d34113a9a8",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Desviador Trasero Shimano Deore RD-M6100 SGS 12v",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-rd-m6100-sgs-saved-name-20260917.json",
+      "sha256": "80be3118dc3d4e6eec874b81bf3956e92da6d0c7179e0330e95bf56c3b9461ba"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "ab79dedfc7e16678dac327f1ee7c0544372ff4e0312ef693e6f02cee06fa916b",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 71cfec092d8ff64feda554a2d37c3e021f590daab750a5205d45fd6c5d9df581: RD-M6100-SGS: «Rear speeds 12», «HG 12-speed», 0T, 41T, 51/51, 10/10, Direct attachment ✔; SHADOW RD+ ✔ no leído como embrague, consistente con la definición."
+  }
+}

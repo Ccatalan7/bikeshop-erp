@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "053d0d0a-017c-40fe-bb33-e9d3e563a677",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "NEUMATICO RUTA BICICLETA ARO 700 X 23C RAPIDE NEGRO ARISUN",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "9871714b0b2de94f72f15466a7a87cd89770b630ec238aa10d7794a491ec140c",
+  "product_sha256": "cb4812a09dae54de2c92ea782facca8422331f944a7bd28fc5d87bf78dd86b66",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

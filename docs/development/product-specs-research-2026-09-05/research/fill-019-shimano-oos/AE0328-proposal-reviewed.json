@@ -1,0 +1,196 @@
+{
+  "schema_version": 2,
+  "product_id": "a142ba96-3162-4aa3-894e-831e25703bc2",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "1bf62ac316d26f34b1d8cfe34b9e41faeea91e24c2731c8b96679ad02bd5bee2",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "68760c21a937a1cdac13deb764579ec52d2b56d3b4a8289a6156f6360d24cc76",
+      "template_sha256": "f5eeb6b53a09a29b814885c7db9d6233c7dfacc87ef6207322b2d3220e39e63d",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 0,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "61005a7e-a107-49f3-96c3-2fa2796d3299",
+    "contract_version": 51
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "SL-U6000-11R",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice literalmente «SL-U6000-11R»; la ficha oficial documenta SL-U6000-11R (CUES, RAPIDFIRE PLUS, 11 velocidades traseras)."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/SL-U6000-11R",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-17 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "shifter_position",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Derecho (trasero)",
+      "unit": null,
+      "method": "Ficha SL-U6000-11R: «Rear speeds 11», «Front speeds -»; el sufijo R del modelo es el lado derecho en la nomenclatura Shimano (los delanteros llevan L).",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "SL-U6000-11R",
+      "reason": "La ficha declara sólo velocidades traseras."
+    },
+    {
+      "key": "shifter_actuation_mode",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Indexado",
+      "unit": null,
+      "method": "Tabla productinfo: «Rear speeds 11», «Compatible rear derailleur type LINKGLIDE 11-speed» y «Max. multiple shifts (main lever/rear) 2». La celda de velocidades no lleva la marca «(friction)» que estas tablas usan para los mandos de fricción («3 (friction)» en SL-TX30-LN y en FD-TZ510-DS6, archivadas), y los cambios múltiples por palanca presuponen posiciones. «Release function: 2-WAY RELEASE ✔».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "oem-tx30"
+      ],
+      "scope": "SL-U6000-11R",
+      "reason": "Once posiciones traseras sin marca de fricción."
+    },
+    {
+      "key": "shifter_indexed_positions",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "11",
+      "unit": null,
+      "method": "Ficha SL-U6000-11R: «Rear speeds 11»; nombre guardado «11R».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "SL-U6000-11R",
+      "reason": "Literal."
+    },
+    {
+      "key": "shifter_compatibility_claims",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "rd",
+            "values": {
+              "claim_identity": "Cambio trasero LINKGLIDE 11-speed",
+              "scope_kind": "Interfaz o estándar documentado",
+              "declared_interface": "LINKGLIDE 11-speed",
+              "source_document": "productinfo.shimano.com — ficha SL-U6000-11R (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/SL-U6000-11R",
+              "target_component": "Cambio trasero",
+              "declaration_result": "Compatible declarado",
+              "conditions": "Fila «Compatible rear derailleur type: LINKGLIDE 11-speed» de la tabla productinfo."
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/SL-U6000-11R"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Fila «Compatible rear derailleur type: LINKGLIDE 11-speed».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "SL-U6000-11R",
+      "reason": "Declaración publicada."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/SL-U6000-11R",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial SL-U6000-11R",
+      "finding": "CUES; RAPIDFIRE PLUS; Rear speeds 11; LINKGLIDE 11-speed; Clamp band ✔; 2-WAY RELEASE; OT-SP41",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-sl-u6000-11r-20260917.md",
+      "sha256": "784c756c2120fb7879be32e4226f405f9c2d41d84e0c3ca773a637954cc21975"
+    },
+    {
+      "id": "oem-tx30",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/SL-TX30-LN",
+      "consulted_on": "2026-09-17",
+      "scope": "Fichas SL-TX30: cómo marcan la fricción estas tablas",
+      "finding": "SL-TX30-LN: «Front speeds 3 (friction)»",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-sl-tx30-20260916.md",
+      "sha256": "08203f6c6a3c68c9a8293a339234a71b1707deb2db38c43f7a9ff5d8eabbd3a8"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product a142ba96-3162-4aa3-894e-831e25703bc2",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Shimano CUES SL-U6000-11R",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-sl-u6000-11r-saved-name-20260917.json",
+      "sha256": "5f833de3ac771bee764b6652b27e8fe6a6e1da633ee7fd5d3f920c6560378ca0"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "abdff02bfdbb9b92c384b17962781deabda1d122ff36bd58b524072d1c9accca",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 82e8cbcc99f1caff2500ea2546152dcb90a3fe7115e7f114ea602c73e8110bf6: SL-U6000-11R: «Rear speeds 11», «LINKGLIDE 11-speed», «Max. multiple shifts 2» sin marca de fricción; 11R literal en el nombre."
+  }
+}

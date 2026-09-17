@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "2995de28-9fa1-4f98-b314-deee08ebcb36",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "ROTOR FRENO DISCO SHIMANO SM-RT10 160MM (BOLSA) ESMRT10S2",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "d779639e544dfbb9cb634fc52f36c926f48db5cb2d33b1aeaf93a01484bdbd85",
+  "product_sha256": "4e71f9646c1979b593849b0878bdeada50ce17caa77ae068b8e264c226dbe7b5",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

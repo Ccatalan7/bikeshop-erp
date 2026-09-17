@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "69dcf998-040c-4337-8d7b-0eef2e9d3f24",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Cadena 1/2\" X 3/32\" Kmc X8 Plata/Gris",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "1bfcefdb1309f7332714ea95c35afda4a6205ab21c88de8cfa8f5ce900fc6e69",
+  "product_sha256": "7d0fdba9c273121bd44cf7049ed315798c6d587966d85ac906200bcfe6968bdd",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

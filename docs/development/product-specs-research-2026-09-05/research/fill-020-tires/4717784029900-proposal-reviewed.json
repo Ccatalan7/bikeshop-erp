@@ -1,0 +1,227 @@
+{
+  "schema_version": 2,
+  "product_id": "03fe7045-7423-4935-876e-71f86afe99c2",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "04abde49403bd721e19ebcab4166f557693971f6654809b896dbacb36bc67e9e",
+    "fingerprints": {
+      "facts_sha256": "185720a8c09703ed65306fc73e32f81c796953cd02db3c90d95d4e7e3b728192",
+      "product_sha256": "a8b9d4edd6a28f3e1b657f88b2ede4de9e3a2b90986a204654d667a405f223ea",
+      "template_sha256": "c9c12ef9de5da2f893445f1910c3cbdebe2daad22315ccc4e3310cb8ef173342",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "4d5edd21-5818-4c98-827a-7154d1eebfe4",
+    "contract_version": 38
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "Tomahawk",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado nombra el modelo «Tomahawk» literal y la página oficial de Maxxis documenta ese modelo con ese nombre."
+    },
+    {
+      "field": "manufacturer_sku",
+      "current": null,
+      "proposed": "TB91000300",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre fija medida y tecnología (27.5X2.30, 3C/TR/EXO) y la tabla oficial tiene una sola fila con esa combinación: TB91000300."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.maxxis.com/us/tire/tomahawk/",
+      "unit": null,
+      "method": "URL de la ficha oficial del fabricante consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "tire_tpi",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "60",
+      "unit": "TPI",
+      "method": "Copia completa de la tabla maxxis.com/us del Tomahawk (maxxis-us-tomahawk-completa-20260917.md): el nombre guardado dice «27.5X2.30 K … 3C/TR/EXO» y la única fila 27.5X2.30 con Tech «3C/EXO/TR» es TB91000300: «Tpi 60».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "TPI",
+      "reason": "Carcasa publicada por el fabricante."
+    },
+    {
+      "key": "tire_etrto",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "58-584",
+      "unit": null,
+      "method": "Misma fila TB91000300 de la copia completa: «Etrto 58-584» (también en la otra fila 27.5X2.30).",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Medida ETRTO",
+      "reason": "ETRTO publicado por el fabricante."
+    },
+    {
+      "key": "tire_general_max_pressures",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "max-psi",
+            "values": {
+              "pressure_unit": "psi",
+              "max_pressure_value": "60",
+              "declared_scope": "Sin condición de llanta en el documento",
+              "source_document": "maxxis.com — página oficial Tomahawk (consultada 2026-09-17)",
+              "source_url": "https://www.maxxis.com/us/tire/tomahawk/"
+            },
+            "sources": [
+              "https://www.maxxis.com/us/tire/tomahawk/"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Misma fila TB91000300 de la copia completa: «Max Psi 60». Fila de presión declarada sin condición de llanta (la tabla no la condiciona).",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Presiones declaradas",
+      "reason": "Presión máxima publicada por el fabricante."
+    },
+    {
+      "key": "tire_weight_g",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "810",
+      "unit": "g",
+      "method": "Misma fila TB91000300: «Weight (g) 810».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Peso",
+      "reason": "Peso publicado por el fabricante."
+    },
+    {
+      "key": "tire_bead_type",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Plegable (kevlar)",
+      "unit": null,
+      "method": "Misma fila TB91000300: «Bead FOLDABLE»; el nombre guardado lleva «K» (kevlar).",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Talón",
+      "reason": "Talón publicado por el fabricante."
+    },
+    {
+      "key": "tire_use",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "MTB",
+      "unit": null,
+      "method": "Copia completa de la tabla maxxis.com/us del Tomahawk: columna «Application: MOUNTAIN» en las dos filas 27.5X2.30; el nombre guardado dice «Neumático XC».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Uso",
+      "reason": "Categoría de uso declarada por el fabricante para el modelo."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Maxxis (maxxis.com/us, sitio oficial)",
+      "locator": "https://www.maxxis.com/us/tire/tomahawk/",
+      "consulted_on": "2026-09-17",
+      "scope": "Página oficial del modelo Tomahawk (tabla de especificaciones y categoría)",
+      "finding": "Copia completa de la tabla maxxis.com/us: filas 27.5X2.30 TB91000300 (Etrto 58-584, Tpi 60, FOLDABLE, 810 g, 3C MAXX TERRA, Max Psi 60, 3C/EXO/TR, Black, MOUNTAIN) y TB91000200 (58-584, 120X2, 1 005 g, 3C/TR/DD, MOUNTAIN)",
+      "artifact_path": "research/fill-020-tires/evidence/maxxis-us-tomahawk-completa-20260917.md",
+      "sha256": "834dd552bb92cd4520cb20f8778295be93466bed66231128891647893e4e8af7"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 03fe7045-7423-4935-876e-71f86afe99c2",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Neumático XC 27.5X2.30 K MAXXIS TOMAHAWK 3C/TR/EXO",
+      "artifact_path": "research/fill-020-tires/evidence/maxxis-tomahawk-275x230-3c-tr-exo-saved-name-20260917.json",
+      "sha256": "f116ee260f76f83fa1541f6e2ccd7d0180302a958d90cdae88492483e95a0a89"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "3c879e63c8e01cdc51615ee4483e69a4631b788572781283c03b34b3e77622ca",
+    "notes": "Revisión par (sesión Look dude), v2 aceptada sobre d3505b09f46994ae0e7530578146e4735d8cdf50a77a454bb0b06a778781151b: v2 sobre maxxis-us-tomahawk-completa-20260917.md (sha 834dd552…): fila TB91000300 literal 27.5X2.30 · 58-584 · 60 · FOLDABLE · 810 · 3C MAXX TERRA · 60 · 3C/EXO/TR · Black · MOUNTAIN; contrastada con el grid de la página viva. Siete hechos e identidad iguales a la v1."
+  }
+}

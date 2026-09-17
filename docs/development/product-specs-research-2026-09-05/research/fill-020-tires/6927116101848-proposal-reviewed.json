@@ -1,0 +1,106 @@
+{
+  "schema_version": 2,
+  "product_id": "803855f4-e2bc-4115-b610-477117205249",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "aeab74bdb162df6a3a3ed806f06180addee498596aec5a8de7f9726cc9fe5a40",
+    "fingerprints": {
+      "facts_sha256": "6f43912fec14c24820cf9cf283312af1a443fd515452c8eda74805bc5c0eec72",
+      "product_sha256": "15699db08af4dafd7f8008b42a6c07330b33f3f272d672e08d9ed7e285b162c3",
+      "template_sha256": "c9c12ef9de5da2f893445f1910c3cbdebe2daad22315ccc4e3310cb8ef173342",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 6,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "4d5edd21-5818-4c98-827a-7154d1eebfe4",
+    "contract_version": 38
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "Dual Action",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado nombra el modelo «Dual Action» literal y la ficha oficial de Arisun lo documenta con ese nombre."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.arisun-bicycletire.com/product_show.php?action=show&id=liiyixxiyi664JPs",
+      "unit": null,
+      "method": "URL de la ficha oficial del fabricante consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "tire_etrto",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "33-622",
+      "unit": null,
+      "method": "Ficha oficial Arisun DUALACTION: las 2 filas publicadas de 700x33C (T060101 wire 30 TPI 425 g y T060102 aramid 60 TPI 350 g: ambas 33-622) llevan todas ETRTO «33-622»; el nombre guardado fija modelo y medida pero no la pieza.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Medida ETRTO",
+      "reason": "Valor común a todas las filas publicadas de la medida."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Arisun (arisun-bicycletire.com, sitio oficial de Zhongce Rubber)",
+      "locator": "https://www.arisun-bicycletire.com/product_show.php?action=show&id=liiyixxiyi664JPs",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial del modelo DUALACTION (tabla SPECS/CONFIGURATIONS)",
+      "finding": "700x33C: T060101 wire 30 TPI 425 g y T060102 aramid 60 TPI 350 g: ambas 33-622; categoría «CYCLO CROSS»",
+      "artifact_path": "research/fill-020-tires/evidence/arisun-dualaction-20260917.md",
+      "sha256": "cdc6ba39604480e6e9fff2bd2c5f47080558019e9dd56102fe241cf063d21ee0"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 803855f4-e2bc-4115-b610-477117205249",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Neumatico Ruta Bicicleta Aro 700 X 33C Dual Action Arisun",
+      "artifact_path": "research/fill-020-tires/evidence/arisun-dualaction-803855f4-saved-name-20260917.json",
+      "sha256": "007046952d6b3b4bb105af5e927934a2090823505ac3e7d4dadcd5029e82193f"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "ae058a0cc4234ec07743baf67ac23750e71d526e1e1148e2bb9606a1fa5d9208",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 38b2974709ea6b1581c85cd48780231bd341ef0b850d49fd75b26e38f050fa9c. Validador mecánico (tokens, filas, based_on, sha de evidencias, name_quote, simulación) y cotejo literal de cada valor contra el archivo citado."
+  }
+}

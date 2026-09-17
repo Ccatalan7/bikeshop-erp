@@ -1,0 +1,213 @@
+{
+  "schema_version": 2,
+  "product_id": "cc077708-f60b-41ca-b3dd-3ad4112b5ead",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "44fe4bfc0da8ce2975c235a6720a6ea1eb3e3c5e3166f60146713f75657fc8d7",
+    "fingerprints": {
+      "facts_sha256": "690d03e735267c61587e96a29f2d4168fa16d0f24889fd05ae91a91818530db7",
+      "product_sha256": "ef9af7f990e5fadb81b5b3c35d22b7acb8afd848bbcf2646868901cf273ae7dd",
+      "template_sha256": "f5eeb6b53a09a29b814885c7db9d6233c7dfacc87ef6207322b2d3220e39e63d",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 4,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "61005a7e-a107-49f3-96c3-2fa2796d3299",
+    "contract_version": 51
+  },
+  "identity": [],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/SL-M6100-R",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-17 y archivada con hash; la variante I-SPEC EV (https://productinfo.shimano.com/en/product/SL-M6100-IR, archivada) coincide en todo lo declarado aquí",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "shifter_position",
+      "current": {
+        "value": "Derecho (trasero)",
+        "source": "name_reading",
+        "fact_id": "78da3a4f-1f44-45fd-8c4f-890e597697ad",
+        "fact_sha256": "32b231384ab6c6cd25ee15c267c280160041bef196040862fee1597641944877",
+        "confirmed": false
+      },
+      "proposed": "Derecho (trasero)",
+      "unit": null,
+      "method": "Fichas SL-M6100-R e SL-M6100-IR: «Rear speeds 12», «Front speeds -»; nombre guardado «Right». SL-M6100-L devuelve «No results» (archivado).",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "oem-ir",
+        "no-results",
+        "product-name"
+      ],
+      "scope": "SL-M6100 trasero (R o IR)",
+      "reason": "Las dos variantes traseras declaran sólo velocidades traseras; el nombre dice Right."
+    },
+    {
+      "key": "shifter_actuation_mode",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Indexado",
+      "unit": null,
+      "method": "Fichas SL-M6100-R e SL-M6100-IR: Tabla productinfo: «Rear speeds 12», «Compatible rear derailleur type MTB 12-speed» y «Max. multiple shifts (main lever/rear) 3». La celda de velocidades no lleva la marca «(friction)» que estas tablas usan para los mandos de fricción («3 (friction)» en SL-TX30-LN y en FD-TZ510-DS6, archivadas), y los cambios múltiples por palanca presuponen posiciones. «Release function: 2-WAY RELEASE ✔».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "oem-ir",
+        "oem-tx30"
+      ],
+      "scope": "SL-M6100 trasero (R o IR)",
+      "reason": "12 posiciones sin marca de fricción, igual en R e IR."
+    },
+    {
+      "key": "shifter_indexed_positions",
+      "current": {
+        "value": "12",
+        "source": "name_reading",
+        "fact_id": "5807ac68-52e9-4332-9896-5d8f1193b786",
+        "fact_sha256": "304800605e0fff58f6a71362cd483d065be54dccce77d94e3d4b81152a69926b",
+        "confirmed": false
+      },
+      "proposed": "12",
+      "unit": null,
+      "method": "Fichas SL-M6100-R e SL-M6100-IR: «Rear speeds 12»; nombre guardado «12v».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "oem-ir",
+        "product-name"
+      ],
+      "scope": "SL-M6100 trasero (R o IR)",
+      "reason": "Literal, igual en R e IR; sustituye la lectura de nombre."
+    },
+    {
+      "key": "shifter_compatibility_claims",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "rd",
+            "values": {
+              "claim_identity": "Cambio trasero MTB 12-speed",
+              "scope_kind": "Interfaz o estándar documentado",
+              "declared_interface": "MTB 12-speed",
+              "source_document": "productinfo.shimano.com — ficha SL-M6100-R (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/SL-M6100-R",
+              "target_component": "Cambio trasero",
+              "declaration_result": "Compatible declarado",
+              "conditions": "Fila «Compatible rear derailleur type: MTB 12-speed» de la tabla productinfo."
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/SL-M6100-R",
+              "https://productinfo.shimano.com/en/product/SL-M6100-IR"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Fichas SL-M6100-R e SL-M6100-IR: «Compatible rear derailleur type: MTB 12-speed».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "oem-ir"
+      ],
+      "scope": "SL-M6100 trasero (R o IR)",
+      "reason": "Declaración publicada, igual en R e IR."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/SL-M6100-R",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial SL-M6100-R",
+      "finding": "DEORE; RAPIDFIRE PLUS; Rear speeds 12; MTB 12-speed; Clamp band ✔; 2-WAY RELEASE",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-sl-m6100-r-20260917.md",
+      "sha256": "f592f0932aba0493c24146621d097dd28dd0f6c1cf883df6f8bff0f6aff0744f"
+    },
+    {
+      "id": "oem-ir",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/SL-M6100-IR",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha hermana SL-M6100-IR (I-SPEC EV)",
+      "finding": "Rear speeds 12; MTB 12-speed; I-SPEC EV ✔; Clamp band -",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-sl-m6100-ir-20260917.md",
+      "sha256": "cf032d362f04d0027ecc585682555b9c5da7a574ad3ee8d81559d1f2ec55e715"
+    },
+    {
+      "id": "no-results",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/SL-M6100-L",
+      "consulted_on": "2026-09-17",
+      "scope": "Registro de consultas sin ficha en productinfo (2026-09-17)",
+      "finding": "«No results»: SL-M6100-L",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-productinfo-sin-resultado-20260917.md",
+      "sha256": "41018aa06d2edc6865aad1c45c0f67b15a38a5623cacae03df75e9e821bcfec8"
+    },
+    {
+      "id": "oem-tx30",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/SL-TX30-LN",
+      "consulted_on": "2026-09-17",
+      "scope": "Fichas SL-TX30: cómo marcan la fricción estas tablas",
+      "finding": "SL-TX30-LN: «Front speeds 3 (friction)»",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-sl-tx30-20260916.md",
+      "sha256": "08203f6c6a3c68c9a8293a339234a71b1707deb2db38c43f7a9ff5d8eabbd3a8"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product cc077708-f60b-41ca-b3dd-3ad4112b5ead",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Shifter 12v Shimano Deore SL-M6100 Right",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-sl-m6100-right-saved-name-20260917.json",
+      "sha256": "daaca17ab0139f0c2e5e4b54da320f7f489a6c857f9b5ceb70802886587bd0f3"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "86869137112ecf8a33bcf3538c84591e4251fdd5330069841b4acb360100c6a8",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 534e2a70f81bebe2725e602db42dbcc9515b84eb285caf6021f9c10f7e693eac: SL-M6100 sin modelo (R e IR archivadas, L «No results»): hechos comunes «Rear speeds 12», «MTB 12-speed», «Max. multiple shifts 3»; «Right» del nombre."
+  }
+}

@@ -1,0 +1,144 @@
+{
+  "schema_version": 2,
+  "product_id": "416cb816-18e0-4b15-858d-2ee9db27e153",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "30ef524ad92fadbd10d12fe7867781a9d27096f81c20df3a40649352005fe48e",
+    "fingerprints": {
+      "facts_sha256": "7d6785e3e4b5f7b31bad5357ccded435662b7ced124f9f196658d5dc4acbfc48",
+      "product_sha256": "d96d09ad33a0a6d7be53cf0188be9c1f294df2a3bfcecc38f6acfd3943c481ed",
+      "template_sha256": "47b56ca6e31877ebb7113592c4090c331eb4da7a3642c97d5df5253d720b29a0",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "a2ba0aad-9c5c-4563-a4f5-75cf2611a43a",
+    "contract_version": 35
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "SM-RT26",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «RT26 160MM»; la ficha oficial documenta SM-RT26 con 180 ✔, 160 ✔, 140 ✔ (220/203/200 -)."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/SM-RT26",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-17 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "rotor_diameter_mm_value",
+      "current": {
+        "value": "160",
+        "source": "name_reading",
+        "fact_id": "e595c7b6-9016-476a-9b44-c4eeab47d55a",
+        "fact_sha256": "f1a99beb8468332aec8dc140f7667dea3c5e9c7b6f8e1e1dfd797d52a6956296",
+        "confirmed": false
+      },
+      "proposed": "160",
+      "unit": "mm",
+      "method": "Ficha SM-RT26: «Outside diameter (mm)»: 180 ✔, 160 ✔, 140 ✔ (220/203/200 -); nombre guardado «RT26 160MM».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "SM-RT26",
+      "reason": "El nombre fija una de las medidas publicadas; sustituye la lectura de nombre."
+    },
+    {
+      "key": "rotor_material",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Acero Inoxidable",
+      "unit": null,
+      "method": "Ficha SM-RT26: «Rotor — Material: Stainless steel».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "SM-RT26",
+      "reason": "Literal."
+    },
+    {
+      "key": "rotor_nominal_thickness_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "1.75",
+      "unit": "mm",
+      "method": "Ficha SM-RT26: «Rotor thickness — Standard 1.75(mm) ✔; Thick 2.2(mm) -».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "SM-RT26",
+      "reason": "Espesor nominal publicado."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/SM-RT26",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial SM-RT26",
+      "finding": "Outside diameter 180 ✔, 160 ✔, 140 ✔ (220/203/200 -); Stainless steel; 1.75 mm; Pad Resin ✔ Metal -; Note: With anti loosen tightening plate",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-sm-rt26-20260917.md",
+      "sha256": "f0bd9db3f1b86932eee542a7b7d8412fc5a1666bfcefcfa2ffd52acef9f6408a"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 416cb816-18e0-4b15-858d-2ee9db27e153",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Disco freno Shimano RT26 160MM",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-sm-rt26-160-saved-name-20260917.json",
+      "sha256": "417d39e5344b950a105c1f68edec285a510829012762e02dda0671927aa471f1"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "d7e8440c59167e903cb0357fc9aab96d11ce4c8d9aa51cd696f4be0e4358c26e",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 2b4ea693aef7d44bc1b3057f2a02f7e79014bbceda7166e4e15a92d96fc61a5e: SM-RT26 160: 180/160/140 ✔, Stainless, 1.75 ✔; RT26 sin otra lectura."
+  }
+}

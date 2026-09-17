@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "ff5080a9-9e1d-45df-8703-1d4cc274ebe9",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Cassette Shimano 7V CS-HG200-7 12/32T",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "4c2b6d2100f2eb63233b8a16e8e764d95f44d1e86831fe9d88e32ed5bd9e45ba",
+  "product_sha256": "3ecf898137f88c97cd666167e1982d781b504ac19c54652380f9904b46da4b11",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

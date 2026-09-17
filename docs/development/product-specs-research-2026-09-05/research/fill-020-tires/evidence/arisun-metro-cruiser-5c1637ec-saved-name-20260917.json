@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "5c1637ec-4dda-4850-b54e-4b5772a6708b",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Neumatico Ruta Bicicleta Aro 700 X 32C Metro Cruiser Arisun",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "2cef30741a445d6174a18069dbefc7fcc252125a42ac2b23a04147c07bd30e89",
+  "product_sha256": "3b157c82135a60a089bf6c68d40ee4d1ec12ad8e1ed954b9f582230160ab8635",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

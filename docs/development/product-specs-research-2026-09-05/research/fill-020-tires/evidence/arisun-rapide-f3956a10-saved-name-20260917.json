@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "f3956a10-ef4a-4d1d-8485-10fed60c8f36",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "NEUMATICO ARISUN 700 X 23C RAPIDE NEGRO KEVLAR",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "93c57e6d8e8c55c94a2bddd88c1bba5e3044c191603eb7ef400c4d257053d316",
+  "product_sha256": "0712bb8324b9036f219c9ab3c2bc18037473267b370b4a718046d77d152768b1",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

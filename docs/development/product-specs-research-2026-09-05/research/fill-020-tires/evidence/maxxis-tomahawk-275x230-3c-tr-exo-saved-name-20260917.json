@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "03fe7045-7423-4935-876e-71f86afe99c2",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Neumático XC 27.5X2.30 K MAXXIS TOMAHAWK 3C/TR/EXO",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "04abde49403bd721e19ebcab4166f557693971f6654809b896dbacb36bc67e9e",
+  "product_sha256": "a8b9d4edd6a28f3e1b657f88b2ede4de9e3a2b90986a204654d667a405f223ea",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

@@ -1,0 +1,165 @@
+{
+  "schema_version": 2,
+  "product_id": "c51cdb87-839f-4d62-97e1-e32354c2dd6a",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "b0c4a0b2fb9cc8c3c8552aca522ee868b4560af0c04394197b3b0da0d3a2bb2c",
+    "fingerprints": {
+      "facts_sha256": "4153477cd1a5a8849a40b7810b22ddfd45dd72ac30fefd96ad3ddba8bd698b6c",
+      "product_sha256": "777fd7d892e7fcfeefd02ff348181df0cfc57727f01f1857531a16835a21293e",
+      "template_sha256": "944d2fc9c55724dd3af499184f96a524950e093dbdcec89079f2859781430953",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 5,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "0750e4ac-4615-4ad4-862e-95ac102b12f7",
+    "contract_version": 42
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "RD-M370-SGS",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «Rd-M370-L Sgs Altus Negro»; la ficha oficial documenta RD-M370-SGS (colores Black / Silver; el nombre dice Negro)."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/RD-M370-SGS",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-17 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "derailleur_cage_length",
+      "current": {
+        "value": "Larga (SGS)",
+        "source": "name_reading",
+        "fact_id": "a32205fa-58d0-401d-a41d-375fecf662a5",
+        "fact_sha256": "7970e5a2cc9eee74e4b408d358dd92e1e94aa4c464aba3d938371e97ebba013b",
+        "confirmed": false
+      },
+      "proposed": "Larga (SGS)",
+      "unit": null,
+      "method": "Ficha «Model no. RD-M370-SGS»: sufijo SGS de jaula; nombre guardado «SGS».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "RD-M370-SGS",
+      "reason": "Sufijo de jaula del modelo publicado."
+    },
+    {
+      "key": "rear_derailleur_mount_type",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Pata/postiza estándar",
+      "unit": null,
+      "method": "Ficha: «Applicable derailleur hanger — SHIMANO MTB type: Direct attachment (conventional) ✔» (Direct mount -, UDH -, Riveted adapter -).",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "RD-M370-SGS",
+      "reason": "Montaje declarado por el fabricante; el nombre fija la presentación."
+    },
+    {
+      "key": "rear_derailleur_compatibility_claims",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "chain-0",
+            "values": {
+              "claim_identity": "Cadena HG 9-speed",
+              "scope_kind": "Interfaz o estándar documentado",
+              "declared_interface": "HG 9-speed",
+              "source_document": "productinfo.shimano.com — ficha RD-M370-SGS (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/RD-M370-SGS",
+              "target_component": "Cadena",
+              "declaration_result": "Compatible declarado",
+              "conditions": "Fila «Compatible chain» de la ficha RD-M370-SGS."
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/RD-M370-SGS"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Fila «Compatible chain: HG 9-speed» de la ficha.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "RD-M370-SGS",
+      "reason": "Clases de cadena declaradas."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/RD-M370-SGS",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial RD-M370-SGS",
+      "finding": "ALTUS; Rear 9; HG 9-speed; MTB Direct attachment ✔; Max. front difference 22T; cap. 45T; Low 28-34T; Top 11T",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-rd-m370-sgs-20260917.md",
+      "sha256": "b147074c7b0b0a05494e10219ebac7e034bebf88f1da47759c7a483f9d4f4925"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product c51cdb87-839f-4d62-97e1-e32354c2dd6a",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Cambio Shimano 9V. Rd-M370-L Sgs Altus Negro",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-rd-m370-sgs-l-saved-name-20260917.json",
+      "sha256": "27c7f9a8107e59088c6995317434c7b1a8148193534cacf869d9ca331638dd57"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "56dc63a62113c8623fb5aa8984a78f9fcdf54e00075f90b6d64b9fdaaeddc9f9",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre d087d6e2bd9967938977cfeaa4cf6272138e5f9df03800d97a02ab8904f5e3f3: RD-M370-SGS: «Rd-M370» + «Sgs» fijan el Model no.; «Rear speeds 9», «HG 9-speed», MTB Direct attachment ✔; el «-L» del nombre queda sin leer (no cambia el modelo; la ficha publica Black/Silver)."
+  }
+}

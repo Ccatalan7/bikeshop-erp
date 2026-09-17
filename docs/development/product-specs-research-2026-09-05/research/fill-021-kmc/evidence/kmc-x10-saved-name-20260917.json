@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "9182f238-7e49-4ae8-9af5-adc9b5c9038a",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Cadena KMC X10",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "90130f6c72a2e94104e752ef31fa59243d18bce7f3dfb69c854b5596a848ed45",
+  "product_sha256": "a4b205ffc15c2fa30a28fddec2a184e324d6b3a0dcdfb0a139a60fec5382b831",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

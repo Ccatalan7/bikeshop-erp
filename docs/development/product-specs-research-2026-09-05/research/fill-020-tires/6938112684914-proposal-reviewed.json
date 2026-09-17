@@ -1,0 +1,195 @@
+{
+  "schema_version": 2,
+  "product_id": "f43e35d3-214e-4031-bdc7-f8b955165073",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "63a8317099eb27bffdd8fe577817be6956acac24e8e6b1c0984498146d8a2940",
+    "fingerprints": {
+      "facts_sha256": "060957f94d320b411c08fcbe550064a12d6a70964e097daca7978be2b3b833eb",
+      "product_sha256": "d09cfc4da59823aaf9be0d93a94ae97280b409b61175660a988a522be18d3972",
+      "template_sha256": "c9c12ef9de5da2f893445f1910c3cbdebe2daad22315ccc4e3310cb8ef173342",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 1,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "4d5edd21-5818-4c98-827a-7154d1eebfe4",
+    "contract_version": 38
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "XLR8 Touring",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado nombra el modelo «XLR8 Touring» literal y la ficha oficial de Arisun lo documenta con ese nombre."
+    },
+    {
+      "field": "manufacturer_sku",
+      "current": null,
+      "proposed": "T070513",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «XLR8 TOURING CASING T070513» y la ficha oficial XLR8 TOURING / SENTINEL publica la pieza T070513 en 700x25c."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.arisun-bicycletire.com/product_show.php?action=show&id=lXJXJ4XyyQ44x6P8",
+      "unit": null,
+      "method": "URL de la ficha oficial del fabricante consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "tire_etrto",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "25-622",
+      "unit": null,
+      "method": "Ficha oficial Arisun XLR8 TOURING / SENTINEL: fila de la pieza T070513 (T070513: 25-622, 700x25c, durómetro 68, 60 TPI, Black, KD;Reflective Stripe, Wire, 395 g). ETRTO «25-622».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Medida ETRTO",
+      "reason": "ETRTO publicado para la pieza que nombra el ERP."
+    },
+    {
+      "key": "tire_tpi",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "60",
+      "unit": "TPI",
+      "method": "Ficha oficial Arisun XLR8 TOURING / SENTINEL: fila de la pieza T070513 (T070513: 25-622, 700x25c, durómetro 68, 60 TPI, Black, KD;Reflective Stripe, Wire, 395 g). TPI «60».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "TPI",
+      "reason": "Carcasa publicada para la pieza que nombra el ERP."
+    },
+    {
+      "key": "tire_weight_g",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "395",
+      "unit": "g",
+      "method": "Ficha oficial Arisun XLR8 TOURING / SENTINEL: fila de la pieza T070513 (T070513: 25-622, 700x25c, durómetro 68, 60 TPI, Black, KD;Reflective Stripe, Wire, 395 g). WEIGHT(gr) «395».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Peso",
+      "reason": "Peso publicado para la pieza que nombra el ERP."
+    },
+    {
+      "key": "tire_bead_type",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Alambre",
+      "unit": null,
+      "method": "Ficha oficial Arisun XLR8 TOURING / SENTINEL: fila de la pieza T070513 (T070513: 25-622, 700x25c, durómetro 68, 60 TPI, Black, KD;Reflective Stripe, Wire, 395 g). BEAD «Wire».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Talón",
+      "reason": "Talón publicado para la pieza que nombra el ERP."
+    },
+    {
+      "key": "tire_use",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Urbano / híbrido",
+      "unit": null,
+      "method": "Ficha oficial Arisun XLR8 TOURING / SENTINEL: categoría «CITY / URBAN» bajo el nombre del modelo.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Uso",
+      "reason": "Categoría de uso declarada por el fabricante para el modelo."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Arisun (arisun-bicycletire.com, sitio oficial de Zhongce Rubber)",
+      "locator": "https://www.arisun-bicycletire.com/product_show.php?action=show&id=lXJXJ4XyyQ44x6P8",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial del modelo XLR8 TOURING / SENTINEL (tabla SPECS/CONFIGURATIONS)",
+      "finding": "700x25C: T070513: 25-622, 700x25c, durómetro 68, 60 TPI, Black, KD;Reflective Stripe, Wire, 395 g; categoría «CITY / URBAN»",
+      "artifact_path": "research/fill-020-tires/evidence/arisun-xlr8-touring-sentinel-20260917.md",
+      "sha256": "cb36964c2627b78ad9edbbcfe5d3d7f2e7800ce7bf22d10fb60ea851e9171ca9"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product f43e35d3-214e-4031-bdc7-f8b955165073",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "NEUMATICO ARISUN 700 X 25C XLR8 TOURING CASING T070513",
+      "artifact_path": "research/fill-020-tires/evidence/arisun-xlr8-touring-sentinel-f43e35d3-saved-name-20260917.json",
+      "sha256": "cf56f43a15d8f0a91d5e6fe5628a23be1ea1871d3d5cadcb225081f33b119d18"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "ecc4c0f4b1ac35a575b75d26ee3a885d49fd0abfdea49bd15c693b1236a7733f",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 4669d4ecc8ecfae701c868d2c81d6e1985671564fb217d7fd5b9443c1c8db8fe. Validador mecánico (tokens, filas, based_on, sha de evidencias, name_quote, simulación) y cotejo literal de cada valor contra el archivo citado."
+  }
+}

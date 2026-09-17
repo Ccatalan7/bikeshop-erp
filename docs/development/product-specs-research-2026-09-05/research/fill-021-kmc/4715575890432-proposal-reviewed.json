@@ -1,0 +1,167 @@
+{
+  "schema_version": 2,
+  "product_id": "061e7c9b-2dcf-4bd3-99ca-5b68caaf19fc",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "98876560d991034eb9f4e6d8a7d5c49a2a78d9cb222dff76567eea0bef738e4a",
+    "fingerprints": {
+      "facts_sha256": "bd69c9a3bf0e8678de9f09b6196e77d5edb27b63bdcb83d546c0b4a37cd7e3d3",
+      "product_sha256": "268a5ea22b79e0df6ede2b922c405088f3f0c76e221473fd30e9ad8f3726e549",
+      "template_sha256": "116f235acd81e5019c5823922c9b13a4ea53de091bf50273ac359e0a194f4f5a",
+      "references_sha256": "ecfbc36e5431cc517d141900304efe06d322582e21142a7513f604df06ba2974"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "a9d0494f-08b5-42df-9836-42e302d2d9f5",
+    "contract_version": 45
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "X10",
+      "evidence": [
+        "product-name",
+        "com"
+      ],
+      "reason": "El nombre guardado nombra el modelo «X10» literal y la ficha oficial de KMC documenta ese modelo."
+    },
+    {
+      "field": "manufacturer_sku",
+      "current": null,
+      "proposed": "CN10323",
+      "evidence": [
+        "product-name",
+        "us"
+      ],
+      "reason": "El nombre guardado dice «X10 … Ti-dorada»; el registro oficial de la tienda KMC USA del X10 publica la variante «Ti Gold» con sku CN10323 (barcode 766759710323)."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.kmcchain.com/en/product/bicycle-chain-x10-10-speed",
+      "unit": null,
+      "method": "URL de la ficha oficial de KMC consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "com",
+        "us"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "chain_pitch_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "12.7",
+      "unit": "mm",
+      "method": "Tamaño publicado «1/2\"x11/128\"»: paso de 1/2 pulgada = 12,7 mm.",
+      "origin": "research",
+      "evidence": [
+        "com"
+      ],
+      "scope": "Paso",
+      "reason": "Paso literal de la ficha (1/2\")."
+    },
+    {
+      "key": "chain_application_declarations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "sys10",
+            "values": {
+              "claim_identity": "KMC X10 · sistema de 10 velocidades",
+              "scope_kind": "Sistema documentado",
+              "target_system": "Compatibility: SHIMANO, Campagnolo and SRAM 10 speed drivetrain systems | 1x10 , 2x10 , 3x10",
+              "verdict": "Admitido por la fuente",
+              "drive_kind": "Desviador externo",
+              "rear_sprockets": "10",
+              "conditions": "Línea de compatibilidad publicada por KMC: «Compatibility: SHIMANO, Campagnolo and SRAM 10 speed drivetrain systems | 1x10 , 2x10 , 3x10»; una fila por conteo de piñones (columna decimal).",
+              "source_document": "kmcchain.com — página X10 (consultada 2026-09-17)",
+              "source_url": "https://www.kmcchain.com/en/product/bicycle-chain-x10-10-speed"
+            },
+            "sources": [
+              "https://www.kmcchain.com/en/product/bicycle-chain-x10-10-speed"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Línea de compatibilidad publicada: «Compatibility: SHIMANO, Campagnolo and SRAM 10 speed drivetrain systems | 1x10 , 2x10 , 3x10».",
+      "origin": "research",
+      "evidence": [
+        "com"
+      ],
+      "scope": "Sistemas declarados",
+      "reason": "Sistemas declarados por el fabricante."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "com",
+      "kind": "oem_page",
+      "source": "KMC Chain Industrial (kmcchain.com, sitio oficial global)",
+      "locator": "https://www.kmcchain.com/en/product/bicycle-chain-x10-10-speed",
+      "consulted_on": "2026-09-17",
+      "scope": "Página oficial del modelo X10",
+      "finding": "10 Speed; Size 1/2\"x11/128\" | Compatibility: SHIMANO, Campagnolo and SRAM 10 speed drivetrain systems | 1x10 , 2x10 , 3x10",
+      "artifact_path": "research/fill-021-kmc/evidence/kmc-com-x10-10-speed-20260917.md",
+      "sha256": "09f0d737cf014cc7d80e3845aae7b1293d7f5f18548688978ba4d44653539144"
+    },
+    {
+      "id": "us",
+      "kind": "oem_page",
+      "source": "KMC Chain USA (kmcchain.us, tienda oficial)",
+      "locator": "https://kmcchain.us/products/x10",
+      "consulted_on": "2026-09-17",
+      "scope": "Registro oficial del X10 con sus variantes",
+      "finding": "Variante «Ti Gold» · sku CN10323 · barcode 766759710323",
+      "artifact_path": "research/fill-021-kmc/evidence/kmc-us-x10-20260917.md",
+      "sha256": "05ebd715d2d2780c98040c052e2072cddb9c91e2419071c1c3fa7aa384939438"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 061e7c9b-2dcf-4bd3-99ca-5b68caaf19fc",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Cadena Kmc X10 1/2x11/128\" 10v Ti-dorada",
+      "artifact_path": "research/fill-021-kmc/evidence/kmc-x10-ti-dorada-saved-name-20260917.json",
+      "sha256": "bc0fd4c0a665a4b3711bc31611d0ff4db5a6ecff2b5ad860c8ba987a016ef1b8"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "f0588f639264dfc5c55048cdf100681066e46230caa3565e8217c8a2fd0eb9af",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre b6e0479aeb99d7b547d4d825a3b38f806a6fdb31c359dc480e071dd0a872d5e0: Identidad CN10323 por la única variante «Ti» del registro oficial USA («Ti Gold» ↔ «Ti-dorada»); fila de 10 v literal de kmcchain.com. Opcional: chain_speeds 10, drivetrain_mode Derailleur y chain_width_family 11/128 salen de la misma página archivada, como en el Z8.3."
+  }
+}

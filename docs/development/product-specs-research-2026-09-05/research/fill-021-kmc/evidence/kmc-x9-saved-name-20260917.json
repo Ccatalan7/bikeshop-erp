@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "92517c91-fa1b-454d-affd-dc0a52299f5e",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Cadena KMC X9",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "904399f2700ce9f8ffe43fe43ddb14aa5a7b7e9379d0249d82e28e0a0ad7c95a",
+  "product_sha256": "a3975aa97630a62cecc3cdb665404c62a8dde58ac3005e73a24b93a65936cdc2",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

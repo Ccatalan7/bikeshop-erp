@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "2c2b1d24-5537-4bc8-b80c-3687d3f1c7ea",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Llanta Weinmann U28 27.5\" Ojetillos 36H Schrader Negro",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "7847205b5924e60fa65988008b9734773ab36290ee062c5a61e360c6f8af13a4",
+  "product_sha256": "22f7f27e5c5cb7369c6699481004df7f7f00ddc4cc61e3020d4bcf008f6de64e",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

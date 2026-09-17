@@ -1,0 +1,163 @@
+{
+  "schema_version": 2,
+  "product_id": "0d92a6d2-58bf-49c1-98bd-25720ca9072f",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "84be4b3bca75c3190565a13f3aabaa69a9417bd2f0be76338108871adf9ca853",
+    "fingerprints": {
+      "facts_sha256": "ae4e53d8fd59222218c810314b1f95ed7d3c35a54923412042403f1b8af315b6",
+      "product_sha256": "9787e74b5138058fe81feda1e335812819e99b591148b26e3dd30633895f0662",
+      "template_sha256": "47b56ca6e31877ebb7113592c4090c331eb4da7a3642c97d5df5253d720b29a0",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "a2ba0aad-9c5c-4563-a4f5-75cf2611a43a",
+    "contract_version": 35
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "SM-RT10",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «SM-RT10 160MM AE»; la ficha oficial documenta SM-RT10 con 180 ✔, 160 ✔ (220/203/200/140 -)."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/SM-RT10",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-17 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "rotor_diameter_mm_value",
+      "current": {
+        "value": "160",
+        "source": "name_reading",
+        "fact_id": "798c8b28-0a65-4bba-aae0-0fb0084e87e9",
+        "fact_sha256": "2ee8cb30658a21d57d8c4f95b3c0e26837d54c72f3d404ba65c52dfa2f29c3b3",
+        "confirmed": false
+      },
+      "proposed": "160",
+      "unit": "mm",
+      "method": "Ficha SM-RT10: «Outside diameter (mm)»: 180 ✔, 160 ✔ (220/203/200/140 -); nombre guardado «SM-RT10 160MM AE».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "SM-RT10",
+      "reason": "El nombre fija una de las medidas publicadas; sustituye la lectura de nombre."
+    },
+    {
+      "key": "rotor_material",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Acero Inoxidable",
+      "unit": null,
+      "method": "Ficha SM-RT10: «Rotor — Material: Stainless steel».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "SM-RT10",
+      "reason": "Literal."
+    },
+    {
+      "key": "rotor_nominal_thickness_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "1.75",
+      "unit": "mm",
+      "method": "Ficha SM-RT10: «Rotor thickness — Standard 1.75(mm) ✔; Thick 2.2(mm) -».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "SM-RT10",
+      "reason": "Espesor nominal publicado."
+    },
+    {
+      "key": "rotor_mount_type",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Centerlock",
+      "unit": null,
+      "method": "Ficha SM-RT10: lista «Lock ring — Internal/external type: Steel, Painted» entre las piezas del rotor; el anillo de cierre es la pieza de montaje CENTER LOCK (los rotores de 6 pernos no llevan anillo).",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "SM-RT10",
+      "reason": "Pieza de montaje publicada."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/SM-RT10",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial SM-RT10",
+      "finding": "Outside diameter 180 ✔, 160 ✔ (220/203/200/140 -); Stainless steel; 1.75 mm; Pad Resin ✔ Metal -; Lock ring Internal/external type Steel",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-sm-rt10-20260917.md",
+      "sha256": "1f2f07a8e38c1447b41483ae26540ef6a166f48f588b4ca6b06889d68f1bc822"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 0d92a6d2-58bf-49c1-98bd-25720ca9072f",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "ROTOR FRENO DISCO SHIMANO SM-RT10 160MM AE",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-sm-rt10-160-ae-saved-name-20260917.json",
+      "sha256": "d070d701b5b7c922388df0ef0fd4a91a56a29850949a70b71024e2173557c4f6"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "d2ae1539a37e0584ccf07c4dcea1fa686ffab03d3d07bcacd49f7e9f9f22ad49",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre a3b3d775c59a1209fb6c758a074b68720a8d43d6795ba32cb0ec3550a7d43bc0: SM-RT10 160: 160 ✔, Stainless, 1.75 ✔; Centerlock por la fila «Lock ring — Internal/external type: Steel, Painted» (pieza de montaje CENTER LOCK; RT56/RT26 no la listan)."
+  }
+}

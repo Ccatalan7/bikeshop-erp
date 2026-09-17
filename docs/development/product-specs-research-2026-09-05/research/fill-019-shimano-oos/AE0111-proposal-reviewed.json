@@ -1,0 +1,364 @@
+{
+  "schema_version": 2,
+  "product_id": "8eb28626-e65d-4b18-b0c0-1db5aadfd94d",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "e56e2c75e8940a3063883db54bbd400e9e1443f68957d1c2c13c32f384b747a3",
+    "fingerprints": {
+      "facts_sha256": "271daed2b994a9b0634ba29e12934d5f6d8c1bb31016b9c16d3e153489cb10df",
+      "product_sha256": "2f800a580c1c5b2be04c2f8d615776b05b74e7afc065e1f8197e997cfc70d98e",
+      "template_sha256": "19d2ae8cfd39797cf25f509b15d53e8f8fbdf98c188bd6f992d626cc00d56a1b",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "6a02a0c2-b139-46ef-86d8-bba3797252bd",
+    "contract_version": 24
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "CS-HG31-8",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «CS-HG31-8» (o su forma sin sufijo de velocidades) y «8V. (11-34) CS-HG31»; la ficha oficial documenta CS-HG31-8 con «Rear speeds 8» y la combinación 11-34T (ao)."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/CS-HG31-8",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-17 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "sprocket_count",
+      "current": {
+        "value": "8",
+        "source": "name_reading",
+        "fact_id": "6562d897-9c80-4be5-8ea5-ca4b806b5d00",
+        "fact_sha256": "8881e57c82c7725368804f4e741100049705722ab9d036af7acf6a0a574053a7",
+        "confirmed": false
+      },
+      "proposed": "8",
+      "unit": null,
+      "method": "Ficha CS-HG31-8: «Rear speeds 8», «Steel gear QTY (pcs) 8»; nombre guardado «8V. (11-34) CS-HG31».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-HG31-8",
+      "reason": "Literal; sustituye la lectura de nombre."
+    },
+    {
+      "key": "cog_sequence",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "p1",
+            "values": {
+              "position": "1",
+              "teeth": "11"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG31-8"
+            ]
+          },
+          {
+            "id": "p2",
+            "values": {
+              "position": "2",
+              "teeth": "13"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG31-8"
+            ]
+          },
+          {
+            "id": "p3",
+            "values": {
+              "position": "3",
+              "teeth": "15"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG31-8"
+            ]
+          },
+          {
+            "id": "p4",
+            "values": {
+              "position": "4",
+              "teeth": "17"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG31-8"
+            ]
+          },
+          {
+            "id": "p5",
+            "values": {
+              "position": "5",
+              "teeth": "20"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG31-8"
+            ]
+          },
+          {
+            "id": "p6",
+            "values": {
+              "position": "6",
+              "teeth": "23"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG31-8"
+            ]
+          },
+          {
+            "id": "p7",
+            "values": {
+              "position": "7",
+              "teeth": "26"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG31-8"
+            ]
+          },
+          {
+            "id": "p8",
+            "values": {
+              "position": "8",
+              "teeth": "34"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG31-8"
+            ]
+          }
+        ]
+      },
+      "unit": "T",
+      "method": "Ficha CS-HG31-8, «Combination»: 11-34T (ao): 11-13-15-17-20-23-26-34T. La ficha publica además 11-30T (an) y 11-32T (aw); el nombre fija 11-34.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-HG31-8",
+      "reason": "Secuencia publicada de la combinación que nombra el ERP."
+    },
+    {
+      "key": "smallest_cog_teeth",
+      "current": {
+        "value": "11",
+        "source": "supplier_text",
+        "fact_id": "48c4a84f-6199-4854-b602-c7e886eb8919",
+        "fact_sha256": "9c931a6c98e252f07323e8b87208ee1f138cb3ebc130913f48ebf077705b5fa1",
+        "confirmed": false
+      },
+      "proposed": "11",
+      "unit": "T",
+      "method": "Primer piñón de la combinación 11-34T (ao); nombre guardado «8V. (11-34) CS-HG31».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-HG31-8",
+      "reason": "Literal."
+    },
+    {
+      "key": "largest_cog_teeth",
+      "current": {
+        "value": "34",
+        "source": "supplier_text",
+        "fact_id": "1764b60a-e254-4029-ac67-d567296914e2",
+        "fact_sha256": "bcddfc1c77d58293138ac2f3bad43a573111c3e9eee38172f1846e4b53ccb5aa",
+        "confirmed": false
+      },
+      "proposed": "34",
+      "unit": "T",
+      "method": "Último piñón de la combinación 11-34T (ao); nombre guardado «8V. (11-34) CS-HG31».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-HG31-8",
+      "reason": "Literal."
+    },
+    {
+      "key": "cassette_spline_standard",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+      "unit": null,
+      "method": "Ficha CS-HG31-8, «Spline type»: «Shimano HG spline M ✔»; las demás filas de estriado con «-».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CS-HG31-8",
+      "reason": "Declaración del fabricante."
+    },
+    {
+      "key": "shift_technology",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "HYPERGLIDE",
+      "unit": null,
+      "method": "Ficha CS-HG31-8: «Type: HG»; HG es la abreviatura Shimano de HYPERGLIDE (misma sigla del código de modelo y de las filas «HG spline»).",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CS-HG31-8",
+      "reason": "Tecnología declarada por su sigla."
+    },
+    {
+      "key": "freehub_bodies_accepted",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "fh",
+            "values": {
+              "rear_drive_interface": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+              "spacer_requirement": "No publicado",
+              "status": "Compatible declarado",
+              "conditions": "Fila «Spline type» de la tabla productinfo de CS-HG31-8: «Shimano HG spline M ✔»; separador no mencionado.",
+              "source_scope": "Tabla de compatibilidad OEM",
+              "source_url": "https://productinfo.shimano.com/en/product/CS-HG31-8"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG31-8"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Fila «Spline type» de la ficha CS-HG31-8.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CS-HG31-8",
+      "reason": "Núcleo declarado por el fabricante; sin dato de separador."
+    },
+    {
+      "key": "published_variant_label",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "11-34T (ao)",
+      "unit": null,
+      "method": "Ficha CS-HG31-8, «Combination name (Group name)»: 11-34T (ao); nombre guardado «8V. (11-34) CS-HG31».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-HG31-8",
+      "reason": "Variante publicada que corresponde al nombre."
+    },
+    {
+      "key": "lockring_included",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Ficha CS-HG31-8 lista «Lock ring: Material …, Finish …» entre las piezas del producto.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CS-HG31-8",
+      "reason": "Pieza listada en la ficha del producto."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/CS-HG31-8",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial CS-HG31-8",
+      "finding": "Type HG; Rear speeds 8; 11-34T (ao): 11-13-15-17-20-23-26-34T; Shimano HG spline M ✔; Lock ring",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-cs-hg31-8-20260917.md",
+      "sha256": "16b35c8a5c64835cae308170f24dc3f535a2260c0fff433520c869d68b686545"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 8eb28626-e65d-4b18-b0c0-1db5aadfd94d",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "CASSETTE SHIMANO 8V. (11-34) CS-HG31 AE",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-cs-hg31-8-ae-saved-name-20260917.json",
+      "sha256": "7dc78f987914e9001621085f422e501fdda5424e318ce8fbd27447a244c1efb6"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "209403c3604f00b3aff10334d6a41be261de764d38b53c4b449a773b2b4ddbd8",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre d9b769842f1fae9ad0cbdfafa3c506641c638e209adc2673fd1276f35410f5f8: CS-HG31-8 11-34T (ao): igual que 8ce111d0."
+  }
+}

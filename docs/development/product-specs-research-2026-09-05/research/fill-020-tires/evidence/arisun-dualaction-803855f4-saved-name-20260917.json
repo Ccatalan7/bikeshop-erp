@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "803855f4-e2bc-4115-b610-477117205249",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Neumatico Ruta Bicicleta Aro 700 X 33C Dual Action Arisun",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "aeab74bdb162df6a3a3ed806f06180addee498596aec5a8de7f9726cc9fe5a40",
+  "product_sha256": "15699db08af4dafd7f8008b42a6c07330b33f3f272d672e08d9ed7e285b162c3",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

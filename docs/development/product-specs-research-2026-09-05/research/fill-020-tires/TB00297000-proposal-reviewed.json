@@ -1,0 +1,165 @@
+{
+  "schema_version": 2,
+  "product_id": "f1f0b1f3-985a-4bae-8558-04e1e6a4080d",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "59aefb8b4a47b381ef716ac681760f8272fdfe763d829812863c53e4bcfe2e44",
+    "fingerprints": {
+      "facts_sha256": "04dfdcc1d4fc741ccaad3c137dd432f08223214e863a82b9eb05819e061cb345",
+      "product_sha256": "c6db1f090511eb1fd8f97f636b0cb0ed87f4b12943845109279cd9b4c0ed568e",
+      "template_sha256": "c9c12ef9de5da2f893445f1910c3cbdebe2daad22315ccc4e3310cb8ef173342",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "4d5edd21-5818-4c98-827a-7154d1eebfe4",
+    "contract_version": 38
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "Forekaster",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado nombra el modelo «Forekaster» literal y la página oficial de Maxxis documenta ese modelo con ese nombre."
+    },
+    {
+      "field": "manufacturer_sku",
+      "current": null,
+      "proposed": "TB00297000",
+      "evidence": [
+        "product-name",
+        "shop"
+      ],
+      "reason": "El sku guardado del producto es TB00297000, número de pieza Maxxis, y la tabla oficial del Forekaster Gen 1 publica esa pieza en 29X2.35 WIRE."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://shop.maxxis.com/products/forekaster-gen-1",
+      "unit": null,
+      "method": "URL de la ficha oficial del fabricante consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "shop"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "tire_tpi",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "60",
+      "unit": "TPI",
+      "method": "La tabla de la página oficial shop.maxxis.com/products/forekaster-gen-1 tiene la fila de la pieza TB00297000 (el sku guardado del producto): «29X2.35 · Etrto 59-622 · Tpi 60 · Bead WIRE».",
+      "origin": "research",
+      "evidence": [
+        "shop"
+      ],
+      "scope": "TPI",
+      "reason": "Carcasa publicada por el fabricante."
+    },
+    {
+      "key": "tire_etrto",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "59-622",
+      "unit": null,
+      "method": "Misma fila TB00297000 de la tabla shop.maxxis.com (grid): «Etrto 59-622».",
+      "origin": "research",
+      "evidence": [
+        "shop"
+      ],
+      "scope": "Medida ETRTO",
+      "reason": "ETRTO publicado por el fabricante."
+    },
+    {
+      "key": "tire_use",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "MTB",
+      "unit": null,
+      "method": "Página oficial de Maxxis del modelo Forekaster: «Category: XC, Trail» (categoría de bicicleta de montaña del catálogo Maxxis).",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Uso",
+      "reason": "Categoría de uso declarada por el fabricante para el modelo."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Maxxis (maxxis.com/us, sitio oficial)",
+      "locator": "https://www.maxxis.com/us/tire/forekaster/",
+      "consulted_on": "2026-09-17",
+      "scope": "Página oficial del modelo Forekaster (tabla de especificaciones y categoría)",
+      "finding": "Category: XC, Trail",
+      "artifact_path": "research/fill-020-tires/evidence/maxxis-us-forekaster-20260917.md",
+      "sha256": "d81ef810de71e4ddbf84218e5b20d42e38397f97cc1a411e0e73b6af78ca4310"
+    },
+    {
+      "id": "shop",
+      "kind": "oem_page",
+      "source": "Maxxis Tires USA (shop.maxxis.com, tienda oficial de Maxxis)",
+      "locator": "https://shop.maxxis.com/products/forekaster-gen-1",
+      "consulted_on": "2026-09-17",
+      "scope": "Registro oficial del producto Forekaster Gen 1 con sus variantes publicadas",
+      "finding": "Tabla de la página Forekaster Gen 1: fila «TB00297000 | 29X2.35 | 59-622 | 60 | WIRE | 362 | | | | Black | MOUNTAIN»",
+      "artifact_path": "research/fill-020-tires/evidence/maxxis-shop-forekaster-gen-1-20260917.md",
+      "sha256": "a0f12a7ac2c67466432938f39f11751237ebd8fba8a3a3059dd1d3058373f410"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product f1f0b1f3-985a-4bae-8558-04e1e6a4080d",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "MAXXIS ALAMBRE 29X2.35 FOREKASTER",
+      "artifact_path": "research/fill-020-tires/evidence/maxxis-forekaster-29x235-w-tb00297000-saved-name-20260917.json",
+      "sha256": "159aed3908fcc7f80cfd3db37903762667190a02119b06822da6e9ec67937843"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "e8d354093d8428f97bccd6c5e026dc3fdc4917f17cb94ae5ba70301a78e6c790",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 2cfe30ca1c55e1f13daaa97c29ad984d098efb11e78caadd29e3b7f91868d1a6: Fila TB00297000 de la tabla shop.maxxis.com/products/forekaster-gen-1 verificada literal (29X2.35 · 59-622 · 60 · WIRE); el peso 362 g queda fuera con razón."
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "0d92a6d2-58bf-49c1-98bd-25720ca9072f",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "ROTOR FRENO DISCO SHIMANO SM-RT10 160MM AE",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "84be4b3bca75c3190565a13f3aabaa69a9417bd2f0be76338108871adf9ca853",
+  "product_sha256": "9787e74b5138058fe81feda1e335812819e99b591148b26e3dd30633895f0662",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

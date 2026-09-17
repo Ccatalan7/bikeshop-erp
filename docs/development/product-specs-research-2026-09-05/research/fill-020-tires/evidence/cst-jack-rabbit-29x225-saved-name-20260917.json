@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "718a3a0b-296d-4929-92ba-ffbf977d13d7",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Neumatico CST JACK RABBIT, 29x2.25. Black.",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "fcc2b720423fb93d0ce214513323435336308fa07ba47c9ae4f178f937fcb978",
+  "product_sha256": "e61391cb6e003ece1065be974401c033bddbceb8222d92c9a4a54f93a943b78b",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

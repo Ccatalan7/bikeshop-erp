@@ -1,0 +1,172 @@
+{
+  "schema_version": 2,
+  "product_id": "6d664c95-d0c2-4162-8791-e78496f7fd3d",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "bbf378b2458bd598ceccaa767e18ed8652bc876c772df6e5f33f0a0c3e88c74b",
+    "fingerprints": {
+      "facts_sha256": "0e40f7025bf80895c543e791409e266cb89a5d1a12595bbb4f80dabd319cb585",
+      "product_sha256": "3a99223198817a0424dbc176e97923d43160d9a212da1f107c6ff7e57df1b0e0",
+      "template_sha256": "c9c12ef9de5da2f893445f1910c3cbdebe2daad22315ccc4e3310cb8ef173342",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "4d5edd21-5818-4c98-827a-7154d1eebfe4",
+    "contract_version": 38
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "Minion DHF",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado nombra el modelo «Minion DHF» literal y la página oficial de Maxxis documenta ese modelo con ese nombre."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://shop.maxxis.com/products/minion-dhf-1",
+      "unit": null,
+      "method": "URL de la ficha oficial del fabricante consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "shop"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "tire_tpi",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "60",
+      "unit": "TPI",
+      "method": "El nombre guardado dice «MINION DHF EXO/TR» 27.5x2.5 kevlar. En maxxis.com/us las filas 27.5X2.50 con Tech «EXO/TR» (TB85975000 y TB00219900) publican 60 TPI, y en la tienda las variantes 27.5X2.50 «EXO/TR» (incluida la OEM TB85975500) publican 60 TPI.",
+      "origin": "research",
+      "evidence": [
+        "shop"
+      ],
+      "scope": "TPI",
+      "reason": "Carcasa publicada por el fabricante."
+    },
+    {
+      "key": "tire_general_max_pressures",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "max-psi",
+            "values": {
+              "pressure_unit": "psi",
+              "max_pressure_value": "50",
+              "declared_scope": "Sin condición de llanta en el documento",
+              "source_document": "maxxis.com — página oficial Minion DHF (consultada 2026-09-17)",
+              "source_url": "https://www.maxxis.com/us/tire/minion-dhf/"
+            },
+            "sources": [
+              "https://www.maxxis.com/us/tire/minion-dhf/"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "maxxis.com/us, filas 27.5X2.50 EXO/TR (TB85975000, TB00219900): «Max PSI 50». Fila de presión declarada sin condición de llanta (la tabla no la condiciona).",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Presiones declaradas",
+      "reason": "Presión máxima publicada por el fabricante."
+    },
+    {
+      "key": "tire_use",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "MTB",
+      "unit": null,
+      "method": "Página oficial de Maxxis del modelo Minion DHF: «Category: Trail, Enduro, Downhill» (categoría de bicicleta de montaña del catálogo Maxxis).",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Uso",
+      "reason": "Categoría de uso declarada por el fabricante para el modelo."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Maxxis (maxxis.com/us, sitio oficial)",
+      "locator": "https://www.maxxis.com/us/tire/minion-dhf/",
+      "consulted_on": "2026-09-17",
+      "scope": "Página oficial del modelo Minion DHF (tabla de especificaciones y categoría)",
+      "finding": "Filas 27.5X2.50 con Tech EXO/TR: TB85975000 (63-584, 60 TPI, DUAL, 50 psi, Black) y TB00219900 (64-584, 60 TPI, DUAL, 50 psi, Tan Wall); Category: Enduro/Trail",
+      "artifact_path": "research/fill-020-tires/evidence/maxxis-us-minion-dhf-20260917.md",
+      "sha256": "b4f796403dd4f0da4455ca9f3e226b0f5fcdb7a07ae90793acf03f3fdd283347"
+    },
+    {
+      "id": "shop",
+      "kind": "oem_page",
+      "source": "Maxxis Tires USA (shop.maxxis.com, tienda oficial de Maxxis)",
+      "locator": "https://shop.maxxis.com/products/minion-dhf-1",
+      "consulted_on": "2026-09-17",
+      "scope": "Registro oficial del producto Minion DHF con sus variantes publicadas",
+      "finding": "Variantes 27.5X2.50 con tech exactamente «EXO/TR»: TB85975000 (60 TPI, Black), TB00219900 (60 TPI, Tan Wall); Minion DHF (OEM): TB85975500 (60TPI, EXO/TR)",
+      "artifact_path": "research/fill-020-tires/evidence/maxxis-shop-minion-dhf-1-20260917.md",
+      "sha256": "d4a9223a391bd7582457ccc0cdec30ad66e17fa214a194ae6c9cd96c1bbf8648"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 6d664c95-d0c2-4162-8791-e78496f7fd3d",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "MAXXIS KEVLAR 27.5X2.5 MINION DHF EXO/TR",
+      "artifact_path": "research/fill-020-tires/evidence/maxxis-minion-dhf-275x25-exo-tr-saved-name-20260917.json",
+      "sha256": "5728f3d7c2b30b32d9d5cfb0e967601d30488219ad352f9e32a4675b02ac0213"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "42483e3c421bd599e766548c9286ced102c7e3768bc63be26c353b0f9ad6f259",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 82d55b8e20b858e39a8ad834885139aad9079cdc6bb9f5e417ea3de014aff266: Las dos filas 27.5X2.50 con Tech exactamente «EXO/TR» de maxxis.com/us (TB85975000, TB00219900) publican 60 TPI y 50 psi; ETRTO y peso difieren y quedan bien sin declarar."
+  }
+}

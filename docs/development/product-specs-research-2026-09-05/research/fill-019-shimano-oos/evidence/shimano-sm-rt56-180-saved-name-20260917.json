@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "0367a62f-b039-497f-a0df-eed2cda78396",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Disco freno Shimano Deore RT56 180MM",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "ac5b91cf6687bfd6db78ca1d751c450a4eb984c4a6e1bea09c044717f899afd6",
+  "product_sha256": "3dea043171d7100c323d3578778a74a3c6c9536eb6b416e659cb74d95e305efa",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

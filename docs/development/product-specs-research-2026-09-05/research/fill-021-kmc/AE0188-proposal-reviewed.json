@@ -1,0 +1,356 @@
+{
+  "schema_version": 2,
+  "product_id": "6c4638c4-4e3c-4068-b54f-4a04cc214b76",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "feba5aae65130dc117fb70856ad05de72f212ad01d5e410d15ccc786c0e7c9fa",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "4ca2caa8ecd25a72ee745928903d6bd7e5c1b20f5bbad42dcf8fc96824ec6065",
+      "template_sha256": "116f235acd81e5019c5823922c9b13a4ea53de091bf50273ac359e0a194f4f5a",
+      "references_sha256": "ecfbc36e5431cc517d141900304efe06d322582e21142a7513f604df06ba2974"
+    },
+    "spec_revision": 1,
+    "updated_at": "2026-09-15T01:26:32.436906+00:00",
+    "template_id": "a9d0494f-08b5-42df-9836-42e302d2d9f5",
+    "contract_version": 45
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "X11",
+      "evidence": [
+        "product-name",
+        "com"
+      ],
+      "reason": "El nombre guardado nombra el modelo «X11» literal y la ficha oficial de KMC documenta ese modelo."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.kmcchain.com/en/product/bicycle-chain-x11-11-speed",
+      "unit": null,
+      "method": "URL de la ficha oficial de KMC consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "eu1",
+        "eu2",
+        "eu3",
+        "eu4",
+        "com"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "chain_pitch_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "12.7",
+      "unit": "mm",
+      "method": "Tamaño publicado «1/2\"x11/128\"»: paso de 1/2 pulgada = 12,7 mm.",
+      "origin": "research",
+      "evidence": [
+        "eu1",
+        "eu2",
+        "eu3",
+        "eu4",
+        "com"
+      ],
+      "scope": "Paso",
+      "reason": "Paso literal de la ficha (1/2\")."
+    },
+    {
+      "key": "chain_speeds",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": [
+        "11"
+      ],
+      "unit": null,
+      "method": "Página oficial kmcchain.com X11: «11 Speed»; fichas kmcchain.eu X11 (cuatro variantes): «Compatible with all 11-speed derailleur systems».",
+      "origin": "research",
+      "evidence": [
+        "eu1",
+        "eu2",
+        "eu3",
+        "eu4",
+        "com"
+      ],
+      "scope": "Velocidades",
+      "reason": "Velocidades declaradas por el fabricante."
+    },
+    {
+      "key": "drivetrain_mode",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Derailleur",
+      "unit": null,
+      "method": "Ficha KMC: 11 Speed.",
+      "origin": "research",
+      "evidence": [
+        "eu1",
+        "eu2",
+        "eu3",
+        "eu4",
+        "com"
+      ],
+      "scope": "Tipo de transmisión",
+      "reason": "Tipo de transmisión declarado."
+    },
+    {
+      "key": "chain_width_family",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "11/128",
+      "unit": null,
+      "method": "Tamaño publicado «1/2\"x11/128\"».",
+      "origin": "research",
+      "evidence": [
+        "eu1",
+        "eu2",
+        "eu3",
+        "eu4",
+        "com"
+      ],
+      "scope": "Ancho de cadena",
+      "reason": "Ancho literal de la ficha."
+    },
+    {
+      "key": "chain_outer_width_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "5.65",
+      "unit": "mm",
+      "method": "Ficha kmcchain.eu: «Pin length: 5.65 mm» (largo de pasador = ancho externo de la cadena; el catálogo distingue 8/9/10/11 v por este valor) — común a las 4 variantes con ficha archivada (X11 Silver/Black, X11 Grey, X11 EPT, X11 Aurora Blue); el listado nombra además X11 Silver/Black Long y X11 Waxed Aurora Blue, sin ficha archivada, por eso son 4 de 6 y no «todas».",
+      "origin": "research",
+      "evidence": [
+        "eu1",
+        "eu2",
+        "eu3",
+        "eu4"
+      ],
+      "scope": "Ancho externo",
+      "reason": "Ancho externo publicado por el fabricante."
+    },
+    {
+      "key": "quick_link_included",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Ficha kmcchain.eu X11 Silver/Black: «Includes a MissingLink» — común a las 4 variantes con ficha archivada (X11 Silver/Black, X11 Grey, X11 EPT, X11 Aurora Blue); el listado nombra además X11 Silver/Black Long y X11 Waxed Aurora Blue, sin ficha archivada, por eso son 4 de 6 y no «todas».",
+      "origin": "research",
+      "evidence": [
+        "eu1",
+        "eu2",
+        "eu3",
+        "eu4"
+      ],
+      "scope": "Conector incluido",
+      "reason": "Conector incluido según el fabricante."
+    },
+    {
+      "key": "chain_quick_links_supplied",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "ql",
+            "values": {
+              "connector_identity": "MissingLink incluido con la cadena X11",
+              "quantity": "1",
+              "brand": "KMC",
+              "model": "MissingLink",
+              "source_document": "kmcchain.eu — ficha X11 Silver/Black (consultada 2026-09-17)",
+              "source_url": "https://www.kmcchain.eu/products/x11-silver-black"
+            },
+            "sources": [
+              "https://www.kmcchain.eu/products/x11-silver-black"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha kmcchain.eu X11 Silver/Black: «Includes a MissingLink» (un conector por cadena) — común a las 4 variantes con ficha archivada (X11 Silver/Black, X11 Grey, X11 EPT, X11 Aurora Blue); el listado nombra además X11 Silver/Black Long y X11 Waxed Aurora Blue, sin ficha archivada, por eso son 4 de 6 y no «todas».",
+      "origin": "research",
+      "evidence": [
+        "eu1",
+        "eu2",
+        "eu3",
+        "eu4"
+      ],
+      "scope": "Conectores incluidos",
+      "reason": "Conector incluido según el fabricante."
+    },
+    {
+      "key": "chain_application_declarations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "sys11",
+            "values": {
+              "claim_identity": "KMC X11 · sistema de 11 velocidades",
+              "scope_kind": "Sistema documentado",
+              "target_system": "Compatibility: SHIMANO, Campagnolo and SRAM 11 speed drivetrain systems | 1x11, 2x11, 3x11",
+              "verdict": "Admitido por la fuente",
+              "drive_kind": "Desviador externo",
+              "conditions": "Línea de compatibilidad publicada por KMC: «Compatibility: SHIMANO, Campagnolo and SRAM 11 speed drivetrain systems | 1x11, 2x11, 3x11»; una fila por conteo de piñones (columna decimal).",
+              "source_document": "kmcchain.com — página X11 (consultada 2026-09-17)",
+              "source_url": "https://www.kmcchain.com/en/product/bicycle-chain-x11-11-speed",
+              "rear_sprockets": "11"
+            },
+            "sources": [
+              "https://www.kmcchain.com/en/product/bicycle-chain-x11-11-speed"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Línea de compatibilidad publicada: «Compatibility: SHIMANO, Campagnolo and SRAM 11 speed drivetrain systems | 1x11, 2x11, 3x11».",
+      "origin": "research",
+      "evidence": [
+        "eu1",
+        "eu2",
+        "eu3",
+        "eu4",
+        "com"
+      ],
+      "scope": "Sistemas declarados",
+      "reason": "Sistemas declarados por el fabricante."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "eu1",
+      "kind": "oem_page",
+      "source": "KMC Chain Europe (kmcchain.eu, sitio oficial)",
+      "locator": "https://www.kmcchain.eu/products/x11-silver-black",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial X11 Silver/Black",
+      "finding": "Compatible with all 11-speed derailleur systems; Art.nr. BX11NB114; Size 1/2\" X 11/128\"; Pin length 5.65 mm; Weight per 110 links 251 g; Length 114 links",
+      "artifact_path": "research/fill-021-kmc/evidence/kmc-x11-silver-black-20260917.md",
+      "sha256": "5faa91b51b1af32b41cc662f2bdb94622359d21aff0b4dc869f417a206b8983b"
+    },
+    {
+      "id": "eu2",
+      "kind": "oem_page",
+      "source": "KMC Chain Europe (kmcchain.eu, sitio oficial)",
+      "locator": "https://www.kmcchain.eu/products/x11-grey",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial X11 Grey",
+      "finding": "Compatible with all 11-speed derailleur systems; Art.nr. BX11RGY14; Size 1/2\" X 11/128\"; Pin length 5.65 mm; Weight per 110 links 251 g; Length 114 links",
+      "artifact_path": "research/fill-021-kmc/evidence/kmc-x11-grey-20260917.md",
+      "sha256": "bb8dbd9683583babb91d34b828987264aaea96a85c986dfe6df557599608ccaf"
+    },
+    {
+      "id": "eu3",
+      "kind": "oem_page",
+      "source": "KMC Chain Europe (kmcchain.eu, sitio oficial)",
+      "locator": "https://www.kmcchain.eu/products/x11-ept",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial X11 EPT",
+      "finding": "Compatible with all 11-speed derailleur systems; Art.nr. BX11EP118; Size 1/2\" X 11/128\"; Pin length 5.65 mm; Weight per 110 links 260 g; Length 118 links",
+      "artifact_path": "research/fill-021-kmc/evidence/kmc-x11-ept-20260917.md",
+      "sha256": "853710b308421d1bd7fd4246a7d040477b8e258c230df1eabf18cff6a9e0bcfb"
+    },
+    {
+      "id": "eu4",
+      "kind": "oem_page",
+      "source": "KMC Chain Europe (kmcchain.eu, sitio oficial)",
+      "locator": "https://www.kmcchain.eu/products/x11-aurora-blue",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial X11 Aurora Blue",
+      "finding": "Compatible with all 11-speed derailleur systems; Art.nr. BX11AB118; Size 1/2\" X 11/128\"; Pin length 5.65 mm; Weight per 110 links 260 g; Length 118 links",
+      "artifact_path": "research/fill-021-kmc/evidence/kmc-x11-aurora-blue-20260917.md",
+      "sha256": "41ce252d89fe581bb57fb8686c17784ba222faad2d63dd88bb50a5174a7b04dc"
+    },
+    {
+      "id": "com",
+      "kind": "oem_page",
+      "source": "KMC Chain Industrial (kmcchain.com, sitio oficial global)",
+      "locator": "https://www.kmcchain.com/en/product/bicycle-chain-x11-11-speed",
+      "consulted_on": "2026-09-17",
+      "scope": "Página oficial del modelo X11",
+      "finding": "11 Speed; Size 1/2\"x11/128\" | Compatibility: SHIMANO, Campagnolo and SRAM 11 speed drivetrain systems | 1x11, 2x11, 3x11",
+      "artifact_path": "research/fill-021-kmc/evidence/kmc-com-x11-11-speed-20260917.md",
+      "sha256": "6e5ddfd113c459dbfa9018ed497ea4f463365c5cadf317827eb2be8084c85a07"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 6c4638c4-4e3c-4068-b54f-4a04cc214b76",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Cadena KMC X11",
+      "artifact_path": "research/fill-021-kmc/evidence/kmc-x11-saved-name-20260917.json",
+      "sha256": "8ca739511479ec70610e30645ddc7209b7cdf6d8f5a013c63504c59395474c86"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "2beceacfafce6c0a8ae956ff8e2304c0781bc8e97e566deae82c140a2247ce93",
+    "notes": "Revisión par (sesión Look dude), v2 aceptada sobre 3e7dddbca7b6cda86f91d6681f19578eff46b9cb6776e2eae0053602302ba573: v2: fila de conector cita kmcchain.eu X11 Silver/Black («Includes a MissingLink»); métodos «4 de 6 listadas». Sólo eso cambia respecto a la v1."
+  }
+}

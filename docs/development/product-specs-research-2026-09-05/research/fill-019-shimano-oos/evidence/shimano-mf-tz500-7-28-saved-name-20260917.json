@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "bfd5eb6a-56e8-46cd-baee-53e28c87acc4",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "PIÑON SHIMANO ATORNILLADO 7V. (14-28) MF-TZ500-7,7-SPEED, 14-16-18-20-22-24-28T, IND. PACK EMFTZ5007",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "43613250a7043cbb76658ef40e3a1214861a880e8a92fe22102e9a8d81ce77fb",
+  "product_sha256": "87fd1b5b563be0c0e511966b8d8ab77d253b4c0e71b24556a2183839d92705bf",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

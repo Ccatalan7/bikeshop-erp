@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "70d1700d-56a9-4464-8567-073825d2e82a",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "PIÑON SHIMANO ATORNILLADO 6V. (14-28) MF-TZ500-6, IND.PACK AMFTZ5006428",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "cecee9d68a36ceb1af62a28d3f5ddf638a6de7d65bf6f5e352212b6d72065c99",
+  "product_sha256": "bb6191be21961719fa67cb4a4da4512735288e164e6ad0f58cecae0382f8ca6d",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

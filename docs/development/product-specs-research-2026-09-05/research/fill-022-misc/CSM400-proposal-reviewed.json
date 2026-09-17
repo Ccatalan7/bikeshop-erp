@@ -1,0 +1,125 @@
+{
+  "schema_version": 2,
+  "product_id": "5d6e0113-5958-4c9e-aadd-a98824eb4da9",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "7503a1b6b1857057d28b1b5fb4c3a2dda0eac8235a21d173df96f030ed3954ae",
+    "fingerprints": {
+      "facts_sha256": "8c4820824f94ace53d807c9c6443d97ff117c1bf44736e5aeae10be2feaeb266",
+      "product_sha256": "e4383a3d5bfcb6c5116c590142ed0b419bb745456f44ab9a410cc167c76563d0",
+      "template_sha256": "19d2ae8cfd39797cf25f509b15d53e8f8fbdf98c188bd6f992d626cc00d56a1b",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-08-17T22:15:54.447078+00:00",
+    "template_id": "6a02a0c2-b139-46ef-86d8-bba3797252bd",
+    "contract_version": 24
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "CSM400 8BU",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «MOD.CSM400 8BU» y la ficha oficial de SunRace se titula «CSM400 8BU»."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://sunrace.com/product/csm400-8bu/",
+      "unit": null,
+      "method": "URL de la ficha oficial del fabricante consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "lockring_included",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Ficha oficial SunRace CSM400 8BU: «Material: Steel Spider & Lockring» (el lockring es pieza del producto).",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Lockring incluido",
+      "reason": "Pieza listada en la ficha."
+    },
+    {
+      "key": "cassette_spline_standard",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+      "unit": null,
+      "method": "Ficha oficial SunRace CSM400 8BU: «Fitting: HG-Spline» y «Speed: 8-speed». En el contrato el estriado HG de 8 velocidades es la opción «HG spline M (8/9/10v …)»; la «S» es sólo de 7 v y la L/L2 de ruta 11/12 v.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Estriado",
+      "reason": "Estriado HG declarado; la opción del contrato que cubre 8 v."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "SunRace (sunrace.com, sitio oficial)",
+      "locator": "https://sunrace.com/product/csm400-8bu/",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial CSM400 8BU",
+      "finding": "Cassette; Speed 8-speed; Fitting HG-Spline; Material Steel Spider & Lockring; Range 12-32T; Weight 364 g; Color ED Black",
+      "artifact_path": "research/fill-022-misc/evidence/sunrace-csm400-8bu-20260917.md",
+      "sha256": "5e3bb471c148161be05c3f4e0c2f1936839842de6582c15c58c62150b22fafd0"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 5d6e0113-5958-4c9e-aadd-a98824eb4da9",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "PIÑON CASSETTE HG 8V 12-32T SUNRACE MOD.CSM400 8BU 8BU",
+      "artifact_path": "research/fill-022-misc/evidence/sunrace-csm400-8bu-saved-name-20260917.json",
+      "sha256": "204c4379ae1226e8492bf236a9c0c9edb040be2cc6de8348b903d5b27588450f"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "c8fbf29ca6c766e1f8ae8c2cc2f8fc856cbda32d6887583d07c0c43c63571878",
+    "notes": "Revisión par (sesión Look dude), v1 aceptada sobre 4ebcb0dae86370a163672b0c1db1a417dbf32d9524756d4ae4d0f601fdaad0d8: HG spline M por dos literales de la ficha («Fitting: HG-Spline», «Speed: 8-speed») y la etiqueta de la opción («8/9/10v»; la S es «7v»): lectura, no inferencia. lockring_included por «Material: Steel Spider & Lockring». Registrar: la página archivada trae la línea suelta «M4 7-speed cassette» bajo el título mientras Specifications dice 8-speed / Group M5; nombre y código 8BU coinciden en 8."
+  }
+}

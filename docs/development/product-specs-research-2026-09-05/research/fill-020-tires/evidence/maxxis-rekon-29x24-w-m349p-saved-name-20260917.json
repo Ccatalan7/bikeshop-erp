@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "69cee10e-2579-4f8b-8db4-964328bd62fd",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "MAXXIS ALAMBRE REKON 29X2.4 M349P W TT DK62 314/458 3YL",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "141eb41664ee77915be8e646a794e7c3ffa843fbd32db9e43e58646ca292e902",
+  "product_sha256": "c7abcb293111a7a26999e413a31456b4c78806f445c49e24a70080a30522b825",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

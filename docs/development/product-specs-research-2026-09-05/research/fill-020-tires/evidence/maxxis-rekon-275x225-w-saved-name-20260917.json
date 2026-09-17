@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "5670a812-b5eb-49a2-a33f-1d6c3ff5cc94",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "MAXXIS ALAMBRE 27.5X2.25 REKON",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "6104c44425b36958b13ab9249d1ba6e07990f48922684794948730b928e57d58",
+  "product_sha256": "ca931e886993a5543413ce4548beb4336b53ea356f6a26d78683e94832e4498b",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "02d0d992-c8f2-4629-8d3a-19584ac43e43",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "NEUMATICO ARISUN 27.5 X 2.25 30 TPI MOUNT BONA BORDE T030107",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "cb8fbaae842517b5192a912f7a83cf5bc7b2a72a45ebeeec7bbdfa07dc53a084",
+  "product_sha256": "b65bb7ca0ee7843713f3e0dd661fae0c777ec5c0f7191a5d73ecf529268893c9",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

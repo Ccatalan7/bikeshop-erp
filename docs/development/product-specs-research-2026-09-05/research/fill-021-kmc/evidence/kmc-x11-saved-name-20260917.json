@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "6c4638c4-4e3c-4068-b54f-4a04cc214b76",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Cadena KMC X11",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "feba5aae65130dc117fb70856ad05de72f212ad01d5e410d15ccc786c0e7c9fa",
+  "product_sha256": "4ca2caa8ecd25a72ee745928903d6bd7e5c1b20f5bbad42dcf8fc96824ec6065",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

@@ -1,0 +1,105 @@
+{
+  "schema_version": 2,
+  "product_id": "3459d2f7-33cd-447c-86f2-68b58975f694",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "6b0522a8ba2e6a56c421164620f13c7d60bb6a4116487727ad7a4e13dd6bb761",
+    "fingerprints": {
+      "facts_sha256": "c1e24a25a200ecfadb74391748983d84ed632abd966a8443cb7a0d3e3e50648c",
+      "product_sha256": "0754ba77a1b31cb97cb9f3aee4e5744563f4d9eb2a974bf8fb455990cb5d8a9a",
+      "template_sha256": "c9c12ef9de5da2f893445f1910c3cbdebe2daad22315ccc4e3310cb8ef173342",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-08-11T20:03:15.738906+00:00",
+    "template_id": "4d5edd21-5818-4c98-827a-7154d1eebfe4",
+    "contract_version": 38
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": "Rekon Race",
+      "proposed": "Rekon Race",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado nombra el modelo «Rekon Race» literal y la página oficial de Maxxis documenta ese modelo con ese nombre."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.maxxis.com/us/tire/rekon-race/",
+      "unit": null,
+      "method": "URL de la ficha oficial del fabricante consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "tire_use",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "MTB",
+      "unit": null,
+      "method": "Página oficial de Maxxis del modelo Rekon Race: «Category: XC Race, XC» (categoría de bicicleta de montaña del catálogo Maxxis).",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Uso",
+      "reason": "Categoría de uso declarada por el fabricante para el modelo."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Maxxis (maxxis.com/us, sitio oficial)",
+      "locator": "https://www.maxxis.com/us/tire/rekon-race/",
+      "consulted_on": "2026-09-17",
+      "scope": "Página oficial del modelo Rekon Race (tabla de especificaciones y categoría)",
+      "finding": "Category: XC Race, XC",
+      "artifact_path": "research/fill-020-tires/evidence/maxxis-us-rekon-race-20260917.md",
+      "sha256": "8a269bb4f30998ec6350b82b2ec123dcaf36afccb4e00a3e26bbee86da2134b9"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 3459d2f7-33cd-447c-86f2-68b58975f694",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "MAXXIS ALAMBRE 27.5X2.25 REKON RACE",
+      "artifact_path": "research/fill-020-tires/evidence/maxxis-rekon-race-275x225-w-saved-name-20260917.json",
+      "sha256": "cd175945e7712145bc15df0e0690181d3376e65567be32f2c30255c8ffb84532"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "14ddac082f7115169b296a1e7ff3c5a60022e2e00dec49963633d19c6ea6aa89",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 20da19a0e6b9ebe87fd10ccaf8f973f3111bd917da117f236df95797ff6d1350. Validador mecánico (tokens, filas, based_on, sha de evidencias, name_quote, simulación) y cotejo literal de cada valor contra el archivo citado."
+  }
+}

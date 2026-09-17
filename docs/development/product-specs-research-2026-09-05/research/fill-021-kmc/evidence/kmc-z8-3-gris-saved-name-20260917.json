@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "ebfdc050-cd9d-432a-a170-8b156b8ee797",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Cadena 1/2 X 3/32 Kmc Z8.3 Gris",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "0735cd2df251b9aac268412c9ad3a850f395d27780ad3fd9e1e6c659c99ca3fa",
+  "product_sha256": "88447a416431106fbdee3ed75f4c72b3a8f59e651b3c7cbee4320ce7ca4c46ad",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

@@ -1,0 +1,125 @@
+{
+  "schema_version": 2,
+  "product_id": "85d7f228-e3fc-4ab5-8a2b-1f0fd475c90a",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "338cb204fafe261d58b238cedc260d5953646065156b02ccfae2be05d6098085",
+    "fingerprints": {
+      "facts_sha256": "d6f82ee81ec055b9e33f37189311191957bf58478c035987088c65446bab6a7e",
+      "product_sha256": "1b0e75a01fcc65a46fcf8f9c812d435892c1b6b8182565cb80eb5fc46bb5a309",
+      "template_sha256": "c9c12ef9de5da2f893445f1910c3cbdebe2daad22315ccc4e3310cb8ef173342",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 4,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "4d5edd21-5818-4c98-827a-7154d1eebfe4",
+    "contract_version": 38
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "H-5129",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado trae el código «H-5129» y la ficha oficial de Chaoyang documenta el modelo VICTORY bajo ese código."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.chaoyangtire.com/index.php/pro/pro-details/3/61?type=CROSS+COUNTRY&name=VICTORY",
+      "unit": null,
+      "method": "URL de la ficha oficial del fabricante consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "tire_etrto",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "52-559",
+      "unit": null,
+      "method": "Ficha oficial Chaoyang VICTORY (H-5129): todas las filas publicadas de 26×2.10 (W108145 2C-MTB 60 TPI wire 610 g, W108073 Shark Skin 2C-MTB 60 TPI foldable 600 g, W108068 Single 30 TPI wire 675 g) llevan ETRTO «52-559»; el nombre guardado fija modelo y medida pero no la pieza.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Medida ETRTO",
+      "reason": "Valor común a todas las filas publicadas de la medida."
+    },
+    {
+      "key": "tire_use",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "MTB",
+      "unit": null,
+      "method": "Ficha oficial Chaoyang VICTORY: categoría «CROSS COUNTRY» en la ruta de la página (PRODUCT > CROSS COUNTRY > VICTORY).",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Uso",
+      "reason": "Categoría de uso declarada por el fabricante para el modelo."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Chaoyang (chaoyangtire.com, sitio oficial de Zhongce Rubber)",
+      "locator": "https://www.chaoyangtire.com/index.php/pro/pro-details/3/61?type=CROSS+COUNTRY&name=VICTORY",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial del modelo VICTORY (tabla Specification)",
+      "finding": "26×2.10: W108145 2C-MTB 60 TPI wire 610 g, W108073 Shark Skin 2C-MTB 60 TPI foldable 600 g, W108068 Single 30 TPI wire 675 g; categoría «CROSS COUNTRY»",
+      "artifact_path": "research/fill-020-tires/evidence/chaoyang-victory-20260917.md",
+      "sha256": "e417f55e70786ca57da6ec43e5fd92bb918627eddfbb5159af47a9d9f0490258"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 85d7f228-e3fc-4ab5-8a2b-1f0fd475c90a",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "NEUMATICO CHAOYANG 26X2.10 60TPI VICTORY H-5129 HIPO SKIN",
+      "artifact_path": "research/fill-020-tires/evidence/chaoyang-victory-85d7f228-saved-name-20260917.json",
+      "sha256": "53b56e9219d2846be13f120423c32f8f2f0a6bbb38a5b7fe56199fa9cc172e99"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "280bbd12e23e03e07c8d28b60ecdf3ac0275136eeca71639c12c1ea9160af9be",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 4fafedf51b691979ed31198600221a60b28dfd3b7f709d81daf034e250a0f69c. Validador mecánico (tokens, filas, based_on, sha de evidencias, name_quote, simulación) y cotejo literal de cada valor contra el archivo citado."
+  }
+}

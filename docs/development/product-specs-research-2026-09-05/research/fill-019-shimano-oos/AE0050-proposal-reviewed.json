@@ -1,0 +1,196 @@
+{
+  "schema_version": 2,
+  "product_id": "79e9dd71-ea20-4c0d-82d5-b56d970b57f4",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "2dd6b9082b56992043c7405465411c3528045fa217a07b8bbf77ca26b29b96ae",
+    "fingerprints": {
+      "facts_sha256": "0f274e6e348f449ec751d3229bb8318a089c72b47276a44fee039070e6f0b171",
+      "product_sha256": "a0f23f12ba0caf77ea5cf4857a5457814fba99415dd4febdc0bd527c353d15f0",
+      "template_sha256": "f5eeb6b53a09a29b814885c7db9d6233c7dfacc87ef6207322b2d3220e39e63d",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 6,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "61005a7e-a107-49f3-96c3-2fa2796d3299",
+    "contract_version": 51
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "SL-M315-8R",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice literalmente «SL-M315-8R»; la ficha oficial documenta ese modelo (RAPIDFIRE PLUS, 8 velocidades traseras)."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/SL-M315-8R",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-17 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "shifter_position",
+      "current": {
+        "value": "Derecho (trasero)",
+        "source": "name_reading",
+        "fact_id": "45914938-49c2-4bef-aef1-7f6d6f2ac3d0",
+        "fact_sha256": "977190e3b69a7b463ec15c5aef19fa1b889d4395f8195d17bbc5311824c98a14",
+        "confirmed": false
+      },
+      "proposed": "Derecho (trasero)",
+      "unit": null,
+      "method": "Ficha SL-M315-8R: «Rear speeds 8», «Front speeds -» (mando trasero); nombre guardado «DER.».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "SL-M315-8R",
+      "reason": "La ficha declara sólo velocidades traseras y el nombre el lado derecho."
+    },
+    {
+      "key": "shifter_actuation_mode",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Indexado",
+      "unit": null,
+      "method": "Tabla productinfo: «Rear speeds 8», «Compatible rear derailleur type MTB 8-speed» y «Max. multiple shifts (main lever/rear) 3». La celda de velocidades no lleva la marca «(friction)» que estas tablas usan para los mandos de fricción («3 (friction)» en SL-TX30-LN y en FD-TZ510-DS6, archivadas), y los cambios múltiples por palanca presuponen posiciones.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "oem-tx30"
+      ],
+      "scope": "SL-M315-8R",
+      "reason": "La tabla enumera 8 posiciones traseras sin marca de fricción."
+    },
+    {
+      "key": "shifter_indexed_positions",
+      "current": {
+        "value": "8",
+        "source": "name_reading",
+        "fact_id": "c1bfe9a0-9cc5-4dcf-9763-d44da930a91c",
+        "fact_sha256": "3a45544146b0e790cde0ba1c73d758c226f9cede2c2dd7fac9510dfb53723420",
+        "confirmed": false
+      },
+      "proposed": "8",
+      "unit": null,
+      "method": "Ficha SL-M315-8R: «Rear speeds 8»; nombre guardado «8-SPEED».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "SL-M315-8R",
+      "reason": "Literal en ficha y nombre; sustituye la lectura de nombre."
+    },
+    {
+      "key": "shifter_compatibility_claims",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "rd",
+            "values": {
+              "claim_identity": "Cambio trasero MTB 8-speed",
+              "scope_kind": "Interfaz o estándar documentado",
+              "declared_interface": "MTB 8-speed",
+              "source_document": "productinfo.shimano.com — ficha SL-M315-8R (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/SL-M315-8R",
+              "target_component": "Cambio trasero",
+              "declaration_result": "Compatible declarado",
+              "conditions": "Fila «Compatible rear derailleur type: MTB 8-speed» de la tabla productinfo."
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/SL-M315-8R"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Fila «Compatible rear derailleur type: MTB 8-speed» de la ficha.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "SL-M315-8R",
+      "reason": "Declaración de interfaz publicada por el fabricante."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/SL-M315-8R",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial SL-M315-8R",
+      "finding": "RAPIDFIRE PLUS; Rear speeds 8; Compatible rear derailleur type MTB 8-speed; Clamp band; OT-SP41",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-sl-m315-8r-20260916.md",
+      "sha256": "6e2b7f08faccb5f18d147c725e1886e7ff98987617deca94b5db98a231949c33"
+    },
+    {
+      "id": "oem-tx30",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/SL-TX30-LN",
+      "consulted_on": "2026-09-17",
+      "scope": "Fichas SL-TX30: cómo marcan la fricción estas tablas",
+      "finding": "SL-TX30-LN: «Front speeds 3 (friction)»",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-sl-tx30-20260916.md",
+      "sha256": "08203f6c6a3c68c9a8293a339234a71b1707deb2db38c43f7a9ff5d8eabbd3a8"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 79e9dd71-ea20-4c0d-82d5-b56d970b57f4",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "MANILLA CAMBIO SHIMANO SL-M315-8R, DER. 8-SPEED RAPIDFIRE PLUS 2050MM INNER",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-sl-m315-8r-saved-name-20260917.json",
+      "sha256": "78abe13abcceb99a8715729e83c2f6cb715e6b358b95b1f2180fb3862e3fbf8f"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "430085f80385a489f0cb9f1d111b54bfde6fb4c8c6527a5c7317812fcabb13ca",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre b97f1c327b9134d0bf1d4205f2ae61e8d8ec27d68f342545ce8f719b0d1fddba: SL-M315-8R (ficha fill-016): «Rear speeds 8», «MTB 8-speed», «Max. multiple shifts 3» sin marca de fricción; lectura de nombre Gatillo existente no tocada; «2050MM INNER» sin campo, correcto."
+  }
+}

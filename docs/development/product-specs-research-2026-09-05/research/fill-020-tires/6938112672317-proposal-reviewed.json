@@ -1,0 +1,125 @@
+{
+  "schema_version": 2,
+  "product_id": "ffbb6ca6-84b4-43bb-aa9c-612a8d91fe6c",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "8dc257e1999439c6af3b69e5b851cbbbc9a9486933be863ad935868475843c0a",
+    "fingerprints": {
+      "facts_sha256": "7d3aaf6499ba44c39ada4910420dc6a79e01e209505ea934b5b055e68c739f6d",
+      "product_sha256": "7d86981a1b2eaa36e904d8d79a9dea70642cadb4dabbdfe931ca17f83180acb6",
+      "template_sha256": "c9c12ef9de5da2f893445f1910c3cbdebe2daad22315ccc4e3310cb8ef173342",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 4,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "4d5edd21-5818-4c98-827a-7154d1eebfe4",
+    "contract_version": 38
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "H-5177",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado trae el código «H-5177» y la ficha oficial de Chaoyang documenta el modelo DOUBLE HAMMER bajo ese código."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.chaoyangtire.com/index.php/pro/pro-details/2/100?type=ENDURO&name=DOUBLEHAMMER",
+      "unit": null,
+      "method": "URL de la ficha oficial del fabricante consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "tire_etrto",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "54-622",
+      "unit": null,
+      "method": "Ficha oficial Chaoyang DOUBLE HAMMER (H-5177): todas las filas publicadas de 29×2.25 (W112081 TLR/SPS 2C-MTB 60 TPI foldable 905 g, W112080 Shark Skin 2C-MTB 60 TPI foldable 760 g, W112078 Single 30 TPI wire 845 g) llevan ETRTO «54-622»; el nombre guardado fija modelo y medida pero no la pieza.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Medida ETRTO",
+      "reason": "Valor común a todas las filas publicadas de la medida."
+    },
+    {
+      "key": "tire_use",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "MTB",
+      "unit": null,
+      "method": "Ficha oficial Chaoyang DOUBLE HAMMER: categoría «ENDURO» en la ruta de la página (PRODUCT > ENDURO > DOUBLE HAMMER).",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Uso",
+      "reason": "Categoría de uso declarada por el fabricante para el modelo."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Chaoyang (chaoyangtire.com, sitio oficial de Zhongce Rubber)",
+      "locator": "https://www.chaoyangtire.com/index.php/pro/pro-details/2/100?type=ENDURO&name=DOUBLEHAMMER",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial del modelo DOUBLE HAMMER (tabla Specification)",
+      "finding": "29×2.25: W112081 TLR/SPS 2C-MTB 60 TPI foldable 905 g, W112080 Shark Skin 2C-MTB 60 TPI foldable 760 g, W112078 Single 30 TPI wire 845 g; categoría «ENDURO»",
+      "artifact_path": "research/fill-020-tires/evidence/chaoyang-double-hammer-20260917.md",
+      "sha256": "f71312ac99d55c1d2db61d61cbc9dfc6630a480c2a1b2ff19c03ad76e560580d"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product ffbb6ca6-84b4-43bb-aa9c-612a8d91fe6c",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "NEUMATICO 29X2.25 27TPI H-5177 CHAOYANG DOBLE HAMMER",
+      "artifact_path": "research/fill-020-tires/evidence/chaoyang-double-hammer-ffbb6ca6-saved-name-20260917.json",
+      "sha256": "1714d2f9b2fe1a47d374d11ae592f53e9bdc8c68dfd9d53f2ef4d3184c8c3f57"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "483e85d4afba1888eef850bbda749cb5d17a2c13d59f1d8157022446a60cbbe3",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 44982491d374701c86bc7ec88cf30a426725d98e6e55bf4f3be92ce28b295dca. Validador mecánico (tokens, filas, based_on, sha de evidencias, name_quote, simulación) y cotejo literal de cada valor contra el archivo citado."
+  }
+}

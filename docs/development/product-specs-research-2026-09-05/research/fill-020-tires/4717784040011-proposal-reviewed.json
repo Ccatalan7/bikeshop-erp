@@ -1,0 +1,136 @@
+{
+  "schema_version": 2,
+  "product_id": "085aedf6-f2f9-4d0a-87f4-b1674343d445",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "8f2f92c60cd059a473efc6618cebabc052df7bfd4cfecaa6ddcf8117d5f0b579",
+    "fingerprints": {
+      "facts_sha256": "21113122c10785ecb74e209670f920b9528fc77878e3e9ed45103f556e724f6e",
+      "product_sha256": "42c697385562edb2cc7d9d8d95e637d7c5cd5433a2bc7e95b88b2b56a254ea1c",
+      "template_sha256": "c9c12ef9de5da2f893445f1910c3cbdebe2daad22315ccc4e3310cb8ef173342",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "4d5edd21-5818-4c98-827a-7154d1eebfe4",
+    "contract_version": 38
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "Ikon",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado nombra el modelo «Ikon» literal y la página oficial de Maxxis documenta ese modelo con ese nombre."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://shop.maxxis.com/products/ikon",
+      "unit": null,
+      "method": "URL de la ficha oficial del fabricante consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "shop"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "tire_tpi",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "60",
+      "unit": "TPI",
+      "method": "Registro oficial shop.maxxis.com del Ikon: la única variante 26X2.20 de talón WIRE es «26X2.20 | 60TPI | WIRE | | Black | TB72385200»; el nombre guardado dice «ALAMBRE 26X2.20 IKON». Las tres filas 26X2.20 de maxxis.com/us son plegables y difieren en ETRTO (56-559 / 57-559), por eso el ETRTO queda sin declarar.",
+      "origin": "research",
+      "evidence": [
+        "shop"
+      ],
+      "scope": "TPI",
+      "reason": "Carcasa publicada por el fabricante."
+    },
+    {
+      "key": "tire_use",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "MTB",
+      "unit": null,
+      "method": "Página oficial de Maxxis del modelo Ikon: «Category: XC Race, XC» (categoría de bicicleta de montaña del catálogo Maxxis).",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Uso",
+      "reason": "Categoría de uso declarada por el fabricante para el modelo."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Maxxis (maxxis.com/us, sitio oficial)",
+      "locator": "https://www.maxxis.com/us/tire/ikon/",
+      "consulted_on": "2026-09-17",
+      "scope": "Página oficial del modelo Ikon (tabla de especificaciones y categoría)",
+      "finding": "Category: XC Race, XC",
+      "artifact_path": "research/fill-020-tires/evidence/maxxis-us-ikon-20260917.md",
+      "sha256": "fa341027fb4b73e4f6db0d9aab4271bf7bf7ecc0eafae574e0433d4be19a985f"
+    },
+    {
+      "id": "shop",
+      "kind": "oem_page",
+      "source": "Maxxis Tires USA (shop.maxxis.com, tienda oficial de Maxxis)",
+      "locator": "https://shop.maxxis.com/products/ikon",
+      "consulted_on": "2026-09-17",
+      "scope": "Registro oficial del producto Ikon con sus variantes publicadas",
+      "finding": "Variante «26X2.20 | 60TPI | WIRE | | Black | TB72385200»: única de 26X2.20 con talón WIRE",
+      "artifact_path": "research/fill-020-tires/evidence/maxxis-shop-ikon-20260917.md",
+      "sha256": "bafa25d7c66342beb12311c3a285c6cc3f35d285a45e7bbb8199ddb570673b14"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 085aedf6-f2f9-4d0a-87f4-b1674343d445",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "MAXXIS ALAMBRE 26X2.20 IKON",
+      "artifact_path": "research/fill-020-tires/evidence/maxxis-ikon-26x220-w-saved-name-20260917.json",
+      "sha256": "215845587c7676fb44d5f1e7586def7babadaaf3c2841f6c73f93ecc75663aba"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "f19e51e49b6dc1b1454e5939cfa08f65d74c78c7b58f03b39a2a5e5adfd98f35",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 2490014cf4030728eb7e1a3427da40f9f0522e01ced9b12cdada9ded09cef3b5: Aceptada sobre el sha reconstruido. Precisión: la tienda publica dos variantes 26x2.2 de alambre (TB72385200 «26X2.20» y TB00359700 «26X2.2»), ambas 60TPI; el valor se sostiene, pero el método dice «única»."
+  }
+}

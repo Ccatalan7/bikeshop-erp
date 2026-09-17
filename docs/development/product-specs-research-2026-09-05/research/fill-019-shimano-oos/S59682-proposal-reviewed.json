@@ -1,0 +1,386 @@
+{
+  "schema_version": 2,
+  "product_id": "ab2b62b9-2d56-4223-916e-2aaa85d031fe",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "5b897081067722ecd2c17155ee3670068f2cba49b57c5696525c2b7c32d42789",
+    "fingerprints": {
+      "facts_sha256": "3b5de844853178ab7af99f8c4540323097ad0cfe9d29403137bb6d65b326be06",
+      "product_sha256": "63b17a45b67d195c5f1902f89a3cffcd3535670adfd4a1aeb84aab916996d111",
+      "template_sha256": "0a473028d1a837cf9476d7ba194bcca7b6f0cac5ab0d403c71edd8f8cda53a6c",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 3,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "91a0c6d5-9c0a-443f-b2e9-2e0ab5f431ce",
+    "contract_version": 60
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "FC-TY301",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice literalmente «FC-TY301» con «170MM», «42X34X24T» y «W/CG»; la ficha oficial documenta FC-TY301 con esa combinación, el largo 170 y la presentación con cubrecadena."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/FC-TY301",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-17 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "included_chainring_count",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "3",
+      "unit": null,
+      "method": "Ficha FC-TY301: «Chainring combination 42-34-24T, 48-38-28T» (3 platos); nombre guardado.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "FC-TY301",
+      "reason": "3 platos publicados."
+    },
+    {
+      "key": "chainring_teeth_rows",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "exterior",
+            "values": {
+              "ring_identity": "Outer ring 42T",
+              "position": "Exterior",
+              "teeth": "42",
+              "removable": false,
+              "member_designation": "Outer ring — Steel, Painted (P.C.D. Riveted)",
+              "source_document": "productinfo.shimano.com — ficha FC-TY301 (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/FC-TY301"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/FC-TY301"
+            ]
+          },
+          {
+            "id": "medio",
+            "values": {
+              "ring_identity": "Middle ring 34T",
+              "position": "Medio",
+              "teeth": "34",
+              "removable": false,
+              "member_designation": "Middle ring — Steel, Painted (P.C.D. Riveted)",
+              "source_document": "productinfo.shimano.com — ficha FC-TY301 (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/FC-TY301"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/FC-TY301"
+            ]
+          },
+          {
+            "id": "interior",
+            "values": {
+              "ring_identity": "Inner ring 24T",
+              "position": "Interior",
+              "teeth": "24",
+              "removable": false,
+              "member_designation": "Inner ring — Steel, Painted (P.C.D. Riveted)",
+              "source_document": "productinfo.shimano.com — ficha FC-TY301 (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/FC-TY301"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/FC-TY301"
+            ]
+          }
+        ]
+      },
+      "unit": "T",
+      "method": "Ficha FC-TY301: combinación 42-34-24T; «Outer/…/Inner ring: Steel, Painted»; «P.C.D. (mm): Riveted».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "FC-TY301",
+      "reason": "Un plato por fila; remachados, no desmontables."
+    },
+    {
+      "key": "chainring_mounting",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Platos remachados no desmontables",
+      "unit": null,
+      "method": "Ficha FC-TY301: «P.C.D. (mm): Riveted»; «Outer/middle ring fixing bolt: -»; «Inner ring fixing screw: -».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "FC-TY301",
+      "reason": "Literal."
+    },
+    {
+      "key": "spindle_included",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": false,
+      "unit": null,
+      "method": "Ficha FC-TY301: «Compatible bottom bracket type: Square ✔ (Outboard -, OCTALINK -)»; «Recommended bottom bracket: BB-UN101, BB-UN300»; «HOLLOWTECH II -», «2-PIECE CRANKSET -»; peso «w/o bottom bracket». El eje pertenece al pedalier cuadrado recomendado, que va aparte.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "FC-TY301",
+      "reason": "Biela de tres piezas para pedalier de cartucho cuadrado."
+    },
+    {
+      "key": "bottom_bracket_included",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": false,
+      "unit": null,
+      "method": "Ficha FC-TY301: el pedalier figura como «Recommended bottom bracket» (BB-UN101, BB-UN300) y el peso se publica «w/o bottom bracket»; el nombre guardado no menciona pedalier.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "FC-TY301",
+      "reason": "Pedalier recomendado aparte, no incluido."
+    },
+    {
+      "key": "crankset_construction",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Tres piezas (motor aparte)",
+      "unit": null,
+      "method": "Ficha FC-TY301: «2-PIECE CRANKSET -», «HOLLOWTECH II -», «Compatible bottom bracket type: Square ✔» con pedalier recomendado aparte.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "FC-TY301",
+      "reason": "Dos brazos más pedalier independiente."
+    },
+    {
+      "key": "crank_axle_interface_declarations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "square",
+            "values": {
+              "interface_identity": "Cuadradillo (Square)",
+              "junction_role": "Asiento que recibe el eje",
+              "axle_owner": "Pedalier con eje independiente",
+              "designation": "Compatible bottom bracket type: Square ✔; Axle length of BB-UN/ES: D-NL, D-EL",
+              "interface_geometry": "Cuadradillo",
+              "conditions": "Ficha: OCTALINK -, Outboard -; estándar de cuadradillo (JIS/ISO) no publicado.",
+              "source_document": "productinfo.shimano.com — ficha FC-TY301 (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/FC-TY301"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/FC-TY301"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha FC-TY301: «Compatible bottom bracket type: Square ✔».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "FC-TY301",
+      "reason": "La biela recibe un eje cuadrado de un pedalier aparte."
+    },
+    {
+      "key": "bottom_bracket_required",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "bb0",
+            "values": {
+              "requirement_identity": "BB-UN101, BB-UN300, eje D-NL (línea de cadena 47.5 mm)",
+              "bb_shell_interface": "BSA roscado",
+              "bb_model_code": "BB-UN101, BB-UN300",
+              "resulting_chainline_mm": "47.5",
+              "configuration_code": "D-NL",
+              "conditions": "Ficha: «Recommended bottom bracket — Threaded (normal): BB-UN101, BB-UN300»; «Threaded bottom bracket shell width (mm): 68 ✔, 73 ✔»; «Axle length of BB-UN/ES (mm): D-NL»; «Chain line (mm): 47.5/47.5 + t/50». Caja roscada; el largo de eje se publica por código, no en mm.",
+              "source_document": "productinfo.shimano.com — ficha FC-TY301 (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/FC-TY301"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/FC-TY301"
+            ]
+          },
+          {
+            "id": "bb1",
+            "values": {
+              "requirement_identity": "BB-UN101, BB-UN300, eje D-EL (línea de cadena 50 mm)",
+              "bb_shell_interface": "BSA roscado",
+              "bb_model_code": "BB-UN101, BB-UN300",
+              "resulting_chainline_mm": "50",
+              "configuration_code": "D-EL",
+              "conditions": "Ficha: «Recommended bottom bracket — Threaded (normal): BB-UN101, BB-UN300»; «Threaded bottom bracket shell width (mm): 68 ✔, 73 ✔»; «Axle length of BB-UN/ES (mm): D-EL»; «Chain line (mm): 47.5/47.5 + t/50». Caja roscada; el largo de eje se publica por código, no en mm.",
+              "source_document": "productinfo.shimano.com — ficha FC-TY301 (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/FC-TY301"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/FC-TY301"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha FC-TY301: Recommended bottom bracket, shell width, Axle length (códigos) y Chain line.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "FC-TY301",
+      "reason": "Combinaciones publicadas por largo de eje."
+    },
+    {
+      "key": "crank_arm_length_mm",
+      "current": {
+        "value": "170",
+        "source": "name_reading",
+        "fact_id": "5a5c5aa5-692d-4684-85ab-3efbb20b5660",
+        "fact_sha256": "7f683a443802c02c48f023fb225fb8d3e1362df1cf327b132e217abcc9df8a69",
+        "confirmed": false
+      },
+      "proposed": "170",
+      "unit": "mm",
+      "method": "Ficha FC-TY301: «Crank arm length (mm)»: 170 ✔; nombre guardado «170».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "FC-TY301",
+      "reason": "El nombre fija una de las opciones publicadas; sustituye la lectura de nombre."
+    },
+    {
+      "key": "crankset_chain_guard_included",
+      "current": {
+        "value": true,
+        "source": "name_reading",
+        "fact_id": "570d05bc-3f4f-4527-894c-e023d949b3ca",
+        "fact_sha256": "7fcc10216bc6abfad3f91b4805b0252db5f4f761d521bc982872e214ea16d4a0",
+        "confirmed": false
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Ficha FC-TY301: «Optional chain guard — With chain guard ✔ (integrated type); Without chain/bash guard ✔» (dos presentaciones); nombre guardado «W/CG, CHAIN CASE COMP» (con cubrecadena).",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "FC-TY301",
+      "reason": "El nombre fija una de las presentaciones publicadas."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/FC-TY301",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial FC-TY301",
+      "finding": "Rear 8/7/6; 42-34-24T, 48-38-28T; BB-UN101, BB-UN300; D-NL, D-EL; chain line 47.5/47.5 + t/50; Riveted; Square",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-fc-ty301-20260916.md",
+      "sha256": "61e6dc995300591ba2beaf2bf1e2ebf07b05b0be97928b47fff07a27d62ad367"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product ab2b62b9-2d56-4223-916e-2aaa85d031fe",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "VOLANTE SHIMANO TOURNEY FC-TY301 TY, FOR REAR 6/7/8-VEL. 170MM, 42X34X24T W/CG, CHAIN CASE COMPATIBL",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-fc-ty301-cg-saved-name-20260917.json",
+      "sha256": "37fd412e327c075f81cb69802c903ad279b32b0f9b4abe4bcf4cfb581ff8bfea"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "881d23438938e4e8157e07747fa998ed46771207fd7110a2d318b01ea1e708c3",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 5f02210cbbc9f0217d8953f37bcddbfb7eecf31cbeabb7d715917c25abfc78b1: FC-TY301 170, 42-34-24T, «W/CG» → cubrecadena true sobre las dos presentaciones publicadas; «Chain case compatible ✔» sin declarar, correcto."
+  }
+}

@@ -1,0 +1,181 @@
+{
+  "schema_version": 2,
+  "product_id": "718a3a0b-296d-4929-92ba-ffbf977d13d7",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "fcc2b720423fb93d0ce214513323435336308fa07ba47c9ae4f178f937fcb978",
+    "fingerprints": {
+      "facts_sha256": "10934639f995ac5ea60faa1b4186063c81c05a586e87ce1c4acd5e9a919b9000",
+      "product_sha256": "e61391cb6e003ece1065be974401c033bddbceb8222d92c9a4a54f93a943b78b",
+      "template_sha256": "c9c12ef9de5da2f893445f1910c3cbdebe2daad22315ccc4e3310cb8ef173342",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-08-21T18:39:03.80582+00:00",
+    "template_id": "4d5edd21-5818-4c98-827a-7154d1eebfe4",
+    "contract_version": 38
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "Jack Rabbit",
+      "evidence": [
+        "product-name",
+        "shop"
+      ],
+      "reason": "El nombre guardado nombra el modelo «JACK RABBIT» literal y el registro oficial de CST lo documenta con ese nombre."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://shop.csttires.com/products/jack-rabbit-1",
+      "unit": null,
+      "method": "URL de la ficha oficial del fabricante consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "shop"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "tire_tpi",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "60",
+      "unit": "TPI",
+      "method": "Registro oficial shop.csttires.com del Jack Rabbit: la única variante 29X2.25 publicada es «29X2.25 | FOLDABLE | EPS | 60TPI | TB96801100»; el nombre guardado dice «JACK RABBIT, 29x2.25».",
+      "origin": "research",
+      "evidence": [
+        "shop",
+        "product-name"
+      ],
+      "scope": "TPI",
+      "reason": "Valor de la única variante publicada de la medida."
+    },
+    {
+      "key": "tire_bead_type",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Plegable (kevlar)",
+      "unit": null,
+      "method": "Misma variante: «FOLDABLE» (la única 29X2.25 publicada; las de alambre publicadas son 26X2.10 y 29X2.10).",
+      "origin": "research",
+      "evidence": [
+        "shop",
+        "product-name"
+      ],
+      "scope": "Talón",
+      "reason": "Valor de la única variante publicada de la medida."
+    },
+    {
+      "key": "tire_general_max_pressures",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "max-psi",
+            "values": {
+              "pressure_unit": "psi",
+              "max_pressure_value": "65",
+              "declared_scope": "El documento lo declara para todo montaje",
+              "source_document": "shop.csttires.com — registro oficial Jack Rabbit (consultado 2026-09-17)",
+              "source_url": "https://shop.csttires.com/products/jack-rabbit-1"
+            },
+            "sources": [
+              "https://shop.csttires.com/products/jack-rabbit-1"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Descripción oficial del Jack Rabbit: «Max PSI - 65», declarado para el modelo sin distinguir medida ni montaje.",
+      "origin": "research",
+      "evidence": [
+        "shop"
+      ],
+      "scope": "Presiones declaradas",
+      "reason": "Presión máxima declarada por el fabricante para el modelo."
+    },
+    {
+      "key": "tire_use",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "MTB",
+      "unit": null,
+      "method": "Descripción oficial: «Category: Trail, XC (Cross Country)», «Recommended Use: Dry to mixed XC Trail Conditions».",
+      "origin": "research",
+      "evidence": [
+        "shop"
+      ],
+      "scope": "Uso",
+      "reason": "Categoría de uso declarada por el fabricante."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "shop",
+      "kind": "oem_page",
+      "source": "CST Tires USA (shop.csttires.com, tienda oficial de CST)",
+      "locator": "https://shop.csttires.com/products/jack-rabbit-1",
+      "consulted_on": "2026-09-17",
+      "scope": "Registro oficial del producto con descripción y variantes publicadas",
+      "finding": "Variante «29X2.25 | FOLDABLE | EPS | 60TPI | TB96801100 | Black», única de 29X2.25; descripción: «Max PSI - 65», «Category: Trail, XC (Cross Country)»",
+      "artifact_path": "research/fill-020-tires/evidence/cst-jack-rabbit-20260917.md",
+      "sha256": "d305c6b77019383a5a677fc29e205f7dfb84f90f8e2e6b6446411814fe222a58"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 718a3a0b-296d-4929-92ba-ffbf977d13d7",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Neumatico CST JACK RABBIT, 29x2.25. Black.",
+      "artifact_path": "research/fill-020-tires/evidence/cst-jack-rabbit-29x225-saved-name-20260917.json",
+      "sha256": "15f5d35de3839e0014b64fb6a78e5cf20a9e8ddc44d36ccbe35e571b95ca8ff9"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "25b22ef44085f2ce7360121521fc7082b4b33a011b6ba1db975cff65adb6e7dc",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 5fd7e588b63ab4a05a870f51b21dc2982c0102d214ce01920023fa5cb771dbde. Validador mecánico (tokens, filas, based_on, sha de evidencias, name_quote, simulación) y cotejo literal de cada valor contra el archivo citado."
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "7a4bd2fb-8c7f-443a-8b21-f2c92f6faff4",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "CAMBIO SHIMANO 6/7V. RD-TY200, TOURNEY, SS 6/7-SPEED, DIRECT ATTACHMENT, BLACK, BULK ARDTY200SSLD",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "cf16fbfecdd7dd8da565ab8f9a9ebe8155cd99e3a00c76d306a8eeecec40616b",
+  "product_sha256": "a18c8be6f745f650c3278a49c56ea673f554255bcd5c3c6fc181e00c9e08d407",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

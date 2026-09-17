@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "6a1a3c31-0865-4e68-b0b1-7b00088b16de",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "MOTOR SELLADO (73) VP 122.5MM VP-BC73 ACERO",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "3c8d78d4b6026d9f9b3a450a1669f4a80a23c76ddc15afcd2f93dd6c238e8629",
+  "product_sha256": "5e749c1902affb59484d78f82f19f9ab78373238c6e0b4af69ce64b2c31ddbea",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

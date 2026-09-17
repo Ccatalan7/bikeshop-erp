@@ -1,0 +1,105 @@
+{
+  "schema_version": 2,
+  "product_id": "69cee10e-2579-4f8b-8db4-964328bd62fd",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "141eb41664ee77915be8e646a794e7c3ffa843fbd32db9e43e58646ca292e902",
+    "fingerprints": {
+      "facts_sha256": "a7a8690cbbdb101762b93b5dc049d86b4f76ea3bc13e4382b3ec3a144d163540",
+      "product_sha256": "c7abcb293111a7a26999e413a31456b4c78806f445c49e24a70080a30522b825",
+      "template_sha256": "c9c12ef9de5da2f893445f1910c3cbdebe2daad22315ccc4e3310cb8ef173342",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "4d5edd21-5818-4c98-827a-7154d1eebfe4",
+    "contract_version": 38
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "Rekon",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado nombra el modelo «Rekon» literal y la página oficial de Maxxis documenta ese modelo con ese nombre."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.maxxis.com/us/tire/rekon/",
+      "unit": null,
+      "method": "URL de la ficha oficial del fabricante consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "tire_use",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "MTB",
+      "unit": null,
+      "method": "Página oficial de Maxxis del modelo Rekon: «Category: XC, Trail» (categoría de bicicleta de montaña del catálogo Maxxis).",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Uso",
+      "reason": "Categoría de uso declarada por el fabricante para el modelo."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Maxxis (maxxis.com/us, sitio oficial)",
+      "locator": "https://www.maxxis.com/us/tire/rekon/",
+      "consulted_on": "2026-09-17",
+      "scope": "Página oficial del modelo Rekon (tabla de especificaciones y categoría)",
+      "finding": "Category: XC, Trail",
+      "artifact_path": "research/fill-020-tires/evidence/maxxis-us-rekon-20260917.md",
+      "sha256": "b5b66f9606acadf2c4e2a7bbfd6d97d579ace356adfc834a015f09fbcb25d3af"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 69cee10e-2579-4f8b-8db4-964328bd62fd",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "MAXXIS ALAMBRE REKON 29X2.4 M349P W TT DK62 314/458 3YL",
+      "artifact_path": "research/fill-020-tires/evidence/maxxis-rekon-29x24-w-m349p-saved-name-20260917.json",
+      "sha256": "b92620ac15ea8a2c64dcf52597133a67dd3267b5f3fc20350a2d2f3bec31de79"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "59eb1003bf6cb82685e9ad482692e49b398ab84429e8ed20092dbbf4fb8c86e7",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 96e8d248eddd5d579d1f45f80e3c41eae0f60aad1377353cd729ba52a42b00d0. Validador mecánico (tokens, filas, based_on, sha de evidencias, name_quote, simulación) y cotejo literal de cada valor contra el archivo citado."
+  }
+}

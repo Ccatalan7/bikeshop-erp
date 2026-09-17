@@ -1,0 +1,177 @@
+{
+  "schema_version": 2,
+  "product_id": "77ea8429-9473-4a39-9221-445467ffba33",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "841c7e0e2e7789a093ab0b3975eed31731752815abc5dce736aab3b95b64b576",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "a0ec98564d426c9ce3981a65ca9cedb1a71bae6c82ec31dc9a347e0e104bafa2",
+      "template_sha256": "944d2fc9c55724dd3af499184f96a524950e093dbdcec89079f2859781430953",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 0,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "0750e4ac-4615-4ad4-862e-95ac102b12f7",
+    "contract_version": 42
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "RD-TY300-SGS",
+      "evidence": [
+        "product-name",
+        "oem",
+        "no-results"
+      ],
+      "reason": "El nombre guardado dice «RD-TY300 TOURNEY 6/7-SPEED DIRECT ATTACHM» sin sufijo de jaula. productinfo publica RD-TY300-SGS; RD-TY300-GS y RD-TY300-SS devuelven «No results» (archivado). Identidad por eliminación sobre las consultas archivadas."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/RD-TY300-SGS",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-17 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "derailleur_cage_length",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Larga (SGS)",
+      "unit": null,
+      "method": "Ficha «Model no. RD-TY300-SGS»: sufijo SGS de jaula; único RD-TY300 publicado (GS y SS sin ficha, archivado).",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "RD-TY300-SGS",
+      "reason": "Sufijo de jaula del modelo publicado."
+    },
+    {
+      "key": "rear_derailleur_mount_type",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Pata/postiza estándar",
+      "unit": null,
+      "method": "Ficha: «Applicable derailleur hanger — SHIMANO MTB type: Direct attachment (conventional) ✔»; el nombre guardado «DIRECT ATTACHM(ENT)» fija la presentación sin uña.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "RD-TY300-SGS",
+      "reason": "Montaje declarado por el fabricante; el nombre fija la presentación."
+    },
+    {
+      "key": "rear_derailleur_compatibility_claims",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "chain-0",
+            "values": {
+              "claim_identity": "Cadena HG 8/7/6-speed",
+              "scope_kind": "Interfaz o estándar documentado",
+              "declared_interface": "HG 8/7/6-speed",
+              "source_document": "productinfo.shimano.com — ficha RD-TY300-SGS (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/RD-TY300-SGS",
+              "target_component": "Cadena",
+              "declaration_result": "Compatible declarado",
+              "conditions": "Fila «Compatible chain» de la ficha RD-TY300-SGS."
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/RD-TY300-SGS"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Fila «Compatible chain: HG 8/7/6-speed» de la ficha.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "RD-TY300-SGS",
+      "reason": "Clases de cadena declaradas."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/RD-TY300-SGS",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial RD-TY300-SGS",
+      "finding": "TOURNEY; Rear 7/6; MTB Direct attachment ✔; Riveted adapter ROAD ✔ BMX-track ✔; Max. front difference 20T; cap. 43T; Low 28-34T; Top 11-14T",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-rd-ty300-sgs-20260917.md",
+      "sha256": "4a5787983d7341604320243e2f2120b629af40a39672cf76a14e8849384dd13d"
+    },
+    {
+      "id": "no-results",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/RD-TY300-GS",
+      "consulted_on": "2026-09-17",
+      "scope": "Registro de consultas sin ficha en productinfo (2026-09-17)",
+      "finding": "«No results»: RD-TY300-GS, RD-TY300-SS",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-productinfo-sin-resultado-20260917.md",
+      "sha256": "41018aa06d2edc6865aad1c45c0f67b15a38a5623cacae03df75e9e821bcfec8"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 77ea8429-9473-4a39-9221-445467ffba33",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "CAMBIO TRASERO SHIMANO RD-TY300 TOURNEY 6/7-SPEED DIRECT ATTACHM",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-rd-ty300-sgs-directo-saved-name-20260917.json",
+      "sha256": "2efb5004c4a34072caecca0c8a233b19ee7b62337ce87ea67447e37b4e6e948f"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "be3d98e7988aeaded02c8b80b8688c86691822b6187a2cbb82a76b85097ee709",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 02d7fea327e25bbfe60af2b134a9956ff95a6f792d233842bfaba13732c772ef: RD-TY300-SGS por eliminación (igual que 665759a2); «DIRECT ATTACHM» → pata estándar."
+  }
+}

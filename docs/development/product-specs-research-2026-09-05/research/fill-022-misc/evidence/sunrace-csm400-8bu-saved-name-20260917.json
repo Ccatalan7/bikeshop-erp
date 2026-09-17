@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "5d6e0113-5958-4c9e-aadd-a98824eb4da9",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "PIÑON CASSETTE HG 8V 12-32T SUNRACE MOD.CSM400 8BU 8BU",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "7503a1b6b1857057d28b1b5fb4c3a2dda0eac8235a21d173df96f030ed3954ae",
+  "product_sha256": "e4383a3d5bfcb6c5116c590142ed0b419bb745456f44ab9a410cc167c76563d0",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

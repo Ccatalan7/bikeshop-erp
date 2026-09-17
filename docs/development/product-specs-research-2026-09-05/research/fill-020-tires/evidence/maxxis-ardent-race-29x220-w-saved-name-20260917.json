@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "f7016bed-381a-491d-ae25-31570d0f0960",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "MAXXIS ALAMBRE 29X2.20 ARDENT RACE",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "1675aefe9c653ea16d668cd7572a79f8ac43016828c98f815980a7ff7466916c",
+  "product_sha256": "f76aeae8bb99908d1c93c45071e3584b2bc4f9c3ece7fb2b5aa39ad5e138785e",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

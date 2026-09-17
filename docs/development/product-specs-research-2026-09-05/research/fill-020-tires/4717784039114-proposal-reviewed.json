@@ -1,0 +1,136 @@
+{
+  "schema_version": 2,
+  "product_id": "955c2713-6fc6-48c4-b669-2b7968cd5d79",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "8d78f64395cb4e1f923e21ba2b8e85871cf816bf37add7fc934eacd4ab84817a",
+    "fingerprints": {
+      "facts_sha256": "1b0dd8f9928730e6f5999055341044e33b489f7c8ca6782df88b44958f6a96c7",
+      "product_sha256": "4fbd38a40bc7ba61930bbe7166db27df5af4a737135f8f3df66e60135c7e53ca",
+      "template_sha256": "c9c12ef9de5da2f893445f1910c3cbdebe2daad22315ccc4e3310cb8ef173342",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "4d5edd21-5818-4c98-827a-7154d1eebfe4",
+    "contract_version": 38
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "Ardent",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado nombra el modelo «Ardent» literal y la página oficial de Maxxis documenta ese modelo con ese nombre."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://shop.maxxis.com/products/ardent",
+      "unit": null,
+      "method": "URL de la ficha oficial del fabricante consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "shop"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "tire_tpi",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "60",
+      "unit": "TPI",
+      "method": "Registro oficial shop.maxxis.com del Ardent: las siete variantes 27.5X2.25 de talón FOLDABLE publican «60TPI»; el nombre guardado dice «KEVLAR 27.5X2.25 M315P ARDENT» y no fija la tecnología, y 60 TPI es común a todas.",
+      "origin": "research",
+      "evidence": [
+        "shop"
+      ],
+      "scope": "TPI",
+      "reason": "Carcasa publicada por el fabricante."
+    },
+    {
+      "key": "tire_use",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "MTB",
+      "unit": null,
+      "method": "Página oficial de Maxxis del modelo Ardent: «Category: Trail» (categoría de bicicleta de montaña del catálogo Maxxis).",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Uso",
+      "reason": "Categoría de uso declarada por el fabricante para el modelo."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Maxxis (maxxis.com/ca, sitio oficial)",
+      "locator": "https://www.maxxis.com/ca/tire/ardent/",
+      "consulted_on": "2026-09-17",
+      "scope": "Página oficial del modelo Ardent (tabla de especificaciones y categoría)",
+      "finding": "Category: Trail",
+      "artifact_path": "research/fill-020-tires/evidence/maxxis-ca-ardent-20260917.md",
+      "sha256": "2a5df51fd6d737227726d63731f799bd87d0f07f8d47c70ae62b627be7ebec91"
+    },
+    {
+      "id": "shop",
+      "kind": "oem_page",
+      "source": "Maxxis Tires USA (shop.maxxis.com, tienda oficial de Maxxis)",
+      "locator": "https://shop.maxxis.com/products/ardent",
+      "consulted_on": "2026-09-17",
+      "scope": "Registro oficial del producto Ardent con sus variantes publicadas",
+      "finding": "Siete variantes 27.5X2.25 FOLDABLE, todas «60TPI» (EXO, SilkShield/eBike, sin tech, TR, EXO/TANWALL, EXO/TR, EXO/TR/TW)",
+      "artifact_path": "research/fill-020-tires/evidence/maxxis-shop-ardent-20260917.md",
+      "sha256": "e1cda07766f319bcabab0fd39bf28cce2ad5a48b1506a01a36afd7b8510eae96"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 955c2713-6fc6-48c4-b669-2b7968cd5d79",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "MAXXIS KEVLAR 27.5X2.25 M315P ARDENT",
+      "artifact_path": "research/fill-020-tires/evidence/maxxis-ardent-275x225-k-m315p-saved-name-20260917.json",
+      "sha256": "4d7e54c52313d1be844f8d05bea47102862403f6758a78c7259f50b0867946c8"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "e1563cd0b755a81d0ebba05b4efdeb4b7f1b82bae14b0bf265b877f7534bc75f",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 3e8d9bb29bdf85dac2b4f4eea297c6e0cd33bb35ac880cd4ebf4eb07a3b76d59: Siete variantes 27.5X2.25 FOLDABLE de la tienda, todas 60TPI; verificado."
+  }
+}

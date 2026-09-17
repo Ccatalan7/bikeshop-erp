@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "b4a7a87a-96c9-4ee0-b91f-2fdf1c36952a",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Volante Shimano FC-TY301  6 - 7 - 8 Velocidades 42T",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "3505ba28b353926b419a76727bb2e1b4f139b7fea622c64a25e9ee297973a93f",
+  "product_sha256": "ef8ab952f696949109f7eab9951704fe2805919cee8a9c035e7edbe44dae8da2",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

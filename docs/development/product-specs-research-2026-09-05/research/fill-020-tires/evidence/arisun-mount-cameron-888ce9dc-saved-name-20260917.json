@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "888ce9dc-4c59-4b92-b20e-5701ff0865ca",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "NEUMATICO ARISUN 26 X 2.10 MOUNT CAMERON",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "34db5ea87983e5f2a83104263cd1b00919a25c07415d47d19a0388cfddefa170",
+  "product_sha256": "465e74cd5668a7cd1bc319213eb960ae80d069b8f39c81f64e2fe1a5fd27c01a",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

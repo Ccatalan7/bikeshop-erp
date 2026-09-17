@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "dc5a279f-f0d3-4007-a14b-178aadc8cfdc",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "cambiador shimano fd-tz510-ds6 3 (friction) x7/6 31.8mm T/ARRIBA",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "1bb4c4f8ef95043db07efb3958186e7eb13ceb543556d0337c6a939aa1330fe3",
+  "product_sha256": "f3a6b730badad3a7721cbcdbbf50e32ee9cd0af4a870c623f4f246b7e8b014ff",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

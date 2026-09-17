@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "c67110dd-346e-4b19-8356-bc6d02eb015f",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "MAXXIS ALAMBRE 700X40C REAVER EXO",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "5375bc3924347a8b15ec7b25c0a594c2c29ab00fccd405170d7061888740977f",
+  "product_sha256": "ab601973580632c4c4d1fc82774263d5e1ae9c0f69372d22ba85f6fcbfbbad10",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

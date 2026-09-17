@@ -1,0 +1,105 @@
+{
+  "schema_version": 2,
+  "product_id": "4f35e59c-5177-4de8-a990-7ba22a77a2b8",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "967d23cafc75f95dc4191764d2b686043bec8f7edbd259241872fef2b1c514c1",
+    "fingerprints": {
+      "facts_sha256": "9bc29272fb1ce0928a370ee8838012ff107e26827adeacbfc1b8401e1a378e70",
+      "product_sha256": "ff71328cc97b43318385f49294d00b70e83083f8e37d5cb261ac86195c3fe20f",
+      "template_sha256": "c9c12ef9de5da2f893445f1910c3cbdebe2daad22315ccc4e3310cb8ef173342",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "4d5edd21-5818-4c98-827a-7154d1eebfe4",
+    "contract_version": 38
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": "FOREKASTER",
+      "proposed": "Forekaster",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado nombra el modelo «Forekaster» literal y la página oficial de Maxxis documenta ese modelo con ese nombre."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.maxxis.com/us/tire/forekaster/",
+      "unit": null,
+      "method": "URL de la ficha oficial del fabricante consultada el 2026-09-17 y archivada con hash.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "tire_use",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "MTB",
+      "unit": null,
+      "method": "Página oficial de Maxxis del modelo Forekaster: «Category: XC, Trail» (categoría de bicicleta de montaña del catálogo Maxxis).",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Uso",
+      "reason": "Categoría de uso declarada por el fabricante para el modelo."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Maxxis (maxxis.com/us, sitio oficial)",
+      "locator": "https://www.maxxis.com/us/tire/forekaster/",
+      "consulted_on": "2026-09-17",
+      "scope": "Página oficial del modelo Forekaster (tabla de especificaciones y categoría)",
+      "finding": "Category: XC, Trail",
+      "artifact_path": "research/fill-020-tires/evidence/maxxis-us-forekaster-20260917.md",
+      "sha256": "d81ef810de71e4ddbf84218e5b20d42e38397f97cc1a411e0e73b6af78ca4310"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 4f35e59c-5177-4de8-a990-7ba22a77a2b8",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "MAXXIS ALAMBRE 29X2.25 W FOREKASTER",
+      "artifact_path": "research/fill-020-tires/evidence/maxxis-forekaster-29x225-w-saved-name-20260917.json",
+      "sha256": "25e3fefe5ca44a7485812efa11f564bc5ab9a4774d737169193d680f91d4576d"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "969a923ab3bc4fc982bd24f564125ecf1ed7e04f3ffa5555428de785c95b7435",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre ae4f2232ae5d784a54351396e8b8e903872c3d630bb304bfe9edc1c38d295aaa. Validador mecánico (tokens, filas, based_on, sha de evidencias, name_quote, simulación) y cotejo literal de cada valor contra el archivo citado."
+  }
+}

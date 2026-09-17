@@ -1,0 +1,205 @@
+{
+  "schema_version": 2,
+  "product_id": "f8dcbeff-0d83-4428-a5c3-ba6c408b70b6",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "bbccc3958e47edff5edf18aa7bca6da08f2a95273328e45f54619fb35c45456f",
+    "fingerprints": {
+      "facts_sha256": "4daecf48108ca874fbed46cdb9c5156023bab6fc9273541fdfba290be675aaf2",
+      "product_sha256": "88fbcc2e79a336892473787afb30294d75d28086168da60231aa07f5591d1c92",
+      "template_sha256": "116f235acd81e5019c5823922c9b13a4ea53de091bf50273ac359e0a194f4f5a",
+      "references_sha256": "ecfbc36e5431cc517d141900304efe06d322582e21142a7513f604df06ba2974"
+    },
+    "spec_revision": 0,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "a9d0494f-08b5-42df-9836-42e302d2d9f5",
+    "contract_version": 45
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "CN-HG53",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice literalmente «CN-HG53»; la ficha oficial documenta CN-HG53 (HG 9-speed)."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/CN-HG53",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-17 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "chain_speeds",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": [
+        "9"
+      ],
+      "unit": null,
+      "method": "Ficha CN-HG53: «Type: HG 9-speed».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CN-HG53",
+      "reason": "Velocidades traseras publicadas en el tipo de cadena."
+    },
+    {
+      "key": "drivetrain_mode",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Derailleur",
+      "unit": null,
+      "method": "Ficha CN-HG53: «Type: HG 9-speed» (cadena HG para transmisiones de 9 velocidades con cambio externo); nombre guardado «CN-HG53 116L».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CN-HG53",
+      "reason": "Cadena de cambio externo por su tipo publicado."
+    },
+    {
+      "key": "chain_application_declarations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "hg",
+            "values": {
+              "claim_identity": "CN-HG53 · HG 9-speed",
+              "scope_kind": "Sistema documentado",
+              "target_system": "HG 9-speed",
+              "verdict": "Admitido por la fuente",
+              "drive_kind": "Desviador externo",
+              "rear_sprockets": "9",
+              "chain_class": "HG 9-speed",
+              "source_document": "productinfo.shimano.com — ficha CN-HG53 (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/CN-HG53",
+              "conditions": "Fila «Type: HG 9-speed» de la tabla productinfo."
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CN-HG53"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Fila «Type: HG 9-speed» de la ficha CN-HG53.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CN-HG53",
+      "reason": "Sistema declarado por el fabricante."
+    },
+    {
+      "key": "chain_mass_declarations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "w114",
+            "values": {
+              "weighing_identity": "CN-HG53 — 114 eslabones",
+              "weight_g": "299",
+              "basis_links": "114",
+              "basis_description": "Average weight (g) (114 links)",
+              "source_document": "productinfo.shimano.com — ficha CN-HG53 (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/CN-HG53"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CN-HG53"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha CN-HG53: «Average weight (g) (114 links) 299».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CN-HG53",
+      "reason": "Peso publicado sobre una base de 114 eslabones."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/CN-HG53",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial CN-HG53",
+      "finding": "Type HG 9-speed; E-BIKE -; Average weight (114 links) 299 g",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-cn-hg53-20260917.md",
+      "sha256": "2c036fce73ea9bea6e4b78faa32d231f5ebf7764b615f728d96ed94a60870646"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product f8dcbeff-0d83-4428-a5c3-ba6c408b70b6",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "CADENA SHIMANO CN-HG53 116L",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-cn-hg53-saved-name-20260917.json",
+      "sha256": "6dcfdce67c175119325f222ff097328ef688f4d317f68c66e4f8b4c8673a9252"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "3b32bc290ccbce3954d381c6e802de1c8bb5855d18d325c629c5ba86f7177258",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 8d06eb5bf6e866cb124f0459fde7c40ca1b502bf9a40b25e6a12b7957f216e5d: CN-HG53: «HG 9-speed», 299 g/114; «116L» como lectura de nombre."
+  }
+}

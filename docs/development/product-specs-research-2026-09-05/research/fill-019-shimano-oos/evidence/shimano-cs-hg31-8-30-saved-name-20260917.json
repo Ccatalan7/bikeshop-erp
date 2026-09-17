@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "863bc928-a014-470f-b165-27f6fc620399",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Piñón Shimano Altus Cs-Hg31 8V. (11-30)",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "99fd0c46e44282c90d1d0e41951abbd577692b6d2fd9e601ac8c3d6b9e46ba54",
+  "product_sha256": "9fbb00b1de1cf664765bb0b8b09cb09f7db6bacef235916882098ae1bfd31768",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

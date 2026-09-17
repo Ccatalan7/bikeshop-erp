@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "6b8afa81-0fd5-4521-a6f6-fc90beafab77",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Cassette Shimano Deore 10s CS-M4100 11-46T",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "48c94d02910b0b12a621e10b8d6d206b54e58df5444b058166533c3c9fbb96fc",
+  "product_sha256": "a9df5efdb3525457601aa2079f222355568ef3f1e86d100a6bbae01d3968cfab",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

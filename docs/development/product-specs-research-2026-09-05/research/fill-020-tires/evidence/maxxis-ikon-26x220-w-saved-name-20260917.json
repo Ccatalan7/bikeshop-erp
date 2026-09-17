@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "085aedf6-f2f9-4d0a-87f4-b1674343d445",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "MAXXIS ALAMBRE 26X2.20 IKON",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "8f2f92c60cd059a473efc6618cebabc052df7bfd4cfecaa6ddcf8117d5f0b579",
+  "product_sha256": "42c697385562edb2cc7d9d8d95e637d7c5cd5433a2bc7e95b88b2b56a254ea1c",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

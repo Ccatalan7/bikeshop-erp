@@ -1,0 +1,246 @@
+{
+  "schema_version": 2,
+  "product_id": "6d9c79c6-7b79-44d5-8c5a-5ebd3a1ad851",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "ef19213552b672d6da8435289560e2835685c763eadc1a2a75a7bd296e0cf235",
+    "fingerprints": {
+      "facts_sha256": "e3cdd55a12f0cf645c0796011f0797cbda11f201379a06a31ffd80f20eea5904",
+      "product_sha256": "a78c71c29141c29d25ea04ea2e2fed0aa4b892f2bfa80a9afae61d61968eaeca",
+      "template_sha256": "116f235acd81e5019c5823922c9b13a4ea53de091bf50273ac359e0a194f4f5a",
+      "references_sha256": "ecfbc36e5431cc517d141900304efe06d322582e21142a7513f604df06ba2974"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "a9d0494f-08b5-42df-9836-42e302d2d9f5",
+    "contract_version": 45
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "CN-M6100",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice literalmente «CN-M6100»; la ficha oficial documenta CN-M6100 (HG 12-speed)."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/CN-M6100",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-17 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "chain_speeds",
+      "current": {
+        "value": [
+          "12"
+        ],
+        "source": "supplier_text",
+        "fact_id": "bbac5627-15ac-4eb8-abe7-f5ed08d540a6",
+        "fact_sha256": "48a02f9ba9a7de127b2c5bc840d4a108c0019974bd1a5ca152112a2806a10469",
+        "confirmed": false
+      },
+      "proposed": [
+        "12"
+      ],
+      "unit": null,
+      "method": "Ficha CN-M6100: «Type: HG 12-speed».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CN-M6100",
+      "reason": "Velocidades traseras publicadas en el tipo de cadena."
+    },
+    {
+      "key": "drivetrain_mode",
+      "current": {
+        "value": "Derailleur",
+        "source": "name_reading",
+        "fact_id": "99e421d7-4bd6-487b-99ca-d7693fa8fe0b",
+        "fact_sha256": "a2198974a8afdeb08f92f73e6694b4b1331efbf31e1deb215b54cc0d2d87d1f9",
+        "confirmed": false
+      },
+      "proposed": "Derailleur",
+      "unit": null,
+      "method": "Ficha CN-M6100: «Type: HG 12-speed» (cadena HG para transmisiones de 12 velocidades con cambio externo); nombre guardado «CN-M6100 12v».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CN-M6100",
+      "reason": "Cadena de cambio externo por su tipo publicado."
+    },
+    {
+      "key": "chain_application_declarations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "hg",
+            "values": {
+              "claim_identity": "CN-M6100 · HG 12-speed",
+              "scope_kind": "Sistema documentado",
+              "target_system": "HG 12-speed",
+              "verdict": "Admitido por la fuente",
+              "drive_kind": "Desviador externo",
+              "rear_sprockets": "12",
+              "chain_class": "HG 12-speed",
+              "source_document": "productinfo.shimano.com — ficha CN-M6100 (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/CN-M6100",
+              "conditions": "Fila «Type: HG 12-speed» de la tabla productinfo."
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CN-M6100"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Fila «Type: HG 12-speed» de la ficha CN-M6100.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CN-M6100",
+      "reason": "Sistema declarado por el fabricante."
+    },
+    {
+      "key": "chain_mass_declarations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "w114",
+            "values": {
+              "weighing_identity": "CN-M6100 — 114 eslabones",
+              "weight_g": "252",
+              "basis_links": "114",
+              "basis_description": "Average weight (g) (114 links)",
+              "source_document": "productinfo.shimano.com — ficha CN-M6100 (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/CN-M6100"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CN-M6100"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha CN-M6100: «Average weight (g) (114 links) 252».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CN-M6100",
+      "reason": "Peso publicado sobre una base de 114 eslabones."
+    },
+    {
+      "key": "chain_ebike_rated",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Ficha CN-M6100: «E-BIKE rear derailleur system compatible ✔».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CN-M6100",
+      "reason": "Literal."
+    },
+    {
+      "key": "quick_link_included",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Ficha CN-M6100: «Note: QUICK-LINK»; nombre guardado «CN-M6100 12v».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CN-M6100",
+      "reason": "El fabricante anota el conector QUICK-LINK en la ficha del producto."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/CN-M6100",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial CN-M6100",
+      "finding": "Type HG 12-speed; E-BIKE ✔; Average weight (114 links) 252 g; Note QUICK-LINK",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-cn-m6100-20260917.md",
+      "sha256": "51b0e907b92e48f7288e24928804f8236eab0e8703a03177af81711c0366c01b"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 6d9c79c6-7b79-44d5-8c5a-5ebd3a1ad851",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Cadena Shimano CN-M6100 12v",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-cn-m6100-saved-name-20260917.json",
+      "sha256": "3741cf04c0d153974ba3eb8df8e4202591d28c0356e9ae3df15e759d21063c66"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "cc8a688a83fc4bd1969f1aa4f72b35903ee0fb198137b6473c01dd7682bf9b1f",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre a64213eb299c73a2472782229cfb78026fbe5285941475ca75fb2c0247a021e2: CN-M6100: «HG 12-speed», e-bike ✔, 252 g, «Note QUICK-LINK» → conector incluido (misma convención que CN-M7100, cuyo nombre lo confirma). Nota no bloqueante: el método cita product-name aunque el nombre no menciona el conector."
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "79e9dd71-ea20-4c0d-82d5-b56d970b57f4",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "MANILLA CAMBIO SHIMANO SL-M315-8R, DER. 8-SPEED RAPIDFIRE PLUS 2050MM INNER",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "2dd6b9082b56992043c7405465411c3528045fa217a07b8bbf77ca26b29b96ae",
+  "product_sha256": "a0f23f12ba0caf77ea5cf4857a5457814fba99415dd4febdc0bd527c353d15f0",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

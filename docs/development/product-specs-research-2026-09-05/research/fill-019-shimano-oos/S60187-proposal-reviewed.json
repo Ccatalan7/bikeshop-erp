@@ -1,0 +1,229 @@
+{
+  "schema_version": 2,
+  "product_id": "2c35f669-6afc-496b-8f5a-0db24a08d4f8",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "b227d1b0d18ddc3ff038e93c11adb583fa9fcf3c5fdc9e7cc527c164fd9268f1",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "96e4d023c866943ad7101a6f663fb35264faea145681f3230c1ea23ded4330a3",
+      "template_sha256": "e48fe12aecdb34ba5053c7fdbd2c4c243d525073a4b45b908e8004130a1dec57",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 0,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "590232e5-d21a-4a47-9419-1bf42e6b1922",
+    "contract_version": 36
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "FD-TZ500-DS6",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice literalmente «fd-tz500-ds6»; la ficha oficial documenta FD-TZ500-DS6."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/FD-TZ500-DS6",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-17 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "front_derailleur_mount_type",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Abrazadera",
+      "unit": null,
+      "method": "Ficha: «Mount — Clamp band (mm): 28.6 ✔, 31.8 ✔, 34.9 -; E-type -; Direct mount -; Brazed-on -».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "FD-TZ500-DS6",
+      "reason": "Literal."
+    },
+    {
+      "key": "front_derailleur_clamp_options",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 2,
+        "rows": [
+          {
+            "id": "band-28-6",
+            "values": {
+              "option_identity": "Abrazadera directa 28,6 mm",
+              "attachment_method": "Abrazadera directa",
+              "direct_tube_diameter_mm": "28.6",
+              "source_document": "productinfo.shimano.com — ficha FD-TZ500-DS6 (consultada 2026-09-17) y nombre guardado «28.6mm»",
+              "source_url": "https://productinfo.shimano.com/en/product/FD-TZ500-DS6",
+              "conditions": "La ficha publica 28,6 ✔ y 31,8 ✔ como abrazaderas del modelo (34,9 -); el nombre guardado fija 28,6 mm. Sin casquillo reductor mencionado."
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/FD-TZ500-DS6"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Fila «Mount — Clamp band (mm)» de la ficha; el nombre fija la variante de 28,6 mm.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "FD-TZ500-DS6",
+      "reason": "Una abrazadera directa; la cifra del nombre coincide con una opción publicada."
+    },
+    {
+      "key": "front_derailleur_swing",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Down swing",
+      "unit": null,
+      "method": "Ficha: «Action — TOP SWING -; Down swing ✔; SIDE SWING -».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "FD-TZ500-DS6",
+      "reason": "Literal."
+    },
+    {
+      "key": "front_derailleur_application_configurations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "3x7",
+            "values": {
+              "configuration_identity": "3x7 (FD-TZ500-DS6)",
+              "front_chainring_count": "3",
+              "rear_sprocket_count": "7",
+              "chain_declaration": "HG 8/7/6-speed",
+              "top_chainring_min_teeth": "42",
+              "top_chainring_max_teeth": "42",
+              "total_capacity_teeth": "18",
+              "chainline_mm": "47.5",
+              "chainstay_angle_min_deg": "66",
+              "chainstay_angle_max_deg": "69",
+              "source_document": "productinfo.shimano.com — ficha FD-TZ500-DS6 (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/FD-TZ500-DS6",
+              "conditions": "Ficha: «Front speeds 3 (friction)»; «Rear speeds 7/6»; «Top gear teeth 42T»; «Total capacity 18T»; «Applicable top-mid tooth difference 8T»; «Chain line (mm) 47.5»; «Chainstay angle (deg.) 66-69».",
+              "top_middle_difference_teeth": "8"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/FD-TZ500-DS6"
+            ]
+          },
+          {
+            "id": "3x6",
+            "values": {
+              "configuration_identity": "3x6 (FD-TZ500-DS6)",
+              "front_chainring_count": "3",
+              "rear_sprocket_count": "6",
+              "chain_declaration": "HG 8/7/6-speed",
+              "top_chainring_min_teeth": "42",
+              "top_chainring_max_teeth": "42",
+              "total_capacity_teeth": "18",
+              "chainline_mm": "47.5",
+              "chainstay_angle_min_deg": "66",
+              "chainstay_angle_max_deg": "69",
+              "source_document": "productinfo.shimano.com — ficha FD-TZ500-DS6 (consultada 2026-09-17)",
+              "source_url": "https://productinfo.shimano.com/en/product/FD-TZ500-DS6",
+              "conditions": "Ficha: «Front speeds 3 (friction)»; «Rear speeds 7/6»; «Top gear teeth 42T»; «Total capacity 18T»; «Applicable top-mid tooth difference 8T»; «Chain line (mm) 47.5»; «Chainstay angle (deg.) 66-69».",
+              "top_middle_difference_teeth": "8"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/FD-TZ500-DS6"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Tabla productinfo: Front speeds, Rear speeds 7/6, Top gear teeth, Total capacity, Applicable top-mid tooth difference, Chain line, Chainstay angle, Compatible chain.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "FD-TZ500-DS6",
+      "reason": "Dos configuraciones traseras publicadas (7 y 6) con los mismos límites."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/FD-TZ500-DS6",
+      "consulted_on": "2026-09-17",
+      "scope": "Ficha oficial FD-TZ500-DS6",
+      "finding": "TOURNEY TZ; Front 3 (friction); Rear 7/6; Down swing; Clamp band 28.6/31.8; Top-pull exclusive ✔ / Down-pull exclusive ✔; Chain line 47.5; 42T; cap. 18T; diff 8T; 66-69°",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-fd-tz500-ds6-20260917.md",
+      "sha256": "c2d6468ad928a717408b777415af4f535c957243ddbaacee19c9e48c92112778"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 2c35f669-6afc-496b-8f5a-0db24a08d4f8",
+      "locator": "products.name",
+      "consulted_on": "2026-09-17",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "cambiador shimano fd-tz500-ds6 del 3 (friction) x7/6 28.6mm",
+      "artifact_path": "research/fill-019-shimano-oos/evidence/shimano-fd-tz500-ds6-saved-name-20260917.json",
+      "sha256": "0c56686609a32f890a7531ae258f39d4897b7615770a87929b2a6afb561f887a"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-17",
+    "reviewed_proposal_sha256": "6c40f6a1ff16ecdf0a63c4c9a4b03ffaa0378ba2fbee764c7bdaa0d015e989a2",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 91519c89ceab67d2b0b85112e8697468224688c3157d1d7aecc4586a7f8ef4bb: FD-TZ500-DS6: «Front speeds 3 (friction)», «Rear speeds 7/6», Down swing ✔, 28.6 ✔ fijado por el nombre, 42T, 18T, 47.5, 66-69; ruta de cable sin declarar (Top-pull ✔ y Down-pull ✔, nombre mudo), correcto."
+  }
+}

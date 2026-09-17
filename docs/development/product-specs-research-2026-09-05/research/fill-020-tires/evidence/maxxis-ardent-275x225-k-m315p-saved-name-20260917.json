@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "955c2713-6fc6-48c4-b669-2b7968cd5d79",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "MAXXIS KEVLAR 27.5X2.25 M315P ARDENT",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "8d78f64395cb4e1f923e21ba2b8e85871cf816bf37add7fc934eacd4ab84817a",
+  "product_sha256": "4fbd38a40bc7ba61930bbe7166db27df5af4a737135f8f3df66e60135c7e53ca",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

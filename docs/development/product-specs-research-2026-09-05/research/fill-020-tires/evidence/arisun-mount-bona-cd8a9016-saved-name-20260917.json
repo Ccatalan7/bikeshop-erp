@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "cd8a9016-0e17-44b5-89c0-c927af1ec27e",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "NEUMATICO BICICLETA ARO 26 X 2.00 MOUNT BONA ARISUN",
+  "read_on": "2026-09-17",
+  "snapshot_sha256": "51f76814a72b8db988215123a180efe673c513a13573a076365c28743c0c951e",
+  "product_sha256": "626f1aae6362fb534a260517428db72f22b1c26ee1172f48ec9157709e5f5f1c",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}
