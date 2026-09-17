@@ -856,3 +856,30 @@ Lo que queda:
 El read-back también afirma lo que **no** cambió: que `authenticated` sigue sin
 poder escribir la tabla directo. Una migración que abre la puerta que intentaba
 forzar el cliente arregla el síntoma y pierde el aislamiento.
+
+## `create or replace view` borra las `reloptions` (2026-09-17)
+
+**Costo real: una vista quedó sin `security_invoker` en producción, entre el
+apply y el read-back.**
+
+Agregar una columna a `supplier_profile_read_model` con `create or replace view
+… as select …` aplicó bien la columna **y dejó `reloptions` vacío**: la vista
+pasó de `security_invoker=true` a ejecutarse con los permisos de su dueño, que
+es exactamente lo contrario de lo que esa vista necesita. No hay aviso; hay que
+volver a declararlo:
+
+```sql
+create or replace view public.<vista>
+with (security_invoker = true) as
+  select …;
+```
+
+Dos cosas que sí funcionaron y conviene repetir:
+
+- **El read-back lo atrapó.** La aserción afirmaba lo que no debía cambiar —que
+  la vista sigue siendo invoker y que `authenticated` la sigue leyendo—, no sólo
+  que la columna nueva existiera. Un read-back que sólo comprueba lo agregado
+  habría dejado el agujero abierto y sellado la migración.
+- **`create or replace` sólo agrega columnas al final.** La columna nueva va
+  después de la última; reordenar o insertar en medio exige `drop view`, que se
+  lleva los grants y las dependencias.

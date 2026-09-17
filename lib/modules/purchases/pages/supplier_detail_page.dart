@@ -27,6 +27,7 @@ import '../services/supplier_credential_reveal_controller.dart';
 import '../services/supplier_credential_service.dart';
 import '../services/supplier_relationship_service.dart';
 import '../widgets/purchase_visual_language.dart';
+import '../widgets/supplier_avatar.dart';
 
 /// Read boundary for the routed supplier profile.
 ///
@@ -1503,87 +1504,6 @@ class _SupplierNote extends StatelessWidget {
   }
 }
 
-/// Avatar del proveedor: su imagen, o un monograma de dos letras sobre el
-/// tono de avatar del tema. Radio 8 (`image_contract`).
-class _SupplierAvatar extends StatelessWidget {
-  const _SupplierAvatar({
-    required this.name,
-    required this.size,
-    this.imageUrl,
-    this.person = false,
-  });
-
-  final String name;
-  final double size;
-  final String? imageUrl;
-
-  /// Una persona usa el segundo tono de avatar, para que no se confunda con
-  /// la empresa.
-  final bool person;
-
-  static String lettersFor(String name) {
-    final words = name
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((word) => word.isNotEmpty)
-        .toList();
-    return switch (words.length) {
-      0 => '?',
-      1 => words.first.length >= 2
-          ? words.first.substring(0, 2).toUpperCase()
-          : words.first.toUpperCase(),
-      _ => '${words[0][0]}${words[1][0]}'.toUpperCase(),
-    };
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = PurchaseTokens.of(context);
-    final roles = VinabikeThemeRoles.of(context);
-    final type = _SupplierType(tokens);
-    final background = person ? roles.avatarB : roles.avatarA;
-    final foreground = person ? roles.onAvatarB : roles.onAvatarA;
-    final url = imageUrl?.trim();
-    final radius = BorderRadius.circular(_SupplierMetrics.avatarRadius);
-    final letters = Text(
-      lettersFor(name),
-      style:
-          (size >= _SupplierMetrics.avatar ? type.monogram : type.monogramSmall)
-              .copyWith(color: foreground),
-    );
-    return ExcludeSemantics(
-      child: Container(
-        width: size,
-        height: size,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: background,
-          borderRadius: radius,
-          border: Border.all(color: tokens.border),
-        ),
-        clipBehavior: Clip.antiAlias,
-        // Una persona se recorta; una marca se contiene. Un logotipo suele ser
-        // mucho más ancho que alto —el de TeknoBike mide 415×77— y `cover`
-        // sobre un cuadrado deja tres letras del medio.
-        padding: url == null || url.isEmpty || person
-            ? EdgeInsets.zero
-            : EdgeInsets.all(size * 0.10),
-        child: url == null || url.isEmpty
-            ? letters
-            : Image.network(
-                url,
-                fit: person ? BoxFit.cover : BoxFit.contain,
-                // Contenida, la imagen la mide el hueco que deja el padding:
-                // fijarle el lado completo la desborda.
-                width: person ? size : null,
-                height: person ? size : null,
-                errorBuilder: (_, __, ___) => letters,
-              ),
-      ),
-    );
-  }
-}
-
 /// `A-01` · botón primario: acento del preset, alto 38 (48 touch), radio 8,
 /// label 12/600. Uno por superficie.
 class _SupplierPrimaryButton extends StatelessWidget {
@@ -1808,7 +1728,7 @@ class _SupplierProfileHeader extends StatelessWidget {
               _SupplierMetrics.avatarRadius + 3,
             ),
           ),
-          child: _SupplierAvatar(
+          child: SupplierAvatar(
             name: party.displayName,
             size: avatarSize - 6,
             imageUrl: imageUrl,
@@ -2343,7 +2263,7 @@ class _SupplierPrimaryContactBody extends StatelessWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            _SupplierAvatar(
+            SupplierAvatar(
               name: contact.name,
               size: _SupplierMetrics.personAvatar,
               person: true,
@@ -4071,7 +3991,7 @@ class _SupplierContactRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          _SupplierAvatar(
+          SupplierAvatar(
             name: contact.name,
             size: _SupplierMetrics.personAvatar,
             person: true,

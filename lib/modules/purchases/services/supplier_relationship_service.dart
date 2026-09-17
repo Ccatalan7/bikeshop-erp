@@ -1678,7 +1678,10 @@ class SupabaseSupplierRelationshipRepository
       'service_relationship_summary,'
       'recognized_document_count,'
       'validation_issue_count,validation_incidents,data_completeness_status,'
-      'classification_status,accounting_policy_status,created_at,updated_at';
+      'classification_status,accounting_policy_status,created_at,updated_at,'
+      // La imagen viaja con el resto del perfil: el directorio la necesita
+      // por fila y no puede pagar una lectura extra por proveedor.
+      'image_url';
   static const definitionSelect =
       'id,tenant_id,code,label,description,aliases,is_active,is_system,'
       'metadata,created_at,updated_at';

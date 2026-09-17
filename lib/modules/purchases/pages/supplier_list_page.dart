@@ -12,6 +12,7 @@ import '../../../shared/widgets/vb_status_badge.dart';
 import '../../../shared/widgets/vb_sub_tabs.dart';
 import '../models/supplier_foundation.dart';
 import '../services/supplier_relationship_service.dart';
+import '../widgets/supplier_avatar.dart';
 
 enum SupplierHubTab { explore, directory }
 
@@ -114,7 +115,10 @@ class _SupplierListPageState extends State<SupplierListPage> {
   final _exploreScrollController = ScrollController();
   final _directoryScrollController = ScrollController();
 
-  SupplierHubTab _tab = SupplierHubTab.explore;
+  /// El módulo abre en el **Directorio**: es la lista de los 91 proveedores y
+  /// es lo que se viene a buscar. Explorar clasifica por categoría, que es una
+  /// tarea ocasional y queda a un clic.
+  SupplierHubTab _tab = SupplierHubTab.directory;
   _SupplierDirectoryState _directoryState = _SupplierDirectoryState.all;
   _SupplierAttentionScope? _attentionScope;
   String? _categoryScope;
@@ -1553,7 +1557,9 @@ class _SupplierIdentityCell extends StatelessWidget {
       ...roles,
       if (taxId != null) taxId,
     ];
-    return Column(
+    // La imagen que se carga en la ficha se ve también acá: es la lista donde
+    // se busca al proveedor, y una marca se reconoce antes que un nombre.
+    final identity = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -1587,6 +1593,20 @@ class _SupplierIdentityCell extends StatelessWidget {
             ),
           ),
         ],
+      ],
+    );
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        SupplierAvatar(
+          name: profile.displayName,
+          size: 34,
+          imageUrl: profile.legacyDetails.imageUrl,
+          person: profile.party.kind == ExternalPartyKind.person,
+        ),
+        const SizedBox(width: 10),
+        Expanded(child: identity),
       ],
     );
   }

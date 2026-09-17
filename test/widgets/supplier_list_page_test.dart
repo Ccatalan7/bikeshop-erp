@@ -109,6 +109,11 @@ void main() {
 
       await pumpHub(tester, source: source);
 
+      // El módulo abre en Directorio; las tarjetas de categoría viven en
+      // Explorar.
+      await tester.tap(find.text('Explorar'));
+      await tester.pumpAndSettle();
+
       final categoryCard = find
           .ancestor(
             of: find.text('Proveedor de bienes'),
@@ -122,8 +127,6 @@ void main() {
       expect(find.text('Proveedor clasificado'), findsOneWidget);
       expect(find.text('Proveedor sin categoría'), findsNothing);
 
-      await tester.tap(find.text('Explorar'));
-      await tester.pumpAndSettle();
       await tester.tap(find.text('Directorio  2'));
       await tester.pumpAndSettle();
 
@@ -161,6 +164,11 @@ void main() {
       );
 
       await pumpHub(tester, source: source);
+
+      // El módulo abre en Directorio; las tarjetas de categoría viven en
+      // Explorar.
+      await tester.tap(find.text('Explorar'));
+      await tester.pumpAndSettle();
 
       final categoryCard = find
           .ancestor(
