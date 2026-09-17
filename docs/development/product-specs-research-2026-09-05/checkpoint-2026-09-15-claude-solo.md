@@ -303,3 +303,16 @@ ya los contiene). Worktrees inventariados: tres de Codex, todos detached.
 - **Publicación del ERP a los compañeros.** macOS, Windows y Android despachados desde el commit
   4ac87117 (gate 35162024511) con `publish_release=true`; las reglas de compatibilidad del taller
   con las claves sucesoras llegan con esta versión.
+- **Sinónimos de lectura: no hacen falta.** Tras las dos pasadas de rótulos y fill-002c, sólo 3
+  cámaras activas quedan sin tipo de válvula: «V.Bicicleta» / «V/Bicicleta» (ambiguo: no dice
+  francesa ni auto) y una «F/v» sin stock. Un mecanismo de sinónimos en la guardia de lecturas
+  costaría una columna y un cambio del validador para un producto; se descarta con esta cuenta.
+- **fill-003 y fill-004: seis investigaciones aplicadas.** Conectores KMC CL559R, CL555R y CL566R
+  (18 hechos: tipo, fuente OEM, clase de cadena, reutilizable, sentido de montaje, cadenas
+  objetivo por filas) y pedalieres Shimano BB-UN300, SM-BB52 y BB-MT501 (11 hechos: montajes de
+  caja por filas, puertos, ejes admitidos HOLLOWTECH II, fuente OEM), cada uno con propuesta
+  contra el contrato vivo, evidencia OEM archivada con hash, revisión independiente de otra
+  sesión (tres rondas: identidades cerradas por eliminación con las fichas hermanas de KMC; BSA y
+  eje del BB-UN300 atribuidos al nombre guardado; nada que la ficha Shimano no diga) y recibo del
+  aplicador. RISK (5 conectores) y 45 pedalieres sin ficha OEM quedan fuera con razón:
+  [fill-003-004-record-2026-09-16.md](fill-003-004-record-2026-09-16.md).

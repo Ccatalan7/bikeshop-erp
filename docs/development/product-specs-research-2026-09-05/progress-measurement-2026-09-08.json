@@ -1711,5 +1711,32 @@
    "windows": "35163751540",
    "android": "35163753608"
   }
+ },
+ "research_fills_2026_09_16": {
+  "batches": [
+   "fill-003-connectors",
+   "fill-004-bb-shimano"
+  ],
+  "products": 6,
+  "facts": 29,
+  "applications": [
+   "cd2630fb-5caa-56ae-9dff-ee55171dd82a",
+   "0deb2546-36b6-5cff-ac72-4c19087ea1de",
+   "7df62082-c580-5c2c-b2bf-fdc0cc3d183c",
+   "76d4c4bc-d750-5adb-945c-20f355a89245",
+   "3b015523-44e1-5bb6-a6ce-57cf2fcb8f71",
+   "39cd26e4-bdb3-5eac-bd90-a7cd8a038aa3"
+  ],
+  "reviewer": "claude-peer",
+  "rounds": 3,
+  "excluded": {
+   "risk_connectors": 5,
+   "bottom_brackets_without_oem_sheet": 45
+  },
+  "tools": [
+   "build_research_proposal.py",
+   "record_research_review.py"
+  ],
+  "record": "fill-003-004-record-2026-09-16.md"
  }
 }

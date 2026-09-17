@@ -1,0 +1,219 @@
+{
+  "schema_version": 2,
+  "product_id": "86fcb1db-8497-430e-b61c-ace148cba4ef",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "67c3c77cca9d88a5650e6a9ca4b855c31a72fd66760966e60c75b60703439391",
+    "fingerprints": {
+      "facts_sha256": "277a1d631f19730094a09fe34a234e1769e46377c7dcc4732f6d8ed744e6643d",
+      "product_sha256": "67f827a915bae1ad340e6870f3c16542d5ddd7f012ce731c978ad6fb04b39589",
+      "template_sha256": "ca86afea426b43be3508bb456c11fbee17c5be265c7272ad1dd98e9d247787aa",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 0,
+    "updated_at": "2026-08-07T20:47:15.61527+00:00",
+    "template_id": "a4f78fa2-219f-44c6-82c4-d7d63e79cb1d",
+    "contract_version": 36
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "BB-MT501",
+      "evidence": [
+        "shimano-page"
+      ],
+      "reason": "El nombre guardado nombra BB-MT501 y la ficha oficial de Shimano documenta ese modelo."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "bb_installation_claims",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "caja-68",
+            "values": {
+              "configuration": "Caja roscada de 68 mm",
+              "shell_designation": "Roscada («Threaded bottom bracket» según Shimano)",
+              "width_kind": "Valor exacto",
+              "width_mm": "68",
+              "status": "Compatible declarado",
+              "conditions": "La ficha no descompone la rosca; el import previo (hecho 88f2ab1d-87b7-40f7-9616-347c0ba7b6cb, sin confirmar) la registra como BSA 1.37\" x 24 y queda en bb_shell_standard",
+              "source_scope": "Ficha oficial BB-MT501: «Threaded bottom bracket shell width (mm)» 68 ✔",
+              "source_url": "https://bike.shimano.com/products/components/pdp.P-BB-MT501.html"
+            },
+            "sources": [
+              "https://bike.shimano.com/products/components/pdp.P-BB-MT501.html"
+            ]
+          },
+          {
+            "id": "caja-73",
+            "values": {
+              "configuration": "Caja roscada de 73 mm",
+              "shell_designation": "Roscada («Threaded bottom bracket» según Shimano)",
+              "width_kind": "Valor exacto",
+              "width_mm": "73",
+              "status": "Compatible declarado",
+              "conditions": "La ficha no descompone la rosca; el import previo (hecho 88f2ab1d-87b7-40f7-9616-347c0ba7b6cb, sin confirmar) la registra como BSA 1.37\" x 24 y queda en bb_shell_standard",
+              "source_scope": "Ficha oficial BB-MT501: «Threaded bottom bracket shell width (mm)» 73 ✔",
+              "source_url": "https://bike.shimano.com/products/components/pdp.P-BB-MT501.html"
+            },
+            "sources": [
+              "https://bike.shimano.com/products/components/pdp.P-BB-MT501.html"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha oficial: tipo roscado y anchos de caja marcados ✔",
+      "origin": "research",
+      "evidence": [
+        "shimano-page"
+      ],
+      "scope": "Cajas roscadas de 68 y 73 mm según la ficha; la presentación en stock no se certifica",
+      "reason": "Ambos anchos están marcados ✔ en la ficha oficial."
+    },
+    {
+      "key": "bb_accepted_spindles",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "hollowtech-ii",
+            "values": {
+              "target_kind": "Estándar declarado",
+              "standard": "HOLLOWTECH II",
+              "configuration": "Cajas roscadas de 68 y 73 mm",
+              "status": "Compatible declarado",
+              "source_scope": "Ficha oficial BB-MT501: «HOLLOWTECH II bottom bracket»",
+              "source_url": "https://bike.shimano.com/products/components/pdp.P-BB-MT501.html"
+            },
+            "sources": [
+              "https://bike.shimano.com/products/components/pdp.P-BB-MT501.html"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha oficial: «HOLLOWTECH II bottom bracket»",
+      "origin": "research",
+      "evidence": [
+        "shimano-page"
+      ],
+      "scope": "Estándar declarado, no un modelo de biela concreto",
+      "reason": "La ficha lo declara como pedalier HOLLOWTECH II; el diámetro del eje no está en la ficha y no se añade."
+    },
+    {
+      "key": "bb_shell_ports",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "copa-motriz",
+            "values": {
+              "port": "Copa lado motriz",
+              "side": "Lado motriz",
+              "mates_with": "Caja del cuadro",
+              "form": "Designación OEM sin descomponer",
+              "designation": "Roscada («Threaded bottom bracket», Shimano)",
+              "source_scope": "Ficha oficial BB-MT501: tipo de caja roscada",
+              "source_url": "https://bike.shimano.com/products/components/pdp.P-BB-MT501.html"
+            },
+            "sources": [
+              "https://bike.shimano.com/products/components/pdp.P-BB-MT501.html"
+            ]
+          },
+          {
+            "id": "copa-no-motriz",
+            "values": {
+              "port": "Copa lado no motriz",
+              "side": "Lado no motriz",
+              "mates_with": "Caja del cuadro",
+              "form": "Designación OEM sin descomponer",
+              "designation": "Roscada («Threaded bottom bracket», Shimano)",
+              "source_scope": "Ficha oficial BB-MT501: tipo de caja roscada",
+              "source_url": "https://bike.shimano.com/products/components/pdp.P-BB-MT501.html"
+            },
+            "sources": [
+              "https://bike.shimano.com/products/components/pdp.P-BB-MT501.html"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Designación OEM del tipo de caja sin descomponer paso ni mano",
+      "origin": "research",
+      "evidence": [
+        "shimano-page"
+      ],
+      "scope": "Las dos copas roscadas",
+      "reason": "La ficha declara caja roscada («Threaded bottom bracket type ✔»); paso, diámetro y sentido no se publican y no se inventan."
+    },
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://bike.shimano.com/products/components/pdp.P-BB-MT501.html",
+      "unit": null,
+      "method": "URL de la ficha oficial consultada el 2026-09-16 en el navegador y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "shimano-page"
+      ],
+      "scope": "Fuente de todos los hechos de esta propuesta",
+      "reason": "Fuente exigida por el contrato para las declaraciones."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "shimano-page",
+      "kind": "oem_page",
+      "source": "Shimano (bike.shimano.com)",
+      "locator": "https://bike.shimano.com/products/components/pdp.P-BB-MT501.html",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial del modelo BB-MT501",
+      "finding": "HOLLOWTECH II bottom bracket; Threaded bottom bracket type ✔; Threaded bottom bracket shell width (mm): 68 ✔, 73 ✔.",
+      "artifact_path": "research/fill-004-bb-shimano/evidence/shimano-bb-mt501-20260916.md",
+      "sha256": "bcec2348f36758cd67d3c80ef6615ee738b0f8c1a0224b9f25b5e9bfeb0e8a1e"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "8ba5f7a54fa82cad9673d15d9fcab005480bf380e8e6e3fe5165e3f8e7d07d00",
+    "notes": "BB-MT501. Mismos tres cambios aplicados tal cual, con el hecho import 88f2ab1d-87b7-40f7-9616-347c0ba7b6cb citado en conditions (existe en el snapshot como bb_shell_standard sin confirmar). Diff v1→v2 sólo con esas líneas; evidencia sha correcto; simulation.issues = [] y sim.proposal_sha256 corresponde a este v2. Omisión de interface válida."
+  }
+}

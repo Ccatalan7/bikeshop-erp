@@ -1,0 +1,179 @@
+{
+  "schema_version": 2,
+  "product_id": "3711b13d-de91-4e6f-983a-377d6820701e",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "bf780f7dff01211de733e2a49b33461b0b23ec75239dfbb4a00bbebf923bafe5",
+    "fingerprints": {
+      "facts_sha256": "57e06691f19f72e4c67f94275083ad213c897e77199cf3ac4f3837c47ee3cb90",
+      "product_sha256": "2804d62f3871b7898b54245f0f09f62ba4ea552bb613ee03e3287eeab5431c54",
+      "template_sha256": "ca86afea426b43be3508bb456c11fbee17c5be265c7272ad1dd98e9d247787aa",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 0,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "a4f78fa2-219f-44c6-82c4-d7d63e79cb1d",
+    "contract_version": 36
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "BB-UN300",
+      "evidence": [
+        "product-name",
+        "shimano-page"
+      ],
+      "reason": "El nombre guardado nombra BB-UN300 y la ficha oficial de Shimano documenta ese modelo."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "bb_installation_claims",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "caja-68",
+            "values": {
+              "configuration": "Caja roscada de 68 mm",
+              "shell_designation": "BSA / BC1.37 (roscada)",
+              "width_kind": "Valor exacto",
+              "width_mm": "68",
+              "status": "Compatible declarado",
+              "conditions": "Esta presentación es la variante D-NL 122 (nombre guardado: SPINDLE:122.5MM(D-NL), SHELL:BSA 68MM) para caja de 68 mm; la ficha también lista D-NL 122|73 como variante distinta. ** Variante con tornillos de fijación de biela disponible",
+              "source_scope": "Ficha oficial BB-UN300, tabla «Axle length/shell width (mm)», fila D-NL 122|68 (BC1.37) ✔**; «BSA» y «122.5MM(D-NL)» del nombre guardado (evidencia product-name)",
+              "source_url": "https://bike.shimano.com/products/components/pdp.P-BB-UN300.html"
+            },
+            "sources": [
+              "https://bike.shimano.com/products/components/pdp.P-BB-UN300.html"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Tabla oficial «Axle length/shell width (mm)» del modelo",
+      "origin": "research",
+      "evidence": [
+        "shimano-page",
+        "product-name"
+      ],
+      "scope": "Sólo la variante D-NL 122|68 (BC1.37) que nombra el producto (SHELL:BSA 68MM, SPINDLE:122.5MM(D-NL))",
+      "reason": "La fila exacta del producto está marcada ✔ en la tabla oficial; el ancho de caja 68 mm y la designación BC1.37 vienen de ahí."
+    },
+    {
+      "key": "bb_shell_ports",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "copa-motriz",
+            "values": {
+              "port": "Copa lado motriz",
+              "side": "Lado motriz",
+              "mates_with": "Caja del cuadro",
+              "form": "Designación OEM sin descomponer",
+              "designation": "BC1.37 (roscada)",
+              "source_scope": "Ficha oficial BB-UN300: tipo de caja roscada",
+              "source_url": "https://bike.shimano.com/products/components/pdp.P-BB-UN300.html"
+            },
+            "sources": [
+              "https://bike.shimano.com/products/components/pdp.P-BB-UN300.html"
+            ]
+          },
+          {
+            "id": "copa-no-motriz",
+            "values": {
+              "port": "Copa lado no motriz",
+              "side": "Lado no motriz",
+              "mates_with": "Caja del cuadro",
+              "form": "Designación OEM sin descomponer",
+              "designation": "BC1.37 (roscada)",
+              "source_scope": "Ficha oficial BB-UN300: tipo de caja roscada",
+              "source_url": "https://bike.shimano.com/products/components/pdp.P-BB-UN300.html"
+            },
+            "sources": [
+              "https://bike.shimano.com/products/components/pdp.P-BB-UN300.html"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Designación OEM literal de la caja (BC1.37) sin descomponer paso ni mano",
+      "origin": "research",
+      "evidence": [
+        "shimano-page"
+      ],
+      "scope": "Las dos copas roscadas de la variante en stock",
+      "reason": "La ficha nombra BC1.37; no publica paso ni sentido de rosca, así que no se inventan."
+    },
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://bike.shimano.com/products/components/pdp.P-BB-UN300.html",
+      "unit": null,
+      "method": "URL de la ficha oficial consultada el 2026-09-16 en el navegador y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "shimano-page"
+      ],
+      "scope": "Fuente de todos los hechos de esta propuesta",
+      "reason": "Fuente exigida por el contrato para las declaraciones."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "shimano-page",
+      "kind": "oem_page",
+      "source": "Shimano (bike.shimano.com)",
+      "locator": "https://bike.shimano.com/products/components/pdp.P-BB-UN300.html",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial del modelo BB-UN300",
+      "finding": "Spindle: Square type ✔; tabla «Axle length/shell width (mm)» con la fila D-NL 122|68 (BC1.37) ✔**; Remarks: ** w/ Crank arm fixing screws spec. is available.",
+      "artifact_path": "research/fill-004-bb-shimano/evidence/shimano-bb-un300-20260916.md",
+      "sha256": "16397781d84248efe30b7a8a8e1bf3f93623db494d34d24472a1e72507bb247d"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 3711b13d-de91-4e6f-983a-377d6820701e",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante declarada por el proveedor en el nombre; no confirma presentación física",
+      "finding": "EJE MOTOR SELLADO SHIMANO BB-UN300, SPINDLE:SQUARE TYPE, SHELL:BSA 68MM, SPINDLE:122.5MM(D-NL), W/O",
+      "artifact_path": "research/fill-004-bb-shimano/evidence/bb-un300-saved-name-20260916.json",
+      "sha256": "5d50e269bf36dde5cee53580f108b8653c511a9722ef9c5bd34474b5da4abe97"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "0a29fb379c7d8b148c4806c43bfb19416a92c25fa38c234fd0aaf2625c65420b",
+    "notes": "BB-UN300. El nombre guardado está archivado (bb-un300-saved-name-20260916.json) y citado en identity.evidence y en el hecho bb_installation_claims; source_scope y conditions atribuyen «BSA» y «122.5MM(D-NL)» al nombre y D-NL 122|68 (BC1.37) ✔** a la ficha. Con la fuente citada, «BSA / BC1.37 (roscada)» es literal en sus dos mitades. bb_shell_ports y spec_evidence_source sin cambios y correctos. simulation.issues = [] y sim.proposal_sha256 corresponde a este v2."
+  }
+}

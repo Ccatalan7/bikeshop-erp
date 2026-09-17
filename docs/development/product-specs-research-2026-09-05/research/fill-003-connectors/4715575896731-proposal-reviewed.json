@@ -1,0 +1,278 @@
+{
+  "schema_version": 2,
+  "product_id": "28aeb755-1aa2-4835-bd31-edf8c2d7f223",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "27c5802c949533ef1024b84b65c012c6775fdc3ac71c55e5d9b419f41a7375f8",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "f205cb06cd539dbf9e0855963ccb8d5e105f66c90143966661d4df3b1c8d5f48",
+      "template_sha256": "5ff1ed17ae25b119d1779c6969cb83ad4643745235155ba028b24a748cafc709",
+      "references_sha256": "ad8cfc7b79626ddbfd0220c794720065f324887adc2a8124a0bf71c9310bfd31"
+    },
+    "spec_revision": 0,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "9c93c819-cd05-4615-9e57-091af95cf1f0",
+    "contract_version": 48
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "CL555R",
+      "evidence": [
+        "ean-listing",
+        "kmc-series",
+        "kmc-siblings",
+        "kmc-model",
+        "product-name"
+      ],
+      "reason": "El EAN guardado 4715575896731 se vende como Missing Link KMC de 11 velocidades, pack de 2, reutilizable («reopening should be limited to 3-5 times», archivo ean-4715575896731); el nombre guardado dice «Kmc 11 speed, Plata 2 pcs» (archivo cl555r-saved-name). El catálogo oficial lista para 11 velocidades CL555R DLC, CL555R, CL555, CL554 y CL555 EPT (archivo kmc-connector-series). Las fichas de CL555, CL555 EPT y CL554 dicen «Missinglink Non reusable» (archivo kmc-siblings); la única ficha reutilizable de 11 velocidades es la de CL555R («Missinglink Reusable», archivo kmc-cl555r), código que CL555R DLC comparte. Identidad literal por eliminación."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "chain_connector_type",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Missing link",
+      "unit": null,
+      "method": "Declaración OEM en la página del modelo",
+      "origin": "research",
+      "evidence": [
+        "kmc-model"
+      ],
+      "scope": "Modelo CL555R; la presentación en stock se identifica por EAN o nombre",
+      "reason": "La página lo identifica como MissingLink."
+    },
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.kmcchain.com/en/product/connector-missing-link-cl555r-11-speed",
+      "unit": null,
+      "method": "URL de la página OEM consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "kmc-model"
+      ],
+      "scope": "Fuente de todos los hechos de esta propuesta",
+      "reason": "Fuente exigida por el contrato para las declaraciones."
+    },
+    {
+      "key": "chain_speeds",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": [
+        "11"
+      ],
+      "unit": null,
+      "method": "Declaración OEM: clase de cadena 11 velocidades",
+      "origin": "research",
+      "evidence": [
+        "kmc-model"
+      ],
+      "scope": "Sólo el modelo CL555R",
+      "reason": "La página lo clasifica como «11 speed»."
+    },
+    {
+      "key": "chain_link_reusable",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Declaración OEM: «Missinglink Reusable»",
+      "origin": "research",
+      "evidence": [
+        "kmc-model"
+      ],
+      "scope": "Sólo el modelo CL555R",
+      "reason": "Reutilizable según el fabricante; no fija un número de reusos."
+    },
+    {
+      "key": "chain_connector_directional",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": false,
+      "unit": null,
+      "method": "Declaración OEM: «Non directional design for easy assembling»",
+      "origin": "research",
+      "evidence": [
+        "kmc-model"
+      ],
+      "scope": "Sólo el modelo CL555R",
+      "reason": "Sin sentido de montaje según el fabricante."
+    },
+    {
+      "key": "connector_target_declarations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "kmc-11s",
+            "values": {
+              "claim_identity": "KMC CL555R admite cadenas KMC de 11 velocidades",
+              "scope_kind": "Sistema documentado",
+              "target_system": "KMC 11 velocidades",
+              "chain_class": "11",
+              "verdict": "Admitido por la fuente",
+              "source_document": "Página de producto KMC CL555R, línea «Compatibility» (archivo kmc-cl555r-20260916.md)",
+              "source_url": "https://www.kmcchain.com/en/product/connector-missing-link-cl555r-11-speed"
+            },
+            "sources": [
+              "https://www.kmcchain.com/en/product/connector-missing-link-cl555r-11-speed"
+            ]
+          },
+          {
+            "id": "shimano-11s",
+            "values": {
+              "claim_identity": "KMC CL555R admite cadenas Shimano de 11 velocidades",
+              "scope_kind": "Sistema documentado",
+              "target_system": "Shimano 11 velocidades",
+              "chain_class": "11",
+              "verdict": "Admitido por la fuente",
+              "source_document": "Página de producto KMC CL555R, línea «Compatibility» (archivo kmc-cl555r-20260916.md)",
+              "source_url": "https://www.kmcchain.com/en/product/connector-missing-link-cl555r-11-speed"
+            },
+            "sources": [
+              "https://www.kmcchain.com/en/product/connector-missing-link-cl555r-11-speed"
+            ]
+          },
+          {
+            "id": "sram-11s",
+            "values": {
+              "claim_identity": "KMC CL555R admite cadenas SRAM de 11 velocidades",
+              "scope_kind": "Sistema documentado",
+              "target_system": "SRAM 11 velocidades",
+              "chain_class": "11",
+              "verdict": "Admitido por la fuente",
+              "source_document": "Página de producto KMC CL555R, línea «Compatibility» (archivo kmc-cl555r-20260916.md)",
+              "source_url": "https://www.kmcchain.com/en/product/connector-missing-link-cl555r-11-speed"
+            },
+            "sources": [
+              "https://www.kmcchain.com/en/product/connector-missing-link-cl555r-11-speed"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Declaración OEM de compatibilidad: «KMC, SHIMANO&SRAM 11 speed chains»",
+      "origin": "research",
+      "evidence": [
+        "kmc-model"
+      ],
+      "scope": "Declaración de la fuente por sistema (marca y velocidades); no es prueba de montaje ni excluye otras cadenas",
+      "reason": "El contrato exige la declaración por filas; el campo chain_connector_target es legacy."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "kmc-model",
+      "kind": "oem_page",
+      "source": "KMC Chain",
+      "locator": "https://www.kmcchain.com/en/product/connector-missing-link-cl555r-11-speed",
+      "consulted_on": "2026-09-16",
+      "scope": "Página oficial del modelo CL555R",
+      "finding": "«Compatibility : KMC, SHIMANO&SRAM 11 speed chains», «Missinglink Reusable», «Non directional design for easy assembling».",
+      "artifact_path": "research/fill-003-connectors/evidence/kmc-cl555r-20260916.md",
+      "sha256": "f949826823d04dde34164d2753fbdb955f652d3b22f1416b563ae3f9cdfecc95"
+    },
+    {
+      "id": "ean-listing",
+      "kind": "distributor",
+      "source": "Listado minorista del EAN 4715575896731",
+      "locator": "https://ccache.cc/collections/drivetrain/products/kmc-missing-link-11-speed-chain-connector-quick-link",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad de la presentación en stock",
+      "finding": "El EAN 4715575896731 se vende como KMC Missing Link 11 velocidades, pack de 2, reutilizable («reopening limited to 3-5 times»).",
+      "artifact_path": "research/fill-003-connectors/evidence/ean-4715575896731-listings-20260916.md",
+      "sha256": "2b3b090e8745789d86d053d7bcb3d29533aa6a8a4834afe57e25d02a420bc5d0"
+    },
+    {
+      "id": "kmc-series",
+      "kind": "oem_catalogue",
+      "source": "KMC Chain",
+      "locator": "https://www.kmcchain.com/en/series/chain-connector-12s-11s-10s-9s-8s-7s-6s-speed",
+      "consulted_on": "2026-09-16",
+      "scope": "Catálogo oficial de conectores por clase de velocidad",
+      "finding": "11 Speed: CL555R DLC, CL555R, CL555, CL554, CL555 EPT. 9 Speed: CL566R, CL566R EPT, CL566 RB, CL566e, CL566e EPT, CL366. «Re-usable MissingLinks have no latch design, which could be used 3 to 5 times.»",
+      "artifact_path": "research/fill-003-connectors/evidence/kmc-connector-series-20260916.md",
+      "sha256": "17afc7750c4c0b24f356ce5d170010f931e842852bff720d2bcbbe98611aebce"
+    },
+    {
+      "id": "kmc-siblings",
+      "kind": "oem_page",
+      "source": "KMC Chain",
+      "locator": "https://www.kmcchain.com/en/product/connector-missing-link-cl555-11-speed (y las fichas hermanas listadas en el archivo)",
+      "consulted_on": "2026-09-16",
+      "scope": "Fichas oficiales de los demás conectores de 11 y 9 velocidades del catálogo",
+      "finding": "11v: CL555 «Missinglink Non reusable», CL555 EPT «Non reusable», CL554 «Non reusable» (KMC, XGlide). 9v: CL566R EPT reutilizable sólo EPT (sin Ti-N); CL566 RB, CL566e, CL566e EPT «Non reusable» sin Ti-N; CL366 es Snap On (no MissingLink) plata.",
+      "artifact_path": "research/fill-003-connectors/evidence/kmc-siblings-9s-11s-20260916.md",
+      "sha256": "a5f88d124fcbe1a9c5f152fb66da4f408cb3d214a6fa18861b9190328973d0b4"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 28aeb755-1aa2-4835-bd31-edf8c2d7f223",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial existente; no confirma presentación física",
+      "finding": "Conexión Cadena Kmc 11 speed, Plata 2 pcs",
+      "artifact_path": "research/fill-003-connectors/evidence/cl555r-saved-name-20260916.json",
+      "sha256": "f656a5b3496c4eba81c3d442b3d3cd310c09c8e3068ee3c6daa5f769a8dd755b"
+    }
+  ],
+  "conflicts": [
+    {
+      "field": "connector_target_declarations",
+      "description": "El listado minorista del EAN dice «Compatible with KMC, Shimano & Campagnolo 11 speed chains»; la ficha OEM CL555R dice «Compatibility : KMC, SHIMANO&SRAM 11 speed chains».",
+      "evidence": [
+        "ean-listing",
+        "kmc-model"
+      ],
+      "resolution": "Las filas declaradas siguen a la ficha OEM (KMC, Shimano, SRAM); Campagnolo no se declara porque el fabricante no lo escribe."
+    }
+  ],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "8c2205554def3637df4d330a3ba93a067e831a79c5253d22351e6851d9640b94",
+    "notes": "CL555R, proposal-v3.json. La eliminación ya es literal: kmc-siblings-9s-11s-20260916.md trae CL555 «Missinglink Non reusable», CL555 EPT «Missinglink Non reusable» y CL554 «Missinglink Non reusable»; el catálogo acota los 11 velocidades a esos tres más CL555R y CL555R DLC; la ficha CL555R dice «Missinglink Reusable» y el listado del EAN dice reutilizable «3-5 times». «Plata» sale del nombre guardado archivado (cl555r-saved-name-20260916.json, citado en identity.evidence). Hechos, filas, tokens y el conflicto Campagnolo/SRAM quedan como los acepté. simulation.issues = []; based_on y sim.snapshot coinciden con snapshot-fresh."
+  }
+}

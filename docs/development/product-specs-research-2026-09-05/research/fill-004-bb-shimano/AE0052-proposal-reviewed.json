@@ -1,0 +1,219 @@
+{
+  "schema_version": 2,
+  "product_id": "86fa7b83-560b-4d49-9bd0-58067bcf32ee",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "4668e88c0f28f6794977ca94ef7715e5344f3b1411b1d5f2710656f6e5216b05",
+    "fingerprints": {
+      "facts_sha256": "77154073f79ccea59dd4d99f72fa135a698f84dabdb6502c8fb0b1ba5f3167da",
+      "product_sha256": "19ef3328687b2ad51ded08f5096058f5996ba77a6ed35afa52b355c688fd0dd3",
+      "template_sha256": "ca86afea426b43be3508bb456c11fbee17c5be265c7272ad1dd98e9d247787aa",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 0,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "a4f78fa2-219f-44c6-82c4-d7d63e79cb1d",
+    "contract_version": 36
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "SM-BB52",
+      "evidence": [
+        "shimano-page"
+      ],
+      "reason": "El nombre guardado nombra SM-BB52 y la ficha oficial de Shimano documenta ese modelo."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "bb_installation_claims",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "caja-68",
+            "values": {
+              "configuration": "Caja roscada de 68 mm",
+              "shell_designation": "Roscada («Threaded bottom bracket» según Shimano)",
+              "width_kind": "Valor exacto",
+              "width_mm": "68",
+              "status": "Compatible declarado",
+              "conditions": "La ficha no descompone la rosca; el import previo (hecho ba6f96ac-9d3b-445a-b7ba-5b72727ed4e4, sin confirmar) la registra como BSA 1.37\" x 24 y queda en bb_shell_standard",
+              "source_scope": "Ficha oficial SM-BB52: «Threaded bottom bracket shell width (mm)» 68 ✔",
+              "source_url": "https://bike.shimano.com/products/components/pdp.P-SM-BB52.html"
+            },
+            "sources": [
+              "https://bike.shimano.com/products/components/pdp.P-SM-BB52.html"
+            ]
+          },
+          {
+            "id": "caja-73",
+            "values": {
+              "configuration": "Caja roscada de 73 mm",
+              "shell_designation": "Roscada («Threaded bottom bracket» según Shimano)",
+              "width_kind": "Valor exacto",
+              "width_mm": "73",
+              "status": "Compatible declarado",
+              "conditions": "La ficha no descompone la rosca; el import previo (hecho ba6f96ac-9d3b-445a-b7ba-5b72727ed4e4, sin confirmar) la registra como BSA 1.37\" x 24 y queda en bb_shell_standard",
+              "source_scope": "Ficha oficial SM-BB52: «Threaded bottom bracket shell width (mm)» 73 ✔",
+              "source_url": "https://bike.shimano.com/products/components/pdp.P-SM-BB52.html"
+            },
+            "sources": [
+              "https://bike.shimano.com/products/components/pdp.P-SM-BB52.html"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha oficial: tipo roscado y anchos de caja marcados ✔",
+      "origin": "research",
+      "evidence": [
+        "shimano-page"
+      ],
+      "scope": "Cajas roscadas de 68 y 73 mm según la ficha; la presentación en stock no se certifica",
+      "reason": "Ambos anchos están marcados ✔ en la ficha oficial."
+    },
+    {
+      "key": "bb_accepted_spindles",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "hollowtech-ii",
+            "values": {
+              "target_kind": "Estándar declarado",
+              "standard": "HOLLOWTECH II",
+              "configuration": "Cajas roscadas de 68 y 73 mm",
+              "status": "Compatible declarado",
+              "source_scope": "Ficha oficial SM-BB52: «HOLLOWTECH II bottom bracket»",
+              "source_url": "https://bike.shimano.com/products/components/pdp.P-SM-BB52.html"
+            },
+            "sources": [
+              "https://bike.shimano.com/products/components/pdp.P-SM-BB52.html"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha oficial: «HOLLOWTECH II bottom bracket»",
+      "origin": "research",
+      "evidence": [
+        "shimano-page"
+      ],
+      "scope": "Estándar declarado, no un modelo de biela concreto",
+      "reason": "La ficha lo declara como pedalier HOLLOWTECH II; el diámetro del eje no está en la ficha y no se añade."
+    },
+    {
+      "key": "bb_shell_ports",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "copa-motriz",
+            "values": {
+              "port": "Copa lado motriz",
+              "side": "Lado motriz",
+              "mates_with": "Caja del cuadro",
+              "form": "Designación OEM sin descomponer",
+              "designation": "Roscada («Threaded bottom bracket», Shimano)",
+              "source_scope": "Ficha oficial SM-BB52: tipo de caja roscada",
+              "source_url": "https://bike.shimano.com/products/components/pdp.P-SM-BB52.html"
+            },
+            "sources": [
+              "https://bike.shimano.com/products/components/pdp.P-SM-BB52.html"
+            ]
+          },
+          {
+            "id": "copa-no-motriz",
+            "values": {
+              "port": "Copa lado no motriz",
+              "side": "Lado no motriz",
+              "mates_with": "Caja del cuadro",
+              "form": "Designación OEM sin descomponer",
+              "designation": "Roscada («Threaded bottom bracket», Shimano)",
+              "source_scope": "Ficha oficial SM-BB52: tipo de caja roscada",
+              "source_url": "https://bike.shimano.com/products/components/pdp.P-SM-BB52.html"
+            },
+            "sources": [
+              "https://bike.shimano.com/products/components/pdp.P-SM-BB52.html"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Designación OEM del tipo de caja sin descomponer paso ni mano",
+      "origin": "research",
+      "evidence": [
+        "shimano-page"
+      ],
+      "scope": "Las dos copas roscadas",
+      "reason": "La ficha declara caja roscada («Threaded bottom bracket type ✔»); paso, diámetro y sentido no se publican y no se inventan."
+    },
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://bike.shimano.com/products/components/pdp.P-SM-BB52.html",
+      "unit": null,
+      "method": "URL de la ficha oficial consultada el 2026-09-16 en el navegador y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "shimano-page"
+      ],
+      "scope": "Fuente de todos los hechos de esta propuesta",
+      "reason": "Fuente exigida por el contrato para las declaraciones."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "shimano-page",
+      "kind": "oem_page",
+      "source": "Shimano (bike.shimano.com)",
+      "locator": "https://bike.shimano.com/products/components/pdp.P-SM-BB52.html",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial del modelo SM-BB52",
+      "finding": "HOLLOWTECH II bottom bracket; Threaded bottom bracket type ✔; Threaded bottom bracket shell width (mm): 68 ✔, 73 ✔.",
+      "artifact_path": "research/fill-004-bb-shimano/evidence/shimano-sm-bb52-20260916.md",
+      "sha256": "26f2a37cb31b44a9ad01c0f1d89942b932da1a8618e7e767eec615901b5432b0"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "483caf0cce09466b67070277ac174e5af9129e7f229b0a8cf0e8ca21b55b747d",
+    "notes": "SM-BB52. Los tres cambios están aplicados tal cual: designation «Roscada («Threaded bottom bracket», Shimano)» en las dos copas; standard «HOLLOWTECH II» sin diámetro; shell_designation «Roscada («Threaded bottom bracket» según Shimano)» y BSA sólo en conditions, atribuido al hecho import ba6f96ac-9d3b-445a-b7ba-5b72727ed4e4, que existe en el snapshot como bb_shell_standard sin confirmar. Diff v1→v2 contiene sólo esas líneas. Omitir la columna interface es válido porque es opcional. simulation.issues = [] y sim.proposal_sha256 corresponde a este v2."
+  }
+}

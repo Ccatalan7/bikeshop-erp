@@ -1,0 +1,256 @@
+{
+  "schema_version": 2,
+  "product_id": "e2063cc2-e0cf-431b-9824-67ade88b1298",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "7f036652414a0372bb80d85945098097bb401ae316fe5c2ce84d8e44a78fba03",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "fe9109de44741df1d7d689f78dc2e08264d183f27d542a5a3fb7a0acf2bae41a",
+      "template_sha256": "5ff1ed17ae25b119d1779c6969cb83ad4643745235155ba028b24a748cafc709",
+      "references_sha256": "ad8cfc7b79626ddbfd0220c794720065f324887adc2a8124a0bf71c9310bfd31"
+    },
+    "spec_revision": 0,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "9c93c819-cd05-4615-9e57-091af95cf1f0",
+    "contract_version": 48
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "CL566R",
+      "evidence": [
+        "product-name",
+        "kmc-series",
+        "kmc-siblings",
+        "kmc-model"
+      ],
+      "reason": "El nombre guardado «Conexión Titanio Cadena Kmc 9 Speed 2 Pcs» nombra KMC, 9 velocidades y «Titanio», que en un conector se lee como el acabado Ti-N (nitruro de titanio), no como material. El catálogo oficial lista para 9 velocidades CL566R, CL566R EPT, CL566 RB, CL566e, CL566e EPT y CL366 (archivo kmc-connector-series). Las fichas de CL566R EPT (sólo EPT), CL566 RB (sólo RB), CL566e y CL566e EPT (plata/EPT, cadenas e9) y CL366 (Snap On plata, no MissingLink) no ofrecen Ti-N (archivo kmc-siblings); la única ficha de 9 velocidades con acabado Ti-N es la de CL566R (archivo kmc-cl566r). Identidad literal por eliminación; la presentación (2 piezas) no se certifica."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "chain_connector_type",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Missing link",
+      "unit": null,
+      "method": "Declaración OEM en la página del modelo",
+      "origin": "research",
+      "evidence": [
+        "kmc-model"
+      ],
+      "scope": "Modelo CL566R; la presentación en stock se identifica por EAN o nombre",
+      "reason": "La página lo identifica como MissingLink."
+    },
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.kmcchain.com/en/product/connector-missing-link-cl566r-9-speed",
+      "unit": null,
+      "method": "URL de la página OEM consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "kmc-model"
+      ],
+      "scope": "Fuente de todos los hechos de esta propuesta",
+      "reason": "Fuente exigida por el contrato para las declaraciones."
+    },
+    {
+      "key": "chain_speeds",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": [
+        "9"
+      ],
+      "unit": null,
+      "method": "Declaración OEM: clase de cadena 9 velocidades",
+      "origin": "research",
+      "evidence": [
+        "kmc-model"
+      ],
+      "scope": "Sólo el modelo CL566R",
+      "reason": "La página lo clasifica como «9 speed»."
+    },
+    {
+      "key": "chain_link_reusable",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Declaración OEM: «Missinglink Reusable»",
+      "origin": "research",
+      "evidence": [
+        "kmc-model"
+      ],
+      "scope": "Sólo el modelo CL566R",
+      "reason": "Reutilizable según el fabricante; no fija un número de reusos."
+    },
+    {
+      "key": "chain_connector_directional",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": false,
+      "unit": null,
+      "method": "Declaración OEM: «Non directional design for easy assembling»",
+      "origin": "research",
+      "evidence": [
+        "kmc-model"
+      ],
+      "scope": "Sólo el modelo CL566R",
+      "reason": "Sin sentido de montaje según el fabricante."
+    },
+    {
+      "key": "connector_target_declarations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "kmc-9s",
+            "values": {
+              "claim_identity": "KMC CL566R admite cadenas KMC de 9 velocidades",
+              "scope_kind": "Sistema documentado",
+              "target_system": "KMC 9 velocidades",
+              "chain_class": "9",
+              "verdict": "Admitido por la fuente",
+              "source_document": "Página de producto KMC CL566R, línea «Compatibility» (archivo kmc-cl566r-20260916.md)",
+              "source_url": "https://www.kmcchain.com/en/product/connector-missing-link-cl566r-9-speed"
+            },
+            "sources": [
+              "https://www.kmcchain.com/en/product/connector-missing-link-cl566r-9-speed"
+            ]
+          },
+          {
+            "id": "shimano-9s",
+            "values": {
+              "claim_identity": "KMC CL566R admite cadenas Shimano de 9 velocidades",
+              "scope_kind": "Sistema documentado",
+              "target_system": "Shimano 9 velocidades",
+              "chain_class": "9",
+              "verdict": "Admitido por la fuente",
+              "source_document": "Página de producto KMC CL566R, línea «Compatibility» (archivo kmc-cl566r-20260916.md)",
+              "source_url": "https://www.kmcchain.com/en/product/connector-missing-link-cl566r-9-speed"
+            },
+            "sources": [
+              "https://www.kmcchain.com/en/product/connector-missing-link-cl566r-9-speed"
+            ]
+          },
+          {
+            "id": "sram-9s",
+            "values": {
+              "claim_identity": "KMC CL566R admite cadenas SRAM de 9 velocidades",
+              "scope_kind": "Sistema documentado",
+              "target_system": "SRAM 9 velocidades",
+              "chain_class": "9",
+              "verdict": "Admitido por la fuente",
+              "source_document": "Página de producto KMC CL566R, línea «Compatibility» (archivo kmc-cl566r-20260916.md)",
+              "source_url": "https://www.kmcchain.com/en/product/connector-missing-link-cl566r-9-speed"
+            },
+            "sources": [
+              "https://www.kmcchain.com/en/product/connector-missing-link-cl566r-9-speed"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Declaración OEM de compatibilidad: «KMC, SHIMANO&SRAM 9 speed chains»",
+      "origin": "research",
+      "evidence": [
+        "kmc-model"
+      ],
+      "scope": "Declaración de la fuente por sistema (marca y velocidades); no es prueba de montaje ni excluye otras cadenas",
+      "reason": "El contrato exige la declaración por filas; el campo chain_connector_target es legacy."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "kmc-model",
+      "kind": "oem_page",
+      "source": "KMC Chain",
+      "locator": "https://www.kmcchain.com/en/product/connector-missing-link-cl566r-9-speed",
+      "consulted_on": "2026-09-16",
+      "scope": "Página oficial del modelo CL566R",
+      "finding": "«Compatibility : KMC, SHIMANO&SRAM 9 speed chains», «Missinglink Reusable», «Non directional design for easy assembling».",
+      "artifact_path": "research/fill-003-connectors/evidence/kmc-cl566r-20260916.md",
+      "sha256": "826b9ff1bf7645ce5cc823330b82a648134134710b5dbd45251f7f4ee6b5edf6"
+    },
+    {
+      "id": "kmc-series",
+      "kind": "oem_catalogue",
+      "source": "KMC Chain",
+      "locator": "https://www.kmcchain.com/en/series/chain-connector-12s-11s-10s-9s-8s-7s-6s-speed",
+      "consulted_on": "2026-09-16",
+      "scope": "Catálogo oficial de conectores por clase de velocidad",
+      "finding": "11 Speed: CL555R DLC, CL555R, CL555, CL554, CL555 EPT. 9 Speed: CL566R, CL566R EPT, CL566 RB, CL566e, CL566e EPT, CL366. «Re-usable MissingLinks have no latch design, which could be used 3 to 5 times.»",
+      "artifact_path": "research/fill-003-connectors/evidence/kmc-connector-series-20260916.md",
+      "sha256": "17afc7750c4c0b24f356ce5d170010f931e842852bff720d2bcbbe98611aebce"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product e2063cc2-e0cf-431b-9824-67ade88b1298",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial existente; no confirma presentación física",
+      "finding": "Conexión Titanio Cadena Kmc 9 Speed 2 Pcs",
+      "artifact_path": "research/fill-003-connectors/evidence/cl566r-saved-name-20260916.json",
+      "sha256": "a216b476bb4a2d63f5dfebb618fc3df0115e7849337fac504f1be3b37aaff687"
+    },
+    {
+      "id": "kmc-siblings",
+      "kind": "oem_page",
+      "source": "KMC Chain",
+      "locator": "https://www.kmcchain.com/en/product/connector-missing-link-cl555-11-speed (y las fichas hermanas listadas en el archivo)",
+      "consulted_on": "2026-09-16",
+      "scope": "Fichas oficiales de los demás conectores de 11 y 9 velocidades del catálogo",
+      "finding": "11v: CL555 «Missinglink Non reusable», CL555 EPT «Non reusable», CL554 «Non reusable» (KMC, XGlide). 9v: CL566R EPT reutilizable sólo EPT (sin Ti-N); CL566 RB, CL566e, CL566e EPT «Non reusable» sin Ti-N; CL366 es Snap On (no MissingLink) plata.",
+      "artifact_path": "research/fill-003-connectors/evidence/kmc-siblings-9s-11s-20260916.md",
+      "sha256": "a5f88d124fcbe1a9c5f152fb66da4f408cb3d214a6fa18861b9190328973d0b4"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "c0a87c0e426388224e981e34063c85c9b21aa1831e81ec49270844329fddd7ac",
+    "notes": "CL566R, proposal-v3.json. Cierre literal por eliminación: de los seis modelos de 9 velocidades del catálogo, las fichas de CL566R EPT (único acabado «EPT(Anti-Rust)»), CL566 RB («RB(Anti-Rust)»), CL566e y CL566e EPT («Silver/ Silver» y «EPT», cadenas e9) y CL366 (Snap On, plata) no mencionan Ti-N, y sólo la ficha CL566R lo ofrece; el nombre guardado archivado dice «Titanio … 9 Speed» y reason explica que se lee como acabado Ti-N. Hechos y filas sin cambios. simulation.issues = []; based_on y sim.snapshot coinciden con snapshot-fresh."
+  }
+}

@@ -1,4 +1,8 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["jsonschema[format-nongpl]==4.26.0"]
+# ///
 """Write an independent reviewer's verdict into a research proposal.
 
 The reviewer (another session, another agent or the owner) answers with a
@@ -8,7 +12,7 @@ the simulator and the sealed command use) and moves the status to `reviewed`
 when the verdict is `accepted`. The researcher and the reviewer must differ,
 as the applier RPC demands. It refuses to record over an existing verdict.
 
-  python3 scripts/inventory/record_research_review.py --proposal p.json \
+  uv run --script scripts/inventory/record_research_review.py --proposal p.json \
     --by claude-peer --verdict accepted --date 2026-09-16 --notes '…' --output p-reviewed.json
 """
 import argparse
@@ -35,10 +39,11 @@ def main():
         raise SystemExit('this proposal already carries a verdict; review a fresh copy')
     if args.by == proposal['researcher']:
         raise SystemExit('the reviewer must differ from the researcher')
-    proposal['review'] = {'by': args.by, 'verdict': args.verdict, 'date': args.date,
-                          'reviewed_proposal_sha256': None, 'notes': args.notes}
-    proposal['review']['reviewed_proposal_sha256'] = proposal_hash(proposal)
+    # The hash covers everything but the review block, status included, so the
+    # status is settled before the hash is taken.
     proposal['status'] = 'reviewed' if args.verdict == 'accepted' else 'review_ready'
+    proposal['review'] = {'by': args.by, 'verdict': args.verdict, 'date': args.date,
+                          'reviewed_proposal_sha256': proposal_hash(proposal), 'notes': args.notes}
     args.output.write_text(json.dumps(proposal, ensure_ascii=False, indent=2) + '\n')
     print(json.dumps({'output': str(args.output), 'status': proposal['status'],
                       'reviewed_proposal_sha256': proposal['review']['reviewed_proposal_sha256']}))

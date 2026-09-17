@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "3711b13d-de91-4e6f-983a-377d6820701e",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "EJE MOTOR SELLADO SHIMANO BB-UN300, SPINDLE:SQUARE TYPE, SHELL:BSA 68MM, SPINDLE:122.5MM(D-NL), W/O",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "bf780f7dff01211de733e2a49b33461b0b23ec75239dfbb4a00bbebf923bafe5",
+  "product_sha256": "2804d62f3871b7898b54245f0f09f62ba4ea552bb613ee03e3287eeab5431c54",
+  "scope": "Nombre guardado en ERP; no verifica variante física ni presentación."
+}

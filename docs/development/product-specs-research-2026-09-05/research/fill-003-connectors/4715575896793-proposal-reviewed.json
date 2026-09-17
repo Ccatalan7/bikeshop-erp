@@ -1,0 +1,217 @@
+{
+  "schema_version": 2,
+  "product_id": "fc000ff8-b7d8-4ef1-89a5-62352bb1acaf",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "0430917f10c5aaacc796e98dd124e2c78b20b0329dba1328afa8047f2b4515f5",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "a70459d01a4ec34e3a414f203c584a68290d60b42d0d3f9e63c318d96f6571c8",
+      "template_sha256": "5ff1ed17ae25b119d1779c6969cb83ad4643745235155ba028b24a748cafc709",
+      "references_sha256": "ad8cfc7b79626ddbfd0220c794720065f324887adc2a8124a0bf71c9310bfd31"
+    },
+    "spec_revision": 0,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "9c93c819-cd05-4615-9e57-091af95cf1f0",
+    "contract_version": 48
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "CL559R",
+      "evidence": [
+        "kmc-model",
+        "ean-listing"
+      ],
+      "reason": "El EAN guardado (4715575896793) identifica el CL559R plata en los listados minoristas y KMC documenta ese modelo."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "chain_connector_type",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Missing link",
+      "unit": null,
+      "method": "Declaración OEM en la página del modelo",
+      "origin": "research",
+      "evidence": [
+        "kmc-model"
+      ],
+      "scope": "Modelo CL559R; la presentación en stock se identifica por EAN o nombre",
+      "reason": "La página lo identifica como MissingLink."
+    },
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.kmcchain.com/en/product/connector-missing-link-cl559r-10-speed",
+      "unit": null,
+      "method": "URL de la página OEM consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "kmc-model"
+      ],
+      "scope": "Fuente de todos los hechos de esta propuesta",
+      "reason": "Fuente exigida por el contrato para las declaraciones."
+    },
+    {
+      "key": "chain_speeds",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": [
+        "10"
+      ],
+      "unit": null,
+      "method": "Declaración OEM: clase de cadena 10 velocidades",
+      "origin": "research",
+      "evidence": [
+        "kmc-model"
+      ],
+      "scope": "Sólo el modelo CL559R",
+      "reason": "La página lo clasifica como «10 speed»."
+    },
+    {
+      "key": "chain_link_reusable",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Declaración OEM: «Missinglink Reusable»",
+      "origin": "research",
+      "evidence": [
+        "kmc-model"
+      ],
+      "scope": "Sólo el modelo CL559R",
+      "reason": "Reutilizable según el fabricante; no fija un número de reusos."
+    },
+    {
+      "key": "chain_connector_directional",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": false,
+      "unit": null,
+      "method": "Declaración OEM: «Non directional design for easy assembling»",
+      "origin": "research",
+      "evidence": [
+        "kmc-model"
+      ],
+      "scope": "Sólo el modelo CL559R",
+      "reason": "Sin sentido de montaje según el fabricante."
+    },
+    {
+      "key": "connector_target_declarations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "kmc-10s",
+            "values": {
+              "claim_identity": "KMC CL559R admite cadenas KMC de 10 velocidades",
+              "scope_kind": "Sistema documentado",
+              "target_system": "KMC 10 velocidades",
+              "chain_class": "10",
+              "verdict": "Admitido por la fuente",
+              "source_document": "Página de producto KMC CL559R, línea «Compatibility» (archivo kmc-cl559r-20260916.md)",
+              "source_url": "https://www.kmcchain.com/en/product/connector-missing-link-cl559r-10-speed"
+            },
+            "sources": [
+              "https://www.kmcchain.com/en/product/connector-missing-link-cl559r-10-speed"
+            ]
+          },
+          {
+            "id": "shimano-10s",
+            "values": {
+              "claim_identity": "KMC CL559R admite cadenas Shimano de 10 velocidades",
+              "scope_kind": "Sistema documentado",
+              "target_system": "Shimano 10 velocidades",
+              "chain_class": "10",
+              "verdict": "Admitido por la fuente",
+              "source_document": "Página de producto KMC CL559R, línea «Compatibility» (archivo kmc-cl559r-20260916.md)",
+              "source_url": "https://www.kmcchain.com/en/product/connector-missing-link-cl559r-10-speed"
+            },
+            "sources": [
+              "https://www.kmcchain.com/en/product/connector-missing-link-cl559r-10-speed"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Declaración OEM de compatibilidad: «KMC&Shimano 10 speed chains»",
+      "origin": "research",
+      "evidence": [
+        "kmc-model"
+      ],
+      "scope": "Declaración de la fuente por sistema (marca y velocidades); no es prueba de montaje ni excluye otras cadenas",
+      "reason": "El contrato exige la declaración por filas; el campo chain_connector_target es legacy."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "kmc-model",
+      "kind": "oem_page",
+      "source": "KMC Chain",
+      "locator": "https://www.kmcchain.com/en/product/connector-missing-link-cl559r-10-speed",
+      "consulted_on": "2026-09-16",
+      "scope": "Página oficial del modelo CL559R",
+      "finding": "«Compatibility : KMC&Shimano 10 speed chains», «Missinglink Reusable», «Non directional design for easy assembling».",
+      "artifact_path": "research/fill-003-connectors/evidence/kmc-cl559r-20260916.md",
+      "sha256": "43e260b7d3497ed2520dbbaa02378358d5f1f8ef8c53c0c13e09b7e8ebe2bd11"
+    },
+    {
+      "id": "ean-listing",
+      "kind": "distributor",
+      "source": "Listados minoristas del EAN 4715575896793",
+      "locator": "https://www.ebay.com/c/1200624073",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad de la presentación en stock",
+      "finding": "El EAN 4715575896793 se vende como KMC CL559R plata, reutilizable, 2 piezas (eBay 1200624073; Cycle Yoshida 00590270).",
+      "artifact_path": "research/fill-003-connectors/evidence/ean-4715575896793-listings-20260916.md",
+      "sha256": "13672562c74de9dc89de4cecbe43d98960c7d1555a796b229ec82c13cc0572c7"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "77e1a628392367bf888cf8c7ea69563eb28030d50f619be307cf33847116ac43",
+    "notes": "CL559R. Identidad respaldada literalmente: los tres listados del EAN 4715575896793 nombran «KMC CL559R» y el sku guardado es ese EAN. Cada hecho tiene su línea en kmc-cl559r-20260916.md («Missinglink Reusable», «Non directional design for easy assembling», «10 Speed», «Compatibility : KMC&Shimano 10 speed chains»). Filas: scope_kind «Sistema documentado» y verdict «Admitido por la fuente» son tokens del rows_schema; claim_identity únicas; chain_class es texto libre. Scope niega exclusión y montaje; presentación (2 piezas, plata) sólo por EAN. sha256 de ambas evidencias coinciden. simulation.issues = []."
+  }
+}

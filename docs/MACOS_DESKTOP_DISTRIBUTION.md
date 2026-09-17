@@ -175,6 +175,30 @@ protected GitHub `Production` environment. The Android terminal downloads and
 validates a bounded Actions evidence artifact containing the exact final
 Supabase manifest; it never receives those secrets.
 
+### Publicar desde un checkout compartido con cambios ajenos (2026-09-16)
+
+`scripts/publish_macos_update.sh` hace `git add -A` y crea un commit con **todo** lo que haya
+en el árbol, y lo mismo hace la preparación del publicador combinado. Cuando el checkout
+compartido tiene archivos sin confirmar de otra sesión (por ejemplo, la mensajería de Codex),
+ese camino los publicaría sin querer. La alternativa que se usó el 2026-09-16 es despachar los
+tres workflows protegidos con exactamente las entradas que el script arma, sin tocar el árbol:
+
+```bash
+jq -n --arg c <sha> --arg b <base> --arg r <gate_run_id> --arg a <gate_attempt> \
+  '{release_target:"macos",publish_release:"true",expected_commit:$c,release_notes_from_commit:$b,release_notes_candidate_b64:"",release_notes_candidate_sha256:"",integrity_run_id:$r,integrity_run_attempt:$a}' \
+  | gh workflow run macos-release.yml --repo Ccatalan7/bikeshop-erp --ref main --json
+```
+
+`<base>` sale de `scripts/releases/resolve_previous_release_commit.sh macos-v
+macos-release-manifest.json <sha>` (y `windows-v windows-release-manifest.json` para Windows;
+Android acepta el mismo base), `<gate_run_id>` es el `ERP Integrity Gate` verde del sha exacto
+(`gh run list --workflow erp-integrity-gate.yml --commit <sha>`) y el intento sale de
+`gh api repos/…/actions/runs/<id> --jq .run_attempt`. Windows y Android llevan las mismas
+entradas sin `release_target`. El sha tiene que ser el head vivo de `main` al despachar. Después
+se comprueba el manifiesto (`gh release download macos-latest --pattern
+macos-release-manifest.json`: `commit`, `release_notes.source: ai`) y `Published … Android
+1.0.3+N` en el log del run.
+
 ### El recuadro de «Novedades» se escribe antes, o se pierde (2026-08-22)
 
 El texto que ven los compañeros viaja **dentro del manifiesto firmado**, no en

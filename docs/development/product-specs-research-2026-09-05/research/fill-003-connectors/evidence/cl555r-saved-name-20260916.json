@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "28aeb755-1aa2-4835-bd31-edf8c2d7f223",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Conexión Cadena Kmc 11 speed, Plata 2 pcs",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "27c5802c949533ef1024b84b65c012c6775fdc3ac71c55e5d9b419f41a7375f8",
+  "product_sha256": "f205cb06cd539dbf9e0855963ccb8d5e105f66c90143966661d4df3b1c8d5f48",
+  "scope": "Nombre guardado en ERP; no verifica variante física ni presentación."
+}
