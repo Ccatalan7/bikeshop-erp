@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "70b35ab6-c798-470c-86ad-489be4e74b00",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "sku",
+  "value": "RDM41 LD",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "34437f50faa662b33b58006b3a44727db3d51486fd58bd1b723d3d9e5a8117de",
+  "product_sha256": "12f6754b2a6fffe45e361802df9c15cc02c42657864932b9ced10a2ca7ce08b9",
+  "scope": "SKU guardado en ERP; no verifica variante física ni presentación."
+}

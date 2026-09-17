@@ -1,0 +1,117 @@
+{
+  "schema_version": 2,
+  "product_id": "70b35ab6-c798-470c-86ad-489be4e74b00",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "34437f50faa662b33b58006b3a44727db3d51486fd58bd1b723d3d9e5a8117de",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "12f6754b2a6fffe45e361802df9c15cc02c42657864932b9ced10a2ca7ce08b9",
+      "template_sha256": "bcc623bee4bb69727cd830c67fb020a633b00a3c16300f01abb05b66ba60fe5b",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 0,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "0750e4ac-4615-4ad4-862e-95ac102b12f7",
+    "contract_version": 37
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "RDM41",
+      "evidence": [
+        "product-sku",
+        "product-name",
+        "oem"
+      ],
+      "reason": "El sku guardado «RDM41 LD» nombra el modelo RDM41; el nombre dice 7 y 8 velocidades y la ficha oficial SunRace RDM41 LDB declara 7/8-speed. El sufijo de color (LD/LDB) no se fija."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://sunrace.com/product/rdm41-ldb/",
+      "unit": null,
+      "method": "URL de la ficha oficial consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos de esta propuesta",
+      "reason": "Fuente exigida por el contrato para las declaraciones."
+    },
+    {
+      "key": "rear_derailleur_mount_type",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Pata/postiza estándar",
+      "unit": null,
+      "method": "Ficha oficial: «Fitting: Direct»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo RDM41 LDB",
+      "reason": "SunRace declara montaje directo (a la pata), no con uña."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "SunRace (sunrace.com)",
+      "locator": "https://sunrace.com/product/rdm41-ldb/",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial RDM41 LDB",
+      "finding": "Speeds 7/8-speed; Fitting Direct; Reach 11-34; Material Alloy",
+      "artifact_path": "research/fill-005-drivetrain/evidence/sunrace-rdm41-ldb-20260916.md",
+      "sha256": "9dc01605065e2b012d5db87e336bd61bf5cc00d78349ab2bfe34afdab35cf729"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 70b35ab6-c798-470c-86ad-489be4e74b00",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante declarada en el nombre; no confirma presentación física",
+      "finding": "CAMBIO TRASERO 7 Y 8 VEL",
+      "artifact_path": "research/fill-005-drivetrain/evidence/rdm41-saved-name-20260916.json",
+      "sha256": "f047d7020eb67cebad147c4beebf79b9f9a0a1772b955e676d94648782410fb1"
+    },
+    {
+      "id": "product-sku",
+      "kind": "name_quote",
+      "source": "ERP product 70b35ab6-c798-470c-86ad-489be4e74b00",
+      "locator": "products.sku",
+      "consulted_on": "2026-09-16",
+      "scope": "SKU guardado; nombra el modelo RDM41 con sufijo LD",
+      "finding": "RDM41 LD",
+      "artifact_path": "research/fill-005-drivetrain/evidence/rdm41-saved-sku-20260916.json",
+      "sha256": "3d846f88a3cc667cc7b4e220fd8394b704dbab9f0bcca0e89df8f2460bb547d5"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "6ac3df7a6bafd58391d1c6443c24d6c27444ae358c8f970c0600c272e9f5de2f",
+    "notes": "RDM41, proposal-v2.json. El sku quedó archivado como saved_product_identity (rdm41-saved-sku-20260916.json, field sku, valor «RDM41 LD», sha coincide, product_sha256 igual al del snapshot) y la identidad lo cita junto al nombre y a la ficha SunRace; «RDM41» es prefijo literal del sku y la ficha RDM41 LDB declara 7/8-speed como el nombre. Montaje «Pata/postiza estándar» por «Fitting: Direct» sin cambios. simulation.issues = []; hash corresponde a este v2."
+  }
+}

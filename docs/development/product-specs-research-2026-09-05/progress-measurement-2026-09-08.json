@@ -1738,5 +1738,55 @@
    "record_research_review.py"
   ],
   "record": "fill-003-004-record-2026-09-16.md"
+ },
+ "research_fill_005_2026_09_16": {
+  "batch": "fill-005-drivetrain",
+  "products": 8,
+  "facts": 27,
+  "applications": [
+   "66b44271-7b1a-556f-8534-d37c9f63a0f2",
+   "70c8a1b9-1a3d-57df-8b12-569eb6c9b024",
+   "994d9249-3f50-5eb4-8c49-d793cfb82b59",
+   "2c18ce55-5fc3-58fe-a77e-46c1860a8fa1",
+   "4ecae8a7-f0ad-5a91-bdb9-fa32fb9822b3",
+   "b6309b35-ee19-5268-aa6f-99a52764b3e6",
+   "cb0f0cc9-ba91-50b4-a81d-ce9e19283cf7",
+   "39485ab7-03cc-50fe-8cec-f4303f58e0df"
+  ],
+  "reviewer": "claude-peer",
+  "rounds": 2,
+  "excluded": {
+   "no_oem_sheet_or_model": 12
+  },
+  "record": "fill-005-record-2026-09-16.md"
+ },
+ "research_rows_schema_version_2026_09_16": {
+  "migration": "20260916260000_research_rows_schema_version",
+  "defect": "research merge, preview empty-envelope test and row-conditions probe pinned rows schema_version 1; three definitions at v2 were unfillable by research",
+  "affected_definitions": [
+   "front_derailleur_clamp_options",
+   "headset_lower_bearing_configuration",
+   "headset_upper_bearing_configuration"
+  ],
+  "facts_stored_under_them_before": 0,
+  "tests": [
+   "supabase/tests/product_spec_research_rows_version.sql",
+   "test/scripts/test_product_spec_research_simulator.py"
+  ],
+  "tooling": [
+   "catalog-fill-proposal-v2.schema.json rows schema_version follows the definition",
+   "simulate_product_spec_research.py row_schema_version + evidence_kind_insufficient"
+  ]
+ },
+ "catalog_research_measurement_2026_09_16": {
+  "criterion": "bound via product_spec_bindings_internal_v1, active, tenant Viñabike; researched = any fact with source in research/mechanic/catalog/supplier_text/import",
+  "bound_active": 1551,
+  "researched": 452,
+  "name_reading_only": 395,
+  "nothing": 704,
+  "in_stock": 506,
+  "in_stock_researched": 105,
+  "in_stock_pending": 401,
+  "note": "measured before fill-005 applied (8 more researched since)"
  }
 }

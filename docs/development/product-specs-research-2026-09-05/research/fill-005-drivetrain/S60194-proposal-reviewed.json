@@ -1,0 +1,143 @@
+{
+  "schema_version": 2,
+  "product_id": "20bd90e2-c18d-4517-86b6-e67c57ccade0",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "17aecc23ac3510e7316cb0052baed9058ac9b05ef6fa1e9ac5eb3bb6d52b7444",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "ddb8d67cf5225de671a6202855cc98a81a3efc6be4e10cad8c7f8fafb0fac393",
+      "template_sha256": "bcc623bee4bb69727cd830c67fb020a633b00a3c16300f01abb05b66ba60fe5b",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 0,
+    "updated_at": "2026-07-22T22:09:29.817866+00:00",
+    "template_id": "0750e4ac-4615-4ad4-862e-95ac102b12f7",
+    "contract_version": 37
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "RD-TZ500-GS",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice RD-TZ500 y el sku Shimano ERDTZ500GSD nombra la variante GS; la ficha oficial documenta RD-TZ500-GS."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://bike.shimano.com/products/components/pdp.P-RD-TZ500-GS.html",
+      "unit": null,
+      "method": "URL de la ficha oficial consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos de esta propuesta",
+      "reason": "Fuente exigida por el contrato para las declaraciones."
+    },
+    {
+      "key": "derailleur_cage_length",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Media (GS)",
+      "unit": null,
+      "method": "Sufijo GS del Model No de la ficha oficial («MEDIUM CAGE»)",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo RD-TZ500-GS",
+      "reason": "La ficha titula «MEDIUM CAGE REAR DERAILLEUR» y el Model No lleva GS."
+    },
+    {
+      "key": "rear_derailleur_compatibility_claims",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "chain",
+            "values": {
+              "claim_identity": "RD-TZ500-GS · cadena HG 8/7/6-speed",
+              "scope_kind": "Interfaz o estándar documentado",
+              "declared_interface": "HG 8/7/6-speed",
+              "target_component": "Cadena",
+              "declaration_result": "Compatible declarado",
+              "source_document": "Ficha oficial Shimano RD-TZ500-GS (tabla de especificaciones)",
+              "source_url": "https://bike.shimano.com/products/components/pdp.P-RD-TZ500-GS.html"
+            },
+            "sources": [
+              "https://bike.shimano.com/products/components/pdp.P-RD-TZ500-GS.html"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha oficial: «Compatible chain: HG 8/7/6-speed»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Declaración de cadena de la ficha; no es prueba de montaje",
+      "reason": "Línea literal de la tabla."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (bike.shimano.com)",
+      "locator": "https://bike.shimano.com/products/components/pdp.P-RD-TZ500-GS.html",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial RD-TZ500-GS",
+      "finding": "Rear speeds 6; Compatible chain HG 8/7/6-speed; Mount: Direct attachment (conventional) ✔, Riveted adapter (ROAD type) ✔",
+      "artifact_path": "research/fill-005-drivetrain/evidence/shimano-rd-tz500-gs-20260916.md",
+      "sha256": "ad3be85a16fb7b52b418b541c76cfb10ff1023bcfed0f2e209a33060aa8e51b2"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 20bd90e2-c18d-4517-86b6-e67c57ccade0",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante declarada en el nombre; no confirma presentación física",
+      "finding": "CAMBIO SHIMANO TOURNEY TZ RD-TZ500 6V. P/APERNAR (CAJA) ERDTZ500GSD",
+      "artifact_path": "research/fill-005-drivetrain/evidence/rd-tz500-saved-name-20260916.json",
+      "sha256": "d21e2474934a0dbd13757759e7a9cac16d65d3f8ee6b57ce83ae253010ec17be"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "14f4e7989be33e493d483f250369ad5ae2e5848a0f65033f0c99f27ee4f5c85d",
+    "notes": "RD-TZ500-GS, proposal-v2.json. Diff v1→v2: sólo desaparece el hecho rear_derailleur_mount_type y la nota de revisión explica que la ficha marca ambos montajes y «apernar» no lo fija. Quedan identidad RD-TZ500-GS (código ERDTZ500GSD del nombre archivado + ficha), «Media (GS)» y la fila de cadena HG 8/7/6, todo literal. Evidencias sha ok, product_sha del nombre coincide con el snapshot; simulation.issues = [] y sim.proposal_sha256 es el compact-sorted sin review de este v2."
+  }
+}

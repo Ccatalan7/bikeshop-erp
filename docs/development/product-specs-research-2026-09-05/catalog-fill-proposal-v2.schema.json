@@ -254,7 +254,8 @@
                 "additionalProperties": false,
                 "properties": {
                   "schema_version": {
-                    "const": 1
+                    "type": "integer",
+                    "minimum": 1
                   },
                   "rows": {
                     "type": "array",

@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "5be04f8f-3982-43a8-900a-8b3b9c964f61",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "HERRAMIENTA PRO BIKEGEAR TOOL BRAKE PISTON LEVER BLACK (PRTLB051)",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "1c76fd4f9b3b33c5642194ead3743fc2adfc952e0bc48ff995df7f42bc0c6017",
+  "product_sha256": "acdd6425785dbda9fe7a9a79a35df781e69d7b9b672e824116b3efd8fdf3f5d1",
+  "scope": "Nombre guardado en ERP; no verifica variante física ni presentación."
+}

@@ -30,6 +30,15 @@ SCHEMA = RESEARCH / 'catalog-fill-proposal-v2.schema.json'
 # researcher. claude-peer is a separate Claude session with fresh context
 # (2026-09-16); owner is the shop owner reviewing by hand.
 REVIEWERS = ('codex', 'claude', 'claude-peer', 'owner')
+# What each contract evidence requirement accepts, by archived evidence kind.
+# A saved name (name_quote) or an existing measurement never stands in for a
+# manufacturer's sheet or the package; a distributor listing is not the OEM.
+EVIDENCE_REQUIREMENT_KINDS = {
+    'oem_spec': {'oem_page', 'oem_catalogue'},
+    'oem_or_package': {'oem_page', 'oem_catalogue', 'packaging_photo'},
+    'package_or_label': {'oem_page', 'oem_catalogue', 'packaging_photo', 'erp_image'},
+    'name_reading_hint_only': None,
+}
 
 
 def canonical(value):
@@ -48,8 +57,14 @@ def same(left, right):
 
 def merge_row_delta(current, patch):
     """Preview upserts retain omitted rows, cells, source order and stable IDs."""
-    base = deepcopy(current if current is not None else {'schema_version': 1, 'rows': []})
-    if (not isinstance(base, dict) or base.get('schema_version') != 1
+    # The rows carry the version their definition's rows_schema declares (the
+    # engine rejects any other); a delta never migrates an observation written
+    # under an older version, that is sanitation work.
+    version = patch.get('schema_version')
+    if type(version) is not int or version < 1:
+        raise ValueError('Row version must be an integer')
+    base = deepcopy(current if current is not None else {'schema_version': version, 'rows': []})
+    if (not isinstance(base, dict) or base.get('schema_version') != version
             or not isinstance(base.get('rows'), list)):
         raise ValueError('Existing row observations require sanitation')
     originals = unique(base['rows'], 'id')
@@ -190,6 +205,8 @@ def inspect_proposal(proposal, snapshot, evidence_root=RESEARCH):
         )
         if not valid_type:
             issue('typed_value_required', key)
+        elif kind == 'json' and value.get('schema_version') != definition['validation_rules']['rows_schema'].get('version'):
+            issue('row_schema_version', key)
         # Research provenance is written by the published applier
         # (20260916140000); only a name reading still needs its own receipt.
         if change['origin'] == 'existing_name':
@@ -199,6 +216,17 @@ def inspect_proposal(proposal, snapshot, evidence_root=RESEARCH):
         for source in change['evidence']:
             if source not in evidence:
                 issue('unknown_evidence', source)
+    # The contract says what kind of evidence each field needs; a fact whose
+    # archived evidence is all weaker than that is blocked here, not by the
+    # reviewer's eye.
+    requirements = (template or {}).get('form_contract', {}).get('evidence_requirements', {}) if fields else {}
+    for key, change in facts.items():
+        accepted = EVIDENCE_REQUIREMENT_KINDS.get(requirements.get(key))
+        if accepted is None:
+            continue
+        kinds = {evidence[source]['kind'] for source in change['evidence'] if source in evidence}
+        if not kinds & accepted:
+            issue('evidence_kind_insufficient', key)
     evidence_root = evidence_root.resolve()
     for source in evidence.values():
         artifact = source['artifact_path']

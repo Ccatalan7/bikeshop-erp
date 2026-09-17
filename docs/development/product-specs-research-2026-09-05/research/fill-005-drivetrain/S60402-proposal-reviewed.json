@@ -1,0 +1,213 @@
+{
+  "schema_version": 2,
+  "product_id": "07551cad-e95c-42dc-b98f-a5963fc3d262",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "afa38ea72958e69a2b1b95cf918b852e9aafda17b67d1395be44620a21e3d938",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "bf58be743e00917e3fd2cb26e952ef2bbaadf8d967dd0c19c14deedac380b9c2",
+      "template_sha256": "a928c81c97bf0e62079758b0d821bb89aa98368d3078cd1a89375431bc3ee602",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 0,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "590232e5-d21a-4a47-9419-1bf42e6b1922",
+    "contract_version": 29
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "FD-TZ510-DS6",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice fd-tz510-ds6 y la ficha oficial documenta FD-TZ510-DS6."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://bike.shimano.com/products/components/pdp.P-FD-TZ510-DS6.html",
+      "unit": null,
+      "method": "URL de la ficha oficial consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos de esta propuesta",
+      "reason": "Fuente exigida por el contrato para las declaraciones."
+    },
+    {
+      "key": "front_derailleur_mount_type",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Abrazadera",
+      "unit": null,
+      "method": "Ficha oficial: título «(CLAMP BAND MOUNT)»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo FD-TZ510-DS6",
+      "reason": "La ficha lo titula clamp band mount."
+    },
+    {
+      "key": "front_derailleur_swing",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Down swing",
+      "unit": null,
+      "method": "Ficha oficial: «Action: Down swing ✔»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo FD-TZ510-DS6",
+      "reason": "Línea literal de la tabla."
+    },
+    {
+      "key": "front_derailleur_clamp_options",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 2,
+        "rows": [
+          {
+            "id": "clamp-28-6",
+            "values": {
+              "option_identity": "Abrazadera 28,6 mm (nombre guardado)",
+              "attachment_method": "Abrazadera directa",
+              "direct_tube_diameter_mm": "28.6",
+              "source_document": "Nombre guardado del producto («28.6mm»); la ficha oficial declara «CLAMP BAND MOUNT» sin diámetro",
+              "source_url": "https://bike.shimano.com/products/components/pdp.P-FD-TZ510-DS6.html",
+              "conditions": "Diámetro tomado del nombre guardado (evidencia product-name); la ficha oficial no lo publica"
+            },
+            "sources": [
+              "https://bike.shimano.com/products/components/pdp.P-FD-TZ510-DS6.html"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Nombre guardado «28.6mm» sobre el montaje clamp band de la ficha",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Presentación en stock; el diámetro viene del nombre, no de la ficha",
+      "reason": "El contrato exige la opción de abrazadera cuando el montaje es abrazadera; la ficha no publica el diámetro y el nombre guardado lo declara."
+    },
+    {
+      "key": "front_derailleur_application_configurations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "3x7",
+            "values": {
+              "configuration_identity": "3x7 (ficha: Front speeds 3 (friction), Rear speeds 7/6)",
+              "front_chainring_count": "3",
+              "rear_sprocket_count": "7",
+              "chain_declaration": "HG 8/7/6-speed",
+              "source_document": "Ficha oficial Shimano FD-TZ510-DS6 (tabla de especificaciones)",
+              "source_url": "https://bike.shimano.com/products/components/pdp.P-FD-TZ510-DS6.html"
+            },
+            "sources": [
+              "https://bike.shimano.com/products/components/pdp.P-FD-TZ510-DS6.html"
+            ]
+          },
+          {
+            "id": "3x6",
+            "values": {
+              "configuration_identity": "3x6 (ficha: Front speeds 3 (friction), Rear speeds 7/6)",
+              "front_chainring_count": "3",
+              "rear_sprocket_count": "6",
+              "chain_declaration": "HG 8/7/6-speed",
+              "source_document": "Ficha oficial Shimano FD-TZ510-DS6 (tabla de especificaciones)",
+              "source_url": "https://bike.shimano.com/products/components/pdp.P-FD-TZ510-DS6.html"
+            },
+            "sources": [
+              "https://bike.shimano.com/products/components/pdp.P-FD-TZ510-DS6.html"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha oficial: Front speeds 3 (friction), Rear speeds 7/6, Compatible chain HG 8/7/6-speed",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Configuraciones documentadas; dientes de plato no publicados",
+      "reason": "La ficha declara 3 platos (fricción) con 7 o 6 velocidades traseras."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (bike.shimano.com)",
+      "locator": "https://bike.shimano.com/products/components/pdp.P-FD-TZ510-DS6.html",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial FD-TZ510-DS6",
+      "finding": "TOURNEY TZ FRONT DERAILLEUR DOWN SWING (CLAMP BAND MOUNT) 3(FRICTION)X8/7s; Front speeds 3 (friction); Rear speeds 7/6; Compatible chain HG 8/7/6-speed; Action Down swing ✔",
+      "artifact_path": "research/fill-005-drivetrain/evidence/shimano-fd-tz510-ds6-20260916.md",
+      "sha256": "06beda691564e732205b624c8bbd213fe06ed386a77f649cb21e26a0d132e0b6"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 07551cad-e95c-42dc-b98f-a5963fc3d262",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante declarada en el nombre; no confirma presentación física",
+      "finding": "cambiador shimano tz fd-tz510-ds6 3 (friction)x7/6 28.6mm",
+      "artifact_path": "research/fill-005-drivetrain/evidence/fd-tz510-saved-name-20260916.json",
+      "sha256": "18f2dbaec5f52b20e441065f5c24fe0982c2cd8bff6014d5dd4635f14cdf1b84"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "b2cc9d90d6d097f305c70231c546f8025af05a60557f3969b671f10d43c5d063",
+    "notes": "FD-TZ510-DS6. Identidad literal en nombre y ficha. Montaje «Abrazadera» («CLAMP BAND MOUNT»), «Down swing» («Action: Down swing ✔»), filas 3x7 y 3x6 con HG 8/7/6: todo literal; tokens válidos. La fila de abrazadera 28,6 mm toma el valor del nombre guardado archivado como name_quote y lo declara en source_document y conditions; mismo criterio que BSA y 122,5 en BB-UN300. front_derailleur_clamp_options lleva schema_version 2 y la definición está en rows_schema.version 2; columnas requeridas presentes. Evidencias sha ok; simulation.issues = []; hash corresponde."
+  }
+}

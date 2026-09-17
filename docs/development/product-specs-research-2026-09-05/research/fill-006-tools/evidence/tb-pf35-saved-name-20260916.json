@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "4a1f8fcc-bda3-46cd-b885-02c617d25c19",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "CENTRADOR DE RUEDA SUPER B PROFESSIONAL TB-PF35",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "318dd95ec0cf4e7564c8a5cca828bcaa89aaa75ba72df25d8ef804d5f0fc1cb8",
+  "product_sha256": "196ed9577197bf48c17356fc37ee65b5a741e259e5a2ac61fb94426674478ed6",
+  "scope": "Nombre guardado en ERP; no verifica variante física ni presentación."
+}

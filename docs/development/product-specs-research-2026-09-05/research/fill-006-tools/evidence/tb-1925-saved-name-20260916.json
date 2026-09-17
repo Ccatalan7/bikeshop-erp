@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "828fe818-d161-4a23-9571-512ea1be5cff",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "LLAVE EXTRACTOR CONO SUPER B DIRECCION TB-1925",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "1bb554f29c80b4bd5ed84a995c8f264921b179acac4d02ab0feac9aea32011be",
+  "product_sha256": "cb05c2fea71e23ba124fe2ca9ba80a7ef7c68c3d3378cd3a347cfd7ec5142f6e",
+  "scope": "Nombre guardado en ERP; no verifica variante física ni presentación."
+}

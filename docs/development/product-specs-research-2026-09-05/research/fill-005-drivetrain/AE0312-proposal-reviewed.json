@@ -1,0 +1,199 @@
+{
+  "schema_version": 2,
+  "product_id": "a7a7b5d4-e0a8-4a9b-b9bf-5739f8494f27",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "9a3afd9cc027ba9592e620184c023900835801d648e152fb2974dc63a1807d5e",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "771a48154095b0110138859ea026e162d0b80bc983b00b60dbdf88b95f444e81",
+      "template_sha256": "bcc623bee4bb69727cd830c67fb020a633b00a3c16300f01abb05b66ba60fe5b",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 0,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "0750e4ac-4615-4ad4-862e-95ac102b12f7",
+    "contract_version": 37
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": "M7100",
+      "proposed": "RD-M7100",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice RD-M7100 12S; la ficha oficial consultada es RD-M7100-SGS y ninguna fuente archivada fija que sólo exista en pata SGS, así que el modelo se registra sin sufijo."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://bike.shimano.com/products/components/pdp.P-RD-M7100-SGS.html",
+      "unit": null,
+      "method": "URL de la ficha oficial consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos de esta propuesta",
+      "reason": "Fuente exigida por el contrato para las declaraciones."
+    },
+    {
+      "key": "derailleur_clutch",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Ficha oficial: «RD construction: SHIMANO SHADOW RD+ ✔»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo RD-M7100-SGS",
+      "reason": "SHADOW RD+ es el sistema Shimano con estabilizador de cadena (clutch); la ficha lo marca."
+    },
+    {
+      "key": "rear_derailleur_mount_type",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Pata/postiza estándar",
+      "unit": null,
+      "method": "Ficha oficial: «Mount: Direct attachment (conventional) ✔»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo RD-M7100-SGS",
+      "reason": "Montaje convencional a la pata del cuadro según la ficha."
+    },
+    {
+      "key": "rear_derailleur_application_configurations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "1x12",
+            "values": {
+              "configuration_identity": "1x12 (título de la ficha «SLX REAR DERAILLEUR 1X12s»)",
+              "front_chainring_count": "1",
+              "rear_sprocket_count": "12",
+              "chain_declaration": "HG 12-speed",
+              "source_document": "Ficha oficial Shimano RD-M7100-SGS (tabla de especificaciones)",
+              "source_url": "https://bike.shimano.com/products/components/pdp.P-RD-M7100-SGS.html"
+            },
+            "sources": [
+              "https://bike.shimano.com/products/components/pdp.P-RD-M7100-SGS.html"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha oficial: título «1X12s», Rear speeds 12, Compatible chain HG 12-speed",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Configuración documentada; los dientes de piñón no están en la ficha y no se declaran",
+      "reason": "La ficha declara 1x12 con cadena HG 12-speed."
+    },
+    {
+      "key": "rear_derailleur_compatibility_claims",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "chain",
+            "values": {
+              "claim_identity": "RD-M7100-SGS · cadena HG 12-speed",
+              "scope_kind": "Interfaz o estándar documentado",
+              "declared_interface": "HG 12-speed",
+              "target_component": "Cadena",
+              "declaration_result": "Compatible declarado",
+              "source_document": "Ficha oficial Shimano RD-M7100-SGS (tabla de especificaciones)",
+              "source_url": "https://bike.shimano.com/products/components/pdp.P-RD-M7100-SGS.html"
+            },
+            "sources": [
+              "https://bike.shimano.com/products/components/pdp.P-RD-M7100-SGS.html"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha oficial: «Compatible chain: HG 12-speed»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Declaración de cadena de la ficha; no es prueba de montaje",
+      "reason": "Línea literal de la tabla."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (bike.shimano.com)",
+      "locator": "https://bike.shimano.com/products/components/pdp.P-RD-M7100-SGS.html",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial RD-M7100-SGS",
+      "finding": "SLX REAR DERAILLEUR 1X12s; Rear speeds 12; Compatible chain HG 12-speed; RD construction SHIMANO SHADOW RD+ ✔; Mount Direct attachment (conventional) ✔",
+      "artifact_path": "research/fill-005-drivetrain/evidence/shimano-rd-m7100-sgs-20260916.md",
+      "sha256": "715ab3bdf171588f0a83b741385cb2dc1f55c85284207ce3990cf34622168ef2"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product a7a7b5d4-e0a8-4a9b-b9bf-5739f8494f27",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante declarada en el nombre; no confirma presentación física",
+      "finding": "Shimano Deore SLX RD-M7100 12S",
+      "artifact_path": "research/fill-005-drivetrain/evidence/rd-m7100-saved-name-20260916.json",
+      "sha256": "7b3fed88ecb879aae97e65e5541712679882fdf07ca5e51d1e78b0e3553c2aed"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "58634c81d0d9666cda2adfae1e28d701d06281780aae016c3504881ba0361b24",
+    "notes": "RD-M7100, proposal-v2.json. Opción (b) aplicada tal cual: model «RD-M7100» (nombre «RD-M7100 12S», literal), sin derailleur_cage_length, y se conservan clutch por SHADOW RD+, montaje «Pata/postiza estándar» (única opción marcada), fila 1x12 con HG 12-speed y fila de cadena. Observación sin efecto: claim_identity y source_document de las filas siguen nombrando «RD-M7100-SGS» porque esa es la ficha archivada. Evidencias sha ok; simulation.issues = []; hash corresponde."
+  }
+}

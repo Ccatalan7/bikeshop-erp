@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "a7a7b5d4-e0a8-4a9b-b9bf-5739f8494f27",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Shimano Deore SLX RD-M7100 12S",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "9a3afd9cc027ba9592e620184c023900835801d648e152fb2974dc63a1807d5e",
+  "product_sha256": "771a48154095b0110138859ea026e162d0b80bc983b00b60dbdf88b95f444e81",
+  "scope": "Nombre guardado en ERP; no verifica variante física ni presentación."
+}

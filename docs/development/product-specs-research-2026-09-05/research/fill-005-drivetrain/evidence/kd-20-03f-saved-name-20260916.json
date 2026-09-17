@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "87053530-a9d9-468f-9df9-9c48407d7f77",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "MANILLA CAMBIO 6 VEL. M.T.B. KD-20-03F\nSAIGUAN SET",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "d940ceef85c47f748233de47bb85e2a61d12acf8b82d038f84a0dc29b35e4558",
+  "product_sha256": "3d2f8e7aa082bce9569605438106571e82041962a1869e19d0f1ab90363d5fa1",
+  "scope": "Nombre guardado en ERP; no verifica variante física ni presentación."
+}

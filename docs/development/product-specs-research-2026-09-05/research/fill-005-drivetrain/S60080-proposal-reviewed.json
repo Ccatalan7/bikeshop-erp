@@ -1,0 +1,143 @@
+{
+  "schema_version": 2,
+  "product_id": "704175ff-2b31-4451-ae3a-a1a3ad15a6fe",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "5b03bf04b3bd9be15ada53a14c567d3780b4524bbd3ec1d99619ef071f2f0034",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "68821e219b1ecd7bde95c94f6c71e176661f35d058b3b3e7d4f1e3c2f6f3bda9",
+      "template_sha256": "a788e2db3fa29e6c1cfa155dcfc274824180854016998ef9f0533059a9661098",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 0,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "61005a7e-a107-49f3-96c3-2fa2796d3299",
+    "contract_version": 34
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "SL-TZ500-LN",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice sl-tz500-ln y la ficha oficial documenta SL-TZ500-LN."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://bike.shimano.com/products/components/pdp.P-SL-TZ500-LN.html",
+      "unit": null,
+      "method": "URL de la ficha oficial consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos de esta propuesta",
+      "reason": "Fuente exigida por el contrato para las declaraciones."
+    },
+    {
+      "key": "shifter_position",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Izquierdo (delantero)",
+      "unit": null,
+      "method": "Ficha oficial: título «LEFT THUMB SHIFTER», Front speeds 3",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo SL-TZ500-LN",
+      "reason": "Mando izquierdo (delantero) según la ficha."
+    },
+    {
+      "key": "shifter_control_style",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Palanca de pulgar",
+      "unit": null,
+      "method": "Ficha oficial: «Shifter type: Thumb Shifter»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo SL-TZ500-LN",
+      "reason": "Línea literal de la tabla."
+    },
+    {
+      "key": "shifter_actuation_mode",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Fricción",
+      "unit": null,
+      "method": "Ficha oficial: «Front speeds: 3 (friction)»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo SL-TZ500-LN",
+      "reason": "La ficha lo declara de fricción."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (bike.shimano.com)",
+      "locator": "https://bike.shimano.com/products/components/pdp.P-SL-TZ500-LN.html",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial SL-TZ500-LN",
+      "finding": "TOURNEY TZ LEFT THUMB SHIFTER 3X7/6s (FRICTION); Shifter type Thumb Shifter; Front speeds 3 (friction); Mount type Clamp band ✔",
+      "artifact_path": "research/fill-005-drivetrain/evidence/shimano-sl-tz500-ln-20260916.md",
+      "sha256": "e466b8dd29214440c6d3dda6f9695137d4f06a9d6aaf195ee168b9a2291af860"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 704175ff-2b31-4451-ae3a-a1a3ad15a6fe",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante declarada en el nombre; no confirma presentación física",
+      "finding": "manilla cambio shimano sl-tz500-ln 3v. tz front 1800mm",
+      "artifact_path": "research/fill-005-drivetrain/evidence/sl-tz500-saved-name-20260916.json",
+      "sha256": "d57fb5ad98b6f654d767526142c567092d37725891de9f04b0d604a9ec523c7c"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "37eb08940f6c238047f0ececac6c25a606e0ff07f6ec8a3f985abfe12e3da40d",
+    "notes": "SL-TZ500-LN. Identidad literal en nombre y ficha. «Izquierdo (delantero)», «Palanca de pulgar» y «Fricción» son literales y tokens válidos; diámetro de manillar no declarado, correcto. Nota sin efecto: el saved-name registra el snapshot previo a la migración de plantilla; product_sha256 coincide. Evidencias sha ok; simulation.issues = []; hash corresponde."
+  }
+}

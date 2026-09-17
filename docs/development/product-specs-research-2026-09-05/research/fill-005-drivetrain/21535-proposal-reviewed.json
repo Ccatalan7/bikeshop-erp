@@ -1,0 +1,105 @@
+{
+  "schema_version": 2,
+  "product_id": "2adde042-01df-45fd-94df-c3ca462c20dd",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "732f505e53949772846f8b4b4b938e988e7f83cc43b488cdb85d6714f6edcb76",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "5211fddc3bc436dab5fb3beecd1b567f784835919cb467046e4027c1c72f0427",
+      "template_sha256": "bcc623bee4bb69727cd830c67fb020a633b00a3c16300f01abb05b66ba60fe5b",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 0,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "0750e4ac-4615-4ad4-862e-95ac102b12f7",
+    "contract_version": 37
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "HG-38A",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice HG38A y la ficha oficial de Saiguan documenta HG-38-HG-38A (HG-38A sin conector)."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.saiguan.com/-1335105.html",
+      "unit": null,
+      "method": "URL de la ficha oficial consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos de esta propuesta",
+      "reason": "Fuente exigida por el contrato para las declaraciones."
+    },
+    {
+      "key": "derailleur_cage_length",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Corta (SS)",
+      "unit": null,
+      "method": "Ficha oficial: «Index rear derailleur,short cage»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo HG-38A",
+      "reason": "La ficha lo declara de pata corta."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Ningbo Saiguan Bicycle Co. (saiguan.com)",
+      "locator": "https://www.saiguan.com/-1335105.html",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial HG-38-HG-38A",
+      "finding": "Index rear derailleur, short cage; Capacity 28T; steel/resin",
+      "artifact_path": "research/fill-005-drivetrain/evidence/saiguan-hg-38a-20260916.md",
+      "sha256": "d762518f3efc38bd524b33aa32215769fbbf251181ccc289536ccf5e38d784ee"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 2adde042-01df-45fd-94df-c3ca462c20dd",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante declarada en el nombre; no confirma presentación física",
+      "finding": "Cambio SIAGUAN HG38A, Index, 6-7 Vel. Apernado, Max 36T, Black",
+      "artifact_path": "research/fill-005-drivetrain/evidence/hg-38a-saved-name-20260916.json",
+      "sha256": "b1517207d23aa1b2a750e046bb688982ee006dec31114e3e339e6c42c589b6aa"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "5cbb835bac2b3c2f5e4eabe23411a14cd80742c5541382de62259d0970dde6a6",
+    "notes": "HG-38A. La identidad se sostiene: el nombre dice «HG38A» y la ficha Saiguan documenta «HG-38-HG-38A»; «Corta (SS)» por «Index rear derailleur,short cage» es literal y token válido. No declarar montaje es lo correcto. Observación sin efecto: el nombre dice «Max 36T» y la ficha «Capacity: 28T»; son magnitudes distintas y ninguna se propone. Evidencias sha ok; simulation.issues = []; hash corresponde."
+  }
+}

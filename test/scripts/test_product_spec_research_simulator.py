@@ -102,6 +102,45 @@ class ResearchSimulationTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.inspect()
 
+    def test_evidence_kind_must_satisfy_the_contract(self):
+        contract = self.snapshot['editor']['template']['form_contract']
+        contract['evidence_requirements'] = {'amount': 'oem_spec'}
+        self.assertFalse(self.inspect()['issues'])
+        self.proposal['evidence'][0]['kind'] = 'distributor'
+        self.sign_record()
+        self.assertIn({'code': 'evidence_kind_insufficient', 'field': 'amount'}, self.inspect()['issues'])
+        contract['evidence_requirements'] = {'amount': 'oem_or_package'}
+        self.proposal['evidence'][0]['kind'] = 'packaging_photo'
+        self.sign_record()
+        self.assertFalse(self.inspect()['issues'])
+        self.proposal['evidence'][0]['kind'] = 'name_quote'
+        self.sign_record()
+        self.assertIn({'code': 'evidence_kind_insufficient', 'field': 'amount'}, self.inspect()['issues'])
+        contract['evidence_requirements'] = {'amount': 'name_reading_hint_only'}
+        self.assertFalse(self.inspect()['issues'])
+
+    def test_row_schema_version_follows_the_definition(self):
+        # front_derailleur_clamp_options moved to rows_schema version 2 (strict
+        # ordered pairs); the engine refuses a version-1 payload for it, so the
+        # proposal must carry the definition's version, and only that one.
+        definition = self.snapshot['editor']['template']['fields'][2]['spec_definitions']
+        definition['validation_rules']['rows_schema']['version'] = 2
+        self.proposal['facts'][0].update(key='rows', unit=None,
+            proposed={'schema_version': 2, 'rows': [{'id': 'row-a', 'values': {'length': '1'}, 'sources': []}]})
+        self.assertFalse(self.inspect()['issues'])
+        self.proposal['facts'][0]['proposed']['schema_version'] = 1
+        self.assertIn({'code': 'row_schema_version', 'field': 'rows'}, self.inspect()['issues'])
+        self.proposal['facts'][0]['proposed']['schema_version'] = 0
+        with self.assertRaises(ValueError):
+            self.inspect()
+
+    def test_row_delta_never_migrates_an_observation_of_another_version(self):
+        before = {'schema_version': 1, 'rows': [{'id': 'one', 'values': {'length': '1'}, 'sources': []}]}
+        delta = {'schema_version': 2, 'rows': [{'id': 'two', 'values': {'length': '2'}, 'sources': []}]}
+        with self.assertRaises(ValueError):
+            sim.merge_row_delta(before, delta)
+        self.assertEqual(sim.merge_row_delta(None, delta)['schema_version'], 2)
+
     def test_row_delta_preserves_omitted_rows_cells_and_sources(self):
         before = {'schema_version': 1, 'rows': [
             {'id': 'one', 'values': {'length': '1', 'note': 'Existing evidence'}, 'sources': ['first']},

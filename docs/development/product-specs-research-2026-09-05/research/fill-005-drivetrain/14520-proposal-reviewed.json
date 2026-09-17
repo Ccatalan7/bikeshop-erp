@@ -1,0 +1,178 @@
+{
+  "schema_version": 2,
+  "product_id": "87053530-a9d9-468f-9df9-9c48407d7f77",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "d940ceef85c47f748233de47bb85e2a61d12acf8b82d038f84a0dc29b35e4558",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "3d2f8e7aa082bce9569605438106571e82041962a1869e19d0f1ab90363d5fa1",
+      "template_sha256": "a788e2db3fa29e6c1cfa155dcfc274824180854016998ef9f0533059a9661098",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 0,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "61005a7e-a107-49f3-96c3-2fa2796d3299",
+    "contract_version": 34
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "KD-20-03F",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice KD-20-03F y la ficha oficial de Saiguan documenta ese modelo."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.saiguan.com/-133346.html",
+      "unit": null,
+      "method": "URL de la ficha oficial consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos de esta propuesta",
+      "reason": "Fuente exigida por el contrato para las declaraciones."
+    },
+    {
+      "key": "shifter_position",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Par",
+      "unit": null,
+      "method": "Nombre guardado «SET» y ficha oficial embalada por pares («100Prs/ctn»)",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Presentación en stock (par)",
+      "reason": "El nombre vende el set y la ficha embala por pares."
+    },
+    {
+      "key": "shifter_unit_count",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "2",
+      "unit": null,
+      "method": "Par de mandos: uno por lado",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Presentación en stock (par)",
+      "reason": "Un set trae dos mandos; la ficha embala por pares."
+    },
+    {
+      "key": "shifter_units",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "left",
+            "values": {
+              "unit_identity": "Mando izquierdo del par KD-20-03F",
+              "unit_side": "Izquierdo (delantero)",
+              "actuation_mode": "Fricción",
+              "handlebar_clamp_mm": "22.2",
+              "source_document": "Ficha oficial Saiguan KD-20-03F (sección SHIFTING LEVER)",
+              "source_url": "https://www.saiguan.com/-133346.html"
+            },
+            "sources": [
+              "https://www.saiguan.com/-133346.html"
+            ]
+          },
+          {
+            "id": "right",
+            "values": {
+              "unit_identity": "Mando derecho del par KD-20-03F",
+              "unit_side": "Derecho (trasero)",
+              "actuation_mode": "Fricción",
+              "handlebar_clamp_mm": "22.2",
+              "source_document": "Ficha oficial Saiguan KD-20-03F (sección SHIFTING LEVER)",
+              "source_url": "https://www.saiguan.com/-133346.html"
+            },
+            "sources": [
+              "https://www.saiguan.com/-133346.html"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha oficial (fricción, abrazadera 22,2 mm) aplicada a cada mando del par",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Los dos mandos del set; velocidades no declaradas por la ficha (el nombre dice 6 vel. pero la ficha no lo publica)",
+      "reason": "El contrato exige las unidades cuando la posición es Par."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Ningbo Saiguan Bicycle Co. (saiguan.com)",
+      "locator": "https://www.saiguan.com/-133346.html",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial KD-20-03F",
+      "finding": "MTB/ATB friction shifting lever; Clamp diam Φ22.2mm; resin, steel clamp; Packing 100Prs/ctn",
+      "artifact_path": "research/fill-005-drivetrain/evidence/saiguan-kd-20-03f-20260916.md",
+      "sha256": "037acb14ae4931fe84e8b758a945705f30c74b3e3622325ff2c18ec68ce82d00"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 87053530-a9d9-468f-9df9-9c48407d7f77",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y presentación (set) declaradas en el nombre",
+      "finding": "MANILLA CAMBIO 6 VEL. M.T.B. KD-20-03F\nSAIGUAN SET",
+      "artifact_path": "research/fill-005-drivetrain/evidence/kd-20-03f-saved-name-20260916.json",
+      "sha256": "f8740b58ed4baa720903eaf2d738d56cb4a491d0d85136edaca1441430e4bf4d"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "c52ded331b8896c6a17ebaa36624eda725feefd1366cf73a3e9f88e013eaae73",
+    "notes": "KD-20-03F. Identidad literal en nombre y ficha. «Par» por «SET» del nombre archivado y «100Prs/ctn» de la ficha; shifter_unit_count 2 es la aritmética de un par; las dos filas de shifter_units llevan «Fricción» y 22,2 literales, unit_side tokens válidos y únicos. No declarar velocidades ni estilo de palanca es correcto. Evidencias sha ok; simulation.issues = []; hash corresponde."
+  }
+}

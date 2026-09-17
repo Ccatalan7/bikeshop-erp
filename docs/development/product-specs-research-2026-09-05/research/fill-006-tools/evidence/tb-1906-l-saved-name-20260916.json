@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "487db3f8-73d0-4868-82e5-d7596524dcb6",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "MACHO PEDAL IZQUIERDA SUPER B 9/16 MOD. 1906-L",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "afd6d6279d7f9624f0b30b6f123d0257c206c8c31c7dce146b63b4a2f1e08531",
+  "product_sha256": "8893e9134a17a7468d5514289c1583808bd5b807b0f3d046f53e465908cd44b1",
+  "scope": "Nombre guardado en ERP; no verifica variante física ni presentación."
+}
