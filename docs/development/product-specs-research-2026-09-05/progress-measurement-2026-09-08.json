@@ -1966,5 +1966,32 @@
   "rounds": 2,
   "record": "fill-017-record-2026-09-16.md",
   "origin": "segunda pasada por marca sobre la lista de taller"
+ },
+ "name_reading_pass2_2026_09_17": {
+  "batch": "fill-018-name-pass2",
+  "scope": "todo el catálogo activo con plantilla (1520 fichas, con y sin stock)",
+  "readings_confirmed": 1705,
+  "products_read": 1047,
+  "new_name_reading_facts": 815,
+  "products_with_new_facts": 576,
+  "fields_filled_before": 1887,
+  "fields_filled_after": 2702,
+  "contract_fields": 11633,
+  "pct_before": 16.2,
+  "pct_after": 23.2,
+  "empty_sheets_before": 676,
+  "empty_sheets_after": 266,
+  "migrations": [
+   "20260916280000_name_reading_terms",
+   "20260917010000_name_reading_terms_vocabulary",
+   "20260917020000_name_reading_terms_specificity"
+  ],
+  "dry_run": {
+   "calls": 1705,
+   "recorded": 1705,
+   "rejected": 0
+  },
+  "record": "fill-018-name-pass2-record-2026-09-17.md",
+  "origin": "corrección del dueño 2026-09-16: medir por campos de la ficha y leer todo lo que el nombre dice"
  }
 }
