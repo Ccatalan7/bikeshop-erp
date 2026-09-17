@@ -810,3 +810,78 @@ el operador ve.
 
 Regla corta: **si lo que quieres verificar no lo dibuja Flutter, `shot` no
 sirve como evidencia de que falta; sólo prueba que Flutter no lo dibujó.**
+
+## Probar un atajo de teclado: tres trampas, una detrás de otra (2026-09-17)
+
+Verificar `⌘K` y «escribir abre el buscador» costó cuatro rondas, todas gastadas
+en el arnés y ninguna en la app. En orden:
+
+**1. La app instalada contesta por el mismo nombre.** Hay dos procesos vivos:
+la Release instalada (`com.vinabike.vinabikeErp`,
+`~/Applications/Vinabike ERP.app`) y la sesión de debug
+(`com.vinabike.vinabikeErp.debug`, `build/macos/.../Debug/vinabike_erp.app`).
+Pedir acceso por el nombre visible **«Vinabike ERP» resuelve a la Release**, y
+su `window_id` acepta clics y capturas sin que nada falle: se está manejando la
+app equivocada, con datos reales, creyendo que es la sesión. Se pide el bundle
+`…​.debug` explícito y se confirma cruzando el tamaño de ventana con el de
+`app_control.sh shot`. `lsappinfo list | grep -A3 vinabike` muestra los dos con
+su ruta y su pid.
+
+**2. Una tecla sintética por accesibilidad no llega al motor de Flutter.**
+`app_batch`/`app_key` entregan «raw input on AXGroup» y el propio resultado
+avisa que no hay acción de accesibilidad para esa tecla. Flutter no la ve:
+`HardwareKeyboard.instance.addHandler` no se dispara y la pantalla no cambia.
+Eso **no prueba que el atajo esté roto**. Lo que sí llega es
+`osascript -e 'tell application "System Events" to keystroke "k" using command down'`,
+y sólo con el proceso de debug al frente:
+
+```bash
+osascript -e 'tell application "System Events" to set frontmost of (first process whose unix id is <PID_DEBUG>) to true'
+osascript -e 'tell application "System Events" to keystroke "felipe"'
+```
+
+Sin el `frontmost`, las teclas se las lleva la app que esté adelante —
+típicamente la Release del punto 1 — y el log de la sesión queda mudo. Un
+`debugPrint` temporal en el handler más `native_session.sh log` distingue en una
+ronda «no llega la tecla» de «llega y la lógica la descarta»; es más barato que
+mirar capturas.
+
+**3. `app_control.sh type` se come los espacios.** `type "nueva factura"` llega
+como `nuevafactura` y la pantalla contesta que no encuentra nada, que parece un
+defecto del buscador. Para texto con espacios se usa
+`enter-text --key <clave> --text "…"`, que escribe la cadena completa en el
+campo por identidad. (Complementa la nota anterior de que `type` no escribe en
+un campo enfocado por identidad.)
+
+## Un cambio de entitlements no entra por reload ni por restart (2026-09-17)
+
+**Costo real: una ronda entera creyendo que el código nuevo no se había
+aplicado.**
+
+`reload` y `restart` reutilizan el bundle ya firmado. Los entitlements se
+graban al **construir y firmar** `vinabike_erp.app`, así que agregar
+`com.apple.security.files.downloads.read-write` y recargar deja al sandbox
+exactamente igual de estricto, con el mismo síntoma de antes: la escritura
+falla, la cadena de respaldo la esconde, y desde afuera se ve como «el cambio
+no se aplicó». El ciclo correcto es `stop` + `start`, y se comprueba leyendo lo
+que quedó firmado, no lo que dice el archivo fuente:
+
+```bash
+codesign -d --entitlements - build/macos/Build/Products/Debug/vinabike_erp.app
+```
+
+Dos trampas más de esa misma ronda, ambas al verificar un panel **nativo**:
+
+- **`app_control.sh shot` no ve los paneles del sistema.** Devuelve el frame que
+  pinta Flutter; un `NSSavePanel` es una ventana de AppKit y no está ahí.
+  Para verlo hay que usar `window`, o `screencapture -x` cuando el panel queda
+  fuera del marco de la ventana.
+- **El panel se abre detrás si la app no está al frente,** y entonces parece que
+  nunca se abrió mientras bloquea la app. Antes de clicar algo que abra un panel
+  nativo, traer el PID exacto al frente:
+  `osascript -e 'tell application "System Events" to set frontmost of (first process whose unix id is <pid>) to true'`.
+  Su contenido **no** se puede recorrer por accesibilidad —vive en un servicio
+  XPC aparte, y `entire contents` viene vacío—, así que se maneja por teclado:
+  `cmd+a`, el nombre, `return`. El nombre de la ventana (`Guardar archivo`) sí
+  se ve, y sirve para confirmar que está abierto; recuerda apuntar al PID de
+  debug, porque el Release instalado comparte el nombre del proceso.

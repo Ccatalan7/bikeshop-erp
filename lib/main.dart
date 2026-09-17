@@ -90,6 +90,7 @@ import 'modules/ai_assistant/services/ai_assistant_session_service.dart';
 import 'shared/services/window_zoom_service.dart';
 import 'shared/services/window_chrome_layout_region_service.dart';
 import 'shared/services/right_toolbar_service.dart';
+import 'shared/services/global_search/global_search_index.dart';
 import 'shared/utils/responsive_viewport.dart';
 import 'shared/services/ocr_file_handoff_service.dart';
 import 'shared/services/smart_screenshot_service.dart';
@@ -105,6 +106,7 @@ import 'shared/services/barcode_scanner_service.dart';
 import 'shared/widgets/scanner_bridge_scope.dart';
 import 'shared/widgets/right_toolbar.dart';
 import 'shared/widgets/query_performance_gauge.dart';
+import 'shared/widgets/global_search/global_search_shortcut.dart';
 import 'public_router_app.dart';
 import 'shared/services/deep_link_handler.dart';
 import 'shared/services/route_share_service.dart';
@@ -442,6 +444,9 @@ class VinabikeApp extends StatelessWidget {
           return service;
         }),
         ChangeNotifierProvider(create: (_) => RightToolbarService()),
+        // El índice del buscador global. Se liga a la autoridad cuando lo
+        // piden y se vacía solo al cambiar de usuario o de tenant.
+        ChangeNotifierProvider(create: (_) => GlobalSearchIndex()),
         ChangeNotifierProvider(create: (_) => AIAssistantContextService()),
         // The assistant session binds to one coherent authority. Auth alone is
         // not enough: the ERP profile carries the tenant, role and permissions
@@ -937,7 +942,10 @@ class VinabikeApp extends StatelessWidget {
                   }
 
                   return Scaffold(
-                    body: Stack(
+                    // `⌘K` / `Ctrl+K` existe sólo dentro del ERP autenticado:
+                    // en la pantalla de acceso no hay nada que buscar.
+                    body: GlobalSearchShortcut(
+                      child: Stack(
                       children: [
                         // Do not consume the top system inset here. The
                         // compact MainLayout AppBar is the single owner that
@@ -955,6 +963,7 @@ class VinabikeApp extends StatelessWidget {
                         const DesktopUpdatePrompt(),
                         const AndroidUpdatePrompt(),
                       ],
+                      ),
                     ),
                   );
                 },

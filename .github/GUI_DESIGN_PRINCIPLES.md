@@ -1357,3 +1357,229 @@ tres celdas alineadas arriba —lo leído, la coincidencia sin tarjeta, la
 decisión—, hairline entre filas, un solo botón accent por fila sin decidir,
 badge neutral «Seleccionado» y «Cambiar» en texto cuando ya se decidió.
 Regresión: `test/widget/vb_button_test.dart` y la batería del workspace.
+
+### Una superficie que nace mientras alguien escribe no puede mover el foco (2026-09-17)
+
+**Costo real: tres implementaciones del mismo buscador antes de que la primera
+palabra llegara entera.**
+
+El buscador global se abre tecleando en cualquier pantalla. La primera versión
+nacía con su propio campo y le pasaba el foco; la segunda compartía el texto
+pero seguía pasando el foco; la tercera dejó de moverlo. Sólo la tercera no
+pierde teclas. Escribir «felipe» de corrido llegaba como `f`, después como
+`feli`, y recién entonces completo.
+
+La causa no es el texto, es el **hueco**. Entre que se dispara la apertura y que
+el campo nuevo existe y toma el foco pasan los 200 ms de la transición, y en ese
+tramo la tecla no tiene dónde caer: el origen ya no la quiere y el destino
+todavía no está. Las reglas que quedan:
+
+- **El buffer pertenece a un host que ya estaba montado**, no a la superficie
+  que se está abriendo. La superficie lo adopta y lo devuelve; no lo crea ni lo
+  destruye.
+- **La condición para seguir capturando no es «¿está abierto?», es «¿hay dónde
+  escribir?»** — es decir, si hay un `EditableText` con el foco. Cortar al abrir
+  reabre el mismo hueco desde el otro lado, que fue exactamente el segundo
+  intento.
+- **Una lista de resultados que empuja el contenido de la página no es una
+  lista, es un salto de layout.** Flota con `OverlayPortal`, que no es una ruta
+  y por eso tampoco toca el foco; y se ancla midiendo **el campo**, no el widget
+  que lo alinea, transformando las dos esquinas al mismo espacio por el zoom de
+  la aplicación.
+- **Un carácter suelto no es una consulta.** Con una letra se ofrece lo de
+  siempre, no «no encontramos nada con f»: eso afirma una ausencia que nadie
+  midió.
+
+Y antes de quedarse con las teclas sueltas de toda la aplicación, mirar quién
+más las escucha. Acá ya estaban tomadas: `ScannerBridgeScope` entrega al lector
+de códigos de barras exactamente en la misma condición —ninguna caja de texto
+enfocada—. Conviven porque `BarcodeScannerService` **sólo escucha cuando una
+pantalla lo armó**, así que el buscador se calla mientras eso sea cierto. Si se
+hubiera resuelto por velocidad de tecleo, cada escaneo habría abierto el
+buscador y su `Enter` habría navegado.
+
+### Nombrar no es parecerse (2026-09-17, corrección del dueño)
+
+Escribir `pos` en el buscador global contestaba `Postiza Padro` antes que el
+módulo **POS**. El dueño rechazó el arreglo puntual —«no quiero que lo arregles
+para el caso POS, tiene que haber una lógica más amplia detrás»— y tenía razón:
+el caso era el síntoma de dos reglas que faltaban.
+
+- **Una palabra escrita entera vale más que ser el principio de otra más
+  larga.** El puntaje compartido lo negaba: un `contains` sobre el valor
+  completo cortaba antes de mirar las palabras, así que `Panel POS` valía 68 por
+  «contiene pos» y nunca llegaba al 96 de «tiene la palabra pos». Corregido en
+  `bike_finder_search.dart`, para todo el ERP y no sólo para el buscador.
+- **Nombrar algo es la señal más fuerte que existe bajo un identificador.** Si
+  cada palabra tecleada es una palabra del título, eso no es parecido: es el
+  nombre. Pesa más que cualquier coincidencia parcial y menos que un SKU, un RUT
+  o un número de documento, que son identidad.
+- **Un destino a medio escribir se ofrece igual.** Los destinos son un conjunto
+  cerrado y corto —los ~100 del menú de ese usuario, más las herramientas del
+  rail— y los registros son miles y abiertos. Con `vent` en pantalla, que el
+  operador esté nombrando `Ventas` es mucho más probable que que quisiera uno
+  cualquiera de los productos que empiezan igual. El bono aplica sólo a destinos
+  y por eso no distorsiona la búsqueda de registros.
+
+Y la lección de alcance, que es la que se repite: **un índice que mira una sola
+lista contesta «no existe» sobre cosas que sí existen.** Faltaban las catorce
+herramientas del rail derecho: `tareas`, `calculadora`, `kiosko` no encontraban
+nada teniendo su propia pantalla. Un buscador global se alimenta de **todos** los
+catálogos canónicos de destinos que el producto ya tiene, y de cada uno por su
+registro compartido —nunca por una lista propia que se desincroniza.
+
+### Un buscador acierta por tres vías, y ninguna es una tabla de sinónimos (2026-09-17)
+
+Corrección del dueño, literal: *«no quiero que lo configures puntualmente de esa
+forma, me gustaría que hubieran otros fundamentos lógicos y de aprendizaje que le
+hagan intuir esa búsqueda»*. Los casos eran `taller` —que él usa para el módulo
+de **Trabajos**— y `notificaciones`, que debería encontrar el **Resumen diario**
+del rail. Cablear esas dos equivalencias habría tapado el problema y dejado
+intacto el siguiente. Los tres fundamentos que lo resuelven de raíz:
+
+**1. Indexar cómo se llama la cosa por dentro, no sólo su rótulo.** La ruta y la
+clave técnica son vocabulario que el producto ya tiene y que nadie mantiene a
+mano: `/taller/pegas` aporta «taller» y «pegas» a una pantalla rotulada
+«Trabajos»; `ToolbarTool.notifications` aporta «notifications» al «Resumen
+diario». Además cubre gratis el cruce castellano/inglés en las palabras donde
+importa —productos/products, tareas/tasks, órdenes/orders—. Pesa poco: nunca le
+gana a un título de verdad.
+
+**2. Nombrar un módulo aterriza en su puerta de entrada.** Cuál es la puerta no
+lo decide nadie escribiendo una equivalencia: es la **primera pantalla del
+módulo** según el modelo de navegación, que además el usuario ordenó. Taller
+abre en Trabajos, Ventas en Facturas de venta, Inventario en Productos. El resto
+del módulo acompaña debajo en vez de dispersarse.
+
+**3. Aprender qué palabra usa esta persona para qué destino.** No basta con
+contar qué destinos son populares: hay que guardar **con qué se pidió** lo que se
+eligió. Así «taller → Trabajos» lo enseña el segundo uso, y lo mismo cualquier
+palabra que nadie previó. Es progresivo —enseñado `taller`, ya `tall` orienta— y
+tiene frenos: escala con la cantidad de veces, de modo que **una elección
+equivocada no queda grabada**, vence con el tiempo y jamás le gana a un
+identificador exacto.
+
+Y una regla de puntaje que salió de ahí: **una señal, un premio.** Los bonos de
+nombrar la pantalla, nombrar el módulo y prefijar un destino son excluyentes y en
+ese orden. Sumarlos contaba dos veces la misma palabra —con `pos`, que es título
+y módulo a la vez, el puntaje se inflaba tanto que ni lo aprendido por el propio
+usuario podía moverlo—.
+
+### La segunda línea dice por qué esta fila no es la otra (2026-09-17)
+
+El buscador global contestaba a `prove` con dos filas tituladas **Proveedores**,
+una «Comunicación» y otra «Compras». El dueño: *«¿qué es ese comunicación? no es
+intuitivo… otra vez, el punto es más amplio que este problema puntual»*.
+
+La causa no es una palabra mal elegida: es **de dónde salió la palabra**.
+`ToolbarToolGroup.communication` se escribió para agrupar iconos en una columna
+del rail, donde el icono ya identifica la herramienta y la etiqueta sólo separa
+bloques. Trasplantada a una lista de resultados, esa etiqueta tenía que hacer un
+trabajo distinto —distinguir dos filas homónimas— y no podía.
+
+Las reglas que quedan, para cualquier lista de este ERP:
+
+- **Una etiqueta escrita para otra superficie no es una etiqueta para ésta.**
+  Reutilizarla es reutilizar una decisión tomada para otra pregunta. Se puede
+  seguir usando como texto **buscable** —quien piense «comunicación» la
+  encuentra— sin mostrarla.
+- **La segunda línea de un resultado existe para decir por qué esta fila no es
+  la otra.** Si dos filas la leen igual, la lista afirma haber encontrado dos
+  cosas mostrando una sola dos veces. Vale más un hecho del objeto —el dueño de
+  la bicicleta, el estado del documento— que una categoría.
+- **Y el hecho útil es QUÉ HACE, en las palabras del empleado.** Primero probé
+  con `Herramientas` —dónde se abre a mano— y el dueño lo rechazó en el acto:
+  *«¿herramientas? es aún más confuso, debería decir whatsapp, tiene que ser
+  ultra intuitivo para los empleados»*. Tenía razón: ubicar no es explicar. Esa
+  bandeja **es** el WhatsApp de los proveedores, así que eso dice.
+- **Redactar esa frase es diseño de producto, no una tabla de sinónimos.** Son
+  dos cosas distintas y las confundí: cablear equivalencias de búsqueda por caso
+  está prohibido —envejece y sólo cubre lo que alguien imaginó—, pero **nombrar
+  honestamente una cosa que no tenía nombre** es el trabajo. La frase se escribe
+  una vez, en el catálogo canónico de esa familia, y la consume quien la
+  muestre; se escribe mirando lo que el panel hace de verdad, no lo que su
+  título sugiere; y se omite cuando el título ya se explica solo, porque repetir
+  «Calculadora» con otras palabras no aclara nada.
+- **Y el caso homónimo se resuelve por mecanismo, no por vigilancia.** Al armar
+  el índice, dos destinos que se leerían idénticos reciben lo que de verdad los
+  separa. Nadie tiene que acordarse de revisarlo cuando agregue el próximo.
+
+### Un resultado se abre donde se encontró (2026-09-17)
+
+El proveedor de TeknoBike mandó el catálogo de pedales por WhatsApp. El dueño
+escribió `pedales` en el buscador global y no salió: el índice leía nueve tablas
+de registros y ninguna de archivos. Su petición fue precisa —*«que me ofrezca
+esos archivos como resultados, para abrir la vista previa del PDF sin
+necesariamente abrir todo el módulo de WhatsApp proveedores, sólo la vista
+previa con alguna pista del contexto de dónde se sacó»*—, y de ahí salen dos
+reglas que valen para cualquier resultado, no sólo para adjuntos.
+
+- **Lo que entró al ERP por una conversación es contenido del ERP.** Un archivo
+  que llegó por WhatsApp no es una propiedad del módulo de mensajería: es el
+  catálogo del proveedor, y se busca por su nombre —`pedales`— igual que un
+  producto. Un buscador que sólo mira tablas de registros contesta «no existe»
+  sobre algo que la tienda recibió, leyó y guardó.
+- **Abrir un resultado no puede costar montar el módulo del que salió.** El
+  destino de un adjunto no es su conversación: es el archivo. Se abre el mismo
+  visor que usa el chat, con una URL firmada al vuelo, sobre la pantalla en la
+  que el operador ya estaba. Enviarlo a la bandeja, a buscar el hilo y a bajar
+  hasta el mensaje es devolverle el trabajo que el buscador venía a ahorrarle.
+- **La pista de origen es parte del resultado, no un adorno.** «TeknoBike ·
+  WhatsApp · 17 sep» es lo que convierte `PEDALES GINEYEA JUN 26.pdf` en algo
+  que se puede juzgar antes de abrirlo: de quién vino, por dónde llegó y cuándo.
+  Sin eso es un archivo sin dueño, que es como estaba en el disco.
+- **Una fila que no se puede abrir no es un resultado.** Sin ruta de
+  almacenamiento no hay nada que mostrar, y ofrecerla sólo entrega un clic que
+  no lleva a ninguna parte.
+
+Y la trampa de carga que salió de agregar la novena fuente: **`Future.wait`
+propaga el primer error.** Un `select` roto —una columna que cambió, un embed
+que el servidor rechaza— vaciaba el índice **entero**, y el buscador contestaba
+«no hay nada» sobre un taller lleno de datos. Cada fuente responde por sí misma:
+la que falla queda vacía y anotada, y las otras ocho siguen contestando. Una
+superficie que agrega fuentes tiene que degradar por fuente, nunca en bloque.
+
+### Un aviso de éxito nombra el resultado, no la intención (2026-09-17)
+
+**Costo real: diez días de descargas invisibles, y el dueño diciendo «no
+funciona» sobre un botón que sí corría.**
+
+`Descargar` en el visor de adjuntos escribía el archivo, mostraba «Guardado en
+Archivos y descargado», y en `~/Descargas` no había nada. No estaba roto: la app
+de macOS es sandbox y le faltaba
+`com.apple.security.files.downloads.read-write`, así que el sistema rechazaba la
+escritura en la carpeta del usuario y la cadena de respaldo la dejaba caer
+dentro del contenedor de la app —`Containers/<bundle>/Data/Documents/Downloads`,
+donde nadie entra—. El archivo del 7 de septiembre seguía ahí.
+
+- **Un mensaje de éxito que no nombra dónde quedó la cosa no se puede
+  contradecir.** «Descargado» es la intención; «Descargado en Downloads» es el
+  resultado, y el primer día en que hubiera dicho «Descargado en Documents» el
+  defecto se habría visto solo. Si la operación produce algo ubicable —un
+  archivo, un documento, una fila— el aviso dice dónde, y ofrece llegar ahí.
+- **Una cadena de respaldo silenciosa convierte un permiso faltante en un
+  misterio.** Degradar está bien; degradar sin decirlo, no. La función devuelve
+  **la ruta que escribió** en vez de `void`, justamente para que quien avisa
+  tenga con qué.
+- **En una app sandbox, escribir donde el usuario mira es un permiso, no una
+  ruta.** `getDownloadsDirectory()` devuelve un enlace a `~/Descargas` que el
+  sandbox deniega sin el entitlement correspondiente; el `catch` que sigue no
+  distingue «no se pudo» de «no me dejan». Todo destino fuera del contenedor
+  —Descargas, Escritorio, una carpeta elegida— se declara en los dos
+  `.entitlements`, y **un cambio de entitlements no entra por hot reload ni por
+  hot restart: exige reconstruir y volver a firmar el bundle.**
+
+Vale para cualquier superficie de este ERP que confirme algo: exportar, guardar,
+adjuntar, publicar. El aviso es la única prueba que el operador tiene, y una
+prueba que no se puede falsar no es una prueba.
+
+**Y en escritorio, «Descargar» pregunta dónde.** El dueño lo pidió apenas vio
+que el archivo caía derecho a Descargas: elegir la carpeta es lo que hace un
+escritorio, y bajar un catálogo no es lo mismo que bajar una factura que va a la
+carpeta del año. El panel del sistema se abre con **Descargas ya seleccionada**,
+así que quien sólo quiere el archivo aprieta Enter y listo — la pregunta no le
+cobra una decisión a nadie. De ahí sale el tercer estado que había que nombrar:
+**cerrar el panel es una decisión, no un fallo**. No se anuncia como error, no
+se guarda una copia «por si acaso», y no se felicita por algo que no pasó. Por
+eso la función devuelve los tres casos —guardado en una ruta, entregado al
+navegador, cancelado— en vez de un `String?` que los confunde.

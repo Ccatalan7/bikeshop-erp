@@ -119,6 +119,35 @@ F-04, E-01, O-04) mientras el API estaba cerrado; ni un valor salió de una
 captura. Lo que **no** trae la copia es lo que tampoco trae el API: lo que
 cae después del cap de 256 KiB.
 
+### La copia de rescate del `get_file` anterior ya no existe (2026-09-17)
+
+La receta de arriba —recuperar la guía íntegra desde los resultados de
+herramienta de una sesión pasada— **ya no funciona**, y el `find … -path
+"*tool-results*"` que describe no encuentra nada: los transcritos de hoy son
+`~/.claude/projects/<proyecto>/<uuid>.jsonl` y guardan el **preview**, no el
+contenido; lo que `get_file` escribió a disco vive en el scratchpad de *aquella*
+sesión, que se borra. Se verificó recorriendo los `.jsonl` en busca de una
+cadena de más de 100 KB con `E-01 Status badge`: no hay ninguna.
+
+Con `DesignSync` cerrado, entonces, **la única fuente legítima que queda son los
+valores ya leídos y anotados en el código**, que es justamente para lo que
+`universal-ui-component-system.md` bendice reutilizar la geometría de `S-05` en
+`S-06`. Hoy están, literales y con su cita:
+
+- `vb_short_select.dart` — campo cerrado, popover y opción (`S-05`), y el mapeo
+  hex → rol.
+- `vb_anchored_popover.dart` — la escalera de profundidad `F-05` completa
+  (`raised 0 1px 2px .06`, `popover 0 6px 22px .13`, `overlay 0 12px 40px .22`),
+  la curva única `cubic-bezier(.22,1,.36,1)`, `base 200` y el radio `O-02` 10.
+- `vb_surface_icon_button.dart` / `vb_segmented.dart` — `fast 120`, anillo de
+  foco de 3 px al 12 % y la regla de `reduce-motion`.
+
+El buscador global (2026-09-17) se construyó entero con esas citas. Lo que no
+estaba anotado —el ancho de una superficie centrada— se declaró *no leído* en su
+línea en vez de inventarlo. Eso es lo que el contrato pide, y alcanza para
+trabajar: **un `DesignSync` cerrado no detiene una ronda que compone con
+componentes ya adoptados; detiene una que necesita un valor nuevo.**
+
 ### Reading a large page without burning context
 
 A `get_file` result above roughly 50 KB is written to a file on disk and only a

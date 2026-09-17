@@ -92,11 +92,17 @@ int _tokenMatchQuality(String queryToken, _NormalizedBikeFinderField field) {
   if (value.startsWith(queryToken) || compactValue.startsWith(queryToken)) {
     return 88;
   }
-  if (queryToken.length >= 3 &&
-      (value.contains(queryToken) || compactValue.contains(queryToken))) {
-    return 68;
-  }
 
+  // El `contains` sobre el valor completo se evalúa DESPUÉS del recorrido por
+  // palabras, no antes.
+  //
+  // **Causa medida (2026-09-17, reportada por el dueño):** escribir `pos` no
+  // encontraba el módulo POS. `Panel POS` contiene «pos», así que el retorno
+  // temprano lo cerraba en 68 y nunca llegaba al bucle que ve la palabra `pos`
+  // completa y vale 96; `Postiza Padro`, en cambio, *empieza* con «pos» y se
+  // llevaba 88. Una palabra escrita entera es una señal más fuerte que ser el
+  // principio de otra palabra más larga, y el orden de las comparaciones lo
+  // estaba negando.
   var best = 0;
   for (final word in words) {
     if (word == queryToken) return 96;
@@ -110,6 +116,12 @@ int _tokenMatchQuality(String queryToken, _NormalizedBikeFinderField field) {
     }
     final fuzzyQuality = _fuzzyWordQuality(queryToken, word);
     if (fuzzyQuality > best) best = fuzzyQuality;
+  }
+
+  if (queryToken.length >= 3 &&
+      (value.contains(queryToken) || compactValue.contains(queryToken)) &&
+      best < 68) {
+    return 68;
   }
   return best;
 }

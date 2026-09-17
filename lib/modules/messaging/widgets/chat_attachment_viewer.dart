@@ -181,19 +181,37 @@ class _ChatAttachmentViewerState extends State<ChatAttachmentViewer> {
       }
     }
 
+    String? savedPath;
+    var cancelled = false;
     try {
-      await downloadFile(
+      final result = await downloadFile(
         bytes: payload.bytes,
         fileName: safeName,
         mimeType: payload.contentType,
+        // El dueño elige dónde queda, con Descargas ya puesta: bajar un
+        // catálogo y bajar una factura que va a una carpeta del año no son la
+        // misma operación.
+        promptForLocation: true,
       );
-      downloadedLocalCopy = true;
+      cancelled = result.cancelled;
+      savedPath = result.path;
+      downloadedLocalCopy = result.didSave;
     } catch (error) {
       localDownloadError = error;
       debugPrint('💬 Chat attachment local download skipped: $error');
     }
 
     if (!mounted) return;
+    // Cerrar el panel de guardado es una decisión, no un fallo: no se anuncia
+    // como error. Lo único que queda por decir es la copia interna, si la hubo.
+    if (cancelled) {
+      if (savedInFiles) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Guardado en Archivos.')),
+        );
+      }
+      return;
+    }
     if (!savedInFiles && !downloadedLocalCopy) {
       final reason = internalSaveError ?? localDownloadError ?? 'error';
       ScaffoldMessenger.of(context).showSnackBar(
@@ -202,14 +220,61 @@ class _ChatAttachmentViewerState extends State<ChatAttachmentViewer> {
       return;
     }
 
+    // **Decir dónde quedó, no sólo que quedó.** Un aviso que dice «descargado»
+    // sin nombrar la carpeta manda al dueño a buscarlo a `~/Descargas`, y
+    // durante diez días el archivo estuvo cayendo dentro del contenedor sandbox
+    // de la app. Nombrar la carpeta habría delatado el defecto el primer día.
+    final folder = savedPath == null ? null : _folderName(savedPath);
     final message = savedInFiles && downloadedLocalCopy
-        ? 'Guardado en Archivos y descargado.'
+        ? folder == null
+            ? 'Guardado en Archivos y descargado.'
+            : 'Guardado en Archivos y en $folder.'
         : savedInFiles
             ? 'Guardado en Archivos.'
-            : 'Archivo descargado. No se pudo guardar en Archivos.';
+            : folder == null
+                ? 'Archivo descargado. No se pudo guardar en Archivos.'
+                : 'Descargado en $folder.';
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
+      SnackBar(
+        content: Text(message),
+        action: savedPath == null
+            ? null
+            : SnackBarAction(
+                label: 'Mostrar',
+                onPressed: () => _revealSavedFile(savedPath!),
+              ),
+      ),
     );
+  }
+
+  /// La carpeta contenedora, dicha corto: es lo que el dueño necesita para ir a
+  /// buscarlo, no la ruta absoluta entera. Se parte por los dos separadores a
+  /// mano porque este visor también se compila para web, donde no hay
+  /// `dart:io` — y en web nunca hay ruta que mostrar.
+  static String _folderName(String path) {
+    final segments =
+        path.split(RegExp(r'[/\\]')).where((part) => part.isNotEmpty).toList();
+    return segments.length < 2 ? path : segments[segments.length - 2];
+  }
+
+  Future<void> _revealSavedFile(String path) async {
+    final segments = path.split(RegExp(r'[/\\]'));
+    final folder = segments.sublist(0, segments.length - 1).join('/');
+    // `Uri.file` codifica los espacios de «Application Support» y compañía;
+    // armar `file://$folder` a mano deja una URL inválida en cuanto la ruta
+    // tiene uno.
+    var opened = false;
+    if (folder.isNotEmpty) {
+      try {
+        opened = await launchUrl(Uri.file(folder));
+      } catch (error) {
+        debugPrint('💬 No se pudo abrir la carpeta de la descarga: $error');
+      }
+    }
+    if (opened || !mounted) return;
+    // Si no se pudo abrir, al menos se dice la ruta completa: el dueño puede
+    // pegarla en Finder.
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(path)));
   }
 
   Future<void> _openExternal() async {
