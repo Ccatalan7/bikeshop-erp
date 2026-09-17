@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "c32283c0-ee3a-4b6b-87f7-94d1d08189e2",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Lubricante Finish Line Humedo XC 8oz",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "2923aa08fb1417a557730a6a28620fc8d7290f804eecd5eb67bee0b5744bb5c3",
+  "product_sha256": "0a7d64baac327375001f3acedbba0d70e0888d3cfd41f7d98bb651036efd86ce",
+  "scope": "Nombre guardado en ERP; no verifica variante física ni presentación."
+}

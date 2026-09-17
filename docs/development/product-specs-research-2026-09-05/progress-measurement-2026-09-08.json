@@ -1827,5 +1827,33 @@
   "reviewer": "claude-peer",
   "rounds": 1,
   "record": "fill-007-record-2026-09-16.md"
+ },
+ "research_fill_009_2026_09_16": {
+  "batch": "fill-009-rims",
+  "products": 5,
+  "facts": 44,
+  "applications": [
+   "464fdd48-2732-5c13-9980-f4916783e03d",
+   "2dbacd5a-8118-5f92-af83-c505c7263280",
+   "52a2945f-c600-5b02-a7bd-16d4a2d71510",
+   "47ac557d-c6be-577d-bd89-0a9fe6c9baa3",
+   "5d9716d1-fcb8-5e10-9e9e-7dd7fdd42231"
+  ],
+  "reviewer": "claude-peer",
+  "rounds": 2,
+  "contract_change": "20260916270000_rim_etrto_without_bead_profile",
+  "record": "fill-009-record-2026-09-16.md"
+ },
+ "research_fill_010_2026_09_16": {
+  "batch": "fill-010-bb-neco",
+  "products": 2,
+  "facts": 10,
+  "applications": [
+   "7772ef51-479e-5dbf-b0cb-aa3278438913",
+   "be30f302-67f1-52ed-b9f3-145cd30024fe"
+  ],
+  "reviewer": "claude-peer",
+  "rounds": 1,
+  "record": "fill-010-record-2026-09-16.md"
  }
 }

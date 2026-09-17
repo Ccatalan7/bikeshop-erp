@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "548e7136-c5ce-4c61-b5c6-c983f56ab195",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Lubricante Liqui Moly Bike Kettenspray 400ml",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "9a4bdb4fd01ff49d51b486056ea615a37c479f9b747eacd43d9bd2be1499c1c9",
+  "product_sha256": "46dc756e9ecffef688bcff9f3344899a05ba2ac8a42c255c0fca89cd00977501",
+  "scope": "Nombre guardado en ERP; no verifica variante física ni presentación."
+}

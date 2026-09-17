@@ -1,0 +1,4 @@
+# LIQUI MOLY Bike Chain Spray (art. 6055, 400 ml) — https://www.liqui-moly.com/en/bike-chain-spray-p003247.html
+Consultada 2026-09-16 (curl del HTML público; líneas literales de la ficha oficial de LIQUI MOLY).
+"Bike Chain Spray" · "Specially formulated to lubricate and maintain bicycle chains in both wet and dry conditions. Also suitable for e-bikes." · "Clean the bicycle chain with Brake and Chain Cleaner (Part no. 6054) before use. Then shake the chain spray well and apply a thin coat to the dry chain. Wipe off any excess." · Variantes: "200 ml" · "400 ml" · artículo "6055" para "400 ml" · el texto de seguridad de la ficha lo describe como "aerosol" · la ficha lo declara "biodegradable"
+Es un lubricante de cadena para condiciones húmedas y secas; la lista de tipos de la plantilla no tiene un token para lubricante de cadena universal.

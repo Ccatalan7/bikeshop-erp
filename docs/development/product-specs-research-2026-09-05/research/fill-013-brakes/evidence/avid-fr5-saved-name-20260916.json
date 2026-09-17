@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "eb526234-e6b2-4061-a53f-09711ebfeba1",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Manetas Avid FR-5",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "a0e0ba8262d9b823419b735df794cf87f7ef059a745dc2918c45ef86b9e55453",
+  "product_sha256": "a2ceeea9ceb9d07f92e08dbcf3a6bbf4405db60b44f1287b5775fe2aee47ea71",
+  "scope": "Nombre guardado en ERP; no verifica variante física ni presentación."
+}

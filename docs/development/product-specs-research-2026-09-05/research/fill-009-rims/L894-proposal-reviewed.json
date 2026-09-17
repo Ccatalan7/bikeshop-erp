@@ -1,0 +1,281 @@
+{
+  "schema_version": 2,
+  "product_id": "e3e9663b-c38c-4d3a-8beb-3eea51a8e616",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "e560e0b4b151884a0074bbe5c1ba4df5238143b67b0ab4c952c40779d8c5da49",
+    "fingerprints": {
+      "facts_sha256": "ca731f7c9eeaaa9694a43aeb930e8555126dea25698bc3850fb75be16fbcb36f",
+      "product_sha256": "ab7c4f1a23ff06a15becb4138f7642c91b210692e619506d8a558d907cfc950e",
+      "template_sha256": "d53cf1933c413140855dcbbc8c48b202eb3e8a379b552445774669f2eaf7b483",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 1,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "81547e3f-433c-462e-9dbe-a141aef745c9",
+    "contract_version": 61
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "U32 TL",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado nombra U32 TL y el catálogo oficial Weinmann lo documenta."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.weinmanntek.com/archive/product/item/files/MY2025%20WEINMANN.pdf",
+      "unit": null,
+      "method": "URL de la página del catálogo oficial Weinmann consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos de esta propuesta",
+      "reason": "Fuente exigida por el contrato para las declaraciones."
+    },
+    {
+      "key": "rim_bead_profile",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Desconocido / sin confirmar",
+      "unit": null,
+      "method": "El catálogo Weinmann no publica el perfil de talón (hooked/hookless); el contrato exige declararlo y ofrece este valor",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Lo que la fuente calla",
+      "reason": "Sin dato OEM no se elige gancho ni hookless; «Desconocido / sin confirmar» es el valor previsto por el contrato para ese caso y abre los campos ETRTO."
+    },
+    {
+      "key": "bead_seat_diameter_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "584",
+      "unit": "mm",
+      "method": "Catálogo: fila 27.5\" «584x27.4»; rueda fijada por el nombre",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "U32 TL 27.5\"",
+      "reason": "ETRTO literal de la fila de la rueda que vende el nombre."
+    },
+    {
+      "key": "rim_internal_width_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "27.4",
+      "unit": "mm",
+      "method": "Catálogo: ETRTO «584x27.4» (ancho interior nominal)",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "U32 TL",
+      "reason": "Segundo término del ETRTO literal."
+    },
+    {
+      "key": "rim_etrto",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "584x27.4",
+      "unit": null,
+      "method": "Catálogo: columna ETRTO, fila 27.5\"",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "U32 TL 27.5\"",
+      "reason": "Literal."
+    },
+    {
+      "key": "rim_erd_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "561.83",
+      "unit": "mm",
+      "method": "Catálogo: columna ERD, fila 27.5\"",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "U32 TL 27.5\"",
+      "reason": "Literal."
+    },
+    {
+      "key": "rim_joint_designation",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Sleeve",
+      "unit": null,
+      "method": "Catálogo: columna «Joint Type»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "U32 TL",
+      "reason": "Literal."
+    },
+    {
+      "key": "spoke_hole_count",
+      "current": {
+        "value": "28",
+        "source": "name_reading",
+        "fact_id": "2566b064-d212-440c-ad65-e4b619a3c3d1",
+        "fact_sha256": "55499f77a3dfb7b970e11984e177a88235f59b6d8f0e9b1e29bdf5abe307b283",
+        "confirmed": false
+      },
+      "proposed": "28",
+      "unit": null,
+      "method": "Nombre guardado «28H» sobre las opciones de agujeros del catálogo",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Presentación en stock",
+      "reason": "El catálogo lista las perforaciones disponibles y el nombre fija la vendida."
+    },
+    {
+      "key": "rim_external_width_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "32.0",
+      "unit": "mm",
+      "method": "Catálogo: cota de ancho exterior del dibujo de perfil (transcrita)",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "U32 TL",
+      "reason": "Cota literal del dibujo."
+    },
+    {
+      "key": "rim_profile_height_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "19.9",
+      "unit": "mm",
+      "method": "Catálogo: cota de alto del dibujo de perfil (transcrita)",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "U32 TL",
+      "reason": "Cota literal del dibujo."
+    },
+    {
+      "key": "brake_track",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": false,
+      "unit": null,
+      "method": "Catálogo: la tabla U32 TL está en la sección «E-MTB/DISC» y sin opción CNC; llanta de disco",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "U32 TL",
+      "reason": "Ver método; el revisor decide si la lectura es literal."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_catalogue",
+      "source": "Weinmann Metal Products (weinmanntek.com), catálogo MY2024–MY2025",
+      "locator": "https://www.weinmanntek.com/archive/product/item/files/MY2025%20WEINMANN.pdf",
+      "consulted_on": "2026-09-16",
+      "scope": "Tabla U32 TL del catálogo (transcrita del PDF de imagen)",
+      "finding": "27.5\" 584x27.4 ERD 561.83 · Sleeve · agujeros 28 · perfil 27.4 / 32.0 / 19.9",
+      "artifact_path": "research/fill-009-rims/evidence/weinmann-my2025-catalogue-20260916.md",
+      "sha256": "4e5b77f02dae41c04ae4e3bab1f98896783009fb163ad70fdaf47aef279a10c5"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product e3e9663b-c38c-4d3a-8beb-3eea51a8e616",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante (rueda, agujeros, acabado) declaradas en el nombre",
+      "finding": "Llanta Weinmann U32 TL 27.5\" Ojetillos 28H Presta Negro",
+      "artifact_path": "research/fill-009-rims/evidence/u32-tl-saved-name-20260916.json",
+      "sha256": "fce53df6de4dfc906312df511882f2c9931b78381c821b540344f531fc881d78"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "aeeeb95758887e3850b9e5cb739cffb826e4c890f7e8b0cd744bd9ae371d5bf2",
+    "notes": "U32 TL. Identidad literal. bsd 584 (27.5\" del nombre), 27.4, «584x27.4», ERD 561.83, Sleeve, 28 agujeros (nombre sobre 32\\28), exterior 32.0 y alto 19.9: fila y dibujo transcritos. brake_track = false por estar en la sección «E-MTB/DISC» sin opción CNC, coherente con que el nombre no diga F/V; aceptada. No declarar tubeless por el sufijo TL es cauto. Evidencias sha ok; simulation.issues = []; hash corresponde."
+  }
+}

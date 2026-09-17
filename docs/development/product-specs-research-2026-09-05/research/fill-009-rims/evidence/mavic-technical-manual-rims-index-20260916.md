@@ -1,0 +1,43 @@
+# Mavic Technical Manual — índice de llantas (family 1032) — https://technicalmanual.mavic.com/tech-mavic/technical_manual/data/mavic_tech.php?display=product&family=1032&subfamily=0&macronu=14609
+Consultado 2026-09-16 (curl del HTML público; nombres de producto listados en la sección de llantas del Technical Manual, en orden de aparición).
+- Pro access
+- EN
+- EN
+- Ellipse Pro Carbon
+- Elite
+- Disc
+- Disc Allroad
+- Pro Carbon
+- Pro Carbon SL
+- Elite
+- Pro Carbon
+- Pro Carbon SL
+- Elite
+- Ksyrium / Disc
+- S / S Disc
+- SL / SL Disc
+- Elite / Elite Disc
+- Pro / Pro Disc
+- Pro Carbon
+- Pro Carbon SL
+- Allroad Elite
+- Allroad Pro
+- Allroad Pro Carbon S / SL
+- Elite
+- Pro
+- Elite
+- Pro
+- Elite Carbon
+- Pro Carbon
+- Elite
+- Pro
+- Elite Carbon
+- Pro Carbon SLR/XLR
+- TN
+- XC
+- XM
+- EX
+- EN
+- XM 319 Disc
+
+El índice lista «XM 319 Disc» y no lista ningún «XM 319» sin Disc; la ficha 2_399.pdf (archivada aparte) documenta XM 319 Disc 26" y 29".

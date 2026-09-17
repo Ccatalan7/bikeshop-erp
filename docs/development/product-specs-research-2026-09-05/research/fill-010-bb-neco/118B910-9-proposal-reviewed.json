@@ -1,0 +1,253 @@
+{
+  "schema_version": 2,
+  "product_id": "715c6eb5-e6b2-48e0-9748-05615b20bc45",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "fc2999b3e890b95a2db3875a61434c1fbbb219f6e62e02518d0592bde9f24ba3",
+    "fingerprints": {
+      "facts_sha256": "20267bea450bfa05fcabfa352cda7911c4504afc977207f16c115aed9a47e37e",
+      "product_sha256": "50a55da681d419fabc399499c4345f3f488e37a497668d798c3ea8b0288206a9",
+      "template_sha256": "ca86afea426b43be3508bb456c11fbee17c5be265c7272ad1dd98e9d247787aa",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-09-15T01:26:34.090982+00:00",
+    "template_id": "a4f78fa2-219f-44c6-82c4-d7d63e79cb1d",
+    "contract_version": 36
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "B910",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «NECO MOD. B910» escrito «B91O» con letra O por error tipográfico (73x122.5MM) y la ficha oficial Neco documenta B910 (BSA 1.37\"x24T, R/L)."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.necoparts.com/en/product/B910%2C+B910E%2C+B910P%2C+B910B%2C+B910PP.html",
+      "unit": null,
+      "method": "URL de la ficha oficial Neco consultada el 2026-09-16 y archivada con hash (plano archivado aparte)",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "includes_spindle",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Ficha oficial: «10B21 Spindle, Steel Cups, 2pcs Sealed Bearing Mechanism, Steel Body» (cartucho con eje)",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Modelo B910",
+      "reason": "La ficha describe el eje como parte del motor."
+    },
+    {
+      "key": "spindle_interface",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Cuadrado JIS",
+      "unit": null,
+      "method": "Plano oficial: «SQUARE(JIS) CARTRIDGE BOTTOM BRACKET DIMENSIONS»",
+      "origin": "research",
+      "evidence": [
+        "drawing"
+      ],
+      "scope": "Modelo B910",
+      "reason": "Literal del plano."
+    },
+    {
+      "key": "spindle_length_mm",
+      "current": {
+        "value": "122.5",
+        "source": "name_reading",
+        "fact_id": "a41f43b7-7022-483f-9821-082b7e0a1d17",
+        "fact_sha256": "6f9f076344e16115768b9e1fc22b5aa3967f03ae4e5feb117ee26268cb1d7941",
+        "confirmed": false
+      },
+      "proposed": "122.5",
+      "unit": "mm",
+      "method": "Nombre guardado «73x122.5MM» sobre la lista de largos de la ficha («… 122.5mm … for 68mm & 73mm Widths»)",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Presentación en stock",
+      "reason": "La ficha lista el largo y el nombre lo fija."
+    },
+    {
+      "key": "bb_shell_ports",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "copa-motriz",
+            "values": {
+              "port": "Copa lado motriz",
+              "side": "Lado motriz",
+              "mates_with": "Caja del cuadro",
+              "form": "Designación OEM sin descomponer",
+              "designation": "BSA 1.37\"x24T, R/L",
+              "source_scope": "Ficha oficial Neco B910: «B910: BSA 1.37”x24T, R/L»; plano: «Threads: BC 1.37\"x24T R/L(B910/B910E/B910P)», «Steel cups(B910/B910B)»",
+              "source_url": "https://www.necoparts.com/en/product/B910%2C+B910E%2C+B910P%2C+B910B%2C+B910PP.html"
+            },
+            "sources": [
+              "https://www.necoparts.com/en/product/B910%2C+B910E%2C+B910P%2C+B910B%2C+B910PP.html",
+              "https://www.necoparts.com/Templates/att/B910-Drawing.pdf"
+            ]
+          },
+          {
+            "id": "copa-no-motriz",
+            "values": {
+              "port": "Copa lado no motriz",
+              "side": "Lado no motriz",
+              "mates_with": "Caja del cuadro",
+              "form": "Designación OEM sin descomponer",
+              "designation": "BSA 1.37\"x24T, R/L",
+              "source_scope": "Ficha oficial Neco B910: «B910: BSA 1.37”x24T, R/L»; plano: «Threads: BC 1.37\"x24T R/L(B910/B910E/B910P)», «Steel cups(B910/B910B)»",
+              "source_url": "https://www.necoparts.com/en/product/B910%2C+B910E%2C+B910P%2C+B910B%2C+B910PP.html"
+            },
+            "sources": [
+              "https://www.necoparts.com/en/product/B910%2C+B910E%2C+B910P%2C+B910B%2C+B910PP.html",
+              "https://www.necoparts.com/Templates/att/B910-Drawing.pdf"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Designación OEM literal de la rosca (BSA 1.37\"x24T, R/L) sin descomponer",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "drawing"
+      ],
+      "scope": "Las dos copas roscadas del B910",
+      "reason": "La ficha y el plano nombran la rosca; la lectura R/L no se descompone en mano por copa."
+    },
+    {
+      "key": "bb_installation_claims",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "caja-73",
+            "values": {
+              "configuration": "Caja roscada BSA de 73 mm",
+              "shell_designation": "BSA 1.37\"x24T",
+              "width_kind": "Valor exacto",
+              "width_mm": "73",
+              "status": "Compatible declarado",
+              "conditions": "Presentación en stock: eje de 122.5 mm para caja de 73 mm según el nombre guardado; la ficha lista los largos «110.5mm, 113.5mm, 115mm, 116mm, 118mm, 122.5mm & 127.5mm for 68mm & 73mm Widths»",
+              "source_scope": "Ficha oficial Neco B910 (SPINDLE LENGTH … for 68mm & 73mm Widths) y plano (B.B. SHELL WIDTH=73mm); «73x122.5MM» del nombre guardado",
+              "source_url": "https://www.necoparts.com/en/product/B910%2C+B910E%2C+B910P%2C+B910B%2C+B910PP.html"
+            },
+            "sources": [
+              "https://www.necoparts.com/en/product/B910%2C+B910E%2C+B910P%2C+B910B%2C+B910PP.html",
+              "https://www.necoparts.com/Templates/att/B910-Drawing.pdf"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha oficial: largos «for 68mm & 73mm Widths»; plano: «B.B. SHELL WIDTH=73mm»; caja 73 fijada por el nombre",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "drawing",
+        "product-name"
+      ],
+      "scope": "Sólo la caja de 73 mm que nombra el producto",
+      "reason": "La ficha declara 68 y 73 y el nombre fija 73."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Neco Technology Industry Co. (necoparts.com)",
+      "locator": "https://www.necoparts.com/en/product/B910%2C+B910E%2C+B910P%2C+B910B%2C+B910PP.html",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial B910/B910E/B910P/B910B/B910PP",
+      "finding": "B910: BSA 1.37”x24T, R/L; 10B21 spindle, steel cups, 2 sealed bearings; spindle lengths 110.5–127.5 for 68 & 73 mm",
+      "artifact_path": "research/fill-010-bb-neco/evidence/neco-b910-page-20260916.md",
+      "sha256": "1e399628d9484de14112e593f1d90ad908ec6f92d6bbc6bbebcdbafc797996c3"
+    },
+    {
+      "id": "drawing",
+      "kind": "oem_catalogue",
+      "source": "Neco Technology Industry Co. (necoparts.com)",
+      "locator": "https://www.necoparts.com/Templates/att/B910-Drawing.pdf",
+      "consulted_on": "2026-09-16",
+      "scope": "Plano de conjunto B910 rev. C (2021-05-13)",
+      "finding": "SQUARE(JIS) CARTRIDGE BOTTOM BRACKET; Threads BC 1.37\"x24T R/L; Steel cups; shell widths 68/70/73",
+      "artifact_path": "research/fill-010-bb-neco/evidence/neco-b910-drawing-20260916.md",
+      "sha256": "fd11b21cc3e9951e0fb73c0a55aa7b019c0620fdfdf8ca0ca6d12c402650bcd5"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 715c6eb5-e6b2-48e0-9748-05615b20bc45",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante (caja, largo de eje) declaradas en el nombre",
+      "finding": "MOTOR SELLADO 73x122.5MM NECO MOD. B91O JA21011",
+      "artifact_path": "research/fill-010-bb-neco/evidence/neco-b910-122-saved-name-20260916.json",
+      "sha256": "19aca3f072d639407fd30803772a33adf24f082c26068dda9d649d530819f09f"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "6262f9bfbb52a00f5a8d6834938a8edca87c3a3ae9b069627870f1adf3b6a93d",
+    "notes": "Neco B910 73x122.5. Igual que el anterior con largo 122.5. La identidad con «B91O» (letra O) es un error tipográfico evidente en «NECO MOD. B91O JA21011» y reason lo dice; aceptado. Evidencias sha ok; simulation.issues = []; hash corresponde."
+  }
+}

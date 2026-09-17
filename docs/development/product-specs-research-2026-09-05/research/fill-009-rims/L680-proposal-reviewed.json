@@ -1,0 +1,281 @@
+{
+  "schema_version": 2,
+  "product_id": "61aa573c-2cea-4cbd-b9c5-8febe95d59b9",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "6c768f08f5e9fb04b0d4bae16e56437a88b3199f9abda7c457196ed873e99e35",
+    "fingerprints": {
+      "facts_sha256": "dc03dce971a962f0a98f2c494ffbc909072e1ed127bb868f67bf0d691640772f",
+      "product_sha256": "75ecf8c3b73e03d5abecb92bb3b9c773029d339b42de9923648c657291d7b1ff",
+      "template_sha256": "d53cf1933c413140855dcbbc8c48b202eb3e8a379b552445774669f2eaf7b483",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 1,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "81547e3f-433c-462e-9dbe-a141aef745c9",
+    "contract_version": 61
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "DISC BULL",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado nombra DISC BULL y el catálogo oficial Weinmann lo documenta."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.weinmanntek.com/archive/product/item/files/MY2025%20WEINMANN.pdf",
+      "unit": null,
+      "method": "URL de la página del catálogo oficial Weinmann consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos de esta propuesta",
+      "reason": "Fuente exigida por el contrato para las declaraciones."
+    },
+    {
+      "key": "rim_bead_profile",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Desconocido / sin confirmar",
+      "unit": null,
+      "method": "El catálogo Weinmann no publica el perfil de talón (hooked/hookless); el contrato exige declararlo y ofrece este valor",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Lo que la fuente calla",
+      "reason": "Sin dato OEM no se elige gancho ni hookless; «Desconocido / sin confirmar» es el valor previsto por el contrato para ese caso y abre los campos ETRTO."
+    },
+    {
+      "key": "bead_seat_diameter_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "584",
+      "unit": "mm",
+      "method": "Catálogo: fila 27.5\" «584x24.0»; rueda fijada por el nombre",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "DISC BULL 27.5\"",
+      "reason": "ETRTO literal de la fila de la rueda que vende el nombre."
+    },
+    {
+      "key": "rim_internal_width_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "24.0",
+      "unit": "mm",
+      "method": "Catálogo: ETRTO «584x24.0» (ancho interior nominal)",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "DISC BULL",
+      "reason": "Segundo término del ETRTO literal."
+    },
+    {
+      "key": "rim_etrto",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "584x24.0",
+      "unit": null,
+      "method": "Catálogo: columna ETRTO, fila 27.5\"",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "DISC BULL 27.5\"",
+      "reason": "Literal."
+    },
+    {
+      "key": "rim_erd_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "558.15",
+      "unit": "mm",
+      "method": "Catálogo: columna ERD, fila 27.5\"",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "DISC BULL 27.5\"",
+      "reason": "Literal."
+    },
+    {
+      "key": "rim_joint_designation",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "PIN",
+      "unit": null,
+      "method": "Catálogo: columna «Joint Type»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "DISC BULL",
+      "reason": "Literal."
+    },
+    {
+      "key": "spoke_hole_count",
+      "current": {
+        "value": "32",
+        "source": "name_reading",
+        "fact_id": "54b9ae2a-7f10-43c8-a674-8e397c837131",
+        "fact_sha256": "caf69b014c318d0243ac55c98a40fdfddd2b11b64f9e0ed1960069ce5ce684d9",
+        "confirmed": false
+      },
+      "proposed": "32",
+      "unit": null,
+      "method": "Nombre guardado «32H» sobre las opciones de agujeros del catálogo",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Presentación en stock",
+      "reason": "El catálogo lista las perforaciones disponibles y el nombre fija la vendida."
+    },
+    {
+      "key": "rim_external_width_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "31.40",
+      "unit": "mm",
+      "method": "Catálogo: cota de ancho exterior del dibujo de perfil (transcrita)",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "DISC BULL",
+      "reason": "Cota literal del dibujo."
+    },
+    {
+      "key": "rim_profile_height_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "21.02",
+      "unit": "mm",
+      "method": "Catálogo: cota de alto del dibujo de perfil (transcrita)",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "DISC BULL",
+      "reason": "Cota literal del dibujo."
+    },
+    {
+      "key": "brake_track",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": false,
+      "unit": null,
+      "method": "Catálogo: la tabla DISC BULL está en la sección «E-MTB/DISC» y sin opción CNC; llanta de disco",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "DISC BULL",
+      "reason": "Ver método; el revisor decide si la lectura es literal."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_catalogue",
+      "source": "Weinmann Metal Products (weinmanntek.com), catálogo MY2024–MY2025",
+      "locator": "https://www.weinmanntek.com/archive/product/item/files/MY2025%20WEINMANN.pdf",
+      "consulted_on": "2026-09-16",
+      "scope": "Tabla DISC BULL del catálogo (transcrita del PDF de imagen)",
+      "finding": "27.5\" 584x24.0 ERD 558.15 · PIN · agujeros 32 · perfil 24.0 / 31.40 / 21.02",
+      "artifact_path": "research/fill-009-rims/evidence/weinmann-my2025-catalogue-20260916.md",
+      "sha256": "4e5b77f02dae41c04ae4e3bab1f98896783009fb163ad70fdaf47aef279a10c5"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 61aa573c-2cea-4cbd-b9c5-8febe95d59b9",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante (rueda, agujeros, acabado) declaradas en el nombre",
+      "finding": "Llanta Weinmann 27.5 Ojetill 32H DISCBUL Negra",
+      "artifact_path": "research/fill-009-rims/evidence/disc-bull-saved-name-20260916.json",
+      "sha256": "cd9e445c4041cb9776ebbc81ba821aecb298bd9a5cd89527226dc4165f28798b"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "c1ca1bbe6bd9480cf1d806d20ac4a91b02872d2f1c8e3f736b1ec6b0feee36f4",
+    "notes": "DISC BULL. «DISCBUL» del nombre es la abreviatura inequívoca del modelo del catálogo. bsd 584, 24.0, «584x24.0», ERD 558.15, PIN, 32 agujeros (nombre sobre 36\\32\\28), exterior 31.40 y alto 21.02 literales de la transcripción; brake_track = false por la sección DISC. Evidencias sha ok; simulation.issues = []; hash corresponde."
+  }
+}

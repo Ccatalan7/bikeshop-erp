@@ -1,0 +1,281 @@
+{
+  "schema_version": 2,
+  "product_id": "e1dda70a-398f-465d-acea-87d131b5858b",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "b87b542688fe68fcf3a649fcc8db7b14570cce0014c90a8090d667b849805cd7",
+    "fingerprints": {
+      "facts_sha256": "160074e37f1ad9a3bece59e7789c6b59d549c7aef7991e9629f96822d3c5ae06",
+      "product_sha256": "e97917df919648ad15284fc3d3cb742d1325a846ae8cb22a09c0c0f59de7a7b3",
+      "template_sha256": "d53cf1933c413140855dcbbc8c48b202eb3e8a379b552445774669f2eaf7b483",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 1,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "81547e3f-433c-462e-9dbe-a141aef745c9",
+    "contract_version": 61
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "ZAC19",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado nombra ZAC19 y el catálogo oficial Weinmann lo documenta."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.weinmanntek.com/archive/product/item/files/MY2025%20WEINMANN.pdf",
+      "unit": null,
+      "method": "URL de la página del catálogo oficial Weinmann consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos de esta propuesta",
+      "reason": "Fuente exigida por el contrato para las declaraciones."
+    },
+    {
+      "key": "rim_bead_profile",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Desconocido / sin confirmar",
+      "unit": null,
+      "method": "El catálogo Weinmann no publica el perfil de talón (hooked/hookless); el contrato exige declararlo y ofrece este valor",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Lo que la fuente calla",
+      "reason": "Sin dato OEM no se elige gancho ni hookless; «Desconocido / sin confirmar» es el valor previsto por el contrato para ese caso y abre los campos ETRTO."
+    },
+    {
+      "key": "bead_seat_diameter_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "559",
+      "unit": "mm",
+      "method": "Catálogo: fila 26\" «559x19.0»; rueda fijada por el nombre",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "ZAC19 26\"",
+      "reason": "ETRTO literal de la fila de la rueda que vende el nombre."
+    },
+    {
+      "key": "rim_internal_width_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "19.0",
+      "unit": "mm",
+      "method": "Catálogo: ETRTO «559x19.0» (ancho interior nominal)",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "ZAC19",
+      "reason": "Segundo término del ETRTO literal."
+    },
+    {
+      "key": "rim_etrto",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "559x19.0",
+      "unit": null,
+      "method": "Catálogo: columna ETRTO, fila 26\"",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "ZAC19 26\"",
+      "reason": "Literal."
+    },
+    {
+      "key": "rim_erd_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "540.70",
+      "unit": "mm",
+      "method": "Catálogo: columna ERD, fila 26\"",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "ZAC19 26\"",
+      "reason": "Literal."
+    },
+    {
+      "key": "rim_joint_designation",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "PIN",
+      "unit": null,
+      "method": "Catálogo: columna «Joint Type»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "ZAC19",
+      "reason": "Literal."
+    },
+    {
+      "key": "spoke_hole_count",
+      "current": {
+        "value": "32",
+        "source": "name_reading",
+        "fact_id": "45a9e665-7495-4541-8044-95aa771a732b",
+        "fact_sha256": "a7a99fbace1406cca80f55060c20230d58ca9ba622419cf7da9d86c06aa35274",
+        "confirmed": false
+      },
+      "proposed": "32",
+      "unit": null,
+      "method": "Nombre guardado «32H» sobre las opciones de agujeros del catálogo",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Presentación en stock",
+      "reason": "El catálogo lista las perforaciones disponibles y el nombre fija la vendida."
+    },
+    {
+      "key": "rim_external_width_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "23.60",
+      "unit": "mm",
+      "method": "Catálogo: cota de ancho exterior del dibujo de perfil (transcrita)",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "ZAC19",
+      "reason": "Cota literal del dibujo."
+    },
+    {
+      "key": "rim_profile_height_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "17.52",
+      "unit": "mm",
+      "method": "Catálogo: cota de alto del dibujo de perfil (transcrita)",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "ZAC19",
+      "reason": "Cota literal del dibujo."
+    },
+    {
+      "key": "brake_track",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Nombre guardado «CNC» y catálogo «Optional: CNC» (flanco mecanizado CNC = pista de freno); el nombre además dice F/V (freno V)",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "ZAC19",
+      "reason": "Ver método; el revisor decide si la lectura es literal."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_catalogue",
+      "source": "Weinmann Metal Products (weinmanntek.com), catálogo MY2024–MY2025",
+      "locator": "https://www.weinmanntek.com/archive/product/item/files/MY2025%20WEINMANN.pdf",
+      "consulted_on": "2026-09-16",
+      "scope": "Tabla ZAC19 del catálogo (transcrita del PDF de imagen)",
+      "finding": "26\" 559x19.0 ERD 540.70 · PIN · agujeros 32 · perfil 19.0 / 23.60 / 17.52",
+      "artifact_path": "research/fill-009-rims/evidence/weinmann-my2025-catalogue-20260916.md",
+      "sha256": "4e5b77f02dae41c04ae4e3bab1f98896783009fb163ad70fdaf47aef279a10c5"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product e1dda70a-398f-465d-acea-87d131b5858b",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante (rueda, agujeros, acabado) declaradas en el nombre",
+      "finding": "Llanta Weinmann 26\" Ojet ZAC19 CNC 32H negra F/V",
+      "artifact_path": "research/fill-009-rims/evidence/zac19-saved-name-20260916.json",
+      "sha256": "8c614586155147e88e6a09d233c64e09016d77d181c55bded0756fb864bdb28c"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "2020c0f1c6701b021782dd618dd61306f387882ae72936d89b86ecbf45d52071",
+    "notes": "ZAC19. Identidad literal en nombre y catálogo. bsd 559 (rueda 26\" del nombre sobre la fila «26\" 559x19.0»), ancho interior 19.0, ETRTO «559x19.0», ERD 540.70, unión PIN, 32 agujeros (nombre sobre 36\\32\\28), ancho exterior 23.60 y alto 17.52 son la fila y el dibujo transcritos; tokens válidos. brake_track = true: «CNC» es la opción de flanco mecanizado de una tabla de la sección E-MTB/MTB y el nombre la fija dos veces («CNC» y «F/V»); aceptado como lectura de esa opción. Advertencia general del lote Weinmann, que no bloquea: la evidencia es una transcripción manual de un PDF de imagen, y así lo declara. Evidencias sha ok; simulation.issues = []; hash corresponde."
+  }
+}

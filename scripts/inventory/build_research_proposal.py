@@ -62,17 +62,16 @@ def main():
         evidence.append(item)
 
     def current_of(key):
+        # The preimage the simulator checks is the editor's resolved value
+        # (an option's canonical value for a select, text for a number), not
+        # the raw fact columns: a single_select fact keeps its value in
+        # spec_fact_values, so reading the columns would report None and the
+        # simulator would refuse the proposal with fact_preimage.
         o = existing.get(key)
+        value = editor['values'].get(key)
         if o is None:
-            return {'value': None, 'source': None, 'fact_id': None, 'fact_sha256': None, 'confirmed': None}
+            return {'value': value, 'source': None, 'fact_id': None, 'fact_sha256': None, 'confirmed': None}
         fact = o['fact']
-        value = fact.get('value_number')
-        if value is None:
-            value = fact.get('value_boolean')
-        if value is None:
-            value = fact.get('value_text')
-        if value is None and fact.get('value_json_text'):
-            value = json.loads(fact['value_json_text'])
         return {'value': value, 'source': fact['source'], 'fact_id': fact['id'],
                 'fact_sha256': o.get('fact_sha256'), 'confirmed': fact.get('confirmed')}
 

@@ -1,0 +1,234 @@
+{
+  "schema_version": 2,
+  "product_id": "2c7752aa-68d4-4594-9766-a1af107e0bf5",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "16d23543cd3b8c77db52f05b9bf27b094cb18e290a314ae6ddd636cc1e7f7d13",
+    "fingerprints": {
+      "facts_sha256": "9e6b59f08d677adaf624da93e89871bb33b9e8c432de690b5dc51387d837aaa4",
+      "product_sha256": "cc062ebe4cf28bb085aafc582c5762daa935f14c3f125ca5c6cf22614272fc43",
+      "template_sha256": "d53cf1933c413140855dcbbc8c48b202eb3e8a379b552445774669f2eaf7b483",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 1,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "81547e3f-433c-462e-9dbe-a141aef745c9",
+    "contract_version": 61
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "XM 319 Disc",
+      "evidence": [
+        "product-name",
+        "oem",
+        "mavic-index"
+      ],
+      "reason": "El nombre guardado dice «Mavic 319, 29x32H con ojetillos»; el índice de llantas del Technical Manual de Mavic sólo lista «XM 319 Disc» (ningún XM 319 sin Disc) y la ficha 2_399 documenta XM 319 Disc 29\" con 32 agujeros y ojetillos simples: identidad por eliminación con las dos fuentes archivadas."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://technicalmanual.mavic.com/tech-mavic/technical_manual/data/docs/products/2_399.pdf",
+      "unit": null,
+      "method": "URL de la ficha técnica oficial Mavic (Technical Manual) consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos de esta propuesta",
+      "reason": "Fuente exigida por el contrato para las declaraciones."
+    },
+    {
+      "key": "rim_bead_profile",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Desconocido / sin confirmar",
+      "unit": null,
+      "method": "La ficha Mavic no publica el perfil de talón (hooked/hookless); el contrato exige declararlo y ofrece este valor",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "La ficha Mavic no publica el perfil de talón",
+      "reason": "Sin dato OEM no se elige gancho ni hookless; «Desconocido / sin confirmar» es el valor previsto por el contrato para ese caso y abre los campos ETRTO."
+    },
+    {
+      "key": "bead_seat_diameter_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "622",
+      "unit": "mm",
+      "method": "Ficha Mavic: «Comptabilité ETRTO 622x19TC» (columna XM 319 Disc 29\"); rueda 29 fijada por el nombre",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "XM 319 Disc 29\"",
+      "reason": "ETRTO literal."
+    },
+    {
+      "key": "rim_internal_width_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "19",
+      "unit": "mm",
+      "method": "Ficha Mavic: ETRTO «622x19TC»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "XM 319 Disc 29\"",
+      "reason": "Segundo término del ETRTO literal."
+    },
+    {
+      "key": "rim_etrto",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "622x19TC",
+      "unit": null,
+      "method": "Ficha Mavic: columna XM 319 Disc 29\"",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "XM 319 Disc 29\"",
+      "reason": "Literal."
+    },
+    {
+      "key": "rim_eyelet_type",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Ojetillo simple",
+      "unit": null,
+      "method": "Ficha Mavic: «Oeilletage: Simple»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "XM 319 Disc 29\"",
+      "reason": "Literal (ojetillo simple)."
+    },
+    {
+      "key": "spoke_hole_count",
+      "current": {
+        "value": "32",
+        "source": "name_reading",
+        "fact_id": "c589b1e4-8e21-44b9-bcf4-490037fc9b06",
+        "fact_sha256": "553d34184674b64b0c8b6950353045251ae5fc3fb5bd7a0024da5609f50cedbf",
+        "confirmed": false
+      },
+      "proposed": "32",
+      "unit": null,
+      "method": "Nombre guardado «32H» sobre las perforaciones publicadas («Noir 32 trous» y «Noir 36 trous»)",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Presentación en stock",
+      "reason": "La ficha lista 32 y 36 y el nombre fija 32."
+    },
+    {
+      "key": "rim_valve_bore_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "8.5",
+      "unit": "mm",
+      "method": "Ficha Mavic: «Ø trou de valve en mm: 8,5 livrée avec adaptateur de valve»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "XM 319 Disc 29\"",
+      "reason": "Literal; la llanta trae adaptador de válvula."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_catalogue",
+      "source": "Mavic (technicalmanual.mavic.com)",
+      "locator": "https://technicalmanual.mavic.com/tech-mavic/technical_manual/data/docs/products/2_399.pdf",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha técnica XM 319 Disc 26\"/29\" y otras (francés)",
+      "finding": "XM 319 Disc 29\": Maxtal; 622x19TC; 1.5 à 2.3; Oeilletage Simple; 560 g; 32 y 36 trous; appui de rayon 595,32; fond de jante 622x20x0,6",
+      "artifact_path": "research/fill-009-rims/evidence/mavic-xm-319-disc-2_399-20260916.md",
+      "sha256": "3b7240bd1b3541cc69b6044416e0df4544f0c479667b41a6e0354f75fe2222cc"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 2c7752aa-68d4-4594-9766-a1af107e0bf5",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante (rueda, agujeros, acabado) declaradas en el nombre",
+      "finding": "Llanta Mavic 319, 29x32H Con Ojetillos.",
+      "artifact_path": "research/fill-009-rims/evidence/mavic-319-saved-name-20260916.json",
+      "sha256": "e741954e7dd5cc6864e4bd9c5282f8b966c822b68221997ce8682701ef237f18"
+    },
+    {
+      "id": "mavic-index",
+      "kind": "oem_catalogue",
+      "source": "Mavic (technicalmanual.mavic.com)",
+      "locator": "https://technicalmanual.mavic.com/tech-mavic/technical_manual/data/mavic_tech.php?display=product&family=1032&subfamily=0&macronu=14609",
+      "consulted_on": "2026-09-16",
+      "scope": "Índice de llantas del Technical Manual: qué modelos XM 319 existen",
+      "finding": "Lista «XM 319 Disc»; no lista un «XM 319» sin Disc",
+      "artifact_path": "research/fill-009-rims/evidence/mavic-technical-manual-rims-index-20260916.md",
+      "sha256": "58ff0a87e278095a93e2f7ba2fea3e7362d5a590835b23eecbbe3b6da8717316"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "9eb34885dfb516d7aeda89fb1cf220fb554686431d6906b3b6202e710c716d89",
+    "notes": "Mavic XM 319 Disc, proposal-v2.json. El índice de llantas del Technical Manual lista «XM 319 Disc» y ningún «XM 319» sin Disc, y la ficha 2_399 documenta XM 319 Disc 26\" y 29\": con el nombre «319, 29x32H con ojetillos» la identidad queda por eliminación dentro de lo que Mavic publica hoy. Diff v1→v2 sólo en identity.evidence, identity.reason, el scope del perfil de talón y la evidencia nueva; hechos idénticos a los que acepté. simulation.issues = [] y sim.proposal_sha256 corresponde a este v2. Marca vacía: flujo canónico."
+  }
+}

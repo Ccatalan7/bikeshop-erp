@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "3853352a-8f4b-45e9-bbf8-5c81c97a780e",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "FITTING HIDRAULICO ALLIGATOR MOD. HK-HST08",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "55093058283066900d86da9ce896dc6648125c446ca5cfbeee42ea9d2a410073",
+  "product_sha256": "868e1d1dde5911eb5c6c9c1042670ed737ff5edc16b34e6fbaae43a108a4d47d",
+  "scope": "Nombre guardado en ERP; no verifica variante física ni presentación."
+}

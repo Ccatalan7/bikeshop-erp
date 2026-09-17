@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "2dc3293f-c163-4bd1-bd95-1243167f182e",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "COLLERIN ZOOM 31.8MM ALUMINIO MATE SSABK AT-115",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "f0943113ae520b15d4efd3ad3cd9e3aee242f6e4c6ebb9bfcc28df43bbd22fe7",
+  "product_sha256": "73184effee8fb5db40fdfe5b61d0dac3a47b326828b6f44fe7e73cae3773e2cd",
+  "scope": "Nombre guardado en ERP; no verifica variante física ni presentación."
+}

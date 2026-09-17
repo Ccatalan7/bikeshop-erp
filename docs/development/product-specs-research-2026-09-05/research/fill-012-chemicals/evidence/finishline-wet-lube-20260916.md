@@ -1,0 +1,4 @@
+# Finish Line® Wet Chain Lubricant — https://finishlineusa.com/products/chain-lubricants/wet-lube
+Consultada 2026-09-16 (curl del HTML público; líneas literales de la ficha oficial de Finish Line).
+"Wet Chain Lubricant" · "Quiet. Long-lasting. Protection. Wet Lube maximizes your bike chain’s performance in nature’s harshest, wettest conditions." · "Wet-weather formula shields against water, rust, and salty air." · Select Size: "2 fl oz - Drip" · "4 fl oz - Drip" · "8 fl oz - Drip" · "32 fl oz - Bottle" · "Full synthetic technology, with molybdenum and water repelling polymers make Finish Line® Wet Lube a race proven classic, on and off-road." · Eco Profile: "Wet Lubricant features an eco-safe, non-toxic, readily biodegradable formulation that reaches more than 60% biodegradation within 28 days, and complete breakdown shortly thereafter."
+La ficha publica el envase en onzas líquidas; no se convierte a ml.

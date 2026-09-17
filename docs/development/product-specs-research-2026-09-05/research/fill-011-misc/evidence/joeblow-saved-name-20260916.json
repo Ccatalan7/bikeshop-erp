@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "b0fb57f8-05ca-42c3-9c40-bc7182d6e316",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Bomba De Pie Topeak Joe Blow Sport Iii",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "b4d7a9f1d8cf6e1d1097dd6f0e18799350db9618e3316025a69b892a9f0f4d40",
+  "product_sha256": "0fb67db5f29d73fb9c89fa33f6e2703ab96a58b7780983660c359181556a163e",
+  "scope": "Nombre guardado en ERP; no verifica variante física ni presentación."
+}

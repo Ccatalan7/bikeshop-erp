@@ -1,0 +1,222 @@
+{
+  "schema_version": 2,
+  "product_id": "a0a978df-d4bc-4f83-a38c-b64bc127405c",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "c94c6b520c481d899b4ff1012fd9fa207ae911916863585c76d45d6b34ca27dd",
+    "fingerprints": {
+      "facts_sha256": "feef497042ae7f0bc473bf4c8cd976ba2624d3076097d5e6e6f73722ad4a7b94",
+      "product_sha256": "c366614191e6a3907c26d4ec710c42dbf25b82b523acc3b4c6e8cbabdf107c88",
+      "template_sha256": "d53cf1933c413140855dcbbc8c48b202eb3e8a379b552445774669f2eaf7b483",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 1,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "81547e3f-433c-462e-9dbe-a141aef745c9",
+    "contract_version": 61
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "AR Offset",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «Race Face AR Offset 30mm 32H 29″» y la ficha oficial Race Face documenta AR Offset Rim con la variante 29 / 30 / 32."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.raceface.com/products/ar-offset-rim",
+      "unit": null,
+      "method": "URL de la ficha oficial Race Face consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos de esta propuesta",
+      "reason": "Fuente exigida por el contrato para las declaraciones."
+    },
+    {
+      "key": "rim_bead_profile",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Desconocido / sin confirmar",
+      "unit": null,
+      "method": "La ficha Race Face no publica el perfil de talón (hooked/hookless); el contrato exige declararlo y ofrece este valor",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Lo que la fuente calla",
+      "reason": "Sin dato OEM no se elige gancho ni hookless; «Desconocido / sin confirmar» es el valor previsto por el contrato para ese caso y abre los campos ETRTO."
+    },
+    {
+      "key": "rim_internal_width_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "30",
+      "unit": "mm",
+      "method": "Nombre guardado «30mm» sobre las variantes «29 / 30 / 32» y «Available Internal Rim Width 25 mm, 30 mm, 35 mm, 40 mm» de la ficha",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Variante 29 / 30 / 32",
+      "reason": "La ficha lista los anchos y el nombre fija 30."
+    },
+    {
+      "key": "spoke_hole_count",
+      "current": {
+        "value": "32",
+        "source": "name_reading",
+        "fact_id": "ab12bd8e-dab0-44c3-a882-8aa8b1446edb",
+        "fact_sha256": "3306aa23ed4a9aa9569e06e0f2eae12e1dfb5494aca6858cb25948b7cb327255",
+        "confirmed": false
+      },
+      "proposed": "32",
+      "unit": null,
+      "method": "Ficha: «Available Spoke Count 32»; nombre «32H»",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "AR Offset (todas las variantes)",
+      "reason": "Literal."
+    },
+    {
+      "key": "rim_tubeless_ready",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Ficha: «Tubeless Ready»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "AR Offset",
+      "reason": "Literal."
+    },
+    {
+      "key": "rim_material",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Aluminio",
+      "unit": null,
+      "method": "Ficha: «Material 6061 aluminum»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "AR Offset",
+      "reason": "Literal."
+    },
+    {
+      "key": "rim_symmetry",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Asimétrica",
+      "unit": null,
+      "method": "Ficha: «AR Offset Rim», «Rim Offset 4.5 mm (all except 25mm internal rim width)»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "AR Offset 30 mm",
+      "reason": "Llanta con offset declarado."
+    },
+    {
+      "key": "rim_asymmetric_offset_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "4.5",
+      "unit": "mm",
+      "method": "Ficha: «Rim Offset 4.5 mm (all except 25mm internal rim width)»; la variante en stock es de 30 mm",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Variante 29 / 30 / 32",
+      "reason": "Literal para todos los anchos salvo 25 mm."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Race Face (raceface.com)",
+      "locator": "https://www.raceface.com/products/ar-offset-rim",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial AR Offset Rim",
+      "finding": "Variantes 29 / 30 / 32; 6061 aluminum; Tubeless Ready; Rim Offset 4.5 mm; ERD sólo 27.5\" (562 mm)",
+      "artifact_path": "research/fill-009-rims/evidence/raceface-ar-offset-rim-20260916.md",
+      "sha256": "79ac61b33c60c1436b4db026dc91839d83900f4ce806affd4c7a4ecb131df243"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product a0a978df-d4bc-4f83-a38c-b64bc127405c",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante (rueda, agujeros, acabado) declaradas en el nombre",
+      "finding": "Llanta Race Face AR Offset 30mm 32H 29″",
+      "artifact_path": "research/fill-009-rims/evidence/raceface-ar-saved-name-20260916.json",
+      "sha256": "aa75d0ba1235dedb5b4dfacfd49c09ffa45a89488063467ca10784970d358c62"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "28f3a6e5a462f71982c0c7039caaa5e9bf17fb6c90523f38dabb46aecf08912a",
+    "notes": "Race Face AR Offset. Identidad literal («AR Offset» en nombre y ficha, variante «29 / 30 / 32» publicada). Ancho interior 30 (nombre sobre 25/30/35/40), 32 agujeros, «Tubeless Ready», «6061 aluminum» → Aluminio, y offset 4,5 son literales; «Asimétrica» sigue del propio nombre del modelo y del offset declarado. No declarar bsd porque la ficha dice «29\"» sin ETRTO es estricto y coherente con la regla. Nota: brand nula en el snapshot, para el flujo de marca. Evidencias sha ok; simulation.issues = []; hash corresponde."
+  }
+}

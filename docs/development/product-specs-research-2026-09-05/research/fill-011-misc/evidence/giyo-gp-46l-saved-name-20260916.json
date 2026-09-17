@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "4c278aaa-30bb-4b3f-a4a3-52c0ccf5e19d",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "BOMBIN DE MANO GIYO MODELO GP-46L",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "f3c4e7436c165a326fdfc6c2d94b6fa5e8bd5dc9abc19d46d01d8c3cd7dbaac0",
+  "product_sha256": "f5a28217ec12342b38bb2b403befac1220054a4ba56e1c1352ff94460c6d0086",
+  "scope": "Nombre guardado en ERP; no verifica variante física ni presentación."
+}
