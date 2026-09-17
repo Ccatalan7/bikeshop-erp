@@ -1,0 +1,5 @@
+# ZTTO MTB Thru Axle Road Bike Shaft Front Rear Skewers 12mm 15mm … — https://ztto.net/products/ztto-mtb-thru-axle-road-bike-shaft-front-rear-skewers-12mm-15mm-wheel-axis-hub-x-12-shaft-15x100-12x142-12x100-12x148-15x110
+Consultada 2026-09-16 (curl del HTML público; título y variantes literales de la ficha oficial de ZTTO).
+Título: "ZTTO MTB Thru Axle Road Bike Shaft Front Rear Skewers 12mm 15mm Wheel Axis Hub X-12 Shaft 15x100 12x142 12x100 12x148 15x110"
+Variantes publicadas (selector de la ficha): "15x148LxM15(P1.5)x9" · "15x155LxM14(P1.5)x9" · "15x158LxM15(P1.5)x9" · "12x121LxM12(P1.5)x17" · "12x126LxM12(P1.5)x17" · "12x128LxM12(P1.5)x12" · "12x162LxM12(P1.5)x14" · "12x165LxM12(P1.5)x16" · "12x171LxM12(P1.5)x19" · "12x181LxM12(P1.5)x19" · "12x168LxM12(P1.0)x19" · "12x175LxM12(P1.75x19" · "12x177LxM12(P1.5)x19" · "12x175LxM12(P1.5)x19" · "15x145LxM14(P1.5)x9" · "12x183LxM12(P1.75x10" · "12x160LxM12(P1.0)x15" · "12x120LxM12(P1.0)x15"
+El texto visible de la ficha no publica material, peso ni la clave de la notación (diámetro × largo L × rosca (paso) × largo de rosca es la lectura habitual de ZTTO, no está escrita en la página).

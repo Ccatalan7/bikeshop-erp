@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "e55dfdea-ed5f-41e6-9e2d-a0ecc2bac90d",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Eje Pasante ZTTO 12x177LxM12(P1.5)x19",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "d4c23ee974b2f2948adb5e5849b803f57c7dcb6e6e99528285042ce03d4cdbfa",
+  "product_sha256": "55fbfdc34f001ea64f40bd87ea88ed89b7db9395b2a3776c26c58de5f069efbe",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "99cf1a0e-e383-4cc1-8fb0-bcb96627c15a",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "MANILLA CAMBIO 7 VEL. M.T.B. KD-20-3SI/7SI INDEX\nSAIGUAN SET",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "49d2e4b523b2ed1a649ceb02d7387016fe24b6cba6cedc4ef848da93fb1e06f9",
+  "product_sha256": "92ce2e7c24dd2172d7e1a6350d278a8aaef9a68add176b0bee5d3e02b5aced41",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}
