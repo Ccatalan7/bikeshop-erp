@@ -1622,3 +1622,35 @@ La regla de alcance, otra vez la misma: **un índice que mira una tabla contesta
 rail, después los archivos recibidos, ahora las conversaciones. Al agregar una
 superficie de búsqueda, la pregunta no es «¿qué tablas tengo?» sino «¿qué cosas
 abre la gente en este ERP?».
+
+### El avatar muestra a la contraparte, y una marca no se recorta (2026-09-17)
+
+La ficha del proveedor permitía cargarle una imagen desde hacía tiempo. No se
+veía en ninguna otra parte —el chat con TeknoBike seguía mostrando «TE»— y,
+peor, **tampoco se podía cargar**: el comando escribía `public.suppliers`
+directo desde el cliente, donde `authenticated` no tiene ningún grant, y
+contestaba «permission denied for table suppliers». Nadie lo había notado
+porque el error sólo aparece al elegir el archivo.
+
+- **Un avatar de conversación no muestra «al cliente»: muestra a la
+  contraparte.** El único campo que existía se llamaba `customerImageUrl`, y
+  con ese nombre un hilo de proveedor no tenía de dónde sacar su logo. El
+  concepto correcto —`counterpartyImageUrl`, cliente o proveedor, resuelto en
+  el modelo— hace que la próxima contraparte (un transportista, un taller
+  externo) se resuelva en un lugar y no en cada pantalla.
+- **Una marca se contiene; una cara se recorta.** El logotipo de TeknoBike mide
+  415×77: `BoxFit.cover` sobre un cuadrado deja tres letras del medio, que no
+  identifican a nadie. Un logo va contenido sobre el tono del avatar, con algo
+  de aire; una foto de persona sigue recortada, que es como se ve bien. Cuál es
+  cuál lo dice el dato —si el hilo es de un proveedor, si la ficha es de una
+  organización—, no el ojo de quien implementa.
+- **Y el canal no se pierde al ganar la cara.** El encabezado del hilo mostraba
+  sólo el glifo del canal. Al poner la imagen de la contraparte, el canal baja a
+  la insignia de la esquina —el patrón que la lista de conversaciones ya usaba—
+  en vez de desaparecer. Sin imagen cargada, la superficie queda exactamente
+  como estaba.
+- **Una capacidad que la ficha ofrece y ninguna otra pantalla usa es media
+  capacidad.** «Agregar imagen…» existía, guardaba (o eso parecía) y no cambiaba
+  nada en el lugar donde el operador mira a ese proveedor todos los días, que es
+  la bandeja. Al agregar un dato a una ficha, la pregunta es dónde se representa
+  esa entidad en el resto del ERP.

@@ -1562,13 +1562,21 @@ class _SupplierAvatar extends StatelessWidget {
           border: Border.all(color: tokens.border),
         ),
         clipBehavior: Clip.antiAlias,
+        // Una persona se recorta; una marca se contiene. Un logotipo suele ser
+        // mucho más ancho que alto —el de TeknoBike mide 415×77— y `cover`
+        // sobre un cuadrado deja tres letras del medio.
+        padding: url == null || url.isEmpty || person
+            ? EdgeInsets.zero
+            : EdgeInsets.all(size * 0.10),
         child: url == null || url.isEmpty
             ? letters
             : Image.network(
                 url,
-                fit: BoxFit.cover,
-                width: size,
-                height: size,
+                fit: person ? BoxFit.cover : BoxFit.contain,
+                // Contenida, la imagen la mide el hueco que deja el padding:
+                // fijarle el lado completo la desborda.
+                width: person ? size : null,
+                height: person ? size : null,
                 errorBuilder: (_, __, ___) => letters,
               ),
       ),

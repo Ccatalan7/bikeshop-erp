@@ -18,6 +18,7 @@ class ConversationContextHint {
   final double? invoiceTotal;
   final String? supplierId;
   final String? supplierName;
+  final String? supplierImageUrl;
   final String? supplierPhone;
 
   /// La persona detrás de un hilo de proveedor (vendedor registrado o nombre
@@ -60,6 +61,7 @@ class ConversationContextHint {
     this.invoiceTotal,
     this.supplierId,
     this.supplierName,
+    this.supplierImageUrl,
     this.supplierPhone,
     this.contactPersonName,
     this.contactPersonId,
@@ -103,6 +105,7 @@ class ConversationContextHint {
       invoiceTotal: parseDouble(json['invoice_total']),
       supplierId: json['supplier_id']?.toString(),
       supplierName: json['supplier_name']?.toString(),
+      supplierImageUrl: json['supplier_image_url']?.toString(),
       supplierPhone: json['supplier_phone']?.toString(),
       contactPersonName: json['contact_person_name']?.toString(),
       contactPersonId: json['contact_person_id']?.toString(),
@@ -145,6 +148,8 @@ class ConversationContextHint {
       if (invoiceTotal != null) 'invoice_total': invoiceTotal,
       if (supplierId != null) 'supplier_id': supplierId,
       if (supplierName != null) 'supplier_name': supplierName,
+      if (supplierImageUrl != null)
+        'supplier_image_url': supplierImageUrl,
       if (supplierPhone != null) 'supplier_phone': supplierPhone,
       if (contactPersonName != null) 'contact_person_name': contactPersonName,
       if (contactPersonId != null) 'contact_person_id': contactPersonId,
@@ -194,6 +199,22 @@ class ConversationContextHint {
     final number = invoiceNumber?.trim();
     if (number != null && number.isNotEmpty) return 'Factura $number';
     return hasInvoice ? 'Factura vinculada' : null;
+  }
+
+  /// La imagen de **quien está al otro lado**, sea cliente o proveedor.
+  ///
+  /// El avatar de una conversación no muestra «al cliente»: muestra a la
+  /// contraparte. Mientras el único campo fue `customerImageUrl`, un hilo de
+  /// proveedor no tenía de dónde sacar su logo aunque estuviera cargado en la
+  /// ficha, y caía siempre al monograma. Quien pinte un avatar pregunta por
+  /// esto, no por uno de los dos campos: así una contraparte nueva —un
+  /// transportista, un taller externo— se resuelve acá y no en cada pantalla.
+  String? get counterpartyImageUrl {
+    final customer = customerImageUrl?.trim();
+    if (customer != null && customer.isNotEmpty) return customer;
+    final supplier = supplierImageUrl?.trim();
+    if (supplier != null && supplier.isNotEmpty) return supplier;
+    return null;
   }
 
   String? get supplierLabel {

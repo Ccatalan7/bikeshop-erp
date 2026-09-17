@@ -824,3 +824,35 @@ migraciones pero no siempre deja aplicada la última recién escrita (dijo
 Quien tome el arreglo del trigger: escribir la migración con la versión de
 producción (`pg_get_functiondef` en `production` es la fuente), no la copia
 local.
+
+## Un comando que escribe la tabla directo puede estar muerto desde que nació (2026-09-17)
+
+**Costo real: una función del ERP que nunca funcionó y nadie había reportado.**
+
+`Agregar imagen…` en la ficha del proveedor fallaba siempre con
+`PostgrestException(message: permission denied for table suppliers, code:
+42501)`. La causa no era RLS —una política que niega contesta *«new row
+violates row-level security policy»*— sino la **ausencia de grants**: el rol
+`authenticated` no tiene ningún privilegio sobre `public.suppliers`, ni
+`UPDATE` ni `SELECT`. Todo lo que el cliente hace con proveedores va por RPC
+`security definer`; ese comando era el único del módulo que intentaba
+`.from('suppliers').update(...)`, y por eso era el único roto.
+
+Lo que queda:
+
+- **Antes de escribir una tabla desde el cliente, mirá los grants, no las
+  políticas.** `select grantee, privilege_type from
+  information_schema.role_table_grants where table_name = '<tabla>'`. Si
+  `authenticated` no aparece, esa tabla no se toca desde la app: tiene una RPC,
+  o hay que escribirla.
+- **El vecindario manda.** Si los comandos hermanos del mismo gateway van por
+  RPC y uno va por tabla, ese uno está mal, aunque compile y aunque nadie se
+  haya quejado. Los 42501 sólo aparecen cuando alguien usa la función.
+- **Una RPC nueva nace con el grant por defecto de `public`.** Se retira y se
+  entrega explícito (`revoke all … from public; grant execute … to
+  authenticated, service_role`), y el read-back lo comprueba con
+  `has_function_privilege` para los dos roles —el que debe y el que no—.
+
+El read-back también afirma lo que **no** cambió: que `authenticated` sigue sin
+poder escribir la tabla directo. Una migración que abre la puerta que intentaba
+forzar el cliente arregla el síntoma y pierde el aislamiento.

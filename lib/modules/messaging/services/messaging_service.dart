@@ -909,6 +909,8 @@ class MessagingService {
             (purchaseInvoice == null
                 ? null
                 : _text(purchaseInvoice['supplier_name'])),
+        supplierImageUrl:
+            _text(supplier == null ? null : supplier['image_url']),
         supplierPhone:
             _text(supplier == null ? null : supplier['sales_rep_phone']) ??
                 _text(supplier == null ? null : supplier['phone']) ??

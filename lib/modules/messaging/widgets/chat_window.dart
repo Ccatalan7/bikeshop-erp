@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/material.dart';
 
+import '../../../shared/services/image_service.dart';
 import '../../../shared/themes/vinabike_theme_roles.dart';
 import '../../../shared/widgets/whatsapp_outgoing_preview.dart';
 import 'package:flutter/services.dart';
@@ -4211,18 +4212,9 @@ class _ChatWindowState extends State<ChatWindow> {
                       const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
                   child: Row(
                     children: [
-                      CircleAvatar(
-                        radius: widget.compact ? 17 : 20,
-                        backgroundColor:
-                            ConversationChannelPresentation.accent(conversation)
-                                .withValues(alpha: 0.1),
-                        child: Icon(
-                          ConversationChannelPresentation.icon(conversation),
-                          color: ConversationChannelPresentation.accent(
-                            conversation,
-                          ),
-                          size: 20,
-                        ),
+                      _ConversationHeaderAvatar(
+                        conversation: conversation,
+                        compact: widget.compact,
                       ),
                       SizedBox(width: widget.compact ? 9 : 12),
                       Expanded(
@@ -12376,4 +12368,94 @@ class _MessageReactionsMenuEntryState
   @override
   Widget build(BuildContext context) =>
       SizedBox(height: widget.height, child: widget.child);
+}
+
+/// El avatar del encabezado del hilo: **quién** está al otro lado, y por dónde.
+///
+/// Antes era sólo el glifo del canal. Mostrar la cara o el logo de la
+/// contraparte es lo que hace que el hilo se reconozca de un vistazo —el mismo
+/// motivo por el que la lista de conversaciones ya lo hacía—, y el canal no se
+/// pierde: baja a la insignia de la esquina, exactamente como en la lista. Si
+/// la contraparte no tiene imagen cargada, esto queda idéntico a como estaba.
+class _ConversationHeaderAvatar extends StatelessWidget {
+  const _ConversationHeaderAvatar({
+    required this.conversation,
+    required this.compact,
+  });
+
+  final Conversation conversation;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = ConversationChannelPresentation.accent(conversation);
+    final radius = compact ? 17.0 : 20.0;
+    final url = conversation.contextHint?.counterpartyImageUrl;
+    final isMark = conversation.isSupplierConversation;
+
+    final glyph = CircleAvatar(
+      radius: radius,
+      backgroundColor: accent.withValues(alpha: 0.1),
+      child: Icon(
+        ConversationChannelPresentation.icon(conversation),
+        color: accent,
+        size: 20,
+      ),
+    );
+    if (url == null || url.isEmpty) return glyph;
+
+    final surface = Theme.of(context).colorScheme.surface;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        // Un logo se contiene sobre el tono del canal; una foto se recorta.
+        // Recortar un logotipo de 415×77 a un círculo deja tres letras.
+        SizedBox(
+          width: radius * 2,
+          height: radius * 2,
+          child: isMark
+              ? Container(
+                  padding: EdgeInsets.all(radius * 0.28),
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: ImageService.buildCachedImage(
+                    imageUrl: url,
+                    fit: BoxFit.contain,
+                    placeholder: glyph,
+                    errorWidget: glyph,
+                  ),
+                )
+              : ImageService.buildCachedImage(
+                  imageUrl: url,
+                  width: radius * 2,
+                  height: radius * 2,
+                  isCircular: true,
+                  placeholder: glyph,
+                  errorWidget: glyph,
+                ),
+        ),
+        Positioned(
+          right: -2,
+          bottom: -1,
+          child: Container(
+            width: 18,
+            height: 18,
+            decoration: BoxDecoration(
+              color: surface,
+              shape: BoxShape.circle,
+              border: Border.all(color: surface, width: 2),
+            ),
+            child: Icon(
+              ConversationChannelPresentation.icon(conversation),
+              size: 12,
+              color: accent,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }

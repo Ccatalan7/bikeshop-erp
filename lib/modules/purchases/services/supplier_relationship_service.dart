@@ -1416,13 +1416,19 @@ class SupabaseSupplierRelationshipCommandGateway
     required String supplierId,
     required String? imageUrl,
   }) async {
-    final response = await _client
-        .from('suppliers')
-        .update({'image_url': imageUrl})
-        .eq('tenant_id', tenantId)
-        .eq('id', supplierId)
-        .select('id, tenant_id, image_url')
-        .single();
+    // Por RPC, como todos los comandos de este módulo. Escribir `suppliers`
+    // directo desde el cliente no funciona —`authenticated` no tiene ningún
+    // grant sobre esa tabla— y este comando era el único que lo intentaba: la
+    // imagen del proveedor nunca se pudo guardar («permission denied for table
+    // suppliers», 42501, medido en produccion el 2026-09-17).
+    final response = await _client.rpc(
+      'update_supplier_image_url',
+      params: {
+        'p_tenant_id': tenantId,
+        'p_supplier_id': supplierId,
+        'p_image_url': imageUrl,
+      },
+    );
     return _responseMap(response, 'update_supplier_image');
   }
 

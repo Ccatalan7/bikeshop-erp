@@ -265,7 +265,9 @@ class _ConversationTileState extends State<ConversationTile> {
   ) {
     // «Empresa · persona» sigue siendo la empresa en el avatar.
     final initials = _initialsFor(title.split(' · ').first);
-    final avatarUrl = conv.contextHint?.customerImageUrl?.trim();
+    // La contraparte, no «el cliente»: un hilo de proveedor muestra el logo que
+    // tenga cargado en su ficha, igual que un cliente muestra su foto.
+    final avatarUrl = conv.contextHint?.counterpartyImageUrl;
     final hasAvatar = avatarUrl != null && avatarUrl.isNotEmpty;
     final fallbackAvatar = _buildInitialsAvatar(
       initials,
@@ -280,13 +282,16 @@ class _ConversationTileState extends State<ConversationTile> {
           width: 44,
           height: 44,
           child: hasAvatar
-              ? ImageService.buildCachedImage(
-                  imageUrl: avatarUrl,
-                  width: 44,
-                  height: 44,
-                  isCircular: true,
-                  placeholder: fallbackAvatar,
-                  errorWidget: fallbackAvatar,
+              ? _CounterpartyImage(
+                  url: avatarUrl,
+                  size: 44,
+                  // Un logo se contiene; una cara se recorta. Un logotipo
+                  // suele ser cinco veces más ancho que alto —el de TeknoBike
+                  // mide 415×77— y recortarlo a un cuadrado deja tres letras
+                  // del medio, que no identifican a nadie.
+                  isMark: conv.isSupplierConversation,
+                  accent: accentColor,
+                  fallback: fallbackAvatar,
                 )
               : fallbackAvatar,
         ),
@@ -735,4 +740,51 @@ class _ConversationTileProjection {
 
   @override
   int get hashCode => Object.hash(identityHashCode(conversation), title);
+}
+
+/// La imagen de la contraparte dentro de un avatar redondo.
+///
+/// Con [isMark] la imagen **se contiene** sobre el tono del avatar en vez de
+/// recortarse: una marca no admite recorte, una foto sí. Es la misma distinción
+/// que hace cualquier ficha de contacto, y acá se decide con el dato —si el
+/// hilo es de un proveedor— y no a ojo.
+class _CounterpartyImage extends StatelessWidget {
+  const _CounterpartyImage({
+    required this.url,
+    required this.size,
+    required this.isMark,
+    required this.accent,
+    required this.fallback,
+  });
+
+  final String url;
+  final double size;
+  final bool isMark;
+  final Color accent;
+  final Widget fallback;
+
+  @override
+  Widget build(BuildContext context) {
+    final image = ImageService.buildCachedImage(
+      imageUrl: url,
+      width: size,
+      height: size,
+      fit: isMark ? BoxFit.contain : BoxFit.cover,
+      isCircular: !isMark,
+      placeholder: fallback,
+      errorWidget: fallback,
+    );
+    if (!isMark) return image;
+    return Container(
+      width: size,
+      height: size,
+      padding: EdgeInsets.all(size * 0.14),
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: 0.10),
+        shape: BoxShape.circle,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: image,
+    );
+  }
 }
