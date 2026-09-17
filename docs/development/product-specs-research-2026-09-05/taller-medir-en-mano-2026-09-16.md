@@ -1,8 +1,8 @@
 # Lista para el taller: fichas en stock que ningún fabricante publica (2026-09-16)
 
-Productos activos con stock, con ficha técnica asignada y sin ningún hecho investigado, para los que no existe fuente OEM utilizable: genéricos, marcas de marketplace, importadores sin catálogo o nombres sin modelo. La única forma honesta de llenarlos es medir la pieza física y cargarla en el editor del ERP (rol taller). Lo que ya se llenó por investigación con revisión par está en los registros `fill-005` … `fill-013`; los Shimano en stock esperan a que bike.shimano.com vuelva del mantenimiento.
+Productos activos con stock, con ficha técnica asignada y sin ningún hecho investigado, para los que no existe fuente OEM utilizable: genéricos, marcas de marketplace, importadores sin catálogo o nombres sin modelo. La única forma honesta de llenarlos es medir la pieza física y cargarla en el editor del ERP (rol taller). Lo que ya se llenó por investigación con revisión par está en los registros `fill-005` … `fill-013`; los Shimano en stock con ficha en productinfo.shimano.com van en `fill-016-record-2026-09-16.md`; los que no tienen ficha se añaden abajo (sección «Añadidos el 2026-09-16»).
 
-Total: 318 productos en 78 familias. Por familia se listan los campos que el contrato exige siempre (el editor muestra el resto y sus compuertas).
+Total: 318 productos en 78 familias en la primera versión; ver los ajustes del 2026-09-16 al final (2 salen a investigación, 23 entran). Por familia se listan los campos que el contrato exige siempre (el editor muestra el resto y sus compuertas).
 
 ## brake_pad (20)
 
@@ -868,3 +868,40 @@ Campos obligatorios: Ancho de la cinta
 |---|---|---|---|
 | AE0006 | Cinta Tubeless Deemount 10Mt, 27mm | Deemount | sin sitio oficial (sólo marketplaces) |
 
+
+## Ajustes del 2026-09-16 (segunda pasada por marca)
+
+Se volvió a sondear cada marca de esta lista con fuente OEM posible. Resultado:
+
+- **Salen a investigación (fill-017):** VP `15125` Motor VP BC73 (vpcomponents.com publica VP-BC73: rosca BC1.37” x 24T, eje de acero al boro) y VP `24099` Pedal VP 536 (vpcomponents.com publica VPE-536: cuerpo de nylon de una pieza). El motivo «sin ficha oficial encontrada» era falso.
+- **Se quedan, con motivo corregido:** Beto (beto.com.tw responde hoy y lista CRH-015P, no CRH-009P; el bombín de 80 psi no trae modelo); KMC HV408 (kmcchain.com sólo publica Z6 como cadena de 6 velocidades; HV408 no figura); A-FORGE A-HG0xx (sólo minoristas, sin catálogo del fabricante); Kalloy/UNO AL-822 (sólo minoristas); Neco mazas y direcciones (necoparts.com publica fichas por código, pero los nombres no traen modelo); SunRace SLM10 y SR452 y Saiguan QD-18/CB-132 (sin ficha en el sitio oficial).
+
+### Añadidos: productos del lote Shimano sin ficha OEM utilizable (23)
+
+Consultados en productinfo.shimano.com el 2026-09-16 (registro «No results» archivado en `research/fill-016-shimano/evidence/shimano-productinfo-sin-resultado-20260916.md`); bike.shimano.com redirige toda URL de producto a la portada.
+
+| SKU | Producto | Marca | Motivo |
+|---|---|---|---|
+| S57445 | maza shimano hb-rm66 36h (cl) delantero negro bolsa | Shimano | HB-RM66 descontinuado, sin ficha en productinfo |
+| S56467 | ACEITE MINERAL SHIMANO SM-DBOIL 1000CC BULK | Shimano | sin ficha de producto |
+| 4524667182504 | LLAVE SHIMANO PEDAL TL-PD40 | Shimano | herramienta sin ficha |
+| AE0053 | CAMBIO SHIMANO ALTUS RD-M310-L 7/8V | Shimano | RD-M310 descontinuado, sin ficha |
+| 23326 | Cambio Shimano Altus 7-8 Vel. | - | sin modelo en el nombre |
+| 23300 | Cambio Shimano Tourney 6-7 Vel. Apernar | - | sin modelo en el nombre |
+| 25414 | Cambio Shimano Tourney, 31,8/34,9 Dual. | - | sin modelo en el nombre |
+| S60971 | manilla cambio/freno shimano 3 vel. (c/u) izq. | Shimano | sin modelo en el nombre |
+| S55197 | Funda de cambio shimano sp40 300mm | Shimano | «sp40» no es OT-SP41; la ficha OT-SP41 no publica diámetro |
+| AE0214 | Adaptador Disco de Freno Shimano pm/pm 160/180 | Shimano | sin código SM-MA en el nombre |
+| AE0213 | Adaptador Disco de Freno Shimano pm/pm 160/203 | Shimano | sin código SM-MA en el nombre |
+| oro | Corona Shimano Narrow 96bcd Round Asimétrica 32t | Shimano | sin modelo en el nombre |
+| AE0092 | Juego Coronas Doble Plato Shimano 26-36T | Shimano | sin modelo en el nombre |
+| AE0341 | SHIMANO CUES U6000 1X11 Groupset | Shimano | groupset: el nombre no fija la composición del kit |
+| AE0310 | Shimano DEORE SLX Group Set M7100 51T | Shimano | groupset: el nombre no fija la composición del kit |
+| PO02776019302 | PERNO EJE CUADRADO TIPO SHIMANO | Shimano | genérico «tipo Shimano» |
+| OL03 | Oliva + Pin Shimano BH59 | Aliexpress | pieza pequeña sin ficha; el kit SM-BH59 no la publica aparte |
+| OL04 | Oliva + Pin Shimano BH90 | Aliexpress | ídem (SM-BH90-SBM no publica la oliva) |
+| REP70000037 | Oliva Alligator Compatible SHIMANO | Alligator | sin código Alligator en el nombre |
+| 19379 | Cambio Sensah MX 9 Vol | Sensah | Sensah sin sitio oficial con fichas |
+| 19097 | Cambio SENSAH MX7 7 Velocidades | Sensah | ídem |
+| 19100 | Cambio SENSAH MX8 8 Velocidades | Sensah | ídem |
+| AE0252 | Pastillas Freno Disco Copper … Ruta Shimano TJ944 | ZTTO | ztto.net tiene tienda, no fichas por código |

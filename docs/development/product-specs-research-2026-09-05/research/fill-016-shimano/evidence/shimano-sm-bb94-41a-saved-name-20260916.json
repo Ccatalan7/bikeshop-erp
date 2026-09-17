@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "90497f78-0589-4108-b3b5-be9b3d417ce4",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "SHIMANO XTR SM-BB94-41A MOTOR PRESS-FIT",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "929250dcbc5aa9c7c9da63930668301150ec153fdd08fe05dc5333118afd3302",
+  "product_sha256": "39bd3b2457cf770dbef3df4596911739cafd3857910bfe6fa406d0d0d536880f",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

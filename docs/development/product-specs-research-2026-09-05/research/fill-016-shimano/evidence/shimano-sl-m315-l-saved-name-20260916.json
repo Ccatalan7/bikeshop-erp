@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "fe87f84b-cb23-42ff-b4ef-1c0784942675",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "MANILLA CAMBIO SHIMANO SL-M315, IZQ. 3-SPEED RAPIDFIRE PLUS",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "4d1de68bf16733ae6bf1f4bb9e244fac5679a0b52dcd5bf02bc2468fc41f601e",
+  "product_sha256": "a98821f4292024118df05fcf3b3cbe6ee348d39f6e056a4db04c62014512bb1e",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "06f38f3e-c8d4-4924-b3da-2d18c61e0823",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Manilla Cambio Freno Shimano 8v St-ef500-8r Der Tras",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "bcf54fc4963c0f8ebc0a01227be078959d1a85b3339ceda35409c194fa11b743",
+  "product_sha256": "d2d962241656a0d2a9230474242d45ea4e2343c97ffd866072545e5905a7e4b9",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "2efd065c-b07a-48ce-a805-3493126dfbc9",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "cambiador shimano fd-tz510-ds6 3 (friction) x7/6 31.8mm T/ABAJO",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "b3924655c1c14575355562313cbfae25537032a8e8f1037ee615f2da3a042c2b",
+  "product_sha256": "86065d5e150ac9c86201990c67eaae372e830149b0d474f989261a9e327629a4",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

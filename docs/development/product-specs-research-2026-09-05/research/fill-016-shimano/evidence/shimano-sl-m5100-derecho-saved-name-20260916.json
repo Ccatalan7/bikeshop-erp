@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "9b64aa04-3306-4586-94bd-da2aba2a64ff",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Shifter Derecho SL-M5100 SGS 11 v",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "5a2b36772c27029e82ad4b5954aae99cd102a19d2636c044ebc82c5f9d796fd0",
+  "product_sha256": "ff12a573eac5754ba88abd1a075b23b95cf44b640009b31ba30b250b9f3e8ce1",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

@@ -1,0 +1,156 @@
+{
+  "schema_version": 2,
+  "product_id": "16492e93-b610-4c82-b6af-dbc22800f8a4",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "cd1cdfad80401018fedfc3b9adc08a167eb188a4150ce5abf95f53e4952a46b3",
+    "fingerprints": {
+      "facts_sha256": "ed4d723d2e1d71fd9371490080d0e6be78b8a90465be807d95229178d188a583",
+      "product_sha256": "c8f4e125de49dc0676279990aea9f7f1d3138a9ad6afa9458489c519055a572c",
+      "template_sha256": "a788e2db3fa29e6c1cfa155dcfc274824180854016998ef9f0533059a9661098",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-07-21T21:04:48.217098+00:00",
+    "template_id": "61005a7e-a107-49f3-96c3-2fa2796d3299",
+    "contract_version": 34
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "SL-TX30-LN",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «sl-tx30 (par) 7r&l(friction) - Delantero»: el par es 7R más un izquierdo de fricción, y este producto es el lado delantero (izquierdo). De la serie SL-TX30, productinfo publica ficha para 7R, 6R y LN; SL-TX30-L y SL-TX30-8R devuelven «No results» (archivado). El único izquierdo publicado es SL-TX30-LN, y su ficha dice «Front speeds 3 (friction)», que es lo que el nombre llama «l(friction)»."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/SL-TX30-LN",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "shifter_position",
+      "current": {
+        "value": "Izquierdo (delantero)",
+        "source": "name_reading",
+        "fact_id": "f020b9e8-01e7-4481-adf4-375c0c601034",
+        "fact_sha256": "7fb2aec5c62f868075216edc4100f42f0e9dcad44ed2e769b7c7c7a488531d7e",
+        "confirmed": false
+      },
+      "proposed": "Izquierdo (delantero)",
+      "unit": null,
+      "method": "Nombre guardado «- Delantero»; ficha SL-TX30-LN: «Front speeds 3 (friction)», «Rear speeds -».",
+      "origin": "research",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "scope": "SL-TX30-LN",
+      "reason": "Lado en el nombre; la ficha del único izquierdo de la serie declara sólo velocidades delanteras."
+    },
+    {
+      "key": "shifter_control_style",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Palanca de pulgar",
+      "unit": null,
+      "method": "Ficha SL-TX30-LN: «Shifter type: Thumb shifter Plus» (igual en 7R y 6R).",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "SL-TX30-LN",
+      "reason": "Literal, común a toda la serie archivada."
+    },
+    {
+      "key": "shifter_actuation_mode",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Fricción",
+      "unit": null,
+      "method": "Ficha SL-TX30-LN: «Front speeds 3 (friction)»; nombre guardado «l(friction)».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "SL-TX30-LN",
+      "reason": "Literal en ficha y nombre."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/SL-TX30-LN",
+      "consulted_on": "2026-09-16",
+      "scope": "Fichas oficiales SL-TX30-7R, SL-TX30-6R y SL-TX30-LN (un archivo)",
+      "finding": "SL-TX30-LN: Thumb shifter Plus; Front speeds 3 (friction); Clamp band; OT-SIS40",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-sl-tx30-20260916.md",
+      "sha256": "08203f6c6a3c68c9a8293a339234a71b1707deb2db38c43f7a9ff5d8eabbd3a8"
+    },
+    {
+      "id": "no-results",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/SL-TX30-L",
+      "consulted_on": "2026-09-16",
+      "scope": "Registro de consultas sin ficha en productinfo",
+      "finding": "SL-TX30-L y SL-TX30-8R: «No results»",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-productinfo-sin-resultado-20260916.md",
+      "sha256": "8a19cb8360705c0ad71db21d80ca9d457fcb66b7e8082888b17febf075b65f22"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 16492e93-b610-4c82-b6af-dbc22800f8a4",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "manilla cambio 7v shimano sl-tx30 (par) 7r&l(friction) - Delantero",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-sl-tx30-par-delantero-saved-name-20260916.json",
+      "sha256": "794d21945c5bc18f15e88417158db2e259ef23a42b9bfab51982e76cfa4e0d8b"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "0f06bb2f9a370030176038c32d9f9f16ba19e827c6be03e8813f4f4f6b5b980e",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre b56f5c2db884b95cbac5a9a5cd7bd5367576e799a6bdbf51185cd4623b3da45b: identidad SL-TX30-LN (el nombre fija serie, lado y fricción; SL-TX30-L «No results» archivado; la LN es la única izquierda con ficha y dice «Front speeds 3 (friction)»). Palanca de pulgar literal. Posiciones no declaradas: correcto."
+  }
+}

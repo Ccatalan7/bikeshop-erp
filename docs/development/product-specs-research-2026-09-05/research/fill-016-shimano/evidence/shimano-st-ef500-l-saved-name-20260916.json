@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "eaae1602-87d5-4455-8108-303766fd6edc",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "MANILLA DE CAMBIO Y FRENO SHIMANO 3V ST-EF500-L IZQ",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "48a59b61c68877a8f368db446e3c594fb7836059127e86719c9e1465f3e0a2de",
+  "product_sha256": "c4c59b0aa1379d8708fad750b5f5627660cb1a4bf8fbd9a15e5f6b317242e4ed",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

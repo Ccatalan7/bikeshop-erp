@@ -1,0 +1,241 @@
+{
+  "schema_version": 2,
+  "product_id": "90497f78-0589-4108-b3b5-be9b3d417ce4",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "929250dcbc5aa9c7c9da63930668301150ec153fdd08fe05dc5333118afd3302",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "39bd3b2457cf770dbef3df4596911739cafd3857910bfe6fa406d0d0d536880f",
+      "template_sha256": "ca86afea426b43be3508bb456c11fbee17c5be265c7272ad1dd98e9d247787aa",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 1,
+    "updated_at": "2026-09-15T01:28:28.022416+00:00",
+    "template_id": "a4f78fa2-219f-44c6-82c4-d7d63e79cb1d",
+    "contract_version": 36
+  },
+  "identity": [],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/SM-BB94-41A",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "includes_spindle",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": false,
+      "unit": null,
+      "method": "Ficha: «HOLLOWTECH II bottom bracket — Press-Fit type ✔»; piezas listadas: Adapter (Resin) y Spacer (Resin); no lista eje. En HOLLOWTECH II el eje va integrado en la biela.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "SM-BB94-41A",
+      "reason": "Juego de copas/adaptadores sin eje."
+    },
+    {
+      "key": "bb_shell_ports",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "drive",
+            "values": {
+              "port": "Adaptador lado motriz",
+              "side": "Lado motriz",
+              "mates_with": "Caja del cuadro",
+              "form": "Designación OEM sin descomponer",
+              "designation": "Press-Fit type (SM-BB94-41A); Press-Fit bottom bracket shell width 89.5 / 92 mm",
+              "source_scope": "Tabla productinfo: HOLLOWTECH II bottom bracket — Threaded bottom bracket type -, Press-Fit type ✔",
+              "source_url": "https://productinfo.shimano.com/en/product/SM-BB94-41A"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/SM-BB94-41A"
+            ]
+          },
+          {
+            "id": "non-drive",
+            "values": {
+              "port": "Adaptador lado no motriz",
+              "side": "Lado no motriz",
+              "mates_with": "Caja del cuadro",
+              "form": "Designación OEM sin descomponer",
+              "designation": "Press-Fit type (SM-BB94-41A); Press-Fit bottom bracket shell width 89.5 / 92 mm",
+              "source_scope": "Tabla productinfo: HOLLOWTECH II bottom bracket — Threaded bottom bracket type -, Press-Fit type ✔",
+              "source_url": "https://productinfo.shimano.com/en/product/SM-BB94-41A"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/SM-BB94-41A"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha: «Threaded bottom bracket type -», «Press-Fit type ✔»; la tabla no publica el diámetro de la caja (el «41» va en el código del modelo), por eso el puerto se declara con la designación OEM sin descomponer.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "SM-BB94-41A",
+      "reason": "Dos adaptadores a presión contra la caja; sin rosca declarada."
+    },
+    {
+      "key": "bb_accepted_spindles",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "ht2",
+            "values": {
+              "target_kind": "Estándar declarado",
+              "standard": "HOLLOWTECH II bottom bracket (Press-Fit type)",
+              "configuration": "Press-Fit type (SM-BB94-41A), caja de 89,5 o 92 mm",
+              "status": "Compatible declarado",
+              "conditions": "Fila «HOLLOWTECH II bottom bracket: Press-Fit type ✔» de la tabla productinfo.",
+              "source_scope": "Tabla productinfo: HOLLOWTECH II bottom bracket / Press-Fit type",
+              "source_url": "https://productinfo.shimano.com/en/product/SM-BB94-41A"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/SM-BB94-41A"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Encabezado de la tabla: «HOLLOWTECH II bottom bracket».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "SM-BB94-41A",
+      "reason": "El fabricante declara el estándar de eje que recibe."
+    },
+    {
+      "key": "bb_installation_claims",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "w895",
+            "values": {
+              "configuration": "Press-Fit type (SM-BB94-41A)",
+              "shell_designation": "Press-Fit bottom bracket shell width 89.5 mm",
+              "width_kind": "Valor exacto",
+              "width_mm": "89.5",
+              "status": "Compatible declarado",
+              "conditions": "Celda «89.5 ✔».",
+              "source_scope": "Tabla productinfo: Press-Fit bottom bracket shell width (mm)",
+              "source_url": "https://productinfo.shimano.com/en/product/SM-BB94-41A"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/SM-BB94-41A"
+            ]
+          },
+          {
+            "id": "w92",
+            "values": {
+              "configuration": "Press-Fit type (SM-BB94-41A)",
+              "shell_designation": "Press-Fit bottom bracket shell width 92 mm",
+              "width_kind": "Valor exacto",
+              "width_mm": "92",
+              "status": "Compatible declarado",
+              "conditions": "Celda «92 ✔».",
+              "source_scope": "Tabla productinfo: Press-Fit bottom bracket shell width (mm)",
+              "source_url": "https://productinfo.shimano.com/en/product/SM-BB94-41A"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/SM-BB94-41A"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Fila «Press-Fit bottom bracket shell width (mm)»: 89.5 ✔ y 92 ✔ (84.5, 104.5 y 107 con «-», no declaradas).",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "SM-BB94-41A",
+      "reason": "Anchos de caja declarados compatibles."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/SM-BB94-41A",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial SM-BB94-41A",
+      "finding": "HOLLOWTECH II bottom bracket; Press-Fit type ✔; shell width 89.5 ✔, 92 ✔; Small ball bearing ✔; 58 g",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-sm-bb94-41a-20260916.md",
+      "sha256": "e3ef67ea157a4f44abb4e701309f64999c0d952a12f27799c674688a6d356340"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 90497f78-0589-4108-b3b5-be9b3d417ce4",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "SHIMANO XTR SM-BB94-41A MOTOR PRESS-FIT",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-sm-bb94-41a-saved-name-20260916.json",
+      "sha256": "c0688e5cc69353558d645284da39ec9140809528aa8f07e5d121949d4db342f6"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "037c21a72c304ec835c6a919aced59d6775d9513b25c1689e6a99a60cdc1f7ed",
+    "notes": "Revisión par (sesión Look dude), v2 aceptada sobre 1ae7d01852058dda9bf158574170a11c3c6f59c97770fe90b91849287954f9f9: sólo cambiaron las tres celdas configuration (Press-Fit type (SM-BB94-41A) en vez de «Press-Fit 41 mm», que leía el 41 del código). includes_spindle false cuadra con la definición viva; puertos como designación OEM sin descomponer; 89,5 y 92 literales; legacy sin proponer."
+  }
+}

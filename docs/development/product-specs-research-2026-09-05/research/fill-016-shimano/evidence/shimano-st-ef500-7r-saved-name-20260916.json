@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "c5005ec9-2824-418f-978f-4dd069655ac3",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Manilla Cambio Freno Shimano St-ef500-7r Derecha 7-speed",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "62bb95a66a73d5ce2c1a22e2c4d3a76f1c81534dbf4dd490e8843183a7c3c92f",
+  "product_sha256": "e16168424a7b604af166adfb099e3f51988e7822be5da5a8578a88db14aa7d48",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

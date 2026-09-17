@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "c6b580e0-39c0-4098-83d2-9522b96555ba",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Piñon 8 Veloc Cassette 12/32T CS-HG200-8V",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "c066a7f227fbc40a586359b4244033f098bc8648ab687804fccd0ed3ba19be3e",
+  "product_sha256": "92f206e0dd8c066c04a44e6ab506b7e5fb13f282b70205876398076bc87b5141",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

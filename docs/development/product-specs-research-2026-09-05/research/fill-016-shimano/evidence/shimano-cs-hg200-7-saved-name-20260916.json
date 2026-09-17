@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "ed2a104b-04b8-4407-bd53-e02db19afecf",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Piñon 7 Veloc 12/32T CS-HG200-7V",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "969465e6f6b26ca7176aa50afd1dbb0a62a560f7baa23ce8d07c114c8e1b6127",
+  "product_sha256": "7e0996d2e51f7d5fbe848952a82f59b38ab473e973a6b3f7123215f7baa5f870",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

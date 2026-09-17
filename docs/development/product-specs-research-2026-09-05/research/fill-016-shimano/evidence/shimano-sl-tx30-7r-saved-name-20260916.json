@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "d1fc5119-d0cc-48bd-903f-06b6066b1548",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Shifter Shimano Tra. Tourney Sl-Tx30-7R 7V derecho",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "1849473d789ccc70f96b9370b4b287b141bc8ef06320064037762d7dcccee86b",
+  "product_sha256": "fa7c3c77a83fb36540d72570771987590c3ca069d3a78077a14fdcfd52bdc2f5",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

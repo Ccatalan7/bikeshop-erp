@@ -1,0 +1,202 @@
+{
+  "schema_version": 2,
+  "product_id": "dd32e9dd-9030-404f-82f3-6ac72c79e570",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "1712519b7c8cee7038b51b5f90d5ca130395a7045d080f5bcdf692fa7384f9e9",
+    "fingerprints": {
+      "facts_sha256": "07406a59335a5c1a52a870f83e7134f4a14e2d56e527498cd6a3f673dfa19a12",
+      "product_sha256": "9f2c08cec3f9d7f12a38f8cab58917cdd96defd1589560e1d94a6da842fb7c8e",
+      "template_sha256": "a788e2db3fa29e6c1cfa155dcfc274824180854016998ef9f0533059a9661098",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-07-21T21:04:55.446102+00:00",
+    "template_id": "61005a7e-a107-49f3-96c3-2fa2796d3299",
+    "contract_version": 34
+  },
+  "identity": [],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/SL-TX30-6R",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-16 y archivada con hash; el mando izquierdo del par cita su propia ficha en la fila",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "shifter_unit_count",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "2",
+      "unit": null,
+      "method": "Nombre guardado «(par - bolsa)»: dos mandos; una ficha oficial por mando (SL-TX30-6R y SL-TX30-LN).",
+      "origin": "research",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "scope": "Par SL-TX30 6v",
+      "reason": "El contrato exige 2 para un par."
+    },
+    {
+      "key": "shifter_units",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "right",
+            "values": {
+              "unit_identity": "SL-TX30-6R",
+              "unit_side": "Derecho (trasero)",
+              "control_style": "Palanca de pulgar",
+              "actuation_mode": "Indexado",
+              "indexed_positions": "6",
+              "declared_speeds": "Rear speeds 6",
+              "source_document": "productinfo.shimano.com — ficha SL-TX30-6R (consultada 2026-09-16)",
+              "source_url": "https://productinfo.shimano.com/en/product/SL-TX30-6R"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/SL-TX30-6R"
+            ]
+          },
+          {
+            "id": "left",
+            "values": {
+              "unit_identity": "SL-TX30-LN",
+              "unit_side": "Izquierdo (delantero)",
+              "control_style": "Palanca de pulgar",
+              "actuation_mode": "Fricción",
+              "declared_speeds": "Front speeds 3 (friction)",
+              "source_document": "productinfo.shimano.com — ficha SL-TX30-LN (consultada 2026-09-16)",
+              "source_url": "https://productinfo.shimano.com/en/product/SL-TX30-LN"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/SL-TX30-LN"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Derecho: el nombre fija «6v» y la serie sl-tx30; la única ficha SL-TX30 trasera de 6 velocidades es SL-TX30-6R («Rear speeds 6», «Max. multiple shifts 5», sin la marca «(friction)» que estas tablas usan para fricción → indexado). Izquierdo: el único izquierdo publicado de la serie es SL-TX30-LN («Front speeds 3 (friction)»; SL-TX30-L devuelve «No results», archivado). Ambos «Thumb shifter Plus».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "no-results",
+        "product-name"
+      ],
+      "scope": "Par SL-TX30 6v",
+      "reason": "Un mando por fila con su ficha; el izquierdo no declara posiciones porque es de fricción."
+    },
+    {
+      "key": "shifter_unit_compatibility_claims",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "rd6",
+            "values": {
+              "unit_reference": "right",
+              "claim_identity": "Cambio trasero MTB 6-speed",
+              "scope_kind": "Interfaz o estándar documentado",
+              "declared_interface": "MTB 6-speed",
+              "source_document": "productinfo.shimano.com — ficha SL-TX30-6R (consultada 2026-09-16)",
+              "source_url": "https://productinfo.shimano.com/en/product/SL-TX30-6R",
+              "target_component": "Cambio trasero",
+              "declaration_result": "Compatible declarado",
+              "conditions": "Fila «Compatible rear derailleur type: MTB 6-speed» de la ficha SL-TX30-6R."
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/SL-TX30-6R"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Fila «Compatible rear derailleur type: MTB 6-speed» de la ficha del mando derecho.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Mando derecho del par",
+      "reason": "Declaración publicada, atada al mando derecho."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/SL-TX30-6R",
+      "consulted_on": "2026-09-16",
+      "scope": "Fichas oficiales SL-TX30-7R, SL-TX30-6R y SL-TX30-LN (un archivo)",
+      "finding": "SL-TX30-6R: Thumb shifter Plus; Rear speeds 6; MTB 6-speed. SL-TX30-LN: Front speeds 3 (friction)",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-sl-tx30-20260916.md",
+      "sha256": "08203f6c6a3c68c9a8293a339234a71b1707deb2db38c43f7a9ff5d8eabbd3a8"
+    },
+    {
+      "id": "no-results",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/SL-TX30-L",
+      "consulted_on": "2026-09-16",
+      "scope": "Registro de consultas sin ficha en productinfo",
+      "finding": "SL-TX30-L y SL-TX30-8R: «No results»",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-productinfo-sin-resultado-20260916.md",
+      "sha256": "8a19cb8360705c0ad71db21d80ca9d457fcb66b7e8082888b17febf075b65f22"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product dd32e9dd-9030-404f-82f3-6ac72c79e570",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "manilla cambio 6v shimano (par - bolsa) sl-tx30 shimano",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-sl-tx30-6v-par-saved-name-20260916.json",
+      "sha256": "05a79344170713ff966db8fcbae12b8b74684d35bcae61256653f0fd8a080c36"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "e6cc7879f310f8e4e6206aa34d6a031b5e5119718dfb72fb7b7423dfae8115ef",
+    "notes": "Revisión par (sesión Look dude), v2 aceptada sobre b15beb53a7d4076f099759ee1c126ed1a3ae678913015c5683a6814edb62d005: sólo cambió el método de shifter_units (fila right). Unidades aceptadas: 6R fijado por «6v» + serie; LN el único izquierdo con ficha (L «No results» archivado); «Par» existente satisface la compuerta."
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "ea803c0f-74ed-4c73-8636-56ff22587aec",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "MANILLA CAMBIO SHIMANO SL-M315-7R, DER. 7-SPEED RAPIDFIRE PLUS",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "a7371498e83ef624fc89738b75679c460aee7facac08f11c912f61eaec233202",
+  "product_sha256": "2f166f80780706e8794d2bcd6973b33efb773593dc76e197cd116ace56912551",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

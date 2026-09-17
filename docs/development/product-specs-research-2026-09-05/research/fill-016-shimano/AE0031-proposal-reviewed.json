@@ -1,0 +1,166 @@
+{
+  "schema_version": 2,
+  "product_id": "eaae1602-87d5-4455-8108-303766fd6edc",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "48a59b61c68877a8f368db446e3c594fb7836059127e86719c9e1465f3e0a2de",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "c4c59b0aa1379d8708fad750b5f5627660cb1a4bf8fbd9a15e5f6b317242e4ed",
+      "template_sha256": "a788e2db3fa29e6c1cfa155dcfc274824180854016998ef9f0533059a9661098",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 0,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "61005a7e-a107-49f3-96c3-2fa2796d3299",
+    "contract_version": 34
+  },
+  "identity": [],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/ST-EF500-L2A",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-16 y archivada con hash; la variante 4A (https://productinfo.shimano.com/en/product/ST-EF500-L4A) está en el mismo archivo y coincide en todo lo declarado aquí",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "shifter_position",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Izquierdo (delantero)",
+      "unit": null,
+      "method": "Fichas ST-EF500-L2A y ST-EF500-L4A: «Front speeds 3», «Rear speeds -»; nombre guardado «IZQ».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "ST-EF500-L (2A/4A); las 2L2A/2L4A son de 2 platos y el nombre dice 3V",
+      "reason": "Igual en las dos variantes publicadas; lado en el nombre."
+    },
+    {
+      "key": "shifter_actuation_mode",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Indexado",
+      "unit": null,
+      "method": "Fichas ST-EF500-L2A y ST-EF500-L4A: «Front speeds 3». La única evidencia del accionamiento es la ausencia de la marca «(friction)» que estas tablas usan para los mandos de fricción («3 (friction)» en SL-TX30-LN y en FD-TZ510-DS6, archivadas); la ficha no publica cambios múltiples para el mando delantero.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "oem-tx30"
+      ],
+      "scope": "ST-EF500-L (2A/4A); las 2L2A/2L4A son de 2 platos y el nombre dice 3V",
+      "reason": "Tres posiciones sin marca de fricción, igual en 2A y 4A."
+    },
+    {
+      "key": "shifter_indexed_positions",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "3",
+      "unit": null,
+      "method": "Fichas ST-EF500-L2A y ST-EF500-L4A: «Front speeds 3»; nombre guardado «3V».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "ST-EF500-L (2A/4A); las 2L2A/2L4A son de 2 platos y el nombre dice 3V",
+      "reason": "Literal, igual en 2A y 4A."
+    },
+    {
+      "key": "shifter_control_style",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Integrado con la maneta de freno",
+      "unit": null,
+      "method": "Fichas ST-EF500-L2A y ST-EF500-L4A: «Shifter type: EZ FIRE PLUS» con secciones «Shift lever» y «Brake lever» en la misma ficha del mismo modelo (palanca de freno de 2 o 4 dedos según variante); nombre guardado «Manilla Cambio Freno».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "ST-EF500-L (2A/4A); las 2L2A/2L4A son de 2 platos y el nombre dice 3V",
+      "reason": "Mando de cambio y freno en una pieza, igual en 2A y 4A."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/ST-EF500-L2A",
+      "consulted_on": "2026-09-16",
+      "scope": "Fichas oficiales ST-EF500 (7R2A, 7R4A, 8R2A, 8R4A, L2A, L4A) en un archivo",
+      "finding": "ST-EF500-L2A y ST-EF500-L4A: EZ FIRE PLUS; velocidades y cambio compatible iguales; difieren en dedos de la maneta (2/4) y frenos admitidos",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-st-ef500-20260916.md",
+      "sha256": "4c8196bd8cafb370861906f8c2fc8940f710d08b34a446fd06c66a3e3b4b6fd1"
+    },
+    {
+      "id": "oem-tx30",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/SL-TX30-LN",
+      "consulted_on": "2026-09-16",
+      "scope": "Fichas SL-TX30: cómo marcan la fricción estas tablas",
+      "finding": "SL-TX30-LN: «Front speeds 3 (friction)»",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-sl-tx30-20260916.md",
+      "sha256": "08203f6c6a3c68c9a8293a339234a71b1707deb2db38c43f7a9ff5d8eabbd3a8"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product eaae1602-87d5-4455-8108-303766fd6edc",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "MANILLA DE CAMBIO Y FRENO SHIMANO 3V ST-EF500-L IZQ",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-st-ef500-l-saved-name-20260916.json",
+      "sha256": "a2da494c5572c18b6c2c62bfce64e084e7ca0107b052f32bcaf21581c4a83de0"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "830bff18ce13f3e4dbe6170490c6a79a9c1fb7cc0f4b7a2aa1b77554d56d47aa",
+    "notes": "Revisión par (sesión Look dude), v2 aceptada sobre 8c298862704f05c5ad0cb44884264d73bc20022abe5ab2e8c3f94abad66c9a1f: sólo cambió el método de shifter_actuation_mode (ausencia de marca; sin display). «3V» fija L2A/L4A frente a las 2L de dos platos."
+  }
+}

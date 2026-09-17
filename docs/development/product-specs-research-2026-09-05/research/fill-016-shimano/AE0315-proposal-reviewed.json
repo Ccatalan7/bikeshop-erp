@@ -1,0 +1,201 @@
+{
+  "schema_version": 2,
+  "product_id": "17472a97-b548-49e3-ab94-9bd4d0367ddd",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "55fb66938f3839905aed16992951642b652bc3e6d3855173b099ed34dd34f127",
+    "fingerprints": {
+      "facts_sha256": "5f1518d5850edce03cda7b04321b06449e1496c5c70bda24821d7bcfeab843ef",
+      "product_sha256": "08c67c655a71fa3dd59df3d2e268899c519386167512cebe0cd9b7be79c8282c",
+      "template_sha256": "a788e2db3fa29e6c1cfa155dcfc274824180854016998ef9f0533059a9661098",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 1,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "61005a7e-a107-49f3-96c3-2fa2796d3299",
+    "contract_version": 34
+  },
+  "identity": [],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/SL-M7100-R",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-16 y archivada con hash; la variante I-SPEC EV (https://productinfo.shimano.com/en/product/SL-M7100-IR, archivada) coincide en todo lo declarado aquí",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "shifter_position",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Derecho (trasero)",
+      "unit": null,
+      "method": "Fichas SL-M7100-R e SL-M7100-IR: «Rear speeds 12», «Front speeds -». El nombre «SL-M7100 12V» fija 12 velocidades traseras, que sólo publican las variantes traseras. La ficha SL-M7100-L (archivada) es el mando delantero: «Front speeds 2», «Rear speeds -».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "oem-siblings",
+        "product-name"
+      ],
+      "scope": "SL-M7100 trasero (R o IR)",
+      "reason": "Las dos variantes traseras declaran sólo velocidades traseras; el nombre fija la cifra trasera."
+    },
+    {
+      "key": "shifter_actuation_mode",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Indexado",
+      "unit": null,
+      "method": "Fichas SL-M7100-R e SL-M7100-IR: Tabla productinfo: «Rear speeds 12», «Compatible rear derailleur type 12-speed» y «Max. multiple shifts (main lever/rear) 3». La celda de velocidades no lleva la marca «(friction)» que estas tablas usan para los mandos de fricción («3 (friction)» en SL-TX30-LN y en FD-TZ510-DS6, archivadas), y los cambios múltiples por palanca presuponen posiciones. «Release function: 2-WAY RELEASE ✔».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "oem-siblings",
+        "oem-tx30"
+      ],
+      "scope": "SL-M7100 trasero (R o IR)",
+      "reason": "12 posiciones sin marca de fricción, igual en R e IR."
+    },
+    {
+      "key": "shifter_indexed_positions",
+      "current": {
+        "value": "12",
+        "source": "name_reading",
+        "fact_id": "ad3d86a6-30af-406b-94b0-c8d775da0acd",
+        "fact_sha256": "dee5927c8096687dba040c006fd0dab9aa3d581d62778a1d009b872c82883835",
+        "confirmed": false
+      },
+      "proposed": "12",
+      "unit": null,
+      "method": "Fichas SL-M7100-R e SL-M7100-IR: «Rear speeds 12»; nombre guardado «12V»/«12 v».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "oem-siblings",
+        "product-name"
+      ],
+      "scope": "SL-M7100 trasero (R o IR)",
+      "reason": "Literal, igual en R e IR."
+    },
+    {
+      "key": "shifter_compatibility_claims",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "rd",
+            "values": {
+              "claim_identity": "Cambio trasero 12-speed",
+              "scope_kind": "Interfaz o estándar documentado",
+              "declared_interface": "12-speed",
+              "source_document": "productinfo.shimano.com — fichas SL-M7100-R e SL-M7100-IR (consultadas 2026-09-16)",
+              "source_url": "https://productinfo.shimano.com/en/product/SL-M7100-R",
+              "target_component": "Cambio trasero",
+              "declaration_result": "Compatible declarado",
+              "conditions": "Fila «Compatible rear derailleur type: 12-speed», igual en SL-M7100-R e SL-M7100-IR."
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/SL-M7100-R",
+              "https://productinfo.shimano.com/en/product/SL-M7100-IR"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Fichas SL-M7100-R e SL-M7100-IR: «Compatible rear derailleur type: 12-speed».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "oem-siblings"
+      ],
+      "scope": "SL-M7100 trasero (R o IR)",
+      "reason": "Declaración publicada, igual en R e IR."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/SL-M7100-R",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial SL-M7100-R",
+      "finding": "RAPIDFIRE PLUS; Rear speeds 12; Compatible rear derailleur type 12-speed; Clamp band; 2-WAY RELEASE",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-sl-m7100-r-20260916.md",
+      "sha256": "b311a5fc11b14f87459312d28fe234b0385adbf9e53ed8c3b0d38af38fd49398"
+    },
+    {
+      "id": "oem-siblings",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/SL-M7100-IR",
+      "consulted_on": "2026-09-16",
+      "scope": "Fichas hermanas SL-M7100-IR (I-SPEC EV) y SL-M7100-L (delantero), con las de la otra serie",
+      "finding": "SL-M7100-IR: Rear speeds 12, I-SPEC EV ✔; SL-M7100-L: Front speeds 2",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-sl-m5100-sl-m7100-hermanos-20260916.md",
+      "sha256": "6cc7ab48683fa4cb60286bf2d45bfdca7d48624a60b7036e5202fea97d639463"
+    },
+    {
+      "id": "oem-tx30",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/SL-TX30-LN",
+      "consulted_on": "2026-09-16",
+      "scope": "Fichas SL-TX30: cómo marcan la fricción estas tablas",
+      "finding": "SL-TX30-LN: «Front speeds 3 (friction)»",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-sl-tx30-20260916.md",
+      "sha256": "08203f6c6a3c68c9a8293a339234a71b1707deb2db38c43f7a9ff5d8eabbd3a8"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 17472a97-b548-49e3-ab94-9bd4d0367ddd",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "MANILLA CAMBIO SHIMANO SLX SL-M7100 12V",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-sl-m7100-12v-saved-name-20260916.json",
+      "sha256": "482a48747b5530fac4a6acd03922ce7152fdcf5d601d6a5ddac210224839950f"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "ec3f5c764ea2dd64c22d8b4fd087d5ead2eafbb69bd1b52f25c2d7ac0a4d059e",
+    "notes": "Revisión par (sesión Look dude), v2 aceptada sobre e72b7fccc4eb62a481f97dbe5d85207795d8eb4cee2727ed11f9a17c266313f5: sólo cambió el método de shifter_actuation_mode (en SL-M7100-R el display es «Without ✔»; ya no se cita). Lado derecho por eliminación con la L archivada («Front speeds 2»)."
+  }
+}

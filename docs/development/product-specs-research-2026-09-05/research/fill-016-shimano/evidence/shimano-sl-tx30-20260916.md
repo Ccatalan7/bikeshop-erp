@@ -1,0 +1,11 @@
+# Shimano SL-TX30-7R, SL-TX30-6R y SL-TX30-LN — productinfo.shimano.com
+Consultadas 2026-09-16 en el navegador integrado (productinfo.shimano.com, sitio oficial de información de producto de Shimano). Tablas de especificaciones literales (rótulo → valor).
+
+## SL-TX30-7R — https://productinfo.shimano.com/en/product/SL-TX30-7R
+Series: TOURNEY · Model no.: SL-TX30-7R · Shifter type: Thumb shifter Plus · Front speeds: - · Rear speeds: 7 · Compatible rear derailleur type: MTB 7-speed · Mount type: Clamp band ✔ · I-SPEC B/II/EV: - · Shift lever position adjust: - · Shift lever cable adjust: - · Front 2/3 mode converter: - · Max. multiple shifts (main lever/rear): 6 · Release function: MULTI RELEASE -, INSTANT RELEASE -, 2-WAY RELEASE - · Adjustable lever: - · OPTICAL GEAR DISPLAY: With ✔ · Shift lever bracket: Steel, Painted · Clamp screw: Steel · Main lever body: Resin · Release lever body: Resin · Base cover: Resin · Shift lever cable: Inner cable Steel ✔ · Recommended shift lever outer casing: OT-SIS40 · Average weight (g): -
+
+## SL-TX30-6R — https://productinfo.shimano.com/en/product/SL-TX30-6R
+Series: TOURNEY · Model no.: SL-TX30-6R · Shifter type: Thumb shifter Plus · Front speeds: - · Rear speeds: 6 · Compatible rear derailleur type: MTB 6-speed · Mount type: Clamp band ✔ · Shift lever cable adjust: - · Max. multiple shifts (main lever/rear): 5 · Release function: - · OPTICAL GEAR DISPLAY: With ✔ · Shift lever bracket: Steel, Painted · Clamp screw: Steel · Main lever body: Resin · Release lever body: Resin · Base cover: Resin · Shift lever cable: Inner cable Steel ✔ · Recommended shift lever outer casing: OT-SIS40 · Average weight (g): -
+
+## SL-TX30-LN — https://productinfo.shimano.com/en/product/SL-TX30-LN
+Series: TOURNEY · Model no.: SL-TX30-LN · Shifter type: Thumb shifter Plus · Front speeds: 3 (friction) · Rear speeds: - · Compatible rear derailleur type: - · Mount type: Clamp band ✔ · Shift lever cable adjust: ✔ · Max. multiple shifts (main lever/rear): - · Release function: - · OPTICAL GEAR DISPLAY: With ✔ · Shift lever bracket: Steel, Painted · Clamp screw: Steel · Main lever body: Resin · Release lever body: Resin · Base cover: Resin · Shift lever cable: Inner cable Steel ✔ · Recommended shift lever outer casing: OT-SIS40 · Average weight (g): -

@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "0fbd00f3-9e69-4388-9534-845c3f46e705",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Shimano Deore M5100 desviador trasero 11s RD-M5100 SGS 11 v",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "ab38018b7cfa5ff6b32cc3285652e43e6c3dc84a62853338e57f5ca1ffa23a92",
+  "product_sha256": "b865f15f36180c6e3eb4778885ea2518d10d303fa74cdd030f5fcc1f0cbb2a68",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

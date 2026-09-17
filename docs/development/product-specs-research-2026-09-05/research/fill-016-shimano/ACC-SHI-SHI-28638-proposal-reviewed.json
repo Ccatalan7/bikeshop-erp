@@ -1,0 +1,203 @@
+{
+  "schema_version": 2,
+  "product_id": "d1fc5119-d0cc-48bd-903f-06b6066b1548",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "1849473d789ccc70f96b9370b4b287b141bc8ef06320064037762d7dcccee86b",
+    "fingerprints": {
+      "facts_sha256": "87d9126a748fb9a740fc7bb1ad0099a3252339d0420db33d1ddcbf5f58034cf8",
+      "product_sha256": "fa7c3c77a83fb36540d72570771987590c3ca069d3a78077a14fdcfd52bdc2f5",
+      "template_sha256": "a788e2db3fa29e6c1cfa155dcfc274824180854016998ef9f0533059a9661098",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 3,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "61005a7e-a107-49f3-96c3-2fa2796d3299",
+    "contract_version": 34
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "SL-TX30-7R",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice literalmente «Sl-Tx30-7R»; la ficha oficial documenta SL-TX30-7R (Thumb shifter Plus, 7 velocidades traseras)."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/SL-TX30-7R",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "shifter_position",
+      "current": {
+        "value": "Derecho (trasero)",
+        "source": "name_reading",
+        "fact_id": "aadcd778-e07f-4a55-a213-0c9ff8a14c38",
+        "fact_sha256": "6673ec548962730bab0d637ed91d4b42199b477fb176c008074681f9b64a2c51",
+        "confirmed": false
+      },
+      "proposed": "Derecho (trasero)",
+      "unit": null,
+      "method": "Ficha SL-TX30-7R: «Rear speeds 7», «Front speeds -»; nombre guardado «derecho» y «Tra.».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "SL-TX30-7R",
+      "reason": "Literal en ficha y nombre."
+    },
+    {
+      "key": "shifter_control_style",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Palanca de pulgar",
+      "unit": null,
+      "method": "Ficha SL-TX30-7R: «Shifter type: Thumb shifter Plus».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "SL-TX30-7R",
+      "reason": "Literal."
+    },
+    {
+      "key": "shifter_actuation_mode",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Indexado",
+      "unit": null,
+      "method": "Ficha SL-TX30-7R: «Rear speeds 7», «Compatible rear derailleur type MTB 7-speed», «Max. multiple shifts 6». La hermana SL-TX30-LN, en la misma tabla archivada, marca la fricción como «3 (friction)»; el 7R no lleva esa marca.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "SL-TX30-7R",
+      "reason": "Siete posiciones traseras sin marca de fricción en una serie que sí la marca."
+    },
+    {
+      "key": "shifter_indexed_positions",
+      "current": {
+        "value": "7",
+        "source": "name_reading",
+        "fact_id": "dbe784ea-c5d9-48a5-a803-faa317694695",
+        "fact_sha256": "cd0ca65fcc9c9d1ce4279f635d1adec4357bef98b28f9b36da205b571f387111",
+        "confirmed": false
+      },
+      "proposed": "7",
+      "unit": null,
+      "method": "Ficha SL-TX30-7R: «Rear speeds 7»; nombre guardado «7V».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "SL-TX30-7R",
+      "reason": "Literal en ficha y nombre."
+    },
+    {
+      "key": "shifter_compatibility_claims",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "rd",
+            "values": {
+              "claim_identity": "Cambio trasero MTB 7-speed",
+              "scope_kind": "Interfaz o estándar documentado",
+              "declared_interface": "MTB 7-speed",
+              "source_document": "productinfo.shimano.com — ficha SL-TX30-7R (consultada 2026-09-16)",
+              "source_url": "https://productinfo.shimano.com/en/product/SL-TX30-7R",
+              "target_component": "Cambio trasero",
+              "declaration_result": "Compatible declarado",
+              "conditions": "Fila «Compatible rear derailleur type: MTB 7-speed» de la tabla productinfo."
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/SL-TX30-7R"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Fila «Compatible rear derailleur type: MTB 7-speed».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "SL-TX30-7R",
+      "reason": "Declaración publicada."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/SL-TX30-7R",
+      "consulted_on": "2026-09-16",
+      "scope": "Fichas oficiales SL-TX30-7R, SL-TX30-6R y SL-TX30-LN (un archivo)",
+      "finding": "SL-TX30-7R: Thumb shifter Plus; Rear speeds 7; MTB 7-speed; OT-SIS40",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-sl-tx30-20260916.md",
+      "sha256": "08203f6c6a3c68c9a8293a339234a71b1707deb2db38c43f7a9ff5d8eabbd3a8"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product d1fc5119-d0cc-48bd-903f-06b6066b1548",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Shifter Shimano Tra. Tourney Sl-Tx30-7R 7V derecho",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-sl-tx30-7r-saved-name-20260916.json",
+      "sha256": "8b3d84fc58cde0a3b72dbc8713a15aac0e11b8e368b2f08b3c9c6de286baa564"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "92592e727b5762f1978326e6f705c0434653845e400ec4a8fe6376a120a0efbe",
+    "notes": "Revisión par (sesión Look dude), v2 aceptada sobre 2f147d51a968caa9b169878887aca6a0658d332dcd4942b78677db22e2cbb7d2: sólo cambió el método de shifter_actuation_mode. Modelo literal SL-TX30-7R, pulgar literal, «Max. multiple shifts 6» sostiene indexado."
+  }
+}

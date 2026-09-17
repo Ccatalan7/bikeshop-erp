@@ -1,0 +1,224 @@
+{
+  "schema_version": 2,
+  "product_id": "0fbd00f3-9e69-4388-9534-845c3f46e705",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "ab38018b7cfa5ff6b32cc3285652e43e6c3dc84a62853338e57f5ca1ffa23a92",
+    "fingerprints": {
+      "facts_sha256": "f1f305888a35edbd7c5cb12ce02186e4a04baadd1653edd34edf71eec4a077d7",
+      "product_sha256": "b865f15f36180c6e3eb4778885ea2518d10d303fa74cdd030f5fcc1f0cbb2a68",
+      "template_sha256": "bcc623bee4bb69727cd830c67fb020a633b00a3c16300f01abb05b66ba60fe5b",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 2,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "0750e4ac-4615-4ad4-862e-95ac102b12f7",
+    "contract_version": 37
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": "RD-M5100",
+      "proposed": "RD-M5100-SGS",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «RD-M5100 SGS» (hoy el modelo está como «RD-M5100», sin la jaula); la ficha oficial documenta RD-M5100-SGS."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/RD-M5100-SGS",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "derailleur_cage_length",
+      "current": {
+        "value": "Larga (SGS)",
+        "source": "name_reading",
+        "fact_id": "1a773a6c-9375-48bd-bd5d-9b2d0fcaca5d",
+        "fact_sha256": "250b95580512aeeadb0cda551410c96ca7f8debbfc46f328fbd6d8738c92285e",
+        "confirmed": false
+      },
+      "proposed": "Larga (SGS)",
+      "unit": null,
+      "method": "Ficha «Model no. RD-M5100-SGS»: el sufijo SGS es la designación Shimano de la jaula, y la opción del contrato lo lleva literal; nombre guardado «SGS».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "RD-M5100-SGS",
+      "reason": "Sustituye la lectura de nombre por la ficha oficial; mismo valor."
+    },
+    {
+      "key": "rear_derailleur_mount_type",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Pata/postiza estándar",
+      "unit": null,
+      "method": "Ficha: «Applicable derailleur hanger — SHIMANO MTB type: Direct attachment (conventional) ✔; Direct mount -; UDH standard -; Riveted adapter -».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "RD-M5100-SGS",
+      "reason": "Montaje convencional en la patilla del cuadro, declarado por el fabricante."
+    },
+    {
+      "key": "rear_derailleur_application_configurations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "1x11",
+            "values": {
+              "configuration_identity": "1x11 (RD-M5100-SGS)",
+              "front_chainring_count": "1",
+              "rear_sprocket_count": "11",
+              "chain_declaration": "LINKGLIDE, HG 11-speed",
+              "smallest_sprocket_min_teeth": "11",
+              "smallest_sprocket_max_teeth": "11",
+              "largest_sprocket_min_teeth": "51",
+              "largest_sprocket_max_teeth": "51",
+              "total_capacity_teeth": "40",
+              "max_front_difference_teeth": "0",
+              "source_document": "productinfo.shimano.com — ficha RD-M5100-SGS (consultada 2026-09-16)",
+              "source_url": "https://productinfo.shimano.com/en/product/RD-M5100-SGS",
+              "conditions": "Ficha: «Rear speeds 11»; «Max. front difference 0T» (un solo plato); «Total capacity 40T»; «Low sprocket Max. 51T / Min. 51T»; «Top sprocket Max. 11T / Min. 11T»; «Compatible chain LINKGLIDE, HG 11-speed»."
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/RD-M5100-SGS"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Tabla productinfo, filas Rear speeds, Max. front difference, Total capacity, Low sprocket, Top sprocket y Compatible chain.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "RD-M5100-SGS",
+      "reason": "Una configuración publicada (diferencia de platos 0T = transmisión de un plato)."
+    },
+    {
+      "key": "rear_derailleur_compatibility_claims",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "chain-hg11",
+            "values": {
+              "claim_identity": "Cadena HG 11-speed",
+              "scope_kind": "Interfaz o estándar documentado",
+              "declared_interface": "HG 11-speed",
+              "source_document": "productinfo.shimano.com — ficha RD-M5100-SGS (consultada 2026-09-16)",
+              "source_url": "https://productinfo.shimano.com/en/product/RD-M5100-SGS",
+              "target_component": "Cadena",
+              "declaration_result": "Compatible declarado",
+              "conditions": "Fila «Compatible chain: LINKGLIDE, HG 11-speed»."
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/RD-M5100-SGS"
+            ]
+          },
+          {
+            "id": "chain-linkglide",
+            "values": {
+              "claim_identity": "Cadena LINKGLIDE",
+              "scope_kind": "Interfaz o estándar documentado",
+              "declared_interface": "LINKGLIDE",
+              "source_document": "productinfo.shimano.com — ficha RD-M5100-SGS (consultada 2026-09-16)",
+              "source_url": "https://productinfo.shimano.com/en/product/RD-M5100-SGS",
+              "target_component": "Cadena",
+              "declaration_result": "Compatible declarado",
+              "conditions": "Fila «Compatible chain: LINKGLIDE, HG 11-speed»."
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/RD-M5100-SGS"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Fila «Compatible chain» de la ficha.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "RD-M5100-SGS",
+      "reason": "Dos clases de cadena declaradas."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/RD-M5100-SGS",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial RD-M5100-SGS",
+      "finding": "DEORE; Rear speeds 11; SHADOW RD+; hanger Direct attachment (conventional); Total capacity 40T; Low 51T; Top 11T",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-rd-m5100-sgs-20260916.md",
+      "sha256": "7bce2ed9eb354e50a9c04bf8b31d3f1f99b2b0251639dae76d5109c334a5a2c9"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 0fbd00f3-9e69-4388-9534-845c3f46e705",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Shimano Deore M5100 desviador trasero 11s RD-M5100 SGS 11 v",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-rd-m5100-sgs-saved-name-20260916.json",
+      "sha256": "76fb669fbafe40c61fa492b4383d1d0375878de19b282ab01ba1ca8eb6686bca"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "dae01de8b913ca3d00ab229c176df81d69d4469009d5db0ea20c0abb8b4be115",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre 8e6b54431eaf1b67fe13015554e570d48eaf4295146007d157651e4a6434bf38: modelo RD-M5100 → RD-M5100-SGS (el nombre trae SGS y la ficha lo documenta como Model no.); jaula «Larga (SGS)» literal; montaje «Pata/postiza estándar» por «Direct attachment (conventional) ✔ / Direct mount -»; 1x11 con «Max. front difference 0T» excluye un segundo plato. Embrague sin declarar: consistente con la definición viva del booleano, que no nombra SHADOW RD+."
+  }
+}

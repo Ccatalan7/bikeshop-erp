@@ -1,0 +1,196 @@
+{
+  "schema_version": 2,
+  "product_id": "ea803c0f-74ed-4c73-8636-56ff22587aec",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "a7371498e83ef624fc89738b75679c460aee7facac08f11c912f61eaec233202",
+    "fingerprints": {
+      "facts_sha256": "3998f426a7350b5bd030ffaa7cff8e6931b895726a7d4dcbdeda018d3d265392",
+      "product_sha256": "2f166f80780706e8794d2bcd6973b33efb773593dc76e197cd116ace56912551",
+      "template_sha256": "a788e2db3fa29e6c1cfa155dcfc274824180854016998ef9f0533059a9661098",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 1,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "61005a7e-a107-49f3-96c3-2fa2796d3299",
+    "contract_version": 34
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "SL-M315-7R",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice literalmente «SL-M315-7R»; la ficha oficial documenta ese modelo (RAPIDFIRE PLUS, 7 velocidades traseras)."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/SL-M315-7R",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "shifter_position",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Derecho (trasero)",
+      "unit": null,
+      "method": "Ficha SL-M315-7R: «Rear speeds 7», «Front speeds -» (mando trasero); nombre guardado «DER.».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "SL-M315-7R",
+      "reason": "La ficha declara sólo velocidades traseras y el nombre el lado derecho."
+    },
+    {
+      "key": "shifter_actuation_mode",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Indexado",
+      "unit": null,
+      "method": "Tabla productinfo: «Rear speeds 7», «Compatible rear derailleur type MTB 7-speed» y «Max. multiple shifts (main lever/rear) 3». La celda de velocidades no lleva la marca «(friction)» que estas tablas usan para los mandos de fricción («3 (friction)» en SL-TX30-LN y en FD-TZ510-DS6, archivadas), y los cambios múltiples por palanca presuponen posiciones.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "oem-tx30"
+      ],
+      "scope": "SL-M315-7R",
+      "reason": "La tabla enumera 7 posiciones traseras sin marca de fricción."
+    },
+    {
+      "key": "shifter_indexed_positions",
+      "current": {
+        "value": "7",
+        "source": "name_reading",
+        "fact_id": "5c0fa48f-ca12-4d3e-880a-28686dc195b4",
+        "fact_sha256": "dae9acc2d2b483a4352389bb39c26fb72e055f5d5fa633d7f85c7fee80d172a1",
+        "confirmed": false
+      },
+      "proposed": "7",
+      "unit": null,
+      "method": "Ficha SL-M315-7R: «Rear speeds 7»; nombre guardado «7-SPEED».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "SL-M315-7R",
+      "reason": "Literal en ficha y nombre; sustituye la lectura de nombre por la ficha oficial."
+    },
+    {
+      "key": "shifter_compatibility_claims",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "rd",
+            "values": {
+              "claim_identity": "Cambio trasero MTB 7-speed",
+              "scope_kind": "Interfaz o estándar documentado",
+              "declared_interface": "MTB 7-speed",
+              "source_document": "productinfo.shimano.com — ficha SL-M315-7R (consultada 2026-09-16)",
+              "source_url": "https://productinfo.shimano.com/en/product/SL-M315-7R",
+              "target_component": "Cambio trasero",
+              "declaration_result": "Compatible declarado",
+              "conditions": "Fila «Compatible rear derailleur type: MTB 7-speed» de la tabla productinfo."
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/SL-M315-7R"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Fila «Compatible rear derailleur type: MTB 7-speed» de la ficha.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "SL-M315-7R",
+      "reason": "Declaración de interfaz publicada por el fabricante."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/SL-M315-7R",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial SL-M315-7R",
+      "finding": "RAPIDFIRE PLUS; Rear speeds 7; Compatible rear derailleur type MTB 7-speed; Clamp band; OT-SP41",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-sl-m315-7r-20260916.md",
+      "sha256": "310a6178f7e1e4cad85d6fc97cd2514c66e8c6fad692520521276bd06147995c"
+    },
+    {
+      "id": "oem-tx30",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/SL-TX30-7R",
+      "consulted_on": "2026-09-16",
+      "scope": "Fichas SL-TX30-7R/6R/LN: cómo marcan la fricción estas tablas",
+      "finding": "SL-TX30-LN: «Front speeds 3 (friction)»; SL-TX30-7R: «Rear speeds 7» sin marca",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-sl-tx30-20260916.md",
+      "sha256": "08203f6c6a3c68c9a8293a339234a71b1707deb2db38c43f7a9ff5d8eabbd3a8"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product ea803c0f-74ed-4c73-8636-56ff22587aec",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "MANILLA CAMBIO SHIMANO SL-M315-7R, DER. 7-SPEED RAPIDFIRE PLUS",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-sl-m315-7r-saved-name-20260916.json",
+      "sha256": "52c5d8e00b119e81a08c019142a63b5cc861d2517c18104f1945630c7e2c8e02"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "3b37322e165c03a736b9e972f571c3cb36d73ba462d043a85082328d9519b599",
+    "notes": "Revisión par (sesión Look dude), v2 aceptada sobre 3227627393e7ed2e67c529130b74f3b22465f7150fd30104833546a108fdaa41: sólo cambió el método de shifter_actuation_mode (celda de velocidades sin la marca «(friction)» + «Max. multiple shifts 3»; sin citar el OPTICAL GEAR DISPLAY, que no discrimina). Modelo literal SL-M315-7R, lado, 7 posiciones y claim MTB 7-speed verificados en la v1."
+  }
+}

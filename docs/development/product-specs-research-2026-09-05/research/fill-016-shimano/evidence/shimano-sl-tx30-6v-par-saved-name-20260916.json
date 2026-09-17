@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "dd32e9dd-9030-404f-82f3-6ac72c79e570",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "manilla cambio 6v shimano (par - bolsa) sl-tx30 shimano",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "1712519b7c8cee7038b51b5f90d5ca130395a7045d080f5bcdf692fa7384f9e9",
+  "product_sha256": "9f2c08cec3f9d7f12a38f8cab58917cdd96defd1589560e1d94a6da842fb7c8e",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

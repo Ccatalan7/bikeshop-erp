@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "bb64035a-03dd-4040-b1ba-cd4f8d83e613",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "FRENO HIDRÁULICO DELANTERO SHIMANO BL-MT200(R) / BR-MT200(R)",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "2220ad9bdf58246574f3846bd9d5ff1037a4d1413c47c7d85d39a79935e91d08",
+  "product_sha256": "68dc36e044a2c74ca3526f2d4cc742ea239bbdb89f1bb7a69835f4c44072ec36",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

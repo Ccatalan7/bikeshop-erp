@@ -1,0 +1,14 @@
+# Shimano SL-M5100-IR, SL-M5100-L, SL-M7100-IR y SL-M7100-L — productinfo.shimano.com
+Consultadas 2026-09-16 en el navegador integrado (productinfo.shimano.com). Tablas literales (rótulo → valor), archivadas para acotar los modelos compatibles con los nombres guardados «Shifter Derecho SL-M5100 SGS 11 v» y «MANILLA CAMBIO SHIMANO SLX SL-M7100 12V».
+
+## SL-M5100-IR — https://productinfo.shimano.com/en/product/SL-M5100-IR (encabezado «SL-M5100-IR (w/o OPTICAL GEAR DISPLAY)»)
+Series: DEORE · Model no.: SL-M5100-IR · Shifter type: RAPIDFIRE PLUS · Front speeds: - · Rear speeds: 11 · Compatible rear derailleur type: MTB 11-speed · Mount type: Clamp band -, I-SPEC B -, I-SPEC II -, I-SPEC EV ✔ · Shift lever position adjust: ✔ (14 mm slide adjust range, w/o OPTICAL GEAR DISPLAY) / - (w/ OPTICAL GEAR DISPLAY) · Shift lever cable adjust: ✔ · Max. multiple shifts (main lever/rear): 3 · Release function: MULTI RELEASE -, INSTANT RELEASE -, 2-WAY RELEASE ✔ · OPTICAL GEAR DISPLAY: With ✔, Without ✔ · Shift lever bracket: Aluminum, Painted · Clamp screw: Stainless steel · Main/Release lever body: Steel+GFRP · Base cover: GFRP · Inner cable: OPTISLICK ✔, Stainless ✔ · Recommended shift lever outer casing: OT-SP41
+
+## SL-M5100-L — https://productinfo.shimano.com/en/product/SL-M5100-L
+Series: DEORE · Model no.: SL-M5100-L · Shifter type: RAPIDFIRE PLUS MONO · Front speeds: 2 · Rear speeds: - · Compatible rear derailleur type: - · Mount type: Clamp band ✔ · Shift lever cable adjust: ✔ · Release function: 2-WAY RELEASE ✔ · OPTICAL GEAR DISPLAY: Without ✔ · Inner cable: OPTISLICK ✔, Steel ✔ · Recommended shift lever outer casing: OT-SP41
+
+## SL-M7100-IR — https://productinfo.shimano.com/en/product/SL-M7100-IR
+Series: SLX · Model no.: SL-M7100-IR · Shifter type: RAPIDFIRE PLUS · Front speeds: - · Rear speeds: 12 · Compatible rear derailleur type: 12-speed · Mount type: Clamp band -, I-SPEC B -, I-SPEC II -, I-SPEC EV ✔ · Shift lever position adjust: ✔ (14 mm slide adjust range) · Shift lever cable adjust: ✔ · Max. multiple shifts (main lever/rear): 3 · Release function: MULTI RELEASE -, INSTANT RELEASE -, 2-WAY RELEASE ✔ · OPTICAL GEAR DISPLAY: Without ✔ · Shift lever bracket: Aluminum, Painted · Clamp screw: Stainless steel · Main/Release lever body: Steel+GFRP · Base cover: GFRP · Inner cable: OPTISLICK ✔, Stainless ✔ · Recommended shift lever outer casing: OT-SP41 · Average weight (g): 117 ( /pc)
+
+## SL-M7100-L — https://productinfo.shimano.com/en/product/SL-M7100-L
+Series: SLX · Model no.: SL-M7100-L · Shifter type: RAPIDFIRE PLUS MONO · Front speeds: 2 · Rear speeds: - · Compatible rear derailleur type: - · Mount type: Clamp band ✔ · Shift lever cable adjust: ✔ · Release function: INSTANT RELEASE ✔, 2-WAY RELEASE ✔ · Adjustable lever: ✔ · OPTICAL GEAR DISPLAY: Without ✔ · Inner cable: OPTISLICK ✔, Stainless ✔ · Recommended shift lever outer casing: OT-SP41 · Average weight (g): 77 ( /pc)

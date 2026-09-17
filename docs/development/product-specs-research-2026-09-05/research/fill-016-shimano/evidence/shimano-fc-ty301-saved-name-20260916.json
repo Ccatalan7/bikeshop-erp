@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "3947c1aa-92af-4ad1-90bc-b9001fa1babf",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Volante 42x34x24X170mm C/ Cubre FC-TY301",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "84c562191273a2abc4086a9e47472c4134dd5777b7b59fdc887c5960a78bad9e",
+  "product_sha256": "ca720ecf1d5b1d487034dac3208a4d308847098a1c9f25043420cffdc8c5a0b3",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

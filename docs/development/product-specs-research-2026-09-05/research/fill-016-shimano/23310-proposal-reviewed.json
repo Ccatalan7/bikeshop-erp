@@ -1,0 +1,364 @@
+{
+  "schema_version": 2,
+  "product_id": "c6b580e0-39c0-4098-83d2-9522b96555ba",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "c066a7f227fbc40a586359b4244033f098bc8648ab687804fccd0ed3ba19be3e",
+    "fingerprints": {
+      "facts_sha256": "b5979206253dba76e1c4d50b08912c4f969b9496055c8378cad4c80ca5f87bf8",
+      "product_sha256": "92f206e0dd8c066c04a44e6ab506b7e5fb13f282b70205876398076bc87b5141",
+      "template_sha256": "54af19ab560734995ba12649c6c31d507308ce1a7b185f85961ede21cc697bb0",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 3,
+    "updated_at": "2026-09-09T15:01:43.431286+00:00",
+    "template_id": "6a02a0c2-b139-46ef-86d8-bba3797252bd",
+    "contract_version": 22
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "CS-HG200-8",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «CS-HG200-8V» (V = velocidades en castellano, pegado al código) y «12/32T»; la ficha oficial documenta CS-HG200-8 con «Rear speeds 8» y la combinación 12-32T (br)."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/CS-HG200-8",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "sprocket_count",
+      "current": {
+        "value": "8",
+        "source": "name_reading",
+        "fact_id": "60c7dd0e-27b7-4c36-8043-bb9d5b261427",
+        "fact_sha256": "8fd2330187b7c3aa789472fc9da87763742dbfebf7e43a636788177670d9ca49",
+        "confirmed": false
+      },
+      "proposed": "8",
+      "unit": null,
+      "method": "Ficha CS-HG200-8: «Rear speeds 8», «Steel gear QTY (pcs) 8»; nombre guardado «8 Veloc».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-HG200-8",
+      "reason": "Literal; sustituye la lectura de nombre."
+    },
+    {
+      "key": "cog_sequence",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "p1",
+            "values": {
+              "position": "1",
+              "teeth": "12"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG200-8"
+            ]
+          },
+          {
+            "id": "p2",
+            "values": {
+              "position": "2",
+              "teeth": "14"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG200-8"
+            ]
+          },
+          {
+            "id": "p3",
+            "values": {
+              "position": "3",
+              "teeth": "16"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG200-8"
+            ]
+          },
+          {
+            "id": "p4",
+            "values": {
+              "position": "4",
+              "teeth": "18"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG200-8"
+            ]
+          },
+          {
+            "id": "p5",
+            "values": {
+              "position": "5",
+              "teeth": "21"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG200-8"
+            ]
+          },
+          {
+            "id": "p6",
+            "values": {
+              "position": "6",
+              "teeth": "24"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG200-8"
+            ]
+          },
+          {
+            "id": "p7",
+            "values": {
+              "position": "7",
+              "teeth": "28"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG200-8"
+            ]
+          },
+          {
+            "id": "p8",
+            "values": {
+              "position": "8",
+              "teeth": "32"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG200-8"
+            ]
+          }
+        ]
+      },
+      "unit": "T",
+      "method": "Ficha CS-HG200-8, «Combination»: 12-32T (br): 12-14-16-18-21-24-28-32T.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-HG200-8",
+      "reason": "Secuencia publicada de la combinación que nombra el ERP."
+    },
+    {
+      "key": "smallest_cog_teeth",
+      "current": {
+        "value": "12",
+        "source": "name_reading",
+        "fact_id": "a982aefb-a6fe-4202-b5dc-b8fe19fe5bf2",
+        "fact_sha256": "059dd158e693a3b3abb50523cf97688cefcbc82b50e76d6799cb8dbfab8ac5f7",
+        "confirmed": false
+      },
+      "proposed": "12",
+      "unit": "T",
+      "method": "Primer piñón de la combinación 12-32T (br); nombre guardado «12/32T».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-HG200-8",
+      "reason": "Literal."
+    },
+    {
+      "key": "largest_cog_teeth",
+      "current": {
+        "value": "32",
+        "source": "name_reading",
+        "fact_id": "d9148311-b724-49f4-b661-3900d823c5f5",
+        "fact_sha256": "814232d7449164bb691e4e19fa1fd31a994c8c0a9ca92470b762028ab0dfb939",
+        "confirmed": false
+      },
+      "proposed": "32",
+      "unit": "T",
+      "method": "Último piñón de la combinación 12-32T (br); nombre guardado «12/32T».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-HG200-8",
+      "reason": "Literal."
+    },
+    {
+      "key": "cassette_spline_standard",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+      "unit": null,
+      "method": "Ficha CS-HG200-8, «Spline type»: «Shimano HG spline M ✔»; los demás (MICRO SPLINE, L2, L, S) con «-».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CS-HG200-8",
+      "reason": "Declaración del fabricante."
+    },
+    {
+      "key": "shift_technology",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "HYPERGLIDE",
+      "unit": null,
+      "method": "Ficha CS-HG200-8: «Type: HG»; HG es la abreviatura Shimano de HYPERGLIDE (misma sigla del código de modelo CS-HG200 y de las filas «HG spline»).",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CS-HG200-8",
+      "reason": "Tecnología declarada por su sigla."
+    },
+    {
+      "key": "freehub_bodies_accepted",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "fh",
+            "values": {
+              "rear_drive_interface": "Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)",
+              "spacer_requirement": "No publicado",
+              "status": "Compatible declarado",
+              "conditions": "Fila «Spline type» de la tabla productinfo de CS-HG200-8: «Shimano HG spline M ✔»; separador no mencionado.",
+              "source_scope": "Tabla de compatibilidad OEM",
+              "source_url": "https://productinfo.shimano.com/en/product/CS-HG200-8"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/CS-HG200-8"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Fila «Spline type» de la ficha CS-HG200-8.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CS-HG200-8",
+      "reason": "Núcleo declarado por el fabricante; sin dato de separador."
+    },
+    {
+      "key": "lockring_included",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Ficha CS-HG200-8 lista «Lock ring: Material Steel, Finish Painted» entre las piezas del producto.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "CS-HG200-8",
+      "reason": "Pieza listada en la ficha del producto."
+    },
+    {
+      "key": "published_variant_label",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "12-32T (br)",
+      "unit": null,
+      "method": "Ficha CS-HG200-8, «Combination name (Group name)»: 12-32T (br); nombre guardado «12/32T».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "CS-HG200-8",
+      "reason": "Variante publicada que corresponde al nombre."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/CS-HG200-8",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial CS-HG200-8",
+      "finding": "Type HG; Rear speeds 8; 12-32T (br): 12-14-16-18-21-24-28-32T; Shimano HG spline M ✔; Lock ring Steel",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-cs-hg200-8-20260916.md",
+      "sha256": "194511822c84ab312db969b3f810030efc4ff1902349f75b2015964eb9370562"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product c6b580e0-39c0-4098-83d2-9522b96555ba",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Piñon 8 Veloc Cassette 12/32T CS-HG200-8V",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-cs-hg200-8-saved-name-20260916.json",
+      "sha256": "78d37a9bf53e4ec8ffa7892e98bcd92a07a74063bf303ca97eff1ebf102ba4f8"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "4d608a091ac69dc442973669101fc35c0e87fad84e61dcbf0794ac72fa67348c",
+    "notes": "Revisión par (sesión Look dude), aceptada sobre a895411e0aab8600fa3cdaf4b6ff4ed800e2b625fd369539bb7f3e957830766a: modelo CS-HG200-8 contenido literal en «CS-HG200-8V» con «8 Veloc»; secuencia 12-32T (br) literal; «Type: HG» → HYPERGLIDE como abreviatura propia de Shimano usada en la misma tabla; lock ring listado como pieza → incluido."
+  }
+}

@@ -1,0 +1,203 @@
+{
+  "schema_version": 2,
+  "product_id": "bb64035a-03dd-4040-b1ba-cd4f8d83e613",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "2220ad9bdf58246574f3846bd9d5ff1037a4d1413c47c7d85d39a79935e91d08",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "68dc36e044a2c74ca3526f2d4cc742ea239bbdb89f1bb7a69835f4c44072ec36",
+      "template_sha256": "d5d5bc845fbadc745c2b06d2af39a627251ea1b2ecc94300f73a8f2a8623d7d8",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 0,
+    "updated_at": "2026-06-06T16:16:19.302211+00:00",
+    "template_id": "22fdca94-afe0-4221-a436-959c8ce94a81",
+    "contract_version": 21
+  },
+  "identity": [],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/BL-MT200",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-16 y archivada con hash; la ficha del cáliper BR-MT200 está en el mismo archivo",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "brake_presentation",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Un freno completo (maneta, manguera, cáliper)",
+      "unit": null,
+      "method": "Nombre guardado «FRENO HIDRÁULICO DELANTERO SHIMANO BL-MT200(R) / BR-MT200(R)»: maneta y cáliper juntos; fichas BL-MT200 y BR-MT200: «Brake hose (kit) SM-BH59-JK-SS», «J-Kit spec (for OEM) ✔» (kit con manguera).",
+      "origin": "research",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "scope": "Kit BL-MT200 + BR-MT200",
+      "reason": "Un freno armado con maneta, manguera y cáliper."
+    },
+    {
+      "key": "kit_members",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "lever",
+            "values": {
+              "member_role": "maneta",
+              "family": "brake_lever",
+              "quantity": "1",
+              "position": "Sin posición",
+              "identity_brand": "Shimano",
+              "identity_model": "BL-MT200"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/BL-MT200"
+            ]
+          },
+          {
+            "id": "caliper",
+            "values": {
+              "member_role": "cáliper",
+              "family": "brake_caliper",
+              "quantity": "1",
+              "position": "Delantero",
+              "identity_brand": "Shimano",
+              "identity_model": "BR-MT200"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/BR-MT200"
+            ]
+          },
+          {
+            "id": "hose",
+            "values": {
+              "member_role": "manguera",
+              "family": "hydraulic_hose",
+              "quantity": "1",
+              "position": "Delantero",
+              "identity_brand": "Shimano",
+              "identity_model": "SM-BH59-JK-SS"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/BL-MT200",
+              "https://productinfo.shimano.com/en/product/BR-MT200"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Maneta BL-MT200 sin lado declarado: el «(R)» del nombre acompaña también al cáliper («BR-MT200(R)») y no está explicado, así que no se lee como «derecha»; cáliper BR-MT200 y manguera SM-BH59-JK-SS («Brake hose (kit)» en ambas fichas); posición delantera del cáliper y la manguera por el nombre «DELANTERO».",
+      "origin": "research",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "scope": "Kit BL-MT200 + BR-MT200",
+      "reason": "Tres piezas físicas con su modelo publicado."
+    },
+    {
+      "key": "brake_circuits",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "front",
+            "values": {
+              "circuit_id": "front",
+              "position": "Delantero",
+              "actuation": "Hidráulico",
+              "lever_row_id": "lever",
+              "caliper_row_id": "caliper",
+              "line_row_id": "hose",
+              "fluid_as_shipped": "Aceite Mineral",
+              "source_url": "https://productinfo.shimano.com/en/product/BL-MT200"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/BL-MT200",
+              "https://productinfo.shimano.com/en/product/BR-MT200"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Fichas BL-MT200 y BR-MT200: «Brake type: Hydraulic disc brake», «Oil: SHIMANO Mineral»; circuito delantero por el nombre.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Kit BL-MT200 + BR-MT200",
+      "reason": "Un circuito hidráulico con aceite mineral Shimano."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/BL-MT200",
+      "consulted_on": "2026-09-16",
+      "scope": "Fichas oficiales BL-MT200 y BR-MT200 (un archivo)",
+      "finding": "BL-MT200: Hydraulic disc brake; 3 dedos; hose SM-BH59-JK-SS; J-Kit; Oil SHIMANO Mineral. BR-MT200: Post mount; 2 pistones resina; rotores 140/160/180; pad B05S-RX; Oil SHIMANO Mineral",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-bl-mt200-br-mt200-20260916.md",
+      "sha256": "56a071229bd2c047cc93f7a5f5fac343ea1901f7a16c3e65127d3414d08c3bbd"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product bb64035a-03dd-4040-b1ba-cd4f8d83e613",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "FRENO HIDRÁULICO DELANTERO SHIMANO BL-MT200(R) / BR-MT200(R)",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-bl-br-mt200-delantero-saved-name-20260916.json",
+      "sha256": "1e42650648e78aca0c0d66c40b74fac38ac9260a10c6f16ef38570302968fe18"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "1e98c954f8ec94a12a28db5af7ed490f8f1b402ecf6caaaa7ffd6eba2ce4f8a4",
+    "notes": "Revisión par (sesión Look dude), v2 aceptada sobre 8c070380dafa50d52da238f38d9ff393715aad277727eea88bfff7f1f817b6b0: sólo cambió kit_members.rows[lever].position a «Sin posición» y su método: el «(R)» del nombre va también en el cáliper y no está explicado; «DELANTERO» como palabra plena vale para cáliper, manguera y circuito. Presentación completa, «Hydraulic disc brake» y «Oil: SHIMANO Mineral» literales."
+  }
+}

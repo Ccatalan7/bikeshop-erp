@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "0e6e6f5d-d306-40ab-bd25-bebff1c17581",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "VOLANTE SHIMANO FC-TY501 6/7/8-SPEED, 170MM, 42X34X24T W/O CG, W/CRANK FIXING BOLT, BLACK, BULK AFCT EN CAJA",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "ed4aad8862c7fa437ac36000d991fa8ee09bae1949b6efa49f6ba6cb34480ebe",
+  "product_sha256": "71ee27e80ceb844f87391334366c2c2347628bc41dfa4d9281442731d19fd3e4",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

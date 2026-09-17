@@ -1,0 +1,201 @@
+{
+  "schema_version": 2,
+  "product_id": "9b64aa04-3306-4586-94bd-da2aba2a64ff",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "5a2b36772c27029e82ad4b5954aae99cd102a19d2636c044ebc82c5f9d796fd0",
+    "fingerprints": {
+      "facts_sha256": "18316a9cd588d392341fb88accf63fc26d84a92f6ac3b3935821555384d2711a",
+      "product_sha256": "ff12a573eac5754ba88abd1a075b23b95cf44b640009b31ba30b250b9f3e8ce1",
+      "template_sha256": "a788e2db3fa29e6c1cfa155dcfc274824180854016998ef9f0533059a9661098",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 3,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "61005a7e-a107-49f3-96c3-2fa2796d3299",
+    "contract_version": 34
+  },
+  "identity": [],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/SL-M5100-R",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-16 y archivada con hash; la variante I-SPEC EV (https://productinfo.shimano.com/en/product/SL-M5100-IR, archivada) coincide en todo lo declarado aquí",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "shifter_position",
+      "current": {
+        "value": "Derecho (trasero)",
+        "source": "name_reading",
+        "fact_id": "35e32e4b-864f-4868-b2bb-7a58ca9535ea",
+        "fact_sha256": "d0ff71fdfb44a332e1a4ea3ebd45a1661d94a64b1b2235e10a10967de62f2028",
+        "confirmed": false
+      },
+      "proposed": "Derecho (trasero)",
+      "unit": null,
+      "method": "Fichas SL-M5100-R e SL-M5100-IR: «Rear speeds 11», «Front speeds -». El nombre «Shifter Derecho SL-M5100 SGS 11 v» fija el lado derecho y 11 velocidades («SGS» es un código de jaula de cambio, ajeno al mando). La ficha SL-M5100-L (archivada) es el mando delantero: «Front speeds 2», «Rear speeds -».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "oem-siblings",
+        "product-name"
+      ],
+      "scope": "SL-M5100 trasero (R o IR)",
+      "reason": "Las dos variantes traseras declaran sólo velocidades traseras; el nombre fija la cifra trasera."
+    },
+    {
+      "key": "shifter_actuation_mode",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Indexado",
+      "unit": null,
+      "method": "Fichas SL-M5100-R e SL-M5100-IR: Tabla productinfo: «Rear speeds 11», «Compatible rear derailleur type MTB 11-speed» y «Max. multiple shifts (main lever/rear) 3». La celda de velocidades no lleva la marca «(friction)» que estas tablas usan para los mandos de fricción («3 (friction)» en SL-TX30-LN y en FD-TZ510-DS6, archivadas), y los cambios múltiples por palanca presuponen posiciones. «Release function: 2-WAY RELEASE ✔».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "oem-siblings",
+        "oem-tx30"
+      ],
+      "scope": "SL-M5100 trasero (R o IR)",
+      "reason": "11 posiciones sin marca de fricción, igual en R e IR."
+    },
+    {
+      "key": "shifter_indexed_positions",
+      "current": {
+        "value": "11",
+        "source": "name_reading",
+        "fact_id": "694c0d9c-e5e0-409a-b421-0b370b112f4f",
+        "fact_sha256": "9da5e8b3f75cec13bdd4516bc0ed8caf7683e6a72820c00617fbcc6ba5f262b8",
+        "confirmed": false
+      },
+      "proposed": "11",
+      "unit": null,
+      "method": "Fichas SL-M5100-R e SL-M5100-IR: «Rear speeds 11»; nombre guardado «11V»/«11 v».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "oem-siblings",
+        "product-name"
+      ],
+      "scope": "SL-M5100 trasero (R o IR)",
+      "reason": "Literal, igual en R e IR."
+    },
+    {
+      "key": "shifter_compatibility_claims",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "rd",
+            "values": {
+              "claim_identity": "Cambio trasero MTB 11-speed",
+              "scope_kind": "Interfaz o estándar documentado",
+              "declared_interface": "MTB 11-speed",
+              "source_document": "productinfo.shimano.com — fichas SL-M5100-R e SL-M5100-IR (consultadas 2026-09-16)",
+              "source_url": "https://productinfo.shimano.com/en/product/SL-M5100-R",
+              "target_component": "Cambio trasero",
+              "declaration_result": "Compatible declarado",
+              "conditions": "Fila «Compatible rear derailleur type: MTB 11-speed», igual en SL-M5100-R e SL-M5100-IR."
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/SL-M5100-R",
+              "https://productinfo.shimano.com/en/product/SL-M5100-IR"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Fichas SL-M5100-R e SL-M5100-IR: «Compatible rear derailleur type: MTB 11-speed».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "oem-siblings"
+      ],
+      "scope": "SL-M5100 trasero (R o IR)",
+      "reason": "Declaración publicada, igual en R e IR."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/SL-M5100-R",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial SL-M5100-R",
+      "finding": "RAPIDFIRE PLUS; Rear speeds 11; Compatible rear derailleur type MTB 11-speed; Clamp band; 2-WAY RELEASE",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-sl-m5100-r-20260916.md",
+      "sha256": "c675fa443f431690fbdbbbd27565a0d6c957dca1282a543161d92ce442ba14bf"
+    },
+    {
+      "id": "oem-siblings",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/SL-M5100-IR",
+      "consulted_on": "2026-09-16",
+      "scope": "Fichas hermanas SL-M5100-IR (I-SPEC EV) y SL-M5100-L (delantero), con las de la otra serie",
+      "finding": "SL-M5100-IR: Rear speeds 11, I-SPEC EV ✔; SL-M5100-L: Front speeds 2",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-sl-m5100-sl-m7100-hermanos-20260916.md",
+      "sha256": "6cc7ab48683fa4cb60286bf2d45bfdca7d48624a60b7036e5202fea97d639463"
+    },
+    {
+      "id": "oem-tx30",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/SL-TX30-LN",
+      "consulted_on": "2026-09-16",
+      "scope": "Fichas SL-TX30: cómo marcan la fricción estas tablas",
+      "finding": "SL-TX30-LN: «Front speeds 3 (friction)»",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-sl-tx30-20260916.md",
+      "sha256": "08203f6c6a3c68c9a8293a339234a71b1707deb2db38c43f7a9ff5d8eabbd3a8"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 9b64aa04-3306-4586-94bd-da2aba2a64ff",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "Shifter Derecho SL-M5100 SGS 11 v",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-sl-m5100-derecho-saved-name-20260916.json",
+      "sha256": "611d55a3344de74e131885c157850852c19efb95d2b74f9b4851b306b376bf0d"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "5a38849e898d6f6a635b1f6d1ea5321a430281ee8ef08a22eaf94b9d76843b69",
+    "notes": "Revisión par (sesión Look dude), v2 aceptada sobre ea904401ac118c8295733a087a2f7461e0bbe67a1df07205b05db596bfcdc14d: sólo cambió el método de shifter_actuation_mode. «SGS» ignorado como código de jaula: correcto."
+  }
+}

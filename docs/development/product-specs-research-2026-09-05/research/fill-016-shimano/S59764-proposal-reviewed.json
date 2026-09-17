@@ -1,0 +1,406 @@
+{
+  "schema_version": 2,
+  "product_id": "0e6e6f5d-d306-40ab-bd25-bebff1c17581",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "ed4aad8862c7fa437ac36000d991fa8ee09bae1949b6efa49f6ba6cb34480ebe",
+    "fingerprints": {
+      "facts_sha256": "c396e40647c41b3145e882d3cfed9a713ea985d83e6bb7b8030fdfe5f94362b4",
+      "product_sha256": "71ee27e80ceb844f87391334366c2c2347628bc41dfa4d9281442731d19fd3e4",
+      "template_sha256": "2d517fdc5113531317ad8283fcb4bda31bc9b0d2aed3743407209f62f39f9feb",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 1,
+    "updated_at": "2026-05-22T22:33:41.227011+00:00",
+    "template_id": "91a0c6d5-9c0a-443f-b2e9-2e0ab5f431ce",
+    "contract_version": 51
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "FC-TY501",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice literalmente «FC-TY501»; la ficha oficial documenta FC-TY501 con la combinación 42-34-24T y el largo 170 mm."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://productinfo.shimano.com/en/product/FC-TY501",
+      "unit": null,
+      "method": "URL de la ficha oficial de Shimano (productinfo.shimano.com) consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "crank_arm_length_mm",
+      "current": {
+        "value": "170",
+        "source": "name_reading",
+        "fact_id": "09fdb74e-1c4d-431e-9696-30b0ee3047e1",
+        "fact_sha256": "fc8ec72d68d306690443256509ce306dd382f3c7caf062692fdaf31a13921ca9",
+        "confirmed": false
+      },
+      "proposed": "170",
+      "unit": "mm",
+      "method": "Ficha FC-TY501: «Crank arm length (mm)»: 170 ✔ (también 165/175 ✔); nombre guardado «170».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "FC-TY501",
+      "reason": "El nombre fija una de las opciones publicadas; sustituye la lectura de nombre."
+    },
+    {
+      "key": "included_chainring_count",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "3",
+      "unit": null,
+      "method": "Ficha FC-TY501: «Chainring combination 42-34-24T, 48-38-28T» (tres platos); nombre guardado «42X34X24T»/«42x34x24».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "FC-TY501",
+      "reason": "Tres platos; el nombre fija la combinación 42-34-24T."
+    },
+    {
+      "key": "chainring_teeth_rows",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "outer",
+            "values": {
+              "ring_identity": "Outer ring 42T",
+              "position": "Exterior",
+              "teeth": "42",
+              "removable": false,
+              "member_designation": "Outer ring — Steel, Painted (P.C.D. Riveted)",
+              "source_document": "productinfo.shimano.com — ficha FC-TY501 (consultada 2026-09-16)",
+              "source_url": "https://productinfo.shimano.com/en/product/FC-TY501"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/FC-TY501"
+            ]
+          },
+          {
+            "id": "middle",
+            "values": {
+              "ring_identity": "Middle ring 34T",
+              "position": "Medio",
+              "teeth": "34",
+              "removable": false,
+              "member_designation": "Middle ring — Steel, Painted (P.C.D. Riveted)",
+              "source_document": "productinfo.shimano.com — ficha FC-TY501 (consultada 2026-09-16)",
+              "source_url": "https://productinfo.shimano.com/en/product/FC-TY501"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/FC-TY501"
+            ]
+          },
+          {
+            "id": "inner",
+            "values": {
+              "ring_identity": "Inner ring 24T",
+              "position": "Interior",
+              "teeth": "24",
+              "removable": false,
+              "member_designation": "Inner ring — Steel, Painted (P.C.D. Riveted)",
+              "source_document": "productinfo.shimano.com — ficha FC-TY501 (consultada 2026-09-16)",
+              "source_url": "https://productinfo.shimano.com/en/product/FC-TY501"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/FC-TY501"
+            ]
+          }
+        ]
+      },
+      "unit": "T",
+      "method": "Ficha FC-TY501: combinación 42-34-24T; «Outer/Middle/Inner ring: Steel, Painted»; «P.C.D. (mm): Riveted».",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "FC-TY501",
+      "reason": "Un plato por fila; remachados, no desmontables."
+    },
+    {
+      "key": "chainring_mounting",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Platos remachados no desmontables",
+      "unit": null,
+      "method": "Ficha FC-TY501: «P.C.D. (mm): Riveted»; «Outer/middle ring fixing bolt: -»; «Inner ring fixing screw: -».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "FC-TY501",
+      "reason": "Literal."
+    },
+    {
+      "key": "spindle_included",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": false,
+      "unit": null,
+      "method": "Ficha FC-TY501: «Compatible bottom bracket type: Square ✔ (Outboard -, OCTALINK -)»; «Recommended bottom bracket: BB-UN101, BB-UN300»; «HOLLOWTECH II -», «2-PIECE CRANKSET -»; peso «w/o bottom bracket». El eje pertenece al pedalier cuadrado recomendado, que va aparte.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "FC-TY501",
+      "reason": "Biela de tres piezas para pedalier de cartucho cuadrado."
+    },
+    {
+      "key": "bottom_bracket_included",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": false,
+      "unit": null,
+      "method": "Ficha FC-TY501: el pedalier figura como «Recommended bottom bracket» (BB-UN101, BB-UN300) y el peso se publica «w/o bottom bracket»; el nombre guardado no menciona pedalier.",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "FC-TY501",
+      "reason": "Pedalier recomendado aparte, no incluido."
+    },
+    {
+      "key": "crankset_construction",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Tres piezas (motor aparte)",
+      "unit": null,
+      "method": "Ficha FC-TY501: «2-PIECE CRANKSET -», «HOLLOWTECH II -», «Compatible bottom bracket type: Square ✔» con pedalier recomendado aparte.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "FC-TY501",
+      "reason": "Dos brazos más pedalier independiente."
+    },
+    {
+      "key": "crank_axle_interface_declarations",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "square",
+            "values": {
+              "interface_identity": "Cuadradillo (Square)",
+              "junction_role": "Asiento que recibe el eje",
+              "axle_owner": "Pedalier con eje independiente",
+              "designation": "Compatible bottom bracket type: Square ✔; Axle length of BB-UN/ES: D-NL, D-EL",
+              "interface_geometry": "Cuadradillo",
+              "conditions": "Ficha: OCTALINK -, Outboard -; estándar de cuadradillo (JIS/ISO) no publicado.",
+              "source_document": "productinfo.shimano.com — ficha FC-TY501 (consultada 2026-09-16)",
+              "source_url": "https://productinfo.shimano.com/en/product/FC-TY501"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/FC-TY501"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha FC-TY501: «Compatible bottom bracket type: Square ✔».",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "FC-TY501",
+      "reason": "La biela recibe un eje cuadrado de un pedalier aparte."
+    },
+    {
+      "key": "bottom_bracket_required",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "d-nl",
+            "values": {
+              "requirement_identity": "BB-UN101, BB-UN300, eje D-NL (línea de cadena 47,5 mm)",
+              "bb_shell_interface": "BSA roscado",
+              "bb_model_code": "BB-UN101, BB-UN300 (con cubrecadena de cuadro: BB-UN101-K, BB-UN300K)",
+              "resulting_chainline_mm": "47.5",
+              "configuration_code": "D-NL",
+              "conditions": "Ficha: «Recommended bottom bracket — Threaded (normal): BB-UN101, BB-UN300»; «Threaded bottom bracket shell width (mm): 68 ✔, 70 -, 73 ✔, 83 -»; «Axle length of BB-UN/ES (mm): D-NL, D-EL *1»; «Chain line (mm): 47.5/47.5 + t/50». Caja roscada de 68 o 73 mm; el largo de eje se publica por código, no en mm.",
+              "source_document": "productinfo.shimano.com — ficha FC-TY501 (consultada 2026-09-16)",
+              "source_url": "https://productinfo.shimano.com/en/product/FC-TY501"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/FC-TY501"
+            ]
+          },
+          {
+            "id": "d-el",
+            "values": {
+              "requirement_identity": "BB-UN101, BB-UN300, eje D-EL (línea de cadena 50 mm)",
+              "bb_shell_interface": "BSA roscado",
+              "bb_model_code": "BB-UN101, BB-UN300 (con cubrecadena de cuadro: BB-UN101-K, BB-UN300K)",
+              "resulting_chainline_mm": "50",
+              "configuration_code": "D-EL",
+              "conditions": "Ficha, nota *1: «Bottom bracket spec. for chain line 50 mm»; caja roscada de 68 o 73 mm.",
+              "source_document": "productinfo.shimano.com — ficha FC-TY501 (consultada 2026-09-16)",
+              "source_url": "https://productinfo.shimano.com/en/product/FC-TY501"
+            },
+            "sources": [
+              "https://productinfo.shimano.com/en/product/FC-TY501"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha FC-TY501: Recommended bottom bracket, shell width, Axle length (códigos D-NL/D-EL) y Chain line.",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "FC-TY501",
+      "reason": "Dos combinaciones publicadas por largo de eje (línea de cadena 47,5 o 50 mm)."
+    },
+    {
+      "key": "crankset_chain_guard_included",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": false,
+      "unit": null,
+      "method": "Ficha FC-TY501: «Optional chain guard — With chain guard ✔ (integrated type); Without chain/bash guard ✔» (dos presentaciones); nombre guardado «W/O CG» (sin cubrecadena).",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "FC-TY501",
+      "reason": "El nombre fija una de las dos presentaciones publicadas."
+    },
+    {
+      "key": "crank_fixing_bolt_included",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Nombre guardado «W/CRANK FIXING BOLT»; ficha FC-TY501: «Crank fixing screw included ✔ (option)» (presentación con perno publicada como opción).",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "FC-TY501",
+      "reason": "El nombre declara el perno y la ficha publica la presentación con perno."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Shimano (productinfo.shimano.com)",
+      "locator": "https://productinfo.shimano.com/en/product/FC-TY501",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial FC-TY501",
+      "finding": "Rear 8/7/6; 42-34-24T / 48-38-28T; 170 ✔; Square; BB-UN101, BB-UN300; D-NL/D-EL; chain line 47.5 / 50; Riveted; chain guard ✔ (integrated) / without ✔",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-fc-ty501-20260916.md",
+      "sha256": "350caab0a2e1c4c3c341f55dc5cb6231b1ba06eddd51e8e419f11a2031905003"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 0e6e6f5d-d306-40ab-bd25-bebff1c17581",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante declaradas en el ERP",
+      "finding": "VOLANTE SHIMANO FC-TY501 6/7/8-SPEED, 170MM, 42X34X24T W/O CG, W/CRANK FIXING BOLT, BLACK, BULK AFCT EN CAJA",
+      "artifact_path": "research/fill-016-shimano/evidence/shimano-fc-ty501-saved-name-20260916.json",
+      "sha256": "636c3975cbf2b147b88ce9422973e4f759729ef33ddaa64eadc88d90c0db1b77"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "936eea6511d57d70e27d301893db0ccefb3a45de3db2b76f686c1d7167d7807f",
+    "notes": "Revisión par (sesión Look dude), v2 aceptada sobre d35e9ef3a8bfdb02d51354420b19d8a93318f33e4e6d5f597bd3112b9139d2b1: sólo se añadió crank_fixing_bolt_included = true (nombre «W/CRANK FIXING BOLT» literal + «Crank fixing screw included ✔ (option)»); identidad y evidencias idénticas a la v1 aceptada (170 y 42-34-24T fijados por el nombre; remachados; sin eje ni pedalier; BSA roscado por 68 ✔ 73 ✔; D-NL/D-EL; cubrecadena false por «W/O CG»)."
+  }
+}

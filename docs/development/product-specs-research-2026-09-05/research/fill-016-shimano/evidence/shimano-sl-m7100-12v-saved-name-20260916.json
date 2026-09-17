@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "17472a97-b548-49e3-ab94-9bd4d0367ddd",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "MANILLA CAMBIO SHIMANO SLX SL-M7100 12V",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "55fb66938f3839905aed16992951642b652bc3e6d3855173b099ed34dd34f127",
+  "product_sha256": "08c67c655a71fa3dd59df3d2e268899c519386167512cebe0cd9b7be79c8282c",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

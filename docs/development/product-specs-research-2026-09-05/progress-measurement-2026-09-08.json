@@ -1923,5 +1923,49 @@
   "reviewer": "claude-peer",
   "rounds": 2,
   "record": "fill-014-015-record-2026-09-16.md"
+ },
+ "research_fill_016_shimano_2026_09_16": {
+  "batch": "fill-016-shimano",
+  "products": 18,
+  "facts": 113,
+  "applications": [
+   "e6475540-27eb-53ff-9891-bbdcddf5f9f4",
+   "ddf6b36e-a51c-53b1-9909-dd51616590c7",
+   "9a94495f-f739-56ca-8345-d7090b30f193",
+   "292153a1-d89c-53fb-923a-749f9354156c",
+   "99a454e0-3f78-5f04-9877-618dd1e5f404",
+   "223e0b38-3bf3-515f-a62c-3c44cd3dc72a",
+   "ef4286db-325a-5b43-a97c-a3cdf312c677",
+   "c0c34f48-2be3-5ca8-9710-85b58b2d758f",
+   "07f1ad58-6e54-5d70-a1fb-d4318ca4a377",
+   "4f7aa62c-2242-523c-9ad6-9284e3c777f8",
+   "91ade3df-9f64-574d-a6e9-3edb7f7d49cb",
+   "6a4c1775-69b4-5f75-80c5-faff9aabbd85",
+   "a16ac66f-88ed-5016-9a8e-5f0d916e23b3",
+   "eb94c990-e678-54c9-b2bc-3b93a0486f80",
+   "38f25b05-ccf0-5fed-a624-da44b28c8d55",
+   "37d2e39f-0887-57c1-abe1-45c5ad2d1036",
+   "5d1c6dbf-5821-5c7b-8f62-483ee3d90af9",
+   "209819be-fcc0-56ad-9cb1-2b1432afd086"
+  ],
+  "reviewer": "claude-peer",
+  "rounds": 2,
+  "record": "fill-016-record-2026-09-16.md",
+  "source": "productinfo.shimano.com (bike.shimano.com redirigía a la portada)",
+  "excluded_to_workshop": 23
+ },
+ "research_fill_017_misc_2026_09_16": {
+  "batch": "fill-017-misc",
+  "products": 1,
+  "facts": 3,
+  "applications": [
+   "832ec866-548c-57ae-a7f9-7cf94d38d45b"
+  ],
+  "reviewer": "claude-peer",
+  "rounds": 1,
+  "record": "fill-017-record-2026-09-16.md",
+  "pending": [
+   "a0f51a2d VPE-536 v2 en revisión"
+  ]
  }
 }
