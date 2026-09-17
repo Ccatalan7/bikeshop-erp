@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "a0a978df-d4bc-4f83-a38c-b64bc127405c",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Llanta Race Face AR Offset 30mm 32H 29″",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "c94c6b520c481d899b4ff1012fd9fa207ae911916863585c76d45d6b34ca27dd",
+  "product_sha256": "c366614191e6a3907c26d4ec710c42dbf25b82b523acc3b4c6e8cbabdf107c88",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

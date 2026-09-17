@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "e1dda70a-398f-465d-acea-87d131b5858b",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Llanta Weinmann 26\" Ojet ZAC19 CNC 32H negra F/V",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "b87b542688fe68fcf3a649fcc8db7b14570cce0014c90a8090d667b849805cd7",
+  "product_sha256": "e97917df919648ad15284fc3d3cb742d1325a846ae8cb22a09c0c0f59de7a7b3",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

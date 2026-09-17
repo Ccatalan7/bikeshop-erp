@@ -1,0 +1,3 @@
+# Neco B910 — plano «910/910E/910P/910B/910T/910TE/910PPT 組立圖 (Assembly drawing)», rev. C, 2021-05-13 — https://www.necoparts.com/Templates/att/B910-Drawing.pdf
+Consultado 2026-09-16 (PDF público; texto extraído con pypdf, las tablas de cotas quedan desordenadas y no se transcriben).
+Líneas literales: "SQUARE(JIS) CARTRIDGE BOTTOM BRACKET DIMENSIONS" · "Threads: BC 1.37"x24T R/L(B910/B910E/B910P)" · "BC 36mmx24T R/R(B910B)" · "Steel cups(B910/B910B)" · "Nylon cups(B910PP)" · "E-type steel cup(B910E)" · encabezados "B.B. SHELL WIDTH=68mm / 70mm / 73mm" y "AXLE LENGTH" con largos 110.5, 113.5, 115.0, 118.0, 119.0, 122.5, 127.5, 131.0 · "12.65±0.05" (cota del cuadrado, sin rotular en el texto extraído)

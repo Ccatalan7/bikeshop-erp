@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "2c7752aa-68d4-4594-9766-a1af107e0bf5",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Llanta Mavic 319, 29x32H Con Ojetillos.",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "16d23543cd3b8c77db52f05b9bf27b094cb18e290a314ae6ddd636cc1e7f7d13",
+  "product_sha256": "cc062ebe4cf28bb085aafc582c5762daa935f14c3f125ca5c6cf22614272fc43",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

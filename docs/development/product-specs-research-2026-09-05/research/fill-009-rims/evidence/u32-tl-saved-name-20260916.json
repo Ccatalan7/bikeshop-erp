@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "e3e9663b-c38c-4d3a-8beb-3eea51a8e616",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Llanta Weinmann U32 TL 27.5\" Ojetillos 28H Presta Negro",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "e560e0b4b151884a0074bbe5c1ba4df5238143b67b0ab4c952c40779d8c5da49",
+  "product_sha256": "ab7c4f1a23ff06a15becb4138f7642c91b210692e619506d8a558d907cfc950e",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}

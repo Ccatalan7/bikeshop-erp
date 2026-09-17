@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "141886b5-3621-4bb2-ae3d-92365998f178",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "MOTOR SELLADO 73x118MM NECO MOD. B910 JA21011",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "1f2bfee17281f411c695f433decf99c26b3faeb54f52a07c31f5e12a6f429a8d",
+  "product_sha256": "67c9940957156205b037fbb7bf6a416b6fb39b96e5a1fdb20c3a75a145ef5a2d",
+  "scope": "Nombre guardado en ERP; no verifica variante física ni presentación."
+}

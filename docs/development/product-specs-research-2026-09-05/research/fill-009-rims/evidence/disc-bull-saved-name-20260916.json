@@ -1,0 +1,11 @@
+{
+  "kind": "saved_product_identity",
+  "product_id": "61aa573c-2cea-4cbd-b9c5-8febe95d59b9",
+  "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+  "field": "name",
+  "value": "Llanta Weinmann 27.5 Ojetill 32H DISCBUL Negra",
+  "read_on": "2026-09-16",
+  "snapshot_sha256": "6c768f08f5e9fb04b0d4bae16e56437a88b3199f9abda7c457196ed873e99e35",
+  "product_sha256": "75ecf8c3b73e03d5abecb92bb3b9c773029d339b42de9923648c657291d7b1ff",
+  "scope": "name guardado en ERP; no verifica variante física ni presentación."
+}
