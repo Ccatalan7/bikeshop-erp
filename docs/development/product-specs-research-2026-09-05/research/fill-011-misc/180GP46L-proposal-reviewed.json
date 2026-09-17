@@ -1,0 +1,183 @@
+{
+  "schema_version": 2,
+  "product_id": "4c278aaa-30bb-4b3f-a4a3-52c0ccf5e19d",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "f3c4e7436c165a326fdfc6c2d94b6fa5e8bd5dc9abc19d46d01d8c3cd7dbaac0",
+    "fingerprints": {
+      "facts_sha256": "274f04dfb329ee655702e526dda7de23c66eeeea5a35966588fab6abbe58b929",
+      "product_sha256": "f5a28217ec12342b38bb2b403befac1220054a4ba56e1c1352ff94460c6d0086",
+      "template_sha256": "cc5763f39aafacdf3ca2fc2332e74a273a6ddec66fa64589078f2e1382399a8b",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 3,
+    "updated_at": "2026-09-14T23:59:14.656605+00:00",
+    "template_id": "bd7a5906-64bc-590a-b405-a3d0fba86b49",
+    "contract_version": 20
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "GP-46L",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «bombín de mano GIYO modelo GP-46L» y la ficha oficial GIYO documenta GP-46L."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://giyo.com.tw/gp-46l-mini-pump-w-lever/",
+      "unit": null,
+      "method": "URL de la ficha oficial consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "pump_kind",
+      "current": {
+        "value": "De mano / mini",
+        "source": "name_reading",
+        "fact_id": "fd1b1417-cf15-4140-96a5-fcd8c38075ba",
+        "fact_sha256": "6bc844fa29b3a59848e4fd2a2577578ff01b39ea893dfefe8037df93dba9fd71",
+        "confirmed": false
+      },
+      "proposed": "De mano / mini",
+      "unit": null,
+      "method": "Ficha oficial: «Mini pump W/Lever»; nombre «bombín de mano»",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "GP-46L",
+      "reason": "Literal."
+    },
+    {
+      "key": "valve_heads_supported",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": [
+        "Presta (francesa)",
+        "Schrader (americana / auto)"
+      ],
+      "unit": null,
+      "method": "Ficha oficial: «Compatible Valve Types: Presta | Schrader», «Reversible Presta and Schrader»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "GP-46L",
+      "reason": "Literal."
+    },
+    {
+      "key": "gauge",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": false,
+      "unit": null,
+      "method": "Ficha oficial: «Pressure Gauge: None»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "GP-46L",
+      "reason": "Literal."
+    },
+    {
+      "key": "pump_pressure_specifications",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "max-psi",
+            "values": {
+              "quantity_kind": "Máximo de bombeo declarado",
+              "value": "80",
+              "unit": "psi",
+              "configuration": "Bomba de mano GP-46L («Max PSI: 80 psi»)",
+              "source_url": "https://giyo.com.tw/gp-46l-mini-pump-w-lever/"
+            },
+            "sources": [
+              "https://giyo.com.tw/gp-46l-mini-pump-w-lever/"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha oficial: «Max PSI: 80 psi»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "GP-46L",
+      "reason": "Literal."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "GIYO (giyo.com.tw)",
+      "locator": "https://giyo.com.tw/gp-46l-mini-pump-w-lever/",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial GP-46L",
+      "finding": "Mini pump W/Lever; Max PSI 80 psi; Presta | Schrader; Pressure Gauge None; 122 g",
+      "artifact_path": "research/fill-011-misc/evidence/giyo-gp-46l-20260916.md",
+      "sha256": "aca9b1bef94041a0209b173c95ee26aac824f4867cfd7405c3557e0c9afc758f"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 4c278aaa-30bb-4b3f-a4a3-52c0ccf5e19d",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante declaradas en el nombre",
+      "finding": "BOMBIN DE MANO GIYO MODELO GP-46L",
+      "artifact_path": "research/fill-011-misc/evidence/giyo-gp-46l-saved-name-20260916.json",
+      "sha256": "97716af2252b17280960cc7f34ee76b70d3bfcdf5fded3bf5aabaa179b7561aa"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "31cba54664fd8391019546c14f52863243affc427a195799186b0ee06218090c",
+    "notes": "Giyo GP-46L. Identidad literal en nombre y ficha. «De mano / mini», Presta y Schrader, gauge = false («Pressure Gauge: None») y la fila «Máximo de bombeo declarado» 80 psi («Max PSI: 80 psi») son literales; tokens válidos; no declarar manguera es correcto. La lectura de nombre previa en pump_kind queda reemplazada por la investigación. Evidencias sha ok; simulation.issues = []; hash corresponde."
+  }
+}

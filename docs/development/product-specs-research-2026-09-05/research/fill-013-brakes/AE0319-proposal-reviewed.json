@@ -1,0 +1,143 @@
+{
+  "schema_version": 2,
+  "product_id": "eb526234-e6b2-4061-a53f-09711ebfeba1",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "a0e0ba8262d9b823419b735df794cf87f7ef059a745dc2918c45ef86b9e55453",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "a2ceeea9ceb9d07f92e08dbcf3a6bbf4405db60b44f1287b5775fe2aee47ea71",
+      "template_sha256": "ba7bd1aa33de3daede74117e08880b08ec7c525e0676a6596d339cc502a89ec6",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 0,
+    "updated_at": "2026-09-10T16:19:01.833594+00:00",
+    "template_id": "dee33c12-b165-48ea-ac1a-7a10b0144d1a",
+    "contract_version": 42
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "FR-5",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «Manetas Avid FR-5» y la ficha oficial SRAM documenta FR-5 Lever (BL-FR-5-A1)."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.sram.com/en/sram/models/bl-fr-5-a1",
+      "unit": null,
+      "method": "URL de la ficha oficial consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "brake_actuation",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Mecánico (cable)",
+      "unit": null,
+      "method": "Ficha oficial: «Qwik-Adjust Barrel Adjuster», «compatible with mechanical disc brakes and linear-pull brakes» (maneta de cable)",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "FR-5",
+      "reason": "Maneta con tensor de cable para frenos mecánicos."
+    },
+    {
+      "key": "lever_cable_pull",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Tiro largo (V-brake / disco mecánico tiro largo)",
+      "unit": null,
+      "method": "Ficha oficial: «All levers are compatible with mechanical disc brakes and linear-pull brakes» (linear-pull = V-brake, tiro largo)",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "FR-5",
+      "reason": "La ficha declara compatibilidad con frenos linear-pull y disco mecánico, que es la definición del token de tiro largo; el revisor decide si la equivalencia es literal."
+    },
+    {
+      "key": "reach_adjust",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Ficha oficial: «ReachAdjustment™», «Reach adjuster»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "FR-5",
+      "reason": "Literal."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "SRAM / Avid (sram.com)",
+      "locator": "https://www.sram.com/en/sram/models/bl-fr-5-a1",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial FR-5 Lever BL-FR-5-A1",
+      "finding": "ReachAdjustment; Qwik-Adjust Barrel Adjuster; compatible with mechanical disc brakes and linear-pull brakes",
+      "artifact_path": "research/fill-013-brakes/evidence/sram-avid-fr-5-20260916.md",
+      "sha256": "bc6adca69c218cd93352872fe820a60cc654d90a3a5100656df2d72ad84933fc"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product eb526234-e6b2-4061-a53f-09711ebfeba1",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante (envase) declaradas en el nombre",
+      "finding": "Manetas Avid FR-5",
+      "artifact_path": "research/fill-013-brakes/evidence/avid-fr5-saved-name-20260916.json",
+      "sha256": "2e51546a9546c0d31b2f6e6818176f40dc52577a46ed4d9504ec4ca5035b8d83"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "2daf8c18542528fd8b22353d9a8d6c4f6c3804e93d2d22b7dd22ac26ef765b2b",
+    "notes": "Avid FR-5. Identidad literal (ficha «FR-5 Lever», BL-FR-5-A1). «Mecánico (cable)» por «Qwik-Adjust Barrel Adjuster» y la compatibilidad con frenos mecánicos. «Tiro largo»: la equivalencia es literal en el propio token («V-brake / disco mecánico tiro largo») y «linear-pull» es el nombre genérico del freno registrado como V-Brake. reach_adjust = true por «ReachAdjustment™». No declarar lado, montaje ni interfaz de cable es correcto. Marca nula: flujo canónico. Evidencias sha ok; simulation.issues = []; hash corresponde."
+  }
+}

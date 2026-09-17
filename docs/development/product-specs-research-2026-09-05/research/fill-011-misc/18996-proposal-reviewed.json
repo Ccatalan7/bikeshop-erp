@@ -1,0 +1,146 @@
+{
+  "schema_version": 2,
+  "product_id": "141877f8-f6cd-4255-9d35-e2ed33d9c54f",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "dae7369ba763b1915112c246988da0e5c64cb066fd1fe64c8a933b88d4844c85",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "744f5cc1bd30f42046ee59be3b17b1d090574802c8bad1ebefcb25bd493bf4fb",
+      "template_sha256": "27b44082a5f79ef06b052958f05f2e284e546a847c57528be547eb34a46ee359",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 1,
+    "updated_at": "2026-09-15T00:05:41.248133+00:00",
+    "template_id": "1ab4211c-bb7e-5904-837c-cc7baab153dd",
+    "contract_version": 40
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "SP-C261/ISO-M",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «ZOOM SP-C261(ISO-M) 31.6X400» y la ficha oficial HL Corp (marca ZOOM) documenta SP-C261/ISO-M en Φ31.6 y 400 mm."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "http://bike.us.hlcorp.com/product/item-585.html",
+      "unit": null,
+      "method": "URL de la ficha oficial consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "seatpost_kind",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Rígida",
+      "unit": null,
+      "method": "Ficha oficial en la categoría de tijas con offset («Seatpost › Road Bike › 0~15mm OFFSET»), separada de «Suspension Seatpost»; el nombre no nombra suspensión ni dropper",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "SP-C261/ISO-M",
+      "reason": "Por la categoría de la ficha: tija fija."
+    },
+    {
+      "key": "seatpost_diameter_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "31.6",
+      "unit": "mm",
+      "method": "Nombre guardado «31.6X400» sobre la ficha «Diameter: Φ27.2 Φ30.9 Φ31.6»",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Presentación en stock",
+      "reason": "La ficha lista los diámetros y el nombre fija 31.6."
+    },
+    {
+      "key": "seatpost_length_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "400",
+      "unit": "mm",
+      "method": "Nombre guardado «31.6X400» sobre la ficha «Length: 300 350 400mm»",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Presentación en stock",
+      "reason": "La ficha lista los largos y el nombre fija 400."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "HL Corp / ZOOM (bike.us.hlcorp.com)",
+      "locator": "http://bike.us.hlcorp.com/product/item-585.html",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial SP-C261/ISO-M",
+      "finding": "Die-casting Alloy / Alloy; Φ27.2 Φ30.9 Φ31.6; 300 350 400mm; Barreled / Anodized Black or Silver",
+      "artifact_path": "research/fill-011-misc/evidence/hlcorp-zoom-sp-c261-20260916.md",
+      "sha256": "d3c10c52ecfdbc920eb2ac3ff82ab53803205ce62cce2d95a69884d558f86af5"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 141877f8-f6cd-4255-9d35-e2ed33d9c54f",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante declaradas en el nombre",
+      "finding": "TUBO SILLIN ZOOM SP-C261(ISO-M) 31.6X400 BED/BED/LABK",
+      "artifact_path": "research/fill-011-misc/evidence/zoom-sp-c261-saved-name-20260916.json",
+      "sha256": "c5f511623cf71489afc9c55033840409ad20daae2c157cde0867f23502b82300"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "eaa3a6dcfc9bf0b2cb9204f859728a754eabff816f2c4754f60e14b895f4ec26",
+    "notes": "Zoom SP-C261/ISO-M. Identidad literal. Diámetro 31.6 y largo 400 siguen el patrón aceptado (nombre sobre las listas de la ficha). «Rígida» por la categoría de la ficha, separada de «Suspension Seatpost» y sin mención de suspensión ni dropper en el nombre, es la misma lectura estructural que acepté con la sección DISC de Weinmann. No traducir «Die-casting Alloy / Alloy» ni inventar el offset es correcto. Marca vacía: flujo canónico. Evidencias sha ok; simulation.issues = []; hash corresponde."
+  }
+}

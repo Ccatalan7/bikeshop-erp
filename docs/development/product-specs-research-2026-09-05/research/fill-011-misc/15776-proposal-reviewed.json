@@ -1,0 +1,126 @@
+{
+  "schema_version": 2,
+  "product_id": "2dc3293f-c163-4bd1-bd95-1243167f182e",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "f0943113ae520b15d4efd3ad3cd9e3aee242f6e4c6ebb9bfcc28df43bbd22fe7",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "73184effee8fb5db40fdfe5b61d0dac3a47b326828b6f44fe7e73cae3773e2cd",
+      "template_sha256": "81fd8529e51788cde0b021e6d319a60c0575822eeed29e76d768bb7c8e4b90dc",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 1,
+    "updated_at": "2026-09-15T00:05:45.431183+00:00",
+    "template_id": "a5f3352c-08c8-5173-80c0-07f4d785967f",
+    "contract_version": 15
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "AT-115",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «COLLERIN ZOOM … AT-115» y la ficha oficial HL Corp (marca ZOOM) documenta AT-115 en Φ25.4/28.6/31.8/35."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "http://us.hlcorp.com/department_product/item-553.html",
+      "unit": null,
+      "method": "URL de la ficha oficial consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "seat_tube_outer_diameter_mm",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "31.8",
+      "unit": "mm",
+      "method": "Nombre guardado «31.8MM» sobre la ficha «Diameter: Φ25.4 Φ28.6 Φ31.8 Φ35»",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Presentación en stock",
+      "reason": "La ficha lista los diámetros y el nombre fija uno."
+    },
+    {
+      "key": "material",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Aluminio",
+      "unit": null,
+      "method": "Nombre guardado «ALUMINIO» sobre la ficha «Material: Alloy»",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "AT-115",
+      "reason": "La ficha dice aleación y el nombre la nombra como aluminio; el revisor decide si «Alloy» + «ALUMINIO» basta."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "HL Corp / ZOOM (us.hlcorp.com)",
+      "locator": "http://us.hlcorp.com/department_product/item-553.html",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial AT-115",
+      "finding": "Material Alloy; Diameter Φ25.4 Φ28.6 Φ31.8 Φ35; Sand Blasted Anodized Colors",
+      "artifact_path": "research/fill-011-misc/evidence/hlcorp-zoom-at-115-20260916.md",
+      "sha256": "e9dc6f4fc610b78c5bc8e268a09c53f7b2c06778501989da035bcf30a0a7b0a1"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 2dc3293f-c163-4bd1-bd95-1243167f182e",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad y diámetro declarados en el nombre",
+      "finding": "COLLERIN ZOOM 31.8MM ALUMINIO MATE SSABK AT-115",
+      "artifact_path": "research/fill-011-misc/evidence/zoom-at-115-318-saved-name-20260916.json",
+      "sha256": "d963a909967f3712a5b317743923cb68a8b99ec2d20db17ca073833cd24edce4"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "841fb033b07ff6cc463f95b0b9ea7d74529afe297309faab7f5ed72a3452b56d",
+    "notes": "Zoom AT-115 31,8. Igual que el anterior con 31.8 y «Aluminio» por el nombre literal; clamp_kind bien omitido. Evidencias sha ok; simulation.issues = []; hash corresponde."
+  }
+}

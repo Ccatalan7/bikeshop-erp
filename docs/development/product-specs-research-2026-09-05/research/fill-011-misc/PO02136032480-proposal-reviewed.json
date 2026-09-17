@@ -1,0 +1,123 @@
+{
+  "schema_version": 2,
+  "product_id": "6ba21202-5c5b-4e20-9312-dbb1f3d36ff7",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "cd493e2882fb816a7f08948117fa950f851cd97781680f840a9a3ab16053a70a",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "cf43310204b52550eb37d41966e7ace51c6410305938a419e7d6df6dc4d3cad2",
+      "template_sha256": "7462f7d755241270b643ac5f533b7abf0c5cf833c03abc72ad38b524d4b79562",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 1,
+    "updated_at": "2026-09-15T00:07:18.905535+00:00",
+    "template_id": "c841aa12-ec88-507a-9923-89e36eb7486c",
+    "contract_version": 14
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "HK-HST04",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «FITTING HIDRAULICO ALLIGATOR MOD. HK-HST04» (código literal) y es prefijo del único código del listado oficial, «HK-HST04-DIY» (Insert Set, Magura); el sufijo -DIY nombra el kit de venta y la presentación en stock no se certifica."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.alligatorcables.com/hose-fitting-diy-kit.html",
+      "unit": null,
+      "method": "URL de la ficha oficial consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "hydraulic_fitting_components",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "insert-set",
+            "values": {
+              "component": "Insert Set HK-HST04-DIY",
+              "piece_kind": "Inserto / espiga",
+              "oem_code": "HK-HST04-DIY",
+              "thread_form": "No declarado",
+              "conditions": "El listado oficial nombra el kit «HK-HST04-DIY» (Insert Set, Magura); la presentación en stock (kit completo o inserto suelto) no se certifica; cantidad de piezas y rosca no publicadas",
+              "source_url": "https://www.alligatorcables.com/hose-fitting-diy-kit.html"
+            },
+            "sources": [
+              "https://www.alligatorcables.com/hose-fitting-diy-kit.html"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Listado oficial Alligator: «HK-HST04-DIY», «Insert Set», «Magura»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Kit HK-HST04-DIY",
+      "reason": "Lo único que el listado publica: tipo de pieza y freno destino."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Alligator Cables (alligatorcables.com)",
+      "locator": "https://www.alligatorcables.com/hose-fitting-diy-kit.html",
+      "consulted_on": "2026-09-16",
+      "scope": "Listado oficial Hose Fitting DIY Kits",
+      "finding": "HK-HST04-DIY · Insert Set · Magura",
+      "artifact_path": "research/fill-011-misc/evidence/alligator-hose-fitting-diy-kits-20260916.md",
+      "sha256": "87347f1ec79702154b03a90888fa4dc6f598a9144181ecbc7dd8ea43dc153419"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 6ba21202-5c5b-4e20-9312-dbb1f3d36ff7",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante declaradas en el nombre",
+      "finding": "FITTING HIDRAULICO ALLIGATOR MOD. HK-HST04",
+      "artifact_path": "research/fill-011-misc/evidence/alligator-hst04-saved-name-20260916.json",
+      "sha256": "26fc79155c47852c96c8dd924381b6ba7a997aa6ed1eaf409c9c8aec235f7cbc"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "384f685e4abf8a19b41078fb96c9e08db249b60554172e38f9d21a6f28ffeb2b",
+    "notes": "Alligator HK-HST04, proposal-v2.json. model = «HK-HST04» (código literal del nombre, prefijo del único código del listado), reason y conditions dicen que el listado nombra el kit «HK-HST04-DIY» (Insert Set, Magura) y que la presentación en stock no se certifica; oem_code sigue siendo el del listado. simulation.issues = []; hash corresponde."
+  }
+}

@@ -1855,5 +1855,47 @@
   "reviewer": "claude-peer",
   "rounds": 1,
   "record": "fill-010-record-2026-09-16.md"
+ },
+ "research_fill_011_misc_2026_09_16": {
+  "batch": "fill-011-misc",
+  "products": 7,
+  "facts": 24,
+  "applications": [
+   "d65a04be-9f73-5ea4-ac9c-8872d04752d4",
+   "569d8879-942f-506e-af36-c7970633d225",
+   "7a8a24c7-6556-5655-8ab2-6d5940fbab98",
+   "927d8db9-58dd-590d-b1b8-791692d8bd4d",
+   "73fd2a4d-081b-5344-9961-f2c8a4489312",
+   "2078744d-acdb-5a86-a542-2146b3d64c76",
+   "6b395bb2-619f-5458-a71c-cc32fd07e4c3"
+  ],
+  "reviewer": "claude-peer",
+  "record": "fill-011-013-record-2026-09-16.md"
+ },
+ "research_fill_012_chemicals_2026_09_16": {
+  "batch": "fill-012-chemicals",
+  "products": 2,
+  "facts": 10,
+  "applications": [
+   "972eee97-cf71-5403-9fe4-8b6dd1d0b013",
+   "dd7c07f6-2faf-5a79-a494-2840b24b9a70"
+  ],
+  "reviewer": "claude-peer",
+  "record": "fill-011-013-record-2026-09-16.md"
+ },
+ "research_fill_013_brakes_2026_09_16": {
+  "batch": "fill-013-brakes",
+  "products": 1,
+  "facts": 4,
+  "applications": [
+   "1ad287c4-a534-5312-b6f0-99665dc83182"
+  ],
+  "reviewer": "claude-peer",
+  "record": "fill-011-013-record-2026-09-16.md"
+ },
+ "contract_gaps_2026_09_16": {
+  "workshop_chemical.chemical_kind": "no token for universal / all-conditions chain lube (Liqui Moly 6055)",
+  "rim_brake": "no fields for material, rim range, shoe model, weight (Alhonga HJ-612AD7 / HJ-811AD7)",
+  "record": "fill-011-013-record-2026-09-16.md"
  }
 }

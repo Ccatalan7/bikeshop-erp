@@ -1,0 +1,166 @@
+{
+  "schema_version": 2,
+  "product_id": "c32283c0-ee3a-4b6b-87f7-94d1d08189e2",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "2923aa08fb1417a557730a6a28620fc8d7290f804eecd5eb67bee0b5744bb5c3",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "0a7d64baac327375001f3acedbba0d70e0888d3cfd41f7d98bb651036efd86ce",
+      "template_sha256": "9cf93f51ec1bcd8947436b3aacdae208c62b6ad142a5372aec3ea862684e3780",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 1,
+    "updated_at": "2026-09-15T00:23:09.178801+00:00",
+    "template_id": "61bc1c93-8b73-55d0-9584-6087a8190dfe",
+    "contract_version": 13
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "Wet Lube",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «Lubricante Finish Line Húmedo XC 8oz» y la ficha oficial Finish Line documenta Wet Chain Lubricant con la variante «8 fl oz - Drip»."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://finishlineusa.com/products/chain-lubricants/wet-lube",
+      "unit": null,
+      "method": "URL de la ficha oficial consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "chemical_kind",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Lubricante de cadena (húmedo)",
+      "unit": null,
+      "method": "Ficha oficial: «Wet Chain Lubricant», «Wet-weather formula»; nombre «Lubricante … Húmedo»",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Wet Lube",
+      "reason": "Literal."
+    },
+    {
+      "key": "container",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Gotero",
+      "unit": null,
+      "method": "Nombre guardado «8oz» sobre las variantes de la ficha «2/4/8 fl oz - Drip» y «32 fl oz - Bottle»",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Presentación 8 fl oz",
+      "reason": "La ficha lista la presentación de 8 fl oz como Drip (gotero)."
+    },
+    {
+      "key": "declared_applications",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": [
+        "Cadena"
+      ],
+      "unit": null,
+      "method": "Ficha oficial: «Wet Chain Lubricant», «bike chain’s performance»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Wet Lube",
+      "reason": "Literal."
+    },
+    {
+      "key": "biodegradable_claim",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Ficha oficial: «readily biodegradable formulation that reaches more than 60% biodegradation within 28 days»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Wet Lube",
+      "reason": "Literal."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Finish Line (finishlineusa.com)",
+      "locator": "https://finishlineusa.com/products/chain-lubricants/wet-lube",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial Wet Chain Lubricant",
+      "finding": "Wet Chain Lubricant; 2/4/8 fl oz Drip, 32 fl oz Bottle; full synthetic; readily biodegradable",
+      "artifact_path": "research/fill-012-chemicals/evidence/finishline-wet-lube-20260916.md",
+      "sha256": "3b9897465d78cb133289fad9434002e1c2f919d3e159ea88ff4e57dee6c5ced2"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product c32283c0-ee3a-4b6b-87f7-94d1d08189e2",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante (envase) declaradas en el nombre",
+      "finding": "Lubricante Finish Line Humedo XC 8oz",
+      "artifact_path": "research/fill-012-chemicals/evidence/finishline-wet-saved-name-20260916.json",
+      "sha256": "196c497db01b1b91eb4fa33395f70de94bc2b933bb1e76a97ddabdf5555a844f"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "18a3ac0bd292fcb2e59998c2c1f5be1468a850c8f17eb654f086e4714b2175d6",
+    "notes": "Finish Line Wet Lube 8 oz. Identidad «Wet Lube» literal en la ficha y coherente con el nombre. «Lubricante de cadena (húmedo)» por «Wet Chain Lubricant» / «Wet-weather formula»; «Gotero» por «8oz» sobre «8 fl oz - Drip»; «Cadena» y biodegradable = true literales. No convertir 8 fl oz a ml es coherente con la regla. Marca nula: flujo canónico. Evidencias sha ok; simulation.issues = []; hash corresponde."
+  }
+}

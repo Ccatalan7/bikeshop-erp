@@ -1,0 +1,123 @@
+{
+  "schema_version": 2,
+  "product_id": "3853352a-8f4b-45e9-bbf8-5c81c97a780e",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "55093058283066900d86da9ce896dc6648125c446ca5cfbeee42ea9d2a410073",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "868e1d1dde5911eb5c6c9c1042670ed737ff5edc16b34e6fbaae43a108a4d47d",
+      "template_sha256": "7462f7d755241270b643ac5f533b7abf0c5cf833c03abc72ad38b524d4b79562",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 1,
+    "updated_at": "2026-09-15T00:05:49.226142+00:00",
+    "template_id": "c841aa12-ec88-507a-9923-89e36eb7486c",
+    "contract_version": 14
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "HK-HST08",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «FITTING HIDRAULICO ALLIGATOR MOD. HK-HST08» (código literal) y es prefijo del único código del listado oficial, «HK-HST08-DIY» (Insert Set, Hayes El Camino Lever side/ Sole Lever & Caliper side); el sufijo -DIY nombra el kit de venta y la presentación en stock no se certifica."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.alligatorcables.com/hose-fitting-diy-kit.html",
+      "unit": null,
+      "method": "URL de la ficha oficial consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "hydraulic_fitting_components",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "insert-set",
+            "values": {
+              "component": "Insert Set HK-HST08-DIY",
+              "piece_kind": "Inserto / espiga",
+              "oem_code": "HK-HST08-DIY",
+              "thread_form": "No declarado",
+              "conditions": "El listado oficial nombra el kit «HK-HST08-DIY» (Insert Set, Hayes El Camino Lever side/ Sole Lever & Caliper side); la presentación en stock (kit completo o inserto suelto) no se certifica; cantidad de piezas y rosca no publicadas",
+              "source_url": "https://www.alligatorcables.com/hose-fitting-diy-kit.html"
+            },
+            "sources": [
+              "https://www.alligatorcables.com/hose-fitting-diy-kit.html"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Listado oficial Alligator: «HK-HST08-DIY», «Insert Set», «Hayes El Camino Lever side/ Sole Lever & Caliper side»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Kit HK-HST08-DIY",
+      "reason": "Lo único que el listado publica: tipo de pieza y freno destino."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Alligator Cables (alligatorcables.com)",
+      "locator": "https://www.alligatorcables.com/hose-fitting-diy-kit.html",
+      "consulted_on": "2026-09-16",
+      "scope": "Listado oficial Hose Fitting DIY Kits",
+      "finding": "HK-HST08-DIY · Insert Set · Hayes El Camino Lever side/ Sole Lever & Caliper side",
+      "artifact_path": "research/fill-011-misc/evidence/alligator-hose-fitting-diy-kits-20260916.md",
+      "sha256": "87347f1ec79702154b03a90888fa4dc6f598a9144181ecbc7dd8ea43dc153419"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 3853352a-8f4b-45e9-bbf8-5c81c97a780e",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante declaradas en el nombre",
+      "finding": "FITTING HIDRAULICO ALLIGATOR MOD. HK-HST08",
+      "artifact_path": "research/fill-011-misc/evidence/alligator-hst08-saved-name-20260916.json",
+      "sha256": "c21040cb4efe5cb5cc6b5d36af385ff4ade0f1c0a1ac98581f2f7536a09c652d"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "fa12d86043b801125daa56e1adb770daca0b54865fdbe07172f8389e44d614d3",
+    "notes": "Alligator HK-HST08, proposal-v2.json. Mismo cambio aplicado tal cual (model «HK-HST08», reason y conditions con el kit «-DIY» y la presentación sin certificar). simulation.issues = []; hash corresponde."
+  }
+}

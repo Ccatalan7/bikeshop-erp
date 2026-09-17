@@ -1,0 +1,223 @@
+{
+  "schema_version": 2,
+  "product_id": "b0fb57f8-05ca-42c3-9c40-bc7182d6e316",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "b4d7a9f1d8cf6e1d1097dd6f0e18799350db9618e3316025a69b892a9f0f4d40",
+    "fingerprints": {
+      "facts_sha256": "7747b856015834066e7d1f3b8c51c729aa6336c10a6e084006354d7eb247adad",
+      "product_sha256": "0fb67db5f29d73fb9c89fa33f6e2703ab96a58b7780983660c359181556a163e",
+      "template_sha256": "cc5763f39aafacdf3ca2fc2332e74a273a6ddec66fa64589078f2e1382399a8b",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 3,
+    "updated_at": "2026-09-15T00:31:20.037328+00:00",
+    "template_id": "bd7a5906-64bc-590a-b405-a3d0fba86b49",
+    "contract_version": 20
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "TJB-S6",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «Bomba de pie Topeak Joe Blow Sport III» y la ficha oficial JoeBlow® Sport III lleva ART NO TJB-S6."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.topeak.com/global/en/product/1079-JOEBLOW-SPORT-III",
+      "unit": null,
+      "method": "URL de la ficha oficial consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "pump_kind",
+      "current": {
+        "value": "De pie",
+        "source": "name_reading",
+        "fact_id": "db3ee738-27d0-42e0-8f20-fbc0d0577f93",
+        "fact_sha256": "5506ce831054f75b39c8348d0eedabb9ddb283bc16dfecd6cf2b713e2e3c514e",
+        "confirmed": false
+      },
+      "proposed": "De pie",
+      "unit": null,
+      "method": "Nombre guardado «Bomba De Pie» (name_quote) sobre la ficha oficial, que describe una bomba con «BASE: Hardened steel» y manguera («Hose Length 72 cm»)",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "JoeBlow Sport III",
+      "reason": "Bomba de pie según el nombre guardado; la ficha archivada describe base y manguera de una bomba de pie."
+    },
+    {
+      "key": "valve_heads_supported",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": [
+        "Presta (francesa)",
+        "Schrader (americana / auto)",
+        "Dunlop (inglesa)"
+      ],
+      "unit": null,
+      "method": "Ficha oficial: Head «TwinHead® DX …, Presta / Schrader / Dunlop»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "JoeBlow Sport III",
+      "reason": "Línea literal."
+    },
+    {
+      "key": "gauge",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Ficha oficial: GAUGE «160 psi / 11 bar, 3” mid mount analog»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "JoeBlow Sport III",
+      "reason": "Manómetro declarado."
+    },
+    {
+      "key": "hose",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Ficha oficial: «extra long 360 pivot hose», Hose Length «72 cm»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "JoeBlow Sport III",
+      "reason": "Manguera declarada."
+    },
+    {
+      "key": "barrel_material",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Acero",
+      "unit": null,
+      "method": "Ficha oficial: Barrel «Painted steel»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "JoeBlow Sport III",
+      "reason": "Literal."
+    },
+    {
+      "key": "pump_pressure_specifications",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": {
+        "schema_version": 1,
+        "rows": [
+          {
+            "id": "gauge",
+            "values": {
+              "quantity_kind": "Fondo de escala del manómetro",
+              "value": "160",
+              "unit": "psi",
+              "configuration": "Manómetro analógico de 3\" de la bomba («GAUGE: 160 psi / 11 bar, 3” mid mount analog»)",
+              "conditions": "La ficha publica 160 psi / 11 bar bajo el rótulo GAUGE",
+              "source_url": "https://www.topeak.com/global/en/product/1079-JOEBLOW-SPORT-III"
+            },
+            "sources": [
+              "https://www.topeak.com/global/en/product/1079-JOEBLOW-SPORT-III"
+            ]
+          }
+        ]
+      },
+      "unit": null,
+      "method": "Ficha oficial: rótulo GAUGE «160 psi / 11 bar»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "JoeBlow Sport III",
+      "reason": "La cifra está publicada bajo GAUGE, por eso se registra como fondo de escala del manómetro y no como máximo de bombeo."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "Topeak (topeak.com)",
+      "locator": "https://www.topeak.com/global/en/product/1079-JOEBLOW-SPORT-III",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial JoeBlow Sport III",
+      "finding": "TJB-S6; TwinHead DX Presta/Schrader/Dunlop; painted steel barrel; gauge 160 psi / 11 bar; hose 72 cm; 1.68 kg",
+      "artifact_path": "research/fill-011-misc/evidence/topeak-joeblow-sport-iii-20260916.md",
+      "sha256": "0db54146b59537e1f3be6929192323f33526e3c39660c55d32c2c71295bf2271"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product b0fb57f8-05ca-42c3-9c40-bc7182d6e316",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante declaradas en el nombre",
+      "finding": "Bomba De Pie Topeak Joe Blow Sport Iii",
+      "artifact_path": "research/fill-011-misc/evidence/joeblow-saved-name-20260916.json",
+      "sha256": "ea9aa87a537ecc1aa6a96bf5176ab71f2c28ee5a77a591bf238a0f864c192188"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "4ccfd86065210fa373071e94ee31fc8583ebab665249465f8b90ead428739298",
+    "notes": "Topeak TJB-S6, proposal-v2.json. Diff v1→v2 sólo en method y reason de pump_kind, que ahora citan lo archivado: nombre guardado «Bomba De Pie» (name_quote) y «BASE: Hardened steel» / «Hose Length 72 cm» de la ficha. Todo lo demás idéntico a lo ya juzgado (válvulas, gauge, hose, «Acero», fila «Fondo de escala del manómetro» 160 psi). Evidencias sha ok; simulation.issues = []; hash corresponde a este v2."
+  }
+}

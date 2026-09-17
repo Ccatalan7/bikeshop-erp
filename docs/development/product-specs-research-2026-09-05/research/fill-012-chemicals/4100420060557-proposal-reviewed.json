@@ -1,0 +1,165 @@
+{
+  "schema_version": 2,
+  "product_id": "548e7136-c5ce-4c61-b5c6-c983f56ab195",
+  "researcher": "claude",
+  "status": "reviewed",
+  "based_on": {
+    "tenant_id": "5443b130-cc28-45af-a420-cd500b288890",
+    "snapshot_sha256": "9a4bdb4fd01ff49d51b486056ea615a37c479f9b747eacd43d9bd2be1499c1c9",
+    "fingerprints": {
+      "facts_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "product_sha256": "46dc756e9ecffef688bcff9f3344899a05ba2ac8a42c255c0fca89cd00977501",
+      "template_sha256": "9cf93f51ec1bcd8947436b3aacdae208c62b6ad142a5372aec3ea862684e3780",
+      "references_sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "spec_revision": 1,
+    "updated_at": "2026-09-15T00:09:19.881491+00:00",
+    "template_id": "61bc1c93-8b73-55d0-9584-6087a8190dfe",
+    "contract_version": 13
+  },
+  "identity": [
+    {
+      "field": "model",
+      "current": null,
+      "proposed": "6055",
+      "evidence": [
+        "product-name",
+        "oem"
+      ],
+      "reason": "El nombre guardado dice «Liqui Moly Bike Kettenspray 400ml» y la ficha oficial Bike Chain Spray lleva el artículo 6055 para 400 ml."
+    }
+  ],
+  "reference": null,
+  "facts": [
+    {
+      "key": "spec_evidence_source",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "https://www.liqui-moly.com/en/bike-chain-spray-p003247.html",
+      "unit": null,
+      "method": "URL de la ficha oficial consultada el 2026-09-16 y archivada con hash",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Fuente de todos los hechos",
+      "reason": "Fuente exigida por el contrato."
+    },
+    {
+      "key": "container",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "Aerosol",
+      "unit": null,
+      "method": "Ficha oficial: «Bike Chain Spray», descrito como «aerosol» en el texto de seguridad",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Bike Chain Spray",
+      "reason": "Literal."
+    },
+    {
+      "key": "volume_ml",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": "400",
+      "unit": "ml",
+      "method": "Ficha oficial: variante «400 ml» (art. 6055); nombre «400ml»",
+      "origin": "research",
+      "evidence": [
+        "oem",
+        "product-name"
+      ],
+      "scope": "Presentación 400 ml",
+      "reason": "Literal."
+    },
+    {
+      "key": "declared_applications",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": [
+        "Cadena"
+      ],
+      "unit": null,
+      "method": "Ficha oficial: «lubricate and maintain bicycle chains»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Bike Chain Spray",
+      "reason": "Literal."
+    },
+    {
+      "key": "biodegradable_claim",
+      "current": {
+        "value": null,
+        "source": null,
+        "fact_id": null,
+        "fact_sha256": null,
+        "confirmed": null
+      },
+      "proposed": true,
+      "unit": null,
+      "method": "Ficha oficial: «biodegradable»",
+      "origin": "research",
+      "evidence": [
+        "oem"
+      ],
+      "scope": "Bike Chain Spray",
+      "reason": "Literal."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "oem",
+      "kind": "oem_page",
+      "source": "LIQUI MOLY (liqui-moly.com)",
+      "locator": "https://www.liqui-moly.com/en/bike-chain-spray-p003247.html",
+      "consulted_on": "2026-09-16",
+      "scope": "Ficha oficial Bike Chain Spray",
+      "finding": "Lubricates bicycle chains in wet and dry conditions; 200/400 ml; art. 6055; aerosol; biodegradable",
+      "artifact_path": "research/fill-012-chemicals/evidence/liquimoly-bike-chain-spray-20260916.md",
+      "sha256": "5785865bff24f88791f94b006f296b552daf8c9c537f41ce778df696d36c14dd"
+    },
+    {
+      "id": "product-name",
+      "kind": "name_quote",
+      "source": "ERP product 548e7136-c5ce-4c61-b5c6-c983f56ab195",
+      "locator": "products.name",
+      "consulted_on": "2026-09-16",
+      "scope": "Identidad comercial y variante (envase) declaradas en el nombre",
+      "finding": "Lubricante Liqui Moly Bike Kettenspray 400ml",
+      "artifact_path": "research/fill-012-chemicals/evidence/liquimoly-saved-name-20260916.json",
+      "sha256": "34c14b5d5bc704285e2add8123f57bbc116adabd483494356dada0df12e31c76"
+    }
+  ],
+  "conflicts": [],
+  "review": {
+    "by": "claude-peer",
+    "verdict": "accepted",
+    "date": "2026-09-16",
+    "reviewed_proposal_sha256": "cd1915868abefeb8b3296eea3ee1dec351dc45bc7cac7b15d7486195f9cf6060",
+    "notes": "Liqui Moly Bike Chain Spray 400 ml. Identidad 6055 literal (el nombre fija 400 ml y la ficha da el artículo 6055 para 400 ml). «Aerosol», 400 ml, «Cadena» y biodegradable = true correctos. chemical_kind sin declarar y registrado como hueco del contrato, mejor que «Otro»: lo honesto es agregar el token «Lubricante de cadena (universal / todo tiempo)» y completar después. Evidencias sha ok; simulation.issues = []; hash corresponde."
+  }
+}
