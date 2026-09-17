@@ -51,7 +51,7 @@ class ProductSpecBooleanField extends StatelessWidget {
               ],
               onChanged: onChanged,
               groupDisabledReason: onChanged == null
-                  ? helperText ?? 'Completa primero los requisitos.'
+                  ? helperText ?? 'Se habilita cuando completes los datos anteriores.'
                   : null,
             ),
           )),

@@ -54,6 +54,7 @@ import '../../../shared/widgets/vb_form_section.dart';
 import '../../../shared/widgets/vb_searchable_select.dart';
 import '../../../shared/widgets/vb_short_select.dart';
 import '../widgets/product_spec_boolean_field.dart';
+import '../widgets/hub_measure_guide.dart';
 import '../services/whatsapp_catalog_sync_service.dart';
 import '../../ai_assistant/services/ai_service.dart';
 import '../../bikeshop/config/brake_canonical_data.dart';
@@ -424,6 +425,13 @@ class _ProductFormPageState extends State<ProductFormPage>
   final Map<String, dynamic> _autoDerivedSpecValues = <String, dynamic>{};
   Map<String, String> _specFieldGuidance = const <String, String>{};
 
+  /// Hub sheet only: the field the operator is on (focus or tap) and the one
+  /// under the pointer. The measure guide lights the hovered one first, then
+  /// the focused one, so it answers «this one?» before «where was I?».
+  final ValueNotifier<String?> _hubGuideFocusKey = ValueNotifier<String?>(null);
+  final ValueNotifier<String?> _hubGuideHoverKey = ValueNotifier<String?>(null);
+  final Map<String, GlobalKey> _hubGuideFieldKeys = <String, GlobalKey>{};
+
   List<_ServiceWorkflowProfile> _serviceProfiles = [];
   bool _isLoadingServiceProfiles = false;
   String? _selectedServiceProfileId;
@@ -520,6 +528,8 @@ class _ProductFormPageState extends State<ProductFormPage>
   @override
   void dispose() {
     _specLoadEpoch++;
+    _hubGuideFocusKey.dispose();
+    _hubGuideHoverKey.dispose();
     _tabController.removeListener(_handleTabControllerChanged);
     _tabController.dispose();
     for (final controller in _retiredTabControllers.toList()) {
@@ -1580,11 +1590,22 @@ class _ProductFormPageState extends State<ProductFormPage>
       allowedOptions: allowed?.toList(growable: false),
       helperText: ready
           ? null
-          : 'Completa primero ${{
+          : _specPrerequisiteSentence({
               ...template.prerequisitesFor(def.key),
               ...template.applicabilityDependencies(field)
-            }.map(template.labelFor).join(', ')}.',
+            }.map(template.labelFor).toList()),
     );
+  }
+
+  /// «Se habilita cuando completes Fuente del dato y Posición de la maza.»
+  /// The old «Completa primero A, B.» read like an order with a list of
+  /// codes; the owner could not tell it meant this field was waiting.
+  static String _specPrerequisiteSentence(List<String> labels) {
+    if (labels.isEmpty) return 'Se habilita cuando completes los datos anteriores.';
+    final joined = labels.length == 1
+        ? labels.single
+        : '${labels.sublist(0, labels.length - 1).join(', ')} y ${labels.last}';
+    return 'Se habilita cuando completes $joined.';
   }
 
   String _normalizedSpecOptionValue(dynamic value) {
@@ -5866,7 +5887,8 @@ class _ProductFormPageState extends State<ProductFormPage>
                           theme,
                           key: const ValueKey(2),
                         )
-                      : _buildSpecTab(theme, key: const ValueKey(2));
+                      : _buildSpecTab(theme,
+                          key: const ValueKey(2), inlineGuide: !isWide);
                 case 3:
                   tabView = _buildServiceWizardPreviewTab(
                     theme,
@@ -5946,6 +5968,19 @@ class _ProductFormPageState extends State<ProductFormPage>
   Widget _buildRightSidebar(ThemeData theme) {
     return Column(
       children: [
+        // The hub measure guide stays beside the sheet while it scrolls.
+        ListenableBuilder(
+          listenable: _tabController,
+          builder: (context, _) {
+            if (_tabController.index != 2 || !_hubGuideVisible) {
+              return const SizedBox.shrink();
+            }
+            return Column(children: [
+              _buildHubGuideCard(theme),
+              const SizedBox(height: 16),
+            ]);
+          },
+        ),
         if (_isServiceForm) ...[
           _buildSectionCard(
             theme,
@@ -7733,7 +7768,8 @@ class _ProductFormPageState extends State<ProductFormPage>
     ]);
   }
 
-  Widget _buildSpecTab(ThemeData theme, {Key? key}) {
+  Widget _buildSpecTab(ThemeData theme,
+      {Key? key, bool inlineGuide = false}) {
     if (_specLoadError != null) {
       return Column(
           key: key,
@@ -7804,6 +7840,11 @@ class _ProductFormPageState extends State<ProductFormPage>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Narrow hosts have no sidebar: the guide opens the sheet instead.
+          if (inlineGuide && _hubGuideVisible) ...[
+            _buildHubGuideCard(theme),
+            const SizedBox(height: 16),
+          ],
           _buildSpecIdentitySection(theme),
           if (_unassignedSpecFacts.isNotEmpty) _buildUnassignedSpecFacts(),
           const SizedBox(height: 16),
@@ -8010,6 +8051,122 @@ class _ProductFormPageState extends State<ProductFormPage>
     ProductSpecMemberDraft? member,
     int memberGeneration = 0,
   }) {
+    final control = _buildSpecFieldControl(
+        theme: theme,
+        field: field,
+        template: template,
+        member: member,
+        memberGeneration: memberGeneration);
+    final key = field.definition?.key;
+    if (member != null || key == null || template.technicalFamily != 'hub') {
+      return control;
+    }
+    // Hub sheet: hovering, focusing or tapping a field lights its measure on
+    // the guide. The Focus node never takes focus itself; it only observes
+    // the control underneath.
+    final anchor = _hubGuideFieldKeys.putIfAbsent(key, GlobalKey.new);
+    return MouseRegion(
+      onEnter: (_) => _hubGuideHoverKey.value = key,
+      onExit: (_) {
+        if (_hubGuideHoverKey.value == key) _hubGuideHoverKey.value = null;
+      },
+      child: Focus(
+        canRequestFocus: false,
+        skipTraversal: true,
+        includeSemantics: false,
+        onFocusChange: (focused) {
+          if (focused) _hubGuideFocusKey.value = key;
+        },
+        child: Listener(
+          behavior: HitTestBehavior.translucent,
+          onPointerDown: (_) => _hubGuideFocusKey.value = key,
+          child: KeyedSubtree(key: anchor, child: control),
+        ),
+      ),
+    );
+  }
+
+  bool get _hubGuideVisible =>
+      !_isServiceForm &&
+      _specLoadError == null &&
+      !_isLoadingSpecs &&
+      _specTemplate?.technicalFamily == 'hub';
+
+  int? get _hubSpokeHoleCount {
+    final canonical =
+        _specNumericValue(_specValues['spoke_hole_count'])?.canonical;
+    return canonical == null ? null : double.tryParse(canonical)?.round();
+  }
+
+  /// Hub fields the sheet is showing now, in the guide's measuring order.
+  List<String> _hubGuideAvailableKeys(SpecTemplate template) => [
+        for (final section in template.sections)
+          for (final field in template.fieldsForSection(section))
+            if (field.definition?.key case final String key
+                when hubGuidePartsForField(key) != null &&
+                    template.roleFor(key) != 'legacy' &&
+                    template.applicabilityFor(field, _specValues) ==
+                        SpecTruth.yes)
+              key,
+      ];
+
+  /// A measure tapped on the guide scrolls its field into view and marks it.
+  void _openHubField(String key) {
+    _hubGuideHoverKey.value = null;
+    _hubGuideFocusKey.value = key;
+    final target = _hubGuideFieldKeys[key]?.currentContext;
+    if (target == null) return;
+    Scrollable.ensureVisible(target,
+        alignment: 0.15,
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic);
+  }
+
+  Widget _buildHubGuideCard(ThemeData theme) {
+    final template = _specTemplate!;
+    final available = _hubGuideAvailableKeys(template);
+    return _buildSectionCard(
+      theme,
+      icon: Icons.straighten_outlined,
+      title: 'Dónde se mide',
+      children: [
+        ValueListenableBuilder<String?>(
+          valueListenable: _hubGuideHoverKey,
+          builder: (context, hover, _) => ValueListenableBuilder<String?>(
+            valueListenable: _hubGuideFocusKey,
+            builder: (context, focus, _) {
+              final key = hover ?? focus;
+              return HubMeasureGuidePanel(
+                highlightedKey: key,
+                labelFor: template.labelFor,
+                helperFor: template.helperFor,
+                availableKeys: available,
+                spokeHoleCount: _hubSpokeHoleCount,
+                onSelect: _openHubField,
+                showChips: false,
+                onExpand: () => showHubMeasureGuideDialog(
+                  context,
+                  initialKey: key,
+                  labelFor: template.labelFor,
+                  helperFor: template.helperFor,
+                  availableKeys: available,
+                  spokeHoleCount: _hubSpokeHoleCount,
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSpecFieldControl({
+    required ThemeData theme,
+    required SpecTemplateField field,
+    required SpecTemplate template,
+    ProductSpecMemberDraft? member,
+    int memberGeneration = 0,
+  }) {
     final values = member?.values ?? _specValues;
     final issues = member?.validate() ?? _specIssues;
     final reference = member == null ? _specReference : member.reference;
@@ -8054,7 +8211,10 @@ class _ProductFormPageState extends State<ProductFormPage>
         def.rowSchema == null) {
       return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('$label: ${_specValueText(currentValue)}'),
-        Text(issue?.message ?? behavior.helperText ?? 'Revisa los requisitos.',
+        Text(
+            issue?.message ??
+                behavior.helperText ??
+                'Revisa los datos que este campo necesita antes.',
             style: theme.textTheme.bodySmall?.copyWith(
                 color: issue?.blocking == true
                     ? theme.colorScheme.error

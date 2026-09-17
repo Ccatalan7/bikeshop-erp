@@ -80,6 +80,23 @@ Tres reglas que generan el resto:
   midió, e invita a aprobar por umbral. Se dice en palabras lo que el sistema
   honestamente sabe.
 
+**Fichas técnicas (2026-09-17).** El dueño abrió la ficha de una maza y no
+la entendió: «PCD brida izquierda», «Centro a brida izquierda», «Completa
+primero Fuente de la declaración, Posición de la maza». Las palabras de una
+ficha viven en tres lugares y los tres se corrigen juntos: el rótulo del campo
+es `spec_definitions.label` (global, por `key`; el mismo rótulo sale en la
+tienda, el taller y los mensajes «X: falta confirmar…» que arma el SQL), la
+ayuda es `spec_templates.form_contract->'helpers'` de esa plantilla, y la frase
+de espera la arma el formulario (`_specPrerequisiteSentence`: «Se habilita
+cuando completes A y B», no «Completa primero A, B»). Una medida se explica
+como la mide el mecánico, con los valores usuales de ejemplo («de tuerca a
+tuerca: 100 delante, 135 atrás con cierre rápido»), y cuando el dato es una
+cota, el formulario la muestra en un dibujo técnico que se enciende al tocar
+el campo (`HubMeasureGuide`, ver `docs/development/AGENT_VISUAL_WORKFLOW.md`
+no aplica: es un componente de la ficha, no un frame de Design). Cada familia
+con cotas —llanta, rayo, biela, eje— merece el mismo trato antes de darse por
+«llenable».
+
 ### Un estado se deriva del PORQUÉ, no de un número
 
 `balance == 0` no significa "pagado": puede significar que no había nada que
