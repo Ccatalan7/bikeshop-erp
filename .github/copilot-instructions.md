@@ -1277,6 +1277,11 @@ The target balance is:
 These are safe to remove when disk space is low because they are regenerated from committed manifests, lockfiles, or tool state:
 
 - root `build/` and `mobile_scanner_app/build/`
+- **`build/test_cache/` above all** — `flutter test` adds compiled test dills
+  on every run and never prunes them: it was **15 GB** of the 24 GB in
+  `build/` on 2026-09-18. The debug app does not use it, so it can go even with
+  a live canonical session, unless a `flutter test` is running right now. The
+  same day `build/app/` (Android output, 3.7 GB) was the other big piece.
 - root `.dart_tool/` and `mobile_scanner_app/.dart_tool/`
 - Android Gradle intermediates such as `android/.gradle/` and `mobile_scanner_app/android/.gradle/`
 - Flutter ephemeral folders such as `macos/Flutter/ephemeral/`, `ios/Flutter/ephemeral/`, and their `mobile_scanner_app/` equivalents
@@ -1329,6 +1334,24 @@ Therefore:
   `du -sh -- /private/tmp/* | sort -hr | head`. It is not covered by
   `flutter clean`, by editor cache clearing, or by any repo-level target, so it
   is invisible to every other cleanup path in this document.
+
+#### Measured on 2026-09-18 (28 GB free of 460)
+
+`/private/tmp` was only 0.7 GB this time. What held the space, in order:
+WhatsApp media in `~/Library/Group Containers/group.net.whatsapp.*` (**52 GB**,
+the owner's — cleared only from WhatsApp › Storage, never by an agent), repo
+`build/` (24 GB, 15 of them `build/test_cache/`), Codex session history in
+`~/.codex/sessions` (11 GB, the owner decides), the Android emulator AVD
+(7.5 GB), Gradle caches (7.9 GB) and the second account
+`/Users/katalinplummer` (unreadable, needs the owner's admin password). Two
+`flutter_tester` processes orphaned 9 and 29 days earlier were still alive
+under `launchd`; the hook blocks `kill`, so they are reported, not signalled.
+
+**How to clean here:** the repo hook blocks `rm -rf`, `find -delete` and
+`kill`. Move targets with `mv` into one dated folder, `~/.Trash/limpieza-<date>/`
+(same APFS volume, so it is an instant rename), report the size, and let the
+owner empty the Trash. That keeps every step recoverable and one command away
+from undone.
 
 
 On Windows, the equivalent cleanup targets are usually:

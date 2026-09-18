@@ -105,6 +105,14 @@
   used only when the owner explicitly asks for it; a Design frame never
   overrides product reasoning or becomes required before Codex can redesign a
   module.
+- **Cada ronda limpia lo que generó, antes de cerrar.** El Mac del dueño se
+  llena una y otra vez con basura de agentes (2026-09-18: 28 GB libres de 460).
+  Capturas, PDFs, renders, descargas y archivos de prueba fuera del repo van a
+  `~/.Trash/limpieza-<fecha>/`; tras correr pruebas, también
+  `build/test_cache/` (15 GB ese día, crece con cada corrida). Bajo 50 GB
+  libres (`df -h /System/Volumes/Data`) se aplica «Local Storage Hygiene» de
+  `.github/copilot-instructions.md` sin que el dueño lo pida. Se mueve a la
+  Papelera, no se borra; el dueño la vacía.
 - **Cada ronda que descubre algo, lo escribe antes de cerrar.** Una trampa de
   una herramienta, una preferencia del dueño, un documento que resultó falso, o
   una regla de dominio que sólo aparece con datos reales: se documenta en la

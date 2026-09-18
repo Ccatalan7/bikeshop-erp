@@ -94,6 +94,23 @@ the guarded-read defaults, is in
 Never use `supabase db query`, `supabase db push`, ad hoc hosted `psql`, or the
 hosted SQL Editor.
 
+## Limpia lo que generas, antes de cerrar la ronda
+
+El Mac del dueño se llena una y otra vez con basura de las sesiones de agente
+(2026-08-20: 867 MB libres; 2026-09-18: 28 GB de 460), y está harto de
+repetirlo. **Cada ronda deja el disco como lo encontró:**
+
+- Lo que generaste fuera del repo —capturas, PDFs, renders, descargas,
+  candidatos en el scratchpad— se va a la Papelera antes de cerrar.
+- Si corriste pruebas, `build/test_cache/` crece sin techo con cada corrida
+  (15 GB el 2026-09-18) y no lo usa la sesión de debug: va a la Papelera.
+- Mide con `df -h /System/Volumes/Data`. Bajo 50 GB libres, aplica «Local
+  Storage Hygiene» de `.github/copilot-instructions.md` sin esperar a que el
+  dueño lo pida.
+- `rm -rf` y `kill` los bloquea el hook: se **mueve** a
+  `~/.Trash/limpieza-<fecha>/` y el dueño vacía la Papelera. Nunca se toca la
+  media de WhatsApp, los volúmenes de Colima ni la otra cuenta del Mac.
+
 ## Escribe lo que aprendes, antes de cerrar la ronda
 
 Si esta ronda descubrió algo que le habría ahorrado tiempo a quien venga
