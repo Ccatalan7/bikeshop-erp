@@ -1125,14 +1125,26 @@ class BankReconciliationMatcher {
         .toList(growable: false);
     if (configured.isNotEmpty) {
       for (final policy in configured) {
-        final minimumLag = policy.settlementBusinessDays;
-        final maximumLag =
-            policy.settlementBusinessDays + policy.bookingGraceBusinessDays;
         final learned = policy.instrument == BankPaymentInstrument.credit
             ? calibration.credit
             : policy.instrument == BankPaymentInstrument.debit
                 ? calibration.debit
                 : null;
+        // The configured delay plus booking grace, widened to one business
+        // day either side of the delay this statement proved. The window is
+        // the same whether or not the proved rate equals the configured one:
+        // correcting the configuration must not narrow what the statement
+        // already showed (Transbank débito pays in 2 days, sometimes in 1).
+        final configuredMaximum =
+            policy.settlementBusinessDays + policy.bookingGraceBusinessDays;
+        final minimumLag = learned == null
+            ? policy.settlementBusinessDays
+            : math.max<int>(1,
+                math.min<int>(policy.settlementBusinessDays, learned.lag - 1));
+        final maximumLag = learned == null
+            ? configuredMaximum
+            : math.max<int>(configuredMaximum, learned.lag + 1);
+        final expectedLag = learned?.lag ?? policy.settlementBusinessDays;
         // When the statement proves another rate, the configured one only
         // produces coincidental fits.
         final contradicted = learned != null &&
@@ -1145,6 +1157,7 @@ class BankReconciliationMatcher {
             vatBps: policy.commissionVatBps,
             minimumLag: minimumLag,
             maximumLag: maximumLag,
+            expectedLag: expectedLag,
             policy: policy,
             learned: false,
           ));
@@ -1156,9 +1169,9 @@ class BankReconciliationMatcher {
             instrument: policy.instrument,
             rateBps: rate,
             vatBps: policy.commissionVatBps,
-            minimumLag:
-                math.max<int>(1, math.min<int>(minimumLag, learned.lag - 1)),
-            maximumLag: math.max<int>(maximumLag, learned.lag + 1),
+            minimumLag: minimumLag,
+            maximumLag: maximumLag,
+            expectedLag: expectedLag,
             policy: policy,
             learned: true,
           ));
@@ -1183,6 +1196,7 @@ class BankReconciliationMatcher {
           vatBps: 1900,
           minimumLag: math.max<int>(1, learned.lag - 1),
           maximumLag: learned.lag + 1,
+          expectedLag: learned.lag,
           policy: null,
           learned: true,
         ));
@@ -1314,7 +1328,7 @@ class BankReconciliationMatcher {
     for (final item in pick) {
       final lag =
           calendar.businessDaysBetween(item.sale.candidate.occurredOn, date);
-      penalty += (lag - item.rail.minimumLag).abs() * 2;
+      penalty += (lag - item.rail.expectedLag).abs() * 2;
       if (!item.rail.learned && item.rail.policy == null) penalty += 1;
     }
     return penalty;
@@ -2047,6 +2061,7 @@ class _Rail {
     required this.vatBps,
     required this.minimumLag,
     required this.maximumLag,
+    required this.expectedLag,
     required this.policy,
     required this.learned,
   });
@@ -2056,6 +2071,9 @@ class _Rail {
   final int vatBps;
   final int minimumLag;
   final int maximumLag;
+
+  /// The usual delay; a settlement further from it is less likely.
+  final int expectedLag;
   final BankTerminalMatchPolicy? policy;
   final bool learned;
 

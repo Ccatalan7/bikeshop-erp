@@ -117,7 +117,20 @@ The statement proves the acquirer's real terms: a deposit that equals one sale
 net of `round(gross × rate)` and 19% VAT on that commission, to the peso, is a
 measurement. With at least three such fits the dominant rate replaces a
 configured rate it contradicts, and the review warns. On the owner's statements
-debit cost 1,21% + VAT at 2 banking days while Terminales POS said 1,75% at 1.
+debit cost 1,21% + VAT at 2 banking days while Terminales POS said 1,75% at 1;
+credit showed 1,60% and 1,61% at 3 days (two deposits only: credit varies by
+card). Terminales POS was corrected to 121 bps / 2 days and 160 bps / 3 days on
+2026-09-18, keeping `effective_from` 2026-05-20 because the statements show
+those terms since June.
+
+A sale's window is the configured delay plus booking grace, widened to one
+banking day either side of the delay the statement proved, whether or not the
+proved rate equals the configured one. Transbank debit usually pays in 2 days
+and sometimes in 1 (a Friday-night sale paid Monday). Before 2026-09-18 the
+widening applied only to a contradicted configuration, so correcting
+Terminales POS to the real 2 days lost five next-day deposits, among them one
+that had been preselected. The penalty
+measures the distance to the proved delay, not to the window's first day.
 
 A deposit is explained by card sales inside their banking-day windows (Chilean
 holidays included); terminal-cleared and legacy bank-booked sales are never

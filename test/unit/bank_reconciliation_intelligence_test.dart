@@ -212,20 +212,60 @@ void main() {
         contains('no cobra lo configurado en débito'),
       );
     });
+
+    test('correcting the configuration keeps the next-day deposits', () {
+      // Once Terminales POS says 1,21% at 2 days, a deposit that also carries
+      // a sale from the previous banking day (Friday night, paid Monday) must
+      // still fit to the peso, as it did while the configuration was wrong.
+      final sales = [
+        _debitSale('a', _d(8, 19), 120000),
+        _debitSale('b', _d(8, 20), 37000),
+        _debitSale('c', _d(9, 2), 16000),
+        _debitSale('thursday', _d(9, 3), 5000),
+        _debitSale('friday', _d(9, 4), 42000),
+      ];
+      final deposits = [
+        _deposit('dep-a', _d(8, 21), 118272),
+        _deposit('dep-b', _d(8, 24), 36467),
+        _deposit('dep-c', _d(9, 4), 15769),
+        _deposit('monday', _d(9, 7), 46322),
+      ];
+
+      final result = matcher.analyze(
+        movements: deposits,
+        candidates: sales,
+        terminalPolicies: _policies(rateBps: 121, settlementDays: 2),
+      );
+
+      final monday = result.proposals['monday']!.first;
+      expect(monday.isSelectedByDefault, isTrue);
+      expect(monday.reasons, contains('Cuadra al peso'));
+      expect(
+        monday.allocations.map((item) => item.candidate.targetId).toSet(),
+        {'thursday', 'friday'},
+      );
+      expect(
+        result.insights.map((item) => item.title).join(' '),
+        isNot(contains('no cobra lo configurado')),
+      );
+    });
   });
 
   test('a near deposit never credits a sale more than its gross', () {
     // 60.000 + 2.000 net 60.708 under the configured debit terms; the bank
     // paid 200 more. Putting the residue on the small sale would credit it
     // 2.158 for a 2.000 sale, which the database rejects for the whole review.
-    final proposal = matcher.analyze(
-      movements: [_deposit('near', _d(8, 11), 60908)],
-      candidates: [
-        _debitSale('big', _d(8, 10), 60000),
-        _debitSale('small', _d(8, 10), 2000),
-      ],
-      terminalPolicies: _policies(),
-    ).proposals['near']!.first;
+    final proposal = matcher
+        .analyze(
+          movements: [_deposit('near', _d(8, 11), 60908)],
+          candidates: [
+            _debitSale('big', _d(8, 10), 60000),
+            _debitSale('small', _d(8, 10), 2000),
+          ],
+          terminalPolicies: _policies(),
+        )
+        .proposals['near']!
+        .first;
 
     expect(proposal.isSelectedByDefault, isFalse);
     expect(proposal.allocatedBankAmountClp, 60908);
@@ -554,7 +594,11 @@ BankStatementMovement _deposit(String id, BankCivilDate date, int amount) =>
       description: 'Pago: Abonos Debito Y Credito Transbank 0966893109',
     );
 
-List<BankTerminalMatchPolicy> _policies() => [
+List<BankTerminalMatchPolicy> _policies({
+  int rateBps = 175,
+  int settlementDays = 1,
+}) =>
+    [
       BankTerminalMatchPolicy(
         profileId: 'transbank',
         providerCode: 'transbank',
@@ -563,9 +607,9 @@ List<BankTerminalMatchPolicy> _policies() => [
         descriptorPatterns: const ['transbank', 'abonos debito y credito'],
         paymentMethodCode: 'card_debit',
         instrument: BankPaymentInstrument.debit,
-        commissionRateBps: 175,
+        commissionRateBps: rateBps,
         commissionVatBps: 1900,
-        settlementBusinessDays: 1,
+        settlementBusinessDays: settlementDays,
         bookingGraceBusinessDays: 2,
         amountToleranceClp: 1000,
         effectiveFrom: const BankCivilDate(2026, 5, 20),
