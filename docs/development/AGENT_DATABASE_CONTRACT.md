@@ -883,3 +883,32 @@ Dos cosas que sí funcionaron y conviene repetir:
 - **`create or replace` sólo agrega columnas al final.** La columna nueva va
   después de la última; reordenar o insertar en medio exige `drop view`, que se
   lleva los grants y las dependencias.
+
+## Un relleno masivo desde fuera se mira antes de escribirlo (2026-09-17)
+
+Rellenar `suppliers.image_url` con el icono que publica cada sitio dejó 27 filas
+nuevas en producción. Lo que hizo que fueran correctas no fue el código: fue
+**montar las 27 imágenes en una hoja de contacto y mirarlas** antes del
+`update`. Tres cosas que sólo se ven mirando, y que ninguna validación de
+tamaño o de tipo habría detenido:
+
+- **El favicon puede ser el de la plataforma, no el de la marca.** `cge.cl`
+  servía la W de WordPress en 80×80: un PNG válido, del dominio correcto, y
+  completamente equivocado como logo de CGE.
+- **`qlmanage` convierte un SVG roto en un PNG perfectamente válido.** El de
+  AliExpress no parseaba, y Quick Look rindió *el mensaje de error* en 512×512.
+  Pasó el filtro de dimensiones y de formato; se cayó al verlo.
+- **Un logotipo claro sobre fondo transparente desaparece.** Se compone sobre el
+  fondo que lo deja ver —la luminancia media de lo opaco decide blanco u
+  oscuro—, no sobre el que uno supuso.
+
+Dos notas de herramienta para la próxima:
+
+- **`supabase storage cp` sube al bucket**, con `--experimental`, y resuelve el
+  proyecto **desde el directorio de trabajo**: corriéndolo fuera del repo
+  contesta `LegacyProjectNotLinkedError` aunque el enlace exista. Es el camino
+  para subir un archivo sin service-role key, y deja el objeto donde la app ya
+  los pone (`vinabike-assets/suppliers/<tenant>/<supplier>/`).
+- **Después del `update`, comprobar que cada URL guardada responde una imagen.**
+  Una fila con una URL muerta se ve igual que una fila sin imagen hasta que
+  alguien abre la pantalla. Un `HEAD` por fila cuesta segundos.
