@@ -296,6 +296,25 @@ class _GlobalSearchPanelState extends State<_GlobalSearchPanel> {
       return;
     }
 
+    // El sitio de un proveedor abre al lado, como una pestaña: mirar su
+    // catálogo no debería costar la pantalla en la que uno estaba.
+    final browserUrl = entry.browserUrl;
+    if (browserUrl != null) {
+      final workspaces = context.read<WorkspaceManager>();
+      if (workspaces.openBrowserWorkspace(browserUrl) == null) {
+        // El techo de espacios se dice, no se descubre fallando.
+        ScaffoldMessenger.maybeOf(rootContext)?.showSnackBar(
+          const SnackBar(
+            content: Text(
+              'No se pudo abrir el sitio: ya tienes '
+              '${WorkspaceManager.maxWorkspaces} espacios abiertos.',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
     final tool = entry.toolbarTool;
     if (tool != null) {
       final toolbar = context.read<RightToolbarService>();

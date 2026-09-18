@@ -20,6 +20,7 @@ enum GlobalSearchKind {
   salesInvoice,
   purchase,
   supplier,
+  website,
   employee,
   menu,
 }
@@ -37,6 +38,7 @@ extension GlobalSearchKindPresentation on GlobalSearchKind {
         GlobalSearchKind.salesInvoice => 'Facturas de venta',
         GlobalSearchKind.purchase => 'Documentos de compra',
         GlobalSearchKind.supplier => 'Proveedores',
+        GlobalSearchKind.website => 'Sitios web',
         GlobalSearchKind.employee => 'Equipo',
         GlobalSearchKind.menu => 'Ir a',
       };
@@ -52,6 +54,7 @@ extension GlobalSearchKindPresentation on GlobalSearchKind {
         GlobalSearchKind.salesInvoice => Icons.receipt_long_outlined,
         GlobalSearchKind.purchase => Icons.shopping_cart_outlined,
         GlobalSearchKind.supplier => Icons.local_shipping_outlined,
+        GlobalSearchKind.website => Icons.public_outlined,
         GlobalSearchKind.employee => Icons.badge_outlined,
         GlobalSearchKind.menu => Icons.north_east_rounded,
       };
@@ -68,6 +71,8 @@ extension GlobalSearchKindPresentation on GlobalSearchKind {
         GlobalSearchKind.salesInvoice => '/sales/invoices',
         GlobalSearchKind.purchase => '/purchases',
         GlobalSearchKind.supplier => '/purchases/suppliers',
+        // Un sitio web no tiene lista propia dentro del ERP.
+        GlobalSearchKind.website => null,
         GlobalSearchKind.employee => '/hr/employees',
         GlobalSearchKind.action => null,
         GlobalSearchKind.menu => null,
@@ -137,6 +142,7 @@ class GlobalSearchEntry {
     this.isModuleFrontDoor = false,
     this.attachment,
     this.conversationId,
+    this.browserUrl,
     this.imageUrl,
     Set<String> alsoNamed = const <String>{},
     List<BikeFinderSearchField> fields = const <BikeFinderSearchField>[],
@@ -228,6 +234,13 @@ class GlobalSearchEntry {
   /// sí solo pesa poco. Lo que sí decide es cuál de sus pantallas contesta,
   /// que es para lo que existe [isModuleFrontDoor].
   final Set<String> moduleWords;
+
+  /// La página que abre este resultado **en un espacio de trabajo nuevo**.
+  ///
+  /// Salir del ERP a mirar el catálogo de un proveedor no debería costar la
+  /// pantalla en la que uno estaba: el navegador integrado abre al lado, como
+  /// una pestaña, y lo que se estaba haciendo sigue ahí.
+  final String? browserUrl;
 
   /// La imagen **pública** de esta fila: la foto del producto, el logo del
   /// proveedor, la cara de la contraparte de un chat.

@@ -164,7 +164,7 @@ class GlobalSearchIndex extends ChangeNotifier {
       _selectOrEmpty(
         'suppliers',
         'id, name, rut, trade_name, legal_name, is_active, updated_at, '
-            'image_url',
+            'image_url, website',
         tenantId,
       ),
       // Sólo identidad laboral: ni sueldo, ni banco, ni RUT.
@@ -263,6 +263,8 @@ class GlobalSearchIndex extends ChangeNotifier {
     }
     for (final row in suppliers) {
       entries.add(_supplierEntry(row));
+      final site = globalSearchSupplierWebsiteEntry(row);
+      if (site != null) entries.add(site);
     }
     for (final row in employees) {
       entries.add(_employeeEntry(row));
@@ -688,9 +690,8 @@ GlobalSearchEntry? globalSearchAttachmentEntry(Map<String, dynamic> row) {
       contentType:
           _text(row['declared_mime_type']) ?? 'application/octet-stream',
       origin: origin.isEmpty ? 'Conversación' : origin,
-      sizeBytes: row['size_bytes'] is num
-          ? (row['size_bytes'] as num).toInt()
-          : null,
+      sizeBytes:
+          row['size_bytes'] is num ? (row['size_bytes'] as num).toInt() : null,
     ),
     fields: <BikeFinderSearchField>[
       BikeFinderSearchField(name, weight: 135),
@@ -701,6 +702,73 @@ GlobalSearchEntry? globalSearchAttachmentEntry(Map<String, dynamic> row) {
       BikeFinderSearchField(counterparty, weight: 110),
       BikeFinderSearchField(person, weight: 110),
       BikeFinderSearchField(extension, weight: 70),
+    ],
+  );
+}
+
+/// `http:`, `mailto:`, `ftp:`… cualquier esquema al principio.
+final RegExp _schemePrefix =
+    RegExp(r'^[a-z][a-z0-9+.-]*:', caseSensitive: false);
+
+/// Un dominio de verdad: etiquetas alfanuméricas separadas por puntos.
+final RegExp _hostShape = RegExp(
+  r'^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$',
+);
+
+bool _looksLikeHost(String host) => _hostShape.hasMatch(host.toLowerCase());
+
+/// El sitio web de un proveedor, como una fila que se puede abrir.
+///
+/// Escribir «teknobike» y tener que acordarse de entrar a la ficha para mirar
+/// su catálogo es un rodeo: la página es una de las cosas que se quieren de un
+/// proveedor, tanto como su ficha. Se abre en un **espacio nuevo**, como una
+/// pestaña, para no costar la pantalla en la que uno estaba — el mismo
+/// comportamiento que el botón «Abrir sitio web» de la ficha.
+///
+/// `null` cuando el proveedor no tiene sitio, o cuando lo que tiene no es una
+/// dirección que se pueda abrir.
+@visibleForTesting
+GlobalSearchEntry? globalSearchSupplierWebsiteEntry(Map<String, dynamic> row) {
+  final name = _text(row['name']);
+  final website = _text(row['website']);
+  if (name == null || website == null) return null;
+
+  // **Un esquema se detecta por los dos puntos, no por `://`.** `mailto:x@y.cl`
+  // no trae `//`, así que anteponerle `https://` lo convertía en
+  // `https://mailto:x@y.cl` —usuario `mailto:x`, anfitrión `y.cl`— y pasaba por
+  // una dirección válida.
+  final hasScheme = _schemePrefix.hasMatch(website);
+  final url = hasScheme ? website : 'https://$website';
+  final uri = Uri.tryParse(url);
+  if (uri == null) return null;
+  if (uri.scheme != 'http' && uri.scheme != 'https') return null;
+  // **El campo acepta lo que alguien escriba.** Hoy los 40 sitios guardados son
+  // direcciones limpias, pero «pregunta a Diego» en esa casilla no puede
+  // convertirse en una fila que promete abrir algo: el anfitrión tiene que
+  // parecer un dominio, con un punto y sin espacios.
+  if (!_looksLikeHost(uri.host)) return null;
+
+  // El dominio sin `www.` es como se lee y como se teclea.
+  final host = uri.host.startsWith('www.') ? uri.host.substring(4) : uri.host;
+
+  return GlobalSearchEntry(
+    kind: GlobalSearchKind.website,
+    id: 'supplier_website:${row['id']}',
+    title: 'Sitio web de $name',
+    subtitle: host,
+    // La ruta es el respaldo si algún día esto se comparte o se copia; el
+    // resultado abre el navegador integrado, no navega el ERP.
+    route: url,
+    browserUrl: url,
+    imageUrl: _text(row['image_url']),
+    updatedAt: _timestamp(row['updated_at']),
+    // Responde al nombre del proveedor y a su dominio: las dos maneras en que
+    // alguien lo pide.
+    alsoNamed: <String>{name, host},
+    fields: <BikeFinderSearchField>[
+      BikeFinderSearchField(name, weight: 130),
+      BikeFinderSearchField(host, weight: 125),
+      const BikeFinderSearchField('sitio web pagina catalogo', weight: 60),
     ],
   );
 }
@@ -739,7 +807,8 @@ GlobalSearchEntry? globalSearchConversationEntry(
 
   // Un hilo sin título se llama como la persona; sin ninguno de los dos, por su
   // canal — que es lo único cierto que queda.
-  final title = _text(row['title']) ?? contact ?? 'Conversación · $channelLabel';
+  final title =
+      _text(row['title']) ?? contact ?? 'Conversación · $channelLabel';
 
   final normalizedTitle = normalizeBikeFinderSearch(title);
   final showsContact =

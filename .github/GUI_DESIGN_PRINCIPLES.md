@@ -1685,3 +1685,28 @@ Y el defecto que salió al escribir la prueba, que vale para cualquier caché de
 futuros: **`return future` no es `return await future`**. Sin el `await`, la
 excepción nace fuera del `try` que promete no lanzar, y además el fracaso no
 queda registrado, así que se reintenta en cada repintado.
+
+### Lo que se quiere de una cosa no es sólo su ficha (2026-09-17)
+
+Escribir el nombre de un proveedor ofrecía su ficha, su chat, sus archivos y
+sus compras — todo menos lo que uno va a buscar cuando quiere ver qué vende:
+**su sitio web**. La dirección estaba guardada (40 de 92 proveedores la tienen)
+y sólo se podía abrir entrando a la ficha y desplegando un menú.
+
+- **Un dato que sirve para algo es una fila.** Si el ERP guarda una dirección y
+  tiene un botón para abrirla, esa acción vale por sí sola en el buscador. La
+  pregunta al indexar una entidad no es «¿qué pantallas tiene?» sino «¿qué
+  quiere hacer alguien con esto?».
+- **Y se abre donde no cuesta la pantalla.** Mirar el catálogo de un proveedor
+  es una consulta de paso: abre en un espacio nuevo, como una pestaña, y lo que
+  se estaba haciendo sigue ahí. Es el mismo `openBrowserWorkspace` que ya usaba
+  la ficha, no una forma nueva de abrir páginas.
+- **Un campo de texto libre no es una dirección.** `suppliers.website` acepta lo
+  que alguien teclee. Una fila que promete abrir algo sólo aparece si lo que hay
+  se puede abrir de verdad: el anfitrión tiene forma de dominio y el esquema es
+  `http`/`https`. Dos trampas medidas al escribir la prueba: `https://`
+  antepuesto a `pregunta a Diego` pasaba por URL, y `mailto:x@y.cl` —que no trae
+  `//`— se convertía en `https://mailto:x@y.cl`, donde `y.cl` queda de anfitrión
+  y el resto de usuario. El esquema se detecta por los dos puntos, no por `://`.
+- **El techo se dice, no se descubre fallando.** Con diez espacios abiertos el
+  resultado no puede hacer nada; entonces lo explica en vez de quedarse mudo.
