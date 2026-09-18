@@ -1352,12 +1352,18 @@ Machine local snapshots (`tmutil listlocalsnapshots /`). The simulator runtime
 looks like 22 GB in `/Library/Developer/CoreSimulator/Volumes`, but that is the
 *mounted* image; the real cost is its 9.9 GB image in
 `/System/Library/AssetsV2/com_apple_MobileAsset_iOSSimulatorRuntime` plus 3 GB of
-dyld cache, and it is the only runtime (keep it). What does belong to us:
+dyld cache, and it is the only runtime (keep it).
 `/private/var/folders/*/X/com.google.Chrome.code_sign_clone` and the Edge
-equivalent — **a full browser copy that macOS leaves each time an agent drives
-Chrome and it does not close cleanly** (3 GB here; reported at 50–62 GB in the
-Codex and Playwright trackers). Move them only with both browsers fully quit;
-a restart also clears them, together with orphaned `flutter_tester` processes.
+equivalent are a copy of the browser that Chrome/Edge create **at launch and
+remove on a normal quit**. **Correction, same day:** the 3 GB found here were
+not a pile-up — one clone per browser that was open at the time (Edge's 1.6 GB
+is exactly `Microsoft Edge.app`), after 36 days of uptime, and the folder was
+empty once both were closed. Clones only accumulate when the browser is
+**killed instead of quit** (crash, force-quit, automation that ends Chromium
+without `browser.close()`) — the Codex and Playwright trackers report 50–62 GB
+that way. So: count clones, not bytes; one per open browser is normal, several
+per browser is the leak. A restart clears any leftover, together with orphaned
+`flutter_tester` processes.
 
 **How to clean here:** the repo hook blocks `rm -rf`, `find -delete` and
 `kill`. Move targets with `mv` into one dated folder, `~/.Trash/limpieza-<date>/`
