@@ -163,8 +163,8 @@ class GlobalSearchIndex extends ChangeNotifier {
       ),
       _selectOrEmpty(
         'suppliers',
-        'id, name, rut, trade_name, legal_name, is_active, updated_at, '
-            'image_url, website',
+        'id, name, rut, trade_name, legal_name, aliases, is_active, '
+            'updated_at, image_url, website',
         tenantId,
       ),
       // Sólo identidad laboral: ni sueldo, ni banco, ni RUT.
@@ -262,7 +262,7 @@ class GlobalSearchIndex extends ChangeNotifier {
       entries.add(_bikeEntry(row, customerNames));
     }
     for (final row in suppliers) {
-      entries.add(_supplierEntry(row));
+      entries.add(globalSearchSupplierEntry(row));
       final site = globalSearchSupplierWebsiteEntry(row);
       if (site != null) entries.add(site);
     }
@@ -613,11 +613,28 @@ GlobalSearchEntry _bikeEntry(
   );
 }
 
-GlobalSearchEntry _supplierEntry(Map<String, dynamic> row) {
+@visibleForTesting
+GlobalSearchEntry globalSearchSupplierEntry(Map<String, dynamic> row) {
   final name = _text(row['name']) ?? 'Proveedor';
   final rut = _text(row['rut']);
   final trade = _text(row['trade_name']);
   final legal = _text(row['legal_name']);
+  final isActive = row['is_active'] != false;
+  // Los alias son nombres del registro, no sinónimos inventados: cuando dos
+  // fichas del mismo proveedor se unifican, el nombre de la que se retira
+  // queda como alias de la que sigue, y buscarlo tiene que llevar a ella.
+  final aliases = <String>[
+    for (final alias in (row['aliases'] as List?) ?? const <Object?>[])
+      if (_text(alias) case final String value) value,
+  ];
+  // **La ficha retirada no le gana a la que la absorbió.** Tras unificar,
+  // «garozzo» coincide exacto con el título de la inactiva y, en «Bicicletas
+  // Garozzo», el puntaje premia al *primer* campo que coincide de cualquier
+  // modo: el nombre, que sólo la contiene, tapa al alias exacto. Con un 80 %
+  // la inactiva seguía primero (lo prueba
+  // `global_search_supplier_alias_test.dart`); con un 60 % queda detrás, y se
+  // sigue encontrando.
+  int weight(int base) => isActive ? base : base * 60 ~/ 100;
 
   return GlobalSearchEntry(
     kind: GlobalSearchKind.supplier,
@@ -626,17 +643,21 @@ GlobalSearchEntry _supplierEntry(Map<String, dynamic> row) {
     subtitle: <String>[
       if (rut != null) rut,
       if (trade != null && trade != name) trade,
+      if (!isActive) 'Inactivo',
     ].join(' · '),
     identifier: rut,
     imageUrl: _text(row['image_url']),
     route: '/purchases/suppliers/${row['id']}',
     updatedAt: _timestamp(row['updated_at']),
+    alsoNamed: aliases.toSet(),
     fields: <BikeFinderSearchField>[
-      BikeFinderSearchField(name, weight: 135),
-      BikeFinderSearchField(trade, weight: 120),
-      BikeFinderSearchField(legal, weight: 110),
-      BikeFinderSearchField(rut, weight: 125),
-      BikeFinderSearchField(_compactIdentity(rut), weight: 125),
+      BikeFinderSearchField(name, weight: weight(135)),
+      for (final alias in aliases)
+        BikeFinderSearchField(alias, weight: weight(130)),
+      BikeFinderSearchField(trade, weight: weight(120)),
+      BikeFinderSearchField(legal, weight: weight(110)),
+      BikeFinderSearchField(rut, weight: weight(125)),
+      BikeFinderSearchField(_compactIdentity(rut), weight: weight(125)),
     ],
   );
 }

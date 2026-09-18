@@ -964,3 +964,40 @@ Nota de herramienta: **Pillow está en `/usr/bin/python3`** (10.4), no en el
 Python de Homebrew; y **`qlmanage -t -s 1600 hoja.html`** rinde a PNG una hoja
 de revisión HTML con imágenes locales, que el navegador integrado sólo muestra
 como instantánea estática, sin captura posible.
+
+## Unificar proveedores duplicados sin perder nada (2026-09-18)
+
+Tres pares de fichas duplicadas —«garozzo»/«Bicicletas Garozzo»,
+«Transvayve»/«Transportes Vayve», «Pernos y Gomas»/«Comercial Gomas y
+Pernos»— se unificaron con la instrucción del dueño «que no se pierda nada».
+Lo que hace falta saber para repetirlo:
+
+- **Primero se mide lo que cuelga de cada ficha, en todas partes.** Hay 49
+  claves foráneas hacia `suppliers` (algunas `on delete restrict`, otras
+  `cascade`: borrar arrastraría roles, contactos y credenciales) y además
+  referencias **sin** clave foránea: `conversations.context_id`,
+  `conversation_contexts.context_id`, `app_files.context_id`,
+  `erp_notifications.entity_id` y la identidad en `external_parties` (mismo id
+  que el proveedor) con sus `external_party_identifiers`. La consulta de conteo
+  se arma de las dos listas y se corre **antes y después**: tiene que dar lo
+  mismo fila por fila.
+- **Se desactiva, no se borra.** La ficha retirada queda `is_active = false`
+  con una nota que nombra a la que la absorbe; la sobreviviente guarda su
+  nombre como alias y su ID de Zoho en la nota. El trigger
+  `prepare_supplier_external_party` refleja `is_active` en `external_parties`
+  solo, así que un `update` directo de `suppliers` deja las dos tablas
+  coherentes. Si la retirada tuviera movimientos, se re-apuntan antes; estas no
+  tenían ninguno, y los datos bancarios y la plantilla OCR estaban vacíos en
+  las seis.
+- **No usar `save_supplier_relationship_profile` para un cambio parcial.** Es
+  un comando de ficha completa: los campos del perfil sólo cambian si vienen en
+  el JSON, pero roles, capacidades y etiquetas **se reemplazan enteros** con los
+  arreglos que se le pasen —un arreglo vacío los borra—.
+- **Ensayo con `rollback` y aserciones al final.** El archivo termina con un
+  `select 1 / (case when <estado final esperado> then 1 else 0 end)` por
+  bloque: si una fila no quedó como se esperaba, la división por cero aborta la
+  transacción entera. Cada `update` va guardado por el `updated_at` leído, para
+  no pisar una edición hecha entretanto.
+- **El buscador global también tiene que saberlo.** No leía `aliases` ni
+  marcaba inactivos; tras unificar, «transvayve» sólo encontraba la ficha
+  retirada. Ver la fila del buscador en `canonical-ui-surfaces.md`.
