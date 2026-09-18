@@ -5,7 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/material.dart';
 
-import '../../../shared/services/image_service.dart';
+import 'counterparty_avatar_image.dart';
 import '../../../shared/themes/vinabike_theme_roles.dart';
 import '../../../shared/widgets/whatsapp_outgoing_preview.dart';
 import 'package:flutter/services.dart';
@@ -12408,34 +12408,18 @@ class _ConversationHeaderAvatar extends StatelessWidget {
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        // Un logo se contiene sobre el tono del canal; una foto se recorta.
-        // Recortar un logotipo de 415×77 a un círculo deja tres letras.
+        // El mismo avatar que la lista: llena el círculo, como WhatsApp, y
+        // sólo un logotipo muy ancho se contiene.
         SizedBox(
           width: radius * 2,
           height: radius * 2,
-          child: isMark
-              ? Container(
-                  padding: EdgeInsets.all(radius * 0.28),
-                  decoration: BoxDecoration(
-                    color: accent.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: ImageService.buildCachedImage(
-                    imageUrl: url,
-                    fit: BoxFit.contain,
-                    placeholder: glyph,
-                    errorWidget: glyph,
-                  ),
-                )
-              : ImageService.buildCachedImage(
-                  imageUrl: url,
-                  width: radius * 2,
-                  height: radius * 2,
-                  isCircular: true,
-                  placeholder: glyph,
-                  errorWidget: glyph,
-                ),
+          child: CounterpartyAvatarImage(
+            url: url,
+            size: radius * 2,
+            isMark: isMark,
+            backdrop: accent.withValues(alpha: 0.1),
+            fallback: glyph,
+          ),
         ),
         Positioned(
           right: -2,

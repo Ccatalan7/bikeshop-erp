@@ -1644,6 +1644,16 @@ porque el error sólo aparece al elegir el archivo.
   de aire; una foto de persona sigue recortada, que es como se ve bien. Cuál es
   cuál lo dice el dato —si el hilo es de un proveedor, si la ficha es de una
   organización—, no el ojo de quien implementa.
+  **Corrección del dueño (2026-09-18): en el círculo de un chat, la marca llena
+  el círculo, como WhatsApp.** Contenida con un 14 % de aire quedaba a dos
+  tercios del avatar, sobre un anillo de color que no dice nada. Lo que decide
+  ahora es **la forma real de la imagen**, leída al decodificarla
+  (`CounterpartyAvatarImage`): entre 0,8 y 1,25 de proporción llena; más
+  apaisada o más alta se sigue conteniendo, porque «Agregar imagen…» acepta
+  cualquier archivo y el caso de TeknoBike vuelve apenas alguien suba un
+  logotipo. Los logos de proveedor se preparan cuadrados, con el aire ya
+  dentro de la imagen, para que llenar no corte nada. El avatar cuadrado del
+  directorio y la miniatura del buscador no cambian.
 - **Y el canal no se pierde al ganar la cara.** El encabezado del hilo mostraba
   sólo el glifo del canal. Al poner la imagen de la contraparte, el canal baja a
   la insignia de la esquina —el patrón que la lista de conversaciones ya usaba—
