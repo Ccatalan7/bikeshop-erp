@@ -1347,6 +1347,18 @@ the owner's — cleared only from WhatsApp › Storage, never by an agent), repo
 `flutter_tester` processes orphaned 9 and 29 days earlier were still alive
 under `launchd`; the hook blocks `kill`, so they are reported, not signalled.
 
+**«System Data» on this Mac is not the usual suspect.** There were no Time
+Machine local snapshots (`tmutil listlocalsnapshots /`). The simulator runtime
+looks like 22 GB in `/Library/Developer/CoreSimulator/Volumes`, but that is the
+*mounted* image; the real cost is its 9.9 GB image in
+`/System/Library/AssetsV2/com_apple_MobileAsset_iOSSimulatorRuntime` plus 3 GB of
+dyld cache, and it is the only runtime (keep it). What does belong to us:
+`/private/var/folders/*/X/com.google.Chrome.code_sign_clone` and the Edge
+equivalent — **a full browser copy that macOS leaves each time an agent drives
+Chrome and it does not close cleanly** (3 GB here; reported at 50–62 GB in the
+Codex and Playwright trackers). Move them only with both browsers fully quit;
+a restart also clears them, together with orphaned `flutter_tester` processes.
+
 **How to clean here:** the repo hook blocks `rm -rf`, `find -delete` and
 `kill`. Move targets with `mv` into one dated folder, `~/.Trash/limpieza-<date>/`
 (same APFS volume, so it is an instant rename), report the size, and let the
