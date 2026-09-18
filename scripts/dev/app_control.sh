@@ -12,7 +12,7 @@
 #   app_control.sh enter-text --key X --text "texto"
 #   app_control.sh type "texto"
 #   app_control.sh key <keycode>         # 36=return 53=esc 48=tab 51=delete
-#   app_control.sh choose-file /abs/path # file in the current macOS Open panel
+#   app_control.sh choose-file /abs/path # file (or every file of a folder) in the Open panel
 #   app_control.sh resize W H            # largest window of the exact debug PID
 #   app_control.sh geometry              # pid + window frame + frame size
 #
@@ -444,7 +444,7 @@ PY
 
   choose-file)
     if [ $# -ne 2 ]; then
-      echo "uso: app_control.sh choose-file /ruta/absoluta/al/archivo" >&2
+      echo "uso: app_control.sh choose-file /ruta/absoluta/al/archivo|carpeta" >&2
       exit 2
     fi
     file_path="$2"
@@ -452,10 +452,19 @@ PY
       /*) ;;
       *) echo "choose-file exige una ruta absoluta" >&2; exit 2 ;;
     esac
-    [ -f "$file_path" ] || {
+    # A folder selects every file inside it, for pickers that accept several
+    # files (e.g. several bank statements at once). Put only the wanted files
+    # in that folder.
+    select_all=0
+    if [ -d "$file_path" ]; then
+      select_all=1
+      # Without the trailing slash Go to Folder stays in the parent and only
+      # highlights the folder; Cmd+A then selects the parent's files.
+      case "$file_path" in */) ;; *) file_path="$file_path/" ;; esac
+    elif [ ! -f "$file_path" ]; then
       echo "el archivo no existe o no es regular: $file_path" >&2
       exit 2
-    }
+    fi
 
     # The Flutter picker is an OS window, so it is outside the VM-service
     # semantics tree used by `tap`. Target the exact debug bundle/PID and
@@ -476,9 +485,10 @@ PY
     # the exact-PID predicate inline at every access. For the same reason do
     # not use `open -a`: LaunchServices/name resolution is unnecessary when the
     # exact debug PID is already known and can activate the installed copy.
-    if ! osascript - "$file_path" <<EOF >/dev/null
+    if ! osascript - "$file_path" "$select_all" <<EOF >/dev/null
 on run argv
   set filePath to item 1 of argv
+  set selectAll to (item 2 of argv) is "1"
   set savedClipboard to missing value
   try
     set savedClipboard to the clipboard as record
@@ -516,6 +526,14 @@ on run argv
       delay 0.3
       key code 36
       delay 1
+      if selectAll then
+        -- Column view leaves the folder highlighted with the focus outside
+        -- it; Right moves the focus into its files before selecting all.
+        key code 124
+        delay 0.4
+        keystroke "a" using {command down}
+        delay 0.5
+      end if
       key code 36
     end tell
 

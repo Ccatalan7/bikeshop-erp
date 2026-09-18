@@ -361,7 +361,11 @@ void main() {
     expect(proposals.single.instrument, BankPaymentInstrument.unknown);
     expect(
         proposals.single.reasons.join(' '), contains('1 débito + 1 crédito'));
-    expect(proposals.single.isSelectedByDefault, isFalse);
+    // One combination explains the deposit to the peso under the configured
+    // terms, so it is decisive; a looser fit would stay a manual choice.
+    expect(proposals.single.isSelectedByDefault, isTrue);
+    expect(proposals.single.confidence, BankReconciliationConfidence.high);
+    expect(proposals.single.reasons, contains('Cuadra al peso'));
   });
 
   test('credit rail cannot settle before its configured business-day release',

@@ -387,6 +387,17 @@ nombre puede activar la copia instalada. `choose-file` mantiene ahora el
 predicado de PID inline y enumera cada ventana por índice; esta trampa costó una
 ronda completa el 2026-08-01.
 
+**Varios archivos a la vez (2026-09-18).** Para un selector que acepta
+varios (Conciliación bancaria → «Elegir archivos»), copia sólo los archivos
+deseados a una carpeta propia y pasa **la carpeta**:
+`app_control.sh choose-file /ruta/a/la/carpeta`. El owner entra a la carpeta,
+selecciona todo y abre. Dos trampas, cada una costó un intento: sin la `/`
+final, «Go to Folder» se queda en la carpeta padre con la carpeta resaltada y
+`Cmd+A` elige los archivos del padre (una captura de pantalla terminó enviada
+a Veryfi como si fuera una cartola); y en la vista de columnas el foco queda
+fuera de la carpeta, así que `Open` sigue deshabilitado hasta mover el foco
+con la flecha derecha. El owner ya hace las dos cosas.
+
 ### Tap by identity; pixels are a one-frame fallback (2026-07-31)
 
 ```bash

@@ -68,7 +68,7 @@ void main() {
     expect(result.first.instrument, BankPaymentInstrument.unknown);
     expect(result.last.targetKind, BankReconciliationTargetKind.expense);
     expect(result.last.amountClp, 19980);
-    expect(calls.single.name, 'get_bank_reconciliation_candidates_v1');
+    expect(calls.single.name, 'get_bank_reconciliation_candidates_v2');
   });
 
   test('persistence sends structured evidence only and canonical provider code',
@@ -179,6 +179,95 @@ void main() {
         actions.single['allocations'] as List<Map<String, dynamic>>;
     expect(allocations.single['provider'], 'mercadopago');
     expect(allocations.single['instrument'], 'unknown');
+  });
+
+  test('several statements persist each file under its own row ids', () async {
+    final calls = <_RpcCall>[];
+    final service = BankReconciliationService(
+      database: _FakeDatabaseService(),
+      rpc: (name, params) async {
+        calls.add(_RpcCall(name, params));
+        final rows = params['p_rows'] as List<Map<String, dynamic>>;
+        return <String, dynamic>{
+          'import_id': 'import-${calls.length}',
+          'revision': 1,
+          'replayed': false,
+          'rows': <Map<String, dynamic>>[
+            for (final row in rows)
+              <String, dynamic>{
+                'source_row_id': row['source_row_id'],
+                'row_id': 'db-${row['source_row_id']}',
+              },
+          ],
+        };
+      },
+    );
+    BankStatementMovement movement(String fileRowId, String sha) =>
+        BankStatementMovement(
+          sourceRowId: fileRowId,
+          ordinal: 1,
+          bookingDate: const BankCivilDate(2026, 7, 1),
+          description: 'Traspaso',
+          normalizedDescription: 'traspaso',
+          direction: BankMovementDirection.credit,
+          amountClp: 1000,
+          sourcePage: 1,
+          sourceLineStart: 1,
+          sourceLineEnd: 1,
+        ).withSourceRowId('${sha.substring(0, 12)}:$fileRowId');
+    final june = 'a' * 64;
+    final july = 'b' * 64;
+    final draft = BankReconciliationPreparedDraft(
+      fileSha256: june,
+      filename: '2 cartolas',
+      sourceType: 'pdf_text',
+      parserName: 'banco_chile_statement',
+      parserVersion: 'v1',
+      rows: <BankReconciliationRowDraft>[
+        BankReconciliationRowDraft(
+          movement: movement('row-1', june),
+          proposals: const [],
+          sourceFileSha256: june,
+        ),
+        BankReconciliationRowDraft(
+          movement: movement('row-1', july),
+          proposals: const [],
+          sourceFileSha256: july,
+        ),
+      ],
+      sources: <BankStatementSource>[
+        BankStatementSource(
+          fileSha256: june,
+          filename: 'cartola junio.pdf',
+          sourceType: 'pdf_text',
+        ),
+        BankStatementSource(
+          fileSha256: july,
+          filename: 'cartola julio.pdf',
+          sourceType: 'pdf_text',
+        ),
+      ],
+    );
+
+    final receipts = <BankStatementImportReceipt>[
+      for (final source in draft.sources)
+        await service.createImport(
+          draft: draft.forSource(source),
+          erpAccountId: '66666666-6666-4666-8666-666666666666',
+        ),
+    ];
+
+    expect(calls.map((call) => call.params['p_file_sha256']), [june, july]);
+    for (final call in calls) {
+      final rows = call.params['p_rows'] as List<Map<String, dynamic>>;
+      // Importing the same file again later keeps the same row identity.
+      expect(rows.single['source_row_id'], 'row-1');
+    }
+    expect(receipts.first.rowIdsBySourceRowId, {
+      '${june.substring(0, 12)}:row-1': 'db-row-1',
+    });
+    expect(receipts.last.rowIdsBySourceRowId.keys.single,
+        '${july.substring(0, 12)}:row-1');
   });
 
   test('apply serializes expense, journal and dismissal as real actions',

@@ -17,6 +17,13 @@ action operations. It also projected production expense `GTO-00136` as the
 17/07 NIC Chile debit for CLP 19,980, proving the legacy-paid-expense seam
 without creating or changing a business row.
 
+**Matching v2 (2026-09-18):** migration `20260918150000` adds
+`get_bank_reconciliation_candidates_v2`; the client moved to it, a global
+assignment, acquirer calibration and suggestions for unregistered rows. On the
+owner's real June–September 2026 statements (229 movements) v1 preselected 2;
+v2 preselects 125, offers a one-tap suggestion for 15 more and ties 5 transfers
+to salaries Nómina still owes. v1 stays deployed, unchanged, for older builds.
+
 ## Product boundary
 
 The operator imports a bank statement to resolve what each bank debit or credit
@@ -56,7 +63,71 @@ Sources:
 - [Banco de Chile · Consulta de cuentas Banconexión](https://portales.bancochile.cl/uploads/000/011/348/0b858c20-8963-487a-a1de-895412983e4a/original/bch_banconexion-consultacuentas_v2.pdf)
 - [CMF · definitions for operation and accounting dates](https://www.cmfchile.cl/portal/estadisticas/617/w3-propertyvalue-29581.html)
 
-## Transbank estimates
+## Candidate catalog (v2)
+
+v1 sent every payment twice — the payment and the journal entry it posted —
+because its exclusion list named the modules `sales`, `purchases` and
+`expenses`, while the ledger writes `sales_payments`, `purchase_payments` and
+`expense_payments`. Two identical candidates meant no row was ever unique. v2
+calls v1 for eligibility (access, range, account, allocated targets) and then:
+
+- drops a journal whose `source_module` is a payment module or whose
+  `source_reference` is a candidate payment;
+- adds every name a bank line may print for the counterparty: customer;
+  supplier name, legal name, trade name, owner and aliases; for a salary, the
+  employee (via `payroll_voucher_lines.expense_id` or a payment-workspace leg)
+  plus `payroll_beneficiary_aliases`. Salary expenses carry no supplier, so v1
+  called every one of them «Proveedor»;
+- adds `bank_evidence`: the bank rows Nómina already tied to that salary
+  payment (`payroll_payment_statement_allocations`,
+  `payroll_statement_allocations`). Nómina registered weeks of July salaries on
+  12 August; the evidence keeps the real transfer date;
+- returns unpaid payroll lines, open sales and purchase invoices, a directory
+  of counterparties with the expense account each was booked to, and earlier
+  reconciliation decisions, so an unregistered row can be proposed.
+
+The client asks from 45 days before the statement: a salary can be registered
+weeks after its transfer.
+
+## Direct matching
+
+Bank lines print the holder's legal name, reordered, with the channel word
+«Internet», accents dropped and the whole line cut at a fixed width. Identity
+is therefore token based and order free; only the last bank word may be a cut
+word («Univer» → «Universal»); a four-letter ERP name may be a nickname
+(«Cata»); one-letter misspellings match («Natero» / «Nattero»). Placeholders
+(«Cliente Mostrador», «Sin registro», «Proveedor») identify nobody; two real
+names that share nothing are a conflict — someone else paid — and are proposed
+but never preselected.
+
+Every row ranks its options by amount, name, date distance and evidence; the
+date window widens only for a strong name (12 days, 40 for salaries and
+recurring payees). Rows are then assigned **together**: a row Nómina tied to
+operations is fixed first, then one operation per row by maximum total score
+(Hungarian method per group of competing rows), then one transfer paying
+several operations of the same party (a salary plus a reimbursement). Greedy
+row-by-row assignment gave a July group the June salary that a June transfer
+needed. A pair starts selected only when the next-best arrangement — this row
+taking another operation, or another row taking this one — scores clearly
+lower.
+
+## Acquirer deposits
+
+The statement proves the acquirer's real terms: a deposit that equals one sale
+net of `round(gross × rate)` and 19% VAT on that commission, to the peso, is a
+measurement. With at least three such fits the dominant rate replaces a
+configured rate it contradicts, and the review warns. On the owner's statements
+debit cost 1,21% + VAT at 2 banking days while Terminales POS said 1,75% at 1.
+
+A deposit is explained by card sales inside their banking-day windows (Chilean
+holidays included); terminal-cleared and legacy bank-booked sales are never
+mixed in one deposit. It starts selected only when one combination fits to the
+peso and a coincidental fit is unlikely: with many eligible sales some subset
+hits any amount by chance, so the density of reachable sums near the deposit is
+measured. Otherwise the closest combination under the proven rate is proposed
+with its residue, and only then the broad legacy estimate below.
+
+### Legacy Transbank estimate (fallback)
 
 Transbank deposits are settlement groups, not one sale. The first policy uses
 the combined ERP card method and keeps its instrument as `unknown`; it examines
@@ -71,7 +142,7 @@ configured plausible envelope. It shows the equation:
 
 `gross card sales − estimated commission/IVA/retentions/adjustments = bank deposit`
 
-No estimated Transbank group is preselected. The user must approve it. The
+No estimated (non-exact) Transbank group is preselected. The user must approve it. The
 allocation records both each source payment's authoritative gross amount and a
 proportional share of the net bank deposit, so many sales can explain one bank
 row without pretending that fees disappeared.
@@ -92,8 +163,11 @@ Official basis:
 
 - Direction must agree: bank credit with incoming ERP money; bank debit with
   outgoing ERP money.
-- A direct proposal stays within the configured date and CLP tolerance. Only a
-  unique, exact, high-confidence result starts selected.
+- A direct proposal stays within the CLP tolerance and its date window. Only a
+  decisive result starts selected: Nómina evidence, a strong name with the
+  amount within 1% (transfers round salaries up), or an exact amount within
+  three days that nothing else competes for — each with a clear margin over the
+  best alternative arrangement.
 - Existing-operation candidates include canonical payment rows and legacy paid
   expenses that embedded their bank account/method before `expense_payments`
   became the write model. The latter is how a NIC Chile payment can be linked
@@ -111,6 +185,29 @@ Official basis:
   complete review snapshot under optimistic revision control.
 - Authenticated clients can read their accounting scope but cannot directly
   insert or mutate reconciliation tables.
+
+## Unregistered movements
+
+A row nothing explains gets one suggestion, firmest evidence first: a transfer
+and its return cancel each other (dismiss both); an earlier decision for the
+same counterparty or merchant; a salary Nómina still owes (pay it in Nómina —
+this workspace never books a salary); an open invoice with that balance
+(register the payment in Ventas or Compras); the account a supplier or payee
+was booked to before (e.g. the monthly rent); a goods supplier with no
+purchase (register it in Compras); the merchant of a card charge (Google Cloud,
+Meta, NIC Chile…) or a bank fee (a journal to financial expenses, never a
+look-alike supplier). A suggestion this workspace can apply carries a
+prefilled decision; «Usar sugerencias seguras» applies only high-confidence
+ones and leaves them editable until the review is applied.
+
+## Several statements at once
+
+The operator may pick several statements of the same account. They are read
+and reviewed together — a sale of 30 June settled on 2 July is explained across
+files — and a movement repeated by overlapping statements (same date, amount,
+balance and text) is reviewed once. Each file is still persisted as its own
+import under its own row ids, so importing a file again never duplicates rows,
+and applying replays per file after a partial failure.
 
 ## Responsive composition
 

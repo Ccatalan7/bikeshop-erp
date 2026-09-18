@@ -11,6 +11,8 @@ import '../../../hr/services/payroll_bank_statement_parser.dart';
 import '../../../hr/services/payroll_statement_extraction_service.dart';
 import '../../../hr/services/payroll_statement_veryfi_ocr.dart';
 import '../models/bank_reconciliation_models.dart';
+import 'bank_reconciliation_advisor.dart';
+import 'bank_reconciliation_catalog_codec.dart';
 import 'bank_reconciliation_matcher.dart';
 
 typedef BankReconciliationRpc = Future<dynamic> Function(
@@ -27,17 +29,54 @@ class BankReconciliationServiceException implements Exception {
   String toString() => message;
 }
 
+/// One statement file picked by the operator.
+class BankStatementFileInput {
+  const BankStatementFileInput({
+    required this.bytes,
+    required this.filename,
+    this.sourcePath,
+  });
+
+  final Uint8List bytes;
+  final String filename;
+  final String? sourcePath;
+}
+
+class _ReadStatement {
+  const _ReadStatement({
+    required this.file,
+    required this.extraction,
+    required this.movements,
+    required this.sourceType,
+    required this.accountFingerprint,
+    required this.firstDate,
+    required this.lastDate,
+    required this.warnings,
+  });
+
+  final BankStatementFileInput file;
+  final PayrollStatementExtractionResult extraction;
+  final List<BankStatementMovement> movements;
+  final String sourceType;
+  final String? accountFingerprint;
+  final BankCivilDate? firstDate;
+  final BankCivilDate? lastDate;
+  final List<String> warnings;
+}
+
 class BankReconciliationService {
   BankReconciliationService({
     required DatabaseService database,
     PayrollBankStatementParser parser = const PayrollBankStatementParser(),
     PayrollStatementVeryfiOcr veryfiOcr = const PayrollStatementVeryfiOcr(),
     BankReconciliationMatcher matcher = const BankReconciliationMatcher(),
+    BankReconciliationAdvisor advisor = const BankReconciliationAdvisor(),
     BankReconciliationRpc? rpc,
   })  : _database = database,
         _parser = parser,
         _veryfiOcr = veryfiOcr,
         _matcher = matcher,
+        _advisor = advisor,
         _rpc = rpc ??
             ((functionName, params) =>
                 database.supabase.rpc(functionName, params: params));
@@ -49,14 +88,29 @@ class BankReconciliationService {
   final PayrollBankStatementParser _parser;
   final PayrollStatementVeryfiOcr _veryfiOcr;
   final BankReconciliationMatcher _matcher;
+  final BankReconciliationAdvisor _advisor;
   final BankReconciliationRpc _rpc;
 
+  /// Every direct table read is scoped to the operator's tenant explicitly,
+  /// not only by row-level security.
+  Future<String> _requireTenantId() async {
+    final tenantId = await _database.getTenantId();
+    if (tenantId == null || tenantId.trim().isEmpty) {
+      throw const BankReconciliationServiceException(
+        'No pudimos identificar la empresa de tu sesión.',
+      );
+    }
+    return tenantId;
+  }
+
   Future<List<BankReconciliationAccountOption>> loadBankAccounts() async {
+    final tenantId = await _requireTenantId();
     final rows = await _database.supabase
         .from('accounts')
         .select(
           'id, tenant_id, code, name, type, category, parent_id, is_active',
         )
+        .eq('tenant_id', tenantId)
         .eq('type', 'asset')
         .eq('is_active', true)
         .order('code');
@@ -84,14 +138,17 @@ class BankReconciliationService {
   Future<BankReconciliationWorkspaceOptions> loadWorkspaceOptions({
     required String erpAccountId,
   }) async {
+    final tenantId = await _requireTenantId();
     final accountRows = await _database.supabase
         .from('accounts')
         .select('id, code, name, type, category, is_active')
+        .eq('tenant_id', tenantId)
         .eq('is_active', true)
         .order('code');
     final methodRows = await _database.supabase
         .from('payment_methods')
         .select('id, code, name, account_id, is_active, usage_scope')
+        .eq('tenant_id', tenantId)
         .eq('account_id', erpAccountId)
         .eq('is_active', true)
         .inFilter('usage_scope', const ['outbound', 'both']).order('name');
@@ -149,20 +206,215 @@ class BankReconciliationService {
     String? sourcePath,
     int? statementYear,
     PayrollStatementPreparationProgressCallback? onProgress,
+  }) {
+    return prepareMany(
+      files: <BankStatementFileInput>[
+        BankStatementFileInput(
+          bytes: bytes,
+          filename: filename,
+          sourcePath: sourcePath,
+        ),
+      ],
+      erpAccountId: erpAccountId,
+      statementYear: statementYear,
+      onProgress: onProgress,
+    );
+  }
+
+  /// Reads one or several statements of the same account and reviews them
+  /// together: a card sale of 30 June settled on 2 July is explained across
+  /// the two files, and one assignment covers every movement.
+  Future<BankReconciliationPreparedDraft> prepareMany({
+    required List<BankStatementFileInput> files,
+    required String erpAccountId,
+    int? statementYear,
+    PayrollStatementPreparationProgressCallback? onProgress,
   }) async {
+    if (files.isEmpty) {
+      throw const BankReconciliationServiceException(
+        'Elige al menos una cartola.',
+      );
+    }
     final extractionService = PayrollStatementExtractionService(
       cloudDocumentTextExtractor: _veryfiOcr.extractText,
     );
+    final statements = <_ReadStatement>[];
+    final seenFiles = <String>{};
+    for (final file in files) {
+      final statement = await _readStatement(
+        extractionService,
+        file,
+        statementYear: statementYear,
+        onProgress: onProgress,
+      );
+      if (seenFiles.add(statement.extraction.fileSha256)) {
+        statements.add(statement);
+      }
+    }
+    final fingerprints = statements
+        .map((statement) => statement.accountFingerprint)
+        .whereType<String>()
+        .toSet();
+    if (fingerprints.length > 1) {
+      throw const BankReconciliationServiceException(
+        'Las cartolas son de cuentas bancarias distintas. Concilia cada '
+        'cuenta por separado.',
+      );
+    }
+
+    // Unique ids across files; a movement repeated by two overlapping
+    // statements (same date, amount, balance and text) is reviewed once.
+    final multiple = statements.length > 1;
+    final entries = <(BankStatementMovement, String, int)>[];
+    final seenInEarlierFiles = <String>{};
+    var repeated = 0;
+    for (var index = 0; index < statements.length; index++) {
+      final statement = statements[index];
+      final keys = <String>{};
+      for (final movement in statement.movements) {
+        final key = movement.balanceClp == null
+            ? null
+            : <Object?>[
+                movement.bookingDate,
+                movement.direction.name,
+                movement.amountClp,
+                movement.balanceClp,
+                movement.normalizedDescription,
+              ].join('|');
+        if (multiple && key != null && seenInEarlierFiles.contains(key)) {
+          repeated++;
+          continue;
+        }
+        if (key != null) keys.add(key);
+        entries.add((
+          multiple
+              ? movement.withSourceRowId(
+                  '${statement.extraction.fileSha256.substring(0, 12)}:'
+                  '${movement.sourceRowId}',
+                )
+              : movement,
+          statement.extraction.fileSha256,
+          index,
+        ));
+      }
+      seenInEarlierFiles.addAll(keys);
+    }
+    entries.sort((left, right) {
+      final leftDate = left.$1.bookingDate;
+      final rightDate = right.$1.bookingDate;
+      if (leftDate != null && rightDate != null) {
+        final byDate = leftDate.compareTo(rightDate);
+        if (byDate != 0) return byDate;
+      }
+      final byFile = left.$3.compareTo(right.$3);
+      return byFile != 0 ? byFile : left.$1.ordinal.compareTo(right.$1.ordinal);
+    });
+    final movements = [for (final entry in entries) entry.$1];
+    final dated = movements
+        .map((movement) => movement.bookingDate)
+        .whereType<BankCivilDate>()
+        .toList(growable: false)
+      ..sort();
+    if (dated.isEmpty) {
+      throw const BankReconciliationServiceException(
+        'La cartola no contiene fechas contables legibles.',
+      );
+    }
+
+    // Salaries are registered up to weeks after the transfer, so the
+    // catalog reaches further back than the statement.
+    final context = await loadContext(
+      erpAccountId: erpAccountId,
+      from: dated.first.addDays(-45),
+      to: dated.last.addDays(10),
+    );
+    final terminalPolicies = await loadTerminalMatchPolicies(
+      from: dated.first.addDays(-30),
+      to: dated.last,
+    );
+    BankReconciliationWorkspaceOptions? options;
+    try {
+      options = await loadWorkspaceOptions(erpAccountId: erpAccountId);
+    } catch (error) {
+      // Suggestions degrade to prefilled text; matching still works.
+      debugPrint('BankReconciliationService workspace options: $error');
+    }
+    final match = _matcher.analyze(
+      movements: movements,
+      candidates: context.candidates,
+      terminalPolicies: terminalPolicies,
+    );
+    final suggestions = _advisor.suggest(
+      movements: movements,
+      proposals: match.proposals,
+      context: context,
+      options: options,
+    );
+    final first = statements.first;
+    return BankReconciliationPreparedDraft(
+      fileSha256: first.extraction.fileSha256,
+      filename:
+          multiple ? '${statements.length} cartolas' : first.file.filename,
+      sourceType: first.sourceType,
+      accountFingerprint: first.accountFingerprint,
+      parserName: parserName,
+      parserVersion: parserVersion,
+      rows: <BankReconciliationRowDraft>[
+        for (final entry in entries)
+          BankReconciliationRowDraft(
+            movement: entry.$1,
+            proposals: match.proposals[entry.$1.sourceRowId] ??
+                const <BankReconciliationProposal>[],
+            suggestion: suggestions[entry.$1.sourceRowId],
+            sourceFileSha256: multiple ? entry.$2 : null,
+          ),
+      ],
+      candidateCatalog: context.candidates,
+      extractionWarnings: <String>[
+        for (final statement in statements) ...statement.warnings,
+        if (repeated > 0)
+          '$repeated movimiento(s) aparecen en dos cartolas que se traslapan; '
+              'se revisan una sola vez.',
+      ],
+      sources: <BankStatementSource>[
+        for (final statement in statements)
+          BankStatementSource(
+            fileSha256: statement.extraction.fileSha256,
+            filename: statement.file.filename,
+            sourceType: statement.sourceType,
+            accountFingerprint: statement.accountFingerprint,
+            firstDate: statement.firstDate,
+            lastDate: statement.lastDate,
+            movementCount: entries
+                .where((entry) => entry.$2 == statement.extraction.fileSha256)
+                .length,
+          ),
+      ],
+      insights: <BankReconciliationInsight>[
+        ...match.insights,
+        ..._advisor.insights(suggestions),
+      ],
+    );
+  }
+
+  Future<_ReadStatement> _readStatement(
+    PayrollStatementExtractionService extractionService,
+    BankStatementFileInput file, {
+    required int? statementYear,
+    required PayrollStatementPreparationProgressCallback? onProgress,
+  }) async {
     PayrollStatementExtractionResult extraction;
     try {
       extraction = await extractionService.extract(
-        bytes: bytes,
-        filename: filename,
-        sourcePath: sourcePath,
+        bytes: file.bytes,
+        filename: file.filename,
+        sourcePath: file.sourcePath,
         onProgress: onProgress,
       );
     } on PayrollStatementExtractionException catch (error) {
-      throw BankReconciliationServiceException(error.message);
+      throw BankReconciliationServiceException(
+        '${file.filename}: ${error.message}',
+      );
     }
 
     var year = statementYear ?? _inferStatementYear(extraction);
@@ -175,9 +427,9 @@ class BankReconciliationService {
         extraction.method == PayrollStatementExtractionMethod.embeddedPdfText &&
         parsed.rows.isEmpty) {
       extraction = await extractionService.extract(
-        bytes: bytes,
-        filename: filename,
-        sourcePath: sourcePath,
+        bytes: file.bytes,
+        filename: file.filename,
+        sourcePath: file.sourcePath,
         forceImageOcrForPdf: true,
         onProgress: onProgress,
       );
@@ -187,53 +439,26 @@ class BankReconciliationService {
       );
     }
     if (extraction.needsImageOcr || parsed.rows.isEmpty) {
-      throw const BankReconciliationServiceException(
-        'No se reconocieron movimientos bancarios revisables.',
+      throw BankReconciliationServiceException(
+        '${file.filename}: no se reconocieron movimientos bancarios '
+        'revisables.',
       );
     }
-
     final movements = _mapMovements(parsed.rows);
     final dated = movements
         .map((movement) => movement.bookingDate)
         .whereType<BankCivilDate>()
         .toList(growable: false)
       ..sort();
-    if (dated.isEmpty) {
-      throw const BankReconciliationServiceException(
-        'La cartola no contiene fechas contables legibles.',
-      );
-    }
-    final candidates = await loadCandidates(
-      erpAccountId: erpAccountId,
-      from: dated.first.addDays(-14),
-      to: dated.last.addDays(7),
-    );
-    final terminalPolicies = await loadTerminalMatchPolicies(
-      from: dated.first.addDays(-30),
-      to: dated.last,
-    );
-    final proposals = _matcher.match(
+    return _ReadStatement(
+      file: file,
+      extraction: extraction,
       movements: movements,
-      candidates: candidates,
-      terminalPolicies: terminalPolicies,
-    );
-
-    return BankReconciliationPreparedDraft(
-      fileSha256: extraction.fileSha256,
-      filename: filename,
       sourceType: _sourceType(extraction),
       accountFingerprint: _extractAccountFingerprint(extraction),
-      parserName: parserName,
-      parserVersion: parserVersion,
-      rows: <BankReconciliationRowDraft>[
-        for (final movement in movements)
-          BankReconciliationRowDraft(
-            movement: movement,
-            proposals: proposals[movement.sourceRowId] ?? const [],
-          ),
-      ],
-      candidateCatalog: candidates,
-      extractionWarnings: <String>[
+      firstDate: dated.isEmpty ? null : dated.first,
+      lastDate: dated.isEmpty ? null : dated.last,
+      warnings: <String>[
         ...extraction.warnings,
         ...parsed.warnings.map((warning) => warning.message),
       ],
@@ -245,11 +470,13 @@ class BankReconciliationService {
     required BankCivilDate to,
   }) async {
     try {
+      final tenantId = await _requireTenantId();
       final profileRows = await _database.supabase
           .from('payment_terminal_profiles')
           .select(
             'id,provider_code,provider_name,terminal_name,descriptor_patterns',
           )
+          .eq('tenant_id', tenantId)
           .eq('is_active', true);
       final termRows = await _database.supabase
           .from('payment_terminal_terms')
@@ -260,6 +487,7 @@ class BankReconciliationService {
             'effective_from,effective_to,'
             'payment_methods!payment_terminal_terms_method_fk(code,is_active)',
           )
+          .eq('tenant_id', tenantId)
           .lte('effective_from', to.toString())
           .or('effective_to.is.null,effective_to.gte.${from.toString()}');
       final profileById = <String, Map<String, dynamic>>{
@@ -318,23 +546,30 @@ class BankReconciliationService {
     required BankCivilDate from,
     required BankCivilDate to,
   }) async {
+    final context = await loadContext(
+      erpAccountId: erpAccountId,
+      from: from,
+      to: to,
+    );
+    return context.candidates;
+  }
+
+  /// Candidates plus what explains an unregistered movement: unpaid payroll,
+  /// open invoices, counterparties and earlier decisions.
+  Future<BankReconciliationContext> loadContext({
+    required String erpAccountId,
+    required BankCivilDate from,
+    required BankCivilDate to,
+  }) async {
     final raw = await _rpc(
-      'get_bank_reconciliation_candidates_v1',
+      'get_bank_reconciliation_candidates_v2',
       <String, dynamic>{
         'p_erp_account_id': erpAccountId,
         'p_from_date': from.toString(),
         'p_to_date': to.toString(),
       },
     );
-    final payload = raw is Map ? Map<String, dynamic>.from(raw) : null;
-    final items = payload?['candidates'];
-    if (items is! List) return const [];
-    final result = <BankReconciliationCandidate>[];
-    for (final item in items.whereType<Map>()) {
-      final candidate = _candidateFromJson(Map<String, dynamic>.from(item));
-      if (candidate != null) result.add(candidate);
-    }
-    return List.unmodifiable(result);
+    return const BankReconciliationCatalogCodec().context(raw);
   }
 
   Future<BankStatementImportReceipt> createImport({
@@ -362,13 +597,20 @@ class BankReconciliationService {
       },
     );
     final receipt = _receiptMap(raw);
+    // The server keys rows by the file's own row id; the review keys them by
+    // the id made unique across statements.
+    final draftIdByPersisted = <String, String>{
+      for (final row in draft.rows)
+        row.movement.persistedRowId: row.movement.sourceRowId,
+    };
     final rowMap = <String, String>{};
     final rows = receipt['rows'];
     if (rows is List) {
       for (final item in rows.whereType<Map>()) {
         final source = item['source_row_id']?.toString() ?? '';
         final id = item['row_id']?.toString() ?? '';
-        if (source.isNotEmpty && id.isNotEmpty) rowMap[source] = id;
+        final draftId = draftIdByPersisted[source];
+        if (draftId != null && id.isNotEmpty) rowMap[draftId] = id;
       }
     }
     if (rowMap.length != draft.rows.length) {
@@ -542,56 +784,6 @@ class BankReconciliationService {
     ];
   }
 
-  BankReconciliationCandidate? _candidateFromJson(Map<String, dynamic> json) {
-    final id = json['target_id']?.toString().trim() ?? '';
-    final amount = _intOf(json['amount']);
-    final date = DateTime.tryParse(json['occurred_on']?.toString() ?? '');
-    if (id.isEmpty || amount == null || amount <= 0 || date == null) {
-      return null;
-    }
-    final kind = switch (json['target_kind']?.toString()) {
-      'sales_payment' => BankReconciliationTargetKind.salesPayment,
-      'purchase_payment' => BankReconciliationTargetKind.purchasePayment,
-      'expense_payment' => BankReconciliationTargetKind.expensePayment,
-      'expense' => BankReconciliationTargetKind.expense,
-      'journal_entry' => BankReconciliationTargetKind.journalEntry,
-      _ => null,
-    };
-    if (kind == null) return null;
-    final direction = json['direction']?.toString() == 'credit'
-        ? BankMovementDirection.credit
-        : BankMovementDirection.debit;
-    final methodCode = json['payment_method_code']?.toString().toLowerCase();
-    final providerCode = json['provider']?.toString().toLowerCase();
-    final provider = switch (providerCode) {
-      'transbank' => BankSettlementProvider.transbank,
-      'mercadopago' => BankSettlementProvider.mercadoPago,
-      'other' => BankSettlementProvider.other,
-      _ => BankSettlementProvider.none,
-    };
-    final instrument = switch (json['instrument']?.toString()) {
-      'debit' => BankPaymentInstrument.debit,
-      'credit' => BankPaymentInstrument.credit,
-      'prepaid' => BankPaymentInstrument.prepaid,
-      _ => BankPaymentInstrument.unknown,
-    };
-    return BankReconciliationCandidate(
-      targetKind: kind,
-      targetId: id,
-      direction: direction,
-      amountClp: amount,
-      occurredOn: BankCivilDate.fromDateTime(date),
-      label: json['label']?.toString().trim().isNotEmpty == true
-          ? json['label'].toString().trim()
-          : 'Operación ERP',
-      counterparty: json['counterparty']?.toString(),
-      reference: json['reference']?.toString(),
-      paymentMethodCode: methodCode,
-      provider: provider,
-      instrument: instrument,
-    );
-  }
-
   BankPaymentInstrument _instrument(Object? value) =>
       switch (value?.toString()) {
         'debit' => BankPaymentInstrument.debit,
@@ -616,7 +808,7 @@ class BankReconciliationService {
       movement.ordinal.toString(),
     ].join('|');
     return <String, dynamic>{
-      'source_row_id': movement.sourceRowId,
+      'source_row_id': movement.persistedRowId,
       'ordinal': movement.ordinal,
       'booking_date': movement.bookingDate?.toString(),
       'operation_date': movement.operationDate?.toString(),

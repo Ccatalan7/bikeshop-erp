@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -18,10 +16,8 @@ import '../bank_reconciliation/services/bank_reconciliation_service.dart';
 
 typedef BankStatementPrepareAction = Future<BankReconciliationPreparedDraft>
     Function({
-  required Uint8List bytes,
-  required String filename,
+  required List<BankStatementFileInput> files,
   required String erpAccountId,
-  String? sourcePath,
 });
 
 class BankReconciliationActions {
@@ -51,7 +47,7 @@ class BankReconciliationActions {
   }) apply;
 }
 
-enum _MovementFilter { all, proposed, processor, unmatched }
+enum _MovementFilter { all, proposed, suggested, processor, unmatched }
 
 bool _isProcessorEstimate(BankReconciliationMatchKind kind) =>
     kind == BankReconciliationMatchKind.processorEstimate ||
@@ -78,15 +74,19 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
   BankReconciliationPreparedDraft? _draft;
   BankReconciliationWorkspaceOptions? _workspaceOptions;
   String? _selectedSourceRowId;
-  BankStatementImportReceipt? _importReceipt;
   BankReconciliationApplyReceipt? _applyReceipt;
   _MovementFilter _filter = _MovementFilter.all;
   bool _loadingAccounts = true;
   bool _loadingWorkspaceOptions = false;
   bool _busy = false;
   String? _error;
-  String? _createOperationKey;
-  String? _applyOperationKey;
+
+  // One import per statement file, keyed by its sha: a retry after a partial
+  // failure replays the same operations instead of duplicating them.
+  final Map<String, BankStatementImportReceipt> _importReceipts = {};
+  final Map<String, BankReconciliationApplyReceipt> _applyReceipts = {};
+  final Map<String, String> _createOperationKeys = {};
+  final Map<String, String> _applyOperationKeys = {};
 
   @override
   void reassemble() {
@@ -112,16 +112,12 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
       loadBankAccounts: service.loadBankAccounts,
       loadWorkspaceOptions: service.loadWorkspaceOptions,
       prepare: ({
-        required bytes,
-        required filename,
+        required files,
         required erpAccountId,
-        sourcePath,
       }) =>
-          service.prepare(
-        bytes: bytes,
-        filename: filename,
+          service.prepareMany(
+        files: files,
         erpAccountId: erpAccountId,
-        sourcePath: sourcePath,
       ),
       createImport: service.createImport,
       apply: service.apply,
@@ -188,13 +184,20 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
     if (accountId == null || _busy) return;
     final result = await FilePicker.platform.pickFiles(
       withData: true,
-      allowMultiple: false,
+      allowMultiple: true,
       type: FileType.custom,
       allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png', 'webp'],
     );
-    final file = result?.files.single;
-    final bytes = file?.bytes;
-    if (file == null || bytes == null) return;
+    final files = <BankStatementFileInput>[
+      for (final file in result?.files ?? const <PlatformFile>[])
+        if (file.bytes != null)
+          BankStatementFileInput(
+            bytes: file.bytes!,
+            filename: file.name,
+            sourcePath: file.path,
+          ),
+    ];
+    if (files.isEmpty) return;
     setState(() {
       _busy = true;
       _error = null;
@@ -202,17 +205,13 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
     });
     try {
       final draft = await _actions.prepare(
-        bytes: bytes,
-        filename: file.name,
+        files: files,
         erpAccountId: accountId,
-        sourcePath: file.path,
       );
       if (!mounted) return;
       setState(() {
         _draft = draft;
-        _importReceipt = null;
-        _createOperationKey = null;
-        _applyOperationKey = null;
+        _clearPersistence();
       });
       await _loadWorkspaceOptions(accountId);
     } on BankReconciliationServiceException catch (error) {
@@ -232,14 +231,70 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
     }
   }
 
+  void _clearPersistence() {
+    _importReceipts.clear();
+    _applyReceipts.clear();
+    _createOperationKeys.clear();
+    _applyOperationKeys.clear();
+  }
+
   void _replaceRow(BankReconciliationRowDraft replacement) {
+    _replaceRows(<BankReconciliationRowDraft>[replacement]);
+  }
+
+  void _replaceRows(List<BankReconciliationRowDraft> replacements) {
     final draft = _draft;
     if (draft == null || _busy || _applyReceipt != null) return;
+    // A statement already applied (the other one failed) is final: an edit
+    // there would never be saved.
+    final editable = replacements
+        .where((row) => !_applyReceipts.containsKey(
+              row.sourceFileSha256 ?? draft.fileSha256,
+            ))
+        .toList(growable: false);
+    if (editable.isEmpty) return;
     setState(() {
-      _draft = draft.replaceRow(replacement);
+      _draft = draft.replaceRows(editable);
       _error = null;
-      _applyOperationKey = null;
+      // A changed decision is a new apply payload for files not applied yet.
+      _applyOperationKeys.removeWhere(
+        (sha, _) => !_applyReceipts.containsKey(sha),
+      );
     });
+  }
+
+  BankReconciliationRowDraft _withResolution(
+    BankReconciliationRowDraft row,
+    BankReconciliationResolutionDraft resolution,
+  ) {
+    return row.copyWith(
+      clearSelection:
+          resolution.action != BankReconciliationActionKind.associateExisting,
+      resolution: resolution,
+      disposition: switch (resolution.action) {
+        BankReconciliationActionKind.dismiss =>
+          BankReconciliationDisposition.ignored,
+        BankReconciliationActionKind.pending =>
+          BankReconciliationDisposition.pending,
+        _ => BankReconciliationDisposition.reconciled,
+      },
+    );
+  }
+
+  void _applySuggestion(String sourceRowId) {
+    final row = _draft?.rowsBySourceId[sourceRowId];
+    final resolution = row?.suggestion?.resolution;
+    if (row == null || resolution == null) return;
+    _replaceRow(_withResolution(row, resolution));
+  }
+
+  void _applySafeSuggestions() {
+    final draft = _draft;
+    if (draft == null) return;
+    _replaceRows(<BankReconciliationRowDraft>[
+      for (final row in draft.acceptableSuggestionRows)
+        _withResolution(row, row.suggestion!.resolution!),
+    ]);
   }
 
   void _setAction(
@@ -251,6 +306,13 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
     final row = draft.rowsBySourceId[sourceRowId];
     if (row == null) return;
     final current = row.effectiveResolution;
+    final suggested = row.suggestion?.resolution;
+    if (suggested != null &&
+        suggested.action == action &&
+        current.action != action) {
+      _replaceRow(_withResolution(row, suggested));
+      return;
+    }
     final defaults = switch (action) {
       BankReconciliationActionKind.createExpense =>
         BankReconciliationResolutionDraft(
@@ -382,25 +444,35 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
       _error = null;
     });
     try {
-      var importReceipt = _importReceipt;
-      if (importReceipt == null) {
-        _createOperationKey ??= UniqueKey().toString();
-        importReceipt = await _actions.createImport(
-          draft: draft,
-          erpAccountId: accountId,
-          operationKey: _createOperationKey,
+      for (final source in draft.sources) {
+        final sha = source.fileSha256;
+        if (_applyReceipts.containsKey(sha)) continue;
+        final part = draft.forSource(source);
+        var importReceipt = _importReceipts[sha];
+        if (importReceipt == null) {
+          importReceipt = await _actions.createImport(
+            draft: part,
+            erpAccountId: accountId,
+            operationKey: _createOperationKeys.putIfAbsent(
+              sha,
+              () => UniqueKey().toString(),
+            ),
+          );
+          if (!mounted) return;
+          _importReceipts[sha] = importReceipt;
+        }
+        final receipt = await _actions.apply(
+          draft: part,
+          importReceipt: importReceipt,
+          operationKey: _applyOperationKeys.putIfAbsent(
+            sha,
+            () => UniqueKey().toString(),
+          ),
         );
         if (!mounted) return;
-        setState(() => _importReceipt = importReceipt);
+        _applyReceipts[sha] = receipt;
       }
-      _applyOperationKey ??= UniqueKey().toString();
-      final receipt = await _actions.apply(
-        draft: draft,
-        importReceipt: importReceipt,
-        operationKey: _applyOperationKey,
-      );
-      if (!mounted) return;
-      setState(() => _applyReceipt = receipt);
+      setState(() => _applyReceipt = _combinedReceipt());
     } on BankReconciliationServiceException catch (error) {
       if (!mounted) return;
       setState(() => _error = error.message);
@@ -413,12 +485,31 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
     }
   }
 
+  BankReconciliationApplyReceipt _combinedReceipt() {
+    final receipts = _applyReceipts.values.toList(growable: false);
+    final first = receipts.first;
+    return BankReconciliationApplyReceipt(
+      importId: first.importId,
+      revision: first.revision,
+      status: first.status,
+      allocationCount:
+          receipts.fold<int>(0, (sum, item) => sum + item.allocationCount),
+      replayed: receipts.every((item) => item.replayed),
+      createdExpenseCount:
+          receipts.fold<int>(0, (sum, item) => sum + item.createdExpenseCount),
+      createdJournalCount:
+          receipts.fold<int>(0, (sum, item) => sum + item.createdJournalCount),
+    );
+  }
+
   List<BankReconciliationRowDraft> get _visibleRows {
     final rows = _draft?.rows ?? const <BankReconciliationRowDraft>[];
     return rows.where((row) {
       return switch (_filter) {
         _MovementFilter.all => true,
         _MovementFilter.proposed => row.proposals.isNotEmpty,
+        _MovementFilter.suggested =>
+          row.proposals.isEmpty && row.suggestion != null,
         _MovementFilter.processor => row.proposals
             .any((proposal) => _isProcessorEstimate(proposal.matchKind)),
         _MovementFilter.unmatched => row.proposals.isEmpty,
@@ -510,19 +601,12 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
               tone: VbNoticeTone.success,
             ),
           ),
-        if (draft.extractionWarnings.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-            child: VbNotice(
-              title: 'La lectura tiene observaciones',
-              body: draft.extractionWarnings.first,
-              tone: VbNoticeTone.warning,
-            ),
-          ),
         _ReviewToolbar(
           draft: draft,
           filter: _filter,
+          enabled: !_busy && _applyReceipt == null,
           onFilterChanged: (value) => setState(() => _filter = value),
+          onApplySuggestions: _applySafeSuggestions,
         ),
         Expanded(
           child: LayoutBuilder(
@@ -533,6 +617,27 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
                   ? null
                   : draft.rowsBySourceId[_selectedSourceRowId];
               final list = _MovementList(
+                // Findings scroll with the rows instead of taking the height
+                // the operator needs to review movements.
+                leading: <Widget>[
+                  if (draft.extractionWarnings.isNotEmpty)
+                    VbNotice(
+                      title: 'La lectura tiene observaciones',
+                      body: draft.extractionWarnings.join(' '),
+                      tone: VbNoticeTone.warning,
+                      bodyMaxLines: 3,
+                    ),
+                  if (_applyReceipt == null)
+                    for (final insight in draft.insights)
+                      VbNotice(
+                        title: insight.title,
+                        body: insight.body,
+                        tone: insight.tone == BankInsightTone.warning
+                            ? VbNoticeTone.warning
+                            : VbNoticeTone.info,
+                        bodyMaxLines: 3,
+                      ),
+                ],
                 rows: _visibleRows,
                 desktop: desktop,
                 enabled: !_busy && _applyReceipt == null,
@@ -568,9 +673,13 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
                     selected.movement.sourceRowId,
                     candidate,
                   ),
+                  onApplySuggestion: () =>
+                      _applySuggestion(selected.movement.sourceRowId),
                 );
               }
               return Row(
+                // The resolver starts at the top, level with the list.
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Expanded(flex: 3, child: list),
                   const VerticalDivider(width: 1),
@@ -607,6 +716,9 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
                               selected.movement.sourceRowId,
                               candidate,
                             ),
+                            onApplySuggestion: () => _applySuggestion(
+                              selected.movement.sourceRowId,
+                            ),
                           ),
                   ),
                 ],
@@ -621,10 +733,8 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
   void _reset() {
     setState(() {
       _draft = null;
-      _importReceipt = null;
+      _clearPersistence();
       _applyReceipt = null;
-      _createOperationKey = null;
-      _applyOperationKey = null;
       _error = null;
       _filter = _MovementFilter.all;
       _workspaceOptions = null;
@@ -725,7 +835,7 @@ class _Header extends StatelessWidget {
             final importButton = FilledButton.icon(
               onPressed: busy || hasDraft ? null : onPick,
               icon: const Icon(Icons.upload_file_outlined),
-              label: Text(busy ? 'Leyendo…' : 'Importar cartola'),
+              label: Text(busy ? 'Leyendo…' : 'Importar cartolas'),
             );
             final controls = phone
                 ? Column(
@@ -798,20 +908,22 @@ class _EmptyImportState extends StatelessWidget {
               const SizedBox(height: 12),
               Text(
                 accountSelected
-                    ? 'Sube la cartola de esta cuenta'
+                    ? 'Sube las cartolas de esta cuenta'
                     : 'Primero elige la cuenta bancaria',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
               const Text(
-                'Veryfi y el parser de Banco de Chile trabajan en memoria. Guardamos movimientos estructurados y huellas, nunca el archivo ni el texto OCR completo.',
+                'Puedes elegir varios meses a la vez: se revisan juntos, así '
+                'un pago que cruza de un mes al otro también calza. Guardamos '
+                'los movimientos, nunca el archivo.',
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
               FilledButton.icon(
                 onPressed: busy ? null : onPick,
                 icon: const Icon(Icons.upload_file_outlined),
-                label: Text(busy ? 'Leyendo cartola…' : 'Elegir archivo'),
+                label: Text(busy ? 'Leyendo cartolas…' : 'Elegir archivos'),
               ),
             ],
           ),
@@ -825,12 +937,16 @@ class _ReviewToolbar extends StatelessWidget {
   const _ReviewToolbar({
     required this.draft,
     required this.filter,
+    required this.enabled,
     required this.onFilterChanged,
+    required this.onApplySuggestions,
   });
 
   final BankReconciliationPreparedDraft draft;
   final _MovementFilter filter;
+  final bool enabled;
   final ValueChanged<_MovementFilter> onFilterChanged;
+  final VoidCallback onApplySuggestions;
 
   @override
   Widget build(BuildContext context) {
@@ -852,6 +968,18 @@ class _ReviewToolbar extends StatelessWidget {
               label: '${draft.pendingCount} pendientes',
               tone: VbStatusTone.info,
             ),
+            if (draft.acceptableSuggestionRows.isNotEmpty)
+              FilledButton.tonalIcon(
+                key: const ValueKey('bank-reconciliation-accept-suggestions'),
+                onPressed: enabled ? onApplySuggestions : null,
+                icon: const Icon(Icons.done_all),
+                label: Text(
+                  draft.acceptableSuggestionRows.length == 1
+                      ? 'Usar 1 sugerencia segura'
+                      : 'Usar ${draft.acceptableSuggestionRows.length} '
+                          'sugerencias seguras',
+                ),
+              ),
           ],
         );
         final filterSelect = SizedBox(
@@ -862,6 +990,8 @@ class _ReviewToolbar extends StatelessWidget {
               VbShortSelectOption(value: _MovementFilter.all, label: 'Todos'),
               VbShortSelectOption(
                   value: _MovementFilter.proposed, label: 'Con propuesta'),
+              VbShortSelectOption(
+                  value: _MovementFilter.suggested, label: 'Con sugerencia'),
               VbShortSelectOption(
                   value: _MovementFilter.processor, label: 'Recaudadores'),
               VbShortSelectOption(
@@ -899,6 +1029,7 @@ class _ReviewToolbar extends StatelessWidget {
 
 class _MovementList extends StatelessWidget {
   const _MovementList({
+    this.leading = const <Widget>[],
     required this.rows,
     required this.desktop,
     required this.enabled,
@@ -906,6 +1037,7 @@ class _MovementList extends StatelessWidget {
     required this.onResolve,
   });
 
+  final List<Widget> leading;
   final List<BankReconciliationRowDraft> rows;
   final bool desktop;
   final bool enabled;
@@ -914,13 +1046,21 @@ class _MovementList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final header = desktop ? 1 : 0;
     return ListView.builder(
       key: const PageStorageKey('bank-reconciliation-rows'),
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      itemCount: rows.length + (desktop ? 1 : 0),
+      itemCount: leading.length + header + rows.length,
       itemBuilder: (context, index) {
-        if (desktop && index == 0) return const _ColumnHeader();
-        final row = rows[index - (desktop ? 1 : 0)];
+        if (index < leading.length) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: leading[index],
+          );
+        }
+        final position = index - leading.length;
+        if (desktop && position == 0) return const _ColumnHeader();
+        final row = rows[position - header];
         return _MovementRow(
           key: ValueKey(
             'bank-reconciliation-row-${row.movement.sourceRowId}',
@@ -954,7 +1094,7 @@ class _ColumnHeader extends StatelessWidget {
           ),
           const SizedBox(width: 16),
           Expanded(flex: 3, child: Text('CALCE PROPUESTO', style: style)),
-          const SizedBox(width: 142, child: Text('RESOLUCIÓN')),
+          SizedBox(width: 142, child: Text('RESOLUCIÓN', style: style)),
         ],
       ),
     );
@@ -998,7 +1138,10 @@ class _MovementRow extends StatelessWidget {
               Expanded(flex: 4, child: _MovementIdentity(movement: movement)),
               SizedBox(width: 104, child: VbMoneyText(movement.amountClp)),
               const SizedBox(width: 16),
-              Expanded(flex: 3, child: _ProposalSummary(proposal: proposal)),
+              Expanded(
+                flex: 3,
+                child: _ProposalSummary(proposal: proposal, row: row),
+              ),
               SizedBox(
                 width: 142,
                 child: Column(
@@ -1022,7 +1165,7 @@ class _MovementRow extends StatelessWidget {
               const SizedBox(height: 8),
               _MovementIdentity(movement: movement),
               const SizedBox(height: 12),
-              _ProposalSummary(proposal: proposal),
+              _ProposalSummary(proposal: proposal, row: row),
               const SizedBox(height: 12),
               Wrap(
                 alignment: WrapAlignment.spaceBetween,
@@ -1127,13 +1270,50 @@ class _MovementIdentity extends StatelessWidget {
 }
 
 class _ProposalSummary extends StatelessWidget {
-  const _ProposalSummary({required this.proposal});
+  const _ProposalSummary({required this.proposal, required this.row});
 
   final BankReconciliationProposal? proposal;
+  final BankReconciliationRowDraft row;
 
   @override
   Widget build(BuildContext context) {
     final value = proposal;
+    final suggestion = row.suggestion;
+    if (value == null && suggestion != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              VbStatusBadge(
+                label: suggestion.resolution == null
+                    ? 'Por registrar'
+                    : 'Sugerencia',
+                tone: VbStatusTone.info,
+                dense: true,
+              ),
+              Text(
+                suggestion.title,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            <String>[
+              ...suggestion.reasons,
+              if (suggestion.followUp != null) suggestion.followUp!,
+            ].join(' · '),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      );
+    }
     if (value == null) {
       return Text('Sin operación existente candidata',
           style: Theme.of(context).textTheme.bodySmall);
@@ -1227,6 +1407,7 @@ class _ResolutionPanel extends StatelessWidget {
     required this.onResolutionChanged,
     required this.onProposalSelected,
     required this.onCandidateSelected,
+    required this.onApplySuggestion,
   });
 
   final BankReconciliationRowDraft row;
@@ -1240,6 +1421,7 @@ class _ResolutionPanel extends StatelessWidget {
   final ValueChanged<BankReconciliationResolutionDraft> onResolutionChanged;
   final ValueChanged<String> onProposalSelected;
   final ValueChanged<BankReconciliationCandidate> onCandidateSelected;
+  final VoidCallback onApplySuggestion;
 
   @override
   Widget build(BuildContext context) {
@@ -1286,6 +1468,15 @@ class _ResolutionPanel extends StatelessWidget {
               ],
             ),
             const Divider(height: 32),
+            if (row.suggestion != null && row.selectedProposal == null) ...[
+              _SuggestionPanel(
+                suggestion: row.suggestion!,
+                applied: _suggestionApplied(row),
+                enabled: enabled,
+                onApply: onApplySuggestion,
+              ),
+              const SizedBox(height: 20),
+            ],
             Text('¿Qué corresponde hacer?',
                 style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 8),
@@ -1338,6 +1529,63 @@ class _ResolutionPanel extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+bool _suggestionApplied(BankReconciliationRowDraft row) {
+  final suggested = row.suggestion?.resolution;
+  final current = row.effectiveResolution;
+  return suggested != null &&
+      current.action == suggested.action &&
+      current.accountId == suggested.accountId &&
+      current.paymentMethodId == suggested.paymentMethodId &&
+      current.reason == suggested.reason;
+}
+
+/// What the ERP proposes for a movement no existing operation explains.
+class _SuggestionPanel extends StatelessWidget {
+  const _SuggestionPanel({
+    required this.suggestion,
+    required this.applied,
+    required this.enabled,
+    required this.onApply,
+  });
+
+  final BankReconciliationSuggestion suggestion;
+  final bool applied;
+  final bool enabled;
+  final VoidCallback onApply;
+
+  @override
+  Widget build(BuildContext context) {
+    final body = <String>[
+      ...suggestion.reasons,
+      if (suggestion.followUp != null) suggestion.followUp!,
+    ].join('. ');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        VbNotice(
+          title: suggestion.resolution == null
+              ? 'Por registrar: ${suggestion.title}'
+              : 'Sugerencia: ${suggestion.title}',
+          body: body,
+          tone: VbNoticeTone.info,
+        ),
+        if (suggestion.resolution != null) ...[
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FilledButton.tonalIcon(
+              key: const ValueKey('bank-reconciliation-use-suggestion'),
+              onPressed: enabled && !applied ? onApply : null,
+              icon: Icon(applied ? Icons.check : Icons.auto_fix_high_outlined),
+              label: Text(applied ? 'Sugerencia aplicada' : 'Usar sugerencia'),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -1865,7 +2113,11 @@ class _Footer extends StatelessWidget {
             );
             final replaceButton = OutlinedButton(
               onPressed: onReplace,
-              child: const Text('Cambiar cartola'),
+              child: Text(
+                draft.sources.length > 1
+                    ? 'Cambiar cartolas'
+                    : 'Cambiar cartola',
+              ),
             );
             final saveButton = FilledButton.icon(
               key: const ValueKey('bank-reconciliation-save'),

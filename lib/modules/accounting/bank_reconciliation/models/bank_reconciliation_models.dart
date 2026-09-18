@@ -213,6 +213,7 @@ class BankStatementMovement {
     required this.sourcePage,
     required this.sourceLineStart,
     required this.sourceLineEnd,
+    this.fileRowId,
   })  : assert(sourceRowId != ''),
         assert(ordinal > 0),
         assert(amountClp == null || amountClp > 0),
@@ -234,12 +235,58 @@ class BankStatementMovement {
   final int sourceLineStart;
   final int sourceLineEnd;
 
+  /// Row id inside its own file when [sourceRowId] was made unique across
+  /// several statements. The persisted import always keeps the file's id, so
+  /// importing the same file again never duplicates its rows.
+  final String? fileRowId;
+
+  String get persistedRowId => fileRowId ?? sourceRowId;
+
+  BankStatementMovement withSourceRowId(String value) => BankStatementMovement(
+        sourceRowId: value,
+        ordinal: ordinal,
+        bookingDate: bookingDate,
+        operationDate: operationDate,
+        description: description,
+        normalizedDescription: normalizedDescription,
+        counterpartyObserved: counterpartyObserved,
+        documentNumber: documentNumber,
+        direction: direction,
+        amountClp: amountClp,
+        balanceClp: balanceClp,
+        warningCodes: warningCodes,
+        sourcePage: sourcePage,
+        sourceLineStart: sourceLineStart,
+        sourceLineEnd: sourceLineEnd,
+        fileRowId: persistedRowId,
+      );
+
   bool get isComplete =>
       bookingDate != null &&
       direction != BankMovementDirection.unknown &&
       amountClp != null &&
       description.trim().isNotEmpty &&
       warningCodes.isEmpty;
+}
+
+/// Who an ERP operation belongs to, as far as a bank line can tell.
+enum BankCounterpartyKind { unknown, customer, supplier, employee, payee }
+
+/// A bank row another module already tied to this ERP operation.
+///
+/// Nómina reconciles salary transfers against the same statement. Its
+/// allocation remembers the observed row (date, amount, beneficiary), which is
+/// stronger evidence than any similarity between amounts or dates.
+class BankObservedRowEvidence {
+  const BankObservedRowEvidence({
+    required this.date,
+    required this.amountClp,
+    this.beneficiary,
+  });
+
+  final BankCivilDate date;
+  final int amountClp;
+  final String? beneficiary;
 }
 
 class BankReconciliationCandidate {
@@ -255,8 +302,17 @@ class BankReconciliationCandidate {
     this.paymentMethodCode,
     this.provider = BankSettlementProvider.none,
     this.instrument = BankPaymentInstrument.unknown,
+    this.occurredAt,
+    this.counterpartyKind = BankCounterpartyKind.unknown,
+    this.counterpartyId,
+    List<String> counterpartyNames = const <String>[],
+    this.documentNumber,
+    List<BankObservedRowEvidence> bankEvidence =
+        const <BankObservedRowEvidence>[],
   })  : assert(targetId != ''),
-        assert(amountClp > 0);
+        assert(amountClp > 0),
+        counterpartyNames = List.unmodifiable(counterpartyNames),
+        bankEvidence = List.unmodifiable(bankEvidence);
 
   final BankReconciliationTargetKind targetKind;
   final String targetId;
@@ -270,7 +326,29 @@ class BankReconciliationCandidate {
   final BankSettlementProvider provider;
   final BankPaymentInstrument instrument;
 
+  /// Operation timestamp, when the source keeps one. Card sales settle in the
+  /// order they were taken, so the time orders two sales of the same day.
+  final DateTime? occurredAt;
+  final BankCounterpartyKind counterpartyKind;
+  final String? counterpartyId;
+
+  /// Every name a bank line may show for this counterparty: customer name,
+  /// supplier legal/trade names and aliases, employee and payroll aliases.
+  final List<String> counterpartyNames;
+  final String? documentNumber;
+  final List<BankObservedRowEvidence> bankEvidence;
+
   String get identity => '${targetKind.name}:$targetId';
+
+  /// Names to compare with a bank line, falling back to the display name.
+  List<String> get identityNames => counterpartyNames.isNotEmpty
+      ? counterpartyNames
+      : <String>[if (counterparty != null) counterparty!];
+
+  /// Card sale settled by an acquirer deposit, never by a direct transfer.
+  bool get isAcquirerSale =>
+      targetKind == BankReconciliationTargetKind.salesPayment &&
+      provider == BankSettlementProvider.transbank;
 }
 
 class BankReconciliationAllocationDraft {
@@ -371,6 +449,8 @@ class BankReconciliationRowDraft {
     bool selectDefault = true,
     this.disposition = BankReconciliationDisposition.pending,
     BankReconciliationResolutionDraft? resolution,
+    this.suggestion,
+    this.sourceFileSha256,
   })  : proposals = List.unmodifiable(proposals),
         selectedProposalId = selectedProposalId ??
             (selectDefault
@@ -399,6 +479,14 @@ class BankReconciliationRowDraft {
   final String? selectedProposalId;
   final BankReconciliationDisposition disposition;
   final BankReconciliationResolutionDraft? resolution;
+
+  /// What the ERP proposes when no existing operation explains the movement:
+  /// a prefilled expense or journal, a dismissal, or a task in another module.
+  final BankReconciliationSuggestion? suggestion;
+
+  /// File this movement was read from when several statements are reviewed
+  /// together; null for a single statement.
+  final String? sourceFileSha256;
 
   BankReconciliationResolutionDraft get effectiveResolution =>
       resolution ??
@@ -435,6 +523,8 @@ class BankReconciliationRowDraft {
       selectDefault: false,
       disposition: disposition ?? this.disposition,
       resolution: resolution ?? effectiveResolution,
+      suggestion: suggestion,
+      sourceFileSha256: sourceFileSha256,
     );
   }
 
@@ -456,6 +546,28 @@ class BankReconciliationRowDraft {
   String get reasonText => effectiveResolution.reason ?? '';
 }
 
+/// One statement file inside a review. Each file is persisted as its own
+/// import, so its evidence and idempotency stay tied to that exact file.
+class BankStatementSource {
+  const BankStatementSource({
+    required this.fileSha256,
+    required this.filename,
+    required this.sourceType,
+    this.accountFingerprint,
+    this.firstDate,
+    this.lastDate,
+    this.movementCount = 0,
+  });
+
+  final String fileSha256;
+  final String filename;
+  final String sourceType;
+  final String? accountFingerprint;
+  final BankCivilDate? firstDate;
+  final BankCivilDate? lastDate;
+  final int movementCount;
+}
+
 class BankReconciliationPreparedDraft {
   BankReconciliationPreparedDraft({
     required this.fileSha256,
@@ -467,9 +579,25 @@ class BankReconciliationPreparedDraft {
     required List<BankReconciliationRowDraft> rows,
     List<BankReconciliationCandidate> candidateCatalog = const [],
     List<String> extractionWarnings = const <String>[],
+    List<BankStatementSource>? sources,
+    List<BankReconciliationInsight> insights =
+        const <BankReconciliationInsight>[],
   })  : rows = List.unmodifiable(rows),
         candidateCatalog = List.unmodifiable(candidateCatalog),
-        extractionWarnings = List.unmodifiable(extractionWarnings);
+        extractionWarnings = List.unmodifiable(extractionWarnings),
+        insights = List.unmodifiable(insights),
+        sources = List.unmodifiable(
+          sources ??
+              <BankStatementSource>[
+                BankStatementSource(
+                  fileSha256: fileSha256,
+                  filename: filename,
+                  sourceType: sourceType,
+                  accountFingerprint: accountFingerprint,
+                  movementCount: rows.length,
+                ),
+              ],
+        );
 
   final String fileSha256;
   final String filename;
@@ -480,6 +608,8 @@ class BankReconciliationPreparedDraft {
   final List<BankReconciliationRowDraft> rows;
   final List<BankReconciliationCandidate> candidateCatalog;
   final List<String> extractionWarnings;
+  final List<BankStatementSource> sources;
+  final List<BankReconciliationInsight> insights;
 
   int get movementCount => rows.length;
   int get proposedCount => rows.where((row) => row.proposals.isNotEmpty).length;
@@ -487,6 +617,14 @@ class BankReconciliationPreparedDraft {
       rows.where((row) => row.selectedProposal != null).length;
   int get resolvedCount => rows.where((row) => row.isResolved).length;
   int get pendingCount => movementCount - resolvedCount;
+
+  /// Rows whose suggestion can be accepted without another decision.
+  List<BankReconciliationRowDraft> get acceptableSuggestionRows => rows
+      .where((row) =>
+          !row.isResolved &&
+          row.suggestion?.resolution != null &&
+          row.suggestion!.confidence == BankReconciliationConfidence.high)
+      .toList(growable: false);
 
   Map<String, BankReconciliationRowDraft> get rowsBySourceId =>
       UnmodifiableMapView(<String, BankReconciliationRowDraft>{
@@ -496,6 +634,15 @@ class BankReconciliationPreparedDraft {
   BankReconciliationPreparedDraft replaceRow(
     BankReconciliationRowDraft replacement,
   ) {
+    return replaceRows(<BankReconciliationRowDraft>[replacement]);
+  }
+
+  BankReconciliationPreparedDraft replaceRows(
+    List<BankReconciliationRowDraft> replacements,
+  ) {
+    final bySource = <String, BankReconciliationRowDraft>{
+      for (final row in replacements) row.movement.sourceRowId: row,
+    };
     return BankReconciliationPreparedDraft(
       fileSha256: fileSha256,
       filename: filename,
@@ -504,14 +651,31 @@ class BankReconciliationPreparedDraft {
       parserName: parserName,
       parserVersion: parserVersion,
       rows: <BankReconciliationRowDraft>[
-        for (final row in rows)
-          if (row.movement.sourceRowId == replacement.movement.sourceRowId)
-            replacement
-          else
-            row,
+        for (final row in rows) bySource[row.movement.sourceRowId] ?? row,
       ],
       candidateCatalog: candidateCatalog,
       extractionWarnings: extractionWarnings,
+      sources: sources,
+      insights: insights,
+    );
+  }
+
+  /// The part of this review that belongs to one statement file.
+  BankReconciliationPreparedDraft forSource(BankStatementSource source) {
+    if (sources.length == 1) return this;
+    return BankReconciliationPreparedDraft(
+      fileSha256: source.fileSha256,
+      filename: source.filename,
+      sourceType: source.sourceType,
+      accountFingerprint: source.accountFingerprint,
+      parserName: parserName,
+      parserVersion: parserVersion,
+      rows: rows
+          .where((row) => row.sourceFileSha256 == source.fileSha256)
+          .toList(growable: false),
+      candidateCatalog: candidateCatalog,
+      extractionWarnings: extractionWarnings,
+      sources: <BankStatementSource>[source],
     );
   }
 }
@@ -548,6 +712,207 @@ class BankReconciliationApplyReceipt {
   final bool replayed;
   final int createdExpenseCount;
   final int createdJournalCount;
+}
+
+/// What the ERP proposes for a movement no existing operation explains.
+enum BankSuggestionKind {
+  /// A paid expense, prefilled from how this counterparty was booked before.
+  createExpense,
+
+  /// A journal against a counterpart account (bank fees, owner funds…).
+  postJournal,
+
+  /// Two movements that cancel each other, or a row that is not accounting.
+  dismiss,
+
+  /// A salary owed in Nómina: pay it there, not here.
+  payroll,
+
+  /// A supplier payment whose purchase lives in Compras.
+  purchase,
+
+  /// A customer payment whose sale lives in Ventas.
+  sale,
+}
+
+class BankReconciliationSuggestion {
+  BankReconciliationSuggestion({
+    required this.kind,
+    required this.confidence,
+    required this.title,
+    List<String> reasons = const <String>[],
+    this.resolution,
+    this.followUp,
+    this.relatedSourceRowId,
+  }) : reasons = List.unmodifiable(reasons);
+
+  final BankSuggestionKind kind;
+  final BankReconciliationConfidence confidence;
+
+  /// Short, operator-facing name of the proposal ("Arriendo · Darinka L.").
+  final String title;
+  final List<String> reasons;
+
+  /// Prefilled decision for kinds this workspace can apply by itself.
+  final BankReconciliationResolutionDraft? resolution;
+
+  /// What to do in another module when this workspace must not book it.
+  final String? followUp;
+
+  /// The other half of a pair of movements that cancel each other.
+  final String? relatedSourceRowId;
+}
+
+enum BankInsightTone { info, warning }
+
+/// A finding about the whole review, e.g. acquirer terms that do not match
+/// what the bank actually paid.
+class BankReconciliationInsight {
+  const BankReconciliationInsight({
+    required this.title,
+    required this.body,
+    this.tone = BankInsightTone.info,
+  });
+
+  final String title;
+  final String body;
+  final BankInsightTone tone;
+}
+
+/// A payroll line Nómina still owes; a bank transfer may already have paid it.
+class BankPayrollExpectation {
+  BankPayrollExpectation({
+    required this.voucherId,
+    required this.voucherNumber,
+    required this.periodLabel,
+    required this.periodEnd,
+    required this.lineId,
+    required this.employeeName,
+    required List<String> names,
+    required this.amountClp,
+    this.paymentMethod,
+  }) : names = List.unmodifiable(names);
+
+  final String voucherId;
+  final String voucherNumber;
+  final String periodLabel;
+  final BankCivilDate periodEnd;
+  final String lineId;
+  final String employeeName;
+  final List<String> names;
+  final int amountClp;
+  final String? paymentMethod;
+}
+
+enum BankOpenInvoiceKind { sale, purchase }
+
+class BankOpenInvoice {
+  BankOpenInvoice({
+    required this.kind,
+    required this.invoiceId,
+    required this.number,
+    required this.date,
+    required this.totalClp,
+    required this.balanceClp,
+    required this.status,
+    this.counterpartyId,
+    List<String> names = const <String>[],
+  }) : names = List.unmodifiable(names);
+
+  final BankOpenInvoiceKind kind;
+  final String invoiceId;
+  final String number;
+  final BankCivilDate date;
+  final int totalClp;
+  final int balanceClp;
+  final String status;
+  final String? counterpartyId;
+  final List<String> names;
+}
+
+/// How a counterparty was booked before: account, payment method and text.
+class BankUsualBooking {
+  const BankUsualBooking({
+    required this.accountId,
+    this.paymentMethodCode,
+    this.uses = 0,
+    this.lastDescription,
+  });
+
+  final String accountId;
+  final String? paymentMethodCode;
+  final int uses;
+  final String? lastDescription;
+}
+
+class BankCounterpartyProfile {
+  BankCounterpartyProfile({
+    required this.kind,
+    required this.displayName,
+    this.id,
+    List<String> names = const <String>[],
+    this.purchaseCount = 0,
+    List<BankUsualBooking> usual = const <BankUsualBooking>[],
+  })  : names = List.unmodifiable(names),
+        usual = List.unmodifiable(usual);
+
+  final BankCounterpartyKind kind;
+  final String? id;
+  final String displayName;
+  final List<String> names;
+
+  /// Purchase invoices in the last 18 months: a goods supplier, whose
+  /// transfers belong to Compras rather than to a loose expense.
+  final int purchaseCount;
+  final List<BankUsualBooking> usual;
+}
+
+/// A decision taken on an earlier statement, reused for the same counterparty.
+class BankPriorDecision {
+  const BankPriorDecision({
+    required this.action,
+    required this.direction,
+    required this.description,
+    this.counterparty,
+    this.amountClp,
+    this.accountId,
+    this.paymentMethodId,
+    this.supplierName,
+    this.text,
+  });
+
+  final BankReconciliationActionKind action;
+  final BankMovementDirection direction;
+  final String description;
+  final String? counterparty;
+  final int? amountClp;
+  final String? accountId;
+  final String? paymentMethodId;
+  final String? supplierName;
+  final String? text;
+}
+
+/// Everything the ERP knows that can explain a statement movement.
+class BankReconciliationContext {
+  BankReconciliationContext({
+    List<BankReconciliationCandidate> candidates =
+        const <BankReconciliationCandidate>[],
+    List<BankPayrollExpectation> payrollLines =
+        const <BankPayrollExpectation>[],
+    List<BankOpenInvoice> openInvoices = const <BankOpenInvoice>[],
+    List<BankCounterpartyProfile> parties = const <BankCounterpartyProfile>[],
+    List<BankPriorDecision> decisions = const <BankPriorDecision>[],
+  })  : candidates = List.unmodifiable(candidates),
+        payrollLines = List.unmodifiable(payrollLines),
+        openInvoices = List.unmodifiable(openInvoices),
+        parties = List.unmodifiable(parties),
+        decisions = List.unmodifiable(decisions);
+
+  final List<BankReconciliationCandidate> candidates;
+  final List<BankPayrollExpectation> payrollLines;
+  final List<BankOpenInvoice> openInvoices;
+  final List<BankCounterpartyProfile> parties;
+  final List<BankPriorDecision> decisions;
 }
 
 extension _FirstOrNull<T> on Iterable<T> {

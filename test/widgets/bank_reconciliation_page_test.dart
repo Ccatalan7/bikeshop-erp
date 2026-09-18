@@ -233,6 +233,86 @@ void main() {
     expect(find.textContaining('No se creó'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+  testWidgets('a safe suggestion resolves an unregistered charge in one tap',
+      (tester) async {
+    final harness = _Harness();
+    addTearDown(harness.dispose);
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(harness.app(initialDraft: _suggestedDraft()));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Sugerencia'), findsOneWidget);
+    expect(find.text('Google Cloud · Google'), findsOneWidget);
+    expect(
+      find.text('0 de 1 movimientos resueltos · 1 quedan pendientes'),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('bank-reconciliation-resolve-cloud')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Sugerencia: Google Cloud · Google'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('bank-reconciliation-accept-suggestions')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('1 de 1 movimientos resueltos · 0 quedan pendientes'),
+      findsOneWidget,
+    );
+    expect(find.text('Gasto listo'), findsOneWidget);
+    expect(find.text('Sugerencia aplicada'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+}
+
+BankReconciliationPreparedDraft _suggestedDraft() {
+  final movement = BankStatementMovement(
+    sourceRowId: 'cloud',
+    ordinal: 1,
+    bookingDate: const BankCivilDate(2026, 9, 2),
+    description: 'Pago: Google Cloud Jl5r Renca',
+    normalizedDescription: 'pago google cloud jl5r renca',
+    direction: BankMovementDirection.debit,
+    amountClp: 9928,
+    sourcePage: 1,
+    sourceLineStart: 1,
+    sourceLineEnd: 1,
+  );
+  return BankReconciliationPreparedDraft(
+    fileSha256:
+        'cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc',
+    filename: 'cartola septiembre.pdf',
+    sourceType: 'pdf_text',
+    parserName: 'banco_chile_statement',
+    parserVersion: 'v1',
+    rows: <BankReconciliationRowDraft>[
+      BankReconciliationRowDraft(
+        movement: movement,
+        proposals: const <BankReconciliationProposal>[],
+        suggestion: BankReconciliationSuggestion(
+          kind: BankSuggestionKind.createExpense,
+          confidence: BankReconciliationConfidence.high,
+          title: 'Google Cloud · Google',
+          reasons: const <String>['Cargo con tarjeta en Google'],
+          resolution: const BankReconciliationResolutionDraft(
+            action: BankReconciliationActionKind.createExpense,
+            accountId: 'expense-account',
+            paymentMethodId: 'bank-method',
+            description: 'Google Cloud',
+            counterparty: 'Google',
+          ),
+        ),
+      ),
+    ],
+  );
 }
 
 class _Harness {
@@ -307,10 +387,8 @@ class _Harness {
               ],
             ),
             prepare: ({
-              required bytes,
-              required filename,
+              required files,
               required erpAccountId,
-              sourcePath,
             }) async =>
                 _draft(),
             createImport: ({
