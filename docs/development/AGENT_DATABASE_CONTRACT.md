@@ -887,10 +887,11 @@ Dos cosas que sí funcionaron y conviene repetir:
 ## Un relleno masivo desde fuera se mira antes de escribirlo (2026-09-17)
 
 Rellenar `suppliers.image_url` con el icono que publica cada sitio dejó 27 filas
-nuevas en producción. Lo que hizo que fueran correctas no fue el código: fue
+nuevas en producción. Lo que evitó los peores errores no fue el código: fue
 **montar las 27 imágenes en una hoja de contacto y mirarlas** antes del
-`update`. Tres cosas que sólo se ven mirando, y que ninguna validación de
-tamaño o de tipo habría detenido:
+`update` —aunque mirarlas **no bastó**; ver la corrección de abajo—. Tres cosas
+que sólo se ven mirando, y que ninguna validación de tamaño o de tipo habría
+detenido:
 
 - **El favicon puede ser el de la plataforma, no el de la marca.** `cge.cl`
   servía la W de WordPress en 80×80: un PNG válido, del dominio correcto, y
@@ -912,3 +913,54 @@ Dos notas de herramienta para la próxima:
 - **Después del `update`, comprobar que cada URL guardada responde una imagen.**
   Una fila con una URL muerta se ve igual que una fila sin imagen hasta que
   alguien abre la pantalla. Un `HEAD` por fila cuesta segundos.
+
+### Corrección (2026-09-17, misma tarde): el favicon no es el logo de la marca
+
+La pasada de arriba **no quedó correcta**. El dueño la rechazó al verla en el
+directorio: de las 28 imágenes, 12 eran favicons de 32 a 64 px que se
+desarmaban al agrandarlos, la de Andes Industrial eran barras blancas
+ilegibles, y la de **Pullman Cargo era la «S» de Svelte** —el favicon por
+defecto del framework del sitio—, que pasó la hoja de contacto. Hubo que
+rehacer 14 y buscar desde cero las demás.
+
+**Causa:** la hoja mostraba *un* candidato por proveedor, sin nada al lado con
+qué compararlo. «¿Es esta la marca de Pullman?» no se contesta mirando una
+imagen sola; se contesta al ponerla junto al logo del encabezado del sitio y al
+avatar de su página, donde la ajena salta a la vista. La hoja de revisión se
+arma **por proveedor, con todos los candidatos en una fila**.
+
+Dónde está el mejor candidato, en el orden en que rindió (91 proveedores, 53
+con imagen al cerrar; los 38 restantes son personas o comercios sin ninguna
+imagen propia publicada):
+
+1. **El avatar de su página de Facebook.** Es el cuadrado que la marca misma
+   eligió para verse chica, casi siempre a 720 px:
+   `https://graph.facebook.com/<página>/picture?type=large&width=720&height=720`,
+   sin token, para páginas públicas. La `<página>` se saca de los enlaces a
+   `facebook.com/…` del propio sitio, no se adivina. Un nombre de página que no
+   existe responde **HTTP 400**; una página sin foto responde **200 con la
+   silueta gris genérica** en 720×720 —una imagen válida que hay que descartar
+   comparándola con la silueta conocida—.
+2. **Lo que el sitio declara:** el `<img>` del encabezado cuyo `src`, `alt` o
+   `class` dice *logo*, el `og:image`, los íconos del `manifest` y el
+   `apple-touch-icon`. El favicon va al final.
+3. **Wikimedia Commons** para las marcas nacionales grandes cuyo sitio bloquea
+   bots (Copec, Esval, SII tienen su SVG oficial): la API de búsqueda en el
+   espacio `6` y `imageinfo` con `iiurlwidth`, siempre con `User-Agent`.
+4. **Instagram**, para el comercio que sólo existe ahí: su API contesta 401 sin
+   sesión; el navegador integrado sí muestra la foto de perfil, a 150 px, con
+   una URL firmada del CDN que se descarga sin cookies. **Nunca se inicia
+   sesión.**
+5. **Una marca corta que sólo se publica como favicon de 32 px** (la A de
+   Atletis, la B de Blue Express) se recorta del logotipo grande, por
+   **componente conexo** y no por caja fija: en una tipografía itálica las
+   letras se montan y una caja arrastra la vecina.
+
+Y al reemplazar, la fila cambia sólo si su imagen sigue siendo la leída antes
+de subir (`where image_url = '<leída>'`, o `is null`): si el dueño cambió una a
+mano entretanto, el relleno no se la pisa.
+
+Nota de herramienta: **Pillow está en `/usr/bin/python3`** (10.4), no en el
+Python de Homebrew; y **`qlmanage -t -s 1600 hoja.html`** rinde a PNG una hoja
+de revisión HTML con imágenes locales, que el navegador integrado sólo muestra
+como instantánea estática, sin captura posible.
