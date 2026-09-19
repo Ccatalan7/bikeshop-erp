@@ -1155,8 +1155,26 @@ repararla aparecieron tres causas que no se parecen:
 **Antes de tocar una fixture, preguntar cuál de las tres es.** Y una prueba
 que lleva tiempo roja no es ruido: ésta escondía un bloqueo permanente.
 
-Queda abierto: otras seis funciones tratan cualquier `banned_until` como
-bloqueo vigente (`erp_member_tenant_id`, `current_erp_employee_id`,
-`guard_worker_portal_identity`, `switch_erp_user_to_worker` y los dos
-directorios de chat/empleados). Es la misma pregunta con más alcance y ninguna
-prueba encima; se decide aparte.
+**Cerrado el mismo día, y con una lección de método.** Dije que «otras seis
+funciones» trataban cualquier `banned_until` como bloqueo vigente, contando
+las que devolvía `grep banned_until is null`. Cuatro ya tenían la condición
+completa: `banned_until is null` **es la primera mitad** de «is null or <=
+statement_timestamp()», así que buscar esa frase las señala en falso. Lo
+encontró Codex revisando, después de que mi reemplazo automático corrompiera
+`get_erp_employee_directory` —alias distinto, `directory_auth_user`— y el
+`create or replace` no fallara: SQL válido, función rota.
+
+Dos reglas de esto: **una condición se cuenta leyendo su contexto, no
+greppeando media frase**, y **una función regenerada desde
+`pg_get_functiondef` se prueba ejecutándola**, no sólo aplicándola. Las dos
+puertas que sí estaban estrictas —`guard_worker_portal_identity` y
+`switch_erp_user_to_worker`— quedaron corregidas en `20260919220000`, con
+`supabase/tests/expired_ban_is_not_a_ban.sql` (7 aserciones) encima. Ese
+trigger, además, sólo vigila `tenant_id, employee_id, auth_user_id,
+is_active`: una prueba que cambia otra columna no lo despierta y pasa sin
+probar nada.
+
+Lo que esto **no** resuelve, y conviene decirlo: un bloqueo temporal no es una
+suspensión. Si a alguien se le quita el acceso de verdad, va en los estados
+(`user_profiles.is_active`, `employees.status`, la cuenta de portal), no en
+una fecha que vence sola.
