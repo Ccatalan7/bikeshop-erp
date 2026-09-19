@@ -408,6 +408,51 @@ void main() {
           employeeId: 'braulio-id',
         );
 
+    test('what a worker was paid before never hides the salary he is owed', () {
+      // Vicente was once reimbursed for a part he bought; his salary still
+      // arrives by transfer and must stay a salary, never a safe expense.
+      final reimbursed = BankPriorDecision(
+        action: BankReconciliationActionKind.createExpense,
+        direction: BankMovementDirection.debit,
+        description: 'App-traspaso A: Braulio Munoz Internet',
+        counterparty: 'Braulio Munoz Internet',
+        accountId: 'misc',
+        paymentMethodId: 'transfer-id',
+        text: 'Reembolso repuesto comprado en taller local',
+      );
+      final worker = BankCounterpartyProfile(
+        kind: BankCounterpartyKind.employee,
+        displayName: 'Braulio Muñoz',
+        names: const ['Braulio Muñoz'],
+      );
+      final salary = suggest(
+          [
+            _movement('salary', _d(8, 31), BankMovementDirection.debit, 71400,
+                counterparty: 'Braulio Munoz Internet'),
+          ],
+          BankReconciliationContext(
+            payrollLines: [owedSalary()],
+            parties: [worker],
+            decisions: [reimbursed],
+          ))['salary']!;
+      expect(salary.kind, BankSuggestionKind.payroll);
+      expect(
+          salary.resolution!.action, BankReconciliationActionKind.payPayroll);
+
+      final other = suggest(
+          [
+            _movement('other', _d(8, 14), BankMovementDirection.debit, 5000,
+                counterparty: 'Braulio Munoz Internet'),
+          ],
+          BankReconciliationContext(
+            parties: [worker],
+            decisions: [reimbursed],
+          ))['other']!;
+      expect(other.kind, BankSuggestionKind.createExpense);
+      expect(other.confidence, BankReconciliationConfidence.medium);
+      expect(other.followUp, contains('Revisa si esta vez fue lo mismo'));
+    });
+
     test('a salary Nómina still owes is paid here, through Nómina', () {
       final suggestion = suggest([
         _movement('braulio', _d(8, 31), BankMovementDirection.debit, 71400,

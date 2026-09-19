@@ -157,42 +157,9 @@ class BankReconciliationAdvisor {
     final isCardCharge = _isCardCharge(movement);
     final isDebit = movement.direction == BankMovementDirection.debit;
 
-    // 1. What the operator decided for this counterparty before.
-    final prior = _priorDecision(movement, context.decisions);
-    if (prior != null) {
-      final resolution = _resolutionFromPrior(movement, prior, options);
-      if (resolution != null) {
-        return BankReconciliationSuggestion(
-          kind: switch (prior.action) {
-            BankReconciliationActionKind.createExpense =>
-              BankSuggestionKind.createExpense,
-            BankReconciliationActionKind.dismiss => BankSuggestionKind.dismiss,
-            BankReconciliationActionKind.split => BankSuggestionKind.split,
-            _ => BankSuggestionKind.postJournal,
-          },
-          // A split repeats its structure, not its amounts: what the
-          // accountant, the F29 or the licence cost changes every month.
-          confidence: prior.action == BankReconciliationActionKind.split
-              ? BankReconciliationConfidence.medium
-              : BankReconciliationConfidence.high,
-          title: prior.action == BankReconciliationActionKind.split
-              ? 'Dividir como la vez anterior'
-              : prior.supplierName ?? prior.text ?? _displayParty(movement),
-          reasons: <String>[
-            'Así resolviste "${prior.counterparty ?? prior.description}" en '
-                'una conciliación anterior',
-            if (prior.action == BankReconciliationActionKind.split)
-              resolution.splitParts.map((part) => part.description).join(' + '),
-          ],
-          followUp: prior.action == BankReconciliationActionKind.split
-              ? 'Revisa los montos de cada parte: la última toma lo que queda.'
-              : null,
-          resolution: resolution,
-        );
-      }
-    }
-
-    // 2. A salary Nómina still owes, net of the advances it already paid.
+    // 1. A salary Nómina still owes, net of the advances it already paid.
+    // It goes before what was decided for the same person: a worker once
+    // reimbursed for a part is still paid his salary by transfer.
     if (isDebit && !isCardCharge) {
       final match = _payrollMatch(
         party,
@@ -272,6 +239,48 @@ class BankReconciliationAdvisor {
 
     final profile = _profile(party, context.parties);
 
+    // 2. What the operator decided for this counterparty before. For a
+    // worker it is a question, never a safe suggestion: what he was paid
+    // last time (a reimbursement, a bonus) says little about this transfer.
+    final prior = _priorDecision(movement, context.decisions);
+    final employee = profile?.kind == BankCounterpartyKind.employee;
+    if (prior != null) {
+      final resolution = _resolutionFromPrior(movement, prior, options);
+      if (resolution != null) {
+        return BankReconciliationSuggestion(
+          kind: switch (prior.action) {
+            BankReconciliationActionKind.createExpense =>
+              BankSuggestionKind.createExpense,
+            BankReconciliationActionKind.dismiss => BankSuggestionKind.dismiss,
+            BankReconciliationActionKind.split => BankSuggestionKind.split,
+            _ => BankSuggestionKind.postJournal,
+          },
+          // A split repeats its structure, not its amounts: what the
+          // accountant, the F29 or the licence cost changes every month.
+          confidence:
+              prior.action == BankReconciliationActionKind.split || employee
+                  ? BankReconciliationConfidence.medium
+                  : BankReconciliationConfidence.high,
+          title: prior.action == BankReconciliationActionKind.split
+              ? 'Dividir como la vez anterior'
+              : prior.supplierName ?? prior.text ?? _displayParty(movement),
+          reasons: <String>[
+            'Así resolviste "${prior.counterparty ?? prior.description}" en '
+                'una conciliación anterior',
+            if (prior.action == BankReconciliationActionKind.split)
+              resolution.splitParts.map((part) => part.description).join(' + '),
+          ],
+          followUp: prior.action == BankReconciliationActionKind.split
+              ? 'Revisa los montos de cada parte: la última toma lo que queda.'
+              : employee
+                  ? 'Revisa si esta vez fue lo mismo: a una persona de la '
+                      'planilla se le paga por varios motivos.'
+                  : null,
+          resolution: resolution,
+        );
+      }
+    }
+
     // 3. People on the payroll who are not being paid a pending salary.
     if (profile?.kind == BankCounterpartyKind.employee && !isCardCharge) {
       if (isDebit) {
@@ -287,7 +296,10 @@ class BankReconciliationAdvisor {
         );
       }
       if (!hasProposal) {
-        final capital = _accountByKeywords(options, const <String>['capital']);
+        final capital = _accountByKeywords(
+          options,
+          const <String>['aportes de socio', 'aporte', 'capital'],
+        );
         return BankReconciliationSuggestion(
           kind: BankSuggestionKind.postJournal,
           confidence: BankReconciliationConfidence.low,
