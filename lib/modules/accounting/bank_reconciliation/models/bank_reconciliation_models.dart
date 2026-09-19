@@ -503,6 +503,11 @@ class BankReconciliationResolutionDraft {
   });
 
   final BankReconciliationActionKind action;
+
+  /// The counterpart account. For [BankReconciliationActionKind
+  /// .associateExisting], the account that takes what the chosen operations
+  /// leave of the movement ([BankReconciliationRowDraft
+  /// .associationRemainderClp]), with [description] as its gloss.
   final String? accountId;
   final String? paymentMethodId;
   final String? description;
@@ -672,7 +677,7 @@ class BankReconciliationRowDraft {
       !isSettled &&
       switch (effectiveResolution.action) {
         BankReconciliationActionKind.associateExisting =>
-          _explainsMovement(selectedProposal),
+          _explainsMovement(selectedProposal) || _remainderBooked,
         BankReconciliationActionKind.createExpense =>
           (effectiveResolution.accountId?.trim().isNotEmpty ?? false) &&
               (effectiveResolution.paymentMethodId?.trim().isNotEmpty ??
@@ -715,6 +720,31 @@ class BankReconciliationRowDraft {
 
   /// A manual choice counts once its operations add up to the movement; the
   /// matcher's own proposals already carry their checked difference.
+  /// What the operations chosen by hand leave of the movement, when it is
+  /// more than the fee tolerance: Carlos Sánchez paid his $7.000 sale and
+  /// $11.000 nobody registered in one $18.000 transfer. Null when they add
+  /// up, exceed it, or the association is not a manual one.
+  int? get associationRemainderClp {
+    if (effectiveResolution.action !=
+        BankReconciliationActionKind.associateExisting) {
+      return null;
+    }
+    final proposal = selectedProposal;
+    final amount = movement.amountClp;
+    if (proposal == null ||
+        amount == null ||
+        proposal.matchKind != BankReconciliationMatchKind.manual) {
+      return null;
+    }
+    final rest = amount - proposal.targetTotalClp;
+    return rest > BankReconciliationProposal.manualToleranceClp ? rest : null;
+  }
+
+  bool get _remainderBooked =>
+      associationRemainderClp != null &&
+      (effectiveResolution.accountId?.trim().isNotEmpty ?? false) &&
+      (effectiveResolution.description?.trim().length ?? 0) >= 2;
+
   bool _explainsMovement(BankReconciliationProposal? proposal) {
     if (proposal == null) return false;
     if (proposal.matchKind != BankReconciliationMatchKind.manual) return true;
@@ -1213,6 +1243,7 @@ class BankReconciliationSuggestion {
     this.relatedSourceRowId,
     this.proposalId,
     this.ruleId,
+    this.proposal,
   }) : reasons = List.unmodifiable(reasons);
 
   final BankSuggestionKind kind;
@@ -1238,6 +1269,11 @@ class BankReconciliationSuggestion {
   /// The company rule this comes from ([BankReconciliationRule.ruleId]): a
   /// line it decided is not offered to be taught again.
   final String? ruleId;
+
+  /// An association the row does not have among its proposals yet (the
+  /// same person's sale a transfer paid with something more). The review
+  /// adds it to the row, and [proposalId] names it.
+  final BankReconciliationProposal? proposal;
 }
 
 enum BankInsightTone { info, warning }

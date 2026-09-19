@@ -184,6 +184,58 @@ select ok(
   'the list says how many statements, movements and draft decisions it holds'
 );
 
+-- What a statement already applied is no longer «sin aplicar», even while
+-- the draft still carries it.
+select lives_ok(
+  format(
+    'select public.apply_bank_reconciliation_actions_v3(%L, %s, %L, %L)',
+    (select june from imports),
+    (select revision from public.bank_statement_imports
+      where id = (select june from imports)),
+    'drafts:apply-june',
+    jsonb_build_array(
+      jsonb_build_object(
+        'row_id', (select id from public.bank_statement_rows
+                    where import_id = (select june from imports)
+                      and source_row_id = 'j1'),
+        'action', 'dismiss', 'reason', 'Duplicado confirmado'
+      ),
+      jsonb_build_object(
+        'row_id', (select id from public.bank_statement_rows
+                    where import_id = (select june from imports)
+                      and source_row_id = 'j2'),
+        'action', 'pending'
+      )
+    )
+  ),
+  'one June movement is applied'
+);
+
+-- The screen has not saved since: the draft still carries the applied one.
+select is(
+  (public.save_bank_reconciliation_session_draft_v1(
+    (select (receipt->>'session_id')::uuid from opened), 2,
+    jsonb_build_object('version', 1, 'rows', jsonb_build_object(
+      repeat('c', 64) || ':j1',
+      '{"resolution":{"action":"dismiss","reason":"Duplicado confirmado"},"ai":{"explanation":"Duplicado"}}'::jsonb,
+      repeat('c', 64) || ':j2',
+      '{"resolution":{"action":"split"},"ai":{"explanation":"Google"}}'::jsonb
+    ))
+  )->>'revision')::bigint,
+  3::bigint,
+  'the draft is saved with both movements'
+);
+
+select ok(
+  (select (items->0->>'decided_count')::int = 1
+              and (items->0->>'draft_rows')::int = 1
+              and (items->0->>'draft_decisions')::int = 1
+              and (items->0->>'draft_analyses')::int = 1
+         from (select public.list_bank_reconciliation_sessions_v1(
+           'e6000000-0000-4000-8000-000000000010') as items) relisted),
+  'the list counts only the draft decisions a statement has not applied'
+);
+
 -- Another shop sees nothing of it and cannot write to it.
 select pg_temp.act_as('e6000000-0000-4000-8000-000000000102');
 

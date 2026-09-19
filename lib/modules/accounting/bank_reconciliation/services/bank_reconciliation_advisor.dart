@@ -433,22 +433,100 @@ class BankReconciliationAdvisor {
       );
     }
 
-    // 9. Money from someone with no sale.
+    // 9. Money from someone with no sale: most likely a sale nobody
+    // registered, booked as the sales kernel books a transfer sale (4100, no
+    // VAT). When the same person has a transfer sale for less that no
+    // movement explains, the transfer paid it and more: the sale is linked
+    // and the rest is the unregistered part.
     if (!isDebit && !hasProposal) {
-      final clue = _samePartyClue(movement, context.candidates, explained);
+      final payer = _displayParty(movement);
+      final same = _samePartyCandidate(movement, context.candidates, explained);
+      final income = _salesIncomeAccount(options);
+      final unregistered = 'Venta no registrada · $payer';
+      if (same != null && same.amountClp < amount && income != null) {
+        // Stored as a choice by hand, so a saved draft restores it; it says
+        // why it was proposed instead of who chose it.
+        final chosen = BankReconciliationProposal.manual(
+          sourceRowId: movement.sourceRowId,
+          movementAmountClp: amount,
+          candidates: <BankReconciliationCandidate>[same],
+        )!;
+        final proposal = BankReconciliationProposal(
+          sourceRowId: chosen.sourceRowId,
+          matchKind: chosen.matchKind,
+          confidence: BankReconciliationConfidence.medium,
+          allocations: chosen.allocations,
+          reasons: <String>[
+            'Misma persona: ${same.label} por ${_money(same.amountClp)}, '
+                'registrada como transferencia',
+          ],
+        );
+        final rest = amount - same.amountClp;
+        return BankReconciliationSuggestion(
+          kind: BankSuggestionKind.sale,
+          confidence: BankReconciliationConfidence.medium,
+          title: '${same.label} y ${_money(rest)} sin registrar',
+          reasons: <String>[
+            _samePartyClue(movement, same),
+            'Se vincula la venta por sus ${_money(same.amountClp)} y los '
+                '${_money(rest)} que sobran quedan como venta no registrada '
+                'en ${income.label}',
+          ],
+          followUp: 'Si la venta quedó registrada con otro monto, corrígela '
+              'en Ventas; si la diferencia fue otra cosa, cambia su cuenta.',
+          resolution: BankReconciliationResolutionDraft(
+            action: BankReconciliationActionKind.associateExisting,
+            accountId: income.accountId,
+            description: unregistered,
+          ),
+          proposalId: BankReconciliationRowDraft.proposalIdentity(proposal),
+          proposal: proposal,
+        );
+      }
       return BankReconciliationSuggestion(
         kind: BankSuggestionKind.sale,
         confidence: BankReconciliationConfidence.low,
-        title: 'Transferencia de ${_displayParty(movement)} sin venta',
+        title: 'Transferencia de $payer sin venta',
         reasons: <String>[
           'No hay venta ni factura abierta por este monto',
-          if (clue != null) clue,
+          if (same != null) _samePartyClue(movement, same),
         ],
-        followUp: 'Si fue una venta, regístrala en Ventas con pago por '
-            'transferencia; si es un abono o una devolución, clasifícala aquí.',
+        followUp: income == null
+            ? 'Si fue una venta, regístrala en Ventas con pago por '
+                'transferencia; si es un abono o una devolución, clasifícala '
+                'aquí.'
+            : 'Si sabes qué se vendió, regístralo en Ventas con pago por '
+                'transferencia y la próxima conciliación lo vincula. Si no, '
+                '«Usar sugerencia» lo deja como venta no registrada en '
+                '${income.label}, sin IVA, como una venta por transferencia. '
+                'Si fue un préstamo, un aporte o una devolución, clasifícalo '
+                'en su cuenta.',
+        resolution: income == null
+            ? null
+            : BankReconciliationResolutionDraft(
+                action: BankReconciliationActionKind.classifyAccount,
+                accountId: income.accountId,
+                description: unregistered,
+                reference: movement.documentNumber,
+              ),
       );
     }
     return null;
+  }
+
+  /// Where the ERP books a sale: the sales kernel credits 4100.
+  BankReconciliationLedgerAccountOption? _salesIncomeAccount(
+    BankReconciliationWorkspaceOptions? options,
+  ) {
+    if (options == null) return null;
+    final income = options.accounts
+        .where((account) => account.type == 'income')
+        .toList(growable: false)
+      ..sort((left, right) => left.code.compareTo(right.code));
+    return income.where((account) => account.code == '4100').firstOrNull ??
+        income
+            .where((account) => account.category == 'operatingIncome')
+            .firstOrNull;
   }
 
   BankReconciliationSuggestion? _ruleSuggestion(
@@ -485,7 +563,7 @@ class BankReconciliationAdvisor {
   /// another amount, that no movement explains: Carlos Sánchez sent $18.000
   /// on 7 July, the day his $7.000 sale was recorded as a transfer that
   /// never arrived.
-  String? _samePartyClue(
+  BankReconciliationCandidate? _samePartyCandidate(
     BankStatementMovement movement,
     List<BankReconciliationCandidate> candidates,
     Set<String> explained,
@@ -508,14 +586,18 @@ class BankReconciliationAdvisor {
           .daysUntil(date)
           .abs()
           .compareTo(right.occurredOn.daysUntil(date).abs()));
-    if (matches.isEmpty) return null;
-    final candidate = matches.first;
-    return '${_displayParty(movement)} tiene la ${candidate.label} por '
-        '${_money(candidate.amountClp)} del ${_day(candidate.occurredOn)}, '
-        'registrada como transferencia, y esa transferencia no aparece en la '
-        'cartola: ¿pagó esa venta y algo más, o quedó registrada con otro '
-        'monto?';
+    return matches.firstOrNull;
   }
+
+  String _samePartyClue(
+    BankStatementMovement movement,
+    BankReconciliationCandidate candidate,
+  ) =>
+      '${_displayParty(movement)} tiene la ${candidate.label} por '
+      '${_money(candidate.amountClp)} del ${_day(candidate.occurredOn)}, '
+      'registrada como transferencia, y esa transferencia no aparece en la '
+      'cartola: ¿pagó esa venta y algo más, o quedó registrada con otro '
+      'monto?';
 
   BankPriorDecision? _priorDecision(
     BankStatementMovement movement,

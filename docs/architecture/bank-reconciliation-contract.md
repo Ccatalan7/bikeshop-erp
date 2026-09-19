@@ -344,13 +344,55 @@ Two deterministic readings cover what the name on the statement cannot:
   same person has an operation by transfer, within five days and for
   another amount, that no movement explains: Carlos Sánchez sent $18.000 on
   7 July, the day his $7.000 sale was recorded as a transfer that never
-  arrived. It stays a question for the owner.
+  arrived. When that operation is smaller, the suggestion (medium, never
+  safe) links it and books the rest as «Venta no registrada · nombre» on the
+  sales income account — the association remainder below; the advisor adds
+  that choice to the row's proposals («Misma persona: …»).
+- **Money from someone, no sale at all.** Most likely a sale nobody
+  registered. The suggestion (low, never safe) books it as the sales kernel
+  books a transfer sale — 4100 Ingresos Operacionales, no VAT, «Venta no
+  registrada · nombre» — and says to register it in Ventas instead when what
+  was sold is known. The owner keeps the five of 2026 pending until Vicente
+  says what they were (2026-09-19).
 - **ERP without bank.** «N operaciones del ERP no aparecen en la cartola» lists
   what the ERP records as paid or collected through this account, dated inside
   the statements (minus a 3-day booking lag), that no selected movement
   explains: a test purchase «paid» by transfer, a sale registered as a
   transfer that never arrived, salaries a relative paid. Card sales are left
   out; the acquirer pays them later and in groups.
+
+## An association and what it leaves
+
+«Vincular operación» accepts operations chosen by hand that add up to the
+movement within $1.000 (a fee, a rounding), the last taking the difference.
+When they add up to less, the row is not resolved until the rest has an
+account: the link editor shows «Registrar los $X que faltan» (account and
+what it was), and `associate_existing` carries `remainder` {account_id,
+description, reference?} (`20260919090000`). The operations are linked for
+their own amounts and the rest is one posted journal against the bank to
+that account (money in: Debe banco / Haber cuenta; money out: Debe cuenta /
+Haber banco). The resolution keeps the account and gloss in `accountId` and
+`description`, so a saved draft restores them.
+
+- A manual association that does not add up and has no remainder is sent as
+  `pending`, never with its last operation carrying the difference; the
+  kernel refuses a manual allocation more than $1.000 away from its
+  operation (`20260919110000`). None reached production before the guard.
+- A remainder of zero or less, or one to the bank account itself, is refused.
+
+## The first real apply (2026-09-19)
+
+The owner's four statements: 222 of 229 movements applied in one operation
+per file — 185 links, 16 expenses, 18 journals, 5 salaries paid through
+Nómina (NOM-00037 and NOM-00039 confirmed). The 50 card deposits no sale
+combination explains were excluded with the owner's reason («se asume que
+las ventas con tarjeta están bien registradas»), five transfers from
+customers and two supplier payments wait for Vicente. It exposed that
+`post_journal` booked money going out backwards (13 journals, $31.443; the
+bank ledger $62.886 above the statement); `20260919100000` fixed the kernel
+and swapped those journals' lines in place, so their allocations keep
+pointing at right journals. The conciliations list counted applied
+decisions still in the draft as «sin aplicar» (`20260919130000`).
 
 ## AI analysis
 

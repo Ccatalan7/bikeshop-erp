@@ -870,6 +870,109 @@ void main() {
     );
   });
 
+  test('a transfer that paid a sale and more links it and books the rest',
+      () async {
+    final calls = <_RpcCall>[];
+    final service = BankReconciliationService(
+      database: _FakeDatabaseService(),
+      rpc: (name, params) async {
+        calls.add(_RpcCall(name, params));
+        return <String, dynamic>{
+          'import_id': '33333333-3333-4333-8333-333333333333',
+          'revision': 2,
+          'status': 'reconciled',
+          'allocation_count': 2,
+          'replayed': false,
+        };
+      },
+    );
+    final movement = BankStatementMovement(
+      sourceRowId: 'carlos',
+      ordinal: 1,
+      bookingDate: const BankCivilDate(2026, 7, 7),
+      description: 'Traspaso De: Carlos Aurelio Sanchez Internet Sanchez',
+      normalizedDescription:
+          'traspaso de carlos aurelio sanchez internet sanchez',
+      direction: BankMovementDirection.credit,
+      amountClp: 18000,
+      sourcePage: 1,
+      sourceLineStart: 1,
+      sourceLineEnd: 1,
+    );
+    final sale = BankReconciliationCandidate(
+      targetKind: BankReconciliationTargetKind.salesPayment,
+      targetId: '55555555-5555-4555-8555-555555555555',
+      direction: BankMovementDirection.credit,
+      amountClp: 7000,
+      occurredOn: const BankCivilDate(2026, 7, 7),
+      label: 'Venta FV-00836',
+      paymentMethodCode: 'transfer',
+    );
+    final proposal = BankReconciliationProposal.manual(
+      sourceRowId: 'carlos',
+      movementAmountClp: 18000,
+      candidates: <BankReconciliationCandidate>[sale],
+    )!;
+    BankReconciliationPreparedDraft draftWith(
+      BankReconciliationResolutionDraft resolution,
+    ) =>
+        BankReconciliationPreparedDraft(
+          fileSha256: 'a' * 64,
+          filename: 'cartola julio.pdf',
+          sourceType: 'pdf_text',
+          parserName: 'banco_chile_statement',
+          parserVersion: 'v1',
+          rows: <BankReconciliationRowDraft>[
+            BankReconciliationRowDraft(
+              movement: movement,
+              proposals: <BankReconciliationProposal>[proposal],
+              selectedProposalId:
+                  BankReconciliationRowDraft.proposalIdentity(proposal),
+              resolution: resolution,
+            ),
+          ],
+        );
+    final receipt = BankStatementImportReceipt(
+      importId: '33333333-3333-4333-8333-333333333333',
+      revision: 1,
+      rowIdsBySourceRowId: const <String, String>{
+        'carlos': '44444444-4444-4444-8444-444444444444',
+      },
+      replayed: false,
+    );
+
+    // "Faltan $11.000" with nothing booked for them stays pending: sent as
+    // it is, the sale would carry $18.000 of evidence.
+    final short = draftWith(const BankReconciliationResolutionDraft(
+      action: BankReconciliationActionKind.associateExisting,
+    ));
+    expect(short.rows.single.associationRemainderClp, 11000);
+    expect(short.rows.single.isResolved, isFalse);
+    await service.apply(
+        draft: short, importReceipt: receipt, operationKey: 'short');
+    var action = (calls.last.params['p_actions'] as List).single as Map;
+    expect(action['action'], 'pending');
+    expect(action.containsKey('allocations'), isFalse);
+
+    final booked = draftWith(const BankReconciliationResolutionDraft(
+      action: BankReconciliationActionKind.associateExisting,
+      accountId: 'sales-income',
+      description: 'Venta no registrada · Carlos Sanchez',
+    ));
+    expect(booked.rows.single.isResolved, isTrue);
+    await service.apply(
+        draft: booked, importReceipt: receipt, operationKey: 'booked');
+    action = (calls.last.params['p_actions'] as List).single as Map;
+    expect(action['action'], 'associate_existing');
+    final allocation = (action['allocations'] as List).single as Map;
+    expect(allocation['bank_amount'], 7000);
+    expect(allocation['target_amount'], 7000);
+    expect(action['remainder'], <String, dynamic>{
+      'account_id': 'sales-income',
+      'description': 'Venta no registrada · Carlos Sanchez',
+    });
+  });
+
   test('a split row sends its parts and counts only when they add up',
       () async {
     final calls = <_RpcCall>[];

@@ -561,6 +561,11 @@ class BankReconciliationService {
                   proposal,
               if (thirdParty[entry.$1.sourceRowId] != null)
                 thirdParty[entry.$1.sourceRowId]!,
+              // An association only the advisor saw (the same person's sale
+              // a transfer paid with something more).
+              if (allSuggestions[entry.$1.sourceRowId]?.proposal
+                  case final extra?)
+                extra,
             ],
             suggestion: allSuggestions[entry.$1.sourceRowId],
             sourceFileSha256: multiple ? entry.$2 : null,
@@ -1252,13 +1257,25 @@ class BankReconciliationService {
               'Elige la operación ERP que corresponde antes de guardar.',
             );
           }
+          // Operations chosen by hand that do not add up to the movement,
+          // with nothing booked for the difference, stay pending: sent as
+          // they are, the last one would carry evidence it never had.
+          if (!row.isResolved) {
+            action['action'] = 'pending';
+            break;
+          }
+          // Operations that leave part of the movement are linked for
+          // their own amounts; the rest is a journal to the account named.
+          final remainder = row.associationRemainderClp;
           action['allocations'] = <Map<String, dynamic>>[
             for (final allocation in proposal.allocations)
               <String, dynamic>{
                 'row_id': rowId,
                 'target_kind': _targetKindCode(allocation.candidate.targetKind),
                 'target_id': allocation.candidate.targetId,
-                'bank_amount': allocation.bankAmountClp,
+                'bank_amount': remainder == null
+                    ? allocation.bankAmountClp
+                    : allocation.candidate.amountClp,
                 'target_amount': allocation.candidate.amountClp,
                 'match_kind': _matchKindCode(proposal.matchKind),
                 'confidence': proposal.confidence.name,
@@ -1271,6 +1288,14 @@ class BankReconciliationService {
                 },
               },
           ];
+          if (remainder != null) {
+            action['remainder'] = <String, dynamic>{
+              'account_id': resolution.accountId,
+              'description': resolution.description!.trim(),
+              if (resolution.reference?.trim().isNotEmpty ?? false)
+                'reference': resolution.reference!.trim(),
+            };
+          }
           break;
         case BankReconciliationActionKind.createExpense:
           if (row.movement.direction != BankMovementDirection.debit ||

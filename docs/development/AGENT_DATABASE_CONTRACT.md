@@ -1001,3 +1001,31 @@ Lo que hace falta saber para repetirlo:
 - **El buscador global también tiene que saberlo.** No leía `aliases` ni
   marcaba inactivos; tras unificar, «transvayve» sólo encontraba la ficha
   retirada. Ver la fila del buscador en `canonical-ui-surfaces.md`.
+
+## Un asiento se prueba en los dos sentidos (2026-09-19)
+
+`post_journal` de la conciliación bancaria escribía sus dos líneas eligiendo
+el monto por dirección dos veces, y para la plata que **sale** dejaba la
+cuenta al Haber y el banco al Debe. Nació el 2026-08-14 con un pgTAP que sólo
+clasificaba un **abono**; el primer «Aplicar» real (13 cargos, $31.443) dejó el
+banco $62.886 por encima de la cartola hasta que la migración
+`20260919100000` corrigió el kernel y los asientos. Toda función que escribe
+un asiento contra el banco se prueba con un movimiento de entrada **y** uno de
+salida, afirmando la cuenta y el lado (`account_code, debit, credit`), no sólo
+que cuadre: un asiento al revés también cuadra. Y después de la primera
+escritura real se lee de vuelta el lado de la línea del banco contra el
+sentido del movimiento.
+
+## Dos trampas de PL/pgSQL y pgTAP que costaron una corrida (2026-09-19)
+
+- **Un `record` sin asignar revienta aunque su rama no corra.**
+  `case when v_journal_id is null then '{}' else jsonb_build_object('id',
+  v_account.id) end` falla con `record "v_account" is not assigned yet` cuando
+  el bloque que llena `v_account` no se ejecutó: PL/pgSQL resuelve los campos
+  del record al preparar la expresión. El jsonb se arma dentro del `if` que
+  asignó el record. Lo detectó `bank_reconciliation_pays_payroll.sql`, no la
+  prueba nueva: por eso se corren todas las pruebas de la función que se tocó.
+- **Una escritura y una lectura `stable` en la misma sentencia no se ven.**
+  `select ok((guardar_borrador(...))->>'revision' = '3' and (select ... from
+  listar(...)))` lee la lista con la foto de antes de guardar. Se escribe en
+  una sentencia y se afirma en la siguiente.

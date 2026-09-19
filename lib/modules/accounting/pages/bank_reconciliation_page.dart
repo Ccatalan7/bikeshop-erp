@@ -2649,10 +2649,12 @@ class _ResolutionPanel extends StatelessWidget {
                     _ExistingOperationEditor(
                       row: row,
                       draft: draft,
+                      options: options,
                       enabled: enabled,
                       onProposalSelected: onProposalSelected,
                       onCandidateSelected: onCandidateSelected,
                       onCandidateRemoved: onCandidateRemoved,
+                      onResolutionChanged: onResolutionChanged,
                     ),
                   BankReconciliationActionKind.createExpense => _ExpenseEditor(
                       row: row,
@@ -2869,18 +2871,24 @@ class _ExistingOperationEditor extends StatelessWidget {
   const _ExistingOperationEditor({
     required this.row,
     required this.draft,
+    required this.options,
     required this.enabled,
     required this.onProposalSelected,
     required this.onCandidateSelected,
     required this.onCandidateRemoved,
+    required this.onResolutionChanged,
   });
 
   final BankReconciliationRowDraft row;
   final BankReconciliationPreparedDraft draft;
+  final BankReconciliationWorkspaceOptions? options;
   final bool enabled;
   final ValueChanged<String> onProposalSelected;
   final ValueChanged<BankReconciliationCandidate> onCandidateSelected;
   final ValueChanged<String> onCandidateRemoved;
+
+  /// Where what the chosen operations leave of the movement is booked.
+  final ValueChanged<BankReconciliationResolutionDraft> onResolutionChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -2896,6 +2904,8 @@ class _ExistingOperationEditor extends StatelessWidget {
     final manual = selected?.matchKind == BankReconciliationMatchKind.manual
         ? selected
         : null;
+    final resolution = row.effectiveResolution;
+    final remainder = row.associationRemainderClp;
     final chosen = <String>{
       for (final allocation
           in manual?.allocations ?? const <BankReconciliationAllocationDraft>[])
@@ -2968,8 +2978,69 @@ class _ExistingOperationEditor extends StatelessWidget {
               ],
             ),
           const SizedBox(height: 8),
-          _ManualTotal(proposal: manual, movement: row.movement),
+          _ManualTotal(
+            proposal: manual,
+            movement: row.movement,
+            remainderAccount:
+                row.isResolved ? options?.account(resolution.accountId) : null,
+          ),
           const SizedBox(height: 16),
+          if (remainder != null) ...[
+            Text(
+              'Registrar los ${_money(remainder)} que faltan',
+              style: theme.textTheme.titleSmall,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Si la transferencia pagó estas operaciones y algo más que '
+              'nadie registró, la diferencia queda en una cuenta.',
+              style: theme.textTheme.bodySmall,
+            ),
+            const SizedBox(height: 8),
+            VbSearchableSelect<String>(
+              key: ValueKey(
+                'bank-reconciliation-remainder-account-'
+                '${row.movement.sourceRowId}',
+              ),
+              value: resolution.accountId,
+              options: [
+                for (final account in options?.accounts ??
+                    const <BankReconciliationLedgerAccountOption>[])
+                  VbSearchableSelectOption<String>(
+                    value: account.accountId,
+                    label: account.label,
+                    context: account.type,
+                    searchText: account.category,
+                  ),
+              ],
+              onChanged: enabled
+                  ? (value) => onResolutionChanged(
+                        resolution.copyWith(
+                          accountId: value,
+                          clearAccount: value == null,
+                        ),
+                      )
+                  : null,
+              sheetTitle: 'Cuenta de la diferencia',
+              label: 'Cuenta de la diferencia',
+              placeholder: 'Ingreso, gasto, préstamo…',
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              key: ValueKey(
+                'bank-reconciliation-remainder-description-'
+                '${row.movement.sourceRowId}',
+              ),
+              initialValue: resolution.description,
+              enabled: enabled,
+              decoration: const InputDecoration(
+                labelText: 'Qué fue la diferencia',
+              ),
+              onChanged: (value) =>
+                  onResolutionChanged(resolution.copyWith(description: value)),
+            ),
+            const SizedBox(height: 16),
+          ],
         ],
         VbSearchableSelect<String>(
           key: ValueKey(
@@ -3004,10 +3075,12 @@ class _ExistingOperationEditor extends StatelessWidget {
           searchHint: 'Buscar por persona, documento o monto…',
         ),
         const SizedBox(height: 16),
-        const VbNotice(
+        VbNotice(
           title: 'Efecto contable',
-          body:
-              'Vincula evidencia bancaria a una o varias operaciones que ya existen. No crea ni repite pagos ni asientos.',
+          body: remainder == null
+              ? 'Vincula evidencia bancaria a una o varias operaciones que ya existen. No crea ni repite pagos ni asientos.'
+              : 'Vincula las operaciones elegidas por sus montos y genera un asiento contabilizado por los ${_money(remainder)} que faltan: '
+                  '${row.movement.direction == BankMovementDirection.credit ? 'Debe banco / Haber ${options?.account(resolution.accountId)?.label ?? 'cuenta elegida'}' : 'Debe ${options?.account(resolution.accountId)?.label ?? 'cuenta elegida'} / Haber banco'}.',
           tone: VbNoticeTone.info,
         ),
       ],
@@ -3017,10 +3090,17 @@ class _ExistingOperationEditor extends StatelessWidget {
 
 /// Whether the operations chosen by hand add up to the movement.
 class _ManualTotal extends StatelessWidget {
-  const _ManualTotal({required this.proposal, required this.movement});
+  const _ManualTotal({
+    required this.proposal,
+    required this.movement,
+    this.remainderAccount,
+  });
 
   final BankReconciliationProposal proposal;
   final BankStatementMovement movement;
+
+  /// The account that takes what the operations leave, once it is booked.
+  final BankReconciliationLedgerAccountOption? remainderAccount;
 
   @override
   Widget build(BuildContext context) {
@@ -3029,6 +3109,16 @@ class _ManualTotal extends StatelessWidget {
     final difference = amount - total;
     final balanced =
         difference.abs() <= BankReconciliationProposal.manualToleranceClp;
+    final account = remainderAccount;
+    if (!balanced && difference > 0 && account != null) {
+      return VbNotice(
+        key: const ValueKey('bank-reconciliation-manual-total'),
+        title: 'Faltan ${_money(difference)}: quedan en ${account.label}',
+        body: 'Operaciones: ${_money(total)} · Diferencia: '
+            '${_money(difference)} · Movimiento: ${_money(amount)}.',
+        tone: VbNoticeTone.success,
+      );
+    }
     return VbNotice(
       key: const ValueKey('bank-reconciliation-manual-total'),
       title: difference == 0
@@ -3039,7 +3129,7 @@ class _ManualTotal extends StatelessWidget {
                   ? 'Faltan ${_money(difference)}'
                   : 'Sobran ${_money(-difference)}',
       body: 'Operaciones: ${_money(total)} · Movimiento: ${_money(amount)}.'
-          '${balanced ? '' : ' Una transferencia puede pagar varias operaciones: agrega las que faltan o quita las que sobran.'}',
+          '${balanced ? '' : difference > 0 ? ' Una transferencia puede pagar varias operaciones: agrega las que faltan, o registra la diferencia en una cuenta.' : ' Una transferencia puede pagar varias operaciones: quita las que sobran.'}',
       tone: balanced ? VbNoticeTone.success : VbNoticeTone.warning,
     );
   }

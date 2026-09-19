@@ -352,6 +352,20 @@ void main() {
           name: 'Retiros de socio · Claudio Catalán',
           type: 'equity',
         ),
+        BankReconciliationLedgerAccountOption(
+          accountId: 'other-income',
+          code: '4201',
+          name: 'Otros Ingresos',
+          type: 'income',
+          category: 'nonOperatingIncome',
+        ),
+        BankReconciliationLedgerAccountOption(
+          accountId: 'sales',
+          code: '4100',
+          name: 'Ingresos Operacionales',
+          type: 'income',
+          category: 'operatingIncome',
+        ),
       ],
       paymentMethods: const [
         BankReconciliationPaymentMethodOption(
@@ -791,23 +805,52 @@ void main() {
           'carlos', _d(7, 7), BankMovementDirection.credit, 18000,
           counterparty: 'Carlos Aurelio Sanchez Sanchez');
 
-      final clue = suggest(
+      final linked = suggest(
         [carlos],
         BankReconciliationContext(candidates: [sale('transfer')]),
       )['carlos']!;
-      expect(clue.confidence, BankReconciliationConfidence.low);
+      expect(linked.confidence, BankReconciliationConfidence.medium);
+      expect(linked.title, r'Venta FV-00836 y $11.000 sin registrar');
       expect(
-        clue.reasons.last,
+        linked.reasons.first,
         allOf(contains('Venta FV-00836'), contains(r'$7.000'),
             contains('07/07'), contains('¿pagó esa venta y algo más')),
       );
+      // The sale is linked for what it is and the rest is an unregistered
+      // sale, booked where the sales kernel books one.
+      expect(linked.resolution!.action,
+          BankReconciliationActionKind.associateExisting);
+      expect(linked.resolution!.accountId, 'sales');
+      expect(linked.resolution!.description,
+          startsWith('Venta no registrada · Carlos Aurelio Sanchez'));
+      final proposal = linked.proposal!;
+      expect(proposal.allocations.single.candidate.targetId, 'fv-836-transfer');
+      expect(
+          proposal.reasons.single, startsWith('Misma persona: Venta FV-00836'));
+      expect(linked.proposalId,
+          BankReconciliationRowDraft.proposalIdentity(proposal));
+      final accepted = BankReconciliationRowDraft(
+        movement: carlos,
+        proposals: <BankReconciliationProposal>[proposal],
+        selectedProposalId: linked.proposalId,
+        resolution: linked.resolution,
+      );
+      expect(accepted.associationRemainderClp, 11000);
+      expect(accepted.isResolved, isTrue);
 
-      // A sale paid in cash explains nothing about a transfer.
+      // A sale paid in cash explains nothing about a transfer: the money is
+      // offered as a sale nobody registered, never as a safe suggestion.
       final none = suggest(
         [carlos],
         BankReconciliationContext(candidates: [sale('cash')]),
       )['carlos']!;
       expect(none.reasons, hasLength(1));
+      expect(none.confidence, BankReconciliationConfidence.low);
+      expect(none.resolution!.action,
+          BankReconciliationActionKind.classifyAccount);
+      expect(none.resolution!.accountId, 'sales');
+      expect(none.resolution!.description,
+          startsWith('Venta no registrada · Carlos Aurelio Sanchez'));
     });
 
     test('a transfer split before is proposed with its parts, never as safe',

@@ -486,6 +486,62 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a transfer that paid a sale and more books the difference',
+      (tester) async {
+    final harness = _Harness();
+    addTearDown(harness.dispose);
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(harness.app(initialDraft: _paidMoreDraft()));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('bank-reconciliation-resolve-carlos')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text(r'Faltan $11.000'), findsOneWidget);
+    expect(find.text(r'Registrar los $11.000 que faltan'), findsOneWidget);
+    expect(
+      find.text('0 de 1 movimientos resueltos · 1 quedan pendientes'),
+      findsOneWidget,
+    );
+
+    final account = find.byKey(
+      const ValueKey('bank-reconciliation-remainder-account-carlos'),
+    );
+    await tester.ensureVisible(account);
+    await tester.pumpAndSettle();
+    await tester.tap(account);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('4100 · Otros ingresos').last);
+    await tester.pumpAndSettle();
+    final description = find.byKey(
+      const ValueKey('bank-reconciliation-remainder-description-carlos'),
+    );
+    await tester.ensureVisible(description);
+    await tester.pumpAndSettle();
+    await tester.enterText(description, 'Venta no registrada · Carlos Sanchez');
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(r'Faltan $11.000: quedan en 4100 · Otros ingresos'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining(r'genera un asiento contabilizado por los $11.000 '
+          'que faltan: Debe banco / Haber 4100 · Otros ingresos'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('1 de 1 movimientos resueltos · 0 quedan pendientes'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('the split editor fits a phone', (tester) async {
     final harness = _Harness();
     addTearDown(harness.dispose);
@@ -1020,6 +1076,56 @@ BankReconciliationPreparedDraft _suggestedDraft() {
         ),
       ),
     ],
+  );
+}
+
+/// Carlos Sánchez's $18.000 transfer with his $7.000 sale chosen by hand.
+BankReconciliationPreparedDraft _paidMoreDraft() {
+  final sale = BankReconciliationCandidate(
+    targetKind: BankReconciliationTargetKind.salesPayment,
+    targetId: 'fv-836',
+    direction: BankMovementDirection.credit,
+    amountClp: 7000,
+    occurredOn: const BankCivilDate(2026, 7, 7),
+    label: 'Venta FV-00836',
+    paymentMethodCode: 'transfer',
+  );
+  final proposal = BankReconciliationProposal.manual(
+    sourceRowId: 'carlos',
+    movementAmountClp: 18000,
+    candidates: <BankReconciliationCandidate>[sale],
+  )!;
+  return BankReconciliationPreparedDraft(
+    fileSha256:
+        'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+    filename: 'cartola julio.pdf',
+    sourceType: 'pdf_text',
+    parserName: 'banco_chile_statement',
+    parserVersion: 'v1',
+    rows: <BankReconciliationRowDraft>[
+      BankReconciliationRowDraft(
+        movement: BankStatementMovement(
+          sourceRowId: 'carlos',
+          ordinal: 1,
+          bookingDate: const BankCivilDate(2026, 7, 7),
+          description: 'Traspaso De: Carlos Aurelio Sanchez Internet Sanchez',
+          normalizedDescription:
+              'traspaso de carlos aurelio sanchez internet sanchez',
+          direction: BankMovementDirection.credit,
+          amountClp: 18000,
+          sourcePage: 1,
+          sourceLineStart: 1,
+          sourceLineEnd: 1,
+        ),
+        proposals: <BankReconciliationProposal>[proposal],
+        selectedProposalId:
+            BankReconciliationRowDraft.proposalIdentity(proposal),
+        resolution: const BankReconciliationResolutionDraft(
+          action: BankReconciliationActionKind.associateExisting,
+        ),
+      ),
+    ],
+    candidateCatalog: <BankReconciliationCandidate>[sale],
   );
 }
 
