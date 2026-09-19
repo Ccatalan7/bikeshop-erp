@@ -29,6 +29,14 @@ class BankReconciliationAdvisor {
     }).toList(growable: false);
     final result = <String, BankReconciliationSuggestion>{};
     result.addAll(_offsettingPairs(open));
+    // Operations a movement already explains are nobody's clue.
+    final explained = <String>{
+      for (final rowProposals in proposals.values)
+        for (final proposal in rowProposals)
+          if (proposal.isSelectedByDefault)
+            for (final allocation in proposal.allocations)
+              allocation.candidate.identity,
+    };
     // One salary is paid by one transfer.
     final claimedPayrollLines = <String>{};
     final advancesByLine = _assignAdvances(context);
@@ -41,6 +49,7 @@ class BankReconciliationAdvisor {
         options: options,
         claimedPayrollLines: claimedPayrollLines,
         advancesByLine: advancesByLine,
+        explained: explained,
       );
       if (suggestion != null) result[movement.sourceRowId] = suggestion;
     }
@@ -150,6 +159,7 @@ class BankReconciliationAdvisor {
     required BankReconciliationWorkspaceOptions? options,
     required Set<String> claimedPayrollLines,
     required Map<String, List<BankPayrollAdvanceUse>> advancesByLine,
+    Set<String> explained = const <String>{},
   }) {
     final party = _party(movement);
     final amount = movement.amountClp!;
@@ -417,18 +427,56 @@ class BankReconciliationAdvisor {
 
     // 8. Money from someone with no sale.
     if (!isDebit && !hasProposal) {
+      final clue = _samePartyClue(movement, context.candidates, explained);
       return BankReconciliationSuggestion(
         kind: BankSuggestionKind.sale,
         confidence: BankReconciliationConfidence.low,
         title: 'Transferencia de ${_displayParty(movement)} sin venta',
-        reasons: const <String>[
+        reasons: <String>[
           'No hay venta ni factura abierta por este monto',
+          if (clue != null) clue,
         ],
         followUp: 'Si fue una venta, regístrala en Ventas con pago por '
             'transferencia; si es un abono o una devolución, clasifícala aquí.',
       );
     }
     return null;
+  }
+
+  /// The same person has an operation by transfer, near the date and for
+  /// another amount, that no movement explains: Carlos Sánchez sent $18.000
+  /// on 7 July, the day his $7.000 sale was recorded as a transfer that
+  /// never arrived.
+  String? _samePartyClue(
+    BankStatementMovement movement,
+    List<BankReconciliationCandidate> candidates,
+    Set<String> explained,
+  ) {
+    final date = movement.bookingDate!;
+    final matches = candidates
+        .where((candidate) =>
+            candidate.direction == movement.direction &&
+            candidate.provider == BankSettlementProvider.none &&
+            (candidate.paymentMethodCode?.contains('transf') ?? false) &&
+            candidate.amountClp != movement.amountClp &&
+            !explained.contains(candidate.identity) &&
+            candidate.occurredOn.daysUntil(date).abs() <= 5 &&
+            BankCounterpartyIdentity.compare(
+              _party(movement),
+              candidate.identityNames,
+            ).isStrong)
+        .toList(growable: false)
+      ..sort((left, right) => left.occurredOn
+          .daysUntil(date)
+          .abs()
+          .compareTo(right.occurredOn.daysUntil(date).abs()));
+    if (matches.isEmpty) return null;
+    final candidate = matches.first;
+    return '${_displayParty(movement)} tiene la ${candidate.label} por '
+        '${_money(candidate.amountClp)} del ${_day(candidate.occurredOn)}, '
+        'registrada como transferencia, y esa transferencia no aparece en la '
+        'cartola: ¿pagó esa venta y algo más, o quedó registrada con otro '
+        'monto?';
   }
 
   BankPriorDecision? _priorDecision(

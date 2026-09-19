@@ -513,6 +513,32 @@ class BankReconciliationService {
             entry.key,
       },
     );
+    // A transfer somebody else paid, beyond doubt, is accepted with the safe
+    // suggestions: it selects the association.
+    final allSuggestions = <String, BankReconciliationSuggestion>{
+      ...suggestions,
+    };
+    for (final entry in thirdParty.entries) {
+      final proposal = entry.value;
+      if (proposal.confidence != BankReconciliationConfidence.high ||
+          proposal.allocations.length != 1 ||
+          allSuggestions.containsKey(entry.key)) {
+        continue;
+      }
+      final candidate = proposal.allocations.single.candidate;
+      final incoming = candidate.direction == BankMovementDirection.credit;
+      allSuggestions[entry.key] = BankReconciliationSuggestion(
+        kind: BankSuggestionKind.otherPayer,
+        confidence: BankReconciliationConfidence.high,
+        title: '${candidate.label} · '
+            '${incoming ? 'la pagó otra persona' : 'la recibió otra persona'}',
+        reasons: proposal.reasons,
+        resolution: const BankReconciliationResolutionDraft(
+          action: BankReconciliationActionKind.associateExisting,
+        ),
+        proposalId: BankReconciliationRowDraft.proposalIdentity(proposal),
+      );
+    }
     final first = statements.first;
     return BankReconciliationPreparedDraft(
       fileSha256: first.fileSha256,
@@ -526,11 +552,17 @@ class BankReconciliationService {
           BankReconciliationRowDraft(
             movement: entry.$1,
             proposals: <BankReconciliationProposal>[
-              ...?match.proposals[entry.$1.sourceRowId],
+              // The same operation found as paid by somebody else replaces
+              // the doubtful alternative the name made of it.
+              for (final proposal in match.proposals[entry.$1.sourceRowId] ??
+                  const <BankReconciliationProposal>[])
+                if (!_sameOperations(
+                    proposal, thirdParty[entry.$1.sourceRowId]))
+                  proposal,
               if (thirdParty[entry.$1.sourceRowId] != null)
                 thirdParty[entry.$1.sourceRowId]!,
             ],
-            suggestion: suggestions[entry.$1.sourceRowId],
+            suggestion: allSuggestions[entry.$1.sourceRowId],
             sourceFileSha256: multiple ? entry.$2 : null,
             settled: settled[entry.$1.sourceRowId],
           ),
@@ -560,9 +592,19 @@ class BankReconciliationService {
       insights: <BankReconciliationInsight>[
         ..._settledInsights(settled.values),
         ...match.insights,
-        ..._advisor.insights(suggestions),
+        ..._advisor.insights(allSuggestions),
       ],
     );
+  }
+
+  static bool _sameOperations(
+    BankReconciliationProposal proposal,
+    BankReconciliationProposal? other,
+  ) {
+    if (other == null || proposal.isSelectedByDefault) return false;
+    final mine = proposal.allocations.map((item) => item.candidate.identity);
+    final theirs = other.allocations.map((item) => item.candidate.identity);
+    return mine.toSet().containsAll(theirs) && theirs.toSet().containsAll(mine);
   }
 
   /// Which movements an earlier review settled, by statement row or, across

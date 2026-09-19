@@ -28,8 +28,9 @@ BankReconciliationCandidate _operation(
   BankMovementDirection direction,
   int amount,
   BankCivilDate date,
-  String counterparty,
-) =>
+  String counterparty, {
+  String? method,
+}) =>
     BankReconciliationCandidate(
       targetKind: kind,
       targetId: id,
@@ -38,7 +39,33 @@ BankReconciliationCandidate _operation(
       occurredOn: date,
       label: '$id · $counterparty',
       counterparty: counterparty,
+      paymentMethodCode: method,
     );
+
+/// A sale the ERP recorded as paid by transfer.
+BankReconciliationCandidate _sale(
+  String invoice,
+  int amount,
+  BankCivilDate date,
+  String customer, {
+  String method = 'transfer',
+}) =>
+    BankReconciliationCandidate(
+      targetKind: BankReconciliationTargetKind.salesPayment,
+      targetId: invoice,
+      direction: BankMovementDirection.credit,
+      amountClp: amount,
+      occurredOn: date,
+      label: 'Venta $invoice',
+      counterparty: customer,
+      counterpartyNames: [customer],
+      paymentMethodCode: method,
+    );
+
+BankStatementMovement _incoming(
+        String id, BankCivilDate date, int amount, String who) =>
+    _movement(id, date, BankMovementDirection.credit, amount,
+        'Traspaso De: $who Internet');
 
 void main() {
   const finder = BankThirdPartyFinder();
@@ -140,5 +167,116 @@ void main() {
     );
 
     expect(found, isEmpty);
+  });
+
+  test('a sale somebody else paid by transfer is a safe suggestion', () {
+    // The owner's four, June and July 2026.
+    final found = finder.find(
+      movements: [
+        _incoming('patricio', const BankCivilDate(2026, 6, 30), 76000,
+            'Patricio Ignacio Basau'),
+        _incoming('osvaldo', const BankCivilDate(2026, 7, 13), 34000,
+            'Quezada Silva Osvaldo Andres'),
+        _incoming('sabrina', const BankCivilDate(2026, 7, 10), 37000,
+            'Sabrina Alexandra Gutierrez Bracho'),
+        _incoming('fernando', const BankCivilDate(2026, 7, 9), 6000,
+            'Tapia Carrillo Fernando Jose'),
+      ],
+      proposals: const {},
+      candidates: [
+        // Paid on Saturday 27 June; Monday 29 June was a holiday.
+        _sale('FV-00789', 76000, const BankCivilDate(2026, 6, 27),
+            'Maximo Gallardo'),
+        _sale('FV-00832', 34000, const BankCivilDate(2026, 7, 13),
+            'Rosita Bustamante'),
+        // Paid at 18:37: the bank booked it the next banking day.
+        _sale('FV-00843', 37000, const BankCivilDate(2026, 7, 9),
+            'Gabriel Sanabria'),
+        _sale(
+            'FV-00844', 6000, const BankCivilDate(2026, 7, 9), 'Luis Hidalgo'),
+        // The same amount paid in cash is no candidate.
+        _sale('FV-00840', 6000, const BankCivilDate(2026, 7, 8),
+            'Cliente Mostrador',
+            method: 'cash'),
+      ],
+    );
+
+    expect(found.keys.toSet(), {'patricio', 'osvaldo', 'sabrina', 'fernando'});
+    for (final proposal in found.values) {
+      expect(proposal.confidence, BankReconciliationConfidence.high);
+      expect(proposal.isSelectedByDefault, isFalse);
+      expect(proposal.allocations, hasLength(1));
+    }
+    expect(
+        found['fernando']!.allocations.single.candidate.targetId, 'FV-00844');
+    final saturday = found['patricio']!.reasons.join(' ');
+    expect(saturday, contains('sábado 27-06'));
+    expect(saturday, contains('martes 30-06'));
+    expect(saturday, contains('el 29-06 fue feriado'));
+    expect(
+        saturday,
+        contains('La pagó Patricio Ignacio Basau y no Maximo '
+            'Gallardo'));
+    expect(found['sabrina']!.reasons.first, contains('hecha de tarde'));
+    expect(found['osvaldo']!.reasons.first, contains('el mismo día'));
+  });
+
+  test('another name is only a guess when either side has a rival', () {
+    const sameDay = BankCivilDate(2026, 7, 9);
+    // Two people sent $6.000 that day and the ERP has one sale.
+    expect(
+      finder.find(
+        movements: [
+          _incoming('a', sameDay, 6000, 'Fernando Tapia'),
+          _incoming('b', sameDay, 6000, 'Carla Rojas'),
+        ],
+        proposals: const {},
+        candidates: [_sale('FV-1', 6000, sameDay, 'Luis Hidalgo')],
+      ),
+      isEmpty,
+    );
+    // One transfer and two sales by transfer of that amount.
+    expect(
+      finder.find(
+        movements: [_incoming('a', sameDay, 6000, 'Fernando Tapia')],
+        proposals: const {},
+        candidates: [
+          _sale('FV-1', 6000, sameDay, 'Luis Hidalgo'),
+          _sale('FV-2', 6000, sameDay, 'Ana Pérez'),
+        ],
+      ),
+      isEmpty,
+    );
+    // A card charge is not a person; a sale recorded with another method is
+    // at most a doubt (the method may be wrong), never a safe suggestion.
+    final mixed = finder.find(
+      movements: [
+        _movement('google', sameDay, BankMovementDirection.credit, 6000,
+            'Pago: Google Cloud Renca'),
+        _incoming('c', sameDay, 8000, 'Fernando Tapia'),
+      ],
+      proposals: const {},
+      candidates: [
+        _sale('FV-1', 6000, sameDay, 'Luis Hidalgo'),
+        _sale('FV-2', 8000, sameDay, 'Ana Pérez', method: 'cash'),
+      ],
+    );
+    expect(mixed['google'], isNull);
+    expect(mixed['c']!.confidence, BankReconciliationConfidence.medium);
+  });
+
+  test('three banking days later it is proposed, not a safe suggestion', () {
+    final found = finder.find(
+      movements: [
+        _incoming('late', const BankCivilDate(2026, 7, 14), 37000, 'Sabrina'),
+      ],
+      proposals: const {},
+      candidates: [
+        _sale('FV-00843', 37000, const BankCivilDate(2026, 7, 9),
+            'Gabriel Sanabria'),
+      ],
+    );
+
+    expect(found['late']!.confidence, BankReconciliationConfidence.medium);
   });
 }

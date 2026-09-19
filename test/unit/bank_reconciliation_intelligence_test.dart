@@ -411,7 +411,7 @@ void main() {
     test('what a worker was paid before never hides the salary he is owed', () {
       // Vicente was once reimbursed for a part he bought; his salary still
       // arrives by transfer and must stay a salary, never a safe expense.
-      final reimbursed = BankPriorDecision(
+      const reimbursed = BankPriorDecision(
         action: BankReconciliationActionKind.createExpense,
         direction: BankMovementDirection.debit,
         description: 'App-traspaso A: Braulio Munoz Internet',
@@ -702,6 +702,43 @@ void main() {
       expect(suggestion.confidence, BankReconciliationConfidence.high);
       expect(suggestion.resolution!.accountId, 'misc');
       expect(suggestion.resolution!.description, 'Devolución de préstamo');
+    });
+
+    test('a transfer without a sale points at the same person\'s other sale',
+        () {
+      BankReconciliationCandidate sale(String method) =>
+          BankReconciliationCandidate(
+            targetKind: BankReconciliationTargetKind.salesPayment,
+            targetId: 'fv-836-$method',
+            direction: BankMovementDirection.credit,
+            amountClp: 7000,
+            occurredOn: _d(7, 7),
+            label: 'Venta FV-00836',
+            counterparty: 'Carlos Sanchez',
+            counterpartyNames: const ['Carlos Sanchez'],
+            paymentMethodCode: method,
+          );
+      final carlos = _movement(
+          'carlos', _d(7, 7), BankMovementDirection.credit, 18000,
+          counterparty: 'Carlos Aurelio Sanchez Sanchez');
+
+      final clue = suggest(
+        [carlos],
+        BankReconciliationContext(candidates: [sale('transfer')]),
+      )['carlos']!;
+      expect(clue.confidence, BankReconciliationConfidence.low);
+      expect(
+        clue.reasons.last,
+        allOf(contains('Venta FV-00836'), contains(r'$7.000'),
+            contains('07/07'), contains('¿pagó esa venta y algo más')),
+      );
+
+      // A sale paid in cash explains nothing about a transfer.
+      final none = suggest(
+        [carlos],
+        BankReconciliationContext(candidates: [sale('cash')]),
+      )['carlos']!;
+      expect(none.reasons, hasLength(1));
     });
 
     test('a transfer split before is proposed with its parts, never as safe',

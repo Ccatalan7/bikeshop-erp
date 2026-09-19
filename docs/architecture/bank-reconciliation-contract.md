@@ -284,6 +284,30 @@ Two deterministic readings cover what the name on the statement cannot:
   never selected: a sum can coincide. On the owner's four 2026 statements it
   proposes that one case and nothing else; before the batch rule it paired
   three customers' sales weeks apart with a $20.000 deposit.
+- **One transfer, another name.** Rosita Bustamante's $34.000 sale by
+  transfer arrived from Osvaldo Quezada the same day; Máximo Gallardo's
+  $76.000, paid on Saturday 27 June, from Patricio Basau on Tuesday 30 June
+  (Monday 29 was a holiday). The matcher keeps a payment whose party
+  contradicts the bank's name as a mere alternative — between a card charge
+  and a person that contradiction is real — so the owner had to find these
+  by hand (2026-09-19). Between two people it is a relative or a borrowed
+  account: when the bank row is a person-to-person transfer, the ERP
+  recorded the operation as a transfer, the amount is exact, the bank booked
+  it from one banking day before to three after (`BankBusinessCalendar`),
+  and neither side has another candidate, the finder proposes it in place of
+  that alternative. Booked the same or the next banking day it is high
+  confidence and a safe suggestion (`BankSuggestionKind.otherPayer`, whose
+  `proposalId` the acceptance selects); later, a medium proposal. Its
+  reasons say when each side dated it, why the bank took that long
+  (evening transfer, weekend, holiday) and who paid instead of whom. On the
+  owner's statements it finds exactly those four and nothing else.
+- The finder only reads person-to-person transfers, and a single operation
+  that fits two movements of the same amount is proposed for neither.
+- **Same person, another amount.** A transfer with no sale says so when the
+  same person has an operation by transfer, within five days and for
+  another amount, that no movement explains: Carlos Sánchez sent $18.000 on
+  7 July, the day his $7.000 sale was recorded as a transfer that never
+  arrived. It stays a question for the owner.
 - **ERP without bank.** «N operaciones del ERP no aparecen en la cartola» lists
   what the ERP records as paid or collected through this account, dated inside
   the statements (minus a 3-day booking lag), that no selected movement

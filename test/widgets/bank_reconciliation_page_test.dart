@@ -473,6 +473,86 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a sale somebody else paid is accepted with the safe ones',
+      (tester) async {
+    final harness = _Harness();
+    addTearDown(harness.dispose);
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final sale = BankReconciliationCandidate(
+      targetKind: BankReconciliationTargetKind.salesPayment,
+      targetId: 'fv-832',
+      direction: BankMovementDirection.credit,
+      amountClp: 34000,
+      occurredOn: const BankCivilDate(2026, 7, 13),
+      label: 'Venta FV-00832',
+      counterparty: 'Rosita Bustamante',
+      paymentMethodCode: 'transfer',
+    );
+    final proposal = BankReconciliationProposal(
+      sourceRowId: 'osvaldo',
+      matchKind: BankReconciliationMatchKind.thirdParty,
+      confidence: BankReconciliationConfidence.high,
+      allocations: <BankReconciliationAllocationDraft>[
+        BankReconciliationAllocationDraft(
+            candidate: sale, bankAmountClp: 34000),
+      ],
+      reasons: const <String>['Mismo monto que Venta FV-00832'],
+    );
+    final draft = BankReconciliationPreparedDraft(
+      fileSha256: 'b' * 64,
+      filename: 'cartola julio.pdf',
+      sourceType: 'pdf_text',
+      parserName: 'banco_chile_statement',
+      parserVersion: 'v1',
+      rows: <BankReconciliationRowDraft>[
+        BankReconciliationRowDraft(
+          movement: BankStatementMovement(
+            sourceRowId: 'osvaldo',
+            ordinal: 1,
+            bookingDate: const BankCivilDate(2026, 7, 13),
+            description: 'Traspaso De: Quezada Silva Osvaldo Internet Andres',
+            normalizedDescription:
+                'traspaso de quezada silva osvaldo internet andres',
+            direction: BankMovementDirection.credit,
+            amountClp: 34000,
+            sourcePage: 1,
+            sourceLineStart: 1,
+            sourceLineEnd: 1,
+          ),
+          proposals: <BankReconciliationProposal>[proposal],
+          suggestion: BankReconciliationSuggestion(
+            kind: BankSuggestionKind.otherPayer,
+            confidence: BankReconciliationConfidence.high,
+            title: 'Venta FV-00832 · la pagó otra persona',
+            reasons: proposal.reasons,
+            resolution: const BankReconciliationResolutionDraft(
+              action: BankReconciliationActionKind.associateExisting,
+            ),
+            proposalId: BankReconciliationRowDraft.proposalIdentity(proposal),
+          ),
+        ),
+      ],
+      candidateCatalog: <BankReconciliationCandidate>[sale],
+    );
+
+    await tester.pumpWidget(harness.app(initialDraft: draft));
+    await tester.pumpAndSettle();
+    expect(find.text('Usar 1 sugerencia segura'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('bank-reconciliation-accept-suggestions')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Asociada'), findsOneWidget);
+    expect(find.text('1 de 1 movimientos resueltos · 0 quedan pendientes'),
+        findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('a saved conciliation is resumed and keeps saving itself',
       (tester) async {
     final harness = _Harness();

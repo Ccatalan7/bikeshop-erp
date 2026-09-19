@@ -570,18 +570,27 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
 
   void _applySuggestion(String sourceRowId) {
     final row = _draft?.rowsBySourceId[sourceRowId];
-    final resolution = row?.suggestion?.resolution;
-    if (row == null || resolution == null) return;
-    _replaceRow(_withResolution(row, resolution));
+    if (row?.suggestion?.resolution == null) return;
+    _replaceRow(_accepted(row!));
   }
 
   void _applySafeSuggestions() {
     final draft = _draft;
     if (draft == null) return;
     _replaceRows(<BankReconciliationRowDraft>[
-      for (final row in draft.acceptableSuggestionRows)
-        _withResolution(row, row.suggestion!.resolution!),
+      for (final row in draft.acceptableSuggestionRows) _accepted(row),
     ]);
+  }
+
+  /// The row as its suggestion decides it; an association selects the
+  /// proposal the suggestion names.
+  BankReconciliationRowDraft _accepted(BankReconciliationRowDraft row) {
+    final suggestion = row.suggestion!;
+    final accepted = _withResolution(row, suggestion.resolution!);
+    final proposalId = suggestion.proposalId;
+    return proposalId == null
+        ? accepted
+        : accepted.copyWith(selectedProposalId: proposalId);
   }
 
   Future<void> _analyzeWithAi({String? sourceRowId, String? answer}) async {
@@ -2580,12 +2589,14 @@ class _ResolutionPanel extends StatelessWidget {
 bool _suggestionApplied(BankReconciliationRowDraft row) {
   final suggested = row.suggestion?.resolution;
   final current = row.effectiveResolution;
+  final proposalId = row.suggestion?.proposalId;
   return suggested != null &&
       current.action == suggested.action &&
       current.accountId == suggested.accountId &&
       current.paymentMethodId == suggested.paymentMethodId &&
       current.reason == suggested.reason &&
-      current.payroll?.lineId == suggested.payroll?.lineId;
+      current.payroll?.lineId == suggested.payroll?.lineId &&
+      (proposalId == null || row.selectedProposalId == proposalId);
 }
 
 /// What the ERP proposes for a movement no existing operation explains.

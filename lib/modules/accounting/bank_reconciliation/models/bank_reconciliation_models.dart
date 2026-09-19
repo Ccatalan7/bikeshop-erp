@@ -1189,6 +1189,10 @@ enum BankSuggestionKind {
 
   /// Several accounts at once, as the same counterparty was split before.
   split,
+
+  /// An ERP operation paid by transfer that somebody else paid or received:
+  /// same amount and dates, another name (a relative, a borrowed account).
+  otherPayer,
 }
 
 class BankReconciliationSuggestion {
@@ -1200,6 +1204,7 @@ class BankReconciliationSuggestion {
     this.resolution,
     this.followUp,
     this.relatedSourceRowId,
+    this.proposalId,
   }) : reasons = List.unmodifiable(reasons);
 
   final BankSuggestionKind kind;
@@ -1214,6 +1219,10 @@ class BankReconciliationSuggestion {
 
   /// What to do in another module when this workspace must not book it.
   final String? followUp;
+
+  /// The row's proposal an association suggestion selects
+  /// ([BankReconciliationRowDraft.proposalIdentity]).
+  final String? proposalId;
 
   /// The other half of a pair of movements that cancel each other.
   final String? relatedSourceRowId;
