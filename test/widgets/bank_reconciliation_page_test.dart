@@ -272,6 +272,60 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a decided charge teaches the rule and decides its twins',
+      (tester) async {
+    final harness = _Harness()..teaches = true;
+    addTearDown(harness.dispose);
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(harness.app(initialDraft: _teachDraft()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('bank-reconciliation-resolve-june')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('bank-reconciliation-teach-june')),
+      findsNothing,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('bank-reconciliation-accept-suggestions')),
+    );
+    await tester.pumpAndSettle();
+
+    final teach = find.byKey(const ValueKey('bank-reconciliation-teach-june'));
+    await tester.ensureVisible(teach);
+    await tester.pumpAndSettle();
+    expect(find.text('Usar siempre para «google play youtu»'), findsOneWidget);
+    await tester.tap(teach);
+    await tester.pumpAndSettle();
+
+    final rule = harness.savedRules.single;
+    expect(rule.pattern, 'google play youtu');
+    expect(rule.direction, BankMovementDirection.debit);
+    expect(rule.action, BankReconciliationActionKind.createExpense);
+    expect(rule.accountId, 'expense-account');
+    expect(rule.description, 'YouTube');
+    // July's charge is decided the same way; Google Cloud is another line.
+    expect(
+      find.text('2 de 3 movimientos resueltos · 1 quedan pendientes'),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('bank-reconciliation-rule-note')),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('otro de esta revisión quedó decidido igual'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('a salary Nómina owes is paid from the review', (tester) async {
     final harness = _Harness();
     addTearDown(harness.dispose);
@@ -969,6 +1023,57 @@ BankReconciliationPreparedDraft _suggestedDraft() {
   );
 }
 
+BankReconciliationPreparedDraft _teachDraft() {
+  BankStatementMovement charge(String id, int month, String description) =>
+      BankStatementMovement(
+        sourceRowId: id,
+        ordinal: month,
+        bookingDate: BankCivilDate(2026, month, 15),
+        description: description,
+        normalizedDescription: description.toLowerCase(),
+        direction: BankMovementDirection.debit,
+        amountClp: 2690,
+        sourcePage: 1,
+        sourceLineStart: month,
+        sourceLineEnd: month,
+      );
+  return BankReconciliationPreparedDraft(
+    fileSha256:
+        'dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
+    filename: 'cartola.pdf',
+    sourceType: 'pdf_text',
+    parserName: 'banco_chile_statement',
+    parserVersion: 'v1',
+    rows: <BankReconciliationRowDraft>[
+      BankReconciliationRowDraft(
+        movement: charge('june', 6, 'Pago: Google Play Youtu Renca'),
+        proposals: const <BankReconciliationProposal>[],
+        suggestion: BankReconciliationSuggestion(
+          kind: BankSuggestionKind.createExpense,
+          confidence: BankReconciliationConfidence.high,
+          title: 'YouTube · Google',
+          reasons: const <String>['Cargo con tarjeta en Google'],
+          resolution: const BankReconciliationResolutionDraft(
+            action: BankReconciliationActionKind.createExpense,
+            accountId: 'expense-account',
+            paymentMethodId: 'bank-method',
+            description: 'YouTube',
+            counterparty: 'Google',
+          ),
+        ),
+      ),
+      BankReconciliationRowDraft(
+        movement: charge('july', 7, 'Pago: Google Play Youtu Renca'),
+        proposals: const <BankReconciliationProposal>[],
+      ),
+      BankReconciliationRowDraft(
+        movement: charge('cloud', 8, 'Pago: Google Cloud Jl5r Renca'),
+        proposals: const <BankReconciliationProposal>[],
+      ),
+    ],
+  );
+}
+
 class _Harness {
   _Harness()
       : navigation = NavigationService(),
@@ -994,6 +1099,8 @@ class _Harness {
   BankReconciliationResumedSession? resumed;
   final savedDrafts = <(int, Map<String, dynamic>)>[];
   int resumeCalls = 0;
+  bool teaches = false;
+  final savedRules = <BankReconciliationRule>[];
 
   Widget app({
     BankReconciliationPreparedDraft? initialDraft,
@@ -1083,6 +1190,26 @@ class _Harness {
                   }) async {
                     savedDrafts.add((revision, draft));
                     return revision + 1;
+                  },
+            saveRule: !teaches
+                ? null
+                : ({
+                    required pattern,
+                    required direction,
+                    required action,
+                    required accountId,
+                    required description,
+                  }) async {
+                    final rule = BankReconciliationRule(
+                      ruleId: 'rule-${savedRules.length + 1}',
+                      pattern: pattern,
+                      direction: direction,
+                      action: action,
+                      accountId: accountId,
+                      description: description,
+                    );
+                    savedRules.add(rule);
+                    return rule;
                   },
             prepare: ({
               required files,

@@ -17,6 +17,7 @@ import '../../../shared/widgets/vb_status_badge.dart';
 import '../bank_reconciliation/models/bank_reconciliation_models.dart';
 import '../bank_reconciliation/services/bank_reconciliation_draft_codec.dart';
 import '../bank_reconciliation/services/bank_reconciliation_service.dart';
+import '../bank_reconciliation/services/bank_statement_rule_text.dart';
 
 typedef BankStatementPrepareAction = Future<BankReconciliationPreparedDraft>
     Function({
@@ -46,6 +47,7 @@ class BankReconciliationActions {
     this.saveSessionDraft,
     this.listSessions,
     this.resumeSession,
+    this.saveRule,
   });
 
   /// Absent where no model is available: the review works without it.
@@ -68,6 +70,15 @@ class BankReconciliationActions {
     required String sessionId,
     required String erpAccountId,
   })? resumeSession;
+
+  /// Teaches the company rule for a statement line's words.
+  final Future<BankReconciliationRule> Function({
+    required String pattern,
+    required BankMovementDirection direction,
+    required BankReconciliationActionKind action,
+    required String accountId,
+    required String description,
+  })? saveRule;
 
   bool get keepsDrafts =>
       openSession != null && saveSessionDraft != null && listSessions != null;
@@ -159,6 +170,10 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
   bool _saving = false;
   bool _saveAgain = false;
   String? _registryNote;
+
+  /// What the last taught rule did, shown until the next change.
+  String? _ruleNote;
+  bool _teaching = false;
   List<BankReconciliationSessionSummary> _sessions = const [];
   bool _loadingSessions = false;
 
@@ -213,6 +228,7 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
       saveSessionDraft: service.saveSessionDraft,
       listSessions: service.listSessions,
       resumeSession: service.resumeSession,
+      saveRule: service.saveRule,
     );
   }
 
@@ -337,6 +353,7 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
     _aiAnswers.clear();
     _draftSave = _DraftSave.none;
     _registryNote = null;
+    _ruleNote = null;
   }
 
   /// Saves the statements as soon as they are read and opens the
@@ -580,6 +597,66 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
     _replaceRows(<BankReconciliationRowDraft>[
       for (final row in draft.acceptableSuggestionRows) _accepted(row),
     ]);
+  }
+
+  /// Saves the decision on this line as the company's rule for its words
+  /// and decides the same way the open lines of this review that share
+  /// them.
+  Future<void> _teachRule(String sourceRowId) async {
+    final save = _actions.saveRule;
+    final row = _draft?.rowsBySourceId[sourceRowId];
+    if (save == null || row == null || _teaching || !row.isResolved) return;
+    final resolution = row.effectiveResolution;
+    final accountId = resolution.accountId;
+    if (accountId == null ||
+        (resolution.action != BankReconciliationActionKind.classifyAccount &&
+            resolution.action != BankReconciliationActionKind.createExpense)) {
+      return;
+    }
+    final pattern = BankStatementRuleText.patternOf(row.movement);
+    setState(() => _teaching = true);
+    try {
+      final rule = await save(
+        pattern: pattern,
+        direction: row.movement.direction,
+        action: resolution.action,
+        accountId: accountId,
+        description: resolution.description?.trim().isNotEmpty ?? false
+            ? resolution.description!.trim()
+            : pattern,
+      );
+      if (!mounted) return;
+      final draft = _draft;
+      if (draft == null) return;
+      final alike = <BankReconciliationRowDraft>[
+        for (final other in draft.rows)
+          if (other.movement.sourceRowId != sourceRowId &&
+              !other.isSettled &&
+              !other.isResolved &&
+              BankStatementRuleText.ruleFor(
+                      other.movement, <BankReconciliationRule>[rule]) !=
+                  null)
+            _withResolution(
+              other,
+              resolution.copyWith(
+                reference: other.movement.documentNumber,
+                clearReference: other.movement.documentNumber == null,
+              ),
+            ),
+      ];
+      _replaceRows(alike);
+      setState(() => _ruleNote = alike.isEmpty
+          ? 'Desde ahora los cargos «$pattern» se proponen así.'
+          : 'Desde ahora los cargos «$pattern» se proponen así, y '
+              '${alike.length == 1 ? 'otro de esta revisión quedó decidido' : '${alike.length} más de esta revisión quedaron decididos'} igual.');
+    } catch (error) {
+      debugPrint('[BankReconciliation] rule failed: $error');
+      if (!mounted) return;
+      setState(() => _error = 'No pudimos guardar la regla. La decisión de '
+          'esta fila sigue igual.');
+    } finally {
+      if (mounted) setState(() => _teaching = false);
+    }
   }
 
   /// The row as its suggestion decides it; an association selects the
@@ -1093,6 +1170,16 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
               tone: VbNoticeTone.warning,
             ),
           ),
+        if (_ruleNote != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: VbNotice(
+              key: const ValueKey('bank-reconciliation-rule-note'),
+              title: 'Regla guardada',
+              body: _ruleNote,
+              tone: VbNoticeTone.success,
+            ),
+          ),
         if (_applyReceipt != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -1213,6 +1300,10 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
                       : () => _analyzeWithAi(
                             sourceRowId: selected.movement.sourceRowId,
                           ),
+                  teaching: _teaching,
+                  onTeach: _actions.saveRule == null
+                      ? null
+                      : () => _teachRule(selected.movement.sourceRowId),
                   onAnswerAi: _actions.analyzeWithAi == null
                       ? null
                       : (answer) => _analyzeWithAi(
@@ -1279,6 +1370,12 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
                                 : () => _analyzeWithAi(
                                       sourceRowId:
                                           selected.movement.sourceRowId,
+                                    ),
+                            teaching: _teaching,
+                            onTeach: _actions.saveRule == null
+                                ? null
+                                : () => _teachRule(
+                                      selected.movement.sourceRowId,
                                     ),
                             onAnswerAi: _actions.analyzeWithAi == null
                                 ? null
@@ -2385,6 +2482,8 @@ class _ResolutionPanel extends StatelessWidget {
     this.onUseAi,
     this.onAnalyzeAi,
     this.onAnswerAi,
+    this.onTeach,
+    this.teaching = false,
   });
 
   final BankReconciliationRowDraft row;
@@ -2402,6 +2501,10 @@ class _ResolutionPanel extends StatelessWidget {
   /// card deposit the bulk analysis leaves out.
   final VoidCallback? onAnalyzeAi;
   final ValueChanged<String>? onAnswerAi;
+
+  /// Keeps this decision as the company's rule for the line's words.
+  final VoidCallback? onTeach;
+  final bool teaching;
   final bool loadingOptions;
   final bool enabled;
   final bool compact;
@@ -2412,6 +2515,15 @@ class _ResolutionPanel extends StatelessWidget {
   final ValueChanged<BankReconciliationCandidate> onCandidateSelected;
   final ValueChanged<String> onCandidateRemoved;
   final VoidCallback onApplySuggestion;
+
+  /// A line a company rule decided, still the way the rule says.
+  static bool _decidedByRule(BankReconciliationRowDraft row) {
+    final suggestion = row.suggestion;
+    final resolution = row.effectiveResolution;
+    return suggestion?.ruleId != null &&
+        resolution.action == suggestion!.resolution?.action &&
+        resolution.accountId == suggestion.resolution?.accountId;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2578,6 +2690,31 @@ class _ResolutionPanel extends StatelessWidget {
                       tone: VbNoticeTone.info,
                     ),
                 },
+              if (onTeach != null &&
+                  row.isResolved &&
+                  BankStatementRuleText.canTeach(movement) &&
+                  !_decidedByRule(row) &&
+                  (row.effectiveResolution.action ==
+                          BankReconciliationActionKind.classifyAccount ||
+                      row.effectiveResolution.action ==
+                          BankReconciliationActionKind.createExpense)) ...[
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    key: ValueKey(
+                      'bank-reconciliation-teach-${movement.sourceRowId}',
+                    ),
+                    onPressed: enabled && !teaching ? onTeach : null,
+                    icon: const Icon(Icons.school_outlined),
+                    label: Text(
+                      teaching
+                          ? 'Guardando regla…'
+                          : 'Usar siempre para «${BankStatementRuleText.patternOf(movement)}»',
+                    ),
+                  ),
+                ),
+              ],
             ],
           ],
         ),

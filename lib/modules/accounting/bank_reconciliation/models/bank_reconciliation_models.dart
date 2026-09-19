@@ -283,6 +283,13 @@ class BankStatementMovement {
       normalizedDescription.contains('abonos debito y credito') ||
       normalizedDescription.contains('abono debito credito');
 
+  /// Money a person sent or received ("Traspaso De: …", "App-traspaso A:
+  /// …"), not a card charge or a bank's own line.
+  bool get isPersonTransfer =>
+      !isTransbankDeposit &&
+      (normalizedDescription.contains('traspaso') ||
+          normalizedDescription.contains('transferencia'));
+
   BankStatementMovement withSourceRowId(String value) => BankStatementMovement(
         sourceRowId: value,
         ordinal: ordinal,
@@ -1205,6 +1212,7 @@ class BankReconciliationSuggestion {
     this.followUp,
     this.relatedSourceRowId,
     this.proposalId,
+    this.ruleId,
   }) : reasons = List.unmodifiable(reasons);
 
   final BankSuggestionKind kind;
@@ -1226,6 +1234,10 @@ class BankReconciliationSuggestion {
 
   /// The other half of a pair of movements that cancel each other.
   final String? relatedSourceRowId;
+
+  /// The company rule this comes from ([BankReconciliationRule.ruleId]): a
+  /// line it decided is not offered to be taught again.
+  final String? ruleId;
 }
 
 enum BankInsightTone { info, warning }
@@ -1438,8 +1450,10 @@ class BankReconciliationContext {
     List<BankPriorDecision> decisions = const <BankPriorDecision>[],
     List<BankOpenAdvance> openAdvances = const <BankOpenAdvance>[],
     List<BankReconciledRow> reconciledRows = const <BankReconciledRow>[],
+    List<BankReconciliationRule> rules = const <BankReconciliationRule>[],
   })  : candidates = List.unmodifiable(candidates),
         reconciledRows = List.unmodifiable(reconciledRows),
+        rules = List.unmodifiable(rules),
         payrollLines = List.unmodifiable(payrollLines),
         openInvoices = List.unmodifiable(openInvoices),
         parties = List.unmodifiable(parties),
@@ -1457,6 +1471,47 @@ class BankReconciliationContext {
 
   /// Statement rows an earlier review of this account already settled.
   final List<BankReconciledRow> reconciledRows;
+
+  /// What this company decided for statement lines by their words.
+  final List<BankReconciliationRule> rules;
+
+  BankReconciliationContext withRules(List<BankReconciliationRule> value) =>
+      BankReconciliationContext(
+        candidates: candidates,
+        payrollLines: payrollLines,
+        openInvoices: openInvoices,
+        parties: parties,
+        decisions: decisions,
+        openAdvances: openAdvances,
+        reconciledRows: reconciledRows,
+        rules: value,
+      );
+}
+
+/// What a company decided for the statement lines whose words contain
+/// [pattern] ("youtu" → 3103 Retiros de socio): a journal or a paid expense
+/// on [accountId]. Proposed as a safe suggestion.
+class BankReconciliationRule {
+  const BankReconciliationRule({
+    required this.ruleId,
+    required this.pattern,
+    required this.direction,
+    required this.action,
+    required this.accountId,
+    required this.description,
+  });
+
+  final String ruleId;
+
+  /// The bank's words without its channel words, lowercase, unaccented.
+  final String pattern;
+  final BankMovementDirection direction;
+
+  /// [BankReconciliationActionKind.classifyAccount] or
+  /// [BankReconciliationActionKind.createExpense].
+  final BankReconciliationActionKind action;
+  final String accountId;
+  final String description;
 }
 
 /// A statement row a review of the account already decided.

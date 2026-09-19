@@ -243,9 +243,10 @@ Official basis:
 ## Unregistered movements
 
 A row nothing explains gets one suggestion, firmest evidence first: a transfer
-and its return cancel each other (dismiss both); an earlier decision for the
-same counterparty or merchant; a salary Nómina still owes (paid from here, see
-below); an open invoice with that balance
+and its return cancel each other (dismiss both); a salary Nómina still owes
+(paid from here, see below); a company rule for the line's words (next
+section); an earlier decision for the same counterparty or merchant; an open
+invoice with that balance
 (register the payment in Ventas or Compras); the account a supplier or payee
 was booked to before (e.g. the monthly rent); a goods supplier with no
 purchase (register it in Compras); the merchant of a card charge (Google Cloud,
@@ -253,6 +254,42 @@ Meta, NIC Chile…) or a bank fee (a journal to financial expenses, never a
 look-alike supplier). A suggestion this workspace can apply carries a
 prefilled decision; «Usar sugerencias seguras» applies only high-confidence
 ones and leaves them editable until the review is applied.
+
+## Company rules
+
+The merchant table is the same for every company: Google Play or YouTube may
+be a business tool for one and the owner's personal subscription for another.
+What a company decided lives in `bank_reconciliation_rules` — «the charges
+whose words are X go to account Y, as a journal (`post_journal`) or as a paid
+expense (`create_expense`)» — and the advisor proposes it as a **safe**
+suggestion, ahead of earlier decisions and of the merchant table, with the
+reason «Regla de la empresa: los cargos «X» van a …».
+
+- **Words, not the whole line.** A rule is written in the line's words
+  without the bank's channel words (`BankStatementRuleText`: «Pago: Google
+  Play Youtu Renca» → `google play youtu`). It matches a line when each of its
+  words starts a word of the line, in order: `youtu` speaks for «Dl*google
+  Youtube» and «Google Play Youtu». A rule taught from a row leaves out words
+  with a digit — the bank's code for that one charge («Google Cloud Jl5r»,
+  «Hwm3») — so it also speaks for next month's charge. The longest matching
+  rule wins; a rule only speaks in its direction.
+- **Never for a person.** A transfer to or from a person and a card deposit
+  are decided by who it is and what the ERP owes, never by their words: no
+  rule is taught from them or applied to them.
+- **Teaching.** On a row resolved as a classification or an expense, «Usar
+  siempre para «X»» saves the rule (`save_bank_reconciliation_rule_v1`,
+  accounting role; the same words and direction replace the rule) and decides
+  the same way the open rows of the review it matches. A row a rule already
+  decided does not offer it again. `delete_bank_reconciliation_rule_v1`
+  removes one; a rule's account must be the tenant's and active, and an
+  expense rule needs an expense account and a debit.
+
+Viñabike's first rules (2026-09-19): the YouTube / Google Play and Meli+
+subscriptions (`youtu`, `melimas`, debits) are the owner's personal
+consumption, booked as a journal to 3103 «Retiros de socio · Claudio
+Catalán» (equity), not as a business expense: an expense the business did not
+need would be a rejected expense (gasto rechazado) in the tax return. Changing
+the decision is teaching another rule for the same words.
 
 ## One movement, several accounts
 

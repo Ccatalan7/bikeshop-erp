@@ -346,6 +346,12 @@ void main() {
           name: 'IVA Débito Fiscal',
           type: 'liability',
         ),
+        BankReconciliationLedgerAccountOption(
+          accountId: 'withdrawals',
+          code: '3103',
+          name: 'Retiros de socio · Claudio Catalán',
+          type: 'equity',
+        ),
       ],
       paymentMethods: const [
         BankReconciliationPaymentMethodOption(
@@ -678,6 +684,69 @@ void main() {
 
       expect(suggestion.kind, BankSuggestionKind.postJournal);
       expect(suggestion.resolution!.accountId, 'finance');
+    });
+
+    group('company rules', () {
+      const personal = BankReconciliationRule(
+        ruleId: 'youtube',
+        pattern: 'youtu',
+        direction: BankMovementDirection.debit,
+        action: BankReconciliationActionKind.classifyAccount,
+        accountId: 'withdrawals',
+        description: 'Suscripción YouTube / Google Play (personal)',
+      );
+
+      test('what the company decided wins over the merchant table', () {
+        final suggestions = suggest(
+          [
+            _movement('dl', _d(6, 9), BankMovementDirection.debit, 1799,
+                description: 'Pago: Dl*google Youtube Renca'),
+            _movement('play', _d(6, 15), BankMovementDirection.debit, 2690,
+                description: 'Pago: Google Play Youtu Renca'),
+            _movement('cloud', _d(9, 2), BankMovementDirection.debit, 9928,
+                description: 'Pago: Google Cloud Jl5r Renca'),
+          ],
+          BankReconciliationContext(
+            rules: const [personal],
+            decisions: const [
+              BankPriorDecision(
+                action: BankReconciliationActionKind.createExpense,
+                direction: BankMovementDirection.debit,
+                description: 'Pago: Google Play Youtu Renca',
+                accountId: 'digital',
+                paymentMethodId: 'card-id',
+              ),
+            ],
+          ),
+        );
+
+        for (final id in ['dl', 'play']) {
+          final suggestion = suggestions[id]!;
+          expect(suggestion.kind, BankSuggestionKind.postJournal);
+          expect(suggestion.confidence, BankReconciliationConfidence.high);
+          expect(suggestion.resolution!.action,
+              BankReconciliationActionKind.classifyAccount);
+          expect(suggestion.resolution!.accountId, 'withdrawals');
+          expect(suggestion.resolution!.description,
+              'Suscripción YouTube / Google Play (personal)');
+          expect(suggestion.reasons.single, contains('Regla de la empresa'));
+          expect(suggestion.ruleId, 'youtube');
+        }
+        // A Google line the rule does not name keeps the merchant table.
+        expect(suggestions['cloud']!.resolution!.accountId, 'digital');
+      });
+
+      test('a rule never speaks for a person\'s transfer', () {
+        final suggestion = suggest(
+          [
+            _movement('person', _d(7, 7), BankMovementDirection.debit, 2690,
+                counterparty: 'Youtube Rodriguez'),
+          ],
+          BankReconciliationContext(rules: const [personal]),
+        )['person'];
+
+        expect(suggestion?.resolution?.accountId, isNot('withdrawals'));
+      });
     });
 
     test('an earlier decision for the same person is proposed again', () {

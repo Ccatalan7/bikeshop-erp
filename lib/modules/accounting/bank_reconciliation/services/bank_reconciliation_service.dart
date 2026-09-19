@@ -873,7 +873,65 @@ class BankReconciliationService {
         'p_to_date': to.toString(),
       },
     );
-    return const BankReconciliationCatalogCodec().context(raw);
+    final context = const BankReconciliationCatalogCodec().context(raw);
+    return context.withRules(await loadRules());
+  }
+
+  /// The company's rules for statement lines by their words. Without them
+  /// the review still works on the shared merchant table.
+  Future<List<BankReconciliationRule>> loadRules() async {
+    try {
+      final tenantId = await _requireTenantId();
+      final rows = await _database.supabase
+          .from('bank_reconciliation_rules')
+          .select('id,pattern,direction,action,account_id,description')
+          .eq('tenant_id', tenantId);
+      return <BankReconciliationRule>[
+        for (final row in rows) ruleFromRow(Map<String, dynamic>.from(row)),
+      ];
+    } catch (error) {
+      debugPrint('BankReconciliationService rules: $error');
+      return const <BankReconciliationRule>[];
+    }
+  }
+
+  static BankReconciliationRule ruleFromRow(Map<String, dynamic> row) =>
+      BankReconciliationRule(
+        ruleId: (row['id'] ?? row['rule_id']).toString(),
+        pattern: row['pattern'].toString(),
+        direction: row['direction'] == 'credit'
+            ? BankMovementDirection.credit
+            : BankMovementDirection.debit,
+        action: row['action'] == 'create_expense'
+            ? BankReconciliationActionKind.createExpense
+            : BankReconciliationActionKind.classifyAccount,
+        accountId: row['account_id'].toString(),
+        description: row['description'].toString(),
+      );
+
+  /// Teaches the company rule for lines with [pattern]; the same text again
+  /// replaces it.
+  Future<BankReconciliationRule> saveRule({
+    required String pattern,
+    required BankMovementDirection direction,
+    required BankReconciliationActionKind action,
+    required String accountId,
+    required String description,
+  }) async {
+    final raw = await _rpc(
+      'save_bank_reconciliation_rule_v1',
+      <String, dynamic>{
+        'p_pattern': pattern,
+        'p_direction':
+            direction == BankMovementDirection.credit ? 'credit' : 'debit',
+        'p_action': action == BankReconciliationActionKind.createExpense
+            ? 'create_expense'
+            : 'post_journal',
+        'p_account_id': accountId,
+        'p_description': description,
+      },
+    );
+    return ruleFromRow(_receiptMap(raw));
   }
 
   Future<BankStatementImportReceipt> createImport({

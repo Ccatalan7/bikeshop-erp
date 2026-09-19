@@ -1,5 +1,6 @@
 import '../models/bank_reconciliation_models.dart';
 import 'bank_counterparty_identity.dart';
+import 'bank_statement_rule_text.dart';
 
 /// Proposes what to do with a movement no existing ERP operation explains.
 ///
@@ -247,9 +248,16 @@ class BankReconciliationAdvisor {
       }
     }
 
+    // 2. What this company decided for lines with these words.
+    final rule = BankStatementRuleText.ruleFor(movement, context.rules);
+    if (rule != null) {
+      final ruled = _ruleSuggestion(movement, rule, options);
+      if (ruled != null) return ruled;
+    }
+
     final profile = _profile(party, context.parties);
 
-    // 2. What the operator decided for this counterparty before. For a
+    // 3. What the operator decided for this counterparty before. For a
     // worker it is a question, never a safe suggestion: what he was paid
     // last time (a reimbursement, a bonus) says little about this transfer.
     final prior = _priorDecision(movement, context.decisions);
@@ -291,7 +299,7 @@ class BankReconciliationAdvisor {
       }
     }
 
-    // 3. People on the payroll who are not being paid a pending salary.
+    // 4. People on the payroll who are not being paid a pending salary.
     if (profile?.kind == BankCounterpartyKind.employee && !isCardCharge) {
       if (isDebit) {
         return BankReconciliationSuggestion(
@@ -329,7 +337,7 @@ class BankReconciliationAdvisor {
       }
     }
 
-    // 4. An open invoice waiting for exactly this payment.
+    // 5. An open invoice waiting for exactly this payment.
     final invoice = _openInvoice(movement, party, context.openInvoices);
     if (invoice != null) {
       final sale = invoice.kind == BankOpenInvoiceKind.sale;
@@ -352,7 +360,7 @@ class BankReconciliationAdvisor {
       );
     }
 
-    // 5. A known supplier or payee: book it the way it was booked before.
+    // 6. A known supplier or payee: book it the way it was booked before.
     if (isDebit && profile != null) {
       final usual = profile.usual
           .where((item) => _expenseAccount(options, item.accountId) != null)
@@ -402,7 +410,7 @@ class BankReconciliationAdvisor {
       }
     }
 
-    // 6. What the merchant on a card charge or a bank fee says.
+    // 7. What the merchant on a card charge or a bank fee says.
     if (isDebit) {
       final merchant = _merchant(movement);
       if (merchant != null) {
@@ -410,7 +418,7 @@ class BankReconciliationAdvisor {
       }
     }
 
-    // 7. A card deposit that no registered sale explains.
+    // 8. A card deposit that no registered sale explains.
     if (!isDebit && !hasProposal && _isAcquirerDeposit(movement)) {
       return BankReconciliationSuggestion(
         kind: BankSuggestionKind.sale,
@@ -425,7 +433,7 @@ class BankReconciliationAdvisor {
       );
     }
 
-    // 8. Money from someone with no sale.
+    // 9. Money from someone with no sale.
     if (!isDebit && !hasProposal) {
       final clue = _samePartyClue(movement, context.candidates, explained);
       return BankReconciliationSuggestion(
@@ -441,6 +449,36 @@ class BankReconciliationAdvisor {
       );
     }
     return null;
+  }
+
+  BankReconciliationSuggestion? _ruleSuggestion(
+    BankStatementMovement movement,
+    BankReconciliationRule rule,
+    BankReconciliationWorkspaceOptions? options,
+  ) {
+    final account = options?.account(rule.accountId);
+    if (options != null && account == null) return null;
+    final expense = rule.action == BankReconciliationActionKind.createExpense;
+    final method = expense ? _method(options, 'card') : null;
+    return BankReconciliationSuggestion(
+      kind: expense
+          ? BankSuggestionKind.createExpense
+          : BankSuggestionKind.postJournal,
+      confidence: BankReconciliationConfidence.high,
+      title: rule.description,
+      reasons: <String>[
+        'Regla de la empresa: los cargos «${rule.pattern}» van a '
+            '${account?.label ?? 'la cuenta elegida'}',
+      ],
+      resolution: BankReconciliationResolutionDraft(
+        action: rule.action,
+        accountId: rule.accountId,
+        paymentMethodId: method?.paymentMethodId,
+        description: rule.description,
+        reference: movement.documentNumber,
+      ),
+      ruleId: rule.ruleId,
+    );
   }
 
   /// The same person has an operation by transfer, near the date and for

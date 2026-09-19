@@ -79,7 +79,7 @@ class BankThirdPartyFinder {
       return movement.amountClp != null &&
           movement.bookingDate != null &&
           movement.direction != BankMovementDirection.unknown &&
-          _isPersonTransfer(movement) &&
+          movement.isPersonTransfer &&
           !skipSourceRowIds.contains(movement.sourceRowId) &&
           !rowProposals.any((proposal) => proposal.isSelectedByDefault);
     }).toList(growable: false)
@@ -179,7 +179,7 @@ class BankThirdPartyFinder {
     required Set<String> used,
     required Map<String, BankReconciliationProposal> found,
   }) {
-    final transfers = open.where(_isPersonTransfer).toList(growable: false);
+    final transfers = open;
     final pool = candidates
         .where((candidate) =>
             candidate.provider == BankSettlementProvider.none &&
@@ -307,12 +307,6 @@ class BankThirdPartyFinder {
         .where((word) => word.isNotEmpty && word.toLowerCase() != 'internet')
         .join(' ');
     return name.isEmpty ? 'otra persona' : name;
-  }
-
-  static bool _isPersonTransfer(BankStatementMovement movement) {
-    final text = movement.normalizedDescription;
-    return !movement.isTransbankDeposit &&
-        (text.contains('traspaso') || text.contains('transferencia'));
   }
 
   static bool _isTransferMethod(BankReconciliationCandidate candidate) =>
