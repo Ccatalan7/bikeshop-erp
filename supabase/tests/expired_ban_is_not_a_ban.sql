@@ -147,5 +147,103 @@ select is(
   'once it expires the worker is authoritative again'
 );
 
+-- The other door the same migration fixed: turning an ERP user back into a
+-- worker reads the ban of the Worker identity it is switching to.
+set local session_replication_role = replica;
+insert into auth.users (
+  id, aud, role, email, encrypted_password, email_confirmed_at,
+  raw_app_meta_data, raw_user_meta_data, created_at, updated_at
+) values (
+  -- The person as an ERP user today.
+  'eb000000-0000-4000-8000-000000000005',
+  'authenticated', 'authenticated', 'vicente.erp@example.invalid',
+  '', now(), '{"account_type":"erp_staff"}'::jsonb, '{}'::jsonb, now(), now()
+), (
+  -- And the Worker credential already prepared for him, suspended a week ago.
+  'eb000000-0000-4000-8000-000000000006',
+  'authenticated', 'authenticated', 'vicente.worker@example.invalid',
+  '', now(),
+  jsonb_build_object(
+    'account_type', 'worker_portal',
+    'tenant_id', 'eb000000-0000-4000-8000-000000000001',
+    'employee_id', 'eb000000-0000-4000-8000-000000000031',
+    'role', 'worker'
+  ),
+  '{}'::jsonb, now(), now()
+);
+update auth.users
+   set banned_until = now() - interval '7 days'
+ where id = 'eb000000-0000-4000-8000-000000000006';
+set local session_replication_role = origin;
+
+insert into public.employees (
+  id, tenant_id, employee_number, first_name, last_name, job_title, status,
+  user_id
+) values (
+  'eb000000-0000-4000-8000-000000000031',
+  'eb000000-0000-4000-8000-000000000001',
+  'E-2', 'Vicente', 'Díaz', 'Mecánico', 'active',
+  'eb000000-0000-4000-8000-000000000005'
+);
+insert into public.user_profiles (
+  id, user_id, tenant_id, employee_id, role, permissions, is_active
+) values (
+  'eb000000-0000-4000-8000-000000000006',
+  'eb000000-0000-4000-8000-000000000005',
+  'eb000000-0000-4000-8000-000000000001',
+  'eb000000-0000-4000-8000-000000000031',
+  'mechanic', '{}'::jsonb, true
+);
+-- Prepared, not yet in use: that is what the switch expects to find.
+insert into public.employee_portal_accounts (
+  id, tenant_id, employee_id, auth_user_id, username, login_email,
+  is_active, must_reset_password, password_credential_issued_at, created_by
+) values (
+  'eb000000-0000-4000-8000-000000000041',
+  'eb000000-0000-4000-8000-000000000001',
+  'eb000000-0000-4000-8000-000000000031',
+  'eb000000-0000-4000-8000-000000000006',
+  'vicente', 'vicente@example.invalid', false, true, now(),
+  'eb000000-0000-4000-8000-000000000003'
+);
+
+update auth.users
+   set banned_until = now() + interval '1 day'
+ where id = 'eb000000-0000-4000-8000-000000000006';
+
+select throws_like(
+  $$select public.switch_erp_user_to_worker(
+      'eb000000-0000-4000-8000-000000000005',
+      'eb000000-0000-4000-8000-000000000031',
+      'eb000000-0000-4000-8000-000000000041'
+    )$$,
+  '%worker_identity_conflict%',
+  'a running ban stops the switch to Worker'
+);
+
+update auth.users
+   set banned_until = now() - interval '7 days'
+ where id = 'eb000000-0000-4000-8000-000000000006';
+
+select lives_ok(
+  $$select public.switch_erp_user_to_worker(
+      'eb000000-0000-4000-8000-000000000005',
+      'eb000000-0000-4000-8000-000000000031',
+      'eb000000-0000-4000-8000-000000000041'
+    )$$,
+  'an expired ban does not stop it'
+);
+
+select results_eq(
+  $$select portal.is_active, employee.user_id is null, profile.is_active
+      from public.employee_portal_accounts portal
+      join public.employees employee on employee.id = portal.employee_id
+      join public.user_profiles profile
+        on profile.id = 'eb000000-0000-4000-8000-000000000006'
+     where portal.id = 'eb000000-0000-4000-8000-000000000041'$$,
+  $$values (true, true, false)$$,
+  'and the person ends up as a worker, with the ERP profile closed'
+);
+
 select * from finish();
 rollback;
