@@ -308,6 +308,11 @@ The split is learned: the next transfer to the same person is proposed with
 the same parts — medium confidence, never among the safe suggestions — because
 the structure repeats and the amounts do not.
 
+Money coming in is never split into an expense account: the kernel books
+every part on an expense account as a paid expense, which only a charge can
+be. The editor does not offer those accounts for a deposit, and neither the
+AI nor a learned split proposes them.
+
 ## What somebody else paid, and what never reached the bank
 
 Two deterministic readings cover what the name on the statement cannot:
@@ -374,10 +379,18 @@ that account (money in: Debe banco / Haber cuenta; money out: Debe cuenta /
 Haber banco). The resolution keeps the account and gloss in `accountId` and
 `description`, so a saved draft restores them.
 
-- A manual association that does not add up and has no remainder is sent as
-  `pending`, never with its last operation carrying the difference; the
-  kernel refuses a manual allocation more than $1.000 away from its
-  operation (`20260919110000`). None reached production before the guard.
+- Any row the screen does not count as resolved — a manual association
+  that does not add up, a split whose parts do not reach the movement, an
+  unfinished expense — is sent as `pending`: it never blocks the decided
+  rows of its statement, nor reaches the kernel half-filled.
+- The kernel bounds what a link may claim: a manual allocation without a
+  provider may differ from its operation by at most $1.000; one with a
+  provider is a card settlement (the terminal adapter sends
+  `processor_estimate` as `manual`) and may be below its sale, never above
+  (`20260919140000`; the first bound, `110000`, refused settlements for an
+  hour). The journal a payment posted (sales, purchase and expense payments,
+  terminal settlements) is never a target apart from its payment
+  (`bank_reconciliation_target_is_payment_journal`).
 - A remainder of zero or less, or one to the bank account itself, is refused.
 
 ## The first real apply (2026-09-19)
@@ -464,7 +477,10 @@ the advance is registered there or paid.
 The server refuses rather than guesses: a line whose balance is not the one
 the review saw (`bank_reconciliation_payroll_line_changed`), a draft without
 consent, another tenant's week, a method that does not pay into this account,
-or a date Nómina only accepts as an advance. Nothing is saved when any row
+or a date Nómina only accepts as an advance. It reads the week under
+Nómina's own settlement lock (`:payroll-settlement`, `20260919150000`), so a
+payment Nómina records meanwhile waits instead of slipping between the
+balance checked and the version paid. Nothing is saved when any row
 fails. A retry with the same operation key returns the first receipt without
 calling Nómina again. Nómina keeps its own path; either one leaves the line
 paid, and the next review associates what Nómina paid.
@@ -507,7 +523,9 @@ revision the screen last saw; a screen that did not see the last save is
 refused (`bank_reconciliation_draft_conflict`) and says so instead of
 overwriting. The draft is the client's (`BankReconciliationDraftCodec`,
 version 1): keyed by `<file sha256>:<file row id>`, never by the review's
-unique ids. Untouched movements are not saved, so reopening reviews them
+unique ids. A sitting that loaded only some of the conciliation's
+statements (July imported again alone) saves what the draft holds for the
+others as it was; before 2026-09-19 its next save dropped them. Untouched movements are not saved, so reopening reviews them
 against today's ERP and a sale registered since can still be proposed.
 
 «Conciliaciones guardadas» lists the account's conciliations

@@ -82,9 +82,34 @@ select public.save_bank_statement_import_v1(
     pg_temp.statement_row('fee', 1, 'debit', 459, 99541,
       'Comision Compras En El Extranjero Oficina Central'),
     pg_temp.statement_row('owner', 2, 'credit', 300000, 399541,
-      'Traspaso De: Claudio Catalan')
+      'Traspaso De: Claudio Catalan'),
+    pg_temp.statement_row('paid-more', 3, 'debit', 5000, 394541,
+      'App-traspaso A: Taller Uno')
   )
 ) as receipt;
+
+-- A $3.000 payment entered as a journal against the bank; the transfer paid
+-- it and $2.000 more.
+set local session_replication_role = replica;
+insert into public.journal_entries (
+  id, tenant_id, entry_number, entry_date, description, type, source_module,
+  source_reference, status, total_debit, total_credit
+) values (
+  'e8000000-0000-4000-8000-000000000040', 'e8000000-0000-4000-8000-000000000001',
+  'AC-1', '2026-09-16 12:00:00+00', 'Pago Taller Uno', 'adjustment',
+  'journal_entries', 'TALLER-1', 'posted', 3000, 3000
+);
+insert into public.journal_lines (
+  tenant_id, entry_id, account_id, account_code, account_name, description,
+  debit_amount, credit_amount
+) values
+  ('e8000000-0000-4000-8000-000000000001', 'e8000000-0000-4000-8000-000000000040',
+   'e8000000-0000-4000-8000-000000000011', '6601', 'Gastos Financieros',
+   'Pago Taller Uno', 3000, 0),
+  ('e8000000-0000-4000-8000-000000000001', 'e8000000-0000-4000-8000-000000000040',
+   'e8000000-0000-4000-8000-000000000010', '1110', 'Banco de Chile',
+   'Pago Taller Uno', 0, 3000);
+set local session_replication_role = origin;
 
 create temp table ids on commit drop as
 select
@@ -94,7 +119,10 @@ select
       and source_row_id = 'fee') as fee,
   (select id from public.bank_statement_rows
     where tenant_id = 'e8000000-0000-4000-8000-000000000001'
-      and source_row_id = 'owner') as owner;
+      and source_row_id = 'owner') as owner,
+  (select id from public.bank_statement_rows
+    where tenant_id = 'e8000000-0000-4000-8000-000000000001'
+      and source_row_id = 'paid-more') as paid_more;
 
 select lives_ok(
   format(
@@ -117,10 +145,25 @@ select lives_ok(
           'counterpart_account_id', 'e8000000-0000-4000-8000-000000000012',
           'description', 'Aporte de capital'
         )
+      ),
+      jsonb_build_object(
+        'row_id', (select paid_more from ids), 'action', 'associate_existing',
+        'allocations', jsonb_build_array(jsonb_build_object(
+          'row_id', (select paid_more from ids),
+          'target_kind', 'journal_entry',
+          'target_id', 'e8000000-0000-4000-8000-000000000040',
+          'bank_amount', 3000, 'target_amount', 3000,
+          'match_kind', 'manual', 'confidence', 'medium',
+          'provider', 'none', 'instrument', 'unknown'
+        )),
+        'remainder', jsonb_build_object(
+          'account_id', 'e8000000-0000-4000-8000-000000000011',
+          'description', 'Recargo del taller'
+        )
       )
     )
   ),
-  'a charge and a deposit are classified in one apply'
+  'a charge, a deposit and a payment with its remainder apply together'
 );
 
 select results_eq(
@@ -135,8 +178,10 @@ select results_eq(
       ('Aporte de capital'::text, '1110'::text, 300000, 0),
       ('Aporte de capital', '3102', 0, 300000),
       ('Comisión bancaria', '1110', 0, 459),
-      ('Comisión bancaria', '6601', 459, 0)$$,
-  'money out is Debe cuenta / Haber banco; money in is Debe banco / Haber cuenta'
+      ('Comisión bancaria', '6601', 459, 0),
+      ('Recargo del taller', '1110', 0, 2000),
+      ('Recargo del taller', '6601', 2000, 0)$$,
+  'money out is Debe cuenta / Haber banco, its remainder too; money in is Debe banco / Haber cuenta'
 );
 
 select * from finish();

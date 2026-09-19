@@ -306,7 +306,9 @@ class BankReconciliationAiAnalyst {
           amount == null ||
           amount <= 0 ||
           amount != amount.roundToDouble() ||
-          description == null) {
+          description == null ||
+          // Money coming in never goes to an expense account in a split.
+          (!debit && account.canReceiveExpense)) {
         return null;
       }
       final expense = debit && account.canReceiveExpense;

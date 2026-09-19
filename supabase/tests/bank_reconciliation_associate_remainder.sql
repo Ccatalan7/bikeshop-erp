@@ -28,27 +28,34 @@ insert into public.accounts (id, tenant_id, code, name, type, category) values
   ('e7000000-0000-4000-8000-000000000012', 'e7000000-0000-4000-8000-000000000001',
    '1130', 'Cuentas por Cobrar Comerciales', 'asset', 'currentAsset');
 
--- Carlos Sánchez's $7.000 workshop sale, collected «by transfer» on 7 July:
--- the ERP moved it to the bank, as the sales kernel does.
+-- Carlos Sánchez's $7.000 workshop sale, collected «by transfer» on 7 July
+-- and entered as a journal against the bank. A second copy was posted by a
+-- sales payment: that one is the payment's money and never a target of its
+-- own.
 set local session_replication_role = replica;
 insert into public.journal_entries (
   id, tenant_id, entry_number, entry_date, description, type, source_module,
   source_reference, status, total_debit, total_credit
-) values (
-  'e7000000-0000-4000-8000-000000000040', 'e7000000-0000-4000-8000-000000000001',
-  'AC-1', '2026-07-07 12:00:00+00', 'Pago factura FV-00836 - Transferencia',
-  'adjustment', 'sales_payments', 'FV-00836', 'posted', 7000, 7000
-);
+) values
+  ('e7000000-0000-4000-8000-000000000040', 'e7000000-0000-4000-8000-000000000001',
+   'AC-1', '2026-07-07 12:00:00+00', 'Cobro FV-00836 - Transferencia',
+   'adjustment', 'journal_entries', 'FV-00836', 'posted', 7000, 7000),
+  ('e7000000-0000-4000-8000-000000000041', 'e7000000-0000-4000-8000-000000000001',
+   'AC-2', '2026-07-07 12:00:00+00', 'Pago factura FV-00836 - Transferencia',
+   'adjustment', 'sales_payments', 'FV-00836', 'posted', 7000, 7000);
 insert into public.journal_lines (
   tenant_id, entry_id, account_id, account_code, account_name, description,
   debit_amount, credit_amount
-) values
-  ('e7000000-0000-4000-8000-000000000001', 'e7000000-0000-4000-8000-000000000040',
-   'e7000000-0000-4000-8000-000000000010', '1110', 'Banco de Chile',
-   'Pago FV-00836', 7000, 0),
-  ('e7000000-0000-4000-8000-000000000001', 'e7000000-0000-4000-8000-000000000040',
-   'e7000000-0000-4000-8000-000000000012', '1130', 'Cuentas por Cobrar Comerciales',
-   'Pago FV-00836', 0, 7000);
+)
+select 'e7000000-0000-4000-8000-000000000001', entry.id, line.account_id,
+       line.code, line.name, 'Pago FV-00836', line.debit, line.credit
+  from (values ('e7000000-0000-4000-8000-000000000040'::uuid),
+               ('e7000000-0000-4000-8000-000000000041'::uuid)) entry(id)
+ cross join (values
+   ('e7000000-0000-4000-8000-000000000010'::uuid, '1110', 'Banco de Chile', 7000, 0),
+   ('e7000000-0000-4000-8000-000000000012'::uuid, '1130',
+    'Cuentas por Cobrar Comerciales', 0, 7000)
+ ) line(account_id, code, name, debit, credit);
 
 insert into auth.users (
   id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -104,14 +111,17 @@ select
 
 -- The sale linked for what it is, and optionally what it leaves of the
 -- movement booked to an account.
-create function pg_temp.link(p_bank_amount numeric, p_remainder jsonb)
+create function pg_temp.link(
+  p_bank_amount numeric, p_remainder jsonb,
+  p_target uuid default 'e7000000-0000-4000-8000-000000000040'
+)
 returns jsonb language sql as $$
   select jsonb_build_object(
     'row_id', (select carlos from ids), 'action', 'associate_existing',
     'allocations', jsonb_build_array(jsonb_build_object(
       'row_id', (select carlos from ids),
       'target_kind', 'journal_entry',
-      'target_id', 'e7000000-0000-4000-8000-000000000040',
+      'target_id', p_target,
       'bank_amount', p_bank_amount, 'target_amount', 7000,
       'match_kind', 'manual', 'confidence', 'medium',
       'provider', 'none', 'instrument', 'unknown'
@@ -160,6 +170,14 @@ select throws_like(
   pg_temp.apply('remainder:over-linked', pg_temp.link(18000, null)),
   '%bank_reconciliation_allocation_invalid%',
   'a sale chosen by hand is never linked for $11.000 more than it is'
+);
+
+select throws_like(
+  pg_temp.apply('remainder:payment-journal', pg_temp.link(7000, pg_temp.rest(
+    'e7000000-0000-4000-8000-000000000011', 'Venta no registrada'),
+    'e7000000-0000-4000-8000-000000000041')),
+  '%bank_reconciliation_target_is_payment_journal%',
+  'the journal a sales payment posted is never linked apart from its payment'
 );
 
 select lives_ok(

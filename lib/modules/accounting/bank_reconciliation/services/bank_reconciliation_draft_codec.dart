@@ -40,13 +40,29 @@ class BankReconciliationDraftCodec {
       '${row.sourceFileSha256 ?? draft.fileSha256}:'
       '${row.movement.persistedRowId}';
 
+  /// [saved] is the draft the conciliation had when this sitting opened it:
+  /// what it holds for statements this review did not load (July imported
+  /// again alone, in a conciliation of four) is kept as it was, never
+  /// dropped by the next save.
   Map<String, dynamic> encode(
     BankReconciliationPreparedDraft draft,
-    Set<String> touchedRowIds,
-  ) {
+    Set<String> touchedRowIds, {
+    Map<String, dynamic>? saved,
+  }) {
+    final loaded = <String>{
+      draft.fileSha256,
+      for (final source in draft.sources) source.fileSha256,
+      for (final row in draft.rows)
+        if (row.sourceFileSha256 != null) row.sourceFileSha256!,
+    };
+    final savedRows = saved?['version'] == version ? saved!['rows'] : null;
     return <String, dynamic>{
       'version': version,
       'rows': <String, dynamic>{
+        if (savedRows is Map)
+          for (final entry in savedRows.entries)
+            if (!loaded.contains(entry.key.toString().split(':').first))
+              entry.key.toString(): entry.value,
         for (final row in draft.rows)
           if (!row.isSettled &&
               touchedRowIds.contains(row.movement.sourceRowId))

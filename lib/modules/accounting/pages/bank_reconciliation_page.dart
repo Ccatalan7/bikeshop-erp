@@ -516,7 +516,7 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
       final revision = await save(
         sessionId: session.sessionId,
         revision: session.revision,
-        draft: _codec.encode(draft, _touched),
+        draft: _codec.encode(draft, _touched, saved: session.draft),
       );
       if (_session?.sessionId == session.sessionId) {
         _session = session.withRevision(revision);
@@ -3442,7 +3442,12 @@ class _SplitEditor extends StatelessWidget {
     final parts = resolution.splitParts;
     final amount = row.movement.amountClp ?? 0;
     final debit = row.movement.direction == BankMovementDirection.debit;
-    final accounts = options?.accounts ?? const [];
+    // Money coming in is never split into an expense account: the kernel
+    // books every part on one as an expense, and only a charge pays one.
+    final accounts =
+        (options?.accounts ?? const <BankReconciliationLedgerAccountOption>[])
+            .where((account) => debit || !account.canReceiveExpense)
+            .toList(growable: false);
     final suppliers = options?.suppliers ?? const [];
     final methods = options?.paymentMethods ?? const [];
     final id = row.movement.sourceRowId;

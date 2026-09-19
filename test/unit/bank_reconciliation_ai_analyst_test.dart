@@ -281,6 +281,43 @@ void main() {
     expect(result['owner']!.hasProposal, isFalse);
   });
 
+  test('money coming in is never split into an expense account', () async {
+    final analyst = BankReconciliationAiAnalyst(
+      generate: ({required system, required prompt}) async {
+        final ids = _ids(prompt);
+        return jsonEncode({
+          'rows': [
+            {
+              'row': ids['Claudio Angel'],
+              'explanation': 'Un aporte y la devolución de un honorario.',
+              'proposal': {
+                'type': 'split',
+                'parts': [
+                  {
+                    'account': ids['Aportes de socio'],
+                    'amount': 600000,
+                    'description': 'Aporte de capital',
+                  },
+                  {
+                    'account': ids['Honorarios'],
+                    'amount': 100000,
+                    'description': 'Devolución de honorarios',
+                  },
+                ],
+              },
+            },
+          ],
+        });
+      },
+    );
+
+    final result = await analyst.analyze(draft: _draft(), options: _options);
+
+    // The kernel books every part on an expense account as an expense, and
+    // only a charge pays one: the proposal would be refused on apply.
+    expect(result['owner']!.hasProposal, isFalse);
+  });
+
   test('the owner\'s answer travels with the one movement it answers',
       () async {
     late String seenPrompt;

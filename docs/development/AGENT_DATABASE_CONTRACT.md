@@ -1029,3 +1029,11 @@ sentido del movimiento.
   `select ok((guardar_borrador(...))->>'revision' = '3' and (select ... from
   listar(...)))` lee la lista con la foto de antes de guardar. Se escribe en
   una sentencia y se afirma en la siguiente.
+- **Una guardia nueva en un kernel se prueba con todos sus llamadores.** El
+  tope de $1.000 para vínculos `manual` (`20260919110000`) pasó las nueve
+  pruebas `bank_*` y rompió las liquidaciones de tarjeta: el adaptador de
+  terminales llama al mismo kernel y envía sus estimaciones como `manual`.
+  Su prueba (`payment_terminal_settlement_accounting.sql`) no tiene el
+  prefijo. Lo encontró la revisión de Codex; estuvo una hora en producción.
+  Antes de desplegar se corren **todas** las pruebas que nombran la función:
+  `grep -l <función> supabase/tests/*.sql`.

@@ -973,6 +973,92 @@ void main() {
     });
   });
 
+  test('an unfinished row is sent as pending and never blocks the rest',
+      () async {
+    final calls = <_RpcCall>[];
+    final service = BankReconciliationService(
+      database: _FakeDatabaseService(),
+      rpc: (name, params) async {
+        calls.add(_RpcCall(name, params));
+        return <String, dynamic>{
+          'import_id': '33333333-3333-4333-8333-333333333333',
+          'revision': 2,
+          'status': 'partially_reconciled',
+          'allocation_count': 0,
+          'replayed': false,
+        };
+      },
+    );
+    BankStatementMovement movement(String id, int amount) =>
+        BankStatementMovement(
+          sourceRowId: id,
+          ordinal: 1,
+          bookingDate: const BankCivilDate(2026, 8, 17),
+          description: 'App-traspaso A: Maria Angelica Sandoval',
+          normalizedDescription: 'app traspaso a maria angelica sandoval',
+          direction: BankMovementDirection.debit,
+          amountClp: amount,
+          sourcePage: 1,
+          sourceLineStart: 1,
+          sourceLineEnd: 1,
+        );
+    final draft = BankReconciliationPreparedDraft(
+      fileSha256: 'a' * 64,
+      filename: 'cartola agosto.pdf',
+      sourceType: 'pdf_text',
+      parserName: 'banco_chile_statement',
+      parserVersion: 'v1',
+      rows: <BankReconciliationRowDraft>[
+        BankReconciliationRowDraft(
+          movement: movement('dup', 5000),
+          proposals: const <BankReconciliationProposal>[],
+          resolution: const BankReconciliationResolutionDraft(
+            action: BankReconciliationActionKind.dismiss,
+            reason: 'Duplicado confirmado',
+          ),
+        ),
+        // Half a split: the parts do not add up to the movement yet.
+        BankReconciliationRowDraft(
+          movement: movement('repay', 214685),
+          proposals: const <BankReconciliationProposal>[],
+          resolution: const BankReconciliationResolutionDraft(
+            action: BankReconciliationActionKind.split,
+            splitParts: <BankSplitPartDraft>[
+              BankSplitPartDraft(
+                accountId: 'fees',
+                amountClp: 50000,
+                description: 'Honorarios contador',
+              ),
+              BankSplitPartDraft(accountId: 'vat', description: 'F29'),
+            ],
+          ),
+        ),
+      ],
+    );
+    expect(draft.rowsBySourceId['repay']!.isResolved, isFalse);
+
+    await service.apply(
+      draft: draft,
+      importReceipt: BankStatementImportReceipt(
+        importId: '33333333-3333-4333-8333-333333333333',
+        revision: 1,
+        rowIdsBySourceRowId: const <String, String>{
+          'dup': '44444444-4444-4444-8444-444444444444',
+          'repay': '44444444-4444-4444-8444-444444444445',
+        },
+        replayed: false,
+      ),
+      operationKey: 'partial',
+    );
+
+    final actions = calls.single.params['p_actions'] as List;
+    expect(
+      actions.map((action) => (action as Map)['action']).toList(),
+      <String>['dismiss', 'pending'],
+    );
+    expect((actions.last as Map).containsKey('split'), isFalse);
+  });
+
   test('a split row sends its parts and counts only when they add up',
       () async {
     final calls = <_RpcCall>[];

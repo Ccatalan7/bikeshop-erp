@@ -249,6 +249,43 @@ void main() {
     );
   });
 
+  test('a save keeps what the draft holds for statements not loaded', () {
+    // July imported again alone, in a conciliation that also has June.
+    final june = <String, dynamic>{
+      'resolution': <String, dynamic>{
+        'action': 'dismiss',
+        'reason': 'Duplicado',
+      },
+      'ai': <String, dynamic>{'explanation': 'Una devolución.'},
+    };
+    final saved = _saved(<String, dynamic>{
+      'version': BankReconciliationDraftCodec.version,
+      'rows': <String, dynamic>{
+        '${'b' * 64}:p1-l3-r2': june,
+        // A movement of this statement nobody touched this sitting is
+        // reviewed again, not carried over.
+        '${'a' * 64}:google': <String, dynamic>{
+          'resolution': <String, dynamic>{'action': 'split'},
+        },
+      },
+    });
+
+    final encoded = codec.encode(
+      _decided(),
+      const <String>{'repay'},
+      saved: saved,
+    );
+    final rows = encoded['rows'] as Map<String, dynamic>;
+
+    expect(
+        rows.keys,
+        unorderedEquals(<String>[
+          '${'b' * 64}:p1-l3-r2',
+          '${'a' * 64}:repay',
+        ]));
+    expect(rows['${'b' * 64}:p1-l3-r2'], june);
+  });
+
   test('only touched movements are saved, keyed by file and row', () {
     final saved = codec.encode(_decided(), const <String>{'repay'});
 

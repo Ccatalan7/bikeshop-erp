@@ -1233,6 +1233,14 @@ class BankReconciliationService {
         });
         continue;
       }
+      // A row the screen does not count as resolved stays pending: an
+      // unfinished form (a split that does not add up, operations that
+      // leave part of the movement) never blocks the rows that are decided,
+      // nor reaches the server half-filled.
+      if (!row.isResolved) {
+        actions.add(<String, dynamic>{'row_id': rowId, 'action': 'pending'});
+        continue;
+      }
       final resolution = row.effectiveResolution;
       final proposal = row.selectedProposal;
       final action = <String, dynamic>{
@@ -1256,13 +1264,6 @@ class BankReconciliationService {
             throw const BankReconciliationServiceException(
               'Elige la operación ERP que corresponde antes de guardar.',
             );
-          }
-          // Operations chosen by hand that do not add up to the movement,
-          // with nothing booked for the difference, stay pending: sent as
-          // they are, the last one would carry evidence it never had.
-          if (!row.isResolved) {
-            action['action'] = 'pending';
-            break;
           }
           // Operations that leave part of the movement are linked for
           // their own amounts; the rest is a journal to the account named.

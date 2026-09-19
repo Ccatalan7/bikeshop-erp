@@ -666,9 +666,12 @@ class BankReconciliationAdvisor {
         final parts = <BankSplitPartDraft>[];
         for (final part in prior.parts) {
           final account = options?.account(part.accountId);
-          if (account == null) return null;
-          final expense = account.canReceiveExpense &&
-              movement.direction == BankMovementDirection.debit;
+          final debit = movement.direction == BankMovementDirection.debit;
+          // Money coming in never goes to an expense account in a split.
+          if (account == null || (!debit && account.canReceiveExpense)) {
+            return null;
+          }
+          final expense = account.canReceiveExpense && debit;
           parts.add(BankSplitPartDraft(
             accountId: account.accountId,
             amountClp: part.amountClp,
