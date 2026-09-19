@@ -10,6 +10,14 @@ values ('71111111-1111-4111-8111-111111111111', 'Payroll Ledger Test');
 
 -- Tenant bootstrap seeds the default chart and payment methods. This fixture
 -- uses deterministic IDs, so isolate it from those defaults inside the rollback.
+-- Terminals, methods and accounts reference each other both ways, so the
+-- bootstrap's own rows only come out with the FKs stood down.
+set local session_replication_role = replica;
+delete from public.payment_terminal_terms
+ where tenant_id = '71111111-1111-4111-8111-111111111111';
+delete from public.payment_terminal_profiles
+ where tenant_id = '71111111-1111-4111-8111-111111111111';
+set local session_replication_role = origin;
 delete from public.payment_methods
 where tenant_id = '71111111-1111-4111-8111-111111111111';
 delete from public.accounts

@@ -117,6 +117,29 @@ select public.confirm_payroll_voucher_v2(
     where id = 'ea000000-0000-4000-8000-000000000040')
 );
 
+-- Recognizing the week creates its expense, and that expense says who is
+-- owed: a salary has no supplier, and «Proveedor no informado» reads as a
+-- missing datum on every screen.
+select is(
+  (
+    select expense.supplier_name
+      from public.expenses expense
+      join public.payroll_voucher_lines line on line.expense_id = expense.id
+     where expense.tenant_id = 'ea000000-0000-4000-8000-000000000001'
+  ),
+  'Braulio Muñoz',
+  'the salary expense names the worker it pays'
+);
+
+select ok(
+  (
+    select expense.supplier_id is null
+      from public.expenses expense
+     where expense.tenant_id = 'ea000000-0000-4000-8000-000000000001'
+  ),
+  'naming him does not turn a worker into a supplier'
+);
+
 -- A salary paid on 31 August, weeks before anybody notices the mistake.
 select public.pay_payroll_voucher_v2(
   'ea000000-0000-4000-8000-000000000040',

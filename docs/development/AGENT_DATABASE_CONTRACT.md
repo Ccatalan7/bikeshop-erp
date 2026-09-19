@@ -1107,3 +1107,56 @@ Dos cosas que cuestan una corrida si no se saben:
   ser `AC-02875` al moverlo a agosto; el vínculo con su original
   (`reversal_of_id`, `source_document_id`) es lo que se sigue, nunca el
   número.
+
+## Un gasto sin contraparte se lee como dato faltante (2026-09-19)
+
+109 de los 195 gastos del taller son sueldos, y un sueldo no tiene proveedor:
+quien recibe la plata es el trabajador. El ERP lo sabía —lo escribía en las
+notas y en la línea del gasto— pero dejaba vacío `supplier_name`, que es el
+único campo que leen la lista de gastos, la ficha, el panorama y la
+notificación. El dueño abrió el Resumen diario y vio «GTO-00196 · Proveedor
+no informado · $10.000» una y otra vez.
+
+`supplier_name` es en este ERP **el nombre libre de la contraparte** cuando no
+hay ficha de proveedor —así lo escribe la conciliación bancaria para Google,
+Meta o el arriendo—, así que ahí va el trabajador
+(`ensure_payroll_line_expense`) o el beneficiario del concepto adicional
+(`apply_payroll_payment_workspace_v1`, cuyo beneficiario vive en
+`payroll_payment_workspace_legs.beneficiary_employee_id`, no en la
+disposición: un concepto «adicional» no cuelga de una línea de la semana).
+`supplier_id` sigue nulo, así que las guardias de procedencia que miran
+`supplier_id` no cambian: [[guard-procedencia-gasto-sin-proveedor]] sigue
+valiendo, un gasto sin proveedor es legítimo.
+
+Lo que queda sin contraparte después del relleno son gastos que el dueño
+escribió a mano sin decir a quién: no se inventa.
+
+## Una suite que no corre completa esconde tres cosas distintas (2026-09-19)
+
+`payroll_statement_reconciliation.sql` llevaba semanas cortándose. Al
+repararla aparecieron tres causas que no se parecen:
+
+- **Una trampa de la semilla.** Borrar los métodos de pago del bootstrap
+  falla por `payment_terminal_terms_method_fk`; hay que sacar antes términos
+  y perfiles de terminal bajo `session_replication_role = replica`. Estaba en
+  tres suites más (`payroll_dated_partial_payments_and_advances`,
+  `payroll_included_concept_reclassification`, `payroll_payment_workspace`).
+- **Una regla derogada.** Varias aserciones fechaban el pago **dentro** de la
+  semana; desde `20260812021000` un movimiento anterior al cierre operativo es
+  un anticipo, con cartola o sin ella. Eso no se arregla moviendo la fecha y
+  ya: la aserción que decía «acepta fechas dentro de la semana» pasó a decir
+  «va del cierre operativo al cierre + 5», que es la regla viva.
+- **Una regresión real.** La prueba 67 de
+  `hr_payroll_authorization_hardening.sql` fallaba porque
+  `20260827210000`, al reescribir la identidad, perdió la mitad de la
+  comprobación de bloqueo: cualquier `banned_until`, aunque hubiera vencido,
+  cerraba el Portal del Trabajador para siempre (`20260919210000`).
+
+**Antes de tocar una fixture, preguntar cuál de las tres es.** Y una prueba
+que lleva tiempo roja no es ruido: ésta escondía un bloqueo permanente.
+
+Queda abierto: otras seis funciones tratan cualquier `banned_until` como
+bloqueo vigente (`erp_member_tenant_id`, `current_erp_employee_id`,
+`guard_worker_portal_identity`, `switch_erp_user_to_worker` y los dos
+directorios de chat/empleados). Es la misma pregunta con más alcance y ninguna
+prueba encima; se decide aparte.

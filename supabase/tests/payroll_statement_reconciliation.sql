@@ -3712,7 +3712,10 @@ select set_config(
     jsonb_build_array(
       jsonb_build_object(
         'ordinal', 1,
-        'transaction_date', '2026-07-27',
+        -- The week closes on 28 July: paying it the day before is an
+        -- advance since 20260812021000, and this case is about the OCR
+        -- warning, not about the boundary.
+        'transaction_date', '2026-07-28',
         'direction', 'debit',
         'amount', 1000,
         'description_observed', 'OCR con baja confianza',
@@ -4258,7 +4261,7 @@ select set_config(
     jsonb_build_array(
       jsonb_build_object(
         'ordinal', 1,
-        'transaction_date', '2026-07-27',
+        'transaction_date', '2026-07-31',
         'direction', 'debit',
         'amount', 600,
         'description_observed', 'Pago parcial manual de CLP 600',
@@ -4911,7 +4914,7 @@ select set_config(
     jsonb_build_array(
       jsonb_build_object(
         'ordinal', 1,
-        'transaction_date', '2026-06-30',
+        'transaction_date', '2026-07-06',
         'direction', 'debit',
         'amount', 129500,
         'description_observed', 'Pago semana 27 Vicente',
@@ -5039,7 +5042,7 @@ select set_config(
         'payment_account_id',
           '7f281000-0000-4000-8000-000000000302',
         'applied_amount', 26000,
-        'payment_date', '2026-07-01',
+        'payment_date', '2026-07-04',
         'manual_confirmation', true
       )
     ),
@@ -5095,7 +5098,7 @@ select ok(
         ->>'import_id'
     )::uuid
       and allocation.action = 'bank_payment'
-      and allocation.payment_date = date '2026-06-30'
+      and allocation.payment_date = date '2026-07-06'
   )
   and exists (
     select 1
@@ -5105,7 +5108,7 @@ select ok(
         ->>'import_id'
     )::uuid
       and allocation.action = 'cash_payment'
-      and allocation.payment_date = date '2026-07-01'
+      and allocation.payment_date = date '2026-07-04'
   )
   and exists (
     select 1
@@ -5117,7 +5120,10 @@ select ok(
       and allocation.action = 'bank_payment'
       and allocation.payment_date = date '2026-07-10'
   ),
-  'week-27 payments accept in-week dates and the inclusive end-plus-five boundary'
+  -- Since 20260812021000 a payment before the week's operational close is
+  -- an advance, statement evidence or not: what this case pins now is the
+  -- window from that close to the inclusive end-plus-five boundary.
+  'week-27 payments run from the operational close to end-plus-five'
 );
 
 select set_config(
@@ -5129,7 +5135,7 @@ select set_config(
     jsonb_build_array(
       jsonb_build_object(
         'ordinal', 1,
-        'transaction_date', '2026-03-02',
+        'transaction_date', '2026-03-08',
         'direction', 'debit',
         'amount', 1000,
         'description_observed', 'Cargo idéntico solapado',
@@ -5192,7 +5198,7 @@ select set_config(
     jsonb_build_array(
       jsonb_build_object(
         'ordinal', 1,
-        'transaction_date', '2026-03-02',
+        'transaction_date', '2026-03-08',
         'direction', 'debit',
         'amount', 1000,
         'description_observed', 'Cargo idéntico solapado',
@@ -5201,7 +5207,7 @@ select set_config(
       ),
       jsonb_build_object(
         'ordinal', 2,
-        'transaction_date', '2026-03-02',
+        'transaction_date', '2026-03-08',
         'direction', 'debit',
         'amount', 1000,
         'description_observed', 'Cargo idéntico solapado',
@@ -5386,15 +5392,15 @@ select set_config(
           to_jsonb('2026-07-01'::text)
         ),
         '{statement_end}',
-        to_jsonb('2026-07-28'::text)
+        to_jsonb('2026-08-02'::text)
       ),
       '{document_date}',
-      to_jsonb('2026-07-28'::text)
+      to_jsonb('2026-08-02'::text)
     ),
     jsonb_build_array(
       jsonb_build_object(
         'ordinal', 1,
-        'transaction_date', '2026-07-29',
+        'transaction_date', '2026-08-03',
         'direction', 'debit',
         'amount', 1000,
         'description_observed', 'Movimiento informado después del cierre',
@@ -5413,7 +5419,7 @@ select ok(
       current_setting('test.statement.close_plus_one_import')::jsonb
         ->>'import_id'
     )::uuid
-      and statement_row.transaction_date = date '2026-07-29'
+      and statement_row.transaction_date = date '2026-08-03'
       and statement_row.warnings
             @> '["out_of_statement_range"]'::jsonb
   ),
@@ -5474,7 +5480,7 @@ select ok(
       current_setting('test.statement.close_plus_one_import')::jsonb
         ->>'import_id'
     )::uuid
-      and allocation.payment_date = date '2026-07-29'
+      and allocation.payment_date = date '2026-08-03'
       and allocation.bank_amount = 1000
       and allocation.applied_amount = 1000
   ),
