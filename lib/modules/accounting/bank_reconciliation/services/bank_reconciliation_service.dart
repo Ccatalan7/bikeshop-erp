@@ -23,6 +23,11 @@ typedef BankReconciliationRpc = Future<dynamic> Function(
   Map<String, dynamic> params,
 );
 
+/// Another screen saved the conciliation after this one loaded it.
+class BankReconciliationDraftConflict implements Exception {
+  const BankReconciliationDraftConflict();
+}
+
 class BankReconciliationServiceException implements Exception {
   const BankReconciliationServiceException(this.message);
 
@@ -62,6 +67,30 @@ class _ReadStatement {
   final List<BankStatementMovement> movements;
   final String sourceType;
   final String? accountFingerprint;
+  final BankCivilDate? firstDate;
+  final BankCivilDate? lastDate;
+  final List<String> warnings;
+}
+
+/// What the review needs of one statement, read from its file or rebuilt
+/// from the rows an earlier import saved.
+class _StatementEvidence {
+  const _StatementEvidence({
+    required this.fileSha256,
+    required this.filename,
+    required this.sourceType,
+    required this.accountFingerprint,
+    required this.movements,
+    required this.firstDate,
+    required this.lastDate,
+    this.warnings = const <String>[],
+  });
+
+  final String fileSha256;
+  final String filename;
+  final String sourceType;
+  final String? accountFingerprint;
+  final List<BankStatementMovement> movements;
   final BankCivilDate? firstDate;
   final BankCivilDate? lastDate;
   final List<String> warnings;
@@ -341,6 +370,30 @@ class BankReconciliationService {
         statements.add(statement);
       }
     }
+    return _review(
+      statements: <_StatementEvidence>[
+        for (final statement in statements)
+          _StatementEvidence(
+            fileSha256: statement.extraction.fileSha256,
+            filename: statement.file.filename,
+            sourceType: statement.sourceType,
+            accountFingerprint: statement.accountFingerprint,
+            movements: statement.movements,
+            firstDate: statement.firstDate,
+            lastDate: statement.lastDate,
+            warnings: statement.warnings,
+          ),
+      ],
+      erpAccountId: erpAccountId,
+    );
+  }
+
+  /// Reviews statements already read, from their files or from what an
+  /// earlier import saved: one assignment covers every movement.
+  Future<BankReconciliationPreparedDraft> _review({
+    required List<_StatementEvidence> statements,
+    required String erpAccountId,
+  }) async {
     final fingerprints = statements
         .map((statement) => statement.accountFingerprint)
         .whereType<String>()
@@ -379,11 +432,11 @@ class BankReconciliationService {
         entries.add((
           multiple
               ? movement.withSourceRowId(
-                  '${statement.extraction.fileSha256.substring(0, 12)}:'
+                  '${statement.fileSha256.substring(0, 12)}:'
                   '${movement.sourceRowId}',
                 )
               : movement,
-          statement.extraction.fileSha256,
+          statement.fileSha256,
           index,
         ));
       }
@@ -462,9 +515,8 @@ class BankReconciliationService {
     );
     final first = statements.first;
     return BankReconciliationPreparedDraft(
-      fileSha256: first.extraction.fileSha256,
-      filename:
-          multiple ? '${statements.length} cartolas' : first.file.filename,
+      fileSha256: first.fileSha256,
+      filename: multiple ? '${statements.length} cartolas' : first.filename,
       sourceType: first.sourceType,
       accountFingerprint: first.accountFingerprint,
       parserName: parserName,
@@ -493,14 +545,14 @@ class BankReconciliationService {
       sources: <BankStatementSource>[
         for (final statement in statements)
           BankStatementSource(
-            fileSha256: statement.extraction.fileSha256,
-            filename: statement.file.filename,
+            fileSha256: statement.fileSha256,
+            filename: statement.filename,
             sourceType: statement.sourceType,
             accountFingerprint: statement.accountFingerprint,
             firstDate: statement.firstDate,
             lastDate: statement.lastDate,
             movementCount: entries
-                .where((entry) => entry.$2 == statement.extraction.fileSha256)
+                .where((entry) => entry.$2 == statement.fileSha256)
                 .length,
           ),
       ],
@@ -836,6 +888,218 @@ class BankReconciliationService {
     );
   }
 
+  /// Registers the conciliation these imports belong to, or opens the one
+  /// they already joined, with its saved draft.
+  Future<BankReconciliationSession> openSession({
+    required String erpAccountId,
+    required List<String> importIds,
+  }) async {
+    final raw = await _rpc(
+      'open_bank_reconciliation_session_v1',
+      <String, dynamic>{
+        'p_erp_account_id': erpAccountId,
+        'p_import_ids': importIds,
+      },
+    );
+    final receipt = _receiptMap(raw);
+    final draft = receipt['draft'];
+    return BankReconciliationSession(
+      sessionId: _requiredText(receipt, 'session_id'),
+      revision: _requiredInt(receipt, 'revision'),
+      draft: draft is Map ? Map<String, dynamic>.from(draft) : const {},
+      created: receipt['created'] == true,
+    );
+  }
+
+  /// Saves the draft over [revision]; another screen's newer save is never
+  /// overwritten ([BankReconciliationDraftConflict]).
+  Future<int> saveSessionDraft({
+    required String sessionId,
+    required int revision,
+    required Map<String, dynamic> draft,
+  }) async {
+    final dynamic raw;
+    try {
+      raw = await _rpc(
+        'save_bank_reconciliation_session_draft_v1',
+        <String, dynamic>{
+          'p_session_id': sessionId,
+          'p_expected_revision': revision,
+          'p_draft': draft,
+        },
+      );
+    } catch (error) {
+      if (error.toString().contains('bank_reconciliation_draft_conflict')) {
+        throw const BankReconciliationDraftConflict();
+      }
+      rethrow;
+    }
+    return _requiredInt(_receiptMap(raw), 'revision');
+  }
+
+  /// The account's saved conciliations, newest first.
+  Future<List<BankReconciliationSessionSummary>> listSessions({
+    required String erpAccountId,
+  }) async {
+    final raw = await _rpc(
+      'list_bank_reconciliation_sessions_v1',
+      <String, dynamic>{'p_erp_account_id': erpAccountId},
+    );
+    final items = raw is List ? raw : const <Object?>[];
+    return <BankReconciliationSessionSummary>[
+      for (final item in items.whereType<Map>())
+        BankReconciliationSessionSummary(
+          sessionId: item['session_id'].toString(),
+          statementCount: _intOf(item['statement_count']) ?? 0,
+          movementCount: _intOf(item['movement_count']) ?? 0,
+          decidedCount: _intOf(item['decided_count']) ?? 0,
+          draftRows: _intOf(item['draft_rows']) ?? 0,
+          draftDecisions: _intOf(item['draft_decisions']) ?? 0,
+          draftAnalyses: _intOf(item['draft_analyses']) ?? 0,
+          updatedAt: DateTime.tryParse(item['updated_at']?.toString() ?? '')
+                  ?.toLocal() ??
+              DateTime.now(),
+          firstDate: _civilDate(item['first_date']),
+          lastDate: _civilDate(item['last_date']),
+          lastAppliedAt:
+              DateTime.tryParse(item['last_applied_at']?.toString() ?? '')
+                  ?.toLocal(),
+        ),
+    ];
+  }
+
+  /// Rebuilds a saved conciliation from the rows its imports kept — the
+  /// files are never stored — and reviews it against today's ERP: what was
+  /// applied shows as settled, the rest is decided again from the draft.
+  Future<BankReconciliationResumedSession> resumeSession({
+    required String sessionId,
+    required String erpAccountId,
+  }) async {
+    final tenantId = await _requireTenantId();
+    final imports = await _database.supabase
+        .from('bank_statement_imports')
+        .select('id,file_sha256,account_fingerprint,source_metadata,revision')
+        .eq('tenant_id', tenantId)
+        .eq('erp_account_id', erpAccountId)
+        .eq('session_id', sessionId)
+        .order('created_at');
+    if (imports.isEmpty) {
+      throw const BankReconciliationServiceException(
+        'Esta conciliación no tiene cartolas guardadas.',
+      );
+    }
+    final importIds = <String>[
+      for (final item in imports) item['id'].toString(),
+    ];
+    final rows = <Map<String, dynamic>>[];
+    const page = 1000;
+    for (var from = 0;; from += page) {
+      final batch = await _database.supabase
+          .from('bank_statement_rows')
+          .select(
+            'id,import_id,source_row_id,ordinal,booking_date,operation_date,'
+            'direction,amount,description,normalized_description,'
+            'counterparty_observed,document_number,balance,warning_codes,'
+            'source_page,source_page_end,source_line_start,source_line_end',
+          )
+          .eq('tenant_id', tenantId)
+          .inFilter('import_id', importIds)
+          .order('id')
+          .range(from, from + page - 1);
+      rows.addAll(batch.map(Map<String, dynamic>.from));
+      if (batch.length < page) break;
+    }
+    final multiple = imports.length > 1;
+    final evidence = <_StatementEvidence>[];
+    final receipts = <String, BankStatementImportReceipt>{};
+    for (final item in imports) {
+      final importId = item['id'].toString();
+      final sha = item['file_sha256'].toString();
+      final metadata = item['source_metadata'];
+      final own = rows.where((row) => row['import_id'].toString() == importId);
+      final movements = <BankStatementMovement>[
+        for (final row in own) _movementFromRow(row),
+      ];
+      final dated = movements
+          .map((movement) => movement.bookingDate)
+          .whereType<BankCivilDate>()
+          .toList(growable: false)
+        ..sort();
+      evidence.add(_StatementEvidence(
+        fileSha256: sha,
+        filename: dated.isEmpty
+            ? 'Cartola guardada'
+            : 'Cartola ${_dayMonthYear(dated.first)} – '
+                '${_dayMonthYear(dated.last)}',
+        sourceType: metadata is Map
+            ? metadata['source_type']?.toString() ?? 'pdf_text'
+            : 'pdf_text',
+        accountFingerprint: item['account_fingerprint']?.toString(),
+        movements: movements,
+        firstDate: dated.isEmpty ? null : dated.first,
+        lastDate: dated.isEmpty ? null : dated.last,
+      ));
+      receipts[sha] = BankStatementImportReceipt(
+        importId: importId,
+        revision: _intOf(item['revision']) ?? 1,
+        rowIdsBySourceRowId: <String, String>{
+          for (final row in own)
+            multiple
+                ? '${sha.substring(0, 12)}:${row['source_row_id']}'
+                : row['source_row_id'].toString(): row['id'].toString(),
+        },
+        replayed: true,
+      );
+    }
+    final draft = await _review(
+      statements: evidence,
+      erpAccountId: erpAccountId,
+    );
+    final session = await openSession(
+      erpAccountId: erpAccountId,
+      importIds: importIds,
+    );
+    return BankReconciliationResumedSession(
+      draft: draft,
+      session: session,
+      importReceipts: receipts,
+    );
+  }
+
+  BankStatementMovement _movementFromRow(Map<String, dynamic> row) {
+    int? money(Object? value) =>
+        value is num ? value.round() : num.tryParse('$value')?.round();
+    return BankStatementMovement(
+      sourceRowId: row['source_row_id'].toString(),
+      ordinal: _intOf(row['ordinal']) ?? 1,
+      bookingDate: _civilDate(row['booking_date']),
+      operationDate: _civilDate(row['operation_date']),
+      description: row['description'].toString(),
+      normalizedDescription: row['normalized_description'].toString(),
+      counterpartyObserved: row['counterparty_observed']?.toString(),
+      documentNumber: row['document_number']?.toString(),
+      direction: switch (row['direction']) {
+        'debit' => BankMovementDirection.debit,
+        'credit' => BankMovementDirection.credit,
+        _ => BankMovementDirection.unknown,
+      },
+      amountClp: row['amount'] == null ? null : money(row['amount']),
+      balanceClp: row['balance'] == null ? null : money(row['balance']),
+      warningCodes: <String>[
+        for (final code in row['warning_codes'] as List? ?? const [])
+          code.toString(),
+      ],
+      sourcePage: _intOf(row['source_page']) ?? 1,
+      sourceLineStart: _intOf(row['source_line_start']) ?? 1,
+      sourceLineEnd: _intOf(row['source_line_end']) ?? 1,
+      sourcePageEnd: _intOf(row['source_page_end']),
+    );
+  }
+
+  static String _dayMonthYear(BankCivilDate date) =>
+      '${date.day.toString().padLeft(2, '0')}/'
+      '${date.month.toString().padLeft(2, '0')}/${date.year}';
+
   Future<BankReconciliationApplyReceipt> apply({
     required BankReconciliationPreparedDraft draft,
     required BankStatementImportReceipt importReceipt,
@@ -1140,6 +1404,10 @@ class BankReconciliationService {
           sourcePage: row.evidence.startPageNumber,
           sourceLineStart: row.evidence.startLineNumber,
           sourceLineEnd: row.evidence.endLineNumber,
+          sourcePageEnd:
+              row.evidence.endPageNumber != row.evidence.startPageNumber
+                  ? row.evidence.endPageNumber
+                  : null,
         ),
     ];
   }
@@ -1181,6 +1449,8 @@ class BankReconciliationService {
       'balance': movement.balanceClp,
       'warning_codes': movement.warningCodes,
       'source_page': movement.sourcePage,
+      if (movement.sourcePageEnd != null)
+        'source_page_end': movement.sourcePageEnd,
       'source_line_start': movement.sourceLineStart,
       'source_line_end': movement.sourceLineEnd,
       'fingerprint': sha256.convert(utf8.encode(base)).toString(),

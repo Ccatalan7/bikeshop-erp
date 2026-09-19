@@ -243,6 +243,7 @@ class BankStatementMovement {
     required this.sourcePage,
     required this.sourceLineStart,
     required this.sourceLineEnd,
+    this.sourcePageEnd,
     this.fileRowId,
   })  : assert(sourceRowId != ''),
         assert(ordinal > 0),
@@ -264,6 +265,10 @@ class BankStatementMovement {
   final int sourcePage;
   final int sourceLineStart;
   final int sourceLineEnd;
+
+  /// The page it ends on when a page break split it: [sourceLineEnd] is a
+  /// line of that page (the 11 August deposit ends on line 1 of page 3).
+  final int? sourcePageEnd;
 
   /// Row id inside its own file when [sourceRowId] was made unique across
   /// several statements. The persisted import always keeps the file's id, so
@@ -294,6 +299,7 @@ class BankStatementMovement {
         sourcePage: sourcePage,
         sourceLineStart: sourceLineStart,
         sourceLineEnd: sourceLineEnd,
+        sourcePageEnd: sourcePageEnd,
         fileRowId: persistedRowId,
       );
 
@@ -1039,6 +1045,88 @@ class BankReconciliationPreparedDraft {
       context: context,
     );
   }
+}
+
+/// A saved conciliation as the list shows it: the statements reviewed
+/// together and what is still open.
+class BankReconciliationSessionSummary {
+  const BankReconciliationSessionSummary({
+    required this.sessionId,
+    required this.statementCount,
+    required this.movementCount,
+    required this.decidedCount,
+    required this.draftRows,
+    required this.updatedAt,
+    this.draftDecisions = 0,
+    this.draftAnalyses = 0,
+    this.firstDate,
+    this.lastDate,
+    this.lastAppliedAt,
+  });
+
+  final String sessionId;
+  final int statementCount;
+  final int movementCount;
+
+  /// Movements with a final decision (applied or excluded).
+  final int decidedCount;
+
+  /// Movements saved in the draft: decided and not applied, or read by the
+  /// AI.
+  final int draftRows;
+
+  /// Movements the operator decided and has not applied.
+  final int draftDecisions;
+
+  /// Movements the AI analysis already read.
+  final int draftAnalyses;
+  final DateTime updatedAt;
+  final BankCivilDate? firstDate;
+  final BankCivilDate? lastDate;
+  final DateTime? lastAppliedAt;
+
+  int get pendingCount => movementCount - decidedCount;
+  bool get isComplete => movementCount > 0 && pendingCount <= 0;
+}
+
+/// A conciliation open for review: the draft saved so far and the revision
+/// the next save must build on.
+class BankReconciliationSession {
+  const BankReconciliationSession({
+    required this.sessionId,
+    required this.revision,
+    this.draft = const <String, dynamic>{},
+    this.created = false,
+  });
+
+  final String sessionId;
+  final int revision;
+  final Map<String, dynamic> draft;
+
+  /// Opened for the first time by this import.
+  final bool created;
+
+  BankReconciliationSession withRevision(int value) =>
+      BankReconciliationSession(
+        sessionId: sessionId,
+        revision: value,
+        draft: draft,
+      );
+}
+
+/// A saved conciliation rebuilt from its imports, without the files.
+class BankReconciliationResumedSession {
+  const BankReconciliationResumedSession({
+    required this.draft,
+    required this.session,
+    required this.importReceipts,
+  });
+
+  final BankReconciliationPreparedDraft draft;
+  final BankReconciliationSession session;
+
+  /// Each statement's import, by file hash, ready for the next apply.
+  final Map<String, BankStatementImportReceipt> importReceipts;
 }
 
 class BankStatementImportReceipt {

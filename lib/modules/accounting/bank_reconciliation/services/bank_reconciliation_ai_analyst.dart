@@ -219,10 +219,24 @@ class BankReconciliationAiAnalyst {
     }
     final total = chosen.fold<int>(0, (sum, item) => sum + item.amountClp);
     if ((total - row.movement.amountClp!).abs() > _toleranceClp) return null;
-    final manual = BankReconciliationProposal.manual(
+    return linkProposal(
       sourceRowId: row.movement.sourceRowId,
       movementAmountClp: row.movement.amountClp!,
       candidates: chosen,
+    );
+  }
+
+  /// The association the analysis proposes: low confidence, never among
+  /// the safe suggestions. Also rebuilds one from a saved draft.
+  static BankReconciliationProposal? linkProposal({
+    required String sourceRowId,
+    required int movementAmountClp,
+    required List<BankReconciliationCandidate> candidates,
+  }) {
+    final manual = BankReconciliationProposal.manual(
+      sourceRowId: sourceRowId,
+      movementAmountClp: movementAmountClp,
+      candidates: candidates,
     );
     if (manual == null) return null;
     return BankReconciliationProposal(

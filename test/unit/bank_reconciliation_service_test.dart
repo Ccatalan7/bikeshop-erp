@@ -429,6 +429,72 @@ void main() {
         '${july.substring(0, 12)}:row-1');
   });
 
+  test('a movement a page break split keeps the page it ends on', () async {
+    final calls = <_RpcCall>[];
+    final service = BankReconciliationService(
+      database: _FakeDatabaseService(),
+      rpc: (name, params) async {
+        calls.add(_RpcCall(name, params));
+        final rows = params['p_rows'] as List<Map<String, dynamic>>;
+        return <String, dynamic>{
+          'import_id': 'import-august',
+          'revision': 1,
+          'replayed': false,
+          'rows': <Map<String, dynamic>>[
+            for (final row in rows)
+              <String, dynamic>{
+                'source_row_id': row['source_row_id'],
+                'row_id': 'db-${row['source_row_id']}',
+              },
+          ],
+        };
+      },
+    );
+    BankStatementMovement movement(String id, int line, {int? pageEnd}) =>
+        BankStatementMovement(
+          sourceRowId: id,
+          ordinal: line,
+          bookingDate: const BankCivilDate(2026, 8, 11),
+          description: 'Traspaso De: Claudio Angel Catalan',
+          normalizedDescription: 'traspaso de claudio angel catalan',
+          direction: BankMovementDirection.credit,
+          amountClp: 700000,
+          sourcePage: 2,
+          sourceLineStart: line,
+          sourceLineEnd: pageEnd == null ? line : 1,
+          sourcePageEnd: pageEnd,
+        );
+    final draft = BankReconciliationPreparedDraft(
+      fileSha256: 'c' * 64,
+      filename: 'cartola agosto.pdf',
+      sourceType: 'pdf_text',
+      parserName: 'banco_chile_statement',
+      parserVersion: 'v1',
+      rows: <BankReconciliationRowDraft>[
+        BankReconciliationRowDraft(
+          movement: movement('p2-l38', 38),
+          proposals: const [],
+        ),
+        BankReconciliationRowDraft(
+          movement: movement('p2-l39-r38', 39, pageEnd: 3),
+          proposals: const [],
+        ),
+      ],
+    );
+
+    await service.createImport(
+      draft: draft,
+      erpAccountId: '66666666-6666-4666-8666-666666666666',
+    );
+
+    final rows = calls.single.params['p_rows'] as List<Map<String, dynamic>>;
+    expect(rows.first.containsKey('source_page_end'), isFalse);
+    expect(rows.last['source_page'], 2);
+    expect(rows.last['source_page_end'], 3);
+    expect(rows.last['source_line_start'], 39);
+    expect(rows.last['source_line_end'], 1);
+  });
+
   test('apply serializes expense, journal and dismissal as real actions',
       () async {
     final calls = <_RpcCall>[];

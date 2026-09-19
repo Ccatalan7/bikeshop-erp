@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13,6 +15,7 @@ import '../../../shared/widgets/vb_searchable_select.dart';
 import '../../../shared/widgets/vb_short_select.dart';
 import '../../../shared/widgets/vb_status_badge.dart';
 import '../bank_reconciliation/models/bank_reconciliation_models.dart';
+import '../bank_reconciliation/services/bank_reconciliation_draft_codec.dart';
 import '../bank_reconciliation/services/bank_reconciliation_service.dart';
 
 typedef BankStatementPrepareAction = Future<BankReconciliationPreparedDraft>
@@ -39,10 +42,35 @@ class BankReconciliationActions {
     required this.createImport,
     required this.apply,
     this.analyzeWithAi,
+    this.openSession,
+    this.saveSessionDraft,
+    this.listSessions,
+    this.resumeSession,
   });
 
   /// Absent where no model is available: the review works without it.
   final BankAiAnalyzeAction? analyzeWithAi;
+
+  /// The conciliation registry: absent, a review lives only on screen.
+  final Future<BankReconciliationSession> Function({
+    required String erpAccountId,
+    required List<String> importIds,
+  })? openSession;
+  final Future<int> Function({
+    required String sessionId,
+    required int revision,
+    required Map<String, dynamic> draft,
+  })? saveSessionDraft;
+  final Future<List<BankReconciliationSessionSummary>> Function({
+    required String erpAccountId,
+  })? listSessions;
+  final Future<BankReconciliationResumedSession> Function({
+    required String sessionId,
+    required String erpAccountId,
+  })? resumeSession;
+
+  bool get keepsDrafts =>
+      openSession != null && saveSessionDraft != null && listSessions != null;
 
   final Future<List<BankReconciliationAccountOption>> Function()
       loadBankAccounts;
@@ -71,6 +99,10 @@ enum _MovementFilter {
   processor,
   unmatched
 }
+
+/// Where the conciliation's draft stands: nothing to save (no registry),
+/// a change waiting, being saved, saved, or not saved.
+enum _DraftSave { none, pending, saving, saved, failed, conflict }
 
 bool _isProcessorEstimate(BankReconciliationMatchKind kind) =>
     kind == BankReconciliationMatchKind.processorEstimate ||
@@ -118,6 +150,31 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
   final Map<String, String> _createOperationKeys = {};
   final Map<String, String> _applyOperationKeys = {};
 
+  // The conciliation this review is saved in, and its draft: the movements
+  // the operator touched are saved a moment after each change.
+  BankReconciliationSession? _session;
+  final Set<String> _touched = {};
+  _DraftSave _draftSave = _DraftSave.none;
+  Timer? _saveTimer;
+  bool _saving = false;
+  bool _saveAgain = false;
+  String? _registryNote;
+  List<BankReconciliationSessionSummary> _sessions = const [];
+  bool _loadingSessions = false;
+
+  static const _saveDelay = Duration(milliseconds: 1200);
+  static const _codec = BankReconciliationDraftCodec();
+
+  @override
+  void dispose() {
+    // Whatever was waiting to be saved goes out now.
+    if (_saveTimer?.isActive ?? false) {
+      _saveTimer!.cancel();
+      unawaited(_saveDraftNow(quiet: true));
+    }
+    super.dispose();
+  }
+
   @override
   void reassemble() {
     super.reassemble();
@@ -152,6 +209,10 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
       createImport: service.createImport,
       apply: service.apply,
       analyzeWithAi: service.analyzeWithAi,
+      openSession: service.openSession,
+      saveSessionDraft: service.saveSessionDraft,
+      listSessions: service.listSessions,
+      resumeSession: service.resumeSession,
     );
   }
 
@@ -174,6 +235,8 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
       });
       if (_selectedAccountId != null && _draft != null) {
         await _loadWorkspaceOptions(_selectedAccountId!);
+      } else if (_selectedAccountId != null) {
+        await _loadSessions();
       }
     } catch (_) {
       if (!mounted) return;
@@ -244,6 +307,7 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
         _draft = draft;
         _clearPersistence();
       });
+      await _register(draft, accountId);
       await _loadWorkspaceOptions(accountId);
     } on BankReconciliationServiceException catch (error) {
       if (!mounted) return;
@@ -267,6 +331,196 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
     _applyReceipts.clear();
     _createOperationKeys.clear();
     _applyOperationKeys.clear();
+    _saveTimer?.cancel();
+    _session = null;
+    _touched.clear();
+    _aiAnswers.clear();
+    _draftSave = _DraftSave.none;
+    _registryNote = null;
+  }
+
+  /// Saves the statements as soon as they are read and opens the
+  /// conciliation they belong to: a new one, or the one they already
+  /// joined, whose draft comes back.
+  Future<void> _register(
+    BankReconciliationPreparedDraft draft,
+    String accountId,
+  ) async {
+    final open = _actions.openSession;
+    if (!_actions.keepsDrafts || open == null) return;
+    try {
+      for (final source in draft.sources) {
+        final sha = source.fileSha256;
+        if (_importReceipts.containsKey(sha)) continue;
+        _importReceipts[sha] = await _actions.createImport(
+          draft: draft.forSource(source),
+          erpAccountId: accountId,
+          operationKey: _createOperationKeys.putIfAbsent(
+            sha,
+            () => UniqueKey().toString(),
+          ),
+        );
+      }
+      final session = await open(
+        erpAccountId: accountId,
+        importIds: <String>[
+          for (final receipt in _importReceipts.values) receipt.importId,
+        ],
+      );
+      if (!mounted) return;
+      _adoptSession(session);
+    } catch (error) {
+      debugPrint('[BankReconciliation] registry failed: $error');
+      if (!mounted) return;
+      setState(() {
+        _draftSave = _DraftSave.failed;
+        _registryNote = 'No pudimos guardar esta conciliación como borrador. '
+            'Puedes revisarla y aplicar igual, pero lo que decidas sin '
+            'aplicar se pierde al salir.';
+      });
+    }
+  }
+
+  /// Takes the conciliation as this review's home and brings back what its
+  /// draft still allows.
+  void _adoptSession(BankReconciliationSession session) {
+    final draft = _draft;
+    if (draft == null) return;
+    final restore = _codec.restore(draft, session.draft);
+    setState(() {
+      _session = session;
+      _draft = restore.draft;
+      _touched
+        ..clear()
+        ..addAll(restore.restoredRowIds);
+      _aiAnswers
+        ..clear()
+        ..addAll(<String, String>{
+          for (final row in restore.draft.rows)
+            if (row.aiAnalysis?.answer case final answer?)
+              row.movement.sourceRowId: answer,
+        });
+      _draftSave = _DraftSave.saved;
+      _registryNote = restore.droppedCount == 0
+          ? null
+          : restore.droppedCount == 1
+              ? '1 decisión guardada ya no aplica (la operación se usó en '
+                  'otro movimiento o el sueldo ya se pagó); vuelve a '
+                  'decidirla.'
+              : '${restore.droppedCount} decisiones guardadas ya no aplican '
+                  '(sus operaciones se usaron en otros movimientos o los '
+                  'sueldos ya se pagaron); vuelve a decidirlas.';
+    });
+  }
+
+  Future<void> _loadSessions() async {
+    final list = _actions.listSessions;
+    final accountId = _selectedAccountId;
+    if (list == null || accountId == null) return;
+    setState(() => _loadingSessions = true);
+    try {
+      final sessions = await list(erpAccountId: accountId);
+      if (!mounted || _selectedAccountId != accountId) return;
+      setState(() => _sessions = sessions);
+    } catch (error) {
+      debugPrint('[BankReconciliation] sessions failed: $error');
+      if (!mounted) return;
+      setState(() => _sessions = const []);
+    } finally {
+      if (mounted) setState(() => _loadingSessions = false);
+    }
+  }
+
+  /// Opens a saved conciliation from what its imports kept, reviewed against
+  /// today's ERP.
+  Future<void> _resumeSession(String sessionId) async {
+    final resume = _actions.resumeSession;
+    final accountId = _selectedAccountId;
+    if (resume == null || accountId == null || _busy) return;
+    if (_saveTimer?.isActive ?? false) {
+      _saveTimer!.cancel();
+      await _saveDraftNow();
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final resumed = await resume(
+        sessionId: sessionId,
+        erpAccountId: accountId,
+      );
+      if (!mounted) return;
+      setState(() {
+        _clearPersistence();
+        _applyReceipt = null;
+        _selectedSourceRowId = null;
+        _filter = _MovementFilter.all;
+        _draft = resumed.draft;
+        _importReceipts.addAll(resumed.importReceipts);
+      });
+      _adoptSession(resumed.session);
+      await _loadWorkspaceOptions(accountId);
+    } on BankReconciliationServiceException catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.message);
+    } catch (error) {
+      debugPrint('[BankReconciliation] resume failed: $error');
+      if (!mounted) return;
+      setState(() => _error = 'No pudimos abrir esta conciliación. Intenta '
+          'de nuevo.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _scheduleSave() {
+    if (_session == null || _draftSave == _DraftSave.conflict) return;
+    _saveTimer?.cancel();
+    _saveTimer = Timer(_saveDelay, () => unawaited(_saveDraftNow()));
+    if (_draftSave != _DraftSave.pending) {
+      setState(() => _draftSave = _DraftSave.pending);
+    }
+  }
+
+  /// [quiet] when the page is going away: nothing is redrawn.
+  Future<void> _saveDraftNow({bool quiet = false}) async {
+    final session = _session;
+    final draft = _draft;
+    final save = _actions.saveSessionDraft;
+    if (session == null || draft == null || save == null) return;
+    if (_saving) {
+      _saveAgain = true;
+      return;
+    }
+    _saving = true;
+    if (!quiet && mounted) setState(() => _draftSave = _DraftSave.saving);
+    try {
+      final revision = await save(
+        sessionId: session.sessionId,
+        revision: session.revision,
+        draft: _codec.encode(draft, _touched),
+      );
+      if (_session?.sessionId == session.sessionId) {
+        _session = session.withRevision(revision);
+      }
+      if (mounted) {
+        setState(() =>
+            _draftSave = _saveAgain ? _DraftSave.pending : _DraftSave.saved);
+      }
+    } on BankReconciliationDraftConflict {
+      if (mounted) setState(() => _draftSave = _DraftSave.conflict);
+      _saveAgain = false;
+    } catch (error) {
+      debugPrint('[BankReconciliation] draft save failed: $error');
+      if (mounted) setState(() => _draftSave = _DraftSave.failed);
+    } finally {
+      _saving = false;
+      if (_saveAgain) {
+        _saveAgain = false;
+        unawaited(_saveDraftNow());
+      }
+    }
   }
 
   void _replaceRow(BankReconciliationRowDraft replacement) {
@@ -291,7 +545,9 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
       _applyOperationKeys.removeWhere(
         (sha, _) => !_applyReceipts.containsKey(sha),
       );
+      _touched.addAll(editable.map((row) => row.movement.sourceRowId));
     });
+    _scheduleSave();
   }
 
   BankReconciliationRowDraft _withResolution(
@@ -746,6 +1002,7 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
               onAccountChanged: (value) {
                 if (_draft != null || value == null) return;
                 setState(() => _selectedAccountId = value);
+                unawaited(_loadSessions());
               },
               onPick: _selectedAccountId == null ? null : _pickStatement,
             ),
@@ -757,6 +1014,7 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
                 applied: _applyReceipt != null,
                 onSave: _saveReview,
                 onReplace: _busy ? null : _reset,
+                draftSave: _draftSave,
               ),
           ],
         ),
@@ -788,6 +1046,9 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
         busy: _busy,
         error: _error,
         onPick: _selectedAccountId == null ? null : _pickStatement,
+        sessions: _sessions,
+        loadingSessions: _loadingSessions,
+        onResume: _actions.resumeSession == null ? null : _resumeSession,
       );
     }
     return Column(
@@ -801,6 +1062,28 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
               tone: VbNoticeTone.danger,
             ),
           ),
+        if (_draftSave == _DraftSave.conflict)
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: VbNotice(
+              title: 'Esta conciliación se guardó desde otra pantalla',
+              body: 'Lo que cambies aquí ya no se guarda en el borrador. '
+                  'Vuelve a abrirla desde la lista para ver lo último.',
+              tone: VbNoticeTone.warning,
+            ),
+          )
+        else if (_registryNote != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: VbNotice(
+              key: const ValueKey('bank-reconciliation-registry-note'),
+              title: _session == null
+                  ? 'Sin borrador guardado'
+                  : 'Retomaste una conciliación guardada',
+              body: _registryNote,
+              tone: VbNoticeTone.warning,
+            ),
+          ),
         if (_applyReceipt != null)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -808,6 +1091,21 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
               title: 'Conciliación guardada',
               body: _successMessage(_applyReceipt!),
               tone: VbNoticeTone.success,
+              action: _session != null &&
+                      _actions.resumeSession != null &&
+                      draft.pendingCount > 0
+                  ? TextButton(
+                      key: const ValueKey('bank-reconciliation-continue'),
+                      onPressed: _busy
+                          ? null
+                          : () => _resumeSession(_session!.sessionId),
+                      child: Text(
+                        draft.pendingCount == 1
+                            ? 'Seguir con el pendiente'
+                            : 'Seguir con los ${draft.pendingCount} pendientes',
+                      ),
+                    )
+                  : null,
             ),
           ),
         _ReviewToolbar(
@@ -992,6 +1290,12 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
   }
 
   void _reset() {
+    if (_saveTimer?.isActive ?? false) {
+      _saveTimer!.cancel();
+      unawaited(_saveDraftNow().then((_) => _loadSessions()));
+    } else {
+      unawaited(_loadSessions());
+    }
     setState(() {
       _draft = null;
       _clearPersistence();
@@ -1312,12 +1616,18 @@ class _EmptyImportState extends StatelessWidget {
     required this.busy,
     required this.error,
     required this.onPick,
+    this.sessions = const <BankReconciliationSessionSummary>[],
+    this.loadingSessions = false,
+    this.onResume,
   });
 
   final bool accountSelected;
   final bool busy;
   final String? error;
   final VoidCallback? onPick;
+  final List<BankReconciliationSessionSummary> sessions;
+  final bool loadingSessions;
+  final ValueChanged<String>? onResume;
 
   @override
   Widget build(BuildContext context) {
@@ -1361,8 +1671,135 @@ class _EmptyImportState extends StatelessWidget {
                 icon: const Icon(Icons.upload_file_outlined),
                 label: Text(busy ? 'Leyendo cartolas…' : 'Elegir archivos'),
               ),
+              if (accountSelected &&
+                  onResume != null &&
+                  (sessions.isNotEmpty || loadingSessions)) ...[
+                const SizedBox(height: 32),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Conciliaciones guardadas',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                if (loadingSessions && sessions.isEmpty)
+                  const LinearProgressIndicator()
+                else
+                  for (final session in sessions)
+                    _SavedSessionCard(
+                      session: session,
+                      busy: busy,
+                      onResume: () => onResume!(session.sessionId),
+                    ),
+              ],
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One saved conciliation: its statements, what is done and what is left.
+class _SavedSessionCard extends StatelessWidget {
+  const _SavedSessionCard({
+    required this.session,
+    required this.busy,
+    required this.onResume,
+  });
+
+  final BankReconciliationSessionSummary session;
+  final bool busy;
+  final VoidCallback onResume;
+
+  static String _day(BankCivilDate? date) => date == null
+      ? '—'
+      : '${date.day.toString().padLeft(2, '0')}/'
+          '${date.month.toString().padLeft(2, '0')}/${date.year}';
+
+  static String _moment(DateTime value) =>
+      '${value.day.toString().padLeft(2, '0')}/'
+      '${value.month.toString().padLeft(2, '0')} '
+      '${value.hour.toString().padLeft(2, '0')}:'
+      '${value.minute.toString().padLeft(2, '0')}';
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final statements = session.statementCount == 1
+        ? '1 cartola'
+        : '${session.statementCount} cartolas';
+    final progress = session.isComplete
+        ? 'Todo conciliado'
+        : '${session.decidedCount} aplicados · '
+            '${session.pendingCount} pendientes';
+    final draft = <String>[
+      if (session.draftDecisions == 1)
+        '1 decisión sin aplicar'
+      else if (session.draftDecisions > 1)
+        '${session.draftDecisions} decisiones sin aplicar',
+      if (session.draftAnalyses > 0) '${session.draftAnalyses} con análisis IA',
+    ].join(' · ');
+    return Card(
+      key: ValueKey('bank-reconciliation-session-${session.sessionId}'),
+      margin: const EdgeInsets.only(bottom: 8),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: theme.colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 12,
+          runSpacing: 8,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '${_day(session.firstDate)} – ${_day(session.lastDate)}',
+                  style: theme.textTheme.titleSmall,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '$statements · ${session.movementCount} movimientos · '
+                  '$progress',
+                ),
+                Text(
+                  '${draft.isEmpty ? '' : '$draft · '}'
+                  'guardada el ${_moment(session.updatedAt)}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                VbStatusBadge(
+                  label: session.isComplete ? 'Conciliada' : 'En curso',
+                  tone: session.isComplete
+                      ? VbStatusTone.success
+                      : VbStatusTone.warning,
+                  dense: true,
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton(
+                  key: ValueKey(
+                    'bank-reconciliation-resume-${session.sessionId}',
+                  ),
+                  onPressed: busy ? null : onResume,
+                  child: Text(session.isComplete ? 'Ver' : 'Retomar'),
+                ),
+              ],
+            ),
+          ],
         ),
       ),
     );
@@ -3078,6 +3515,7 @@ class _Footer extends StatelessWidget {
     required this.applied,
     required this.onSave,
     required this.onReplace,
+    this.draftSave = _DraftSave.none,
   });
 
   final BankReconciliationPreparedDraft draft;
@@ -3085,6 +3523,16 @@ class _Footer extends StatelessWidget {
   final bool applied;
   final VoidCallback onSave;
   final VoidCallback? onReplace;
+  final _DraftSave draftSave;
+
+  /// What the operator needs to know about his undecided work.
+  String? get _draftLabel => switch (draftSave) {
+        _DraftSave.none => null,
+        _DraftSave.pending || _DraftSave.saving => 'Guardando borrador…',
+        _DraftSave.saved => 'Borrador guardado',
+        _DraftSave.failed => 'Borrador sin guardar',
+        _DraftSave.conflict => 'Borrador guardado en otra pantalla',
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -3096,12 +3544,30 @@ class _Footer extends StatelessWidget {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final compact = constraints.maxWidth < 600;
-            final summary = Text(
-              '${draft.resolvedCount} de ${draft.openCount} movimientos resueltos · '
-              '${draft.pendingCount} quedan pendientes'
-              '${draft.settledCount > 0 ? ' · ${draft.settledCount} ya conciliados' : ''}',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+            final draftLabel = _draftLabel;
+            final summary = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '${draft.resolvedCount} de ${draft.openCount} movimientos resueltos · '
+                  '${draft.pendingCount} quedan pendientes'
+                  '${draft.settledCount > 0 ? ' · ${draft.settledCount} ya conciliados' : ''}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (draftLabel != null)
+                  Text(
+                    draftLabel,
+                    key: const ValueKey('bank-reconciliation-draft-state'),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: draftSave == _DraftSave.failed ||
+                                  draftSave == _DraftSave.conflict
+                              ? Theme.of(context).colorScheme.error
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+              ],
             );
             final replaceButton = OutlinedButton(
               onPressed: onReplace,

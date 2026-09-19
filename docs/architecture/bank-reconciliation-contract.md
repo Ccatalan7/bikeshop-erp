@@ -387,6 +387,44 @@ catalog stops offering operations a row already explains and returns
 `reconciled_rows` for the statement's dates, and settled-elsewhere dismissals
 never teach the advisor to dismiss.
 
+## Saved conciliations and their draft
+
+A conciliation is registered when its statements are read, not when it is
+applied. Reading them saves each file as its import
+(`save_bank_statement_import_v1`, idempotent per file) and
+`open_bank_reconciliation_session_v1` puts the imports in one
+`bank_reconciliation_sessions` row — a new one, or the one any of them already
+joined, so importing a file again resumes its conciliation. The owner's four
+2026 statements are one conciliation of 229 movements.
+
+The session keeps a **draft**: what the operator decided and has not applied,
+and what the AI read, for each movement he touched. It is saved 1.2 s after
+each change with `save_bank_reconciliation_session_draft_v1` over the
+revision the screen last saw; a screen that did not see the last save is
+refused (`bank_reconciliation_draft_conflict`) and says so instead of
+overwriting. The draft is the client's (`BankReconciliationDraftCodec`,
+version 1): keyed by `<file sha256>:<file row id>`, never by the review's
+unique ids. Untouched movements are not saved, so reopening reviews them
+against today's ERP and a sale registered since can still be proposed.
+
+«Conciliaciones guardadas» lists the account's conciliations
+(`list_bank_reconciliation_sessions_v1`: statements, movements, applied,
+pending, decisions not applied, rows the AI read). «Retomar» rebuilds the
+review from `bank_statement_rows` — the files are never stored — reviews it
+again, and restores a saved decision only while it holds: its operations
+exist and no untouched movement took them, a salary is taken as Nómina owes
+it today. What no longer holds is dropped and counted in a notice. Applying
+stays per file and covers only the open rows, so the operator applies what is
+sure and «Seguir con los N pendientes» reopens the same conciliation with the
+applied rows shown as «Ya conciliado».
+
+A movement a page break split keeps both pages: `source_page_end` (null when
+it fits one page). Until 2026-09-19 a row kept one page and required its last
+line not to precede the first, so the owner's $700.000 deposit of 11 August
+(page 2 line 39 → page 3 line 1) made the whole August statement fail with
+`bank_statement_row_invalid` — «Aplicar» included; no import had ever been
+saved in production.
+
 ## Responsive composition
 
 At 900 logical pixels and above, the workspace uses a bank-row list plus a

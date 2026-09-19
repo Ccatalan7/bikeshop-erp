@@ -473,6 +473,124 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a saved conciliation is resumed and keeps saving itself',
+      (tester) async {
+    final harness = _Harness();
+    addTearDown(harness.dispose);
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final draft = _draft();
+    final sha = draft.fileSha256;
+    harness.sessions = <BankReconciliationSessionSummary>[
+      BankReconciliationSessionSummary(
+        sessionId: 'session-1',
+        statementCount: 1,
+        movementCount: 2,
+        decidedCount: 0,
+        draftRows: 1,
+        draftDecisions: 1,
+        updatedAt: DateTime(2026, 9, 19, 10, 30),
+        firstDate: const BankCivilDate(2026, 8, 12),
+        lastDate: const BankCivilDate(2026, 8, 12),
+      ),
+    ];
+    harness.resumed = BankReconciliationResumedSession(
+      draft: draft,
+      session: BankReconciliationSession(
+        sessionId: 'session-1',
+        revision: 3,
+        draft: <String, dynamic>{
+          'version': 1,
+          'rows': <String, dynamic>{
+            '$sha:transbank': <String, dynamic>{
+              'resolution': <String, dynamic>{
+                'action': 'dismiss',
+                'reason': 'Abono repetido en otra cuenta',
+              },
+            },
+          },
+        },
+      ),
+      importReceipts: <String, BankStatementImportReceipt>{
+        sha: BankStatementImportReceipt(
+          importId: 'import-id',
+          revision: 1,
+          rowIdsBySourceRowId: const <String, String>{
+            'direct': 'row-direct',
+            'transbank': 'row-transbank',
+          },
+          replayed: true,
+        ),
+      },
+    );
+
+    await tester.pumpWidget(harness.app(empty: true));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Conciliaciones guardadas'), findsOneWidget);
+    expect(find.text('1 cartola · 2 movimientos · 0 aplicados · 2 pendientes'),
+        findsOneWidget);
+    expect(find.text('En curso'), findsOneWidget);
+    expect(find.text('1 decisión sin aplicar · guardada el 19/09 10:30'),
+        findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('bank-reconciliation-resume-session-1')),
+    );
+    await tester.pumpAndSettle();
+
+    // The dismissal decided in the first sitting is back; the direct match
+    // nobody touched is proposed again.
+    expect(find.text('Excluida'), findsOneWidget);
+    expect(find.text('2 de 2 movimientos resueltos · 0 quedan pendientes'),
+        findsOneWidget);
+    expect(find.text('Borrador guardado'), findsOneWidget);
+    expect(harness.createCalls, 0);
+
+    await tester.tap(
+      find.byKey(const ValueKey('bank-reconciliation-resolve-direct')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('bank-reconciliation-action-pending')),
+    );
+    await tester.pump();
+    expect(find.text('Guardando borrador…'), findsOneWidget);
+    expect(harness.savedDrafts, isEmpty);
+
+    await tester.pump(const Duration(milliseconds: 1300));
+    await tester.pumpAndSettle();
+
+    final (revision, saved) = harness.savedDrafts.single;
+    expect(revision, 3);
+    expect((saved['rows'] as Map).keys.toSet(), {
+      '$sha:transbank',
+      '$sha:direct',
+    });
+    expect(
+      ((saved['rows'] as Map)['$sha:direct'] as Map)['resolution'],
+      {'action': 'pending'},
+    );
+    expect(find.text('Borrador guardado'), findsOneWidget);
+
+    // Applying what is sure keeps the conciliation open for the rest.
+    await tester.tap(find.byKey(const ValueKey('bank-reconciliation-save')));
+    await tester.pumpAndSettle();
+    expect(harness.applyCalls, 1);
+    expect(harness.createCalls, 0);
+    expect(find.text('Seguir con el pendiente'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('bank-reconciliation-continue')),
+    );
+    await tester.pumpAndSettle();
+    expect(harness.resumeCalls, 2);
+    expect(find.text('Conciliación guardada'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('the AI proposes, the owner uses it or answers its question',
       (tester) async {
     final harness = _Harness();
@@ -792,8 +910,15 @@ class _Harness {
   int createCalls = 0;
   int applyCalls = 0;
   BankAiAnalyzeAction? analyze;
+  List<BankReconciliationSessionSummary>? sessions;
+  BankReconciliationResumedSession? resumed;
+  final savedDrafts = <(int, Map<String, dynamic>)>[];
+  int resumeCalls = 0;
 
-  Widget app({BankReconciliationPreparedDraft? initialDraft}) {
+  Widget app({
+    BankReconciliationPreparedDraft? initialDraft,
+    bool empty = false,
+  }) {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider<NavigationService>.value(value: navigation),
@@ -808,7 +933,7 @@ class _Harness {
           brightness: Brightness.light,
         ),
         home: BankReconciliationPage(
-          initialDraft: initialDraft ?? _draft(),
+          initialDraft: empty ? null : initialDraft ?? _draft(),
           actions: BankReconciliationActions(
             loadBankAccounts: () async =>
                 const <BankReconciliationAccountOption>[
@@ -856,6 +981,29 @@ class _Harness {
               ],
             ),
             analyzeWithAi: analyze,
+            listSessions: sessions == null
+                ? null
+                : ({required erpAccountId}) async => sessions!,
+            openSession: resumed == null
+                ? null
+                : ({required erpAccountId, required importIds}) async =>
+                    resumed!.session,
+            resumeSession: resumed == null
+                ? null
+                : ({required sessionId, required erpAccountId}) async {
+                    resumeCalls++;
+                    return resumed!;
+                  },
+            saveSessionDraft: resumed == null
+                ? null
+                : ({
+                    required sessionId,
+                    required revision,
+                    required draft,
+                  }) async {
+                    savedDrafts.add((revision, draft));
+                    return revision + 1;
+                  },
             prepare: ({
               required files,
               required erpAccountId,
