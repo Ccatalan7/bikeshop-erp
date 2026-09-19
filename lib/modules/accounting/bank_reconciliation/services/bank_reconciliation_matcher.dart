@@ -956,7 +956,10 @@ class BankReconciliationMatcher {
             body: 'Suman \$${_group(unexplainedAmount)} y ninguna combinación '
                 'de ventas con tarjeta registradas los explica al peso. Suele '
                 'ser una venta con tarjeta sin registrar o registrada con otro '
-                'medio de pago; revisa la estimación antes de aceptarla.',
+                'medio de pago; revisa la estimación antes de aceptarla. El '
+                'análisis con IA no los toma en bloque: sin el detalle de '
+                'abonos de Transbank no tiene más evidencia que esta '
+                'estimación.',
             tone: BankInsightTone.warning,
           ),
       ],
@@ -1871,12 +1874,8 @@ class BankReconciliationMatcher {
         BankPaymentInstrument.unknown => 3,
       };
 
-  bool _isTransbankMovement(BankStatementMovement movement) {
-    final text = movement.normalizedDescription;
-    return text.contains('transbank') ||
-        text.contains('abonos debito y credito') ||
-        text.contains('abono debito credito');
-  }
+  bool _isTransbankMovement(BankStatementMovement movement) =>
+      movement.isTransbankDeposit;
 
   BankCivilDate _subtractBusinessDays(BankCivilDate source, int count) {
     var remaining = count;

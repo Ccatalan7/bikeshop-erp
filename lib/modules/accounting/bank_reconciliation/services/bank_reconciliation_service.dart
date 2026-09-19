@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../shared/services/database_service.dart';
+import '../../../../shared/services/gemini_proxy_service.dart';
 import '../../models/account.dart';
 import '../../utils/bank_ledger_account_policy.dart';
 import '../../../hr/models/payroll_statement_reconciliation.dart';
@@ -12,8 +13,10 @@ import '../../../hr/services/payroll_statement_extraction_service.dart';
 import '../../../hr/services/payroll_statement_veryfi_ocr.dart';
 import '../models/bank_reconciliation_models.dart';
 import 'bank_reconciliation_advisor.dart';
+import 'bank_reconciliation_ai_analyst.dart';
 import 'bank_reconciliation_catalog_codec.dart';
 import 'bank_reconciliation_matcher.dart';
+import 'bank_reconciliation_third_party.dart';
 
 typedef BankReconciliationRpc = Future<dynamic> Function(
   String functionName,
@@ -72,7 +75,9 @@ class BankReconciliationService {
     BankReconciliationMatcher matcher = const BankReconciliationMatcher(),
     BankReconciliationAdvisor advisor = const BankReconciliationAdvisor(),
     BankReconciliationRpc? rpc,
+    BankAiGenerate? aiGenerate,
   })  : _database = database,
+        _aiGenerate = aiGenerate,
         _parser = parser,
         _veryfiOcr = veryfiOcr,
         _matcher = matcher,
@@ -90,6 +95,76 @@ class BankReconciliationService {
   final BankReconciliationMatcher _matcher;
   final BankReconciliationAdvisor _advisor;
   final BankReconciliationRpc _rpc;
+  final BankAiGenerate? _aiGenerate;
+
+  /// The model the AI analysis asks: the same one the rest of the ERP uses
+  /// for reading with judgement, through the tenant's Gemini proxy.
+  static const aiModel = 'gemini-2.5-flash';
+
+  /// Reads the movements nothing explains and proposes, per movement, what
+  /// it probably is, what may be missing and the question that would settle
+  /// it. Proposals are verified before they reach the review; nothing is
+  /// applied. Batches arrive through [onBatch] as they are judged.
+  Future<Map<String, BankAiAnalysis>> analyzeWithAi({
+    required BankReconciliationPreparedDraft draft,
+    required BankReconciliationWorkspaceOptions? options,
+    Map<String, String> answers = const <String, String>{},
+    Set<String>? rowIds,
+    BankAiBatchCallback? onBatch,
+  }) async {
+    final analyst = BankReconciliationAiAnalyst(
+      generate: _aiGenerate ?? _geminiGenerate,
+    );
+    try {
+      return await analyst.analyze(
+        draft: draft,
+        options: options,
+        answers: answers,
+        rowIds: rowIds,
+        onBatch: onBatch,
+      );
+    } catch (error) {
+      debugPrint('BankReconciliationService AI analysis: $error');
+      final text = error.toString();
+      throw BankReconciliationServiceException(
+        text.contains('429') || text.contains('RESOURCE_EXHAUSTED')
+            ? 'La IA está al límite de consultas por minuto. No se cambió '
+                'nada: intenta de nuevo en un minuto.'
+            : 'El análisis con IA no respondió. No se cambió nada: puedes '
+                'intentar de nuevo.',
+      );
+    }
+  }
+
+  static Future<String> _geminiGenerate({
+    required String system,
+    required String prompt,
+  }) async {
+    final result = await GeminiProxyService().generateContent(
+      model: aiModel,
+      systemInstruction: <String, dynamic>{
+        'parts': <Map<String, dynamic>>[
+          <String, dynamic>{'text': system},
+        ],
+      },
+      contents: <Map<String, dynamic>>[
+        <String, dynamic>{
+          'role': 'user',
+          'parts': <Map<String, dynamic>>[
+            <String, dynamic>{'text': prompt},
+          ],
+        },
+      ],
+      // A bounded thought keeps one batch far below the proxy's 150 s.
+      generationConfig: const <String, dynamic>{
+        'responseMimeType': 'application/json',
+        'temperature': 0.2,
+        'thinkingConfig': <String, dynamic>{'thinkingBudget': 2048},
+      },
+    );
+    if (result.text.trim().isEmpty) throw StateError('Empty AI response');
+    return result.text;
+  }
 
   /// Every direct table read is scoped to the operator's tenant explicitly,
   /// not only by row-level security.
@@ -373,6 +448,18 @@ class BankReconciliationService {
       context: context,
       options: options,
     );
+    // Several operations one transfer to somebody else settled; not where a
+    // salary or a known booking already explains the movement.
+    final thirdParty = const BankThirdPartyFinder().find(
+      movements: open,
+      proposals: match.proposals,
+      candidates: context.candidates,
+      skipSourceRowIds: <String>{
+        for (final entry in suggestions.entries)
+          if (entry.value.confidence == BankReconciliationConfidence.high)
+            entry.key,
+      },
+    );
     final first = statements.first;
     return BankReconciliationPreparedDraft(
       fileSha256: first.extraction.fileSha256,
@@ -386,8 +473,11 @@ class BankReconciliationService {
         for (final entry in entries)
           BankReconciliationRowDraft(
             movement: entry.$1,
-            proposals: match.proposals[entry.$1.sourceRowId] ??
-                const <BankReconciliationProposal>[],
+            proposals: <BankReconciliationProposal>[
+              ...?match.proposals[entry.$1.sourceRowId],
+              if (thirdParty[entry.$1.sourceRowId] != null)
+                thirdParty[entry.$1.sourceRowId]!,
+            ],
             suggestion: suggestions[entry.$1.sourceRowId],
             sourceFileSha256: multiple ? entry.$2 : null,
             settled: settled[entry.$1.sourceRowId],
@@ -414,6 +504,7 @@ class BankReconciliationService {
                 .length,
           ),
       ],
+      context: context,
       insights: <BankReconciliationInsight>[
         ..._settledInsights(settled.values),
         ...match.insights,
@@ -1198,6 +1289,7 @@ class BankReconciliationService {
         BankReconciliationMatchKind.processorEstimate => 'processor_estimate',
         BankReconciliationMatchKind.transbankEstimate => 'transbank_estimate',
         BankReconciliationMatchKind.manual => 'manual',
+        BankReconciliationMatchKind.thirdParty => 'manual',
       };
 
   String _providerCode(BankSettlementProvider provider) => switch (provider) {

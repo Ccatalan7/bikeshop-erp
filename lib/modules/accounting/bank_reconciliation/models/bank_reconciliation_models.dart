@@ -23,6 +23,10 @@ enum BankReconciliationMatchKind {
   processorEstimate,
   transbankEstimate,
   manual,
+
+  /// Several ERP operations one transfer to or from somebody else settled
+  /// (a relative who paid two salaries and was repaid). Stored as manual.
+  thirdParty,
 }
 
 enum BankReconciliationConfidence { low, medium, high }
@@ -267,6 +271,12 @@ class BankStatementMovement {
   final String? fileRowId;
 
   String get persistedRowId => fileRowId ?? sourceRowId;
+
+  /// Transbank's deposit of earlier card sales, as Banco de Chile prints it.
+  bool get isTransbankDeposit =>
+      normalizedDescription.contains('transbank') ||
+      normalizedDescription.contains('abonos debito y credito') ||
+      normalizedDescription.contains('abono debito credito');
 
   BankStatementMovement withSourceRowId(String value) => BankStatementMovement(
         sourceRowId: value,
@@ -543,6 +553,7 @@ class BankReconciliationRowDraft {
     this.suggestion,
     this.sourceFileSha256,
     this.settled,
+    this.aiAnalysis,
   })  : proposals = List.unmodifiable(proposals),
         selectedProposalId = selectedProposalId ??
             (selectDefault
@@ -586,6 +597,21 @@ class BankReconciliationRowDraft {
 
   bool get isSettled => settled != null;
 
+  /// A card processor's deposit: the settlement calibration estimates its
+  /// sales, and only the processor's deposit report says which sales it
+  /// paid. The AI analysis has no better evidence than that estimate.
+  bool get isCardDeposit =>
+      movement.direction == BankMovementDirection.credit &&
+      (movement.isTransbankDeposit ||
+          proposals.any((proposal) =>
+              proposal.matchKind ==
+                  BankReconciliationMatchKind.processorEstimate ||
+              proposal.matchKind ==
+                  BankReconciliationMatchKind.transbankEstimate));
+
+  /// What the AI analysis read in this movement, when the operator asked.
+  final BankAiAnalysis? aiAnalysis;
+
   BankReconciliationResolutionDraft get effectiveResolution =>
       resolution ??
       BankReconciliationResolutionDraft(
@@ -612,6 +638,7 @@ class BankReconciliationRowDraft {
     BankReconciliationDisposition? disposition,
     BankReconciliationResolutionDraft? resolution,
     List<BankReconciliationProposal>? proposals,
+    BankAiAnalysis? aiAnalysis,
   }) {
     return BankReconciliationRowDraft(
       movement: movement,
@@ -624,6 +651,7 @@ class BankReconciliationRowDraft {
       suggestion: suggestion,
       sourceFileSha256: sourceFileSha256,
       settled: settled,
+      aiAnalysis: aiAnalysis ?? this.aiAnalysis,
     );
   }
 
@@ -762,6 +790,42 @@ class BankPriorSplitPart {
   final bool isExpense;
 }
 
+/// What the AI analysis read in a movement nothing else explained: what it
+/// probably is, what may be missing in the ERP, the question that would
+/// settle it, and a proposal the code verified (operations that exist and add
+/// up, accounts that exist). Never applied on its own.
+/// What one batch of movements came back with from the AI analysis, as soon
+/// as it is judged.
+typedef BankAiBatchCallback = void Function(
+  Map<String, BankAiAnalysis> analyses,
+);
+
+class BankAiAnalysis {
+  const BankAiAnalysis({
+    required this.explanation,
+    this.question,
+    this.missing,
+    this.proposal,
+    this.resolution,
+    this.answer,
+  });
+
+  final String explanation;
+  final String? question;
+  final String? missing;
+
+  /// ERP operations that explain the movement, as a manual choice.
+  final BankReconciliationProposal? proposal;
+
+  /// An expense, a classification or a split for the movement.
+  final BankReconciliationResolutionDraft? resolution;
+
+  /// The operator's reply this analysis already took into account.
+  final String? answer;
+
+  bool get hasProposal => proposal != null || resolution != null;
+}
+
 /// A movement a review already settled.
 class BankSettledMovement {
   const BankSettledMovement({
@@ -823,6 +887,7 @@ class BankReconciliationPreparedDraft {
     List<BankStatementSource>? sources,
     List<BankReconciliationInsight> insights =
         const <BankReconciliationInsight>[],
+    this.context,
   })  : rows = List.unmodifiable(rows),
         candidateCatalog = List.unmodifiable(candidateCatalog),
         extractionWarnings = List.unmodifiable(extractionWarnings),
@@ -852,6 +917,10 @@ class BankReconciliationPreparedDraft {
   final List<BankStatementSource> sources;
   final List<BankReconciliationInsight> insights;
 
+  /// What the ERP knew when the review was prepared; the AI analysis reads
+  /// it. Never persisted.
+  final BankReconciliationContext? context;
+
   int get movementCount => rows.length;
   int get proposedCount => rows.where((row) => row.proposals.isNotEmpty).length;
   int get selectedCount =>
@@ -863,6 +932,18 @@ class BankReconciliationPreparedDraft {
   int get openCount => movementCount - settledCount;
   int get pendingCount => openCount - resolvedCount;
 
+  /// Open movements the AI analysis has not read yet. Card deposits are
+  /// left out (see [BankReconciliationRowDraft.isCardDeposit]); one can
+  /// still be asked about alone.
+  List<BankReconciliationRowDraft> get rowsAwaitingAiAnalysis => rows
+      .where((row) =>
+          !row.isSettled &&
+          !row.isResolved &&
+          !row.isCardDeposit &&
+          row.aiAnalysis == null &&
+          row.movement.amountClp != null)
+      .toList(growable: false);
+
   /// Rows whose suggestion can be accepted without another decision.
   List<BankReconciliationRowDraft> get acceptableSuggestionRows => rows
       .where((row) =>
@@ -871,6 +952,38 @@ class BankReconciliationPreparedDraft {
           row.suggestion?.resolution != null &&
           row.suggestion!.confidence == BankReconciliationConfidence.high)
       .toList(growable: false);
+
+  /// Operations the ERP records as money through this bank account, dated
+  /// inside the statements, that no movement explains: a test purchase
+  /// «paid» by transfer, a sale registered as a transfer that never arrived,
+  /// salaries a relative paid. Card sales are left out: the acquirer pays
+  /// them later and in groups. The last [bookingLagDays] are left out too,
+  /// because the bank may book them after the statement ends.
+  List<BankReconciliationCandidate> unexplainedErpOperations({
+    int bookingLagDays = 3,
+  }) {
+    final dates = rows
+        .map((row) => row.movement.bookingDate)
+        .whereType<BankCivilDate>()
+        .toList()
+      ..sort();
+    if (dates.isEmpty) return const <BankReconciliationCandidate>[];
+    final until = dates.last.addDays(-bookingLagDays);
+    final explained = <String>{
+      for (final row in rows)
+        for (final allocation in row.selectedProposal?.allocations ??
+            const <BankReconciliationAllocationDraft>[])
+          allocation.candidate.identity,
+    };
+    return candidateCatalog
+        .where((candidate) =>
+            candidate.provider == BankSettlementProvider.none &&
+            candidate.occurredOn.compareTo(dates.first) >= 0 &&
+            candidate.occurredOn.compareTo(until) <= 0 &&
+            !explained.contains(candidate.identity))
+        .toList(growable: false)
+      ..sort((left, right) => left.occurredOn.compareTo(right.occurredOn));
+  }
 
   Map<String, BankReconciliationRowDraft> get rowsBySourceId =>
       UnmodifiableMapView(<String, BankReconciliationRowDraft>{
@@ -903,6 +1016,7 @@ class BankReconciliationPreparedDraft {
       extractionWarnings: extractionWarnings,
       sources: sources,
       insights: insights,
+      context: context,
     );
   }
 
@@ -922,6 +1036,7 @@ class BankReconciliationPreparedDraft {
       candidateCatalog: candidateCatalog,
       extractionWarnings: extractionWarnings,
       sources: <BankStatementSource>[source],
+      context: context,
     );
   }
 }

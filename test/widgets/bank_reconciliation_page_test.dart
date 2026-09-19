@@ -473,6 +473,112 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('the AI proposes, the owner uses it or answers its question',
+      (tester) async {
+    final harness = _Harness();
+    addTearDown(harness.dispose);
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final draft = _repaidDraft();
+    final salaries = draft.candidateCatalog.take(2).toList();
+    final calls = <(Map<String, String>, Set<String>?)>[];
+    harness.analyze = ({
+      required draft,
+      required options,
+      Map<String, String> answers = const {},
+      Set<String>? rowIds,
+      BankAiBatchCallback? onBatch,
+    }) async {
+      calls.add((Map.of(answers), rowIds));
+      if (rowIds == null) {
+        return {
+          'mother': BankAiAnalysis(
+            explanation: 'Tu mamá pagó los sueldos de la semana 29.',
+            question: '¿Tu mamá les pagó a Vicente y Lucas?',
+            proposal: BankReconciliationProposal.manual(
+              sourceRowId: 'mother',
+              movementAmountClp: 133000,
+              candidates: salaries,
+            ),
+          ),
+          'other': const BankAiAnalysis(
+            explanation: 'Una transferencia chica sin nada que la explique.',
+            question: '¿Qué fueron estos \$5.000?',
+          ),
+        };
+      }
+      return {
+        'other': BankAiAnalysis(
+          explanation: 'Un reembolso de un repuesto.',
+          answer: answers['other'],
+          resolution: const BankReconciliationResolutionDraft(
+            action: BankReconciliationActionKind.createExpense,
+            accountId: 'expense-account',
+            paymentMethodId: 'bank-method',
+            description: 'Reembolso repuesto',
+          ),
+        ),
+      };
+    };
+
+    await tester.pumpWidget(harness.app(initialDraft: draft));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('bank-reconciliation-analyze-ai')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(calls.single.$2, isNull);
+    expect(find.text('IA propone'), findsOneWidget);
+    expect(find.text('IA pregunta'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('bank-reconciliation-resolve-mother')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+        find.text('Tu mamá pagó los sueldos de la semana 29.'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey('bank-reconciliation-ai-use-mother')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.text('1 de 2 movimientos resueltos · 1 quedan pendientes · '
+          '1 ya conciliados'),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('bank-reconciliation-resolve-other')),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('bank-reconciliation-ai-answer-other')),
+      'Le devolví un repuesto que compró',
+    );
+    await tester.pump();
+    await tester.tap(
+      find.byKey(const ValueKey('bank-reconciliation-ai-reply-other')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(calls.last.$2, {'other'});
+    expect(calls.last.$1, {'other': 'Le devolví un repuesto que compró'});
+    await tester.tap(
+      find.byKey(const ValueKey('bank-reconciliation-ai-use-other')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Gasto listo'), findsOneWidget);
+    expect(
+      find.text('2 de 2 movimientos resueltos · 0 quedan pendientes · '
+          '1 ya conciliados'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('a movement settled before is shown, not decided again',
       (tester) async {
     final harness = _Harness();
@@ -685,6 +791,7 @@ class _Harness {
   late final Workspace workspace;
   int createCalls = 0;
   int applyCalls = 0;
+  BankAiAnalyzeAction? analyze;
 
   Widget app({BankReconciliationPreparedDraft? initialDraft}) {
     return MultiProvider(
@@ -748,6 +855,7 @@ class _Harness {
                 ),
               ],
             ),
+            analyzeWithAi: analyze,
             prepare: ({
               required files,
               required erpAccountId,

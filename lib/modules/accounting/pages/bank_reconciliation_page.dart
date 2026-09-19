@@ -21,6 +21,16 @@ typedef BankStatementPrepareAction = Future<BankReconciliationPreparedDraft>
   required String erpAccountId,
 });
 
+/// Reads the movements nothing explains with the model (see
+/// [BankReconciliationService.analyzeWithAi]).
+typedef BankAiAnalyzeAction = Future<Map<String, BankAiAnalysis>> Function({
+  required BankReconciliationPreparedDraft draft,
+  required BankReconciliationWorkspaceOptions? options,
+  Map<String, String> answers,
+  Set<String>? rowIds,
+  BankAiBatchCallback? onBatch,
+});
+
 class BankReconciliationActions {
   const BankReconciliationActions({
     required this.loadBankAccounts,
@@ -28,7 +38,11 @@ class BankReconciliationActions {
     required this.prepare,
     required this.createImport,
     required this.apply,
+    this.analyzeWithAi,
   });
+
+  /// Absent where no model is available: the review works without it.
+  final BankAiAnalyzeAction? analyzeWithAi;
 
   final Future<List<BankReconciliationAccountOption>> Function()
       loadBankAccounts;
@@ -48,7 +62,15 @@ class BankReconciliationActions {
   }) apply;
 }
 
-enum _MovementFilter { all, open, proposed, suggested, processor, unmatched }
+enum _MovementFilter {
+  all,
+  open,
+  ai,
+  proposed,
+  suggested,
+  processor,
+  unmatched
+}
 
 bool _isProcessorEstimate(BankReconciliationMatchKind kind) =>
     kind == BankReconciliationMatchKind.processorEstimate ||
@@ -81,6 +103,13 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
   bool _loadingWorkspaceOptions = false;
   bool _busy = false;
   String? _error;
+
+  /// The AI analysis in flight: the whole review, or one answered movement.
+  bool _analyzing = false;
+  String? _analyzingRowId;
+  int _aiAnalyzed = 0;
+  int _aiRequested = 0;
+  final Map<String, String> _aiAnswers = {};
 
   // One import per statement file, keyed by its sha: a retry after a partial
   // failure replays the same operations instead of duplicating them.
@@ -122,6 +151,7 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
       ),
       createImport: service.createImport,
       apply: service.apply,
+      analyzeWithAi: service.analyzeWithAi,
     );
   }
 
@@ -296,6 +326,105 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
       for (final row in draft.acceptableSuggestionRows)
         _withResolution(row, row.suggestion!.resolution!),
     ]);
+  }
+
+  Future<void> _analyzeWithAi({String? sourceRowId, String? answer}) async {
+    final draft = _draft;
+    final analyze = _actions.analyzeWithAi;
+    if (draft == null ||
+        analyze == null ||
+        _analyzing ||
+        _busy ||
+        _applyReceipt != null) {
+      return;
+    }
+    if (sourceRowId != null && answer != null) {
+      _aiAnswers[sourceRowId] = answer.trim();
+    }
+    final requested = sourceRowId == null
+        ? <String>{
+            for (final row in draft.rowsAwaitingAiAnalysis)
+              row.movement.sourceRowId,
+          }
+        : <String>{sourceRowId};
+    if (requested.isEmpty) return;
+    setState(() {
+      _analyzing = true;
+      _analyzingRowId = sourceRowId;
+      _aiAnalyzed = 0;
+      _aiRequested = requested.length;
+      _error = null;
+    });
+    // Each batch shows up as soon as it is judged; the operator keeps
+    // working meanwhile.
+    void show(Map<String, BankAiAnalysis> analyses) {
+      if (!mounted) return;
+      final current = _draft;
+      if (current == null) return;
+      _replaceRows(<BankReconciliationRowDraft>[
+        for (final entry in analyses.entries)
+          if (current.rowsBySourceId[entry.key] case final row?)
+            row.copyWith(aiAnalysis: entry.value),
+      ]);
+      setState(() => _aiAnalyzed = requested
+          .where((id) => _draft?.rowsBySourceId[id]?.aiAnalysis != null)
+          .length);
+    }
+
+    try {
+      final analyses = await analyze(
+        draft: draft,
+        options: _workspaceOptions,
+        answers: Map.of(_aiAnswers),
+        rowIds: sourceRowId == null ? null : <String>{sourceRowId},
+        onBatch: show,
+      );
+      show(analyses);
+      if (!mounted) return;
+      if (sourceRowId == null) {
+        final unread = _aiRequested - _aiAnalyzed;
+        if (_aiAnalyzed == 0) {
+          setState(() => _error = 'La IA no encontró nada que decir sobre '
+              'los movimientos pendientes.');
+        } else if (unread > 0) {
+          setState(() => _error = unread == 1
+              ? 'La IA no alcanzó a responder sobre 1 movimiento. Puedes '
+                  'analizarlo de nuevo.'
+              : 'La IA no alcanzó a responder sobre $unread movimientos. '
+                  'Puedes analizarlos de nuevo.');
+        }
+      }
+    } on BankReconciliationServiceException catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.message);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _error = 'El análisis con IA no respondió. No se '
+          'cambió nada: puedes intentar de nuevo.');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _analyzing = false;
+          _analyzingRowId = null;
+        });
+      }
+    }
+  }
+
+  /// Takes the AI's proposal as the operator's decision, still editable.
+  void _useAiProposal(String sourceRowId) {
+    final row = _draft?.rowsBySourceId[sourceRowId];
+    final analysis = row?.aiAnalysis;
+    if (row == null || analysis == null) return;
+    final proposal = analysis.proposal;
+    if (proposal != null) {
+      _setManualChoice(row, <BankReconciliationCandidate>[
+        for (final allocation in proposal.allocations) allocation.candidate,
+      ]);
+      return;
+    }
+    final resolution = analysis.resolution;
+    if (resolution != null) _replaceRow(_withResolution(row, resolution));
   }
 
   void _setAction(
@@ -586,6 +715,7 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
       return switch (_filter) {
         _MovementFilter.all => true,
         _MovementFilter.open => !row.isResolved,
+        _MovementFilter.ai => row.aiAnalysis != null,
         _MovementFilter.proposed => row.proposals.isNotEmpty,
         _MovementFilter.suggested =>
           row.proposals.isEmpty && row.suggestion != null,
@@ -686,6 +816,11 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
           enabled: !_busy && _applyReceipt == null,
           onFilterChanged: (value) => setState(() => _filter = value),
           onApplySuggestions: _applySafeSuggestions,
+          analyzing: _analyzing && _analyzingRowId == null,
+          analyzed: _aiAnalyzed,
+          requested: _aiRequested,
+          onAnalyze:
+              _actions.analyzeWithAi == null ? null : () => _analyzeWithAi(),
         ),
         Expanded(
           child: LayoutBuilder(
@@ -705,6 +840,10 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
                       body: draft.extractionWarnings.join(' '),
                       tone: VbNoticeTone.warning,
                       bodyMaxLines: 3,
+                    ),
+                  if (_applyReceipt == null)
+                    _UnexplainedErpNotice(
+                      operations: draft.unexplainedErpOperations(),
                     ),
                   if (_applyReceipt == null)
                     for (final insight in draft.insights)
@@ -758,6 +897,21 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
                   ),
                   onApplySuggestion: () =>
                       _applySuggestion(selected.movement.sourceRowId),
+                  aiBusy: _analyzing &&
+                      _analyzingRowId == selected.movement.sourceRowId,
+                  onUseAi: () => _useAiProposal(selected.movement.sourceRowId),
+                  aiRunning: _analyzing,
+                  onAnalyzeAi: _actions.analyzeWithAi == null
+                      ? null
+                      : () => _analyzeWithAi(
+                            sourceRowId: selected.movement.sourceRowId,
+                          ),
+                  onAnswerAi: _actions.analyzeWithAi == null
+                      ? null
+                      : (answer) => _analyzeWithAi(
+                            sourceRowId: selected.movement.sourceRowId,
+                            answer: answer,
+                          ),
                 );
               }
               return Row(
@@ -807,6 +961,25 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
                             onApplySuggestion: () => _applySuggestion(
                               selected.movement.sourceRowId,
                             ),
+                            aiBusy: _analyzing &&
+                                _analyzingRowId ==
+                                    selected.movement.sourceRowId,
+                            onUseAi: () =>
+                                _useAiProposal(selected.movement.sourceRowId),
+                            aiRunning: _analyzing,
+                            onAnalyzeAi: _actions.analyzeWithAi == null
+                                ? null
+                                : () => _analyzeWithAi(
+                                      sourceRowId:
+                                          selected.movement.sourceRowId,
+                                    ),
+                            onAnswerAi: _actions.analyzeWithAi == null
+                                ? null
+                                : (answer) => _analyzeWithAi(
+                                      sourceRowId:
+                                          selected.movement.sourceRowId,
+                                      answer: answer,
+                                    ),
                           ),
                   ),
                 ],
@@ -848,6 +1021,175 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
     return '${effects.join(' · ')}. Todo quedó aplicado en una sola operación.';
   }
 }
+
+/// What the AI read in one movement, what it proposes, and a place to
+/// answer its question: the answer goes back to the model for this movement.
+class _AiAnalysisPanel extends StatefulWidget {
+  const _AiAnalysisPanel({
+    super.key,
+    required this.analysis,
+    required this.movement,
+    required this.options,
+    required this.enabled,
+    required this.busy,
+    required this.onUse,
+    required this.onAnswer,
+  });
+
+  final BankAiAnalysis analysis;
+  final BankStatementMovement movement;
+  final BankReconciliationWorkspaceOptions? options;
+  final bool enabled;
+  final bool busy;
+  final VoidCallback? onUse;
+  final ValueChanged<String>? onAnswer;
+
+  @override
+  State<_AiAnalysisPanel> createState() => _AiAnalysisPanelState();
+}
+
+class _AiAnalysisPanelState extends State<_AiAnalysisPanel> {
+  final _answer = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _answer.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _answer.dispose();
+    super.dispose();
+  }
+
+  String? _proposalText() {
+    final analysis = widget.analysis;
+    final proposal = analysis.proposal;
+    if (proposal != null) {
+      return 'Vincular con ${proposal.allocations.map((item) => '${item.candidate.label} (${_money(item.candidate.amountClp)})').join(' + ')}';
+    }
+    final resolution = analysis.resolution;
+    if (resolution == null) return null;
+    final account = widget.options?.account(resolution.accountId)?.label;
+    return switch (resolution.action) {
+      BankReconciliationActionKind.createExpense =>
+        'Registrar un gasto en ${account ?? 'la cuenta propuesta'}: '
+            '${resolution.description ?? ''}',
+      BankReconciliationActionKind.classifyAccount =>
+        'Clasificar en ${account ?? 'la cuenta propuesta'}: '
+            '${resolution.description ?? ''}',
+      BankReconciliationActionKind.split =>
+        'Dividir: ${resolution.splitParts.map((part) => '${part.description} ${_money(part.amountClp)}').join(' + ')}',
+      _ => null,
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final analysis = widget.analysis;
+    final id = widget.movement.sourceRowId;
+    final proposal = _proposalText();
+    final canAnswer = widget.onAnswer != null;
+    return Column(
+      key: ValueKey('bank-reconciliation-ai-panel-$id'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('Análisis con IA', style: theme.textTheme.titleSmall),
+        const SizedBox(height: 8),
+        VbNotice(
+          title: analysis.explanation,
+          body: <String>[
+            if (analysis.missing != null) 'Podría faltar: ${analysis.missing}',
+            if (proposal != null) 'Propone: $proposal',
+            if (analysis.answer != null) 'Tu respuesta: ${analysis.answer}',
+          ].join('\n'),
+          tone: VbNoticeTone.info,
+          action: analysis.hasProposal && widget.onUse != null
+              ? FilledButton.tonal(
+                  key: ValueKey('bank-reconciliation-ai-use-$id'),
+                  onPressed: widget.enabled ? widget.onUse : null,
+                  child: const Text('Usar propuesta'),
+                )
+              : null,
+        ),
+        if (analysis.question != null) ...[
+          const SizedBox(height: 12),
+          Text(analysis.question!, style: theme.textTheme.bodyMedium),
+        ],
+        if (canAnswer) ...[
+          const SizedBox(height: 8),
+          TextField(
+            key: ValueKey('bank-reconciliation-ai-answer-$id'),
+            controller: _answer,
+            enabled: widget.enabled && !widget.busy,
+            minLines: 1,
+            maxLines: 3,
+            decoration: const InputDecoration(
+              labelText: 'Tu respuesta',
+              hintText: 'Cuéntale qué pasó con este movimiento…',
+            ),
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: OutlinedButton.icon(
+              key: ValueKey('bank-reconciliation-ai-reply-$id'),
+              onPressed: widget.enabled &&
+                      !widget.busy &&
+                      _answer.text.trim().isNotEmpty
+                  ? () => widget.onAnswer!(_answer.text)
+                  : null,
+              icon: const Icon(Icons.send_outlined),
+              label: Text(widget.busy ? 'Analizando…' : 'Responder'),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// What the ERP says went through the bank and the statements do not show.
+class _UnexplainedErpNotice extends StatelessWidget {
+  const _UnexplainedErpNotice({required this.operations});
+
+  static const _shown = 8;
+
+  final List<BankReconciliationCandidate> operations;
+
+  @override
+  Widget build(BuildContext context) {
+    if (operations.isEmpty) return const SizedBox.shrink();
+    final lines = <String>[
+      for (final operation in operations.take(_shown))
+        '${_dayMonth(operation.occurredOn)} · ${operation.label} · '
+            '${_money(operation.amountClp)}'
+            '${_who(operation).isEmpty ? '' : ' · ${_who(operation)}'}',
+      if (operations.length > _shown) 'y ${operations.length - _shown} más',
+    ];
+    return VbNotice(
+      key: const ValueKey('bank-reconciliation-unexplained-erp'),
+      title: operations.length == 1
+          ? '1 operación del ERP no aparece en la cartola'
+          : '${operations.length} operaciones del ERP no aparecen en la cartola',
+      body: 'El ERP las registra como pagadas o cobradas por esta cuenta y '
+          'ningún movimiento las explica. Puede ser un pago hecho por otra '
+          'persona, un medio de pago mal elegido o algo que no ocurrió.\n'
+          '${lines.join('\n')}',
+      tone: VbNoticeTone.warning,
+      bodyMaxLines: lines.length + 3,
+    );
+  }
+}
+
+/// The person an operation names: the registered name over a generic
+/// «Proveedor».
+String _who(BankReconciliationCandidate operation) =>
+    operation.counterpartyNames.isNotEmpty
+        ? operation.counterpartyNames.first
+        : operation.counterparty ?? '';
 
 String _dayMonth(BankCivilDate date) =>
     '${date.day.toString().padLeft(2, '0')}/'
@@ -1034,6 +1376,10 @@ class _ReviewToolbar extends StatelessWidget {
     required this.enabled,
     required this.onFilterChanged,
     required this.onApplySuggestions,
+    this.analyzing = false,
+    this.analyzed = 0,
+    this.requested = 0,
+    this.onAnalyze,
   });
 
   final BankReconciliationPreparedDraft draft;
@@ -1041,6 +1387,12 @@ class _ReviewToolbar extends StatelessWidget {
   final bool enabled;
   final ValueChanged<_MovementFilter> onFilterChanged;
   final VoidCallback onApplySuggestions;
+  final bool analyzing;
+
+  /// Movements of the running analysis already answered, of [requested].
+  final int analyzed;
+  final int requested;
+  final VoidCallback? onAnalyze;
 
   @override
   Widget build(BuildContext context) {
@@ -1079,6 +1431,21 @@ class _ReviewToolbar extends StatelessWidget {
                           'sugerencias seguras',
                 ),
               ),
+            if (onAnalyze != null &&
+                (analyzing || draft.rowsAwaitingAiAnalysis.isNotEmpty))
+              OutlinedButton.icon(
+                key: const ValueKey('bank-reconciliation-analyze-ai'),
+                onPressed: enabled && !analyzing ? onAnalyze : null,
+                icon: const Icon(Icons.auto_awesome),
+                label: Text(
+                  analyzing
+                      ? 'Analizando con IA… $analyzed de $requested'
+                      : draft.rowsAwaitingAiAnalysis.length == 1
+                          ? 'Analizar 1 pendiente con IA'
+                          : 'Analizar ${draft.rowsAwaitingAiAnalysis.length} '
+                              'pendientes con IA',
+                ),
+              ),
           ],
         );
         final filterSelect = SizedBox(
@@ -1089,6 +1456,8 @@ class _ReviewToolbar extends StatelessWidget {
               VbShortSelectOption(value: _MovementFilter.all, label: 'Todos'),
               VbShortSelectOption(
                   value: _MovementFilter.open, label: 'Por resolver'),
+              VbShortSelectOption(
+                  value: _MovementFilter.ai, label: 'Con análisis IA'),
               VbShortSelectOption(
                   value: _MovementFilter.proposed, label: 'Con propuesta'),
               VbShortSelectOption(
@@ -1413,6 +1782,26 @@ class _ProposalSummary extends StatelessWidget {
         style: Theme.of(context).textTheme.bodySmall,
       );
     }
+    final ai = row.aiAnalysis;
+    if (value == null && ai != null && !row.isResolved) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          VbStatusBadge(
+            label: ai.hasProposal ? 'IA propone' : 'IA pregunta',
+            tone: VbStatusTone.info,
+            dense: true,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            ai.question ?? ai.explanation,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      );
+    }
     if (value == null && suggestion != null) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1545,11 +1934,28 @@ class _ResolutionPanel extends StatelessWidget {
     required this.onCandidateSelected,
     required this.onCandidateRemoved,
     required this.onApplySuggestion,
+    this.aiBusy = false,
+    this.aiRunning = false,
+    this.onUseAi,
+    this.onAnalyzeAi,
+    this.onAnswerAi,
   });
 
   final BankReconciliationRowDraft row;
   final BankReconciliationPreparedDraft draft;
   final BankReconciliationWorkspaceOptions? options;
+
+  /// The AI is reading this movement.
+  final bool aiBusy;
+
+  /// An analysis is running, of this movement or of the pending ones.
+  final bool aiRunning;
+  final VoidCallback? onUseAi;
+
+  /// Asks the AI about this movement alone: one it has not read, such as a
+  /// card deposit the bulk analysis leaves out.
+  final VoidCallback? onAnalyzeAi;
+  final ValueChanged<String>? onAnswerAi;
   final bool loadingOptions;
   final bool enabled;
   final bool compact;
@@ -1619,6 +2025,22 @@ class _ResolutionPanel extends StatelessWidget {
                 tone: VbNoticeTone.info,
               )
             else ...[
+              if (row.aiAnalysis != null) ...[
+                _AiAnalysisPanel(
+                  key: ValueKey(
+                    'bank-reconciliation-ai-${movement.sourceRowId}-'
+                    '${row.aiAnalysis!.answer ?? ''}',
+                  ),
+                  analysis: row.aiAnalysis!,
+                  movement: movement,
+                  options: options,
+                  enabled: enabled,
+                  busy: aiBusy,
+                  onUse: onUseAi,
+                  onAnswer: onAnswerAi,
+                ),
+                const SizedBox(height: 20),
+              ],
               if (row.suggestion != null && row.selectedProposal == null) ...[
                 _SuggestionPanel(
                   suggestion: row.suggestion!,
@@ -1627,6 +2049,24 @@ class _ResolutionPanel extends StatelessWidget {
                   onApply: onApplySuggestion,
                 ),
                 const SizedBox(height: 20),
+              ],
+              if (row.aiAnalysis == null &&
+                  !row.isResolved &&
+                  onAnalyzeAi != null) ...[
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    key: ValueKey(
+                      'bank-reconciliation-ai-ask-${movement.sourceRowId}',
+                    ),
+                    onPressed: enabled && !aiRunning ? onAnalyzeAi : null,
+                    icon: const Icon(Icons.auto_awesome),
+                    label: Text(
+                      aiBusy ? 'Analizando con IA…' : 'Analizar con IA',
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
               ],
               Text('¿Qué corresponde hacer?',
                   style: Theme.of(context).textTheme.titleSmall),

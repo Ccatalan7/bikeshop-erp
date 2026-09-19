@@ -271,6 +271,60 @@ The split is learned: the next transfer to the same person is proposed with
 the same parts — medium confidence, never among the safe suggestions — because
 the structure repeats and the amounts do not.
 
+## What somebody else paid, and what never reached the bank
+
+Two deterministic readings cover what the name on the statement cannot:
+
+- **Paid by somebody else.** The owner's mother paid Vicente $94.500 and Lucas
+  $38.500 of week 29, Nómina registered both on 12 August, and he repaid her
+  $133.000 on 7 July. `BankThirdPartyFinder` proposes a movement as the sum of
+  1–3 ERP operations nothing else explains, within 45 days, only when exactly
+  one combination adds up to the peso and the parts form a batch (one kind,
+  registered within 7 days; money coming in from one customer only). It is
+  never selected: a sum can coincide. On the owner's four 2026 statements it
+  proposes that one case and nothing else; before the batch rule it paired
+  three customers' sales weeks apart with a $20.000 deposit.
+- **ERP without bank.** «N operaciones del ERP no aparecen en la cartola» lists
+  what the ERP records as paid or collected through this account, dated inside
+  the statements (minus a 3-day booking lag), that no selected movement
+  explains: a test purchase «paid» by transfer, a sale registered as a
+  transfer that never arrived, salaries a relative paid. Card sales are left
+  out; the acquirer pays them later and in groups.
+
+## AI analysis
+
+«Analizar N pendientes con IA» reads the open movements the review could not
+explain the way the owner's accountant would: what each one probably is, what
+may be missing in the ERP, and the one question that would settle it. The
+operator may answer in the row («Responder»); the answer travels with that
+movement and the model proposes again with it as the truth. It never applies
+anything: «Usar propuesta» only fills the row's decision, still editable.
+
+**The model reads, the code judges.** `BankReconciliationAiAnalyst` sends
+movements, operations, accounts and suppliers with short ids (M1, O4, A3, S2)
+and keeps a proposal only if every id exists and the proposal fits: a link
+goes the same direction as the movement and adds up to it within $1.000
+(low confidence, never among the safe suggestions); an expense only for a
+debit on an expense account; a split whose whole parts add up exactly. What
+fails is dropped and the explanation and question remain. An id that slips
+into a text is replaced by what it names — the owner never sees «M3».
+
+It asks `gemini-2.5-flash` through `gemini-proxy` in JSON mode, 8 movements per
+question, 3 questions at a time, with a bounded thinking budget. Each batch
+shows up as soon as it is judged and an operation one batch linked is taken
+for the batches judged after it. The proxy is an edge function cut at 150 s:
+60 movements with 160 operations in one question returned 504 three times
+(7½ minutes) on 2026-09-19; in batches the owner's 49 open movements take
+about 30 s. A batch that fails leaves its movements unread and the rest
+stands.
+
+Card deposits are left out of the bulk analysis: without Transbank's deposit
+report the model has no evidence beyond the settlement estimate, and they
+were half of the owner's pending rows. The card-deposit finding says so, and
+«Analizar con IA» in a row's resolver asks about one movement alone, card
+deposit included. Rows already analysed are not sent again; the button counts
+only the ones still unread.
+
 ## Salaries Nómina owes
 
 A transfer to a worker that matches an owed payroll line (strong name, amount
