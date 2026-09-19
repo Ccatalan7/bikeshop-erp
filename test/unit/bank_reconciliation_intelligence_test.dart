@@ -393,6 +393,7 @@ void main() {
           status: status,
           reconciliationVersion: 7,
           payableFrom: payableFrom,
+          employeeId: 'braulio-id',
         );
 
     test('a salary Nómina still owes is paid here, through Nómina', () {
@@ -473,6 +474,76 @@ void main() {
       expect(friday.kind, BankSuggestionKind.payroll);
       expect(friday.resolution, isNull);
       expect(friday.followUp, contains('anticipo'));
+    });
+
+    group('advances', () {
+      // Braulio, week 34: $40.600 owed, $30.000 in cash during the week,
+      // $10.600 by transfer on the next Thursday.
+      BankPayrollExpectation week34() => BankPayrollExpectation(
+            voucherId: 'v36',
+            voucherNumber: 'NOM-00036',
+            periodLabel: 'Semana 34',
+            periodEnd: _d(8, 23),
+            payableFrom: _d(8, 22),
+            lineId: 'line-34',
+            employeeId: 'braulio-id',
+            employeeName: 'Braulio Muñoz',
+            names: const ['Braulio Muñoz'],
+            amountClp: 40600,
+            paymentMethod: 'transfer',
+          );
+      BankOpenAdvance cash(BankCivilDate paidOn) => BankOpenAdvance(
+            advanceId: 'advance-1',
+            employeeId: 'braulio-id',
+            availableClp: 30000,
+            paidOn: paidOn,
+            paymentMethodCode: 'cash',
+          );
+      BankReconciliationSuggestion transfer(
+        List<BankOpenAdvance> advances,
+      ) =>
+          suggest(
+              [
+                _movement(
+                    'braulio', _d(8, 27), BankMovementDirection.debit, 10600,
+                    counterparty: 'Braulio Munoz Internet'),
+              ],
+              BankReconciliationContext(
+                payrollLines: [week34()],
+                openAdvances: advances,
+              ))['braulio']!;
+
+      test('a registered advance is discounted and the transfer pays the rest',
+          () {
+        final suggestion = transfer([cash(_d(8, 20))]);
+
+        expect(suggestion.confidence, BankReconciliationConfidence.high);
+        final payroll = suggestion.resolution!.payroll!;
+        expect(payroll.amountClp, 10600);
+        expect(payroll.advances.single.advance.advanceId, 'advance-1');
+        expect(payroll.advances.single.amountClp, 30000);
+        expect(payroll.owedAfterClp, 0);
+        expect(suggestion.reasons.join(' '), contains('anticipo en efectivo'));
+      });
+
+      test('a forgotten advance is asked about, never assumed', () {
+        final suggestion = transfer(const []);
+
+        expect(suggestion.confidence, BankReconciliationConfidence.medium);
+        expect(suggestion.title, startsWith('Parte del sueldo'));
+        final payroll = suggestion.resolution!.payroll!;
+        expect(payroll.amountClp, 10600);
+        expect(payroll.advances, isEmpty);
+        expect(payroll.owedAfterClp, 30000);
+        expect(suggestion.followUp, contains('anticipo que no registraste'));
+      });
+
+      test('an advance paid after the week ends belongs to a later week', () {
+        final suggestion = transfer([cash(_d(8, 24))]);
+
+        expect(suggestion.resolution!.payroll!.advances, isEmpty);
+        expect(suggestion.confidence, BankReconciliationConfidence.medium);
+      });
     });
 
     test('a confirmed week is paid without confirming it again', () {

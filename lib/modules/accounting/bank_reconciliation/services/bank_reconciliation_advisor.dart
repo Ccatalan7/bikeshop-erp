@@ -31,6 +31,7 @@ class BankReconciliationAdvisor {
     result.addAll(_offsettingPairs(open));
     // One salary is paid by one transfer.
     final claimedPayrollLines = <String>{};
+    final advancesByLine = _assignAdvances(context);
     for (final movement in open) {
       if (result.containsKey(movement.sourceRowId)) continue;
       final suggestion = _suggestOne(
@@ -39,6 +40,7 @@ class BankReconciliationAdvisor {
         context: context,
         options: options,
         claimedPayrollLines: claimedPayrollLines,
+        advancesByLine: advancesByLine,
       );
       if (suggestion != null) result[movement.sourceRowId] = suggestion;
     }
@@ -147,6 +149,7 @@ class BankReconciliationAdvisor {
     required BankReconciliationContext context,
     required BankReconciliationWorkspaceOptions? options,
     required Set<String> claimedPayrollLines,
+    required Map<String, List<BankPayrollAdvanceUse>> advancesByLine,
   }) {
     final party = _party(movement);
     final amount = movement.amountClp!;
@@ -177,32 +180,51 @@ class BankReconciliationAdvisor {
       }
     }
 
-    // 2. A salary Nómina still owes.
+    // 2. A salary Nómina still owes, net of the advances it already paid.
     if (isDebit && !isCardCharge) {
-      final line = _payrollLine(
+      final match = _payrollMatch(
         party,
         amount,
         date,
         context.payrollLines
             .where((item) => !claimedPayrollLines.contains(item.lineId))
             .toList(growable: false),
+        advancesByLine,
       );
-      if (line != null) {
+      if (match != null) {
+        final line = match.line;
         claimedPayrollLines.add(line.lineId);
         // Money before the week's close is an advance for Nómina, never
         // this week's salary: offering it here would fail the whole apply.
         final beforeClose = !line.acceptsSalaryOn(date);
-        final payment =
-            beforeClose ? null : _payrollPayment(line, amount, options);
+        final payment = beforeClose
+            ? null
+            : _payrollPayment(line, amount, options, advances: match.advances);
+        final missing =
+            match.partial && payment != null ? payment.owedAfterClp : 0;
         return BankReconciliationSuggestion(
           kind: BankSuggestionKind.payroll,
-          confidence: BankReconciliationConfidence.high,
-          title: 'Sueldo de ${line.employeeName} · ${line.periodLabel}',
+          confidence: match.partial
+              ? BankReconciliationConfidence.medium
+              : BankReconciliationConfidence.high,
+          title: match.partial
+              ? 'Parte del sueldo de ${line.employeeName} · ${line.periodLabel}'
+              : 'Sueldo de ${line.employeeName} · ${line.periodLabel}',
           reasons: <String>[
             'Nómina ${line.voucherNumber} le debe ${_money(line.amountClp)} '
                 'y aún no registra el pago',
-            if (line.amountClp != amount)
+            for (final use in match.advances)
+              'Descuenta el anticipo ${use.advance.isCash ? 'en efectivo ' : ''}'
+                  'del ${_day(use.advance.paidOn)}: ${_money(use.amountClp)}',
+            if (match.advances.isNotEmpty && !match.partial)
+              'La transferencia paga el resto',
+            if (!match.partial &&
+                match.advances.isEmpty &&
+                line.amountClp != amount)
               'La transferencia redondea ${_money((amount - line.amountClp).abs())}',
+            if (missing > 0)
+              'Esta transferencia cubre ${_money(amount)}: faltan '
+                  '${_money(missing)}',
             if (beforeClose)
               'Se transfirió antes del cierre de la semana '
                   '(${_day(line.payableFrom ?? line.periodEnd)}): para Nómina '
@@ -223,10 +245,15 @@ class BankReconciliationAdvisor {
           followUp: beforeClose
               ? 'Regístralo como anticipo de ${line.employeeName} en Nómina; '
                   'al pagar la semana ${line.voucherNumber} se descuenta.'
-              : payment == null
-                  ? 'Págalo en Nómina (${line.voucherNumber}); la próxima '
-                      'conciliación lo asocia sola.'
-                  : null,
+              : missing > 0
+                  ? '¿Esos ${_money(missing)} fueron un anticipo que no '
+                      'registraste (en efectivo o por transferencia durante la '
+                      'semana)? Regístralo en Nómina y se descuenta del sueldo. '
+                      'Si todavía se le deben, quedan pendientes en Nómina.'
+                  : payment == null
+                      ? 'Págalo en Nómina (${line.voucherNumber}); la próxima '
+                          'conciliación lo asocia sola.'
+                      : null,
         );
       }
     }
@@ -455,8 +482,9 @@ class BankReconciliationAdvisor {
   BankPayrollPaymentDraft? _payrollPayment(
     BankPayrollExpectation line,
     int amount,
-    BankReconciliationWorkspaceOptions? options,
-  ) {
+    BankReconciliationWorkspaceOptions? options, {
+    List<BankPayrollAdvanceUse> advances = const <BankPayrollAdvanceUse>[],
+  }) {
     final transfers = options?.paymentMethods
             .where((method) => method.code.trim().toLowerCase() == 'transfer')
             .toList(growable: false) ??
@@ -465,7 +493,9 @@ class BankReconciliationAdvisor {
             .where((item) => item.paymentMethodId == line.paymentMethodId)
             .firstOrNull ??
         (transfers.length == 1 ? transfers.single : null);
-    final paid = amount < line.amountClp ? amount : line.amountClp;
+    final owedByBank = line.amountClp -
+        advances.fold<int>(0, (sum, item) => sum + item.amountClp);
+    final paid = amount < owedByBank ? amount : owedByBank;
     if (method == null || paid <= 0 || amount - paid > 1000) return null;
     return BankPayrollPaymentDraft(
       voucherId: line.voucherId,
@@ -477,21 +507,60 @@ class BankReconciliationAdvisor {
       amountClp: paid,
       paymentMethodId: method.paymentMethodId,
       confirmDraft: line.isDraft,
+      advances: advances,
     );
   }
 
-  BankPayrollExpectation? _payrollLine(
+  /// Open advances onto the weeks Nómina will discount them from: each
+  /// worker's oldest owed week whose end is on or after the advance, as
+  /// pay_payroll_voucher_v2 only takes an advance paid by the week's end.
+  Map<String, List<BankPayrollAdvanceUse>> _assignAdvances(
+    BankReconciliationContext context,
+  ) {
+    final result = <String, List<BankPayrollAdvanceUse>>{};
+    final room = <String, int>{
+      for (final line in context.payrollLines) line.lineId: line.amountClp,
+    };
+    final advances = [...context.openAdvances]
+      ..sort((left, right) => left.paidOn.compareTo(right.paidOn));
+    for (final advance in advances) {
+      final lines = context.payrollLines
+          .where((line) =>
+              line.employeeId == advance.employeeId &&
+              line.periodEnd.compareTo(advance.paidOn) >= 0)
+          .toList(growable: false)
+        ..sort((left, right) => left.periodEnd.compareTo(right.periodEnd));
+      var left = advance.availableClp;
+      for (final line in lines) {
+        if (left <= 0) break;
+        final free = room[line.lineId] ?? 0;
+        final take = left < free ? left : free;
+        if (take <= 0) continue;
+        result
+            .putIfAbsent(line.lineId, () => <BankPayrollAdvanceUse>[])
+            .add(BankPayrollAdvanceUse(advance: advance, amountClp: take));
+        room[line.lineId] = free - take;
+        left -= take;
+      }
+    }
+    return result;
+  }
+
+  /// The owed salary this transfer pays: exactly (net of the advances Nómina
+  /// will discount, or in full), or — oldest week first — only in part,
+  /// which usually means an advance nobody registered.
+  _SalaryMatch? _payrollMatch(
     String party,
     int amount,
     BankCivilDate date,
     List<BankPayrollExpectation> lines,
+    Map<String, List<BankPayrollAdvanceUse>> advancesByLine,
   ) {
-    BankPayrollExpectation? best;
-    var bestDistance = 1 << 30;
+    _SalaryMatch? best;
+    var bestScore = 1 << 30;
+    final rounding = amount ~/ 100;
     for (final line in lines) {
       if (line.paymentMethod == 'cash') continue;
-      final rounding = amount ~/ 100;
-      if ((line.amountClp - amount).abs() > rounding) continue;
       // Salaries go out on the Monday or Tuesday after the week, sometimes
       // weeks later; a transfer a few days before its end is recognised too,
       // to say it is an advance.
@@ -500,10 +569,26 @@ class BankReconciliationAdvisor {
       if (!BankCounterpartyIdentity.compare(party, line.names).isStrong) {
         continue;
       }
-      final score = (line.amountClp - amount).abs() * 10 + distance.abs();
-      if (score < bestDistance) {
-        best = line;
-        bestDistance = score;
+      final uses =
+          advancesByLine[line.lineId] ?? const <BankPayrollAdvanceUse>[];
+      final net = line.amountClp -
+          uses.fold<int>(0, (sum, item) => sum + item.amountClp);
+      _SalaryMatch? candidate;
+      var score = 0;
+      if (uses.isNotEmpty && (net - amount).abs() <= rounding) {
+        candidate = _SalaryMatch(line, uses, partial: false);
+        score = (net - amount).abs() * 10 + distance.abs();
+      } else if ((line.amountClp - amount).abs() <= rounding) {
+        candidate = _SalaryMatch(line, const [], partial: false);
+        score = (line.amountClp - amount).abs() * 10 + distance.abs();
+      } else if (amount < net - rounding && line.acceptsSalaryOn(date)) {
+        candidate = _SalaryMatch(line, uses, partial: true);
+        // Behind every exact match; among partials the oldest week first.
+        score = 100000 - distance;
+      }
+      if (candidate != null && score < bestScore) {
+        best = candidate;
+        bestScore = score;
       }
     }
     return best;
@@ -858,4 +943,14 @@ class _Merchant {
   /// Goods that belong in Compras rather than in a loose expense.
   final bool isPurchase;
   final bool isBankFee;
+}
+
+class _SalaryMatch {
+  const _SalaryMatch(this.line, this.advances, {required this.partial});
+
+  final BankPayrollExpectation line;
+  final List<BankPayrollAdvanceUse> advances;
+
+  /// The transfer pays less than the week owes after its advances.
+  final bool partial;
 }

@@ -2094,7 +2094,7 @@ class _PayrollPaymentSummary extends StatelessWidget {
         ? ''
         : ' el ${date.day.toString().padLeft(2, '0')}/'
             '${date.month.toString().padLeft(2, '0')}';
-    final owedAfter = payroll.expectedAmountClp - payroll.amountClp;
+    final owedAfter = payroll.owedAfterClp;
     return VbNotice(
       key: const ValueKey('bank-reconciliation-payroll-summary'),
       title: 'Se paga en Nómina al aplicar',
@@ -2102,6 +2102,11 @@ class _PayrollPaymentSummary extends StatelessWidget {
         '${payroll.employeeName} · ${payroll.voucherNumber} '
             '${payroll.periodLabel}: ${_money(payroll.amountClp)} desde esta '
             'cuenta$day.',
+        for (final use in payroll.advances)
+          'Descuenta el anticipo del '
+              '${use.advance.paidOn.day.toString().padLeft(2, '0')}/'
+              '${use.advance.paidOn.month.toString().padLeft(2, '0')}: '
+              '${_money(use.amountClp)}.',
         if (payroll.confirmDraft)
           'La semana está en borrador: se confirma antes de pagar.',
         if (owedAfter > 0) 'Nómina le seguirá debiendo ${_money(owedAfter)}.',

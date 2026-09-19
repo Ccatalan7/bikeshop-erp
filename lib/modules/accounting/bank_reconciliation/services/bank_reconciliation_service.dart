@@ -735,6 +735,14 @@ class BankReconciliationService {
             'amount': payroll.amountClp,
             'payment_method_id': payroll.paymentMethodId,
             'confirm_draft': payroll.confirmDraft,
+            if (payroll.advances.isNotEmpty)
+              'advances': <Map<String, dynamic>>[
+                for (final use in payroll.advances)
+                  <String, dynamic>{
+                    'advance_id': use.advance.advanceId,
+                    'amount': use.amountClp,
+                  },
+              ],
           };
           break;
       }
@@ -800,6 +808,10 @@ class BankReconciliationService {
         error.contains('Payroll access denied')) {
       return 'Tu usuario no puede pagar sueldos. No se guardó nada: pide '
           'acceso a Nómina o deja esas transferencias pendientes.';
+    }
+    if (error.contains('bank_reconciliation_payroll_advance_invalid')) {
+      return 'Un anticipo de esta revisión ya se aplicó o cambió en Nómina. '
+          'No se guardó nada: vuelve a subir las cartolas.';
     }
     if (error.contains('bank_reconciliation_payroll_method_invalid')) {
       return 'La cuenta no tiene un medio de pago «Transferencia» activo. '

@@ -811,6 +811,7 @@ class BankPayrollExpectation {
     this.status = 'draft',
     this.reconciliationVersion,
     this.payableFrom,
+    this.employeeId,
   }) : names = List.unmodifiable(names);
 
   final String voucherId;
@@ -834,6 +835,7 @@ class BankPayrollExpectation {
   /// close, Saturday for a Sunday close). Earlier money is an advance. An
   /// older catalog without it falls back to the period end.
   final BankCivilDate? payableFrom;
+  final String? employeeId;
 
   bool get isDraft => status == 'draft';
 
@@ -853,6 +855,7 @@ class BankPayrollPaymentDraft {
     required this.amountClp,
     required this.paymentMethodId,
     required this.confirmDraft,
+    this.advances = const <BankPayrollAdvanceUse>[],
   });
 
   final String voucherId;
@@ -871,6 +874,15 @@ class BankPayrollPaymentDraft {
 
   /// The week is a draft and paying it confirms it first.
   final bool confirmDraft;
+
+  /// Advances Nómina discounts from this salary in the same payment.
+  final List<BankPayrollAdvanceUse> advances;
+
+  int get advancesClp =>
+      advances.fold<int>(0, (sum, item) => sum + item.amountClp);
+
+  /// What Nómina still owes after this payment.
+  int get owedAfterClp => expectedAmountClp - amountClp - advancesClp;
 }
 
 enum BankOpenInvoiceKind { sale, purchase }
@@ -971,17 +983,52 @@ class BankReconciliationContext {
     List<BankOpenInvoice> openInvoices = const <BankOpenInvoice>[],
     List<BankCounterpartyProfile> parties = const <BankCounterpartyProfile>[],
     List<BankPriorDecision> decisions = const <BankPriorDecision>[],
+    List<BankOpenAdvance> openAdvances = const <BankOpenAdvance>[],
   })  : candidates = List.unmodifiable(candidates),
         payrollLines = List.unmodifiable(payrollLines),
         openInvoices = List.unmodifiable(openInvoices),
         parties = List.unmodifiable(parties),
-        decisions = List.unmodifiable(decisions);
+        decisions = List.unmodifiable(decisions),
+        openAdvances = List.unmodifiable(openAdvances);
 
   final List<BankReconciliationCandidate> candidates;
   final List<BankPayrollExpectation> payrollLines;
   final List<BankOpenInvoice> openInvoices;
   final List<BankCounterpartyProfile> parties;
   final List<BankPriorDecision> decisions;
+
+  /// Advances Nómina has not discounted from a salary yet.
+  final List<BankOpenAdvance> openAdvances;
+}
+
+/// An advance Nómina paid a worker and still has to discount.
+class BankOpenAdvance {
+  const BankOpenAdvance({
+    required this.advanceId,
+    required this.employeeId,
+    required this.availableClp,
+    required this.paidOn,
+    this.paymentMethodCode,
+  });
+
+  final String advanceId;
+  final String employeeId;
+  final int availableClp;
+  final BankCivilDate paidOn;
+  final String? paymentMethodCode;
+
+  bool get isCash => paymentMethodCode == 'cash';
+}
+
+/// Part of an advance a salary payment discounts.
+class BankPayrollAdvanceUse {
+  const BankPayrollAdvanceUse({
+    required this.advance,
+    required this.amountClp,
+  });
+
+  final BankOpenAdvance advance;
+  final int amountClp;
 }
 
 extension _FirstOrNull<T> on Iterable<T> {

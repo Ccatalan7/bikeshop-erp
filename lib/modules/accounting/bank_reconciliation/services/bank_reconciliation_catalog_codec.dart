@@ -33,6 +33,31 @@ class BankReconciliationCatalogCodec {
           .map(_decision)
           .whereType<BankPriorDecision>()
           .toList(growable: false),
+      openAdvances: _list(payload['open_advances'])
+          .map(_advance)
+          .whereType<BankOpenAdvance>()
+          .toList(growable: false),
+    );
+  }
+
+  BankOpenAdvance? _advance(Map<String, dynamic> json) {
+    final id = _text(json['advance_id']);
+    final employeeId = _text(json['employee_id']);
+    final available = _int(json['available']);
+    final paidOn = _date(json['paid_on']);
+    if (id == null ||
+        employeeId == null ||
+        available == null ||
+        available <= 0 ||
+        paidOn == null) {
+      return null;
+    }
+    return BankOpenAdvance(
+      advanceId: id,
+      employeeId: employeeId,
+      availableClp: available,
+      paidOn: paidOn,
+      paymentMethodCode: _text(json['payment_method_code']),
     );
   }
 
@@ -124,6 +149,7 @@ class BankReconciliationCatalogCodec {
       status: _text(json['status']) ?? 'draft',
       reconciliationVersion: _int(json['reconciliation_version']),
       payableFrom: _date(json['payable_from']),
+      employeeId: _text(json['employee_id']),
     );
   }
 

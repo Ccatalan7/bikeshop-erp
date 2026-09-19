@@ -203,10 +203,22 @@ void main() {
       periodLabel: 'Semana 35',
       lineId: 'bbbbbbbb-0000-4000-8000-000000000001',
       employeeName: 'Braulio Muñoz',
-      expectedAmountClp: 71400,
+      expectedAmountClp: 101400,
       amountClp: 71400,
       paymentMethodId: 'cccccccc-0000-4000-8000-000000000001',
       confirmDraft: true,
+      advances: <BankPayrollAdvanceUse>[
+        BankPayrollAdvanceUse(
+          advance: BankOpenAdvance(
+            advanceId: 'dddddddd-0000-4000-8000-000000000001',
+            employeeId: 'eeeeeeee-0000-4000-8000-000000000001',
+            availableClp: 30000,
+            paidOn: BankCivilDate(2026, 8, 20),
+            paymentMethodCode: 'cash',
+          ),
+          amountClp: 30000,
+        ),
+      ],
     );
     BankReconciliationRowDraft salaryRow(String id) =>
         BankReconciliationRowDraft(
@@ -260,10 +272,16 @@ void main() {
     expect(action['payroll'], <String, dynamic>{
       'voucher_id': payroll.voucherId,
       'voucher_line_id': payroll.lineId,
-      'expected_amount': 71400,
+      'expected_amount': 101400,
       'amount': 71400,
       'payment_method_id': payroll.paymentMethodId,
       'confirm_draft': true,
+      'advances': <Map<String, dynamic>>[
+        <String, dynamic>{
+          'advance_id': 'dddddddd-0000-4000-8000-000000000001',
+          'amount': 30000,
+        },
+      ],
     });
     expect(receipt.payrollPaymentCount, 1);
 

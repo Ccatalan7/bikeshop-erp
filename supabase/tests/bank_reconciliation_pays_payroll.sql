@@ -576,5 +576,155 @@ select is(
   'and the split week ends paid'
 );
 
+-- A week paid partly with a cash advance during it: the transfer is the
+-- balance minus the advance, and the advance is applied in the same apply.
+insert into public.accounts (id, tenant_id, code, name, type, category) values
+  ('e4000000-0000-4000-8000-000000000016', 'e4000000-0000-4000-8000-000000000001',
+   '1101', 'Caja', 'asset', 'currentAsset');
+insert into public.payment_methods (
+  id, tenant_id, code, name, account_id, default_tax_treatment
+) values
+  ('e4000000-0000-4000-8000-000000000021', 'e4000000-0000-4000-8000-000000000001',
+   'cash', 'Efectivo', 'e4000000-0000-4000-8000-000000000016', 'no_tax');
+insert into public.payroll_vouchers (
+  id, tenant_id, voucher_number, period_start, period_end, period_label,
+  total_hours, total_amount, employee_count, status
+) values (
+  'e4000000-0000-4000-8000-000000000070', 'e4000000-0000-4000-8000-000000000001',
+  'NOM-00035', '2026-08-10', '2026-08-16', 'Semana 33', 11.6, 40600, 1, 'draft'
+);
+insert into public.payroll_voucher_lines (
+  id, tenant_id, voucher_id, employee_id, employee_name, worked_hours,
+  hourly_rate, regular_amount, total_amount, payment_method_id,
+  payment_account_id, salary_account_id
+) values
+  ('e4000000-0000-4000-8000-000000000071', 'e4000000-0000-4000-8000-000000000001',
+   'e4000000-0000-4000-8000-000000000070', 'e4000000-0000-4000-8000-000000000030',
+   'Braulio Muñoz', 11.6, 3500, 40600, 40600,
+   'e4000000-0000-4000-8000-000000000020', 'e4000000-0000-4000-8000-000000000010',
+   'e4000000-0000-4000-8000-000000000014');
+
+create temp table pays_payroll_advance on commit drop as
+select public.register_employee_advance_v3(
+  'pays-payroll:advance-braulio', 'e4000000-0000-4000-8000-000000000030', 30000,
+  'e4000000-0000-4000-8000-000000000021', 'e4000000-0000-4000-8000-000000000016',
+  '2026-08-12 15:00:00+00', null, null, 'requested_advance',
+  'Pidió efectivo durante la semana', null, null, null
+) as receipt;
+
+select is(
+  (
+    select jsonb_build_object(
+      'available', (advance->>'available')::numeric,
+      'paid_on', advance->>'paid_on',
+      'method', advance->>'payment_method_code'
+    )
+    from jsonb_array_elements(
+      public.get_bank_reconciliation_candidates_v2(
+        'e4000000-0000-4000-8000-000000000010', '2026-08-10', '2026-08-31'
+      )->'open_advances'
+    ) advance
+    where advance->>'advance_id' = (select receipt->>'advance_id' from pays_payroll_advance)
+  ),
+  '{"available": 30000, "paid_on": "2026-08-12", "method": "cash"}'::jsonb,
+  'the catalog lists the open advance Nómina will discount'
+);
+
+create temp table pays_payroll_advance_import on commit drop as
+select public.save_bank_statement_import_v1(
+  'pays-payroll:import-advance', repeat('3', 64), repeat('b', 64),
+  'e4000000-0000-4000-8000-000000000010',
+  '{"source_type":"pdf_text","parser_name":"banco_chile_statement","filename_extension":"pdf"}'::jsonb,
+  jsonb_build_array(jsonb_build_object(
+    'source_row_id', 'braulio-33', 'ordinal', 1, 'booking_date', '2026-08-18',
+    'operation_date', null, 'direction', 'debit', 'amount', 10600,
+    'description', 'App-traspaso A: Braulio Munoz Internet',
+    'normalized_description', 'app traspaso a braulio munoz internet',
+    'counterparty_observed', 'Braulio Munoz Internet', 'document_number', null,
+    'balance', null, 'warning_codes', '[]'::jsonb, 'source_page', 1,
+    'source_line_start', 10, 'source_line_end', 10,
+    'fingerprint', repeat('9', 64)
+  ))
+) as receipt;
+
+create temp table pays_payroll_advance_action on commit drop as
+select
+  (imported.receipt->>'import_id')::uuid as import_id,
+  (imported.receipt->>'revision')::bigint as revision,
+  jsonb_build_array(jsonb_build_object(
+    'row_id', (select id from public.bank_statement_rows
+                where import_id = (imported.receipt->>'import_id')::uuid),
+    'action', 'pay_payroll',
+    'payroll', jsonb_build_object(
+      'voucher_id', 'e4000000-0000-4000-8000-000000000070',
+      'voucher_line_id', 'e4000000-0000-4000-8000-000000000071',
+      'expected_amount', 40600, 'amount', 10600,
+      'payment_method_id', 'e4000000-0000-4000-8000-000000000020',
+      'confirm_draft', true,
+      'advances', jsonb_build_array(jsonb_build_object(
+        'advance_id', (select receipt->>'advance_id' from pays_payroll_advance),
+        'amount', 30000
+      ))
+    )
+  )) as actions
+from pays_payroll_advance_import imported;
+
+select throws_ok(
+  format(
+    'select public.apply_bank_reconciliation_actions_v3(%L, %s, %L, %L)',
+    (select import_id from pays_payroll_advance_action),
+    (select revision from pays_payroll_advance_action),
+    'pays-payroll:advance-foreign',
+    jsonb_set(
+      (select actions from pays_payroll_advance_action),
+      '{0,payroll,advances,0,advance_id}',
+      '"e4000000-0000-4000-8000-0000000009ff"'::jsonb
+    )
+  ),
+  '40001',
+  'bank_reconciliation_payroll_advance_invalid',
+  'an advance that is not this worker''s open one is refused'
+);
+
+select is(
+  (
+    select (receipt->>'payroll_payment_count')::integer
+    from (
+      select public.apply_bank_reconciliation_actions_v3(
+        (select import_id from pays_payroll_advance_action),
+        (select revision from pays_payroll_advance_action),
+        'pays-payroll:advance-apply',
+        (select actions from pays_payroll_advance_action)
+      ) as receipt
+    ) applied
+  ),
+  1,
+  'the transfer pays the week together with the advance'
+);
+
+select is(
+  (
+    select jsonb_build_object(
+      'week', voucher.status,
+      'advance', advance.status,
+      'applied', advance.amount_applied,
+      'paid_by_bank', (
+        select sum(payment.amount)
+        from public.expense_payments payment
+        join public.payroll_voucher_lines line
+          on line.tenant_id = payment.tenant_id
+         and line.expense_id = payment.expense_id
+        where line.id = 'e4000000-0000-4000-8000-000000000071'
+      )
+    )
+    from public.payroll_vouchers voucher
+    cross join public.employee_advances advance
+    where voucher.id = 'e4000000-0000-4000-8000-000000000070'
+      and advance.id = (select (receipt->>'advance_id')::uuid from pays_payroll_advance)
+  ),
+  '{"week": "paid", "advance": "applied", "applied": 30000, "paid_by_bank": 10600}'::jsonb,
+  'Nómina ends the week paid: $10.600 from the bank and the $30.000 advance'
+);
+
 select * from finish();
 rollback;

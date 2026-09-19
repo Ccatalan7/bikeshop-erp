@@ -264,6 +264,18 @@ books a salary itself, so the result is the same as paying it in Nómina:
 - the row's allocation names the new expense payment, and its decision keeps
   `payroll_payment` (week, line, worker, payment) in `action_snapshot`.
 
+Advances count. The catalog returns the advances Nómina has not discounted
+yet (`open_advances`); the review places each on its worker's oldest owed week
+ending on or after it, as Nómina applies them, and expects the transfer to be
+the balance minus those advances. «Pagar sueldo» then applies them in the same
+payment (`advances` on the row, re-checked by the server: the worker's own,
+still open, enough left, paid by the week's end). A transfer that pays less
+than that is proposed as part of the salary with medium confidence and a
+question — «¿fueron los $X un anticipo que no registraste?» — because a
+forgotten cash advance is the usual reason (Braulio, week 34: $30.000 in cash
+on 20 August, $10.600 by transfer). The remainder stays owed in Nómina until
+the advance is registered there or paid.
+
 The server refuses rather than guesses: a line whose balance is not the one
 the review saw (`bank_reconciliation_payroll_line_changed`), a draft without
 consent, another tenant's week, a method that does not pay into this account,
