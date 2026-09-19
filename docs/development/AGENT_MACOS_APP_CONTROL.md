@@ -341,6 +341,23 @@ real del sistema operativo; comprueba entonces su salida en vez de descartarla.
 
 Costó cinco rondas el 2026-08-21 dando por rota la app.
 
+**Y cuando `type` sí llega (2026-09-19), puede llegar a otro lado.** Un clic
+por coordenada sobre un campo no garantiza el foco: las letras cayeron en el
+buscador global de la app, que se abre con cualquier tecla, y quedaron
+escritas ahí («Esunaportedecapitalmio…», sin espacios). Se cierra con
+`key 53`. `enter-text --label` tampoco sirve para un campo cuyo rótulo es el
+`labelText` del `InputDecoration`: ese `Text` no es editable ni tocable. Hace
+falta la `ValueKey`; si la llave lleva un id interno
+(`bank-reconciliation-ai-answer-<sha12>:<fila>`), se calcula con la misma
+sonda que usa el servicio sobre el PDF, en vez de probar coordenadas.
+
+**`read` ve más que `find`.** `read` recorre la semántica, que incluye las
+filas que un `ListView` mantiene en caché fuera de pantalla; `find`, `tap` y
+`enter-text` sólo aceptan lo que el hit test alcanza. Si `read` muestra la
+fila y `find` dice «sin coincidencias», la fila está arriba o abajo del
+viewport: desplaza **sobre la lista** (`scroll X Y N`, positivo sube, negativo
+baja) y vuelve a buscar.
+
 ### El selector de archivos es una ventana del sistema (2026-08-01)
 
 `Elegir archivo` abre un panel de macOS que no pertenece al árbol semántico de
