@@ -180,11 +180,16 @@ class BankReconciliationMatcher {
     final open = movements
         .where((movement) => !chosen.containsKey(movement.sourceRowId))
         .toList(growable: false);
+    // A payment whose party contradicts the name the bank printed is only
+    // ever an alternative: assigning it would take it from the row that
+    // really paid it (a $2.450 bonus to Vicente went to a Google charge and
+    // left his $122.500 transfer without its salary + bonus pair).
     final singleOptions = <String, List<_DirectOption>>{
       for (final movement in open)
         movement.sourceRowId: analyses[movement.sourceRowId]!
             .singles
             .where((option) =>
+                option.identity != BankIdentityStrength.conflict &&
                 option.candidateIds.every((id) => !taken.contains(id)))
             .toList(growable: false),
     };

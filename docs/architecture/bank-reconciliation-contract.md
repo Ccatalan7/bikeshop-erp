@@ -103,7 +103,11 @@ word («Univer» → «Universal»); a four-letter ERP name may be a nickname
 («Cata»); one-letter misspellings match («Natero» / «Nattero»). Placeholders
 («Cliente Mostrador», «Sin registro», «Proveedor») identify nobody; two real
 names that share nothing are a conflict — someone else paid — and are proposed
-but never preselected.
+but never preselected. A conflicting option does not enter the assignment
+either: it only appears as a low-confidence alternative. Until 2026-09-18 it
+competed for the operation and could hold it, so a $2.450 bonus Nómina paid to
+Vicente sat on a Google charge of $2.740 and his $122.500 transfer lost its
+salary + bonus pair.
 
 Every row ranks its options by amount, name, date distance and evidence; the
 date window widens only for a strong name (12 days, 40 for salaries and

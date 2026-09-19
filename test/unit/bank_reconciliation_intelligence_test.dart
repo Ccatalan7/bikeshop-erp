@@ -119,6 +119,35 @@ void main() {
       expect(proposal.reasons, contains('El banco muestra otro titular'));
     });
 
+    test('a salary and its bonus are not lost to a look-alike card charge', () {
+      // Nómina paid Vicente's week and an assumed bonus from one transfer.
+      // The bonus is close in amount to a Google charge; a party the bank
+      // contradicts must not take it from the transfer that paid it.
+      final proposals = matcher.match(
+        movements: [
+          _movement('vicente', _d(9, 11), BankMovementDirection.debit, 122500,
+              counterparty: 'Vicente Diaz Internet'),
+          _movement('google', _d(9, 15), BankMovementDirection.debit, 2740,
+              description: 'Pago: Google *google On Renca'),
+        ],
+        candidates: [
+          _salary('salary', _d(9, 11), 120050, 'Vicente Díaz'),
+          _salary('bonus', _d(9, 11), 2450, 'Vicente Díaz'),
+        ],
+      );
+
+      final vicente = proposals['vicente']!.first;
+      expect(vicente.isSelectedByDefault, isTrue);
+      expect(
+        vicente.allocations.map((item) => item.candidate.targetId).toSet(),
+        {'salary', 'bonus'},
+      );
+      expect(
+        proposals['google']!.where((proposal) => proposal.isSelectedByDefault),
+        isEmpty,
+      );
+    });
+
     test('Nómina evidence ties one transfer to a salary and a reimbursement',
         () {
       final evidence = [
