@@ -285,6 +285,20 @@ values
   );
 
 -- Tenant bootstrap creates defaults. Replace them with deterministic fixtures.
+-- Terminals, methods and accounts reference each other both ways, so the
+-- bootstrap's own rows only come out with the FKs stood down.
+set local session_replication_role = replica;
+delete from public.payment_terminal_terms
+where tenant_id in (
+  '7f281000-0000-4000-8000-000000000001',
+  '7f281000-0000-4000-8000-000000000002'
+);
+delete from public.payment_terminal_profiles
+where tenant_id in (
+  '7f281000-0000-4000-8000-000000000001',
+  '7f281000-0000-4000-8000-000000000002'
+);
+set local session_replication_role = origin;
 delete from public.payment_methods
 where tenant_id in (
   '7f281000-0000-4000-8000-000000000001',
@@ -6290,6 +6304,30 @@ select ok(
       and original.amount > 0
   ),
   'payment correction retains the original and appends its exact inverse'
+);
+
+-- A correction is not money moving the day it is noticed: both sides sit in
+-- the month the payment claimed, or one month shows a salary that was never
+-- paid and the next a negative one.
+select ok(
+  exists (
+    select 1
+    from public.expense_payments original
+    join public.expense_payments reversal
+      on reversal.tenant_id = original.tenant_id
+     and reversal.reversal_of_id = original.id
+    join public.journal_entries reversal_journal
+      on reversal_journal.tenant_id = reversal.tenant_id
+     and reversal_journal.source_module = 'expense_payments'
+     and reversal_journal.source_document_id = reversal.id
+    where original.id = current_setting(
+      'test.reversal.payment_id'
+    )::uuid
+      and reversal.payment_date = original.payment_date
+      and reversal_journal.entry_date = original.payment_date
+      and reversal.created_at > original.created_at
+  ),
+  'the correction is dated as the payment it cancels, and says when it was made'
 );
 
 select ok(

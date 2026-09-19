@@ -1077,3 +1077,33 @@ y sólo la versión optimista del comando canónico la detiene
 doble en ninguno de los dos casos**; lo que se pierde sin el bloqueo es la
 protección propia de la revisión, y por eso la sonda afirma el error exacto y
 no «que falle».
+
+## Una reversa se fecha el día del movimiento que anula (2026-09-19)
+
+`reverse_payroll_settlement_v1` escribía el contra-pago con
+`statement_timestamp()`, y el asiento hereda esa fecha. Anular un pago del
+27 de agosto dejaba agosto con $30.000 de sueldo que nunca se pagaron y
+septiembre con un «Gasto · Salario · -$30.000»: los dos meses mal por el
+mismo monto, y en el panorama del dueño un sueldo negativo. Lo vio él, no
+una prueba.
+
+La regla: **un contra-movimiento no es plata moviéndose el día en que se
+descubre el error, sino la retirada de un movimiento**, así que lleva la
+fecha del original (`payment_date` del pago, `applied_at` de la asignación).
+`created_at` y la razón quedan como pista de auditoría de cuándo y por qué
+se corrigió. `20260919180000` lo corrige en la función y repara en su lugar
+lo ya escrito.
+
+Dos cosas que cuestan una corrida si no se saben:
+
+- **Las filas de plata de Nómina están protegidas contra edición**
+  (`payroll_money_receipt_movement_is_immutable`, por
+  `payroll_money_operation_movements`). Una reparación versionada apaga la
+  guardia acotada —`trg_aaa_payroll_expense_payment_balance`,
+  `trg_guard_payroll_workspace_expense_payment`,
+  `trg_aaa_payroll_advance_allocation_evidence`—, corrige, la vuelve a
+  encender y revalida antes de terminar.
+- **Cambiarle la fecha a un asiento le cambia el número.** `AC-02788` pasó a
+  ser `AC-02875` al moverlo a agosto; el vínculo con su original
+  (`reversal_of_id`, `source_document_id`) es lo que se sigue, nunca el
+  número.
