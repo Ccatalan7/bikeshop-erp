@@ -92,6 +92,9 @@ enum BankReconciliationActionKind {
   createExpense,
   classifyAccount,
   dismiss,
+
+  /// Pay a salary Nómina owes with this transfer, then associate the row.
+  payPayroll,
 }
 
 class BankReconciliationAccountOption {
@@ -402,6 +405,7 @@ class BankReconciliationResolutionDraft {
     this.counterparty,
     this.reference,
     this.reason,
+    this.payroll,
   });
 
   final BankReconciliationActionKind action;
@@ -411,6 +415,9 @@ class BankReconciliationResolutionDraft {
   final String? counterparty;
   final String? reference;
   final String? reason;
+
+  /// The salary a [BankReconciliationActionKind.payPayroll] row pays.
+  final BankPayrollPaymentDraft? payroll;
 
   BankReconciliationResolutionDraft copyWith({
     BankReconciliationActionKind? action,
@@ -426,9 +433,12 @@ class BankReconciliationResolutionDraft {
     bool clearReference = false,
     String? reason,
     bool clearReason = false,
+    BankPayrollPaymentDraft? payroll,
+    bool clearPayroll = false,
   }) {
     return BankReconciliationResolutionDraft(
       action: action ?? this.action,
+      payroll: clearPayroll ? null : payroll ?? this.payroll,
       accountId: clearAccount ? null : accountId ?? this.accountId,
       paymentMethodId:
           clearPaymentMethod ? null : paymentMethodId ?? this.paymentMethodId,
@@ -540,6 +550,8 @@ class BankReconciliationRowDraft {
           (effectiveResolution.accountId?.trim().isNotEmpty ?? false) &&
               (effectiveResolution.description?.trim().isNotEmpty ?? false),
         BankReconciliationActionKind.dismiss => reasonText.trim().isNotEmpty,
+        BankReconciliationActionKind.payPayroll =>
+          effectiveResolution.payroll != null,
         BankReconciliationActionKind.pending => false,
       };
 
@@ -703,6 +715,7 @@ class BankReconciliationApplyReceipt {
     required this.replayed,
     this.createdExpenseCount = 0,
     this.createdJournalCount = 0,
+    this.payrollPaymentCount = 0,
   });
 
   final String importId;
@@ -712,6 +725,9 @@ class BankReconciliationApplyReceipt {
   final bool replayed;
   final int createdExpenseCount;
   final int createdJournalCount;
+
+  /// Salaries paid in Nómina by this apply.
+  final int payrollPaymentCount;
 }
 
 /// What the ERP proposes for a movement no existing operation explains.
@@ -791,6 +807,9 @@ class BankPayrollExpectation {
     required List<String> names,
     required this.amountClp,
     this.paymentMethod,
+    this.paymentMethodId,
+    this.status = 'draft',
+    this.reconciliationVersion,
   }) : names = List.unmodifiable(names);
 
   final String voucherId;
@@ -800,8 +819,49 @@ class BankPayrollExpectation {
   final String lineId;
   final String employeeName;
   final List<String> names;
+
+  /// What Nómina still owes on the line (its balance, not its total).
   final int amountClp;
   final String? paymentMethod;
+  final String? paymentMethodId;
+
+  /// `draft`, `confirmed` or `partial`.
+  final String status;
+  final int? reconciliationVersion;
+
+  bool get isDraft => status == 'draft';
+}
+
+/// A salary to pay through Nómina from a bank row.
+class BankPayrollPaymentDraft {
+  const BankPayrollPaymentDraft({
+    required this.voucherId,
+    required this.voucherNumber,
+    required this.periodLabel,
+    required this.lineId,
+    required this.employeeName,
+    required this.expectedAmountClp,
+    required this.amountClp,
+    required this.paymentMethodId,
+    required this.confirmDraft,
+  });
+
+  final String voucherId;
+  final String voucherNumber;
+  final String periodLabel;
+  final String lineId;
+  final String employeeName;
+
+  /// The line's balance when the review was built; the server refuses to
+  /// pay a line that changed since.
+  final int expectedAmountClp;
+
+  /// What this transfer pays of it.
+  final int amountClp;
+  final String paymentMethodId;
+
+  /// The week is a draft and paying it confirms it first.
+  final bool confirmDraft;
 }
 
 enum BankOpenInvoiceKind { sale, purchase }

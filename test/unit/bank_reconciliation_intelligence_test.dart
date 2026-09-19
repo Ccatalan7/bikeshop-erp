@@ -346,29 +346,91 @@ void main() {
       expect(suggestions['back']!.resolution!.reason, contains('devuelta'));
     });
 
-    test('a salary Nómina still owes is paid there, not booked here', () {
-      final suggestion = suggest(
-          [
-            _movement('braulio', _d(8, 31), BankMovementDirection.debit, 71400,
-                counterparty: 'Braulio Munoz Internet'),
-          ],
-          BankReconciliationContext(payrollLines: [
-            BankPayrollExpectation(
-              voucherId: 'v37',
-              voucherNumber: 'NOM-00037',
-              periodLabel: 'Semana 35',
-              periodEnd: _d(8, 30),
-              lineId: 'line',
-              employeeName: 'Braulio Muñoz',
-              names: const ['Braulio Muñoz'],
-              amountClp: 71400,
-              paymentMethod: 'transfer',
-            ),
-          ]))['braulio']!;
+    BankPayrollExpectation owedSalary({
+      String lineId = 'line',
+      String status = 'draft',
+    }) =>
+        BankPayrollExpectation(
+          voucherId: 'v37',
+          voucherNumber: 'NOM-00037',
+          periodLabel: 'Semana 35',
+          periodEnd: _d(8, 30),
+          lineId: lineId,
+          employeeName: 'Braulio Muñoz',
+          names: const ['Braulio Muñoz'],
+          amountClp: 71400,
+          paymentMethod: 'transfer',
+          status: status,
+          reconciliationVersion: 7,
+        );
+
+    test('a salary Nómina still owes is paid here, through Nómina', () {
+      final suggestion = suggest([
+        _movement('braulio', _d(8, 31), BankMovementDirection.debit, 71400,
+            counterparty: 'Braulio Munoz Internet'),
+      ], BankReconciliationContext(payrollLines: [owedSalary()]))['braulio']!;
+
+      expect(suggestion.kind, BankSuggestionKind.payroll);
+      expect(suggestion.confidence, BankReconciliationConfidence.high);
+      expect(suggestion.followUp, isNull);
+      final resolution = suggestion.resolution!;
+      expect(resolution.action, BankReconciliationActionKind.payPayroll);
+      final payroll = resolution.payroll!;
+      expect(payroll.lineId, 'line');
+      expect(payroll.voucherId, 'v37');
+      expect(payroll.amountClp, 71400);
+      expect(payroll.expectedAmountClp, 71400);
+      expect(payroll.paymentMethodId, 'transfer-id');
+      expect(payroll.confirmDraft, isTrue);
+      expect(suggestion.reasons.join(' '), contains('se confirma'));
+    });
+
+    test('without a transfer method the salary is only pointed to Nómina', () {
+      final suggestion = advisor.suggest(
+        movements: [
+          _movement('braulio', _d(8, 31), BankMovementDirection.debit, 71400,
+              counterparty: 'Braulio Munoz Internet'),
+        ],
+        proposals: const {},
+        context: BankReconciliationContext(payrollLines: [owedSalary()]),
+      )['braulio']!;
 
       expect(suggestion.kind, BankSuggestionKind.payroll);
       expect(suggestion.resolution, isNull);
       expect(suggestion.followUp, contains('NOM-00037'));
+    });
+
+    test('one owed salary is paid by one transfer only', () {
+      final suggestions = suggest([
+        _movement('first', _d(8, 31), BankMovementDirection.debit, 71400,
+            counterparty: 'Braulio Munoz Internet'),
+        _movement('second', _d(9, 1), BankMovementDirection.debit, 71400,
+            counterparty: 'Braulio Munoz Internet'),
+      ], BankReconciliationContext(payrollLines: [owedSalary()]));
+
+      expect(
+        suggestions['first']!.resolution?.action,
+        BankReconciliationActionKind.payPayroll,
+      );
+      expect(
+        suggestions['second']?.resolution?.action,
+        isNot(BankReconciliationActionKind.payPayroll),
+      );
+    });
+
+    test('a confirmed week is paid without confirming it again', () {
+      final payroll = suggest(
+              [
+            _movement('braulio', _d(8, 31), BankMovementDirection.debit, 71400,
+                counterparty: 'Braulio Munoz Internet'),
+          ],
+              BankReconciliationContext(payrollLines: [
+                owedSalary(status: 'confirmed'),
+              ]))['braulio']!
+          .resolution!
+          .payroll!;
+
+      expect(payroll.confirmDraft, isFalse);
     });
 
     test('the monthly rent is booked like the previous months', () {

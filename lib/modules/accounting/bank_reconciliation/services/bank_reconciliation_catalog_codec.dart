@@ -120,6 +120,9 @@ class BankReconciliationCatalogCodec {
           .toList(growable: false),
       amountClp: amount,
       paymentMethod: _text(json['payment_method']),
+      paymentMethodId: _text(json['payment_method_id']),
+      status: _text(json['status']) ?? 'draft',
+      reconciliationVersion: _int(json['reconciliation_version']),
     );
   }
 

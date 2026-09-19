@@ -171,7 +171,7 @@ void main() {
       'parser_version': 'v1',
       'filename_extension': 'pdf',
     });
-    expect(calls.last.name, 'apply_bank_reconciliation_actions_v2');
+    expect(calls.last.name, 'apply_bank_reconciliation_actions_v3');
     final actions =
         calls.last.params['p_actions'] as List<Map<String, dynamic>>;
     expect(actions.single['action'], 'associate_existing');
@@ -179,6 +179,147 @@ void main() {
         actions.single['allocations'] as List<Map<String, dynamic>>;
     expect(allocations.single['provider'], 'mercadopago');
     expect(allocations.single['instrument'], 'unknown');
+  });
+
+  test('a salary row is sent as pay_payroll with the line it pays', () async {
+    final calls = <_RpcCall>[];
+    final service = BankReconciliationService(
+      database: _FakeDatabaseService(),
+      rpc: (name, params) async {
+        calls.add(_RpcCall(name, params));
+        return <String, dynamic>{
+          'import_id': '33333333-3333-4333-8333-333333333333',
+          'revision': 2,
+          'status': 'reconciled',
+          'allocation_count': 1,
+          'replayed': false,
+          'payroll_payment_count': 1,
+        };
+      },
+    );
+    const payroll = BankPayrollPaymentDraft(
+      voucherId: 'aaaaaaaa-0000-4000-8000-000000000037',
+      voucherNumber: 'NOM-00037',
+      periodLabel: 'Semana 35',
+      lineId: 'bbbbbbbb-0000-4000-8000-000000000001',
+      employeeName: 'Braulio Muñoz',
+      expectedAmountClp: 71400,
+      amountClp: 71400,
+      paymentMethodId: 'cccccccc-0000-4000-8000-000000000001',
+      confirmDraft: true,
+    );
+    BankReconciliationRowDraft salaryRow(String id) =>
+        BankReconciliationRowDraft(
+          movement: BankStatementMovement(
+            sourceRowId: id,
+            ordinal: 1,
+            bookingDate: const BankCivilDate(2026, 8, 31),
+            description: 'App-traspaso A: Braulio Munoz Internet',
+            normalizedDescription: 'app traspaso a braulio munoz internet',
+            direction: BankMovementDirection.debit,
+            amountClp: 71400,
+            sourcePage: 1,
+            sourceLineStart: 10,
+            sourceLineEnd: 10,
+          ),
+          proposals: const <BankReconciliationProposal>[],
+          resolution: const BankReconciliationResolutionDraft(
+            action: BankReconciliationActionKind.payPayroll,
+            payroll: payroll,
+          ),
+        );
+    BankReconciliationPreparedDraft draftOf(
+            List<BankReconciliationRowDraft> rows) =>
+        BankReconciliationPreparedDraft(
+          fileSha256:
+              'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          filename: 'cartola.pdf',
+          sourceType: 'pdf_text',
+          parserName: 'banco_chile_statement',
+          parserVersion: 'v1',
+          rows: rows,
+        );
+
+    final receipt = await service.apply(
+      draft: draftOf([salaryRow('row-1')]),
+      importReceipt: BankStatementImportReceipt(
+        importId: '33333333-3333-4333-8333-333333333333',
+        revision: 1,
+        rowIdsBySourceRowId: <String, String>{
+          'row-1': '44444444-4444-4444-8444-444444444444',
+        },
+        replayed: false,
+      ),
+      operationKey: 'apply-key',
+    );
+
+    expect(calls.single.name, 'apply_bank_reconciliation_actions_v3');
+    final action =
+        (calls.single.params['p_actions'] as List<Map<String, dynamic>>).single;
+    expect(action['action'], 'pay_payroll');
+    expect(action['payroll'], <String, dynamic>{
+      'voucher_id': payroll.voucherId,
+      'voucher_line_id': payroll.lineId,
+      'expected_amount': 71400,
+      'amount': 71400,
+      'payment_method_id': payroll.paymentMethodId,
+      'confirm_draft': true,
+    });
+    expect(receipt.payrollPaymentCount, 1);
+
+    await expectLater(
+      service.apply(
+        draft: draftOf([salaryRow('row-1'), salaryRow('row-2')]),
+        importReceipt: BankStatementImportReceipt(
+          importId: '33333333-3333-4333-8333-333333333333',
+          revision: 1,
+          rowIdsBySourceRowId: <String, String>{
+            'row-1': '44444444-4444-4444-8444-444444444444',
+            'row-2': '44444444-4444-4444-8444-444444444445',
+          },
+          replayed: false,
+        ),
+        operationKey: 'apply-twice',
+      ),
+      throwsA(isA<BankReconciliationServiceException>()),
+    );
+    expect(calls, hasLength(1),
+        reason: 'one salary twice never reaches Nómina');
+  });
+
+  test('a salary Nómina refused explains that nothing was saved', () async {
+    final service = BankReconciliationService(
+      database: _FakeDatabaseService(),
+      rpc: (name, params) async => throw Exception(
+        'PostgrestException(message: bank_reconciliation_payroll_line_changed, code: 40001)',
+      ),
+    );
+    await expectLater(
+      service.apply(
+        draft: BankReconciliationPreparedDraft(
+          fileSha256:
+              'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          filename: 'cartola.pdf',
+          sourceType: 'pdf_text',
+          parserName: 'banco_chile_statement',
+          parserVersion: 'v1',
+          rows: const <BankReconciliationRowDraft>[],
+        ),
+        importReceipt: BankStatementImportReceipt(
+          importId: '33333333-3333-4333-8333-333333333333',
+          revision: 1,
+          rowIdsBySourceRowId: <String, String>{},
+          replayed: false,
+        ),
+      ),
+      throwsA(
+        isA<BankReconciliationServiceException>().having(
+          (error) => error.message,
+          'message',
+          contains('No se guardó nada'),
+        ),
+      ),
+    );
   });
 
   test('several statements persist each file under its own row ids', () async {

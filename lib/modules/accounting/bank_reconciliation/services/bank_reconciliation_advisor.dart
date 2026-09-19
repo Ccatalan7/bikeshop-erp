@@ -8,8 +8,9 @@ import 'bank_counterparty_identity.dart';
 /// an earlier statement, a salary Nómina still owes, an open invoice, how the
 /// counterparty was booked before, and finally what the merchant name on a
 /// card charge says. A suggestion that this workspace can apply carries a
-/// prefilled decision; one that belongs to another module (paying a salary,
-/// registering a purchase or a sale) only says where to do it.
+/// prefilled decision, a salary Nómina owes included: applying it pays the
+/// salary through Nómina's own command. One that belongs to another module
+/// (registering a purchase or a sale) only says where to do it.
 class BankReconciliationAdvisor {
   const BankReconciliationAdvisor();
 
@@ -28,6 +29,8 @@ class BankReconciliationAdvisor {
     }).toList(growable: false);
     final result = <String, BankReconciliationSuggestion>{};
     result.addAll(_offsettingPairs(open));
+    // One salary is paid by one transfer.
+    final claimedPayrollLines = <String>{};
     for (final movement in open) {
       if (result.containsKey(movement.sourceRowId)) continue;
       final suggestion = _suggestOne(
@@ -35,6 +38,7 @@ class BankReconciliationAdvisor {
         hasProposal: (proposals[movement.sourceRowId] ?? const []).isNotEmpty,
         context: context,
         options: options,
+        claimedPayrollLines: claimedPayrollLines,
       );
       if (suggestion != null) result[movement.sourceRowId] = suggestion;
     }
@@ -45,15 +49,26 @@ class BankReconciliationAdvisor {
   List<BankReconciliationInsight> insights(
     Map<String, BankReconciliationSuggestion> suggestions,
   ) {
-    final payroll = suggestions.values
+    final salaries = suggestions.values
         .where((item) =>
             item.kind == BankSuggestionKind.payroll &&
             item.confidence == BankReconciliationConfidence.high)
-        .length;
+        .toList(growable: false);
+    final payableHere =
+        salaries.where((item) => item.resolution != null).length;
+    final elsewhere = salaries.length - payableHere;
     return <BankReconciliationInsight>[
-      if (payroll > 0)
+      if (payableHere > 0)
         BankReconciliationInsight(
-          title: '$payroll transferencia(s) pagan sueldos que Nómina tiene '
+          title: '$payableHere sueldo(s) que Nómina debe se pagan aquí',
+          body: 'Al aplicar, cada sueldo queda pagado en Nómina con la fecha '
+              'de la cartola y asociado a su transferencia; una semana en '
+              'borrador se confirma. Si prefieres, págalos en Nómina y la '
+              'próxima conciliación los asocia solos.',
+        ),
+      if (elsewhere > 0)
+        BankReconciliationInsight(
+          title: '$elsewhere transferencia(s) pagan sueldos que Nómina tiene '
               'pendientes',
           body: 'Nómina todavía no registra esos pagos. Págalos en Nómina '
               '(puedes usar esta misma cartola) y la próxima conciliación los '
@@ -131,6 +146,7 @@ class BankReconciliationAdvisor {
     required bool hasProposal,
     required BankReconciliationContext context,
     required BankReconciliationWorkspaceOptions? options,
+    required Set<String> claimedPayrollLines,
   }) {
     final party = _party(movement);
     final amount = movement.amountClp!;
@@ -163,8 +179,17 @@ class BankReconciliationAdvisor {
 
     // 2. A salary Nómina still owes.
     if (isDebit && !isCardCharge) {
-      final line = _payrollLine(party, amount, date, context.payrollLines);
+      final line = _payrollLine(
+        party,
+        amount,
+        date,
+        context.payrollLines
+            .where((item) => !claimedPayrollLines.contains(item.lineId))
+            .toList(growable: false),
+      );
       if (line != null) {
+        claimedPayrollLines.add(line.lineId);
+        final payment = _payrollPayment(line, amount, options);
         return BankReconciliationSuggestion(
           kind: BankSuggestionKind.payroll,
           confidence: BankReconciliationConfidence.high,
@@ -174,9 +199,23 @@ class BankReconciliationAdvisor {
                 'y aún no registra el pago',
             if (line.amountClp != amount)
               'La transferencia redondea ${_money((amount - line.amountClp).abs())}',
+            if (payment != null)
+              line.isDraft
+                  ? 'Al aplicar, la semana ${line.voucherNumber} (en borrador) '
+                      'se confirma y el sueldo queda pagado el ${_day(date)}'
+                  : 'Al aplicar, el sueldo queda pagado en Nómina el '
+                      '${_day(date)}',
           ],
-          followUp: 'Págalo en Nómina (${line.voucherNumber}); la próxima '
-              'conciliación lo asocia sola.',
+          resolution: payment == null
+              ? null
+              : BankReconciliationResolutionDraft(
+                  action: BankReconciliationActionKind.payPayroll,
+                  payroll: payment,
+                ),
+          followUp: payment == null
+              ? 'Págalo en Nómina (${line.voucherNumber}); la próxima '
+                  'conciliación lo asocia sola.'
+              : null,
         );
       }
     }
@@ -392,9 +431,42 @@ class BankReconciliationAdvisor {
           reason: prior.text ?? 'Igual que en la conciliación anterior',
         );
       case BankReconciliationActionKind.associateExisting:
+      case BankReconciliationActionKind.payPayroll:
       case BankReconciliationActionKind.pending:
         return null;
     }
+  }
+
+  /// The salary this transfer pays, through the bank's own transfer method.
+  /// A transfer a little short pays that much and Nómina keeps the rest
+  /// owed; one a little over pays the salary and the rounding stays on the
+  /// row, as any direct association tolerates.
+  BankPayrollPaymentDraft? _payrollPayment(
+    BankPayrollExpectation line,
+    int amount,
+    BankReconciliationWorkspaceOptions? options,
+  ) {
+    final transfers = options?.paymentMethods
+            .where((method) => method.code.trim().toLowerCase() == 'transfer')
+            .toList(growable: false) ??
+        const <BankReconciliationPaymentMethodOption>[];
+    final method = transfers
+            .where((item) => item.paymentMethodId == line.paymentMethodId)
+            .firstOrNull ??
+        (transfers.length == 1 ? transfers.single : null);
+    final paid = amount < line.amountClp ? amount : line.amountClp;
+    if (method == null || paid <= 0 || amount - paid > 1000) return null;
+    return BankPayrollPaymentDraft(
+      voucherId: line.voucherId,
+      voucherNumber: line.voucherNumber,
+      periodLabel: line.periodLabel,
+      lineId: line.lineId,
+      employeeName: line.employeeName,
+      expectedAmountClp: line.amountClp,
+      amountClp: paid,
+      paymentMethodId: method.paymentMethodId,
+      confirmDraft: line.isDraft,
+    );
   }
 
   BankPayrollExpectation? _payrollLine(

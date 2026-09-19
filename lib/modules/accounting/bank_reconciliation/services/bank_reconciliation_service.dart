@@ -650,6 +650,7 @@ class BankReconciliationService {
           BankReconciliationActionKind.createExpense => 'create_expense',
           BankReconciliationActionKind.classifyAccount => 'post_journal',
           BankReconciliationActionKind.dismiss => 'dismiss',
+          BankReconciliationActionKind.payPayroll => 'pay_payroll',
         },
       };
       switch (resolution.action) {
@@ -719,18 +720,56 @@ class BankReconciliationService {
           }
           action['reason'] = resolution.reason!.trim();
           break;
+        case BankReconciliationActionKind.payPayroll:
+          final payroll = resolution.payroll;
+          if (row.movement.direction != BankMovementDirection.debit ||
+              payroll == null) {
+            throw const BankReconciliationServiceException(
+              'Elige el sueldo de Nómina que paga esta transferencia.',
+            );
+          }
+          action['payroll'] = <String, dynamic>{
+            'voucher_id': payroll.voucherId,
+            'voucher_line_id': payroll.lineId,
+            'expected_amount': payroll.expectedAmountClp,
+            'amount': payroll.amountClp,
+            'payment_method_id': payroll.paymentMethodId,
+            'confirm_draft': payroll.confirmDraft,
+          };
+          break;
       }
       actions.add(action);
     }
-    final raw = await _rpc(
-      'apply_bank_reconciliation_actions_v2',
-      <String, dynamic>{
-        'p_import_id': importReceipt.importId,
-        'p_expected_revision': importReceipt.revision,
-        'p_operation_key': operationKey ?? const Uuid().v4(),
-        'p_actions': actions,
-      },
-    );
+    final paidLines = <String>{};
+    for (final row in draft.rows) {
+      final payroll = row.effectiveResolution.action ==
+              BankReconciliationActionKind.payPayroll
+          ? row.effectiveResolution.payroll
+          : null;
+      if (payroll != null && !paidLines.add(payroll.lineId)) {
+        throw BankReconciliationServiceException(
+          'El sueldo de ${payroll.employeeName} (${payroll.voucherNumber}) '
+          'está elegido en dos transferencias.',
+        );
+      }
+    }
+    // v3 is v2 plus paying Nómina salaries in the same transaction.
+    final dynamic raw;
+    try {
+      raw = await _rpc(
+        'apply_bank_reconciliation_actions_v3',
+        <String, dynamic>{
+          'p_import_id': importReceipt.importId,
+          'p_expected_revision': importReceipt.revision,
+          'p_operation_key': operationKey ?? const Uuid().v4(),
+          'p_actions': actions,
+        },
+      );
+    } catch (error) {
+      final message = _payrollFailureMessage(error.toString());
+      if (message == null) rethrow;
+      throw BankReconciliationServiceException(message);
+    }
     final receipt = _receiptMap(raw);
     return BankReconciliationApplyReceipt(
       importId: _requiredText(receipt, 'import_id'),
@@ -740,7 +779,41 @@ class BankReconciliationService {
       replayed: receipt['replayed'] == true,
       createdExpenseCount: _intOf(receipt['created_expense_count']) ?? 0,
       createdJournalCount: _intOf(receipt['created_journal_count']) ?? 0,
+      payrollPaymentCount: _intOf(receipt['payroll_payment_count']) ?? 0,
     );
+  }
+
+  /// What the operator can do when Nómina refused to pay a salary. Nothing
+  /// was saved: the apply is one transaction.
+  static String? _payrollFailureMessage(String error) {
+    if (error.contains('bank_reconciliation_payroll_line_changed') ||
+        error.contains('payroll_payment_version_conflict') ||
+        error.contains('payroll_voucher_lifecycle_version_conflict') ||
+        error.contains('payroll_voucher_is_not_a_draft') ||
+        error.contains('payroll_expense_payment_exceeds_line_balance') ||
+        error.contains('Los movimientos exceden el saldo')) {
+      return 'Un sueldo cambió en Nómina después de preparar la revisión '
+          '(se pagó, se editó o se confirmó la semana). No se guardó nada: '
+          'vuelve a subir las cartolas para ver lo que Nómina debe hoy.';
+    }
+    if (error.contains('bank_reconciliation_payroll_access_required') ||
+        error.contains('Payroll access denied')) {
+      return 'Tu usuario no puede pagar sueldos. No se guardó nada: pide '
+          'acceso a Nómina o deja esas transferencias pendientes.';
+    }
+    if (error.contains('bank_reconciliation_payroll_method_invalid')) {
+      return 'La cuenta no tiene un medio de pago «Transferencia» activo. '
+          'No se guardó nada: créalo en Métodos de pago y vuelve a intentar.';
+    }
+    if (error.contains('debe registrarse como anticipo')) {
+      return 'Nómina no acepta un sueldo pagado antes de cerrar su semana: '
+          'regístralo como anticipo en Nómina. No se guardó nada.';
+    }
+    if (error.contains('bank_reconciliation_payroll')) {
+      return 'Nómina no pudo registrar un sueldo de esta revisión. No se '
+          'guardó nada; revisa esos movimientos o págalos en Nómina.';
+    }
+    return null;
   }
 
   List<BankStatementMovement> _mapMovements(

@@ -449,6 +449,13 @@ Keep `click X Y` for what has no identity — a canvas, a chart, a spot inside a
 image — and for testing the OS event path itself. For anything with a key or a
 label, use `tap`; never reuse a coordinate from an earlier frame.
 
+**2026-09-18 — `find` imprime lógicos; `click` y `scroll` piden píxeles del
+`shot`.** Pasarle a `click` el rectángulo que dio `find` lo manda a la mitad de
+la pantalla en Retina (DPR 2): tres clics perdidos sobre «Resolver» de una fila
+de la conciliación. Si `find` lista el objetivo, se toca con
+`tap --label … --index N`; `click` sólo con coordenadas leídas del `shot`
+actual.
+
 **2026-09-15 — una coincidencia única puede ser el control equivocado.** La
 búsqueda por etiqueta admite subcadenas: `Productos` dentro del formulario
 coincidió con el texto del interruptor «Los productos inactivos…», no con el

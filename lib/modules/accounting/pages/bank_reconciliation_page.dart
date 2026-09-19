@@ -309,10 +309,13 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
     final suggested = row.suggestion?.resolution;
     if (suggested != null &&
         suggested.action == action &&
-        current.action != action) {
+        (current.action != action ||
+            action == BankReconciliationActionKind.payPayroll)) {
       _replaceRow(_withResolution(row, suggested));
       return;
     }
+    // A salary is paid only as Nómina's owed line was matched to the row.
+    if (action == BankReconciliationActionKind.payPayroll) return;
     final defaults = switch (action) {
       BankReconciliationActionKind.createExpense =>
         BankReconciliationResolutionDraft(
@@ -499,6 +502,8 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
           receipts.fold<int>(0, (sum, item) => sum + item.createdExpenseCount),
       createdJournalCount:
           receipts.fold<int>(0, (sum, item) => sum + item.createdJournalCount),
+      payrollPaymentCount:
+          receipts.fold<int>(0, (sum, item) => sum + item.payrollPaymentCount),
     );
   }
 
@@ -750,6 +755,8 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
         '${receipt.createdExpenseCount} gasto(s) contabilizado(s)',
       if (receipt.createdJournalCount > 0)
         '${receipt.createdJournalCount} asiento(s) de clasificación',
+      if (receipt.payrollPaymentCount > 0)
+        '${receipt.payrollPaymentCount} sueldo(s) pagado(s) en Nómina',
     ];
     if (effects.isEmpty) {
       return 'Las decisiones quedaron guardadas. Los movimientos pendientes '
@@ -1222,6 +1229,10 @@ class _ResolutionStatus extends StatelessWidget {
           'Excluida',
           VbStatusTone.neutral
         ),
+      BankReconciliationActionKind.payPayroll when row.isResolved => (
+          'Sueldo listo',
+          VbStatusTone.success
+        ),
       _ => ('Pendiente', VbStatusTone.warning),
     };
     return VbStatusBadge(label: label, tone: tone, dense: true);
@@ -1483,6 +1494,8 @@ class _ResolutionPanel extends StatelessWidget {
             _ActionChooser(
               value: row.effectiveResolution.action,
               movement: movement,
+              payrollAvailable: row.suggestion?.resolution?.action ==
+                  BankReconciliationActionKind.payPayroll,
               enabled: enabled,
               onChanged: onAction,
             ),
@@ -1519,6 +1532,11 @@ class _ResolutionPanel extends StatelessWidget {
                     enabled: enabled,
                     onChanged: onResolutionChanged,
                   ),
+                BankReconciliationActionKind.payPayroll =>
+                  _PayrollPaymentSummary(
+                    payroll: row.effectiveResolution.payroll,
+                    movement: movement,
+                  ),
                 BankReconciliationActionKind.pending => const VbNotice(
                     title: 'Quedará pendiente',
                     body:
@@ -1540,7 +1558,8 @@ bool _suggestionApplied(BankReconciliationRowDraft row) {
       current.action == suggested.action &&
       current.accountId == suggested.accountId &&
       current.paymentMethodId == suggested.paymentMethodId &&
-      current.reason == suggested.reason;
+      current.reason == suggested.reason &&
+      current.payroll?.lineId == suggested.payroll?.lineId;
 }
 
 /// What the ERP proposes for a movement no existing operation explains.
@@ -1594,12 +1613,16 @@ class _ActionChooser extends StatelessWidget {
   const _ActionChooser({
     required this.value,
     required this.movement,
+    required this.payrollAvailable,
     required this.enabled,
     required this.onChanged,
   });
 
   final BankReconciliationActionKind value;
   final BankStatementMovement movement;
+
+  /// Nómina owes a salary this transfer pays.
+  final bool payrollAvailable;
   final bool enabled;
   final ValueChanged<BankReconciliationActionKind> onChanged;
 
@@ -1611,6 +1634,12 @@ class _ActionChooser extends StatelessWidget {
         Icons.link,
         'Vincular operación',
       ),
+      if (payrollAvailable && movement.direction == BankMovementDirection.debit)
+        (
+          BankReconciliationActionKind.payPayroll,
+          Icons.payments_outlined,
+          'Pagar sueldo',
+        ),
       if (movement.direction == BankMovementDirection.debit)
         (
           BankReconciliationActionKind.createExpense,
@@ -2036,6 +2065,49 @@ class _JournalEditor extends StatelessWidget {
           tone: VbNoticeTone.info,
         ),
       ],
+    );
+  }
+}
+
+/// What applying a [BankReconciliationActionKind.payPayroll] row does.
+class _PayrollPaymentSummary extends StatelessWidget {
+  const _PayrollPaymentSummary({
+    required this.payroll,
+    required this.movement,
+  });
+
+  final BankPayrollPaymentDraft? payroll;
+  final BankStatementMovement movement;
+
+  @override
+  Widget build(BuildContext context) {
+    final payroll = this.payroll;
+    if (payroll == null) {
+      return const VbNotice(
+        title: 'Ningún sueldo de Nómina calza con esta transferencia',
+        body: 'Elige otra acción o registra el pago en Nómina.',
+        tone: VbNoticeTone.warning,
+      );
+    }
+    final date = movement.bookingDate;
+    final day = date == null
+        ? ''
+        : ' el ${date.day.toString().padLeft(2, '0')}/'
+            '${date.month.toString().padLeft(2, '0')}';
+    final owedAfter = payroll.expectedAmountClp - payroll.amountClp;
+    return VbNotice(
+      key: const ValueKey('bank-reconciliation-payroll-summary'),
+      title: 'Se paga en Nómina al aplicar',
+      body: <String>[
+        '${payroll.employeeName} · ${payroll.voucherNumber} '
+            '${payroll.periodLabel}: ${_money(payroll.amountClp)} desde esta '
+            'cuenta$day.',
+        if (payroll.confirmDraft)
+          'La semana está en borrador: se confirma antes de pagar.',
+        if (owedAfter > 0) 'Nómina le seguirá debiendo ${_money(owedAfter)}.',
+        'La transferencia queda asociada a ese pago.',
+      ].join(' '),
+      tone: VbNoticeTone.info,
     );
   }
 }

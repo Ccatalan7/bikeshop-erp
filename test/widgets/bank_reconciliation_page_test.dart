@@ -271,6 +271,99 @@ void main() {
     expect(find.text('Sugerencia aplicada'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('a salary Nómina owes is paid from the review', (tester) async {
+    final harness = _Harness();
+    addTearDown(harness.dispose);
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(harness.app(initialDraft: _salaryDraft()));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('bank-reconciliation-resolve-braulio')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('bank-reconciliation-action-payPayroll')),
+      findsOneWidget,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('bank-reconciliation-use-suggestion')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('bank-reconciliation-payroll-summary')),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('La semana está en borrador: se confirma'),
+      findsOneWidget,
+    );
+    expect(find.text('Sueldo listo'), findsOneWidget);
+    expect(
+      find.text('1 de 1 movimientos resueltos · 0 quedan pendientes'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+}
+
+BankReconciliationPreparedDraft _salaryDraft() {
+  final movement = BankStatementMovement(
+    sourceRowId: 'braulio',
+    ordinal: 1,
+    bookingDate: const BankCivilDate(2026, 8, 31),
+    description: 'App-traspaso A: Braulio Munoz Internet',
+    normalizedDescription: 'app traspaso a braulio munoz internet',
+    counterpartyObserved: 'Braulio Munoz Internet',
+    direction: BankMovementDirection.debit,
+    amountClp: 71400,
+    sourcePage: 1,
+    sourceLineStart: 1,
+    sourceLineEnd: 1,
+  );
+  const payroll = BankPayrollPaymentDraft(
+    voucherId: 'voucher-37',
+    voucherNumber: 'NOM-00037',
+    periodLabel: 'Semana 35',
+    lineId: 'line-braulio',
+    employeeName: 'Braulio Muñoz',
+    expectedAmountClp: 71400,
+    amountClp: 71400,
+    paymentMethodId: 'bank-method',
+    confirmDraft: true,
+  );
+  return BankReconciliationPreparedDraft(
+    fileSha256:
+        'dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd',
+    filename: 'cartola agosto.pdf',
+    sourceType: 'pdf_text',
+    parserName: 'banco_chile_statement',
+    parserVersion: 'v1',
+    rows: <BankReconciliationRowDraft>[
+      BankReconciliationRowDraft(
+        movement: movement,
+        proposals: const <BankReconciliationProposal>[],
+        suggestion: BankReconciliationSuggestion(
+          kind: BankSuggestionKind.payroll,
+          confidence: BankReconciliationConfidence.high,
+          title: 'Sueldo de Braulio Muñoz · Semana 35',
+          reasons: const <String>[
+            'Nómina NOM-00037 le debe \$71.400 y aún no registra el pago',
+          ],
+          resolution: const BankReconciliationResolutionDraft(
+            action: BankReconciliationActionKind.payPayroll,
+            payroll: payroll,
+          ),
+        ),
+      ),
+    ],
+  );
 }
 
 BankReconciliationPreparedDraft _suggestedDraft() {

@@ -82,9 +82,14 @@ calls v1 for eligibility (access, range, account, allocated targets) and then:
   payment (`payroll_payment_statement_allocations`,
   `payroll_statement_allocations`). Nómina registered weeks of July salaries on
   12 August; the evidence keeps the real transfer date;
-- returns unpaid payroll lines, open sales and purchase invoices, a directory
-  of counterparties with the expense account each was booked to, and earlier
-  reconciliation decisions, so an unregistered row can be proposed.
+- returns the payroll lines Nómina still owes, open sales and purchase
+  invoices, a directory of counterparties with the expense account each was
+  booked to, and earlier reconciliation decisions, so an unregistered row can
+  be proposed. A payroll line is owed while its balance (total minus payments
+  and applied advances, as `pay_payroll_voucher_v2` computes it) is positive,
+  and carries the week's status and `reconciliation_version`. Until
+  2026-09-18 it was «a line without an expense»; confirming a week books every
+  line's expense, so a confirmed, unpaid week disappeared from the review.
 
 The client asks from 45 days before the statement: a salary can be registered
 weeks after its transfer.
@@ -203,8 +208,8 @@ Official basis:
 
 A row nothing explains gets one suggestion, firmest evidence first: a transfer
 and its return cancel each other (dismiss both); an earlier decision for the
-same counterparty or merchant; a salary Nómina still owes (pay it in Nómina —
-this workspace never books a salary); an open invoice with that balance
+same counterparty or merchant; a salary Nómina still owes (paid from here, see
+below); an open invoice with that balance
 (register the payment in Ventas or Compras); the account a supplier or payee
 was booked to before (e.g. the monthly rent); a goods supplier with no
 purchase (register it in Compras); the merchant of a card charge (Google Cloud,
@@ -212,6 +217,34 @@ Meta, NIC Chile…) or a bank fee (a journal to financial expenses, never a
 look-alike supplier). A suggestion this workspace can apply carries a
 prefilled decision; «Usar sugerencias seguras» applies only high-confidence
 ones and leaves them editable until the review is applied.
+
+## Salaries Nómina owes
+
+A transfer to a worker that matches an owed payroll line (strong name, amount
+within 1%, paid from the week's close to 35 days later) is proposed as
+«Pagar sueldo». Applying it goes through `apply_bank_reconciliation_actions_v3`,
+which in one transaction pays the salary with Nómina's own commands and then
+associates the row with the payment they created — the reconciliation never
+books a salary itself, so the result is the same as paying it in Nómina:
+
+- a draft week is confirmed first with `confirm_payroll_voucher_v2`, only when
+  the row says so (`confirm_draft`, shown to the operator as «la semana se
+  confirma»); a week another statement confirmed meanwhile is paid without
+  confirming it again;
+- the salary is paid with `pay_payroll_voucher_v2`, dated on the bank booking
+  date, from this bank account with its active «Transferencia» method; the
+  amount is the transfer, at most the balance, and a rounding up to $1.000
+  stays on the row as any direct association tolerates;
+- the row's allocation names the new expense payment, and its decision keeps
+  `payroll_payment` (week, line, worker, payment) in `action_snapshot`.
+
+The server refuses rather than guesses: a line whose balance is not the one
+the review saw (`bank_reconciliation_payroll_line_changed`), a draft without
+consent, another tenant's week, a method that does not pay into this account,
+or a date Nómina only accepts as an advance. Nothing is saved when any row
+fails. A retry with the same operation key returns the first receipt without
+calling Nómina again. Nómina keeps its own path; either one leaves the line
+paid, and the next review associates what Nómina paid.
 
 ## Several statements at once
 
