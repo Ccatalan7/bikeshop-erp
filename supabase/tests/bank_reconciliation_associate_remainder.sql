@@ -42,7 +42,10 @@ insert into public.journal_entries (
    'adjustment', 'journal_entries', 'FV-00836', 'posted', 7000, 7000),
   ('e7000000-0000-4000-8000-000000000041', 'e7000000-0000-4000-8000-000000000001',
    'AC-2', '2026-07-07 12:00:00+00', 'Pago factura FV-00836 - Transferencia',
-   'adjustment', 'sales_payments', 'FV-00836', 'posted', 7000, 7000);
+   'adjustment', 'sales_payments', 'FV-00836', 'posted', 7000, 7000),
+  ('e7000000-0000-4000-8000-000000000042', 'e7000000-0000-4000-8000-000000000001',
+   'AC-3', '2026-07-07 12:00:00+00', 'Gasto pagado (legado)',
+   'adjustment', 'expenses', 'GTO-1', 'posted', 7000, 7000);
 insert into public.journal_lines (
   tenant_id, entry_id, account_id, account_code, account_name, description,
   debit_amount, credit_amount
@@ -50,7 +53,8 @@ insert into public.journal_lines (
 select 'e7000000-0000-4000-8000-000000000001', entry.id, line.account_id,
        line.code, line.name, 'Pago FV-00836', line.debit, line.credit
   from (values ('e7000000-0000-4000-8000-000000000040'::uuid),
-               ('e7000000-0000-4000-8000-000000000041'::uuid)) entry(id)
+               ('e7000000-0000-4000-8000-000000000041'::uuid),
+               ('e7000000-0000-4000-8000-000000000042'::uuid)) entry(id)
  cross join (values
    ('e7000000-0000-4000-8000-000000000010'::uuid, '1110', 'Banco de Chile', 7000, 0),
    ('e7000000-0000-4000-8000-000000000012'::uuid, '1130',
@@ -113,7 +117,8 @@ select
 -- movement booked to an account.
 create function pg_temp.link(
   p_bank_amount numeric, p_remainder jsonb,
-  p_target uuid default 'e7000000-0000-4000-8000-000000000040'
+  p_target uuid default 'e7000000-0000-4000-8000-000000000040',
+  p_provider text default 'none'
 )
 returns jsonb language sql as $$
   select jsonb_build_object(
@@ -124,7 +129,7 @@ returns jsonb language sql as $$
       'target_id', p_target,
       'bank_amount', p_bank_amount, 'target_amount', 7000,
       'match_kind', 'manual', 'confidence', 'medium',
-      'provider', 'none', 'instrument', 'unknown'
+      'provider', p_provider, 'instrument', 'unknown'
     ))
   ) || case when p_remainder is null then '{}'::jsonb
        else jsonb_build_object('remainder', p_remainder) end
@@ -178,6 +183,24 @@ select throws_like(
     'e7000000-0000-4000-8000-000000000041')),
   '%bank_reconciliation_target_is_payment_journal%',
   'the journal a sales payment posted is never linked apart from its payment'
+);
+
+select throws_like(
+  pg_temp.apply('remainder:legacy-expense-journal', pg_temp.link(7000,
+    pg_temp.rest('e7000000-0000-4000-8000-000000000011', 'Venta no registrada'),
+    'e7000000-0000-4000-8000-000000000042')),
+  '%bank_reconciliation_target_is_payment_journal%',
+  'the journal of a legacy paid expense is never linked apart from it'
+);
+
+-- A settlement is one because the terminal adapter marked it, not because
+-- the caller wrote a provider: this one is bounded like any manual link.
+select throws_like(
+  pg_temp.apply('remainder:card-manual', pg_temp.link(5500,
+    pg_temp.rest('e7000000-0000-4000-8000-000000000011', 'Venta no registrada'),
+    'e7000000-0000-4000-8000-000000000040', 'transbank')),
+  '%bank_reconciliation_allocation_invalid%',
+  'a manual link is bounded at $1.000 whatever provider it claims'
 );
 
 select lives_ok(

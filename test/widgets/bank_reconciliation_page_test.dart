@@ -700,6 +700,15 @@ void main() {
                 'reason': 'Abono repetido en otra cuenta',
               },
             },
+            // Another statement of the same conciliation, not loaded now.
+            '${'b' * 64}:p2-l7-r19': <String, dynamic>{
+              'resolution': <String, dynamic>{
+                'action': 'classifyAccount',
+                'account_id': 'expense-account',
+                'description': 'Suscripción',
+              },
+              'ai': <String, dynamic>{'explanation': 'Un cargo mensual.'},
+            },
           },
         },
       ),
@@ -755,10 +764,18 @@ void main() {
 
     final (revision, saved) = harness.savedDrafts.single;
     expect(revision, 3);
+    // What the conciliation holds for the statement this sitting did not
+    // load is saved as it was.
     expect((saved['rows'] as Map).keys.toSet(), {
       '$sha:transbank',
       '$sha:direct',
+      '${'b' * 64}:p2-l7-r19',
     });
+    expect(
+      (((saved['rows'] as Map)['${'b' * 64}:p2-l7-r19'] as Map)['resolution']
+          as Map)['description'],
+      'Suscripción',
+    );
     expect(
       ((saved['rows'] as Map)['$sha:direct'] as Map)['resolution'],
       {'action': 'pending'},

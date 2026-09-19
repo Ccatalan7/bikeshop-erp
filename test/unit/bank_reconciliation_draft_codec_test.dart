@@ -249,6 +249,71 @@ void main() {
     );
   });
 
+  test('a deposit split the kernel would refuse is not restored', () {
+    final options = BankReconciliationWorkspaceOptions(
+      accounts: const <BankReconciliationLedgerAccountOption>[
+        BankReconciliationLedgerAccountOption(
+          accountId: 'fees',
+          code: '6103',
+          name: 'Honorarios Profesionales',
+          type: 'expense',
+        ),
+        BankReconciliationLedgerAccountOption(
+          accountId: 'partner',
+          code: '3102',
+          name: 'Aportes de socio',
+          type: 'equity',
+        ),
+      ],
+      paymentMethods: const <BankReconciliationPaymentMethodOption>[],
+    );
+    // Saved before the deposit split was blocked: money in, one part on an
+    // expense account.
+    final saved = _saved(<String, dynamic>{
+      'version': BankReconciliationDraftCodec.version,
+      'rows': <String, dynamic>{
+        '${'a' * 64}:owner': <String, dynamic>{
+          'resolution': <String, dynamic>{
+            'action': 'split',
+            'split_parts': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'account_id': 'partner',
+                'amount': 600000,
+                'description': 'Aporte',
+                'is_expense': false,
+              },
+              <String, dynamic>{
+                'account_id': 'fees',
+                'amount': 100000,
+                'description': 'Devolución de honorarios',
+                'is_expense': false,
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    final refused = codec.restore(_fresh(), saved, options: options);
+    expect(refused.droppedCount, 1);
+    expect(refused.draft.rowsBySourceId['owner']!.isResolved, isFalse);
+
+    // The same split of a charge still holds.
+    final kept = codec.restore(
+      _fresh(),
+      _saved(<String, dynamic>{
+        'version': BankReconciliationDraftCodec.version,
+        'rows': <String, dynamic>{
+          '${'a' * 64}:repay': (saved['rows'] as Map)['${'a' * 64}:owner'],
+        },
+      }),
+      options: options,
+    );
+    expect(kept.droppedCount, 0);
+    expect(kept.draft.rowsBySourceId['repay']!.effectiveResolution.action,
+        BankReconciliationActionKind.split);
+  });
+
   test('a save keeps what the draft holds for statements not loaded', () {
     // July imported again alone, in a conciliation that also has June.
     final june = <String, dynamic>{

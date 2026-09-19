@@ -1,11 +1,11 @@
--- Falla si la conciliación vuelve a rechazar una liquidación de tarjeta por
--- su comisión, si puede vincular el asiento de un pago aparte del pago, o si
--- perdió las reglas de hoy.
+-- Falla si la conciliación puede vincular el asiento de un pago aparte del
+-- pago o si perdió las reglas de hoy. Cómo se distingue una liquidación de
+-- tarjeta de un vínculo manual lo afirma
+-- verify_bank_reconciliation_settlement_marker.sql: desde 20260919160000 la
+-- marca el adaptador, no el proveedor.
 select 1 / (case when
   pg_get_functiondef('public.apply_bank_reconciliation_actions_without_terminal_settlements(uuid,bigint,text,jsonb)'::regprocedure)
     like '%bank_reconciliation_target_is_payment_journal%'
-  and pg_get_functiondef('public.apply_bank_reconciliation_actions_without_terminal_settlements(uuid,bigint,text,jsonb)'::regprocedure)
-    like '%v_allocation->>''provider'' <> ''none''%'
   and pg_get_functiondef('public.apply_bank_reconciliation_actions_without_terminal_settlements(uuid,bigint,text,jsonb)'::regprocedure)
     like '%bank_reconciliation_remainder_invalid%'
   and pg_get_functiondef('public.apply_bank_reconciliation_actions_without_terminal_settlements(uuid,bigint,text,jsonb)'::regprocedure)

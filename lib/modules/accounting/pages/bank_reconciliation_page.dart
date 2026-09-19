@@ -403,7 +403,8 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
   void _adoptSession(BankReconciliationSession session) {
     final draft = _draft;
     if (draft == null) return;
-    final restore = _codec.restore(draft, session.draft);
+    final restore =
+        _codec.restore(draft, session.draft, options: _workspaceOptions);
     setState(() {
       _session = session;
       _draft = restore.draft;

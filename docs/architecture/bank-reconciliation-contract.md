@@ -383,14 +383,21 @@ Haber banco). The resolution keeps the account and gloss in `accountId` and
   that does not add up, a split whose parts do not reach the movement, an
   unfinished expense — is sent as `pending`: it never blocks the decided
   rows of its statement, nor reaches the kernel half-filled.
-- The kernel bounds what a link may claim: a manual allocation without a
-  provider may differ from its operation by at most $1.000; one with a
-  provider is a card settlement (the terminal adapter sends
-  `processor_estimate` as `manual`) and may be below its sale, never above
-  (`20260919140000`; the first bound, `110000`, refused settlements for an
-  hour). The journal a payment posted (sales, purchase and expense payments,
-  terminal settlements) is never a target apart from its payment
-  (`bank_reconciliation_target_is_payment_journal`).
+- The kernel bounds what a link may claim: a manual allocation may differ
+  from its operation by at most $1.000. The exception is a card settlement,
+  and it is one because the terminal adapter says so: the adapter turns each
+  `processor_estimate` into a manual allocation marked `settlement` — and
+  strips that mark from anything else — because it is the adapter that books
+  the acquirer's commission and moves the money out of the clearing account.
+  A marked settlement may be below its sale, never above. The first bound
+  (`110000`) refused real settlements for an hour; telling them apart by
+  their provider (`140000`) let a caller reconcile a card sale with no
+  settlement posted at all (`20260919160000`).
+- The journal a payment posted (sales, purchase and expense payments,
+  terminal settlements, and a legacy paid expense's own journal) is never a
+  target apart from its payment
+  (`bank_reconciliation_target_is_payment_journal`): the same money would
+  explain two movements.
 - A remainder of zero or less, or one to the bank account itself, is refused.
 
 ## The first real apply (2026-09-19)
@@ -534,7 +541,8 @@ pending, decisions not applied, rows the AI read). «Retomar» rebuilds the
 review from `bank_statement_rows` — the files are never stored — reviews it
 again, and restores a saved decision only while it holds: its operations
 exist and no untouched movement took them, a salary is taken as Nómina owes
-it today. What no longer holds is dropped and counted in a notice. Applying
+it today, and a decision today's kernel would refuse (a deposit split into
+an expense account) is dropped with the rest. What no longer holds is dropped and counted in a notice. Applying
 stays per file and covers only the open rows, so the operator applies what is
 sure and «Seguir con los N pendientes» reopens the same conciliation with the
 applied rows shown as «Ya conciliado».

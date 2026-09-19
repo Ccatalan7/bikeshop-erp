@@ -128,10 +128,15 @@ class BankReconciliationDraftCodec {
     };
   }
 
+  /// [options] are today's accounts: a saved decision that names one the
+  /// ERP no longer has, or that the kernel would refuse (a deposit split
+  /// into an expense account), is dropped like any other that no longer
+  /// holds.
   BankDraftRestore restore(
     BankReconciliationPreparedDraft draft,
-    Map<String, dynamic> saved,
-  ) {
+    Map<String, dynamic> saved, {
+    BankReconciliationWorkspaceOptions? options,
+  }) {
     final rows = saved['rows'];
     if (saved['version'] != version || rows is! Map || rows.isEmpty) {
       return BankDraftRestore(
@@ -205,6 +210,10 @@ class BankReconciliationDraftCodec {
       }
 
       var resolution = _decodeResolution(entry['resolution']);
+      if (resolution != null && !_bookable(resolution, row, options)) {
+        resolution = null;
+        holds = false;
+      }
       if (resolution?.action == BankReconciliationActionKind.payPayroll) {
         // The salary is taken as Nómina owes it today, never as saved.
         final current = row.suggestion?.resolution;
@@ -225,7 +234,7 @@ class BankReconciliationDraftCodec {
         holds = false;
       }
 
-      final analysis = _decodeAi(entry['ai'], row, catalog);
+      final analysis = _decodeAi(entry['ai'], row, catalog, options);
       if (!holds) {
         dropped++;
         if (analysis != null) {
@@ -260,6 +269,23 @@ class BankReconciliationDraftCodec {
       draft: replacements.isEmpty ? draft : draft.replaceRows(replacements),
       restoredRowIds: restored,
       droppedCount: dropped,
+    );
+  }
+
+  /// Money coming in is never split into an expense account: the kernel
+  /// books every part on one as a paid expense, which only a charge can be.
+  bool _bookable(
+    BankReconciliationResolutionDraft resolution,
+    BankReconciliationRowDraft row,
+    BankReconciliationWorkspaceOptions? options,
+  ) {
+    if (options == null ||
+        resolution.action != BankReconciliationActionKind.split ||
+        row.movement.direction == BankMovementDirection.debit) {
+      return true;
+    }
+    return !resolution.splitParts.any(
+      (part) => options.account(part.accountId)?.canReceiveExpense ?? false,
     );
   }
 
@@ -303,6 +329,7 @@ class BankReconciliationDraftCodec {
     Object? raw,
     BankReconciliationRowDraft row,
     Map<String, BankReconciliationCandidate> catalog,
+    BankReconciliationWorkspaceOptions? options,
   ) {
     if (raw is! Map) return null;
     final explanation = raw['explanation']?.toString();
@@ -323,13 +350,16 @@ class BankReconciliationDraftCodec {
         );
       }
     }
+    final resolution = _decodeResolution(raw['resolution']);
     return BankAiAnalysis(
       explanation: explanation,
       question: raw['question']?.toString(),
       missing: raw['missing']?.toString(),
       answer: raw['answer']?.toString(),
       proposal: proposal,
-      resolution: _decodeResolution(raw['resolution']),
+      resolution: resolution == null || _bookable(resolution, row, options)
+          ? resolution
+          : null,
     );
   }
 }
