@@ -224,8 +224,19 @@ Official basis:
   partial rather than manufacturing reconciliation.
 - Target existence, tenant, account, direction and amount are revalidated in
   the database at save time. A stale target fails the whole command.
-- Import and apply are separate idempotent commands. Applying replaces one
-  complete review snapshot under optimistic revision control.
+- Import and apply are separate idempotent commands under optimistic revision
+  control. A decided row is final: a later apply of the same statement covers
+  exactly the rows still open and the kernel refuses a decided one
+  (`bank_reconciliation_row_already_decided`). Before 2026-09-19 an apply
+  replaced the whole statement and refused one that had created anything, so
+  a movement left pending could never be resolved while the page said it
+  could. A reopened statement shows what an earlier sitting applied as «Ya
+  conciliado» and sends nothing for it.
+- A manual association may take several operations: one transfer can pay
+  several (the owner's mother paid two salaries of week 29 and was repaid
+  $133.000 in one transfer, 7 July). It counts only once the operations add up
+  to the movement within the direct tolerance; each takes its own amount and
+  the last takes the remainder.
 - Authenticated clients can read their accounting scope but cannot directly
   insert or mutate reconciliation tables.
 
@@ -292,6 +303,18 @@ files — and a movement repeated by overlapping statements (same date, amount,
 balance and text) is reviewed once. Each file is still persisted as its own
 import under its own row ids, so importing a file again never duplicates rows,
 and applying replays per file after a partial failure.
+
+Statements loaded on different days overlap too: a month downloaded on the
+17th and the full month later. A movement another statement of the account
+already decided — same booking date, direction, amount and running balance,
+which the bank prints once per movement (every row of the owner's four 2026
+statements carries one, all distinct) — is shown as «Ya conciliado en otra
+cartola» and applied as a dismissal marked `settled_elsewhere`, which the
+kernel proves against that statement. The kernel refuses to associate, book
+or classify such a row (`bank_reconciliation_row_settled_elsewhere`), the
+catalog stops offering operations a row already explains and returns
+`reconciled_rows` for the statement's dates, and settled-elsewhere dismissals
+never teach the advisor to dismiss.
 
 ## Responsive composition
 

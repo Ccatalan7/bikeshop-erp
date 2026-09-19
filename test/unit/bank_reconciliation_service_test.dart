@@ -556,6 +556,253 @@ void main() {
     expect(receipt.createdExpenseCount, 1);
     expect(receipt.createdJournalCount, 1);
   });
+
+  test('a reopened statement sends only its open rows', () async {
+    final calls = <_RpcCall>[];
+    final service = BankReconciliationService(
+      database: _FakeDatabaseService(),
+      rpc: (name, params) async {
+        calls.add(_RpcCall(name, params));
+        return <String, dynamic>{
+          'import_id': '33333333-3333-4333-8333-333333333333',
+          'revision': 5,
+          'status': 'partially_reconciled',
+          'allocation_count': 2,
+          'replayed': false,
+        };
+      },
+    );
+    BankStatementMovement movement(String id, int ordinal, int amount) =>
+        BankStatementMovement(
+          sourceRowId: id,
+          ordinal: ordinal,
+          bookingDate: const BankCivilDate(2026, 7, 7),
+          description: 'Movimiento $id',
+          normalizedDescription: 'movimiento $id',
+          direction: BankMovementDirection.debit,
+          amountClp: amount,
+          sourcePage: 1,
+          sourceLineStart: ordinal,
+          sourceLineEnd: ordinal,
+        );
+    BankReconciliationCandidate salary(String id, int amount) =>
+        BankReconciliationCandidate(
+          targetKind: BankReconciliationTargetKind.expensePayment,
+          targetId: id,
+          direction: BankMovementDirection.debit,
+          amountClp: amount,
+          occurredOn: const BankCivilDate(2026, 8, 12),
+          label: 'Sueldo $id',
+        );
+    final repaid = BankReconciliationProposal.manual(
+      sourceRowId: 'mother',
+      movementAmountClp: 133000,
+      candidates: <BankReconciliationCandidate>[
+        salary('vicente', 94500),
+        salary('lucas', 38500),
+      ],
+    )!;
+    final draft = BankReconciliationPreparedDraft(
+      fileSha256: 'a' * 64,
+      filename: 'cartola.pdf',
+      sourceType: 'pdf_text',
+      parserName: 'banco_chile_statement',
+      parserVersion: 'v1',
+      rows: <BankReconciliationRowDraft>[
+        BankReconciliationRowDraft(
+          movement: movement('applied', 1, 2690),
+          proposals: const [],
+          settled: const BankSettledMovement(
+            sameStatement: true,
+            summary: 'Gasto GTO-00200',
+            disposition: BankReconciliationDisposition.reconciled,
+          ),
+        ),
+        BankReconciliationRowDraft(
+          movement: movement('overlap', 2, 5000),
+          proposals: const [],
+          settled: const BankSettledMovement(
+            sameStatement: false,
+            summary: 'Gasto GTO-00201',
+            disposition: BankReconciliationDisposition.reconciled,
+          ),
+        ),
+        BankReconciliationRowDraft(
+          movement: movement('mother', 3, 133000),
+          proposals: <BankReconciliationProposal>[repaid],
+          selectedProposalId:
+              BankReconciliationRowDraft.proposalIdentity(repaid),
+        ),
+      ],
+    );
+    expect(draft.settledCount, 2);
+    expect(draft.resolvedCount, 1);
+    expect(draft.pendingCount, 0);
+
+    await service.apply(
+      draft: draft,
+      importReceipt: BankStatementImportReceipt(
+        importId: '33333333-3333-4333-8333-333333333333',
+        revision: 4,
+        rowIdsBySourceRowId: const <String, String>{
+          'applied': 'row-applied',
+          'overlap': 'row-overlap',
+          'mother': 'row-mother',
+        },
+        replayed: false,
+      ),
+      operationKey: 'apply-reopened',
+    );
+
+    final actions =
+        calls.single.params['p_actions'] as List<Map<String, dynamic>>;
+    // The row applied in an earlier sitting is final on the server.
+    expect(actions.map((action) => action['row_id']),
+        <String>['row-overlap', 'row-mother']);
+    expect(actions.first['action'], 'dismiss');
+    expect(actions.first['settled_elsewhere'], isTrue);
+    expect(
+        actions.first['reason'], 'Conciliado en otra cartola: Gasto GTO-00201');
+    final allocations =
+        actions.last['allocations'] as List<Map<String, dynamic>>;
+    expect(allocations.map((item) => item['target_id']),
+        <String>['vicente', 'lucas']);
+    expect(allocations.map((item) => item['bank_amount']), <int>[94500, 38500]);
+    expect(allocations.map((item) => item['match_kind']).toSet(), {'manual'});
+  });
+
+  test('settled movements are found by statement row or by running balance',
+      () {
+    BankStatementMovement movement(
+      String id, {
+      required int amount,
+      required int balance,
+      int day = 2,
+    }) =>
+        BankStatementMovement(
+          sourceRowId: id,
+          ordinal: 1,
+          bookingDate: BankCivilDate(2026, 9, day),
+          description: 'Movimiento $id',
+          normalizedDescription: 'movimiento $id',
+          direction: BankMovementDirection.debit,
+          amountClp: amount,
+          balanceClp: balance,
+          sourcePage: 1,
+          sourceLineStart: 1,
+          sourceLineEnd: 1,
+        );
+    BankReconciledRow reconciled(
+      String sha,
+      String rowId, {
+      required int amount,
+      required int balance,
+      bool elsewhere = false,
+      List<String> labels = const <String>[],
+    }) =>
+        BankReconciledRow(
+          importId: 'import-$sha',
+          fileSha256: sha,
+          sourceRowId: rowId,
+          bookingDate: const BankCivilDate(2026, 9, 2),
+          direction: BankMovementDirection.debit,
+          amountClp: amount,
+          balanceClp: balance,
+          disposition: elsewhere
+              ? BankReconciliationDisposition.ignored
+              : BankReconciliationDisposition.reconciled,
+          action: elsewhere ? 'dismiss' : 'associate_existing',
+          settledElsewhere: elsewhere,
+          labels: labels,
+        );
+    final partial = 'p' * 64;
+    final full = 'f' * 64;
+    final later = 'l' * 64;
+    final settled = BankReconciliationService.settledMovements(
+      <(BankStatementMovement, String, int)>[
+        (movement('row-1', amount: 7000, balance: 93000), partial, 0),
+        (movement('row-9', amount: 7000, balance: 93000), full, 1),
+        (movement('row-10', amount: 7000, balance: 86000), full, 1),
+        (movement('row-3', amount: 7000, balance: 93000), later, 2),
+      ],
+      <BankReconciledRow>[
+        // A later statement only recorded it; the partial one settled it.
+        reconciled(later, 'row-2',
+            amount: 7000, balance: 93000, elsewhere: true),
+        reconciled(partial, 'row-1',
+            amount: 7000, balance: 93000, labels: <String>['Gasto GTO-00201']),
+      ],
+    );
+
+    expect(settled['row-1']?.sameStatement, isTrue);
+    expect(settled['row-9']?.sameStatement, isFalse);
+    expect(settled['row-9']?.summary, 'Gasto GTO-00201');
+    // Same date and amount but another running balance: another movement.
+    expect(settled.containsKey('row-10'), isFalse);
+    expect(settled['row-3']?.summary, 'Gasto GTO-00201');
+  });
+
+  test('a manual choice counts once its operations add up to the movement', () {
+    BankReconciliationCandidate payment(String id, int amount) =>
+        BankReconciliationCandidate(
+          targetKind: BankReconciliationTargetKind.expensePayment,
+          targetId: id,
+          direction: BankMovementDirection.debit,
+          amountClp: amount,
+          occurredOn: const BankCivilDate(2026, 8, 12),
+          label: 'Pago $id',
+        );
+    final movement = BankStatementMovement(
+      sourceRowId: 'mother',
+      ordinal: 1,
+      bookingDate: const BankCivilDate(2026, 7, 7),
+      description: 'App-traspaso A: Maria Angelica Sandoval',
+      normalizedDescription: 'app traspaso a maria angelica sandoval',
+      direction: BankMovementDirection.debit,
+      amountClp: 133000,
+      sourcePage: 1,
+      sourceLineStart: 1,
+      sourceLineEnd: 1,
+    );
+    BankReconciliationRowDraft rowWith(List<BankReconciliationCandidate> c) {
+      final proposal = BankReconciliationProposal.manual(
+        sourceRowId: 'mother',
+        movementAmountClp: 133000,
+        candidates: c,
+      )!;
+      return BankReconciliationRowDraft(
+        movement: movement,
+        proposals: <BankReconciliationProposal>[proposal],
+        selectedProposalId:
+            BankReconciliationRowDraft.proposalIdentity(proposal),
+      );
+    }
+
+    expect(rowWith([payment('vicente', 94500)]).isResolved, isFalse);
+    expect(
+      rowWith([payment('vicente', 94500), payment('lucas', 38500)]).isResolved,
+      isTrue,
+    );
+    // Within the direct-match tolerance the last operation takes the rest.
+    final rounded = BankReconciliationProposal.manual(
+      sourceRowId: 'mother',
+      movementAmountClp: 133000,
+      candidates: [payment('vicente', 94500), payment('lucas', 38200)],
+    )!;
+    expect(rounded.allocations.last.bankAmountClp, 38500);
+    expect(
+      BankReconciliationProposal.manual(
+        sourceRowId: 'mother',
+        movementAmountClp: 133000,
+        candidates: [
+          payment('vicente', 94500),
+          payment('big', 40000),
+          payment('lucas', 38500)
+        ],
+      ),
+      isNull,
+    );
+  });
 }
 
 class _FakeDatabaseService extends DatabaseService {}

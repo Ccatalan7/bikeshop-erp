@@ -339,13 +339,21 @@ class BankReconciliationService {
       // Suggestions degrade to prefilled text; matching still works.
       debugPrint('BankReconciliationService workspace options: $error');
     }
+    // What an earlier review settled is shown as done and never decided
+    // again: rows of this statement applied in an earlier sitting, and
+    // movements an overlapping statement of the account already settled.
+    final settled = settledMovements(entries, context.reconciledRows);
+    final open = <BankStatementMovement>[
+      for (final movement in movements)
+        if (!settled.containsKey(movement.sourceRowId)) movement,
+    ];
     final match = _matcher.analyze(
-      movements: movements,
+      movements: open,
       candidates: context.candidates,
       terminalPolicies: terminalPolicies,
     );
     final suggestions = _advisor.suggest(
-      movements: movements,
+      movements: open,
       proposals: match.proposals,
       context: context,
       options: options,
@@ -367,6 +375,7 @@ class BankReconciliationService {
                 const <BankReconciliationProposal>[],
             suggestion: suggestions[entry.$1.sourceRowId],
             sourceFileSha256: multiple ? entry.$2 : null,
+            settled: settled[entry.$1.sourceRowId],
           ),
       ],
       candidateCatalog: context.candidates,
@@ -391,10 +400,105 @@ class BankReconciliationService {
           ),
       ],
       insights: <BankReconciliationInsight>[
+        ..._settledInsights(settled.values),
         ...match.insights,
         ..._advisor.insights(suggestions),
       ],
     );
+  }
+
+  /// Which movements an earlier review settled, by statement row or, across
+  /// overlapping statements, by date, direction, amount and balance.
+  @visibleForTesting
+  static Map<String, BankSettledMovement> settledMovements(
+    List<(BankStatementMovement, String, int)> entries,
+    List<BankReconciledRow> reconciled,
+  ) {
+    final byStatementRow = <String, BankReconciledRow>{
+      for (final row in reconciled) '${row.fileSha256}|${row.sourceRowId}': row,
+    };
+    final byKey = <String, BankReconciledRow>{};
+    for (final row in reconciled) {
+      final key = row.key;
+      if (key == null) continue;
+      final current = byKey[key];
+      // The statement that settled it, not a later one that recorded it.
+      if (current == null ||
+          (current.settledElsewhere && !row.settledElsewhere)) {
+        byKey[key] = row;
+      }
+    }
+    final settled = <String, BankSettledMovement>{};
+    for (final (movement, sha, _) in entries) {
+      final own = byStatementRow['$sha|${movement.persistedRowId}'];
+      if (own != null) {
+        settled[movement.sourceRowId] = _settledFrom(own, sameStatement: true);
+        continue;
+      }
+      final key = BankReconciledRow.keyOf(
+        bookingDate: movement.bookingDate,
+        direction: movement.direction,
+        amountClp: movement.amountClp,
+        balanceClp: movement.balanceClp,
+      );
+      final other = key == null ? null : byKey[key];
+      if (other != null && other.fileSha256 != sha) {
+        settled[movement.sourceRowId] =
+            _settledFrom(other, sameStatement: false);
+      }
+    }
+    return settled;
+  }
+
+  static BankSettledMovement _settledFrom(
+    BankReconciledRow row, {
+    required bool sameStatement,
+  }) {
+    final note = row.note?.trim();
+    final summary = row.labels.isNotEmpty
+        ? row.labels.join(' + ')
+        : row.settledElsewhere
+            ? 'Conciliado en otra cartola'
+            : row.disposition == BankReconciliationDisposition.ignored
+                ? (note == null || note.isEmpty
+                    ? 'Excluido'
+                    : 'Excluido: $note')
+                : 'Conciliado';
+    return BankSettledMovement(
+      sameStatement: sameStatement,
+      summary: summary,
+      disposition: row.disposition,
+      excluded: row.disposition == BankReconciliationDisposition.ignored &&
+          !row.settledElsewhere,
+      decidedOn: row.decidedOn,
+    );
+  }
+
+  static List<BankReconciliationInsight> _settledInsights(
+    Iterable<BankSettledMovement> settled,
+  ) {
+    final same = settled.where((item) => item.sameStatement).length;
+    final other = settled.length - same;
+    return <BankReconciliationInsight>[
+      if (same > 0)
+        BankReconciliationInsight(
+          title: same == 1
+              ? '1 movimiento ya se aplicó'
+              : '$same movimientos ya se aplicaron',
+          body: 'Se aplicaron en una revisión anterior de esta cartola. Se '
+              'muestran como conciliados y no se vuelven a tocar; lo que '
+              'quedó pendiente se resuelve ahora.',
+        ),
+      if (other > 0)
+        BankReconciliationInsight(
+          title: other == 1
+              ? '1 movimiento ya estaba conciliado en otra cartola'
+              : '$other movimientos ya estaban conciliados en otra cartola',
+          body: 'Aparecen también en una cartola que ya aplicaste. Al aplicar '
+              'ésta quedan registrados como conciliados allá, sin crear ni '
+              'asociar nada dos veces.',
+        ),
+    ];
   }
 
   Future<_ReadStatement> _readStatement(
@@ -633,11 +737,26 @@ class BankReconciliationService {
   }) async {
     final actions = <Map<String, dynamic>>[];
     for (final row in draft.rows) {
+      final settled = row.settled;
+      // Decided in an earlier sitting of this statement: final on the server.
+      if (settled != null && settled.sameStatement) continue;
       final rowId = importReceipt.rowIdsBySourceRowId[row.movement.sourceRowId];
       if (rowId == null) {
         throw const BankReconciliationServiceException(
           'La evidencia guardada no coincide con la revisión.',
         );
+      }
+      if (settled != null) {
+        // Settled by an overlapping statement: recorded as such, which the
+        // server proves against that statement.
+        final reason = 'Conciliado en otra cartola: ${settled.summary}';
+        actions.add(<String, dynamic>{
+          'row_id': rowId,
+          'action': 'dismiss',
+          'reason': reason.length > 500 ? reason.substring(0, 500) : reason,
+          'settled_elsewhere': true,
+        });
+        continue;
       }
       final resolution = row.effectiveResolution;
       final proposal = row.selectedProposal;
@@ -824,6 +943,19 @@ class BankReconciliationService {
     if (error.contains('bank_reconciliation_payroll')) {
       return 'Nómina no pudo registrar un sueldo de esta revisión. No se '
           'guardó nada; revisa esos movimientos o págalos en Nómina.';
+    }
+    if (error.contains('bank_reconciliation_row_already_decided') ||
+        error.contains('bank_reconciliation_revision_conflict')) {
+      return 'Esta cartola se aplicó en otra revisión mientras tenías ésta '
+          'abierta. No se guardó nada: vuelve a subirla para ver lo que '
+          'queda pendiente.';
+    }
+    if (error.contains('bank_reconciliation_row_settled_elsewhere') ||
+        error.contains('bank_reconciliation_settled_elsewhere_unproven') ||
+        error.contains('bank_reconciliation_target_already_linked')) {
+      return 'Un movimiento u operación de esta revisión ya quedó conciliado '
+          'en otra cartola. No se guardó nada: vuelve a subir las cartolas '
+          'y aparecerá como ya conciliado.';
     }
     return null;
   }

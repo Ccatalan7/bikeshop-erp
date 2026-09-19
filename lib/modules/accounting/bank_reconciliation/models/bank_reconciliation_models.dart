@@ -394,6 +394,53 @@ class BankReconciliationProposal {
         0,
         (sum, allocation) => sum + allocation.bankAmountClp,
       );
+
+  /// What the chosen ERP operations add up to.
+  int get targetTotalClp => allocations.fold<int>(
+        0,
+        (sum, allocation) => sum + allocation.candidate.amountClp,
+      );
+
+  /// A difference up to this is rounding or a bank fee, as for a direct
+  /// match; beyond it the chosen operations do not explain the movement.
+  static const manualToleranceClp = 1000;
+
+  /// The operations the operator chose for one movement: one transfer can
+  /// pay several (two salaries a relative paid and was repaid in one
+  /// transfer). Each takes its own amount and the last takes what is left,
+  /// so the allocations add up to the movement. Null when the operations
+  /// exceed the movement.
+  static BankReconciliationProposal? manual({
+    required String sourceRowId,
+    required int movementAmountClp,
+    required List<BankReconciliationCandidate> candidates,
+  }) {
+    if (candidates.isEmpty) return null;
+    var remaining = movementAmountClp;
+    final allocations = <BankReconciliationAllocationDraft>[];
+    for (var index = 0; index < candidates.length; index++) {
+      final candidate = candidates[index];
+      final last = index == candidates.length - 1;
+      final amount = last ? remaining : candidate.amountClp;
+      if (amount <= 0 || (!last && amount >= remaining)) return null;
+      allocations.add(BankReconciliationAllocationDraft(
+        candidate: candidate,
+        bankAmountClp: amount,
+      ));
+      remaining -= amount;
+    }
+    return BankReconciliationProposal(
+      sourceRowId: sourceRowId,
+      matchKind: BankReconciliationMatchKind.manual,
+      confidence: BankReconciliationConfidence.medium,
+      allocations: allocations,
+      reasons: <String>[
+        candidates.length == 1
+            ? 'Operación elegida manualmente'
+            : '${candidates.length} operaciones elegidas manualmente',
+      ],
+    );
+  }
 }
 
 class BankReconciliationResolutionDraft {
@@ -461,6 +508,7 @@ class BankReconciliationRowDraft {
     BankReconciliationResolutionDraft? resolution,
     this.suggestion,
     this.sourceFileSha256,
+    this.settled,
   })  : proposals = List.unmodifiable(proposals),
         selectedProposalId = selectedProposalId ??
             (selectDefault
@@ -497,6 +545,12 @@ class BankReconciliationRowDraft {
   /// File this movement was read from when several statements are reviewed
   /// together; null for a single statement.
   final String? sourceFileSha256;
+
+  /// Set when a review already settled this movement, in this statement or
+  /// in another one that overlaps it. It is shown, never decided again.
+  final BankSettledMovement? settled;
+
+  bool get isSettled => settled != null;
 
   BankReconciliationResolutionDraft get effectiveResolution =>
       resolution ??
@@ -535,12 +589,15 @@ class BankReconciliationRowDraft {
       resolution: resolution ?? effectiveResolution,
       suggestion: suggestion,
       sourceFileSha256: sourceFileSha256,
+      settled: settled,
     );
   }
 
-  bool get isResolved => switch (effectiveResolution.action) {
+  bool get isResolved =>
+      !isSettled &&
+      switch (effectiveResolution.action) {
         BankReconciliationActionKind.associateExisting =>
-          selectedProposal != null,
+          _explainsMovement(selectedProposal),
         BankReconciliationActionKind.createExpense =>
           (effectiveResolution.accountId?.trim().isNotEmpty ?? false) &&
               (effectiveResolution.paymentMethodId?.trim().isNotEmpty ??
@@ -556,6 +613,42 @@ class BankReconciliationRowDraft {
       };
 
   String get reasonText => effectiveResolution.reason ?? '';
+
+  /// A manual choice counts once its operations add up to the movement; the
+  /// matcher's own proposals already carry their checked difference.
+  bool _explainsMovement(BankReconciliationProposal? proposal) {
+    if (proposal == null) return false;
+    if (proposal.matchKind != BankReconciliationMatchKind.manual) return true;
+    final amount = movement.amountClp;
+    return amount != null &&
+        (proposal.targetTotalClp - amount).abs() <=
+            BankReconciliationProposal.manualToleranceClp;
+  }
+}
+
+/// A movement a review already settled.
+class BankSettledMovement {
+  const BankSettledMovement({
+    required this.sameStatement,
+    required this.summary,
+    required this.disposition,
+    this.excluded = false,
+    this.decidedOn,
+  });
+
+  /// Settled in this very statement, in an earlier sitting. Otherwise it was
+  /// settled in an overlapping statement and is recorded here as such.
+  final bool sameStatement;
+
+  /// What it was settled as: the operations it explains, or why it was
+  /// excluded.
+  final String summary;
+  final BankReconciliationDisposition disposition;
+
+  /// Excluded by the operator (a returned transfer, a fee checked apart),
+  /// not explained by an operation.
+  final bool excluded;
+  final BankCivilDate? decidedOn;
 }
 
 /// One statement file inside a review. Each file is persisted as its own
@@ -628,11 +721,16 @@ class BankReconciliationPreparedDraft {
   int get selectedCount =>
       rows.where((row) => row.selectedProposal != null).length;
   int get resolvedCount => rows.where((row) => row.isResolved).length;
-  int get pendingCount => movementCount - resolvedCount;
+
+  /// Movements an earlier review settled; they are not decided again.
+  int get settledCount => rows.where((row) => row.isSettled).length;
+  int get openCount => movementCount - settledCount;
+  int get pendingCount => openCount - resolvedCount;
 
   /// Rows whose suggestion can be accepted without another decision.
   List<BankReconciliationRowDraft> get acceptableSuggestionRows => rows
       .where((row) =>
+          !row.isSettled &&
           !row.isResolved &&
           row.suggestion?.resolution != null &&
           row.suggestion!.confidence == BankReconciliationConfidence.high)
@@ -984,7 +1082,9 @@ class BankReconciliationContext {
     List<BankCounterpartyProfile> parties = const <BankCounterpartyProfile>[],
     List<BankPriorDecision> decisions = const <BankPriorDecision>[],
     List<BankOpenAdvance> openAdvances = const <BankOpenAdvance>[],
+    List<BankReconciledRow> reconciledRows = const <BankReconciledRow>[],
   })  : candidates = List.unmodifiable(candidates),
+        reconciledRows = List.unmodifiable(reconciledRows),
         payrollLines = List.unmodifiable(payrollLines),
         openInvoices = List.unmodifiable(openInvoices),
         parties = List.unmodifiable(parties),
@@ -999,6 +1099,67 @@ class BankReconciliationContext {
 
   /// Advances Nómina has not discounted from a salary yet.
   final List<BankOpenAdvance> openAdvances;
+
+  /// Statement rows an earlier review of this account already settled.
+  final List<BankReconciledRow> reconciledRows;
+}
+
+/// A statement row a review of the account already decided.
+class BankReconciledRow {
+  BankReconciledRow({
+    required this.importId,
+    required this.fileSha256,
+    required this.sourceRowId,
+    required this.bookingDate,
+    required this.direction,
+    required this.amountClp,
+    this.balanceClp,
+    required this.disposition,
+    required this.action,
+    this.settledElsewhere = false,
+    this.note,
+    this.decidedOn,
+    List<String> labels = const <String>[],
+  }) : labels = List.unmodifiable(labels);
+
+  final String importId;
+  final String fileSha256;
+  final String sourceRowId;
+  final BankCivilDate? bookingDate;
+  final BankMovementDirection direction;
+  final int? amountClp;
+  final int? balanceClp;
+  final BankReconciliationDisposition disposition;
+  final String action;
+
+  /// Dismissed because an overlapping statement had settled it.
+  final bool settledElsewhere;
+  final String? note;
+  final BankCivilDate? decidedOn;
+
+  /// The ERP operations the row explains.
+  final List<String> labels;
+
+  /// The same movement in two overlapping statements: its date, direction,
+  /// amount and running balance, which the bank prints once per movement.
+  static String? keyOf({
+    required BankCivilDate? bookingDate,
+    required BankMovementDirection direction,
+    required int? amountClp,
+    required int? balanceClp,
+  }) {
+    if (bookingDate == null || amountClp == null || balanceClp == null) {
+      return null;
+    }
+    return '$bookingDate|${direction.name}|$amountClp|$balanceClp';
+  }
+
+  String? get key => keyOf(
+        bookingDate: bookingDate,
+        direction: direction,
+        amountClp: amountClp,
+        balanceClp: balanceClp,
+      );
 }
 
 /// An advance Nómina paid a worker and still has to discount.

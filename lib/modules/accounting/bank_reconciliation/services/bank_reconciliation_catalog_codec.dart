@@ -37,6 +37,52 @@ class BankReconciliationCatalogCodec {
           .map(_advance)
           .whereType<BankOpenAdvance>()
           .toList(growable: false),
+      reconciledRows: _list(payload['reconciled_rows'])
+          .map(_reconciledRow)
+          .whereType<BankReconciledRow>()
+          .toList(growable: false),
+    );
+  }
+
+  BankReconciledRow? _reconciledRow(Map<String, dynamic> json) {
+    final importId = _text(json['import_id']);
+    final sha = _text(json['file_sha256']);
+    final sourceRowId = _text(json['source_row_id']);
+    final disposition = switch (json['disposition']?.toString()) {
+      'reconciled' => BankReconciliationDisposition.reconciled,
+      'ignored' => BankReconciliationDisposition.ignored,
+      'held' => BankReconciliationDisposition.held,
+      _ => null,
+    };
+    if (importId == null ||
+        sha == null ||
+        sourceRowId == null ||
+        disposition == null) {
+      return null;
+    }
+    return BankReconciledRow(
+      importId: importId,
+      fileSha256: sha,
+      sourceRowId: sourceRowId,
+      bookingDate: _date(json['booking_date']),
+      direction: switch (json['direction']?.toString()) {
+        'debit' => BankMovementDirection.debit,
+        'credit' => BankMovementDirection.credit,
+        _ => BankMovementDirection.unknown,
+      },
+      amountClp: _int(json['amount']),
+      balanceClp: _int(json['balance']),
+      disposition: disposition,
+      action: _text(json['action']) ?? '',
+      settledElsewhere: json['settled_elsewhere'] == true,
+      note: _text(json['note']),
+      decidedOn: _localDay(json['decided_at']),
+      labels: <String>[
+        for (final label in json['labels'] is List
+            ? json['labels'] as List
+            : const <Object?>[])
+          if (_text(label) != null) _text(label)!,
+      ],
     );
   }
 
@@ -260,5 +306,12 @@ class BankReconciliationCatalogCodec {
   BankCivilDate? _date(Object? value) {
     final parsed = DateTime.tryParse(value?.toString() ?? '');
     return parsed == null ? null : BankCivilDate.fromDateTime(parsed);
+  }
+
+  /// The operator's day of a timestamp (a decision taken on a Chilean
+  /// evening is already the next day in UTC).
+  BankCivilDate? _localDay(Object? value) {
+    final parsed = DateTime.tryParse(value?.toString() ?? '');
+    return parsed == null ? null : BankCivilDate.fromDateTime(parsed.toLocal());
   }
 }

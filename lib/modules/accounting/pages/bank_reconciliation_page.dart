@@ -47,7 +47,7 @@ class BankReconciliationActions {
   }) apply;
 }
 
-enum _MovementFilter { all, proposed, suggested, processor, unmatched }
+enum _MovementFilter { all, open, proposed, suggested, processor, unmatched }
 
 bool _isProcessorEstimate(BankReconciliationMatchKind kind) =>
     kind == BankReconciliationMatchKind.processorEstimate ||
@@ -397,34 +397,76 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
     );
   }
 
+  /// Adds an operation to the movement's manual choice: one transfer can
+  /// pay several operations, and they must add up to it.
   void _selectManualCandidate(
     String sourceRowId,
     BankReconciliationCandidate candidate,
   ) {
     final row = _draft?.rowsBySourceId[sourceRowId];
-    final bankAmount = row?.movement.amountClp;
-    if (row == null || bankAmount == null) return;
-    final proposal = BankReconciliationProposal(
-      sourceRowId: sourceRowId,
-      matchKind: BankReconciliationMatchKind.manual,
-      confidence: BankReconciliationConfidence.medium,
-      allocations: <BankReconciliationAllocationDraft>[
-        BankReconciliationAllocationDraft(
-          candidate: candidate,
-          bankAmountClp: bankAmount,
-        ),
-      ],
-      reasons: const <String>['Operación elegida manualmente'],
-    );
-    final proposals = <BankReconciliationProposal>[
-      ...row.proposals.where((item) =>
-          BankReconciliationRowDraft.proposalIdentity(item) !=
-          BankReconciliationRowDraft.proposalIdentity(proposal)),
-      proposal,
+    if (row == null) return;
+    final current = row.selectedProposal;
+    final chosen = <BankReconciliationCandidate>[
+      if (current?.matchKind == BankReconciliationMatchKind.manual)
+        for (final allocation in current!.allocations) allocation.candidate,
     ];
-    _replaceRow(row.copyWith(proposals: proposals));
+    if (chosen.any((item) => item.identity == candidate.identity)) return;
+    _setManualChoice(row, <BankReconciliationCandidate>[...chosen, candidate]);
+  }
+
+  void _removeManualCandidate(String sourceRowId, String identity) {
+    final row = _draft?.rowsBySourceId[sourceRowId];
+    final current = row?.selectedProposal;
+    if (row == null ||
+        current == null ||
+        current.matchKind != BankReconciliationMatchKind.manual) {
+      return;
+    }
+    _setManualChoice(row, <BankReconciliationCandidate>[
+      for (final allocation in current.allocations)
+        if (allocation.candidate.identity != identity) allocation.candidate,
+    ]);
+  }
+
+  void _setManualChoice(
+    BankReconciliationRowDraft row,
+    List<BankReconciliationCandidate> chosen,
+  ) {
+    final bankAmount = row.movement.amountClp;
+    if (bankAmount == null) return;
+    final withoutManual = <BankReconciliationProposal>[
+      ...row.proposals.where(
+        (item) => item.matchKind != BankReconciliationMatchKind.manual,
+      ),
+    ];
+    if (chosen.isEmpty) {
+      _replaceRow(row.copyWith(
+        proposals: withoutManual,
+        clearSelection: true,
+        resolution: const BankReconciliationResolutionDraft(
+          action: BankReconciliationActionKind.associateExisting,
+        ),
+      ));
+      return;
+    }
+    final proposal = BankReconciliationProposal.manual(
+      sourceRowId: row.movement.sourceRowId,
+      movementAmountClp: bankAmount,
+      candidates: chosen,
+    );
+    if (proposal == null) {
+      setState(() {
+        _error = 'Esas operaciones suman más que el movimiento del banco. '
+            'Quita alguna antes de agregar otra.';
+      });
+      return;
+    }
+    _replaceRow(row.copyWith(proposals: <BankReconciliationProposal>[
+      ...withoutManual,
+      proposal,
+    ]));
     _selectProposal(
-      sourceRowId,
+      row.movement.sourceRowId,
       BankReconciliationRowDraft.proposalIdentity(proposal),
     );
   }
@@ -451,6 +493,11 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
         final sha = source.fileSha256;
         if (_applyReceipts.containsKey(sha)) continue;
         final part = draft.forSource(source);
+        // A statement whose open rows all stay pending has nothing to save;
+        // what an earlier sitting applied is already there.
+        final changes = part.rows.any((row) =>
+            row.isSettled ? !row.settled!.sameStatement : row.isResolved);
+        if (!changes) continue;
         var importReceipt = _importReceipts[sha];
         if (importReceipt == null) {
           importReceipt = await _actions.createImport(
@@ -474,6 +521,10 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
         );
         if (!mounted) return;
         _applyReceipts[sha] = receipt;
+      }
+      if (_applyReceipts.isEmpty) {
+        setState(() => _error = 'No hay decisiones nuevas que aplicar.');
+        return;
       }
       setState(() => _applyReceipt = _combinedReceipt());
     } on BankReconciliationServiceException catch (error) {
@@ -510,8 +561,10 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
   List<BankReconciliationRowDraft> get _visibleRows {
     final rows = _draft?.rows ?? const <BankReconciliationRowDraft>[];
     return rows.where((row) {
+      if (_filter != _MovementFilter.all && row.isSettled) return false;
       return switch (_filter) {
         _MovementFilter.all => true,
+        _MovementFilter.open => !row.isResolved,
         _MovementFilter.proposed => row.proposals.isNotEmpty,
         _MovementFilter.suggested =>
           row.proposals.isEmpty && row.suggestion != null,
@@ -678,6 +731,10 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
                     selected.movement.sourceRowId,
                     candidate,
                   ),
+                  onCandidateRemoved: (identity) => _removeManualCandidate(
+                    selected.movement.sourceRowId,
+                    identity,
+                  ),
                   onApplySuggestion: () =>
                       _applySuggestion(selected.movement.sourceRowId),
                 );
@@ -720,6 +777,11 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
                                 _selectManualCandidate(
                               selected.movement.sourceRowId,
                               candidate,
+                            ),
+                            onCandidateRemoved: (identity) =>
+                                _removeManualCandidate(
+                              selected.movement.sourceRowId,
+                              identity,
                             ),
                             onApplySuggestion: () => _applySuggestion(
                               selected.movement.sourceRowId,
@@ -765,6 +827,10 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
     return '${effects.join(' · ')}. Todo quedó aplicado en una sola operación.';
   }
 }
+
+String _dayMonth(BankCivilDate date) =>
+    '${date.day.toString().padLeft(2, '0')}/'
+    '${date.month.toString().padLeft(2, '0')}';
 
 bool _hasRepeatedErpTargets(BankReconciliationPreparedDraft draft) {
   final seen = <String>{};
@@ -975,6 +1041,11 @@ class _ReviewToolbar extends StatelessWidget {
               label: '${draft.pendingCount} pendientes',
               tone: VbStatusTone.info,
             ),
+            if (draft.settledCount > 0)
+              VbStatusBadge(
+                label: '${draft.settledCount} ya conciliados',
+                tone: VbStatusTone.neutral,
+              ),
             if (draft.acceptableSuggestionRows.isNotEmpty)
               FilledButton.tonalIcon(
                 key: const ValueKey('bank-reconciliation-accept-suggestions'),
@@ -995,6 +1066,8 @@ class _ReviewToolbar extends StatelessWidget {
             value: filter,
             options: const [
               VbShortSelectOption(value: _MovementFilter.all, label: 'Todos'),
+              VbShortSelectOption(
+                  value: _MovementFilter.open, label: 'Por resolver'),
               VbShortSelectOption(
                   value: _MovementFilter.proposed, label: 'Con propuesta'),
               VbShortSelectOption(
@@ -1133,9 +1206,17 @@ class _MovementRow extends StatelessWidget {
       key: ValueKey(
         'bank-reconciliation-resolve-${movement.sourceRowId}',
       ),
-      onPressed: enabled ? onResolve : null,
-      icon: Icon(row.isResolved ? Icons.edit_outlined : Icons.tune),
-      label: Text(row.isResolved ? 'Editar decisión' : 'Resolver'),
+      onPressed: enabled || row.isSettled ? onResolve : null,
+      icon: Icon(row.isSettled
+          ? Icons.visibility_outlined
+          : row.isResolved
+              ? Icons.edit_outlined
+              : Icons.tune),
+      label: Text(row.isSettled
+          ? 'Ver'
+          : row.isResolved
+              ? 'Editar decisión'
+              : 'Resolver'),
     );
     final status = _ResolutionStatus(row: row);
     final content = desktop
@@ -1212,6 +1293,14 @@ class _ResolutionStatus extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final settled = row.settled;
+    if (settled != null) {
+      return VbStatusBadge(
+        label: settled.excluded ? 'Ya excluido' : 'Ya conciliado',
+        tone: VbStatusTone.neutral,
+        dense: true,
+      );
+    }
     final (label, tone) = switch (row.effectiveResolution.action) {
       BankReconciliationActionKind.associateExisting when row.isResolved => (
           'Asociada',
@@ -1290,6 +1379,15 @@ class _ProposalSummary extends StatelessWidget {
   Widget build(BuildContext context) {
     final value = proposal;
     final suggestion = row.suggestion;
+    final settled = row.settled;
+    if (settled != null) {
+      return Text(
+        settled.summary,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: Theme.of(context).textTheme.bodySmall,
+      );
+    }
     if (value == null && suggestion != null) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1354,7 +1452,9 @@ class _ProposalSummary extends StatelessWidget {
             Text(
               processor
                   ? '${value.allocations.length} ventas con tarjeta'
-                  : value.allocations.first.candidate.label,
+                  : value.allocations
+                      .map((allocation) => allocation.candidate.label)
+                      .join(' + '),
               style: Theme.of(context).textTheme.bodyMedium,
             ),
           ],
@@ -1418,6 +1518,7 @@ class _ResolutionPanel extends StatelessWidget {
     required this.onResolutionChanged,
     required this.onProposalSelected,
     required this.onCandidateSelected,
+    required this.onCandidateRemoved,
     required this.onApplySuggestion,
   });
 
@@ -1432,11 +1533,13 @@ class _ResolutionPanel extends StatelessWidget {
   final ValueChanged<BankReconciliationResolutionDraft> onResolutionChanged;
   final ValueChanged<String> onProposalSelected;
   final ValueChanged<BankReconciliationCandidate> onCandidateSelected;
+  final ValueChanged<String> onCandidateRemoved;
   final VoidCallback onApplySuggestion;
 
   @override
   Widget build(BuildContext context) {
     final movement = row.movement;
+    final settled = row.settled;
     return Material(
       key: const ValueKey('bank-reconciliation-resolution-workspace'),
       color: Theme.of(context).colorScheme.surface,
@@ -1479,71 +1582,86 @@ class _ResolutionPanel extends StatelessWidget {
               ],
             ),
             const Divider(height: 32),
-            if (row.suggestion != null && row.selectedProposal == null) ...[
-              _SuggestionPanel(
-                suggestion: row.suggestion!,
-                applied: _suggestionApplied(row),
+            if (settled != null)
+              VbNotice(
+                title: settled.sameStatement
+                    ? 'Ya se aplicó en esta cartola'
+                    : 'Ya está conciliado en otra cartola',
+                body: '${settled.summary}.'
+                    '${settled.decidedOn == null ? '' : ' Aplicado el ${_dayMonth(settled.decidedOn!)}.'}'
+                    ' No se vuelve a tocar: '
+                    '${settled.sameStatement ? 'lo que ya se aplicó queda firme.' : 'al aplicar ésta queda registrado como conciliado allá.'}',
+                tone: VbNoticeTone.info,
+              )
+            else ...[
+              if (row.suggestion != null && row.selectedProposal == null) ...[
+                _SuggestionPanel(
+                  suggestion: row.suggestion!,
+                  applied: _suggestionApplied(row),
+                  enabled: enabled,
+                  onApply: onApplySuggestion,
+                ),
+                const SizedBox(height: 20),
+              ],
+              Text('¿Qué corresponde hacer?',
+                  style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 8),
+              _ActionChooser(
+                value: row.effectiveResolution.action,
+                movement: movement,
+                payrollAvailable: row.suggestion?.resolution?.action ==
+                    BankReconciliationActionKind.payPayroll,
                 enabled: enabled,
-                onApply: onApplySuggestion,
+                onChanged: onAction,
               ),
               const SizedBox(height: 20),
+              if (loadingOptions)
+                const BrandedLoading(
+                  size: 48,
+                  message: 'Cargando opciones contables…',
+                )
+              else
+                switch (row.effectiveResolution.action) {
+                  BankReconciliationActionKind.associateExisting =>
+                    _ExistingOperationEditor(
+                      row: row,
+                      draft: draft,
+                      enabled: enabled,
+                      onProposalSelected: onProposalSelected,
+                      onCandidateSelected: onCandidateSelected,
+                      onCandidateRemoved: onCandidateRemoved,
+                    ),
+                  BankReconciliationActionKind.createExpense => _ExpenseEditor(
+                      row: row,
+                      options: options,
+                      enabled: enabled,
+                      onChanged: onResolutionChanged,
+                    ),
+                  BankReconciliationActionKind.classifyAccount =>
+                    _JournalEditor(
+                      row: row,
+                      options: options,
+                      enabled: enabled,
+                      onChanged: onResolutionChanged,
+                    ),
+                  BankReconciliationActionKind.dismiss => _DismissEditor(
+                      resolution: row.effectiveResolution,
+                      enabled: enabled,
+                      onChanged: onResolutionChanged,
+                    ),
+                  BankReconciliationActionKind.payPayroll =>
+                    _PayrollPaymentSummary(
+                      payroll: row.effectiveResolution.payroll,
+                      movement: movement,
+                    ),
+                  BankReconciliationActionKind.pending => const VbNotice(
+                      title: 'Quedará pendiente',
+                      body:
+                          'No se crea ningún asiento ni se marca como conciliado. Puedes resolverlo en otra revisión.',
+                      tone: VbNoticeTone.info,
+                    ),
+                },
             ],
-            Text('¿Qué corresponde hacer?',
-                style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: 8),
-            _ActionChooser(
-              value: row.effectiveResolution.action,
-              movement: movement,
-              payrollAvailable: row.suggestion?.resolution?.action ==
-                  BankReconciliationActionKind.payPayroll,
-              enabled: enabled,
-              onChanged: onAction,
-            ),
-            const SizedBox(height: 20),
-            if (loadingOptions)
-              const BrandedLoading(
-                size: 48,
-                message: 'Cargando opciones contables…',
-              )
-            else
-              switch (row.effectiveResolution.action) {
-                BankReconciliationActionKind.associateExisting =>
-                  _ExistingOperationEditor(
-                    row: row,
-                    draft: draft,
-                    enabled: enabled,
-                    onProposalSelected: onProposalSelected,
-                    onCandidateSelected: onCandidateSelected,
-                  ),
-                BankReconciliationActionKind.createExpense => _ExpenseEditor(
-                    row: row,
-                    options: options,
-                    enabled: enabled,
-                    onChanged: onResolutionChanged,
-                  ),
-                BankReconciliationActionKind.classifyAccount => _JournalEditor(
-                    row: row,
-                    options: options,
-                    enabled: enabled,
-                    onChanged: onResolutionChanged,
-                  ),
-                BankReconciliationActionKind.dismiss => _DismissEditor(
-                    resolution: row.effectiveResolution,
-                    enabled: enabled,
-                    onChanged: onResolutionChanged,
-                  ),
-                BankReconciliationActionKind.payPayroll =>
-                  _PayrollPaymentSummary(
-                    payroll: row.effectiveResolution.payroll,
-                    movement: movement,
-                  ),
-                BankReconciliationActionKind.pending => const VbNotice(
-                    title: 'Quedará pendiente',
-                    body:
-                        'No se crea ningún asiento ni se marca como conciliado. Puedes resolverlo en otra revisión.',
-                    tone: VbNoticeTone.info,
-                  ),
-              },
           ],
         ),
       ),
@@ -1693,6 +1811,7 @@ class _ExistingOperationEditor extends StatelessWidget {
     required this.enabled,
     required this.onProposalSelected,
     required this.onCandidateSelected,
+    required this.onCandidateRemoved,
   });
 
   final BankReconciliationRowDraft row;
@@ -1700,9 +1819,11 @@ class _ExistingOperationEditor extends StatelessWidget {
   final bool enabled;
   final ValueChanged<String> onProposalSelected;
   final ValueChanged<BankReconciliationCandidate> onCandidateSelected;
+  final ValueChanged<String> onCandidateRemoved;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final used = <String>{
       for (final other in draft.rows)
         if (other.movement.sourceRowId != row.movement.sourceRowId)
@@ -1710,23 +1831,31 @@ class _ExistingOperationEditor extends StatelessWidget {
               const <BankReconciliationAllocationDraft>[])
             allocation.candidate.identity,
     };
+    final selected = row.selectedProposal;
+    final manual = selected?.matchKind == BankReconciliationMatchKind.manual
+        ? selected
+        : null;
+    final chosen = <String>{
+      for (final allocation
+          in manual?.allocations ?? const <BankReconciliationAllocationDraft>[])
+        allocation.candidate.identity,
+    };
     final candidates = draft.candidateCatalog
         .where((candidate) =>
             candidate.direction == row.movement.direction &&
-            !used.contains(candidate.identity))
+            !used.contains(candidate.identity) &&
+            !chosen.contains(candidate.identity))
         .toList(growable: false);
-    final selected = row.selectedProposal;
-    final selectedManual =
-        selected?.matchKind == BankReconciliationMatchKind.manual
-            ? selected!.allocations.single.candidate.identity
-            : null;
+    final suggested = row.proposals
+        .where((proposal) =>
+            proposal.matchKind != BankReconciliationMatchKind.manual)
+        .toList(growable: false);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Operaciones sugeridas',
-            style: Theme.of(context).textTheme.titleSmall),
+        Text('Operaciones sugeridas', style: theme.textTheme.titleSmall),
         const SizedBox(height: 8),
-        if (row.proposals.isEmpty)
+        if (suggested.isEmpty)
           const VbNotice(
             title: 'No encontramos un calce directo',
             body:
@@ -1734,7 +1863,7 @@ class _ExistingOperationEditor extends StatelessWidget {
             tone: VbNoticeTone.info,
           )
         else
-          for (final proposal in row.proposals)
+          for (final proposal in suggested)
             _ProposalChoice(
               proposal: proposal,
               selected: BankReconciliationRowDraft.proposalIdentity(proposal) ==
@@ -1745,11 +1874,47 @@ class _ExistingOperationEditor extends StatelessWidget {
               ),
             ),
         const SizedBox(height: 16),
+        if (manual != null) ...[
+          Text('Elegidas por ti', style: theme.textTheme.titleSmall),
+          const SizedBox(height: 8),
+          for (final allocation in manual.allocations)
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(allocation.candidate.label),
+                      Text(
+                        '${allocation.candidate.occurredOn} · '
+                        '${_money(allocation.candidate.amountClp)}',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  key: ValueKey(
+                    'bank-reconciliation-manual-remove-'
+                    '${allocation.candidate.identity}',
+                  ),
+                  tooltip: 'Quitar',
+                  onPressed: enabled
+                      ? () => onCandidateRemoved(allocation.candidate.identity)
+                      : null,
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+          const SizedBox(height: 8),
+          _ManualTotal(proposal: manual, movement: row.movement),
+          const SizedBox(height: 16),
+        ],
         VbSearchableSelect<String>(
           key: ValueKey(
             'bank-reconciliation-existing-search-${row.movement.sourceRowId}',
           ),
-          value: selectedManual,
+          value: null,
           options: [
             for (final candidate in candidates)
               VbSearchableSelectOption<String>(
@@ -1771,7 +1936,9 @@ class _ExistingOperationEditor extends StatelessWidget {
                 }
               : null,
           sheetTitle: 'Buscar operación existente',
-          label: 'Buscar otra operación del ERP',
+          label: manual == null
+              ? 'Buscar otra operación del ERP'
+              : 'Agregar otra operación',
           placeholder: 'Venta, compra, gasto, pago o asiento…',
           searchHint: 'Buscar por persona, documento o monto…',
         ),
@@ -1779,10 +1946,40 @@ class _ExistingOperationEditor extends StatelessWidget {
         const VbNotice(
           title: 'Efecto contable',
           body:
-              'Vincula evidencia bancaria a una operación que ya existe. No crea ni repite pagos ni asientos.',
+              'Vincula evidencia bancaria a una o varias operaciones que ya existen. No crea ni repite pagos ni asientos.',
           tone: VbNoticeTone.info,
         ),
       ],
+    );
+  }
+}
+
+/// Whether the operations chosen by hand add up to the movement.
+class _ManualTotal extends StatelessWidget {
+  const _ManualTotal({required this.proposal, required this.movement});
+
+  final BankReconciliationProposal proposal;
+  final BankStatementMovement movement;
+
+  @override
+  Widget build(BuildContext context) {
+    final amount = movement.amountClp ?? 0;
+    final total = proposal.targetTotalClp;
+    final difference = amount - total;
+    final balanced =
+        difference.abs() <= BankReconciliationProposal.manualToleranceClp;
+    return VbNotice(
+      key: const ValueKey('bank-reconciliation-manual-total'),
+      title: difference == 0
+          ? 'Suman lo mismo que el movimiento'
+          : balanced
+              ? 'Suman el movimiento con ${_money(difference.abs())} de diferencia'
+              : difference > 0
+                  ? 'Faltan ${_money(difference)}'
+                  : 'Sobran ${_money(-difference)}',
+      body: 'Operaciones: ${_money(total)} · Movimiento: ${_money(amount)}.'
+          '${balanced ? '' : ' Una transferencia puede pagar varias operaciones: agrega las que faltan o quita las que sobran.'}',
+      tone: balanced ? VbNoticeTone.success : VbNoticeTone.warning,
     );
   }
 }
@@ -2183,8 +2380,9 @@ class _Footer extends StatelessWidget {
           builder: (context, constraints) {
             final compact = constraints.maxWidth < 600;
             final summary = Text(
-              '${draft.resolvedCount} de ${draft.movementCount} movimientos resueltos · '
-              '${draft.pendingCount} quedan pendientes',
+              '${draft.resolvedCount} de ${draft.openCount} movimientos resueltos · '
+              '${draft.pendingCount} quedan pendientes'
+              '${draft.settledCount > 0 ? ' · ${draft.settledCount} ya conciliados' : ''}',
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             );

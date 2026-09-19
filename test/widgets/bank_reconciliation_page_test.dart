@@ -311,6 +311,158 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+  testWidgets('a transfer that paid two operations is linked to both',
+      (tester) async {
+    final harness = _Harness();
+    addTearDown(harness.dispose);
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(harness.app(initialDraft: _repaidDraft()));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('bank-reconciliation-resolve-mother')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Vincular operación'));
+    await tester.pumpAndSettle();
+
+    Future<void> choose(String label) async {
+      final search = find.byKey(
+        const ValueKey('bank-reconciliation-existing-search-mother'),
+      );
+      await tester.ensureVisible(search);
+      await tester.pumpAndSettle();
+      await tester.tap(search);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(label).last);
+      await tester.pumpAndSettle();
+    }
+
+    await choose('Sueldo Vicente · Semana 29');
+    expect(find.text('Faltan \$38.500'), findsOneWidget);
+    expect(
+      find.text('0 de 2 movimientos resueltos · 2 quedan pendientes · '
+          '1 ya conciliados'),
+      findsOneWidget,
+    );
+
+    await choose('Sueldo Lucas · Semana 29');
+    expect(find.text('Suman lo mismo que el movimiento'), findsOneWidget);
+    expect(
+      find.text('1 de 2 movimientos resueltos · 1 quedan pendientes · '
+          '1 ya conciliados'),
+      findsOneWidget,
+    );
+
+    final remove = find.byKey(
+      const ValueKey('bank-reconciliation-manual-remove-expensePayment:lucas'),
+    );
+    await tester.ensureVisible(remove);
+    await tester.pumpAndSettle();
+    await tester.tap(remove);
+    await tester.pumpAndSettle();
+    expect(find.text('Faltan \$38.500'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a movement settled before is shown, not decided again',
+      (tester) async {
+    final harness = _Harness();
+    addTearDown(harness.dispose);
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(harness.app(initialDraft: _repaidDraft()));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ya conciliado'), findsOneWidget);
+    expect(find.text('1 ya conciliados'), findsOneWidget);
+    expect(
+      find.text('0 de 2 movimientos resueltos · 2 quedan pendientes · '
+          '1 ya conciliados'),
+      findsOneWidget,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('bank-reconciliation-resolve-google')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Ya se aplicó en esta cartola'), findsOneWidget);
+    expect(find.text('¿Qué corresponde hacer?'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+}
+
+/// The owner's mother paid two salaries and was repaid in one transfer; an
+/// earlier sitting already applied the subscription.
+BankReconciliationPreparedDraft _repaidDraft() {
+  BankStatementMovement movement(String id, int ordinal, int amount,
+          String description, int balance) =>
+      BankStatementMovement(
+        sourceRowId: id,
+        ordinal: ordinal,
+        bookingDate: const BankCivilDate(2026, 7, 7),
+        description: description,
+        normalizedDescription: description.toLowerCase(),
+        direction: BankMovementDirection.debit,
+        amountClp: amount,
+        balanceClp: balance,
+        sourcePage: 1,
+        sourceLineStart: ordinal,
+        sourceLineEnd: ordinal,
+      );
+  BankReconciliationCandidate salary(String id, String label, int amount) =>
+      BankReconciliationCandidate(
+        targetKind: BankReconciliationTargetKind.expensePayment,
+        targetId: id,
+        direction: BankMovementDirection.debit,
+        amountClp: amount,
+        occurredOn: const BankCivilDate(2026, 8, 12),
+        label: label,
+      );
+  return BankReconciliationPreparedDraft(
+    fileSha256:
+        'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    filename: 'cartola julio.pdf',
+    sourceType: 'pdf_text',
+    parserName: 'banco_chile_statement',
+    parserVersion: 'v1',
+    rows: <BankReconciliationRowDraft>[
+      BankReconciliationRowDraft(
+        movement: movement('google', 1, 2690, 'Pago: Google Play', 500000),
+        proposals: const <BankReconciliationProposal>[],
+        settled: const BankSettledMovement(
+          sameStatement: true,
+          summary: 'Gasto GTO-00200',
+          disposition: BankReconciliationDisposition.reconciled,
+          decidedOn: BankCivilDate(2026, 9, 19),
+        ),
+      ),
+      BankReconciliationRowDraft(
+        movement: movement(
+          'mother',
+          2,
+          133000,
+          'App-traspaso A: Maria Angelica Sandoval',
+          367000,
+        ),
+        proposals: const <BankReconciliationProposal>[],
+      ),
+      BankReconciliationRowDraft(
+        movement: movement('other', 3, 5000, 'App-traspaso A: Otro', 362000),
+        proposals: const <BankReconciliationProposal>[],
+      ),
+    ],
+    candidateCatalog: <BankReconciliationCandidate>[
+      salary('vicente', 'Sueldo Vicente · Semana 29', 94500),
+      salary('lucas', 'Sueldo Lucas · Semana 29', 38500),
+      salary('decoy', 'Sueldo Fernando · Semana 29', 72000),
+    ],
+  );
 }
 
 BankReconciliationPreparedDraft _salaryDraft() {
