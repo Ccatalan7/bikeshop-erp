@@ -378,6 +378,7 @@ void main() {
     BankPayrollExpectation owedSalary({
       String lineId = 'line',
       String status = 'draft',
+      BankCivilDate? payableFrom,
     }) =>
         BankPayrollExpectation(
           voucherId: 'v37',
@@ -391,6 +392,7 @@ void main() {
           paymentMethod: 'transfer',
           status: status,
           reconciliationVersion: 7,
+          payableFrom: payableFrom,
         );
 
     test('a salary Nómina still owes is paid here, through Nómina', () {
@@ -445,6 +447,32 @@ void main() {
         suggestions['second']?.resolution?.action,
         isNot(BankReconciliationActionKind.payPayroll),
       );
+    });
+
+    test('a salary is paid from the week close, earlier money is an advance',
+        () {
+      // Nómina closes the Sunday week on Saturday: a Saturday or a later
+      // Monday/Tuesday transfer pays it; a Friday one is an advance.
+      BankReconciliationSuggestion on(BankCivilDate date) => suggest(
+              [
+                _movement('braulio', date, BankMovementDirection.debit, 71400,
+                    counterparty: 'Braulio Munoz Internet'),
+              ],
+              BankReconciliationContext(payrollLines: [
+                owedSalary(payableFrom: _d(8, 29)),
+              ]))['braulio']!;
+
+      for (final date in [_d(8, 29), _d(8, 31), _d(9, 1), _d(9, 29)]) {
+        expect(
+          on(date).resolution?.action,
+          BankReconciliationActionKind.payPayroll,
+          reason: '$date',
+        );
+      }
+      final friday = on(_d(8, 28));
+      expect(friday.kind, BankSuggestionKind.payroll);
+      expect(friday.resolution, isNull);
+      expect(friday.followUp, contains('anticipo'));
     });
 
     test('a confirmed week is paid without confirming it again', () {

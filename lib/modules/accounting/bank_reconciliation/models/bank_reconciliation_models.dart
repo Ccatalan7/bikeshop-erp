@@ -810,6 +810,7 @@ class BankPayrollExpectation {
     this.paymentMethodId,
     this.status = 'draft',
     this.reconciliationVersion,
+    this.payableFrom,
   }) : names = List.unmodifiable(names);
 
   final String voucherId;
@@ -829,7 +830,15 @@ class BankPayrollExpectation {
   final String status;
   final int? reconciliationVersion;
 
+  /// The first day Nómina takes money as this week's salary (its operational
+  /// close, Saturday for a Sunday close). Earlier money is an advance. An
+  /// older catalog without it falls back to the period end.
+  final BankCivilDate? payableFrom;
+
   bool get isDraft => status == 'draft';
+
+  bool acceptsSalaryOn(BankCivilDate date) =>
+      date.compareTo(payableFrom ?? periodEnd) >= 0;
 }
 
 /// A salary to pay through Nómina from a bank row.

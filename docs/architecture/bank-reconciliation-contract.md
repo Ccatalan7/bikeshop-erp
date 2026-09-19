@@ -52,6 +52,27 @@ evidence, not proof of the moment a purchase, transfer or sale happened.
 statement does not provide it. The matcher uses a bounded date distance to
 rank candidates rather than demanding equality.
 
+The owner's reality the windows are built for (2026-09-18): salaries go out
+the Monday or Tuesday after the payroll week and sometimes days later, and the
+bank's date can trail the real transfer (a Saturday transfer books on Monday).
+Every window is therefore two-sided and generous where the party is known:
+
+- a salary Nómina still owes: from its week's operational close (Saturday for
+  a Sunday close, `payable_from` in the catalog) to 35 days after the week;
+  a transfer up to three days before the end is still recognised, and said
+  to be an advance, because Nómina refuses earlier money as that week's
+  salary;
+- a payment Nómina or another module already registered: 5 days either side,
+  12 with a strong name, 40 for a person or recurring payee, and any distance
+  when Nómina tied the transfer to it;
+- acquirer deposits: banking days after the sale, one day either side of the
+  delay the statement proves.
+
+A salary paid from here is dated on the statement's date, never the guessed
+real one: the bank account in the ERP then matches the statement line by line,
+and a booking date is never earlier than the transfer, so it cannot turn a
+salary into an advance.
+
 Banco de Chile's public Banconexión account-statement guide presents a single
 visible `Fecha` for each movement. CMF reporting definitions separately name
 operation and accounting dates. The ERP therefore preserves the narrower
@@ -225,8 +246,9 @@ ones and leaves them editable until the review is applied.
 ## Salaries Nómina owes
 
 A transfer to a worker that matches an owed payroll line (strong name, amount
-within 1%, paid from the week's close to 35 days later) is proposed as
-«Pagar sueldo». Applying it goes through `apply_bank_reconciliation_actions_v3`,
+within 1%, dated from the week's operational close to 35 days after the week)
+is proposed as «Pagar sueldo». One dated before the close is described as an
+advance and left to Nómina. Applying it goes through `apply_bank_reconciliation_actions_v3`,
 which in one transaction pays the salary with Nómina's own commands and then
 associates the row with the payment they created — the reconciliation never
 books a salary itself, so the result is the same as paying it in Nómina:

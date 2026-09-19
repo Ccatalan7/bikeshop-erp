@@ -123,6 +123,7 @@ class BankReconciliationCatalogCodec {
       paymentMethodId: _text(json['payment_method_id']),
       status: _text(json['status']) ?? 'draft',
       reconciliationVersion: _int(json['reconciliation_version']),
+      payableFrom: _date(json['payable_from']),
     );
   }
 

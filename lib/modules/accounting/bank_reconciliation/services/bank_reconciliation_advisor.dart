@@ -189,7 +189,11 @@ class BankReconciliationAdvisor {
       );
       if (line != null) {
         claimedPayrollLines.add(line.lineId);
-        final payment = _payrollPayment(line, amount, options);
+        // Money before the week's close is an advance for Nómina, never
+        // this week's salary: offering it here would fail the whole apply.
+        final beforeClose = !line.acceptsSalaryOn(date);
+        final payment =
+            beforeClose ? null : _payrollPayment(line, amount, options);
         return BankReconciliationSuggestion(
           kind: BankSuggestionKind.payroll,
           confidence: BankReconciliationConfidence.high,
@@ -199,6 +203,10 @@ class BankReconciliationAdvisor {
                 'y aún no registra el pago',
             if (line.amountClp != amount)
               'La transferencia redondea ${_money((amount - line.amountClp).abs())}',
+            if (beforeClose)
+              'Se transfirió antes del cierre de la semana '
+                  '(${_day(line.payableFrom ?? line.periodEnd)}): para Nómina '
+                  'es un anticipo, no el sueldo',
             if (payment != null)
               line.isDraft
                   ? 'Al aplicar, la semana ${line.voucherNumber} (en borrador) '
@@ -212,10 +220,13 @@ class BankReconciliationAdvisor {
                   action: BankReconciliationActionKind.payPayroll,
                   payroll: payment,
                 ),
-          followUp: payment == null
-              ? 'Págalo en Nómina (${line.voucherNumber}); la próxima '
-                  'conciliación lo asocia sola.'
-              : null,
+          followUp: beforeClose
+              ? 'Regístralo como anticipo de ${line.employeeName} en Nómina; '
+                  'al pagar la semana ${line.voucherNumber} se descuenta.'
+              : payment == null
+                  ? 'Págalo en Nómina (${line.voucherNumber}); la próxima '
+                      'conciliación lo asocia sola.'
+                  : null,
         );
       }
     }
@@ -481,7 +492,9 @@ class BankReconciliationAdvisor {
       if (line.paymentMethod == 'cash') continue;
       final rounding = amount ~/ 100;
       if ((line.amountClp - amount).abs() > rounding) continue;
-      // Paid from the week's close to a month later.
+      // Salaries go out on the Monday or Tuesday after the week, sometimes
+      // weeks later; a transfer a few days before its end is recognised too,
+      // to say it is an advance.
       final distance = line.periodEnd.daysUntil(date);
       if (distance < -3 || distance > 35) continue;
       if (!BankCounterpartyIdentity.compare(party, line.names).isStrong) {

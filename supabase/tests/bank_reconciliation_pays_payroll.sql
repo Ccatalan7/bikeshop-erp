@@ -161,7 +161,8 @@ select is(
       'line', line->>'line_id',
       'status', line->>'status',
       'amount', (line->>'amount')::numeric,
-      'versioned', jsonb_typeof(line->'reconciliation_version')
+      'versioned', jsonb_typeof(line->'reconciliation_version'),
+      'payable_from', line->>'payable_from'
     ) order by line->>'employee_name')
     from jsonb_array_elements(
       public.get_bank_reconciliation_candidates_v2(
@@ -171,11 +172,13 @@ select is(
   ),
   jsonb_build_array(
     jsonb_build_object('line', 'e4000000-0000-4000-8000-000000000041',
-      'status', 'draft', 'amount', 71400, 'versioned', 'number'),
+      'status', 'draft', 'amount', 71400, 'versioned', 'number',
+      'payable_from', '2026-08-30'),
     jsonb_build_object('line', 'e4000000-0000-4000-8000-000000000042',
-      'status', 'draft', 'amount', 109900, 'versioned', 'number')
+      'status', 'draft', 'amount', 109900, 'versioned', 'number',
+      'payable_from', '2026-08-30')
   ),
-  'the catalog lists what the draft week owes, with status and version'
+  'the catalog lists what a week owes, its status, version and first payable day'
 );
 
 create temp table pays_payroll_import on commit drop as
