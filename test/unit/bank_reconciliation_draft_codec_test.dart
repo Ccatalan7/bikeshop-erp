@@ -314,6 +314,86 @@ void main() {
         BankReconciliationActionKind.split);
   });
 
+  test('a deposit split the kernel would refuse is not restored from the AI',
+      () {
+    final options = BankReconciliationWorkspaceOptions(
+      accounts: const <BankReconciliationLedgerAccountOption>[
+        BankReconciliationLedgerAccountOption(
+          accountId: 'fees',
+          code: '6103',
+          name: 'Honorarios Profesionales',
+          type: 'expense',
+        ),
+        BankReconciliationLedgerAccountOption(
+          accountId: 'partner',
+          code: '3102',
+          name: 'Aportes de socio',
+          type: 'equity',
+        ),
+      ],
+      paymentMethods: const <BankReconciliationPaymentMethodOption>[],
+    );
+    final split = <String, dynamic>{
+      'action': 'split',
+      'split_parts': <Map<String, dynamic>>[
+        <String, dynamic>{
+          'account_id': 'partner',
+          'amount': 600000,
+          'description': 'Aporte',
+          'is_expense': false,
+        },
+        <String, dynamic>{
+          'account_id': 'fees',
+          'amount': 100000,
+          'description': 'Devolución de honorarios',
+          'is_expense': false,
+        },
+      ],
+    };
+    final saved = _saved(<String, dynamic>{
+      'version': BankReconciliationDraftCodec.version,
+      'rows': <String, dynamic>{
+        '${'a' * 64}:owner': <String, dynamic>{
+          'ai': <String, dynamic>{
+            'explanation': 'Un aporte con una devolución de honorarios.',
+            'resolution': split,
+          },
+        },
+      },
+    });
+
+    final reviewed = codec.restore(_fresh(), saved, options: options);
+    expect(
+      reviewed.draft.rowsBySourceId['owner']!.aiAnalysis!.explanation,
+      'Un aporte con una devolución de honorarios.',
+    );
+    expect(
+      reviewed.draft.rowsBySourceId['owner']!.aiAnalysis!.resolution,
+      isNull,
+    );
+
+    // The accounts of the day are what tells the parts apart: without them
+    // neither the decision nor the analysis is taken as good.
+    final blind = codec.restore(
+      _fresh(),
+      _saved(<String, dynamic>{
+        'version': BankReconciliationDraftCodec.version,
+        'rows': <String, dynamic>{
+          '${'a' * 64}:owner': <String, dynamic>{
+            'resolution': split,
+            'ai': <String, dynamic>{
+              'explanation': 'Un aporte con una devolución de honorarios.',
+              'resolution': split,
+            },
+          },
+        },
+      }),
+    );
+    expect(blind.droppedCount, 1);
+    expect(blind.draft.rowsBySourceId['owner']!.isResolved, isFalse);
+    expect(blind.draft.rowsBySourceId['owner']!.aiAnalysis!.resolution, isNull);
+  });
+
   test('a save keeps what the draft holds for statements not loaded', () {
     // July imported again alone, in a conciliation that also has June.
     final june = <String, dynamic>{

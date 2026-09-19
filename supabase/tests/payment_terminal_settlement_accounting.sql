@@ -468,5 +468,47 @@ select throws_ok(
   'the same operation key cannot hide a different original decision behind normalization'
 );
 
+-- A settlement applied before the adapter marked its allocations stored the
+-- hash of the unmarked payload. Repeating it now must answer with what it
+-- did, not with a conflict the operator cannot clear.
+update public.bank_reconciliation_operations operation
+   set payload_hash = encode(extensions.digest(convert_to(
+         jsonb_build_object(
+           'import_id', (select (receipt->>'import_id')::uuid from terminal_import),
+           'expected_revision', (select (receipt->>'revision')::bigint from terminal_import),
+           'actions', replace(
+             (select payload::text from terminal_actions),
+             'processor_estimate', 'manual'
+           )::jsonb
+         )::text, 'utf8'), 'sha256'), 'hex')
+ where operation.tenant_id = 'd2000000-0000-4000-8000-000000000001'
+   and operation.operation_key = 'terminal-settlement:apply:001';
+
+select results_eq(
+  $$select (receipt->>'replayed')::boolean,
+           (receipt->>'terminal_settlement_count')::integer,
+           receipt->>'status'
+      from (
+        select public.apply_bank_reconciliation_actions_v2(
+          (terminal_import.receipt->>'import_id')::uuid,
+          (terminal_import.receipt->>'revision')::bigint,
+          'terminal-settlement:apply:001', terminal_actions.payload
+        ) as receipt
+          from terminal_import, terminal_actions
+      ) retry$$,
+  $$values (true, 2, 'reconciled'::text)$$,
+  'a settlement applied before the marker is replayed from its own receipt'
+);
+
+select is(
+  (
+    select count(*)
+      from public.payment_terminal_settlements
+     where tenant_id = 'd2000000-0000-4000-8000-000000000001'
+  ),
+  2::bigint,
+  'replaying it across versions does not settle anything twice'
+);
+
 select * from finish();
 rollback;

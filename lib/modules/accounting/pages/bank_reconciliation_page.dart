@@ -139,6 +139,7 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
   String? _selectedAccountId;
   BankReconciliationPreparedDraft? _draft;
   BankReconciliationWorkspaceOptions? _workspaceOptions;
+  String? _workspaceOptionsAccountId;
   String? _selectedSourceRowId;
   BankReconciliationApplyReceipt? _applyReceipt;
   _MovementFilter _filter = _MovementFilter.all;
@@ -263,6 +264,16 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
     }
   }
 
+  /// What a saved decision is judged against. Restoring one before these
+  /// arrive would accept a split this ERP no longer books.
+  Future<void> _ensureWorkspaceOptions(String accountId) async {
+    if (_workspaceOptions != null &&
+        _workspaceOptionsAccountId == accountId) {
+      return;
+    }
+    await _loadWorkspaceOptions(accountId);
+  }
+
   Future<void> _loadWorkspaceOptions(String accountId) async {
     if (mounted) setState(() => _loadingWorkspaceOptions = true);
     try {
@@ -270,7 +281,10 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
         erpAccountId: accountId,
       );
       if (!mounted) return;
-      setState(() => _workspaceOptions = options);
+      setState(() {
+        _workspaceOptions = options;
+        _workspaceOptionsAccountId = accountId;
+      });
     } catch (error, stackTrace) {
       debugPrint(
         '[BankReconciliation] workspace options failed: $error',
@@ -281,6 +295,8 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
       );
       if (!mounted) return;
       setState(() {
+        _workspaceOptions = null;
+        _workspaceOptionsAccountId = null;
         _error = 'No pudimos cargar las cuentas y medios necesarios para '
             'resolver movimientos.';
       });
@@ -324,7 +340,6 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
         _clearPersistence();
       });
       await _register(draft, accountId);
-      await _loadWorkspaceOptions(accountId);
     } on BankReconciliationServiceException catch (error) {
       if (!mounted) return;
       setState(() => _error = error.message);
@@ -384,6 +399,7 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
           for (final receipt in _importReceipts.values) receipt.importId,
         ],
       );
+      await _ensureWorkspaceOptions(accountId);
       if (!mounted) return;
       _adoptSession(session);
     } catch (error) {
@@ -477,8 +493,9 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
         _draft = resumed.draft;
         _importReceipts.addAll(resumed.importReceipts);
       });
+      await _ensureWorkspaceOptions(accountId);
+      if (!mounted) return;
       _adoptSession(resumed.session);
-      await _loadWorkspaceOptions(accountId);
     } on BankReconciliationServiceException catch (error) {
       if (!mounted) return;
       setState(() => _error = error.message);
@@ -1410,6 +1427,7 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
       _error = null;
       _filter = _MovementFilter.all;
       _workspaceOptions = null;
+      _workspaceOptionsAccountId = null;
       _selectedSourceRowId = null;
     });
   }

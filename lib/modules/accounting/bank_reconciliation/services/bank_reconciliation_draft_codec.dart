@@ -279,14 +279,18 @@ class BankReconciliationDraftCodec {
     BankReconciliationRowDraft row,
     BankReconciliationWorkspaceOptions? options,
   ) {
-    if (options == null ||
-        resolution.action != BankReconciliationActionKind.split ||
+    if (resolution.action != BankReconciliationActionKind.split ||
         row.movement.direction == BankMovementDirection.debit) {
       return true;
     }
-    return !resolution.splitParts.any(
-      (part) => options.account(part.accountId)?.canReceiveExpense ?? false,
-    );
+    // Without today's accounts none of the parts can be told apart, and one
+    // the kernel refuses rolls the whole statement back: it is decided again.
+    if (options == null) return false;
+    return !resolution.splitParts.any((part) {
+      final accountId = part.accountId;
+      if (accountId == null) return false;
+      return options.account(accountId)?.canReceiveExpense ?? true;
+    });
   }
 
   BankReconciliationResolutionDraft? _decodeResolution(Object? raw) {

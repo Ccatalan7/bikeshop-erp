@@ -663,6 +663,130 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  /// Resuming judges a saved split against today's accounts, which have to
+  /// be there before the draft comes back.
+  Future<void> resumeWithSplit(
+    WidgetTester tester,
+    _Harness harness,
+    List<Map<String, dynamic>> parts,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final draft = _draft();
+    final sha = draft.fileSha256;
+    harness.sessions = <BankReconciliationSessionSummary>[
+      BankReconciliationSessionSummary(
+        sessionId: 'session-1',
+        statementCount: 1,
+        movementCount: 2,
+        decidedCount: 0,
+        draftRows: 1,
+        draftDecisions: 1,
+        updatedAt: DateTime(2026, 9, 19, 10, 30),
+        firstDate: const BankCivilDate(2026, 8, 12),
+        lastDate: const BankCivilDate(2026, 8, 12),
+      ),
+    ];
+    final split = <String, dynamic>{
+      'action': 'split',
+      'split_parts': parts,
+    };
+    harness.resumed = BankReconciliationResumedSession(
+      draft: draft,
+      session: BankReconciliationSession(
+        sessionId: 'session-1',
+        revision: 3,
+        draft: <String, dynamic>{
+          'version': 1,
+          'rows': <String, dynamic>{
+            '$sha:transbank': <String, dynamic>{
+              'resolution': split,
+              'ai': <String, dynamic>{
+                'explanation': 'Un abono con dos partes.',
+                'resolution': split,
+              },
+            },
+          },
+        },
+      ),
+      importReceipts: <String, BankStatementImportReceipt>{
+        sha: BankStatementImportReceipt(
+          importId: 'import-id',
+          revision: 1,
+          rowIdsBySourceRowId: const <String, String>{
+            'direct': 'row-direct',
+            'transbank': 'row-transbank',
+          },
+          replayed: true,
+        ),
+      },
+    );
+
+    await tester.pumpWidget(harness.app(empty: true));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('bank-reconciliation-resume-session-1')),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('resuming keeps a deposit split this ERP still books',
+      (tester) async {
+    final harness = _Harness();
+    addTearDown(harness.dispose);
+
+    await resumeWithSplit(tester, harness, <Map<String, dynamic>>[
+      <String, dynamic>{
+        'account_id': 'income-account',
+        'amount': 80000,
+        'description': 'Venta del día',
+        'is_expense': false,
+      },
+      <String, dynamic>{
+        'account_id': 'vat-account',
+        'amount': 15000,
+        'description': 'IVA débito',
+        'is_expense': false,
+      },
+    ]);
+
+    expect(find.text('2 de 2 movimientos resueltos · 0 quedan pendientes'),
+        findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('resuming does not bring back a deposit split the kernel refuses',
+      (tester) async {
+    final harness = _Harness();
+    addTearDown(harness.dispose);
+
+    await resumeWithSplit(tester, harness, <Map<String, dynamic>>[
+      <String, dynamic>{
+        'account_id': 'income-account',
+        'amount': 80000,
+        'description': 'Venta del día',
+        'is_expense': false,
+      },
+      <String, dynamic>{
+        'account_id': 'expense-account',
+        'amount': 15000,
+        'description': 'Devolución de servicios',
+        'is_expense': false,
+      },
+    ]);
+
+    expect(find.text('1 de 2 movimientos resueltos · 1 quedan pendientes'),
+        findsOneWidget);
+    expect(
+      find.textContaining('1 decisión guardada ya no aplica'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Dividir: Venta del día'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('a saved conciliation is resumed and keeps saving itself',
       (tester) async {
     final harness = _Harness();

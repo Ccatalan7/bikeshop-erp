@@ -118,19 +118,24 @@ select
 create function pg_temp.link(
   p_bank_amount numeric, p_remainder jsonb,
   p_target uuid default 'e7000000-0000-4000-8000-000000000040',
-  p_provider text default 'none'
+  p_provider text default 'none',
+  p_settlement boolean default false
 )
 returns jsonb language sql as $$
   select jsonb_build_object(
     'row_id', (select carlos from ids), 'action', 'associate_existing',
-    'allocations', jsonb_build_array(jsonb_build_object(
-      'row_id', (select carlos from ids),
-      'target_kind', 'journal_entry',
-      'target_id', p_target,
-      'bank_amount', p_bank_amount, 'target_amount', 7000,
-      'match_kind', 'manual', 'confidence', 'medium',
-      'provider', p_provider, 'instrument', 'unknown'
-    ))
+    'allocations', jsonb_build_array(
+      jsonb_build_object(
+        'row_id', (select carlos from ids),
+        'target_kind', 'journal_entry',
+        'target_id', p_target,
+        'bank_amount', p_bank_amount, 'target_amount', 7000,
+        'match_kind', 'manual', 'confidence', 'medium',
+        'provider', p_provider, 'instrument', 'unknown'
+      ) || case when p_settlement
+                then jsonb_build_object('settlement', true)
+                else '{}'::jsonb end
+    )
   ) || case when p_remainder is null then '{}'::jsonb
        else jsonb_build_object('remainder', p_remainder) end
 $$;
@@ -201,6 +206,16 @@ select throws_like(
     'e7000000-0000-4000-8000-000000000040', 'transbank')),
   '%bank_reconciliation_allocation_invalid%',
   'a manual link is bounded at $1.000 whatever provider it claims'
+);
+
+-- The mark is the adapter's, not the caller's: writing it by hand changes
+-- nothing about how far the link may stretch.
+select throws_like(
+  pg_temp.apply('remainder:forged-marker', pg_temp.link(5500,
+    pg_temp.rest('e7000000-0000-4000-8000-000000000011', 'Venta no registrada'),
+    'e7000000-0000-4000-8000-000000000040', 'transbank', true)),
+  '%bank_reconciliation_allocation_invalid%',
+  'a caller cannot call its own link a settlement'
 );
 
 select lives_ok(

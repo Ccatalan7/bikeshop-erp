@@ -399,6 +399,16 @@ Haber banco). The resolution keeps the account and gloss in `accountId` and
   (`bank_reconciliation_target_is_payment_journal`): the same money would
   explain two movements.
 - A remainder of zero or less, or one to the bank account itself, is refused.
+- An operation key already applied answers from the receipt it kept, and the
+  adapter answers it before the kernel sees the actions
+  (`20260919170000`). The kernel hashes what it receives, which the adapter
+  has normalized: once it started marking settlements, repeating a
+  settlement applied before that deploy — the case operation keys exist for —
+  came back as `bank_reconciliation_idempotency_conflict` with nothing the
+  operator could do. The adapter takes the kernel's own
+  `:bank-reconciliation` lock, compares the hash of what the **caller** sent
+  with `source_payload_hash`, and replays from the stored receipt; a
+  different payload under the same key is still refused.
 
 ## The first real apply (2026-09-19)
 
@@ -542,7 +552,11 @@ review from `bank_statement_rows` — the files are never stored — reviews it
 again, and restores a saved decision only while it holds: its operations
 exist and no untouched movement took them, a salary is taken as Nómina owes
 it today, and a decision today's kernel would refuse (a deposit split into
-an expense account) is dropped with the rest. What no longer holds is dropped and counted in a notice. Applying
+an expense account) is dropped with the rest. That judgement needs the
+account catalog, so «Retomar» and reimporting load the workspace options
+**before** restoring the draft (until 2026-09-19 they loaded them after, and
+the filter accepted everything it could not check); without them a deposit
+split is decided again rather than taken as good. What no longer holds is dropped and counted in a notice. Applying
 stays per file and covers only the open rows, so the operator applies what is
 sure and «Seguir con los N pendientes» reopens the same conciliation with the
 applied rows shown as «Ya conciliado».

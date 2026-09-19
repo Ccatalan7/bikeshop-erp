@@ -1037,3 +1037,43 @@ sentido del movimiento.
   prefijo. Lo encontró la revisión de Codex; estuvo una hora en producción.
   Antes de desplegar se corren **todas** las pruebas que nombran la función:
   `grep -l <función> supabase/tests/*.sql`.
+
+## Un adaptador que normaliza el payload rompe la idempotencia del kernel (2026-09-19)
+
+`apply_bank_reconciliation_actions_v2` traduce lo que le llega antes de
+llamar al kernel, y el kernel guarda el hash de **lo que recibió**. Cuando el
+adaptador empezó a marcar sus liquidaciones (`20260919160000`), el payload
+normalizado cambió: repetir una operación aplicada antes de ese despliegue
+—exactamente para lo que existen las claves de operación, cuando el cliente
+perdió la respuesta— devolvía `bank_reconciliation_idempotency_conflict`, sin
+nada que el operador pudiera hacer.
+
+Regla: **la idempotencia se juzga sobre lo que mandó el llamador**, no sobre
+lo que la capa de traducción produjo. El adaptador guarda su propio
+`source_payload_hash`, toma el mismo bloqueo que el kernel, y si la operación
+ya existe con esa acción y ese hash devuelve el recibo guardado sin llamar al
+kernel (`20260919170000`). Un payload distinto bajo la misma clave se sigue
+rechazando. Cualquier cambio en la normalización de un adaptador con
+idempotencia se prueba **entre versiones**: aplicar, reescribir el
+`payload_hash` guardado como lo dejaba la versión anterior, y reintentar.
+
+## Una carrera de dos conexiones se prueba con dos conexiones (2026-09-19)
+
+pgTAP corre en una sola sesión, así que una guardia de concurrencia no se
+puede afirmar ahí: el `verify` sólo comprueba que el texto del bloqueo esté.
+`scripts/db/payroll_lock_probe.sh` es el patrón —como
+`atomicity_rollback_probe.sh`—: dos invocaciones de `scripts/db/query.sh
+local --file`, una que toma el bloqueo canónico y duerme dentro de su
+transacción, otra que arranca un segundo después, y afirmaciones sobre el
+**error exacto** y sobre el read-back. Sus SQL viven en
+`supabase/manual_checks/probes/` y la sonda limpia su propia fixture al
+terminar.
+
+Lo que probó: con el bloqueo de Nómina tomado antes de leer el saldo, la
+conciliación espera, ve la semana que cambió y rechaza con
+`bank_reconciliation_payroll_line_changed`. Sin él pasa su propia validación
+y sólo la versión optimista del comando canónico la detiene
+(`payroll_payment_version_conflict`), ya dentro de Nómina. **No hay pago
+doble en ninguno de los dos casos**; lo que se pierde sin el bloqueo es la
+protección propia de la revisión, y por eso la sonda afirma el error exacto y
+no «que falle».
