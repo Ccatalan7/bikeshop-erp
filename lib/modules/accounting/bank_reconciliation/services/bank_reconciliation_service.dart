@@ -152,6 +152,12 @@ class BankReconciliationService {
         .eq('account_id', erpAccountId)
         .eq('is_active', true)
         .inFilter('usage_scope', const ['outbound', 'both']).order('name');
+    final supplierRows = await _database.supabase
+        .from('suppliers')
+        .select('id, name')
+        .eq('tenant_id', tenantId)
+        .eq('is_active', true)
+        .order('name');
 
     final accounts = <BankReconciliationLedgerAccountOption>[];
     for (final raw in accountRows) {
@@ -196,6 +202,15 @@ class BankReconciliationService {
     return BankReconciliationWorkspaceOptions(
       accounts: accounts,
       paymentMethods: methods,
+      suppliers: <BankReconciliationSupplierOption>[
+        for (final raw in supplierRows)
+          if ((raw['id']?.toString().trim() ?? '').isNotEmpty &&
+              (raw['name']?.toString().trim() ?? '').isNotEmpty)
+            BankReconciliationSupplierOption(
+              supplierId: raw['id'].toString().trim(),
+              name: raw['name'].toString().trim(),
+            ),
+      ],
     );
   }
 
@@ -770,6 +785,7 @@ class BankReconciliationService {
           BankReconciliationActionKind.classifyAccount => 'post_journal',
           BankReconciliationActionKind.dismiss => 'dismiss',
           BankReconciliationActionKind.payPayroll => 'pay_payroll',
+          BankReconciliationActionKind.split => 'split',
         },
       };
       switch (resolution.action) {
@@ -838,6 +854,30 @@ class BankReconciliationService {
             );
           }
           action['reason'] = resolution.reason!.trim();
+          break;
+        case BankReconciliationActionKind.split:
+          if (!row.isResolved) {
+            throw const BankReconciliationServiceException(
+              'Completa cada parte con cuenta, monto y descripción: juntas '
+              'deben sumar el movimiento.',
+            );
+          }
+          final parts = resolution.splitParts;
+          action['split'] = <String, dynamic>{
+            if (parts.any((part) => part.isExpense))
+              'payment_method_id': resolution.paymentMethodId,
+            'reference': resolution.reference?.trim(),
+            'parts': <Map<String, dynamic>>[
+              for (final part in parts)
+                <String, dynamic>{
+                  'account_id': part.accountId,
+                  'amount': part.amountClp,
+                  'description': part.description.trim(),
+                  if (part.isExpense && part.supplierId != null)
+                    'supplier_id': part.supplierId,
+                },
+            ],
+          };
           break;
         case BankReconciliationActionKind.payPayroll:
           final payroll = resolution.payroll;
@@ -943,6 +983,18 @@ class BankReconciliationService {
     if (error.contains('bank_reconciliation_payroll')) {
       return 'Nómina no pudo registrar un sueldo de esta revisión. No se '
           'guardó nada; revisa esos movimientos o págalos en Nómina.';
+    }
+    if (error.contains('bank_reconciliation_split_total_mismatch')) {
+      return 'Las partes de un movimiento dividido no suman lo mismo que el '
+          'movimiento. No se guardó nada: corrige los montos.';
+    }
+    if (error.contains('bank_reconciliation_split_supplier_invalid')) {
+      return 'Un proveedor elegido en un movimiento dividido ya no existe. '
+          'No se guardó nada: elige otro o déjalo en blanco.';
+    }
+    if (error.contains('bank_reconciliation_split_expense_needs_debit')) {
+      return 'Un abono no se registra como gasto. No se guardó nada: usa una '
+          'cuenta que no sea de gasto para esa parte.';
     }
     if (error.contains('bank_reconciliation_row_already_decided') ||
         error.contains('bank_reconciliation_revision_conflict')) {

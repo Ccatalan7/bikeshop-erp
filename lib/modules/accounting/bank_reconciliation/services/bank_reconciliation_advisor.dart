@@ -167,14 +167,26 @@ class BankReconciliationAdvisor {
             BankReconciliationActionKind.createExpense =>
               BankSuggestionKind.createExpense,
             BankReconciliationActionKind.dismiss => BankSuggestionKind.dismiss,
+            BankReconciliationActionKind.split => BankSuggestionKind.split,
             _ => BankSuggestionKind.postJournal,
           },
-          confidence: BankReconciliationConfidence.high,
-          title: prior.supplierName ?? prior.text ?? _displayParty(movement),
+          // A split repeats its structure, not its amounts: what the
+          // accountant, the F29 or the licence cost changes every month.
+          confidence: prior.action == BankReconciliationActionKind.split
+              ? BankReconciliationConfidence.medium
+              : BankReconciliationConfidence.high,
+          title: prior.action == BankReconciliationActionKind.split
+              ? 'Dividir como la vez anterior'
+              : prior.supplierName ?? prior.text ?? _displayParty(movement),
           reasons: <String>[
             'Así resolviste "${prior.counterparty ?? prior.description}" en '
                 'una conciliación anterior',
+            if (prior.action == BankReconciliationActionKind.split)
+              resolution.splitParts.map((part) => part.description).join(' + '),
           ],
+          followUp: prior.action == BankReconciliationActionKind.split
+              ? 'Revisa los montos de cada parte: la última toma lo que queda.'
+              : null,
           resolution: resolution,
         );
       }
@@ -467,6 +479,37 @@ class BankReconciliationAdvisor {
         return BankReconciliationResolutionDraft(
           action: BankReconciliationActionKind.dismiss,
           reason: prior.text ?? 'Igual que en la conciliación anterior',
+        );
+      case BankReconciliationActionKind.split:
+        final amount = movement.amountClp;
+        if (amount == null || prior.parts.length < 2) return null;
+        final parts = <BankSplitPartDraft>[];
+        for (final part in prior.parts) {
+          final account = options?.account(part.accountId);
+          if (account == null) return null;
+          final expense = account.canReceiveExpense &&
+              movement.direction == BankMovementDirection.debit;
+          parts.add(BankSplitPartDraft(
+            accountId: account.accountId,
+            amountClp: part.amountClp,
+            description: part.description,
+            supplierId: expense ? part.supplierId : null,
+            isExpense: expense,
+          ));
+        }
+        final withRest = BankSplitPartDraft.withRemainder(parts, amount);
+        if (withRest.last.amountClp == null) return null;
+        final method = options?.paymentMethods
+                .where((item) => item.paymentMethodId == prior.paymentMethodId)
+                .firstOrNull ??
+            options?.paymentMethods
+                .where((item) => item.code == 'transfer')
+                .firstOrNull;
+        return BankReconciliationResolutionDraft(
+          action: BankReconciliationActionKind.split,
+          paymentMethodId: method?.paymentMethodId,
+          reference: movement.documentNumber,
+          splitParts: withRest,
         );
       case BankReconciliationActionKind.associateExisting:
       case BankReconciliationActionKind.payPayroll:

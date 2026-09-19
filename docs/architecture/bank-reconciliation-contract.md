@@ -254,6 +254,23 @@ look-alike supplier). A suggestion this workspace can apply carries a
 prefilled decision; «Usar sugerencias seguras» applies only high-confidence
 ones and leaves them editable until the review is applied.
 
+## One movement, several accounts
+
+A transfer can pay several things at once: the owner's mother pays the
+accountant's fee (Pedro Madrid, $50.000 a month), the monthly F29 and the
+municipal licence, and he repays her in one transfer — 17 August, $214.685 =
+fee $50.000 + F29 $90.149 + second half-year licence $74.536 (she reported
+«IVA $140.149», fee included). «Dividir» books such a row as 2 to 10 parts
+that add up to it. The operator types the parts he knows and the last one takes
+what is left, so the F29 need not be known. A part on an expense account is a
+paid expense with its supplier and the bank method, exactly as «Crear gasto»
+books one; any other account (IVA Débito Fiscal for the F29) is a line of one
+balanced journal against the bank. Money coming in is never an expense.
+
+The split is learned: the next transfer to the same person is proposed with
+the same parts — medium confidence, never among the safe suggestions — because
+the structure repeats and the amounts do not.
+
 ## Salaries Nómina owes
 
 A transfer to a worker that matches an owed payroll line (strong name, amount

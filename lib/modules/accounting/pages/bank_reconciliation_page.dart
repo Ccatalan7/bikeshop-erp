@@ -1,5 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../shared/services/database_service.dart';
@@ -334,6 +335,18 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
           description: current.description ?? row.movement.description,
           reference: current.reference ?? row.movement.documentNumber,
         ),
+      BankReconciliationActionKind.split => BankReconciliationResolutionDraft(
+          action: action,
+          paymentMethodId: _defaultBankMethodId() ?? current.paymentMethodId,
+          reference: current.reference ?? row.movement.documentNumber,
+          splitParts: BankSplitPartDraft.withRemainder(
+            const <BankSplitPartDraft>[
+              BankSplitPartDraft(),
+              BankSplitPartDraft(),
+            ],
+            row.movement.amountClp ?? 0,
+          ),
+        ),
       _ => BankReconciliationResolutionDraft(action: action),
     };
     _replaceRow(
@@ -350,6 +363,14 @@ class _BankReconciliationPageState extends State<BankReconciliationPage> {
         },
       ),
     );
+  }
+
+  /// The transfer method of the bank account, or its only method.
+  String? _defaultBankMethodId() {
+    final methods = _workspaceOptions?.paymentMethods ?? const [];
+    return (methods.where((method) => method.code == 'transfer').firstOrNull ??
+            (methods.length == 1 ? methods.single : null))
+        ?.paymentMethodId;
   }
 
   void _updateResolution(
@@ -1322,6 +1343,10 @@ class _ResolutionStatus extends StatelessWidget {
           'Sueldo listo',
           VbStatusTone.success
         ),
+      BankReconciliationActionKind.split when row.isResolved => (
+          'División lista',
+          VbStatusTone.success
+        ),
       _ => ('Pendiente', VbStatusTone.warning),
     };
     return VbStatusBadge(label: label, tone: tone, dense: true);
@@ -1649,6 +1674,12 @@ class _ResolutionPanel extends StatelessWidget {
                       enabled: enabled,
                       onChanged: onResolutionChanged,
                     ),
+                  BankReconciliationActionKind.split => _SplitEditor(
+                      row: row,
+                      options: options,
+                      enabled: enabled,
+                      onChanged: onResolutionChanged,
+                    ),
                   BankReconciliationActionKind.payPayroll =>
                     _PayrollPaymentSummary(
                       payroll: row.effectiveResolution.payroll,
@@ -1768,6 +1799,11 @@ class _ActionChooser extends StatelessWidget {
         BankReconciliationActionKind.classifyAccount,
         Icons.account_tree_outlined,
         'Clasificar cuenta',
+      ),
+      (
+        BankReconciliationActionKind.split,
+        Icons.call_split,
+        'Dividir',
       ),
       (
         BankReconciliationActionKind.dismiss,
@@ -2259,6 +2295,247 @@ class _JournalEditor extends StatelessWidget {
           body: isCredit
               ? 'Genera un asiento contabilizado: Debe banco / Haber ${selectedAccount?.label ?? 'cuenta elegida'}. Úsalo para ingresos, aportes, devoluciones o préstamos.'
               : 'Genera un asiento contabilizado: Debe ${selectedAccount?.label ?? 'cuenta elegida'} / Haber banco. Úsalo cuando no corresponde crear un documento de gasto.',
+          tone: VbNoticeTone.info,
+        ),
+      ],
+    );
+  }
+}
+
+/// One movement booked across several accounts: the parts the operator
+/// knows (the accountant's fee, the licence) and a last one that takes what
+/// is left (the F29).
+class _SplitEditor extends StatelessWidget {
+  const _SplitEditor({
+    required this.row,
+    required this.options,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  static const _maxParts = 10;
+
+  final BankReconciliationRowDraft row;
+  final BankReconciliationWorkspaceOptions? options;
+  final bool enabled;
+  final ValueChanged<BankReconciliationResolutionDraft> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final resolution = row.effectiveResolution;
+    final parts = resolution.splitParts;
+    final amount = row.movement.amountClp ?? 0;
+    final debit = row.movement.direction == BankMovementDirection.debit;
+    final accounts = options?.accounts ?? const [];
+    final suppliers = options?.suppliers ?? const [];
+    final methods = options?.paymentMethods ?? const [];
+    final id = row.movement.sourceRowId;
+
+    void update(List<BankSplitPartDraft> next) => onChanged(
+          resolution.copyWith(
+            splitParts: BankSplitPartDraft.withRemainder(next, amount),
+          ),
+        );
+    void replace(int index, BankSplitPartDraft part) => update(
+          <BankSplitPartDraft>[
+            for (var i = 0; i < parts.length; i++) i == index ? part : parts[i],
+          ],
+        );
+
+    final expenseParts = parts.where((part) => part.isExpense).length;
+    final journalParts = parts.length - expenseParts;
+    final effects = <String>[
+      if (expenseParts > 0)
+        '$expenseParts gasto(s) pagado(s) con su proveedor y cuenta, en la '
+            'fecha de la cartola',
+      if (journalParts > 0)
+        'un asiento contra el banco para '
+            '${journalParts == 1 ? 'la otra parte' : 'las otras $journalParts partes'}',
+    ].join(' y ');
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('Dividir en varias cuentas', style: theme.textTheme.titleSmall),
+        const SizedBox(height: 4),
+        Text(
+          'Escribe el monto de cada parte que conoces; la última toma lo '
+          'que queda del movimiento.',
+          style: theme.textTheme.bodySmall,
+        ),
+        for (var index = 0; index < parts.length; index++) ...[
+          const Divider(height: 24),
+          Row(
+            children: [
+              Text('Parte ${index + 1}', style: theme.textTheme.labelLarge),
+              const Spacer(),
+              if (parts.length > 2)
+                IconButton(
+                  key: ValueKey('bank-reconciliation-split-remove-$id-$index'),
+                  tooltip: 'Quitar parte',
+                  onPressed: enabled
+                      ? () => update(<BankSplitPartDraft>[
+                            for (var i = 0; i < parts.length; i++)
+                              if (i != index) parts[i],
+                          ])
+                      : null,
+                  icon: const Icon(Icons.close),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          VbSearchableSelect<String>(
+            key: ValueKey('bank-reconciliation-split-account-$id-$index'),
+            value: parts[index].accountId,
+            options: [
+              for (final account in accounts)
+                VbSearchableSelectOption<String>(
+                  value: account.accountId,
+                  label: account.label,
+                  context: account.canReceiveExpense && debit
+                      ? 'Se registra como gasto pagado'
+                      : 'Línea de asiento',
+                  searchText: account.category,
+                ),
+            ],
+            onChanged: enabled
+                ? (value) {
+                    final expense = debit &&
+                        (options?.account(value)?.canReceiveExpense ?? false);
+                    replace(
+                      index,
+                      parts[index].copyWith(
+                        accountId: value,
+                        isExpense: expense,
+                        clearSupplier: !expense,
+                      ),
+                    );
+                  }
+                : null,
+            sheetTitle: 'Elegir cuenta de esta parte',
+            label: 'Cuenta',
+            placeholder: 'Honorarios, patente, IVA…',
+          ),
+          if (parts[index].isExpense) ...[
+            const SizedBox(height: 12),
+            VbSearchableSelect<String>(
+              key: ValueKey('bank-reconciliation-split-supplier-$id-$index'),
+              value: parts[index].supplierId,
+              options: [
+                for (final supplier in suppliers)
+                  VbSearchableSelectOption<String>(
+                    value: supplier.supplierId,
+                    label: supplier.name,
+                  ),
+              ],
+              onChanged: enabled
+                  ? (value) => replace(
+                        index,
+                        parts[index].copyWith(
+                          supplierId: value,
+                          clearSupplier: value == null,
+                        ),
+                      )
+                  : null,
+              sheetTitle: 'Elegir proveedor',
+              label: 'Proveedor (opcional)',
+              placeholder: 'A quién se le pagó…',
+            ),
+          ],
+          const SizedBox(height: 12),
+          TextFormField(
+            key: ValueKey(
+              'bank-reconciliation-split-description-$id-$index-${parts.length}',
+            ),
+            initialValue: parts[index].description,
+            enabled: enabled,
+            decoration: const InputDecoration(labelText: 'Qué fue'),
+            onChanged: (value) =>
+                replace(index, parts[index].copyWith(description: value)),
+          ),
+          const SizedBox(height: 12),
+          if (index < parts.length - 1)
+            TextFormField(
+              key: ValueKey(
+                'bank-reconciliation-split-amount-$id-$index-${parts.length}',
+              ),
+              initialValue: parts[index].amountClp?.toString() ?? '',
+              enabled: enabled,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: const InputDecoration(
+                labelText: 'Monto',
+                prefixText: '\$ ',
+              ),
+              onChanged: (value) {
+                final parsed = int.tryParse(value);
+                replace(
+                  index,
+                  parts[index].copyWith(
+                    amountClp: parsed,
+                    clearAmount: parsed == null,
+                  ),
+                );
+              },
+            )
+          else
+            Text(
+              parts[index].amountClp == null
+                  ? 'Las otras partes ya suman el movimiento o más: no queda '
+                      'nada para ésta.'
+                  : 'Lo que queda: ${_money(parts[index].amountClp)}',
+              key: ValueKey('bank-reconciliation-split-rest-$id'),
+              style: theme.textTheme.bodyMedium,
+            ),
+        ],
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            key: ValueKey('bank-reconciliation-split-add-$id'),
+            onPressed: enabled && parts.length < _maxParts
+                ? () => update(<BankSplitPartDraft>[
+                      ...parts.take(parts.length - 1),
+                      const BankSplitPartDraft(),
+                      parts.last,
+                    ])
+                : null,
+            icon: const Icon(Icons.add),
+            label: const Text('Agregar parte'),
+          ),
+        ),
+        if (expenseParts > 0) ...[
+          const SizedBox(height: 12),
+          VbSearchableSelect<String>(
+            key: ValueKey('bank-reconciliation-split-method-$id'),
+            value: resolution.paymentMethodId,
+            options: [
+              for (final method in methods)
+                VbSearchableSelectOption<String>(
+                  value: method.paymentMethodId,
+                  label: method.name,
+                  context: 'Sale de la cuenta bancaria seleccionada',
+                  searchText: method.code,
+                ),
+            ],
+            onChanged: enabled
+                ? (value) => onChanged(
+                      resolution.copyWith(
+                        paymentMethodId: value,
+                        clearPaymentMethod: value == null,
+                      ),
+                    )
+                : null,
+            sheetTitle: 'Elegir medio de pago',
+            label: 'Medio de pago bancario de los gastos',
+            placeholder: 'Elegir medio…',
+          ),
+        ],
+        const SizedBox(height: 16),
+        VbNotice(
+          title: 'Efecto contable',
+          body: 'Crea ${effects.isEmpty ? 'un asiento' : effects}. El '
+              'movimiento queda explicado por todas las partes.',
           tone: VbNoticeTone.info,
         ),
       ],

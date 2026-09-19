@@ -250,10 +250,27 @@ class BankReconciliationCatalogCodec {
       'create_expense' => BankReconciliationActionKind.createExpense,
       'post_journal' => BankReconciliationActionKind.classifyAccount,
       'dismiss' => BankReconciliationActionKind.dismiss,
+      'split' => BankReconciliationActionKind.split,
       _ => null,
     };
     final description = _text(json['description']);
     if (action == null || description == null) return null;
+    final parts = <BankPriorSplitPart>[
+      for (final raw in _list(json['parts']))
+        if (_text(raw['account_id']) != null &&
+            (_int(raw['amount']) ?? 0) > 0 &&
+            _text(raw['description']) != null)
+          BankPriorSplitPart(
+            accountId: _text(raw['account_id'])!,
+            amountClp: _int(raw['amount'])!,
+            description: _text(raw['description'])!,
+            supplierId: _text(raw['supplier_id']),
+            isExpense: raw['kind']?.toString() == 'expense',
+          ),
+    ];
+    if (action == BankReconciliationActionKind.split && parts.length < 2) {
+      return null;
+    }
     return BankPriorDecision(
       action: action,
       direction: json['direction']?.toString() == 'credit'
@@ -266,6 +283,7 @@ class BankReconciliationCatalogCodec {
       paymentMethodId: _text(json['payment_method_id']),
       supplierName: _text(json['supplier_name']),
       text: _text(json['text']),
+      parts: parts,
     );
   }
 

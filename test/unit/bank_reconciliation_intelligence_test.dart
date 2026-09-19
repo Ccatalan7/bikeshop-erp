@@ -334,6 +334,18 @@ void main() {
           name: 'Gastos Varios',
           type: 'expense',
         ),
+        BankReconciliationLedgerAccountOption(
+          accountId: 'fees',
+          code: '6103',
+          name: 'Honorarios Profesionales',
+          type: 'expense',
+        ),
+        BankReconciliationLedgerAccountOption(
+          accountId: 'vat',
+          code: '2150',
+          name: 'IVA Débito Fiscal',
+          type: 'liability',
+        ),
       ],
       paymentMethods: const [
         BankReconciliationPaymentMethodOption(
@@ -645,6 +657,58 @@ void main() {
       expect(suggestion.confidence, BankReconciliationConfidence.high);
       expect(suggestion.resolution!.accountId, 'misc');
       expect(suggestion.resolution!.description, 'Devolución de préstamo');
+    });
+
+    test('a transfer split before is proposed with its parts, never as safe',
+        () {
+      // Her repayments carry the accountant's fee and a monthly F29 that
+      // changes: the fee repeats, the last part takes what is left.
+      final suggestion = suggest(
+          [
+            _movement('mother', _d(6, 30), BankMovementDirection.debit, 151294,
+                counterparty: 'Maria Angelica Internet Sandoval'),
+          ],
+          BankReconciliationContext(decisions: const [
+            BankPriorDecision(
+              action: BankReconciliationActionKind.split,
+              direction: BankMovementDirection.debit,
+              description: 'App-traspaso A: Maria Angelica Internet Sandoval',
+              counterparty: 'Maria Angelica Internet Sandoval',
+              paymentMethodId: 'transfer-id',
+              parts: [
+                BankPriorSplitPart(
+                  accountId: 'fees',
+                  amountClp: 50000,
+                  description: 'Honorarios contador',
+                  supplierId: 'pedro',
+                  isExpense: true,
+                ),
+                BankPriorSplitPart(
+                  accountId: 'vat',
+                  amountClp: 48000,
+                  description: 'F29 del mes',
+                ),
+              ],
+            ),
+          ]))['mother']!;
+
+      expect(suggestion.kind, BankSuggestionKind.split);
+      expect(suggestion.confidence, BankReconciliationConfidence.medium);
+      final resolution = suggestion.resolution!;
+      expect(resolution.action, BankReconciliationActionKind.split);
+      expect(resolution.paymentMethodId, 'transfer-id');
+      expect(
+        resolution.splitParts.map((part) => (
+              part.accountId,
+              part.amountClp,
+              part.supplierId,
+              part.isExpense,
+            )),
+        [
+          ('fees', 50000, 'pedro', true),
+          ('vat', 101294, null, false),
+        ],
+      );
     });
   });
 

@@ -803,6 +803,119 @@ void main() {
       isNull,
     );
   });
+
+  test('a split row sends its parts and counts only when they add up',
+      () async {
+    final calls = <_RpcCall>[];
+    final service = BankReconciliationService(
+      database: _FakeDatabaseService(),
+      rpc: (name, params) async {
+        calls.add(_RpcCall(name, params));
+        return <String, dynamic>{
+          'import_id': '33333333-3333-4333-8333-333333333333',
+          'revision': 2,
+          'status': 'reconciled',
+          'allocation_count': 3,
+          'created_expense_count': 2,
+          'created_journal_count': 1,
+          'replayed': false,
+        };
+      },
+    );
+    final movement = BankStatementMovement(
+      sourceRowId: 'mother',
+      ordinal: 1,
+      bookingDate: const BankCivilDate(2026, 8, 17),
+      description: 'App-traspaso A: Maria Angelica Sandoval',
+      normalizedDescription: 'app traspaso a maria angelica sandoval',
+      direction: BankMovementDirection.debit,
+      amountClp: 214685,
+      sourcePage: 1,
+      sourceLineStart: 1,
+      sourceLineEnd: 1,
+    );
+    BankReconciliationRowDraft rowWith(List<BankSplitPartDraft> parts,
+            {String? method = 'transfer-id'}) =>
+        BankReconciliationRowDraft(
+          movement: movement,
+          proposals: const [],
+          selectDefault: false,
+          resolution: BankReconciliationResolutionDraft(
+            action: BankReconciliationActionKind.split,
+            paymentMethodId: method,
+            splitParts: BankSplitPartDraft.withRemainder(parts, 214685),
+          ),
+        );
+    const fee = BankSplitPartDraft(
+      accountId: 'fees',
+      amountClp: 50000,
+      description: 'Honorarios contador julio',
+      supplierId: 'pedro',
+      isExpense: true,
+    );
+    const licence = BankSplitPartDraft(
+      accountId: 'licence',
+      amountClp: 74536,
+      description: 'Patente 2º semestre',
+      supplierId: 'municipalidad',
+      isExpense: true,
+    );
+    const f29 = BankSplitPartDraft(accountId: 'vat', description: 'F29 junio');
+
+    expect(rowWith(const [fee, licence, f29]).isResolved, isTrue);
+    // An expense part needs the bank method it was paid with.
+    expect(
+        rowWith(const [fee, licence, f29], method: null).isResolved, isFalse);
+    // Nothing left for the last part: the others already cover it.
+    expect(
+      rowWith(const [
+        BankSplitPartDraft(
+            accountId: 'fees', amountClp: 214685, description: 'Todo'),
+        f29,
+      ]).isResolved,
+      isFalse,
+    );
+
+    final row = rowWith(const [fee, licence, f29]);
+    await service.apply(
+      draft: BankReconciliationPreparedDraft(
+        fileSha256: 'a' * 64,
+        filename: 'cartola.pdf',
+        sourceType: 'pdf_text',
+        parserName: 'banco_chile_statement',
+        parserVersion: 'v1',
+        rows: [row],
+      ),
+      importReceipt: BankStatementImportReceipt(
+        importId: '33333333-3333-4333-8333-333333333333',
+        revision: 1,
+        rowIdsBySourceRowId: const <String, String>{'mother': 'row-mother'},
+        replayed: false,
+      ),
+      operationKey: 'apply-split',
+    );
+
+    final action =
+        (calls.single.params['p_actions'] as List<Map<String, dynamic>>).single;
+    expect(action['action'], 'split');
+    final split = action['split'] as Map<String, dynamic>;
+    expect(split['payment_method_id'], 'transfer-id');
+    expect(split['parts'], [
+      {
+        'account_id': 'fees',
+        'amount': 50000,
+        'description': 'Honorarios contador julio',
+        'supplier_id': 'pedro',
+      },
+      {
+        'account_id': 'licence',
+        'amount': 74536,
+        'description': 'Patente 2º semestre',
+        'supplier_id': 'municipalidad',
+      },
+      {'account_id': 'vat', 'amount': 90149, 'description': 'F29 junio'},
+    ]);
+  });
 }
 
 class _FakeDatabaseService extends DatabaseService {}

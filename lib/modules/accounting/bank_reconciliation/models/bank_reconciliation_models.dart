@@ -95,6 +95,10 @@ enum BankReconciliationActionKind {
 
   /// Pay a salary Nómina owes with this transfer, then associate the row.
   payPayroll,
+
+  /// Book one movement across several accounts: a transfer that repaid the
+  /// accountant's fee, the F29 and the municipal licence at once.
+  split,
 }
 
 class BankReconciliationAccountOption {
@@ -144,15 +148,34 @@ class BankReconciliationPaymentMethodOption {
   final String accountId;
 }
 
+class BankReconciliationSupplierOption {
+  const BankReconciliationSupplierOption({
+    required this.supplierId,
+    required this.name,
+  });
+
+  final String supplierId;
+  final String name;
+}
+
 class BankReconciliationWorkspaceOptions {
   BankReconciliationWorkspaceOptions({
     required List<BankReconciliationLedgerAccountOption> accounts,
     required List<BankReconciliationPaymentMethodOption> paymentMethods,
+    List<BankReconciliationSupplierOption> suppliers =
+        const <BankReconciliationSupplierOption>[],
   })  : accounts = List.unmodifiable(accounts),
-        paymentMethods = List.unmodifiable(paymentMethods);
+        paymentMethods = List.unmodifiable(paymentMethods),
+        suppliers = List.unmodifiable(suppliers);
 
   final List<BankReconciliationLedgerAccountOption> accounts;
   final List<BankReconciliationPaymentMethodOption> paymentMethods;
+
+  /// Who an expense part of a split is paid to.
+  final List<BankReconciliationSupplierOption> suppliers;
+
+  BankReconciliationLedgerAccountOption? account(String? accountId) =>
+      accounts.where((item) => item.accountId == accountId).firstOrNull;
 
   List<BankReconciliationLedgerAccountOption> get expenseAccounts => accounts
       .where((account) => account.canReceiveExpense)
@@ -453,6 +476,7 @@ class BankReconciliationResolutionDraft {
     this.reference,
     this.reason,
     this.payroll,
+    this.splitParts = const <BankSplitPartDraft>[],
   });
 
   final BankReconciliationActionKind action;
@@ -465,6 +489,14 @@ class BankReconciliationResolutionDraft {
 
   /// The salary a [BankReconciliationActionKind.payPayroll] row pays.
   final BankPayrollPaymentDraft? payroll;
+
+  /// The parts a [BankReconciliationActionKind.split] row is booked as.
+  final List<BankSplitPartDraft> splitParts;
+
+  int get splitTotalClp => splitParts.fold<int>(
+        0,
+        (sum, part) => sum + (part.amountClp ?? 0),
+      );
 
   BankReconciliationResolutionDraft copyWith({
     BankReconciliationActionKind? action,
@@ -482,10 +514,12 @@ class BankReconciliationResolutionDraft {
     bool clearReason = false,
     BankPayrollPaymentDraft? payroll,
     bool clearPayroll = false,
+    List<BankSplitPartDraft>? splitParts,
   }) {
     return BankReconciliationResolutionDraft(
       action: action ?? this.action,
       payroll: clearPayroll ? null : payroll ?? this.payroll,
+      splitParts: splitParts ?? this.splitParts,
       accountId: clearAccount ? null : accountId ?? this.accountId,
       paymentMethodId:
           clearPaymentMethod ? null : paymentMethodId ?? this.paymentMethodId,
@@ -609,8 +643,32 @@ class BankReconciliationRowDraft {
         BankReconciliationActionKind.dismiss => reasonText.trim().isNotEmpty,
         BankReconciliationActionKind.payPayroll =>
           effectiveResolution.payroll != null,
+        BankReconciliationActionKind.split => _splitComplete(),
         BankReconciliationActionKind.pending => false,
       };
+
+  /// Every part names an account, an amount and what it was; together they
+  /// are the movement, and an expense part (money out only) has the bank
+  /// method it was paid with.
+  bool _splitComplete() {
+    final resolution = effectiveResolution;
+    final parts = resolution.splitParts;
+    final amount = movement.amountClp;
+    if (amount == null || parts.length < 2 || parts.length > 10) return false;
+    for (final part in parts) {
+      if ((part.accountId?.trim().isEmpty ?? true) ||
+          (part.amountClp ?? 0) <= 0 ||
+          part.description.trim().length < 2) {
+        return false;
+      }
+    }
+    if (resolution.splitTotalClp != amount) return false;
+    if (parts.any((part) => part.isExpense)) {
+      return movement.direction == BankMovementDirection.debit &&
+          (resolution.paymentMethodId?.trim().isNotEmpty ?? false);
+    }
+    return true;
+  }
 
   String get reasonText => effectiveResolution.reason ?? '';
 
@@ -624,6 +682,84 @@ class BankReconciliationRowDraft {
         (proposal.targetTotalClp - amount).abs() <=
             BankReconciliationProposal.manualToleranceClp;
   }
+}
+
+/// One part of a movement booked across several accounts.
+class BankSplitPartDraft {
+  const BankSplitPartDraft({
+    this.accountId,
+    this.amountClp,
+    this.description = '',
+    this.supplierId,
+    this.isExpense = false,
+  });
+
+  final String? accountId;
+  final int? amountClp;
+  final String description;
+
+  /// Who an expense part was paid to (Pedro Madrid, the municipality).
+  final String? supplierId;
+
+  /// On an expense account: booked as a paid expense, not a journal line.
+  final bool isExpense;
+
+  BankSplitPartDraft copyWith({
+    String? accountId,
+    bool? isExpense,
+    int? amountClp,
+    bool clearAmount = false,
+    String? description,
+    String? supplierId,
+    bool clearSupplier = false,
+  }) {
+    return BankSplitPartDraft(
+      accountId: accountId ?? this.accountId,
+      isExpense: isExpense ?? this.isExpense,
+      amountClp: clearAmount ? null : amountClp ?? this.amountClp,
+      description: description ?? this.description,
+      supplierId: clearSupplier ? null : supplierId ?? this.supplierId,
+    );
+  }
+
+  /// The parts with the last one taking what the others leave, so the
+  /// operator types the amounts they know (the fee, the licence) and the
+  /// remainder (the F29) follows. The last amount is null when nothing is
+  /// left.
+  static List<BankSplitPartDraft> withRemainder(
+    List<BankSplitPartDraft> parts,
+    int movementAmountClp,
+  ) {
+    if (parts.isEmpty) return parts;
+    final fixed = parts
+        .take(parts.length - 1)
+        .fold<int>(0, (sum, part) => sum + (part.amountClp ?? 0));
+    final rest = movementAmountClp - fixed;
+    return <BankSplitPartDraft>[
+      ...parts.take(parts.length - 1),
+      parts.last.copyWith(
+        amountClp: rest > 0 ? rest : null,
+        clearAmount: rest <= 0,
+      ),
+    ];
+  }
+}
+
+/// A part of a split the review applied before.
+class BankPriorSplitPart {
+  const BankPriorSplitPart({
+    required this.accountId,
+    required this.amountClp,
+    required this.description,
+    this.supplierId,
+    this.isExpense = false,
+  });
+
+  final String accountId;
+  final int amountClp;
+  final String description;
+  final String? supplierId;
+  final bool isExpense;
 }
 
 /// A movement a review already settled.
@@ -847,6 +983,9 @@ enum BankSuggestionKind {
 
   /// A customer payment whose sale lives in Ventas.
   sale,
+
+  /// Several accounts at once, as the same counterparty was split before.
+  split,
 }
 
 class BankReconciliationSuggestion {
@@ -1058,6 +1197,7 @@ class BankPriorDecision {
     this.paymentMethodId,
     this.supplierName,
     this.text,
+    this.parts = const <BankPriorSplitPart>[],
   });
 
   final BankReconciliationActionKind action;
@@ -1069,6 +1209,9 @@ class BankPriorDecision {
   final String? paymentMethodId;
   final String? supplierName;
   final String? text;
+
+  /// The parts of an earlier split, in the order they were entered.
+  final List<BankPriorSplitPart> parts;
 }
 
 /// Everything the ERP knows that can explain a statement movement.

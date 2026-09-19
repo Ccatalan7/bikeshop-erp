@@ -368,6 +368,111 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('a repayment is split into a paid expense and the rest',
+      (tester) async {
+    final harness = _Harness();
+    addTearDown(harness.dispose);
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(harness.app(initialDraft: _repaidDraft()));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('bank-reconciliation-resolve-other')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('bank-reconciliation-action-split')),
+    );
+    await tester.pumpAndSettle();
+
+    Future<void> pick(String key, String label) async {
+      final field = find.byKey(ValueKey(key));
+      await tester.ensureVisible(field);
+      await tester.pumpAndSettle();
+      await tester.tap(field);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(label).last);
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> type(String key, String text) async {
+      final field = find.byKey(ValueKey(key));
+      await tester.ensureVisible(field);
+      await tester.pumpAndSettle();
+      await tester.enterText(field, text);
+      await tester.pumpAndSettle();
+    }
+
+    expect(find.text('Lo que queda: \$5.000'), findsOneWidget);
+    await pick('bank-reconciliation-split-account-other-0',
+        '6201 · Servicios digitales');
+    await pick('bank-reconciliation-split-supplier-other-0', 'Pedro Madrid');
+    await type('bank-reconciliation-split-description-other-0-2',
+        'Honorarios contador');
+    await type('bank-reconciliation-split-amount-other-0-2', '3000');
+    expect(find.text('Lo que queda: \$2.000'), findsOneWidget);
+
+    await pick('bank-reconciliation-split-account-other-1',
+        '2150 · IVA Débito Fiscal');
+    await type('bank-reconciliation-split-description-other-1-2', 'F29');
+    expect(find.text('División lista'), findsOneWidget);
+    expect(
+      find.text('1 de 2 movimientos resueltos · 1 quedan pendientes · '
+          '1 ya conciliados'),
+      findsOneWidget,
+    );
+    // The supplier is asked only where an expense is created.
+    expect(
+      find.byKey(const ValueKey('bank-reconciliation-split-supplier-other-1')),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the split editor fits a phone', (tester) async {
+    final harness = _Harness();
+    addTearDown(harness.dispose);
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(harness.app(initialDraft: _repaidDraft()));
+    await tester.pumpAndSettle();
+    final resolve =
+        find.byKey(const ValueKey('bank-reconciliation-resolve-other'));
+    // The phone list builds rows lazily.
+    await tester.scrollUntilVisible(
+      resolve,
+      180,
+      scrollable: find.descendant(
+        of: find.byKey(const PageStorageKey('bank-reconciliation-rows')),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(resolve);
+    await tester.pumpAndSettle();
+    final split =
+        find.byKey(const ValueKey('bank-reconciliation-action-split'));
+    await tester.ensureVisible(split);
+    await tester.pumpAndSettle();
+    await tester.tap(split);
+    await tester.pumpAndSettle();
+    final add =
+        find.byKey(const ValueKey('bank-reconciliation-split-add-other'));
+    await tester.ensureVisible(add);
+    await tester.pumpAndSettle();
+    await tester.tap(add);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Parte 3'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('a movement settled before is shown, not decided again',
       (tester) async {
     final harness = _Harness();
@@ -620,6 +725,18 @@ class _Harness {
                   code: '4100',
                   name: 'Otros ingresos',
                   type: 'income',
+                ),
+                BankReconciliationLedgerAccountOption(
+                  accountId: 'vat-account',
+                  code: '2150',
+                  name: 'IVA Débito Fiscal',
+                  type: 'liability',
+                ),
+              ],
+              suppliers: const <BankReconciliationSupplierOption>[
+                BankReconciliationSupplierOption(
+                  supplierId: 'pedro',
+                  name: 'Pedro Madrid',
                 ),
               ],
               paymentMethods: const <BankReconciliationPaymentMethodOption>[
