@@ -96,7 +96,7 @@ void main() {
       expect(profile.familyCandidates, isNot(contains('saddle')));
       expect(
         resolution.category?.fullPath,
-        'Accesorios / Asientos / Adaptadores de tija',
+        'Accesorios / Asientos / Adaptadores para poste de asiento',
       );
     });
   });
@@ -339,11 +339,13 @@ final _tree = <Category>[
   _c('asientos', 'Asientos', 'Accesorios / Asientos', 1, parent: 'accesorios'),
   _c('asiento', 'Asiento', 'Accesorios / Asientos / Asiento', 2,
       parent: 'asientos'),
-  _c('tija', 'Tija', 'Accesorios / Asientos / Tija', 2, parent: 'asientos'),
+  _c('tija', 'Postes de asiento', 'Accesorios / Asientos / Postes de asiento',
+      2,
+      parent: 'asientos'),
   _c(
     'adaptadores-tija',
-    'Adaptadores de tija',
-    'Accesorios / Asientos / Adaptadores de tija',
+    'Adaptadores para poste de asiento',
+    'Accesorios / Asientos / Adaptadores para poste de asiento',
     2,
     parent: 'asientos',
   ),

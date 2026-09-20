@@ -432,7 +432,7 @@ RULES = {
             ('Giro (twist)', r'\bGIRO\b|\bTWIST\b|\bREVO\s?SHIFT\b|\bGRIP\s?SHIFT\b'),
             ('Gatillo (trigger)', r'\bGATILLO\b|\bTRIGGER\b|\bRAPID\s?FIRE\b'),
             ('Palanca de pulgar', r'\bTHUMB\s?SHIFTER\b|\bPULGAR\b'),
-            ('Integrado con la maneta de freno', r'\bCAMBIO\s*/?\s*FRENO\b|\bCAMBIO Y FRENO\b|\bEZ-?FIRE\b|\bINTEGRAD[OA]\b')),
+            ('Integrado con la manilla de freno', r'\bCAMBIO\s*/?\s*FRENO\b|\bCAMBIO Y FRENO\b|\bEZ-?FIRE\b|\bINTEGRAD[OA]\b')),
                                         r'(?:' + PAIR_WORDS + r'|"JUEGO")(?![\s\S]*' + SIDE_WORDS + ')'),
     },
     'chain': {
@@ -633,7 +633,7 @@ RULES = {
                                number(r'[xX]\s?(5[4-9]\d|[67]\d\d|8[0-2]\d)\b(?!\s?MM)(?![.,]\d)')),
         'bar_clamp_diameter_mm': number(NB + r'(25\.4|31\.8)(?:\s?MM)?\b', cast=float),
         'bar_rise_mm': either(number(r'\bRISE\s?((\d{2})\s?MM)\b', group=2, quote_group=1), number(r'\b(\d{2})\s?RISE\b')),
-        'bar_style': words(('Riser', r'\bRISER\b'), ('Recto (plano)', r'\bRECTO\b|\bPLANO\b'), ('Ruta (drop)', r'\bRUTA\b|\bDROP\b'),
+        'bar_style': words(('Riser', r'\bRISER\b'), ('Recto (plano)', r'\bRECTO\b|\bPLANO\b'), ('Ruta (manubrio curvo)', r'\bRUTA\b|\bDROP\b'),
                            ('BMX', r'\bBMX\b'), ('Urbano / paseo', r'\bPLAYERA\b|\bBEACH\b|\bPASEO\b|\bCITY\b')),
         'material': words(MATERIAL_ALU, MATERIAL_ACERO, MATERIAL_CARBONO),
     },
@@ -665,8 +665,8 @@ RULES = {
         'declared_purpose': words(('Perno de biela (cuadrado)', r'\bEJE CUADRADO\b|\bPARA CUADRADA\b|\bCUADRAD[AO]\b'),
                                   ('Perno de plato', r'\bCORONAS?\b'),
                                   ('Perno de rotor', r'\bFRENO DISCO\b|\bDISCO FRENO\b|\bROTOR\b'),
-                                  ('Perno de portacaramagiola', r'\bPORTA\s?CARAMA[YG]I?OLAS?\b'),
-                                  ('Perno de patilla', r'\bPOSTIZA\b')),
+                                  ('Perno de portabotella', r'\bPORTA\s?(?:BOTELLAS?|CARAMA[YG]I?OLAS?)\b'),
+                                  ('Perno de postiza', r'\b(?:PATILLA|POSTIZA|FUSIBLE)\b')),
         'head_drive': words(('Torx', r'\bTORQ\b|\bTORX\b|\bT25\b'), ('Hexagonal interior (Allen)', r'\bALLEN\b')),
         'thread': unless(either(M_THREADS, words(('3/8"', FRACTION_BEFORE + r'3/8' + FRACTION_AFTER))), r'\bGOLILLA\b'),
         'length_mm': unless(number(r'\bM\d{1,2}\s?[xX ]\s?(\d{1,2}(?:\.\d)?)\s?MM\b', cast=float), r'\bGOLILLA\b'),
@@ -777,7 +777,7 @@ RULES = {
         'tire_width_mm': number(r'\b700\s?[xX]\s?(\d{2})\s?[cC]\b'),
     },
     'bike_bag': {
-        'bag_position': words(('Triángulo del cuadro', r'\bTRIANGUL(?:O|AR)\b'), ('Bajo sillín', r'\bBAJO (?:SILL[IÍ]N|ASIENTO)\b'),
+        'bag_position': words(('Triángulo del cuadro', r'\bTRIANGUL(?:O|AR)\b'), ('Bajo el asiento', r'\bBAJO (?:SILL[IÍ]N|ASIENTO)\b'),
                               ('Manubrio', r'\bMANUBRIO\b|\bMANILLAR\b'), ('Alforja', r'\bALFORJAS?\b')),
         'waterproof_claim': flag(r'\bIMPERMEABLE\b|\bWATERPROOF\b'),
     },
@@ -858,7 +858,7 @@ RULES = {
         'material': words(MATERIAL_ACERO),
     },
     'handlebar_covering': {
-        'covering_kind': words(('Cinta de manillar', r'\bCINTA\b'), ('Funda / espuma tubular', r'\bCUBRE MANUBRIO\b')),
+        'covering_kind': words(('Cinta de manubrio', r'\bCINTA\b'), ('Funda / espuma tubular', r'\bCUBRE MANUBRIO\b')),
         'material': words(('EVA', r'\bEVA\b')),
     },
     'seatpost_shim': {

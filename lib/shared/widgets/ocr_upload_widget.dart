@@ -4505,7 +4505,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
     const categorySynonyms = <String, List<String>>{
       'asiento': ['sillin', 'sillines', 'asientos', 'sillon'],
       'asientos': ['sillin', 'sillines', 'asiento', 'sillon'],
-      'porta caramagiola': [
+      'portabotellas': [
         'portacaramagiola',
         'portacaramagiolas',
         'portabotella',
@@ -4514,6 +4514,14 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
         'porta botellas',
         'portabidon',
         'portabidones',
+      ],
+      'postes de asiento': [
+        'poste de asiento',
+        'poste asiento',
+        'tija',
+        'tijas',
+        'seatpost',
+        'seat post',
       ],
       'valvula tubeless': [
         'valvulas tubeless',
@@ -4645,7 +4653,7 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
         if (cTokens.intersection(targetTokens).isNotEmpty) return c;
       }
       // 5. Compound-word matching: handles "Portacaramagiola" vs
-      // "Porta Caramagiola". Strip spaces from both sides; if either is a
+      // "Portabotella". Strip spaces from both sides; if either is a
       // substring of the other AND the shorter one is >=6 chars, accept.
       final targetCompact = target.replaceAll(' ', '');
       if (targetCompact.length >= 6) {
@@ -4697,10 +4705,11 @@ class OCRUploadWidgetState extends State<OCRUploadWidget> {
       'llanta': 'Llantas',
       'camara': 'Cámaras',
       'tubeless': 'Tubeless',
-      'portacaramagiola': 'Porta Caramagiola',
-      'portabotella': 'Porta Caramagiola',
-      'portabidon': 'Porta Caramagiola',
-      'tija': 'Tija',
+      'portacaramagiola': 'Portabotellas',
+      'portabotella': 'Portabotellas',
+      'portabidon': 'Portabotellas',
+      'tija': 'Postes de asiento',
+      'seatpost': 'Postes de asiento',
       'tee': 'Tee',
       'potencia': 'Tee',
       'stem': 'Tee',

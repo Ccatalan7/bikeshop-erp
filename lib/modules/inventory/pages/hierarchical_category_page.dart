@@ -1115,7 +1115,7 @@ class _ImportCategoriesDialogState extends State<_ImportCategoriesDialog> {
             const SizedBox(height: 8),
             const Text('• Una sola columna con nombres de categorías'),
             const Text(
-                '• Use "/" para separar niveles (e.g., "Accesorios / Asientos / Tija")'),
+                '• Use "/" para separar niveles (ej.: "Accesorios / Asientos / Postes de asiento")'),
             const Text('• El sistema creará automáticamente la jerarquía'),
             const Divider(height: 24),
             if (_selectedFileName != null) ...[

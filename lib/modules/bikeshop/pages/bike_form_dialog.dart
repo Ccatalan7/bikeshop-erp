@@ -4472,7 +4472,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
           theme,
           title: 'Cockpit / dirección',
           body:
-              'La ficha todavía no tiene campos estructurados para dirección, stem, manillar o controles. Usa Notas y fotos si necesitas conservar un antecedente mientras se completa este sistema.',
+              'La ficha todavía no tiene campos estructurados para dirección, tee, manubrio o controles. Usa Notas y fotos si necesitas conservar un antecedente mientras se completa este sistema.',
         ),
       _ => _buildTechnicalPlaceholderCard(
           theme,

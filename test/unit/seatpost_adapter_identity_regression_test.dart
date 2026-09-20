@@ -35,7 +35,7 @@ void main() {
       if (product.sku != 'AE0266' && product.sku != 'AE0274') return product;
       return product.copyWith(
         categoryId: _adapterCategoryId,
-        categoryName: 'Adaptadores de tija',
+        categoryName: 'Adaptadores para poste de asiento',
       );
     }).toList(growable: false);
     final result = await _matcher().resolveCandidates(
@@ -45,7 +45,7 @@ void main() {
 
     expect(result.probeIdentity.resolvedFamilyId, 'seatpost_shim');
     expect(result.probeIdentity.category?.label,
-        'accesorios / asientos / adaptadores de tija');
+        'accesorios / asientos / adaptadores para poste de asiento');
     expect(result.recommendations, isNotEmpty);
     expect(result.recommendations.first.product.sku, 'AE0274');
     expect(
@@ -58,7 +58,7 @@ void main() {
         for (final candidate in result.operatorChoices)
           candidate.product.categoryName ?? '',
       },
-      everyElement('Adaptadores de tija'),
+      everyElement('Adaptadores para poste de asiento'),
       reason: 'el overlay no puede volver a ofrecer sillines',
     );
     expect(result.categoryConflicts, isEmpty);
@@ -113,7 +113,7 @@ const _liveProbe = ProductDuplicateProbe(
       'poste de asiento, 22,2, 25,4, 27,2, 31,8, 33,9, 28,6, 30,4 a 30,9, '
       '30, 31,6, 31,8, 33,9, 34,9, 36 (27.2-30.0)',
   categoryId: _adapterCategoryId,
-  categoryName: 'Accesorios / Asientos / Adaptadores de tija',
+  categoryName: 'Accesorios / Asientos / Adaptadores para poste de asiento',
   brandName: 'MUQZI',
   supplierName: 'AliExpress',
   supplierListingId: '1005006641856329',
@@ -146,16 +146,16 @@ final _categories = <Category>[
   Category(
     id: '9a055a2e-25cc-46a3-b30a-7311936914e6',
     tenantId: _tenantId,
-    name: 'Tija',
-    fullPath: 'Accesorios / Asientos / Tija',
+    name: 'Postes de asiento',
+    fullPath: 'Accesorios / Asientos / Postes de asiento',
     parentId: '7f348bb9-047f-481f-a90b-9b07bebbbd58',
     level: 2,
   ),
   Category(
     id: _adapterCategoryId,
     tenantId: _tenantId,
-    name: 'Adaptadores de tija',
-    fullPath: 'Accesorios / Asientos / Adaptadores de tija',
+    name: 'Adaptadores para poste de asiento',
+    fullPath: 'Accesorios / Asientos / Adaptadores para poste de asiento',
     parentId: '7f348bb9-047f-481f-a90b-9b07bebbbd58',
     level: 2,
   ),

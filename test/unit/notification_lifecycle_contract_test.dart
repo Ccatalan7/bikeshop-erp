@@ -8,12 +8,19 @@ void main() {
     final routedLayout =
         File('lib/shared/widgets/main_layout.dart').readAsStringSync();
 
-    expect(shell, contains("table: 'erp_notifications'"));
+    // Since 2026-09-16 the shell joins the tenant Broadcast topics instead of
+    // a postgres_changes subscription (block 2a of the residual-load plan).
+    expect(shell, isNot(contains("table: 'erp_notifications'")));
+    expect(
+        shell,
+        contains(
+            'erpNotificationsTopic(tenantId: tenantId, recipient: userId)'));
     expect(shell, contains('ErpNotificationGate.shared.rememberBaseline'));
     expect(shell, contains('_notificationLifecycleEpoch'));
     expect(shell, contains('_authStateSubscription?.cancel()'));
     expect(shell, contains('_erpNotificationsRefreshTimer?.cancel()'));
-    expect(shell, contains('_erpNotificationsChannel?.unsubscribe()'));
+    expect(shell, contains('_erpNotificationsChannel?.cancel()'));
+    expect(shell, contains('_erpNotificationsAllChannel?.cancel()'));
     expect(shell, contains('_notificationLifecycleEpoch++'));
     expect(shell, contains('MailAccountManager.instance.reset()'));
     expect(shell, contains('ErpNotificationGate.shared.clearScope()'));
@@ -21,6 +28,8 @@ void main() {
     expect(routedLayout, isNot(contains("table: 'erp_notifications'")));
     expect(routedLayout, isNot(contains('Timer.periodic')));
     expect(routedLayout, isNot(contains('RealtimeChannel')));
+    expect(routedLayout, isNot(contains('erpNotificationsTopic(')));
+    expect(routedLayout, isNot(contains('TenantBroadcastHub')));
     expect(routedLayout, isNot(contains('_showTopNotification')));
   });
 

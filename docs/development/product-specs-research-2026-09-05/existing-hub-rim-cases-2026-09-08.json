@@ -1015,7 +1015,7 @@
       "source_urls": []
     },
     {
-      "id": "hur_one_hub_uses_the_same_receiver_presence_as_a_package_piece",
+      "id": "hur_front_hub_rejects_a_rear_drive_receiver",
       "template": "hub",
       "values": {
         "hub_package_position": "Delantera",
@@ -1024,7 +1024,20 @@
         "hub_drive_receiver_reference": "Declaración sintética: no certifica montaje",
         "spec_evidence_source": "https://example.invalid/synthetic"
       },
-      "expected_blocking": [],
+      "expected_blocking": [
+        {
+          "code": "field_applicability",
+          "field": "hub_drive_receiver_present"
+        },
+        {
+          "code": "field_applicability",
+          "field": "hub_drive_receiver_kind"
+        },
+        {
+          "code": "field_applicability",
+          "field": "hub_drive_receiver_reference"
+        }
+      ],
       "facts_verified_for_product": false,
       "automatic_fill_authorized": false,
       "kind": "synthetic_representation",
@@ -1034,7 +1047,7 @@
       "id": "hur_an_absent_receiver_blocks_its_reference_on_one_hub",
       "template": "hub",
       "values": {
-        "hub_package_position": "Delantera",
+        "hub_package_position": "Trasera",
         "hub_drive_receiver_present": false,
         "hub_drive_receiver_reference": "Synthetic receiver",
         "spec_evidence_source": "https://example.invalid/synthetic"
@@ -1251,6 +1264,38 @@
                 "evidence_source": "Synthetic package",
                 "drive_interface_present": false,
                 "drive_receiver_kind": "Driver BMX"
+              },
+              "sources": []
+            }
+          ]
+        }
+      },
+      "expected_blocking": [
+        {
+          "code": "row_field_applicability",
+          "field": "hub_package_pieces"
+        }
+      ],
+      "facts_verified_for_product": false,
+      "automatic_fill_authorized": false,
+      "kind": "synthetic_representation",
+      "source_urls": []
+    },
+    {
+      "id": "hur_front_piece_cannot_claim_a_drive_receiver",
+      "template": "hub",
+      "values": {
+        "hub_package_position": "Juego delantera + trasera",
+        "hub_package_pieces": {
+          "schema_version": 1,
+          "rows": [
+            {
+              "id": "r1",
+              "values": {
+                "piece_position": "Delantera",
+                "piece_identity": "Synthetic Delantera",
+                "evidence_source": "Synthetic package",
+                "drive_interface_present": true
               },
               "sources": []
             }
@@ -1691,5 +1736,5 @@
       "reason": "Spoke length, dish and tension are outcomes of a built wheel, never nominal facts of a hub or a rim."
     }
   ],
-  "catalogue_sha256": "7585bdb1f1b5365e7474324b37e6d20a287d92cbce74319ed53af3ffb663b1a3"
+  "catalogue_sha256": "4738cf072fcdff9f315cac77344c33954d084658b74e742e2dd0e221a549c490"
 }

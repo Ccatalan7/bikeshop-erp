@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../shared/services/tenant_broadcast_channel.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../models/conversation.dart';
 import '../models/conversation_context_hint.dart';
@@ -2167,6 +2168,52 @@ class MessagingService {
           callback: handleChange,
         )
         .subscribe();
+  }
+
+  /// Staff variant of [subscribeToConversationsUpdates]: one private
+  /// Broadcast topic per tenant, fed by the triggers of migration
+  /// `20260916010000`, instead of three unfiltered postgres_changes
+  /// subscriptions. The payload carries only the table, the operation, the
+  /// ids and a delivery status: [onMessageReceiptUpdate] therefore receives
+  /// an update whose `record` holds just those keys and the caller must
+  /// re-read the row before painting anything else.
+  Future<TenantBroadcastListener> subscribeToTenantMessagingUpdates({
+    required String tenantId,
+    required VoidCallback onUpdate,
+    ValueChanged<MessageReceiptRealtimeUpdate>? onMessageReceiptUpdate,
+    void Function(TenantBroadcastStatus status, Object? error)? onStatus,
+  }) {
+    return TenantBroadcastHub.instance.listen(
+      client: _client,
+      topic: messagingTopic(tenantId),
+      onStatus: onStatus,
+      onEvent: (payload) {
+        if (payload['table'] == 'messages' &&
+            payload['operation'] == 'update') {
+          final messageId = _text(payload['message_id']);
+          final conversationId = _text(payload['conversation_id']);
+          final externalStatus = _text(payload['external_status']);
+          if (messageId != null &&
+              conversationId != null &&
+              externalStatus != null) {
+            onMessageReceiptUpdate?.call(
+              MessageReceiptRealtimeUpdate(
+                conversationId: conversationId,
+                messageId: messageId,
+                externalStatus: externalStatus,
+                record: {
+                  'id': messageId,
+                  'conversation_id': conversationId,
+                  'external_status': externalStatus,
+                },
+              ),
+            );
+            return;
+          }
+        }
+        onUpdate();
+      },
+    );
   }
 
   MessageReceiptRealtimeUpdate? _messageReceiptUpdate(

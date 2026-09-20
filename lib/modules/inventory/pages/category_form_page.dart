@@ -436,7 +436,7 @@ class _CategoryFormPageState extends State<CategoryFormPage> {
                       controller: _nameController,
                       decoration: const InputDecoration(
                         labelText: 'Nombre de la Categoría *',
-                        hintText: 'Ej: Bicicletas, Asientos, Tijas',
+                        hintText: 'Ej: Bicicletas, Asientos, Postes de asiento',
                         border: OutlineInputBorder(),
                         prefixIcon: Icon(Icons.label),
                       ),

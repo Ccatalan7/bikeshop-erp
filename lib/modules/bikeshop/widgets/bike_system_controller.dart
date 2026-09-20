@@ -26,7 +26,7 @@ const List<BikeSystemControllerSpec> kBikeSystemControllerSpecs = [
     systemKey: 'cockpit',
     label: 'Cockpit / dirección',
     icon: Icons.tune,
-    diagnosisSubtitle: 'Headset, stem, manillar y controles.',
+    diagnosisSubtitle: 'Dirección, tee, manubrio y controles.',
     supportsStructuredDiagnosis: true,
   ),
   BikeSystemControllerSpec(

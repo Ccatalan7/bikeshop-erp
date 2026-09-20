@@ -63,7 +63,7 @@ void main() {
       expect(profile.familyCandidates, isNot(contains('bottle')));
       expect(
         resolver.resolve(profile).category?.fullPath,
-        'Accesorios / Porta Caramagiola',
+        'Accesorios / Portabotellas',
       );
     });
 
@@ -83,7 +83,7 @@ void main() {
         expect(profile.familyCandidates, isNot(contains('bottle')));
         expect(
           resolver.resolve(profile).category?.fullPath,
-          'Accesorios / Porta Caramagiola',
+          'Accesorios / Portabotellas',
         );
       });
     }
@@ -120,6 +120,28 @@ void main() {
       );
 
       expect(profile.specs[PartSpecKind.position], isNull);
+    });
+
+    test('Chilean pata de cambio is the derailleur, not the frame hanger', () {
+      final profile = ProductIdentityExtractor.extract(
+        const ProductIdentityInput(
+          name: 'Pata de cambio Shimano Altus RD-M310 8 velocidades',
+        ),
+      );
+
+      expect(profile.familyId, 'derailleur');
+      expect(profile.familyCandidates, isNot(contains('derailleur_hanger')));
+    });
+
+    test('Chilean postiza is the replaceable frame hanger', () {
+      final profile = ProductIdentityExtractor.extract(
+        const ProductIdentityInput(
+          name: 'Postiza de cambio Rockrider ST',
+        ),
+      );
+
+      expect(profile.familyId, 'derailleur_hanger');
+      expect(profile.familyCandidates, isNot(contains('derailleur')));
     });
   });
 
@@ -241,8 +263,8 @@ final _catalogTree = <Category>[
   ),
   _category(
     'bottle-cage',
-    'Porta Caramagiola',
-    'Accesorios / Porta Caramagiola',
+    'Portabotellas',
+    'Accesorios / Portabotellas',
     1,
     parentId: 'accessories',
   ),

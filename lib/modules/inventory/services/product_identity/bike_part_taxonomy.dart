@@ -190,7 +190,7 @@ class BikePartTaxonomy {
     BikePartFamily(
       id: 'saddle',
       physicalClass: PartPhysicalClass.seating,
-      label: 'Sillín',
+      label: 'Asiento',
       heads: ['sillin', 'sillines', 'saddle', 'asiento', 'asientos'],
       negativeHeads: [
         'funda de asiento',
@@ -222,15 +222,30 @@ class BikePartTaxonomy {
     BikePartFamily(
       id: 'seatpost',
       physicalClass: PartPhysicalClass.seating,
-      label: 'Tija',
-      heads: ['tija', 'tijas', 'seatpost', 'seat post'],
-      negativeHeads: ['adaptador de tija', 'adaptador tija'],
+      label: 'Poste de asiento',
+      heads: [
+        'poste de asiento',
+        'postes de asiento',
+        'poste asiento',
+        'tija',
+        'tijas',
+        'seatpost',
+        'seat post',
+      ],
+      negativeHeads: [
+        'adaptador de poste de asiento',
+        'adaptador para poste de asiento',
+        'adaptador de tija',
+        'adaptador tija',
+      ],
     ),
     BikePartFamily(
       id: 'seatpost_shim',
       physicalClass: PartPhysicalClass.seating,
-      label: 'Adaptador de tija',
+      label: 'Adaptador para poste de asiento',
       heads: [
+        'adaptador para poste de asiento',
+        'adaptador de poste de asiento',
         'adaptador de tija de asiento',
         'adaptador de tija',
         'adaptador tija',
@@ -250,8 +265,10 @@ class BikePartTaxonomy {
     BikePartFamily(
       id: 'seat_clamp',
       physicalClass: PartPhysicalClass.seating,
-      label: 'Abrazadera de tija',
+      label: 'Abrazadera del poste de asiento',
       heads: [
+        'abrazadera del poste de asiento',
+        'abrazadera de poste de asiento',
         'abrazadera de tija',
         'abrazadera tija',
         'collarin',
@@ -471,6 +488,8 @@ class BikePartTaxonomy {
         'cambiador',
         'cambiadores',
         'derailleur',
+        'pata de cambio',
+        'patas de cambio',
         'cambio trasero',
         'cambio delantero',
       ],
@@ -478,13 +497,16 @@ class BikePartTaxonomy {
         'patilla de cambio',
         'percha de cambio',
         'gancho de cambio',
+        'pata postiza',
       ],
     ),
     BikePartFamily(
       id: 'derailleur_hanger',
       physicalClass: PartPhysicalClass.frame,
-      label: 'Patilla de cambio',
+      label: 'Postiza / fusible de cambio',
       heads: [
+        'pata postiza',
+        'pata de cambio recambiable',
         'patilla de cambio',
         'patilla cambio',
         'percha',
@@ -512,8 +534,10 @@ class BikePartTaxonomy {
       // extender the recommended match for a plain hanger.
       id: 'derailleur_hanger_extender',
       physicalClass: PartPhysicalClass.drivetrain,
-      label: 'Extensión de postiza',
+      label: 'Extensor de postiza',
       heads: [
+        'extensor de pata de cambio',
+        'extension de pata de cambio',
         'extension de postiza',
         'extension para postiza',
         'extensor de postiza',

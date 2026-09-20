@@ -1733,7 +1733,7 @@ class BikeshopService extends ChangeNotifier {
       case 'low_power':
         return 'Poca potencia';
       case 'spongy_lever':
-        return 'Maneta esponjosa';
+        return 'Manilla esponjosa';
       case 'intermittent':
         return 'Frenado intermitente';
       default:

@@ -1388,7 +1388,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
           expectedCount: 1,
           knownCount: 0,
           missingText:
-              'Cockpit / dirección sigue como placeholder explícito hasta que exista una capa real de esquema/editor para headset, stem, manillar y controles.',
+              'Cockpit / dirección sigue como placeholder explícito hasta que exista una capa real de esquema/editor para dirección, tee, manubrio y controles.',
         );
     }
   }
@@ -2762,7 +2762,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
       'chain': 'Cadena',
       'cassette': 'Cassette',
       'chainring': 'Plato',
-      'derailleur_hanger': 'Patilla',
+      'derailleur_hanger': 'Postiza de cambio',
       'front_rotor': 'Rotor delantero',
       'rear_rotor': 'Rotor trasero',
       'rotor': 'Rotor',

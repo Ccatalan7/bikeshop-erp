@@ -31,11 +31,15 @@ void main() {
       expect(hubGuidePartsForField('hub_package_position'), isNull);
       expect(hubGuidePartsForField('spec_evidence_source'), isNull);
       expect(hubGuidePartsForField('hub_package_pieces'), isNull);
+      expect(hubGuidePartsForField('hub_spoke_head_interface'), isNull);
+      expect(hubGuidePartsForField('hub_thru_axle_supplied'), isNull);
+      expect(hubGuidePartsForField('hub_supplied_thru_axle_reference'), isNull);
     });
 
     test('a tapped part opens the first field that lights it', () {
       expect(hubGuideFieldForPart(HubGuidePart.old), 'hub_old_mm');
-      expect(hubGuideFieldForPart(HubGuidePart.pcdRight), 'flange_pcd_right_mm');
+      expect(
+          hubGuideFieldForPart(HubGuidePart.pcdRight), 'flange_pcd_right_mm');
       expect(hubGuideFieldForPart(HubGuidePart.axleBody),
           'hub_axle_diameter_datum');
       expect(hubGuideFieldForPart(HubGuidePart.driveReceiver),
@@ -46,17 +50,87 @@ void main() {
     });
   });
 
+  group('HubGuideConfiguration', () {
+    test('front hub suppresses a stale rear-drive receiver', () {
+      final configuration = HubGuideConfiguration.fromSpecValues(const {
+        'hub_package_position': 'Delantera',
+        'hub_drive_receiver_present': true,
+        'hub_drive_receiver_kind': 'Núcleo de cassette',
+        'hub_rotor_mount_present': true,
+        'rotor_mount_type': 'Centerlock',
+        'bearing_system': 'Bolas sueltas',
+        'hub_axle_mount_kind': 'Cierre rápido',
+      });
+
+      expect(configuration.position, HubGuidePosition.front);
+      expect(configuration.driveInterface, HubGuideDriveInterface.none);
+      expect(configuration.rotorInterface, HubGuideRotorInterface.centerLock);
+      expect(configuration.bearingSystem, HubGuideBearingSystem.loose);
+      expect(configuration.axleMount, HubGuideAxleMount.quickRelease);
+      expect(configuration.semanticLabel, contains('maza delantera'));
+      expect(configuration.semanticLabel, contains('sin montaje para piñón'));
+      expect(configuration.semanticLabel, contains('cierre rápido'));
+    });
+
+    test('rear cassette and threaded freewheel remain different drawings', () {
+      HubGuideConfiguration configuration(String kind) =>
+          HubGuideConfiguration.fromSpecValues({
+            'hub_package_position': 'Trasera',
+            'hub_drive_receiver_present': true,
+            'hub_drive_receiver_kind': kind,
+            'hub_rotor_mount_present': true,
+            'rotor_mount_type': '6 pernos',
+            'bearing_system': 'Sellados',
+            'hub_axle_mount_kind': 'Eje pasante',
+          });
+
+      expect(configuration('Núcleo de cassette').driveInterface,
+          HubGuideDriveInterface.cassette);
+      expect(configuration('Rosca para piñón (rueda libre)').driveInterface,
+          HubGuideDriveInterface.threadedFreewheel);
+      expect(configuration('Núcleo de cassette').rotorInterface,
+          HubGuideRotorInterface.sixBolt);
+      expect(configuration('Núcleo de cassette').bearingSystem,
+          HubGuideBearingSystem.sealed);
+      expect(configuration('Núcleo de cassette').axleMount,
+          HubGuideAxleMount.thruAxle);
+    });
+
+    test('unknown prerequisites never invent optional hardware', () {
+      const neutral = HubGuideConfiguration();
+      final pair = HubGuideConfiguration.fromSpecValues(const {
+        'hub_package_position': 'Juego (delantera y trasera)',
+        'hub_drive_receiver_present': true,
+        'hub_drive_receiver_kind': 'Driver BMX',
+        'hub_rotor_mount_present': true,
+        'rotor_mount_type': '6 pernos',
+        'bearing_system': 'Sellados',
+      });
+
+      expect(neutral.driveInterface, HubGuideDriveInterface.unknown);
+      expect(neutral.rotorInterface, HubGuideRotorInterface.unknown);
+      expect(neutral.bearingSystem, HubGuideBearingSystem.unknown);
+      expect(neutral.axleMount, HubGuideAxleMount.unknown);
+      expect(pair.isPackageSet, isTrue);
+      expect(pair.driveInterface, HubGuideDriveInterface.unknown);
+      expect(pair.rotorInterface, HubGuideRotorInterface.unknown);
+      expect(pair.bearingSystem, HubGuideBearingSystem.unknown);
+      expect(pair.axleMount, HubGuideAxleMount.unknown);
+    });
+  });
+
   group('HubMeasureGuidePanel', () {
     Widget host(Widget child) => MaterialApp(
           theme: ThemeData(useMaterial3: true),
           home: Scaffold(
-            body: SizedBox(width: 340, child: SingleChildScrollView(child: child)),
+            body: SizedBox(
+                width: 340, child: SingleChildScrollView(child: child)),
           ),
         );
 
     String label(String key) => switch (key) {
-          'hub_old_mm' => 'Ancho entre tuercas (OLD)',
-          'flange_pcd_left_mm' => 'Círculo de hoyos, brida izquierda (PCD)',
+          'hub_old_mm' => 'Ancho de la maza entre apoyos (OLD)',
+          'flange_pcd_left_mm' => 'Diámetro del círculo de hoyos izquierdo',
           _ => key,
         };
 
@@ -71,12 +145,13 @@ void main() {
         onSelect: (_) {},
       )));
       await tester.pumpAndSettle();
-      expect(find.text('Ancho entre tuercas (OLD)'), findsWidgets);
+      expect(find.text('Ancho de la maza entre apoyos (OLD)'), findsWidgets);
       expect(find.text('De tuerca a tuerca del eje.'), findsOneWidget);
       expect(find.byType(HubMeasureGuide), findsOneWidget);
     });
 
-    testWidgets('lists only the measures the sheet shows, and selecting one reports it',
+    testWidgets(
+        'lists only the measures the sheet shows, and selecting one reports it',
         (tester) async {
       String? selected;
       await tester.pumpWidget(host(HubMeasureGuidePanel(
@@ -95,7 +170,8 @@ void main() {
           find.text(
               'Toca un campo de la ficha y el dibujo te muestra dónde se mide.'),
           findsOneWidget);
-      await tester.tap(find.byKey(const ValueKey('hub-guide-chip-flange_pcd_left_mm')));
+      await tester
+          .tap(find.byKey(const ValueKey('hub-guide-chip-flange_pcd_left_mm')));
       await tester.pumpAndSettle();
       expect(selected, 'flange_pcd_left_mm');
     });
@@ -113,7 +189,8 @@ void main() {
       )));
       await tester.pumpAndSettle();
       expect(find.text('Posición de la maza'), findsOneWidget);
-      expect(find.text('Este dato no es una medida del dibujo.'), findsOneWidget);
+      expect(
+          find.text('Este dato no es una medida del dibujo.'), findsOneWidget);
     });
 
     testWidgets(
@@ -140,7 +217,8 @@ void main() {
       await tester.pumpWidget(panel('flange_pcd_left_mm'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      expect(find.text('Círculo de hoyos, brida izquierda (PCD)'), findsWidgets);
+      expect(
+          find.text('Diámetro del círculo de hoyos izquierdo'), findsWidgets);
     });
 
     testWidgets('tapping a drawn dimension reports its field', (tester) async {
@@ -152,7 +230,7 @@ void main() {
             child: SizedBox(
               width: 1000,
               child: HubMeasureGuide(
-                highlightedKey: null,
+                highlightedKey: 'hub_old_mm',
                 onFieldTap: (key) => tapped = key,
               ),
             ),
@@ -160,13 +238,65 @@ void main() {
         ),
       ));
       await tester.pumpAndSettle();
-      // The OLD dimension is drawn under the axle, centred on the drawing's
-      // over-locknut span (design units 158..572 at y 494 of 1000×600).
+      // The focused OLD dimension is drawn under the axle, centred on the
+      // over-locknut span (design units 165..835 at y 505 of 1000×600).
       final box = tester.getRect(find.byType(HubMeasureGuide));
       final scale = box.width / 1000;
-      await tester.tapAt(box.topLeft + Offset(365 * scale, 494 * scale));
+      await tester.tapAt(box.topLeft + Offset(500 * scale, 505 * scale));
       await tester.pumpAndSettle();
       expect(tapped, 'hub_old_mm');
+    });
+
+    testWidgets('a visible attachment wins over the axle behind it',
+        (tester) async {
+      String? tapped;
+      await tester.pumpWidget(MaterialApp(
+        home: Center(
+          child: SizedBox(
+            width: 1000,
+            child: HubMeasureGuide(
+              highlightedKey: 'hub_old_mm',
+              configuration: const HubGuideConfiguration(
+                position: HubGuidePosition.rear,
+                rotorInterface: HubGuideRotorInterface.sixBolt,
+                driveInterface: HubGuideDriveInterface.threadedFreewheel,
+                axleMount: HubGuideAxleMount.quickRelease,
+              ),
+              onFieldTap: (key) => tapped = key,
+            ),
+          ),
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      final box = tester.getRect(find.byType(HubMeasureGuide));
+      final scale = box.width / 1000;
+      await tester.tapAt(box.topLeft + Offset(720 * scale, 310 * scale));
+      await tester.pumpAndSettle();
+
+      expect(tapped, 'hub_drive_receiver_present');
+    });
+
+    testWidgets('semantics describe only the confirmed hub configuration',
+        (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        home: HubMeasureGuide(
+          configuration: HubGuideConfiguration.fromSpecValues(const {
+            'hub_package_position': 'Delantera',
+            'hub_rotor_mount_present': true,
+            'rotor_mount_type': 'Centerlock',
+            'hub_drive_receiver_present': false,
+            'bearing_system': 'Bolas sueltas',
+            'hub_axle_mount_kind': 'Cierre rápido',
+          }),
+          spokeHoleCount: 8,
+        ),
+      ));
+
+      expect(
+          find.bySemanticsLabel(RegExp(
+              'maza delantera.*Centerlock.*sin montaje para piñón.*bolas sueltas.*cierre rápido')),
+          findsOneWidget);
     });
   });
 }

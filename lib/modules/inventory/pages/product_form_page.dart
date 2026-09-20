@@ -8090,7 +8090,11 @@ class _ProductFormPageState extends State<ProductFormPage>
       !_isServiceForm &&
       _specLoadError == null &&
       !_isLoadingSpecs &&
-      _specTemplate?.technicalFamily == 'hub';
+      _specTemplate?.technicalFamily == 'hub' &&
+      !_hubGuideConfiguration.isPackageSet;
+
+  HubGuideConfiguration get _hubGuideConfiguration =>
+      HubGuideConfiguration.fromSpecValues(_specValues);
 
   int? get _hubSpokeHoleCount {
     final canonical =
@@ -8142,6 +8146,7 @@ class _ProductFormPageState extends State<ProductFormPage>
                 helperFor: template.helperFor,
                 availableKeys: available,
                 spokeHoleCount: _hubSpokeHoleCount,
+                configuration: _hubGuideConfiguration,
                 onSelect: _openHubField,
                 showChips: false,
                 onExpand: () => showHubMeasureGuideDialog(
@@ -8151,6 +8156,7 @@ class _ProductFormPageState extends State<ProductFormPage>
                   helperFor: template.helperFor,
                   availableKeys: available,
                   spokeHoleCount: _hubSpokeHoleCount,
+                  configuration: _hubGuideConfiguration,
                 ),
               );
             },

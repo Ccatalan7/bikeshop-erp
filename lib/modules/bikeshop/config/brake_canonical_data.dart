@@ -68,7 +68,7 @@ const Map<String, String> kBrakeSymptomLabels = {
   'vibration': 'Vibración',
   'rubbing': 'Roce constante',
   'low_power': 'Poca potencia',
-  'spongy_lever': 'Maneta esponjosa',
+  'spongy_lever': 'Manilla esponjosa',
   'intermittent': 'Frenado intermitente',
 };
 

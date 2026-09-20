@@ -13,6 +13,7 @@ import 'chat_notification_gate.dart';
 import 'erp_employee_directory_service.dart';
 import 'erp_notification_gate.dart';
 import 'mail_notification_gate.dart';
+import 'tenant_broadcast_channel.dart';
 import 'tenant_service.dart';
 
 /// Top-level function required by firebase_messaging for background handling.
@@ -353,7 +354,7 @@ class NotificationService {
   StreamSubscription<String>? _tokenRefreshSubscription;
   StreamSubscription<RemoteMessage>? _foregroundMessageSubscription;
   StreamSubscription<RemoteMessage>? _openedAppSubscription;
-  RealtimeChannel? _desktopMessagesChannel;
+  TenantBroadcastListener? _desktopMessagesChannel;
   Timer? _desktopMessagesRetryTimer;
   int _desktopMessagesRetryAttempt = 0;
   bool _desktopMessagesSetupInFlight = false;
@@ -1533,65 +1534,36 @@ class NotificationService {
       if (_supabase.auth.currentUser?.id != currentUser.id) return;
 
       debugPrint(
-          '🔔 Setting up tenant-filtered Realtime subscription for public:messages...');
+          '🔔 Joining the tenant messaging Broadcast topic for desktop notifications...');
 
-      late final RealtimeChannel channel;
-      channel = _supabase
-          .channel('desktop-message-notifications-$tenantId')
-          .onPostgresChanges(
-            event: PostgresChangeEvent.insert,
-            schema: 'public',
-            table: 'messages',
-            filter: PostgresChangeFilter(
-              type: PostgresChangeFilterType.eq,
-              column: 'tenant_id',
-              value: tenantId,
-            ),
-            callback: (payload) {
-              if (_supabase.auth.currentUser?.id != currentUser.id) return;
-              final newMessage = payload.newRecord;
-              final currentUserId = _supabase.auth.currentUser?.id;
-              final senderId = newMessage['sender_id'];
+      // The database emits a payload-minimal signal per message on the
+      // tenant's private Broadcast topic (migration 20260916010000). The row
+      // is re-read under RLS before anything is presented, so content never
+      // travels through Realtime and a row the user cannot read stays silent.
+      late final TenantBroadcastListener listener;
+      listener = await TenantBroadcastHub.instance.listen(
+        client: _supabase,
+        topic: messagingTopic(tenantId),
+        onEvent: (payload) {
+          if (!identical(listener, _desktopMessagesChannel)) return;
+          if (payload['table'] != 'messages' ||
+              payload['operation'] != 'insert') {
+            return;
+          }
+          final messageId = payload['message_id']?.toString();
+          if (messageId == null || messageId.isEmpty) return;
+          unawaited(_presentIncomingDesktopMessage(messageId, currentUser.id));
+        },
+        onStatus: (status, error) {
+          _handleDesktopMessageRealtimeStatus(listener, status, error);
+        },
+      );
 
-              // Show notification only if:
-              // 1. We are logged in
-              // 2. The sender is NOT us (incoming message)
-              if (currentUserId != null && senderId != currentUserId) {
-                final content = newMessage['content'] ?? 'New Image';
-                final incomingMessage = RemoteMessage(
-                  notification: RemoteNotification(
-                    title: 'New Message',
-                    body: content,
-                  ),
-                  data: newMessage,
-                );
-
-                // Notify in-app listeners (Desktop)
-                _messageStreamController.add(incomingMessage);
-
-                if (!hasForegroundPresentationOwner &&
-                    notificationsEnabledFor(NotificationCategory.message) &&
-                    shouldPresentForegroundMessage(incomingMessage)) {
-                  // Play sound and vibrate
-                  playNotificationSound(
-                    category: NotificationCategory.message,
-                  );
-                  _triggerVibration();
-
-                  showLocalNotification(
-                    'New Message',
-                    content,
-                    category: NotificationCategory.message,
-                  );
-                }
-              }
-            },
-          )
-          .subscribe((status, error) {
-        _handleDesktopMessageRealtimeStatus(channel, status, error);
-      });
-
-      _desktopMessagesChannel = channel;
+      if (_supabase.auth.currentUser?.id != currentUser.id) {
+        await listener.cancel();
+        return;
+      }
+      _desktopMessagesChannel = listener;
       _desktopMessagesTenantId = tenantId;
       _desktopMessagesAuthUserId = currentUser.id;
     } catch (e) {
@@ -1608,33 +1580,83 @@ class NotificationService {
     }
   }
 
+  /// Reads the signalled message under RLS and presents it when it comes
+  /// from someone else. A row the current user cannot read returns null and
+  /// stays silent, which keeps the postgres_changes semantics.
+  Future<void> _presentIncomingDesktopMessage(
+    String messageId,
+    String expectedUserId,
+  ) async {
+    if (_supabase.auth.currentUser?.id != expectedUserId) return;
+    Map<String, dynamic>? newMessage;
+    try {
+      newMessage = await _supabase
+          .from('messages')
+          .select(
+            'id, conversation_id, sender_id, tenant_id, content, type, '
+            'metadata, created_at',
+          )
+          .eq('id', messageId)
+          .maybeSingle();
+    } catch (error) {
+      debugPrint('⚠️ Desktop message notification read failed: $error');
+      return;
+    }
+    if (newMessage == null) return;
+    final currentUserId = _supabase.auth.currentUser?.id;
+    if (currentUserId == null || currentUserId != expectedUserId) return;
+    final senderId = newMessage['sender_id'];
+    // Only incoming messages are presented; our own sends stay silent.
+    if (senderId == currentUserId) return;
+
+    final content = newMessage['content'] ?? 'New Image';
+    final incomingMessage = RemoteMessage(
+      notification: RemoteNotification(
+        title: 'New Message',
+        body: content,
+      ),
+      data: newMessage,
+    );
+
+    // Notify in-app listeners (Desktop)
+    _messageStreamController.add(incomingMessage);
+
+    if (!hasForegroundPresentationOwner &&
+        notificationsEnabledFor(NotificationCategory.message) &&
+        shouldPresentForegroundMessage(incomingMessage)) {
+      playNotificationSound(category: NotificationCategory.message);
+      _triggerVibration();
+      showLocalNotification(
+        'New Message',
+        content,
+        category: NotificationCategory.message,
+      );
+    }
+  }
+
   void _handleDesktopMessageRealtimeStatus(
-    RealtimeChannel channel,
-    RealtimeSubscribeStatus status,
+    TenantBroadcastListener listener,
+    TenantBroadcastStatus status,
     Object? error,
   ) {
-    if (!identical(channel, _desktopMessagesChannel)) return;
+    if (!identical(listener, _desktopMessagesChannel)) return;
 
     switch (status) {
-      case RealtimeSubscribeStatus.subscribed:
+      case TenantBroadcastStatus.subscribed:
         _desktopMessagesRetryAttempt = 0;
         _desktopMessagesRetryTimer?.cancel();
         _desktopMessagesRetryTimer = null;
         debugPrint(
             '✅ Desktop message notification realtime active for tenant $_desktopMessagesTenantId');
         break;
-      case RealtimeSubscribeStatus.channelError:
+      case TenantBroadcastStatus.degraded:
         debugPrint(
             '⚠️ Desktop message notification realtime issue: ${_describeDesktopRealtimeIssue(error)}');
         _scheduleDesktopMessageRealtimeReconnect('channel error');
         break;
-      case RealtimeSubscribeStatus.closed:
+      case TenantBroadcastStatus.closed:
         debugPrint('ℹ️ Desktop message notification realtime closed');
         _scheduleDesktopMessageRealtimeReconnect('channel closed');
-        break;
-      case RealtimeSubscribeStatus.timedOut:
-        debugPrint('⚠️ Desktop message notification realtime timed out');
-        _scheduleDesktopMessageRealtimeReconnect('subscribe timeout');
         break;
     }
   }
@@ -1703,7 +1725,7 @@ class NotificationService {
     _desktopMessagesTenantId = null;
     _desktopMessagesAuthUserId = null;
     if (channel != null) {
-      await channel.unsubscribe();
+      await channel.cancel();
     }
   }
 

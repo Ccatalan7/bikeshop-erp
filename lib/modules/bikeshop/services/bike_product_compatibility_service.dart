@@ -1070,7 +1070,8 @@ class BikeProductCompatibilityService {
             'target_system',
             'chain_class',
           ])
-            if (_confirmedText(row[column]) != null) _confirmedText(row[column])!,
+            if (_confirmedText(row[column]) != null)
+              _confirmedText(row[column])!,
         ].join(' ');
     final declaredTargets = <String>{
       for (final row in declarations)
@@ -1290,8 +1291,7 @@ class BikeProductCompatibilityService {
     // thread standards of freewheels and fixed cogs. The retired
     // `freehub_type` is the fallback.
     final productFreehubs = _rearCogDriveInterfacesFromSpecs(specValues);
-    final refusedFreehubs =
-        _rearCogRefusedDriveInterfacesFromSpecs(specValues);
+    final refusedFreehubs = _rearCogRefusedDriveInterfacesFromSpecs(specValues);
 
     if (expectedSpeed != null &&
         productSpeeds.isNotEmpty &&
@@ -1332,12 +1332,11 @@ class BikeProductCompatibilityService {
     final productPlatforms = _drivetrainPlatformsFromSpecs(specValues);
     final productLargestCog = _largestCogFromSpecs(specValues);
     final productSmallestCog = _smallestCogFromSpecs(specValues);
-    final rangeLabel =
-        productSmallestCog != null && productLargestCog != null
-            ? '$productSmallestCog-${productLargestCog}T'
-            : productLargestCog != null
-                ? 'mayor ${productLargestCog}T'
-                : null;
+    final rangeLabel = productSmallestCog != null && productLargestCog != null
+        ? '$productSmallestCog-${productLargestCog}T'
+        : productLargestCog != null
+            ? 'mayor ${productLargestCog}T'
+            : null;
     final hasFamilyConflict = bikePlatform != null &&
         productFamilies.isNotEmpty &&
         hasExplicitDrivetrainFamilyConflict(
@@ -1638,7 +1637,9 @@ class BikeProductCompatibilityService {
     required int? expectedFrontCount,
   }) {
     final rowSpeed = _parseIntValue(row['rear_sprocket_count']);
-    if (expectedSpeed != null && rowSpeed != null && rowSpeed != expectedSpeed) {
+    if (expectedSpeed != null &&
+        rowSpeed != null &&
+        rowSpeed != expectedSpeed) {
       return false;
     }
     final rowFront = _parseIntValue(row['front_chainring_count']);
@@ -1660,8 +1661,7 @@ class BikeProductCompatibilityService {
     final speed = _chainSpeedFromContext(context);
     final front = _frontChainringCountFromContext(context);
     final parts = <String>[
-      if (front != null || speed != null)
-        '${front ?? '?'}x${speed ?? '?'}',
+      if (front != null || speed != null) '${front ?? '?'}x${speed ?? '?'}',
       if (context.largestCogTeeth != null)
         'piñón mayor ${context.largestCogTeeth}T',
     ];
@@ -1766,7 +1766,8 @@ class BikeProductCompatibilityService {
     final clampDiameters = <String>{
       for (final row in _specRows(specValues, 'front_derailleur_clamp_options'))
         if (_parseDoubleValue(row['direct_tube_diameter_mm']) != null)
-          _formatMeasurement(_parseDoubleValue(row['direct_tube_diameter_mm'])!),
+          _formatMeasurement(
+              _parseDoubleValue(row['direct_tube_diameter_mm'])!),
     };
     final topMaxTeeth = _extremeIntInRows(
       configurations.where((row) =>
@@ -1899,7 +1900,8 @@ class BikeProductCompatibilityService {
     }
 
     final style = _confirmedText(specValues['shifter_control_style']);
-    final styleSuffix = style == null ? '' : ' Manilla: ${style.toLowerCase()}.';
+    final styleSuffix =
+        style == null ? '' : ' Manilla: ${style.toLowerCase()}.';
 
     if (checks.isNotEmpty) {
       final matchedDetails = checks.map((check) => check.detail).join(' · ');
@@ -2097,8 +2099,9 @@ class BikeProductCompatibilityService {
     final productFrontCounts = _frontChainringCountsFromSpecs(specValues);
     // Successor rows: the bottom bracket this crank needs, combination by
     // combination, and the one it ships with.
-    final requiredShells = _affirmativeRows(specValues, 'bottom_bracket_required')
-        .toList(growable: false);
+    final requiredShells =
+        _affirmativeRows(specValues, 'bottom_bracket_required')
+            .toList(growable: false);
     if (expectedFrontCount != null &&
         productFrontCounts.isNotEmpty &&
         !productFrontCounts.contains(expectedFrontCount)) {
@@ -2180,7 +2183,8 @@ class BikeProductCompatibilityService {
 
   /// The crank's spindle: the retired scalar, then the declared junction rows
   /// (designation, taper standard or geometry), then its construction.
-  Set<String> _crankSpindleInterfacesFromSpecs(Map<String, dynamic> specValues) {
+  Set<String> _crankSpindleInterfacesFromSpecs(
+      Map<String, dynamic> specValues) {
     final interfaces = <String>{};
     void add(dynamic raw) {
       final canonical = _canonicalSpindleInterface(raw);
@@ -2200,8 +2204,8 @@ class BikeProductCompatibilityService {
       }
     }
     if (interfaces.isEmpty) {
-      final construction =
-          _normalizeText((specValues['crankset_construction'] ?? '').toString());
+      final construction = _normalizeText(
+          (specValues['crankset_construction'] ?? '').toString());
       if (construction.contains('una pieza')) interfaces.add('one_piece');
     }
     return interfaces;
@@ -2226,8 +2230,9 @@ class BikeProductCompatibilityService {
       for (final row in rings)
         if (_parseIntValue(row['teeth']) != null) _parseIntValue(row['teeth'])!,
     ]..sort((a, b) => b.compareTo(a));
-    final supplied = _affirmativeRows(specValues, 'crankset_bottom_bracket_supplied')
-        .toList(growable: false);
+    final supplied =
+        _affirmativeRows(specValues, 'crankset_bottom_bracket_supplied')
+            .toList(growable: false);
     final construction = _confirmedText(specValues['crankset_construction']);
     return <String>[
       if (armLength != null) 'biela ${_formatMeasurement(armLength)} mm',
@@ -2314,7 +2319,8 @@ class BikeProductCompatibilityService {
     }
     if (shells.isEmpty) {
       final legacy = _canonicalBottomBracketShell(
-          specValues['bb_shell_standard'] ?? specValues['bottom_bracket_family']);
+          specValues['bb_shell_standard'] ??
+              specValues['bottom_bracket_family']);
       if (legacy != null) shells.add(legacy);
     }
     if (widths.isEmpty) {
@@ -2516,7 +2522,8 @@ class BikeProductCompatibilityService {
   }
 
   String _chainringPieceLabel(Map<String, dynamic> specValues) {
-    final kind = _normalizeText((specValues['chainring_package_kind'] ?? '').toString());
+    final kind =
+        _normalizeText((specValues['chainring_package_kind'] ?? '').toString());
     if (kind.contains('juego')) {
       final count = _parseIntValue(specValues['chainring_set_member_count']) ??
           _specRows(specValues, 'chainring_set_members').length;
@@ -2544,7 +2551,8 @@ class BikeProductCompatibilityService {
         '${teeth}T',
       if (bcd != null) 'BCD ${_formatMeasurement(bcd)} mm',
       if (mount != null) mount.toLowerCase(),
-      if (position != null && memberTeeth.isEmpty) 'posición ${position.toLowerCase()}',
+      if (position != null && memberTeeth.isEmpty)
+        'posición ${position.toLowerCase()}',
       if (narrowWide) 'narrow-wide',
     ];
   }
@@ -2773,7 +2781,7 @@ class BikeProductCompatibilityService {
         matchedParts.add('aro $productWheelSize');
       } else if (bikeWheelSize != null) {
         cautionParts.add(
-          'rótulo $productWheelSize frente a $bikeWheelSize: confirmar BSD y cubierta',
+          'rótulo $productWheelSize frente a $bikeWheelSize: confirmar BSD y neumático',
         );
       } else {
         unresolvedParts.add('rodado de la bici');
@@ -2856,7 +2864,8 @@ class BikeProductCompatibilityService {
     }
     return _WheelDiameterReading(
       bsds: bsds,
-      label: bsds.isEmpty ? _canonicalWheelSize(specValues['wheel_size']) : null,
+      label:
+          bsds.isEmpty ? _canonicalWheelSize(specValues['wheel_size']) : null,
     );
   }
 
@@ -2974,8 +2983,7 @@ class BikeProductCompatibilityService {
     required _BikeCompatibilityContext compatibilityContext,
     required Map<String, dynamic> specValues,
   }) {
-    final diameter =
-        _readWheelDiameter(specValues, rowsKey: 'tube_fit_rows');
+    final diameter = _readWheelDiameter(specValues, rowsKey: 'tube_fit_rows');
     final productWheelSize =
         diameter.isEmpty ? null : _wheelDiameterLabel(diameter);
     final bikeWheelSize = _canonicalWheelSize(compatibilityContext.wheelSize);
@@ -3220,7 +3228,7 @@ class BikeProductCompatibilityService {
 
     return ProductCompatibilityAssessment.caution(
       detail: [
-        'Rayo; para decidir el largo hace falta una receta de armado: ERD y offset del aro, geometría de bridas por lado, patrón y niple; confirmar calibre y rosca',
+        'Rayo; para decidir el largo hace falta una receta de armado: ERD y desplazamiento del aro, círculos de hoyos de la maza por lado, patrón y niple; confirmar calibre y rosca',
         if (holeDetails.isNotEmpty)
           'perforaciones registradas: ${holeDetails.join(' / ')}'
         else

@@ -482,7 +482,7 @@ class CategoryService extends ChangeNotifier {
   }
 
   /// Import categories from Excel format (single column with slashes)
-  /// Format: ["Accesorios", "Accesorios / Asientos", "Accesorios / Asientos / Tija"]
+  /// Format: ["Accesorios", "Accesorios / Asientos", "Accesorios / Asientos / Postes de asiento"]
   Future<Map<String, dynamic>> importCategoriesFromList(
       List<String> paths) async {
     try {

@@ -34,6 +34,11 @@ DRILLING = 'rim_drilling_patterns'
 PARK_AXLE = 'https://www.parktool.com/en-us/product/thru-axle-tap-tap-20-2'
 PROFILE_AXLE = 'https://www.profileracing.com/profiles-tech-tip-29-mind-the-gap-converting-your-axle-from-14mm-to-38/'
 PARK_TENSION = 'https://www.parktool.com/en-us/blog/repair-help/wheel-tension-measurement'
+PARK_HUB = 'https://www.parktool.com/en-us/blog/repair-help/hub-overhaul-and-adjustment'
+PARK_FREEHUB = 'https://www.parktool.com/en-us/blog/repair-help/determining-cassette-freewheel-type'
+PARK_SPOKES = 'https://www.parktool.com/en-us/blog/repair-help/determining-spoke-length-for-wheel-building'
+SHELDON_FREEHUB = 'https://sheldonbrown.com/free-k7.html'
+SHELDON_SPOKES = 'https://www.sheldonbrown.com/spoke-length.html'
 RYDE = 'https://www.ryde.nl/andra-29-r/'
 DT = 'https://www.dtswiss.com/en/components/rims-road/endurance/r-470'
 TUFO = 'https://www.tufo.com/en/tubular/'
@@ -77,11 +82,12 @@ def compile_catalog():
         role='contents', semantic='contents', allowed=included, required=included,
         helper='La rosca y longitud pertenecen a esa pieza identificada y a su '
         'montaje en cuadro/horquilla; no se infieren del paso por la maza.')
+    rear = condition(POSITION, 'Trasera')
     add(defs, hub, DRIVE_PRESENT, 'Esta maza recibe la transmisión', 'boolean',
-        role='primary', allowed=single, required=single,
+        role='primary', allowed=rear, required=rear,
         helper='Presencia documentada en esta pieza. La posición no sustituye '
         'la descripción del modelo ni autoriza por sí sola un montaje.')
-    receiver_present = conjunction(single, condition(DRIVE_PRESENT, True, 'boolean'))
+    receiver_present = conjunction(rear, condition(DRIVE_PRESENT, True, 'boolean'))
     add(defs, hub, DRIVE_KIND, 'Construcción del receptor de transmisión',
         'single_select', role='primary', options=DRIVE_KINDS,
         allowed=receiver_present, required=receiver_present)
@@ -137,17 +143,21 @@ def compile_catalog():
                        ('spoke_hole_diameter_mm', 'Diámetro del agujero de rayo')]:
         schema['columns'].append(column(key, label, 'decimal', unit='mm', positive=True))
     for col in schema['columns']:
-        if col['key'] in ('old_mm', 'spoke_hole_count', 'drive_interface_present'):
+        if col['key'] in ('old_mm', 'spoke_hole_count'):
             col['required'] = True
     row_thru = condition('axle_mount_kind', 'Eje pasante')
     row_included = conjunction(row_thru, condition('thru_axle_supplied', True, 'boolean'))
-    receiver = condition('drive_interface_present', True, 'boolean')
+    row_rear = condition('piece_position', 'Trasera')
+    receiver = conjunction(
+        row_rear, condition('drive_interface_present', True, 'boolean'))
     rotor = condition('rotor_mount_present', True, 'boolean')
     h['row_conditions'] = {'version': 1, 'fields': {PIECES: {
-        'allowed_when': {'drive_receiver_kind': receiver,
+        'allowed_when': {'drive_interface_present': row_rear,
+            'drive_receiver_kind': receiver,
             'drive_receiver_reference': receiver, 'rotor_mount_type': rotor,
             'thru_axle_supplied': row_thru, 'supplied_thru_axle_reference': row_included},
-        'required_when': {'drive_receiver_kind': receiver,
+        'required_when': {'drive_interface_present': row_rear,
+            'drive_receiver_kind': receiver,
             'drive_receiver_reference': receiver, 'rotor_mount_type': rotor,
             'supplied_thru_axle_reference': row_included,
             'axle_diameter_datum': {'kind': 'when', 'rows': [[{
@@ -249,7 +259,19 @@ def compile_catalog():
         validate_contract(t['key'], t['form_contract'], defs, keys)
     catalog['stats'] = {'templates': 2, 'definitions': len(defs),
                        'field_uses': sum(len(t['fields']) for t in catalog['templates'])}
-    catalog['source_urls'] += [PARK_AXLE, PROFILE_AXLE, PARK_TENSION, RYDE, DT, TUFO]
+    catalog['source_urls'] += [
+        PARK_AXLE,
+        PROFILE_AXLE,
+        PARK_TENSION,
+        PARK_HUB,
+        PARK_FREEHUB,
+        PARK_SPOKES,
+        SHELDON_FREEHUB,
+        SHELDON_SPOKES,
+        RYDE,
+        DT,
+        TUFO,
+    ]
     catalog['root_adjudication'] = 'Per-piece ownership, measured axle datum and rim construction precede dependent claims.'
     return catalog, fixtures
 
@@ -272,11 +294,14 @@ def root_cases():
         return {'piece_position': position, 'piece_identity': 'Synthetic ' + position,
                 'evidence_source': 'Synthetic package', **extra}
     result += [
-        hub('one_hub_uses_the_same_receiver_presence_as_a_package_piece', {
+        hub('front_hub_rejects_a_rear_drive_receiver', {
             POSITION: 'Delantera', DRIVE_PRESENT: True, DRIVE_KIND: 'Otra interfaz OEM',
-            DRIVE_REF: 'Declaración sintética: no certifica montaje', E: SYNTHETIC}),
+            DRIVE_REF: 'Declaración sintética: no certifica montaje', E: SYNTHETIC},
+            blocking=[('field_applicability', DRIVE_PRESENT),
+                      ('field_applicability', DRIVE_KIND),
+                      ('field_applicability', DRIVE_REF)]),
         hub('an_absent_receiver_blocks_its_reference_on_one_hub', {
-            POSITION: 'Delantera', DRIVE_PRESENT: False,
+            POSITION: 'Trasera', DRIVE_PRESENT: False,
             DRIVE_REF: 'Synthetic receiver', E: SYNTHETIC},
             blocking=[('field_applicability', DRIVE_REF)]),
         hub('an_unconfirmed_receiver_keeps_its_reference_pending', {
@@ -301,6 +326,9 @@ def root_cases():
         hub('piece_without_receiver_cannot_claim_one', {POSITION: SET,
             PIECES: rows(piece('Delantera', drive_interface_present=False,
                 drive_receiver_kind='Driver BMX'))}, blocking=[('row_field_applicability', PIECES)]),
+        hub('front_piece_cannot_claim_a_drive_receiver', {POSITION: SET,
+            PIECES: rows(piece('Delantera', drive_interface_present=True))},
+            blocking=[('row_field_applicability', PIECES)]),
         hub('piece_diameter_requires_its_own_datum', {POSITION: SET,
             PIECES: rows(piece('Trasera', axle_diameter_mm='14'))},
             pending=[('row_required_missing', PIECES)]),

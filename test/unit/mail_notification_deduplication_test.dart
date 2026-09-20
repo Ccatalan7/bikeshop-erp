@@ -103,7 +103,10 @@ void main() {
       expect(
           layout, isNot(contains("channel('erp_online_order_notifications')")));
       expect(layout, isNot(contains('_setupOnlineOrderNotifications')));
-      expect(shell, contains("table: 'erp_notifications'"));
+      expect(
+          shell,
+          contains(
+              "erpNotificationsTopic(tenantId: tenantId, recipient: 'all')"));
       expect(shell, contains('ErpNotificationGate.shared.rememberBaseline'));
       expect(registry, contains('process-wide stable-event gate'));
     });

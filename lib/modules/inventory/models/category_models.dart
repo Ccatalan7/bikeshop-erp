@@ -2,7 +2,7 @@ class Category {
   final String? id;
   final String tenantId; // uuid - MULTI-TENANT ISOLATION
   final String name;
-  final String fullPath; // "Accesorios / Asientos / Tija"
+  final String fullPath; // "Accesorios / Asientos / Postes de asiento"
   final String? parentId;
   final int level; // 0 = root, 1 = child, 2 = grandchild
   final String? description;
@@ -30,7 +30,7 @@ class Category {
   })  : createdAt = createdAt ?? DateTime.now(),
         updatedAt = updatedAt ?? DateTime.now();
 
-  // Get breadcrumb parts: ["Accesorios", "Asientos", "Tija"]
+  // Get breadcrumb parts: ["Accesorios", "Asientos", "Postes de asiento"]
   List<String> get breadcrumbs =>
       fullPath.split(' / ').map((s) => s.trim()).toList();
 

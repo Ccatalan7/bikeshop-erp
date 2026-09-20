@@ -142,8 +142,9 @@ String partSpecLabel(PartSpecKind kind) => switch (kind) {
       PartSpecKind.spokeCount => 'agujeros',
       PartSpecKind.rotorDiameterMm => 'diámetro del rotor',
       PartSpecKind.clampDiameterMm => 'diámetro de abrazadera',
-      PartSpecKind.postDiameterMm => 'diámetro de tija',
-      PartSpecKind.postAdapterDiameterPair => 'diámetros del adaptador de tija',
+      PartSpecKind.postDiameterMm => 'diámetro del poste de asiento',
+      PartSpecKind.postAdapterDiameterPair =>
+        'diámetros del adaptador para poste de asiento',
       PartSpecKind.spacerThicknessMm => 'altura del espaciador',
       PartSpecKind.crankLengthMm => 'largo de biela',
       PartSpecKind.teeth => 'dientes',
@@ -162,7 +163,7 @@ String partSpecLabel(PartSpecKind kind) => switch (kind) {
       PartSpecKind.colorVariant => 'color',
       PartSpecKind.constructionMaterial => 'material',
       PartSpecKind.gripStyle => 'estilo de puño',
-      PartSpecKind.brakeLeverFitment => 'tipo de manillar',
+      PartSpecKind.brakeLeverFitment => 'tipo de manubrio',
       PartSpecKind.bellStyle => 'tipo de timbre',
       PartSpecKind.cableEndKind => 'tipo de terminal',
       PartSpecKind.cableHousingDiameterMm => 'diámetro de funda',
@@ -200,7 +201,7 @@ String partSpecValueLabel(PartSpecKind kind, String value) {
     case PartSpecKind.brakeLeverFitment:
       return switch (value) {
         'road' => 'ruta',
-        'flatbar' => 'MTB/manillar recto',
+        'flatbar' => 'MTB/manubrio recto',
         _ => value,
       };
     case PartSpecKind.bellStyle:

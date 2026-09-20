@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
@@ -21,6 +20,204 @@ enum HubGuidePart {
   bearings,
 }
 
+enum HubGuidePosition { front, rear, universal, pair, unknown }
+
+enum HubGuideRotorInterface { none, sixBolt, centerLock, generic, unknown }
+
+enum HubGuideDriveInterface {
+  none,
+  cassette,
+  threadedFreewheel,
+  fixedThread,
+  lockringCog,
+  bmxDriver,
+  generic,
+  unknown,
+}
+
+enum HubGuideBearingSystem { sealed, loose, mixed, unknown }
+
+enum HubGuideAxleMount {
+  quickRelease,
+  thruAxle,
+  nutted,
+  femaleBolt,
+  generic,
+  unknown,
+}
+
+/// The parts the drawing may show for the currently declared hub.
+///
+/// This projection is deliberately fail-closed: an attachment is omitted when
+/// its prerequisite is missing or physically contradicts the package
+/// position. Stale values therefore cannot turn a front hub into a cassette
+/// hub in the guide.
+class HubGuideConfiguration {
+  const HubGuideConfiguration({
+    this.position = HubGuidePosition.unknown,
+    this.rotorInterface = HubGuideRotorInterface.unknown,
+    this.driveInterface = HubGuideDriveInterface.unknown,
+    this.bearingSystem = HubGuideBearingSystem.unknown,
+    this.axleMount = HubGuideAxleMount.unknown,
+  });
+
+  factory HubGuideConfiguration.fromSpecValues(Map<String, dynamic> values) {
+    final position = switch (values['hub_package_position']) {
+      'Delantera' => HubGuidePosition.front,
+      'Trasera' => HubGuidePosition.rear,
+      'Universal' => HubGuidePosition.universal,
+      'Juego (delantera y trasera)' ||
+      'Juego delantera + trasera' =>
+        HubGuidePosition.pair,
+      _ => HubGuidePosition.unknown,
+    };
+
+    final rotorPresent = values['hub_rotor_mount_present'];
+    final rotorInterface = position == HubGuidePosition.pair
+        ? HubGuideRotorInterface.unknown
+        : switch (rotorPresent) {
+            false => HubGuideRotorInterface.none,
+            true => switch (values['rotor_mount_type']) {
+                '6 pernos' => HubGuideRotorInterface.sixBolt,
+                'Centerlock' ||
+                'Center Lock' =>
+                  HubGuideRotorInterface.centerLock,
+                'Desconocido / sin confirmar' ||
+                null =>
+                  HubGuideRotorInterface.generic,
+                _ => HubGuideRotorInterface.generic,
+              },
+            _ => HubGuideRotorInterface.unknown,
+          };
+
+    final drivePresent = values['hub_drive_receiver_present'];
+    final HubGuideDriveInterface driveInterface;
+    if (position == HubGuidePosition.front) {
+      driveInterface = HubGuideDriveInterface.none;
+    } else if (position != HubGuidePosition.rear) {
+      driveInterface = drivePresent == false
+          ? HubGuideDriveInterface.none
+          : HubGuideDriveInterface.unknown;
+    } else if (drivePresent == false) {
+      driveInterface = HubGuideDriveInterface.none;
+    } else if (drivePresent != true) {
+      driveInterface = HubGuideDriveInterface.unknown;
+    } else {
+      driveInterface = switch (values['hub_drive_receiver_kind']) {
+        'Núcleo de cassette' ||
+        'Núcleo estriado de cassette' =>
+          HubGuideDriveInterface.cassette,
+        'Rosca para piñón (rueda libre)' ||
+        'Rosca para rueda libre' =>
+          HubGuideDriveInterface.threadedFreewheel,
+        'Rosca para piñón fijo' ||
+        'Rosca para piñón fijo y contratuerca' =>
+          HubGuideDriveInterface.fixedThread,
+        'Piñón retenido por anillo' => HubGuideDriveInterface.lockringCog,
+        'Driver BMX' => HubGuideDriveInterface.bmxDriver,
+        'Otro' || 'Otra interfaz OEM' => HubGuideDriveInterface.generic,
+        _ => HubGuideDriveInterface.unknown,
+      };
+    }
+
+    final bearingSystem = position == HubGuidePosition.pair
+        ? HubGuideBearingSystem.unknown
+        : switch (values['bearing_system']) {
+            'Sellados' ||
+            'Rodamientos sellados' =>
+              HubGuideBearingSystem.sealed,
+            'Bolas sueltas' => HubGuideBearingSystem.loose,
+            'Mixto' => HubGuideBearingSystem.mixed,
+            _ => HubGuideBearingSystem.unknown,
+          };
+
+    final axleMount = position == HubGuidePosition.pair
+        ? HubGuideAxleMount.unknown
+        : switch (values['hub_axle_mount_kind']) {
+            'Cierre rápido' => HubGuideAxleMount.quickRelease,
+            'Eje pasante' => HubGuideAxleMount.thruAxle,
+            'Eje con tuercas' => HubGuideAxleMount.nutted,
+            'Eje hembra con pernos' => HubGuideAxleMount.femaleBolt,
+            'Otra interfaz OEM' => HubGuideAxleMount.generic,
+            _ => HubGuideAxleMount.unknown,
+          };
+
+    return HubGuideConfiguration(
+      position: position,
+      rotorInterface: rotorInterface,
+      driveInterface: driveInterface,
+      bearingSystem: bearingSystem,
+      axleMount: axleMount,
+    );
+  }
+
+  final HubGuidePosition position;
+  final HubGuideRotorInterface rotorInterface;
+  final HubGuideDriveInterface driveInterface;
+  final HubGuideBearingSystem bearingSystem;
+  final HubGuideAxleMount axleMount;
+
+  bool get isPackageSet => position == HubGuidePosition.pair;
+
+  String get semanticLabel {
+    final positionText = switch (position) {
+      HubGuidePosition.front => 'maza delantera',
+      HubGuidePosition.rear => 'maza trasera',
+      HubGuidePosition.universal => 'maza de posición universal',
+      HubGuidePosition.pair => 'juego de mazas delantera y trasera',
+      HubGuidePosition.unknown => 'maza de posición sin confirmar',
+    };
+    final rotorText = switch (rotorInterface) {
+      HubGuideRotorInterface.none => 'sin anclaje de disco',
+      HubGuideRotorInterface.sixBolt => 'con anclaje de disco de 6 pernos',
+      HubGuideRotorInterface.centerLock => 'con anclaje de disco Centerlock',
+      HubGuideRotorInterface.generic =>
+        'con anclaje de disco de tipo sin confirmar',
+      HubGuideRotorInterface.unknown => 'anclaje de disco sin confirmar',
+    };
+    final driveText = switch (driveInterface) {
+      HubGuideDriveInterface.none => 'sin montaje para piñón',
+      HubGuideDriveInterface.cassette => 'con núcleo de cassette',
+      HubGuideDriveInterface.threadedFreewheel => 'con rosca para rueda libre',
+      HubGuideDriveInterface.fixedThread => 'con rosca para piñón fijo',
+      HubGuideDriveInterface.lockringCog => 'con piñón retenido por anillo',
+      HubGuideDriveInterface.bmxDriver => 'con núcleo BMX (driver)',
+      HubGuideDriveInterface.generic =>
+        'con montaje para piñón de tipo sin confirmar',
+      HubGuideDriveInterface.unknown => 'montaje del piñón sin confirmar',
+    };
+    final bearingText = switch (bearingSystem) {
+      HubGuideBearingSystem.sealed => 'rodamientos sellados',
+      HubGuideBearingSystem.loose => 'rodamientos de bolas sueltas',
+      HubGuideBearingSystem.mixed => 'sistema de rodamientos mixto',
+      HubGuideBearingSystem.unknown => 'rodamientos sin confirmar',
+    };
+    final axleText = switch (axleMount) {
+      HubGuideAxleMount.quickRelease => 'cierre rápido',
+      HubGuideAxleMount.thruAxle => 'eje pasante',
+      HubGuideAxleMount.nutted => 'eje con tuercas',
+      HubGuideAxleMount.femaleBolt => 'eje hembra con pernos',
+      HubGuideAxleMount.generic => 'sujeción OEM',
+      HubGuideAxleMount.unknown => 'sujeción de eje sin confirmar',
+    };
+    return 'Dibujo de $positionText, $rotorText, $driveText, '
+        '$bearingText y $axleText.';
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is HubGuideConfiguration &&
+      position == other.position &&
+      rotorInterface == other.rotorInterface &&
+      driveInterface == other.driveInterface &&
+      bearingSystem == other.bearingSystem &&
+      axleMount == other.axleMount;
+
+  @override
+  int get hashCode => Object.hash(
+      position, rotorInterface, driveInterface, bearingSystem, axleMount);
+}
+
 /// Which parts of the drawing each hub field points at. A field that has no
 /// place on the drawing (position of the package, evidence source, package
 /// rows) maps to `null`: the guide keeps its text but nothing lights up.
@@ -33,15 +230,12 @@ Set<HubGuidePart>? hubGuidePartsForField(String key) => switch (key) {
       'flange_pcd_right_mm' => const {HubGuidePart.pcdRight},
       'spoke_hole_diameter_mm' => const {HubGuidePart.spokeHoleDiameter},
       'spoke_hole_count' => const {HubGuidePart.spokeHoles},
-      'hub_spoke_head_interface' => const {HubGuidePart.spokeHoles},
       'hub_axle_diameter_mm' => const {HubGuidePart.axleDiameter},
       'hub_axle_diameter_datum' => const {
           HubGuidePart.axleDiameter,
           HubGuidePart.axleBody
         },
       'hub_axle_mount_kind' => const {HubGuidePart.axleEnds},
-      'hub_thru_axle_supplied' => const {HubGuidePart.axleBody},
-      'hub_supplied_thru_axle_reference' => const {HubGuidePart.axleBody},
       'hub_rotor_mount_present' => const {HubGuidePart.rotorMount},
       'rotor_mount_type' => const {HubGuidePart.rotorMount},
       'hub_drive_receiver_present' => const {HubGuidePart.driveReceiver},
@@ -62,12 +256,9 @@ const List<String> hubGuideFieldKeys = [
   'flange_pcd_right_mm',
   'spoke_hole_count',
   'spoke_hole_diameter_mm',
-  'hub_spoke_head_interface',
   'hub_axle_diameter_datum',
   'hub_axle_diameter_mm',
   'hub_axle_mount_kind',
-  'hub_thru_axle_supplied',
-  'hub_supplied_thru_axle_reference',
   'hub_rotor_mount_present',
   'rotor_mount_type',
   'hub_drive_receiver_present',
@@ -87,9 +278,9 @@ String? hubGuideFieldForPart(HubGuidePart part) {
   return null;
 }
 
-/// Technical drawing of a rear disc hub: a section through the axle, with
-/// the wheel centre line, and the left flange seen from the front. Every
-/// dimension the sheet asks for is drawn where a mechanic would measure it.
+/// Technical drawing of the declared hub: a section through the axle, with
+/// the wheel centre line, and the left flange seen from the front. Optional
+/// hardware is shown only when [configuration] confirms it.
 ///
 /// [highlightedKey] is the spec field the operator is on: its parts are drawn
 /// in the accent role and every other dimension recedes. Tapping a dimension
@@ -99,12 +290,14 @@ class HubMeasureGuide extends StatefulWidget {
     super.key,
     this.highlightedKey,
     this.spokeHoleCount,
+    this.configuration = const HubGuideConfiguration(),
     this.onFieldTap,
     this.aspectRatio = 1000 / 600,
   });
 
   final String? highlightedKey;
   final int? spokeHoleCount;
+  final HubGuideConfiguration configuration;
   final ValueChanged<String>? onFieldTap;
   final double aspectRatio;
 
@@ -117,15 +310,11 @@ class _HubMeasureGuideState extends State<HubMeasureGuide>
   late final AnimationController _fade = AnimationController(
       vsync: this, duration: const Duration(milliseconds: 180), value: 1);
   final _hits = <HubGuidePart, Rect>{};
-  Set<HubGuidePart>? _previous;
 
   @override
   void didUpdateWidget(HubMeasureGuide oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.highlightedKey != widget.highlightedKey) {
-      _previous = oldWidget.highlightedKey == null
-          ? null
-          : hubGuidePartsForField(oldWidget.highlightedKey!);
       _fade.forward(from: 0);
     }
   }
@@ -139,10 +328,20 @@ class _HubMeasureGuideState extends State<HubMeasureGuide>
   void _handleTap(TapUpDetails details) {
     final onFieldTap = widget.onFieldTap;
     if (onFieldTap == null) return;
-    for (final entry in _hits.entries) {
-      if (entry.value.inflate(6).contains(details.localPosition)) {
-        final key = hubGuideFieldForPart(entry.key);
-        if (key != null) onFieldTap(key);
+    // Several visible parts cross the axle. Prefer the smallest hit region so
+    // tapping a rotor, bearing or piñón mount opens that part instead of the
+    // long axle rectangle painted behind it.
+    final matches = _hits.entries
+        .where((entry) =>
+            entry.value.inflate(6).contains(details.localPosition))
+        .toList()
+      ..sort((a, b) =>
+          (a.value.width * a.value.height)
+              .compareTo(b.value.width * b.value.height));
+    for (final entry in matches) {
+      final key = hubGuideFieldForPart(entry.key);
+      if (key != null) {
+        onFieldTap(key);
         return;
       }
     }
@@ -152,7 +351,8 @@ class _HubMeasureGuideState extends State<HubMeasureGuide>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     final current = widget.highlightedKey == null
         ? null
         : hubGuidePartsForField(widget.highlightedKey!);
@@ -169,7 +369,7 @@ class _HubMeasureGuideState extends State<HubMeasureGuide>
     );
     final labelStyle = theme.textTheme.labelSmall ?? const TextStyle();
     return Semantics(
-      label: 'Dibujo de la maza con sus medidas',
+      label: widget.configuration.semanticLabel,
       image: true,
       child: AspectRatio(
         aspectRatio: widget.aspectRatio,
@@ -187,9 +387,9 @@ class _HubMeasureGuideState extends State<HubMeasureGuide>
                   palette: palette,
                   labelStyle: labelStyle,
                   current: current,
-                  previous: _previous,
                   progress: reduceMotion ? 1 : _fade.value,
                   spokeHoleCount: widget.spokeHoleCount,
+                  configuration: widget.configuration,
                   hits: _hits,
                 ),
                 child: const SizedBox.expand(),
@@ -225,582 +425,780 @@ class _GuidePalette {
   final Color onAccentContainer;
 }
 
-/// Geometry in design units (1000 × 600). The painter scales it uniformly.
+/// Normalized drawing coordinates. UI colour and type come from the canonical
+/// theme; these coordinates describe only the mechanical illustration.
 class _G {
   static const w = 1000.0;
   static const h = 600.0;
-
-  // Section view: axle axis and wheel centre line.
-  static const axisY = 300.0;
-  static const centerX = 365.0;
-
-  // Over-locknut faces, axle and end caps.
-  static const oldLeft = 158.0;
-  static const oldRight = 572.0;
-  static const axleR = 16.0;
-  static const boreR = 7.0;
-  static const axleLeft = 128.0;
-  static const axleRight = 604.0;
-  static const capW = 24.0;
-  static const capR = 34.0;
-
-  // Rotor mount (6 bolts) next to the left cap.
-  static const rotorX = 196.0;
-  static const rotorW = 12.0;
-  static const rotorR = 90.0;
-  static const rotorBoltY = 66.0;
-
-  // Flanges: disc side (left) is taller, drive side (right) shorter.
-  static const flangeLX = 250.0;
-  static const flangeRX = 466.0;
-  static const flangeT = 18.0;
-  static const pcdL = 214.0;
-  static const pcdR = 196.0;
-  static const flangeLip = 18.0;
-  static const holeR = 8.0;
-
-  // Shell and freehub.
-  static const barrelR = 44.0;
-  static const freehubRight = 560.0;
-  static const freehubR = 38.0;
-
-  // Dimension rows.
-  static const ftfY = 92.0;
-  static const centerY = 138.0;
-  static const oldY = 494.0;
-  static const pcdLeftX = 104.0;
-  static const pcdRightX = 618.0;
-  static const axleDimX = 656.0;
-
-  // End view (left flange seen from the front).
-  static const evCx = 852.0;
-  static const evCy = 292.0;
-  static const evR = 124.0;
-  static const evPcd = 108.0;
-  static const evBoltR = 44.0;
+  static const cy = 310.0;
+  static const centreX = 480.0;
+  static const axleLeft = 105.0;
+  static const axleRight = 895.0;
+  static const oldLeft = 165.0;
+  static const oldRight = 835.0;
+  static const flangeLeft = 310.0;
+  static const flangeRight = 650.0;
+  static const flangeLeftRadius = 146.0;
+  static const flangeRightRadius = 126.0;
+  static const shellLeft = 330.0;
+  static const shellRight = 630.0;
 }
+
+enum _HubGuideScene { side, flange }
 
 class _HubGuidePainter extends CustomPainter {
   _HubGuidePainter({
     required this.palette,
     required this.labelStyle,
     required this.current,
-    required this.previous,
     required this.progress,
     required this.spokeHoleCount,
+    required this.configuration,
     required this.hits,
   });
 
   final _GuidePalette palette;
   final TextStyle labelStyle;
   final Set<HubGuidePart>? current;
-  final Set<HubGuidePart>? previous;
   final double progress;
   final int? spokeHoleCount;
+  final HubGuideConfiguration configuration;
   final Map<HubGuidePart, Rect> hits;
 
-  late double _s;
+  late double _scale;
   late double _dx;
   late double _dy;
 
-  Offset _p(double x, double y) => Offset(_dx + x * _s, _dy + y * _s);
-  double _d(double v) => v * _s;
+  Offset _p(double x, double y) => Offset(_dx + x * _scale, _dy + y * _scale);
+  double _d(double value) => value * _scale;
+  bool get _compact => _scale < 0.5;
+  bool _selected(HubGuidePart part) => current?.contains(part) == true;
+  double _focus(HubGuidePart part) => _selected(part) ? progress : 0;
 
-  /// 0 → 1 as [part] becomes highlighted; blends the previous selection out.
-  double _lit(HubGuidePart part) {
-    final now = current?.contains(part) == true ? 1.0 : 0.0;
-    final before = previous?.contains(part) == true ? 1.0 : 0.0;
-    return before + (now - before) * progress;
+  bool get _usesTopDimension =>
+      _selected(HubGuidePart.flangeToFlange) ||
+      _selected(HubGuidePart.centerToLeft) ||
+      _selected(HubGuidePart.centerToRight);
+
+  _HubGuideScene get _scene {
+    if (_selected(HubGuidePart.pcdLeft) ||
+        _selected(HubGuidePart.pcdRight) ||
+        _selected(HubGuidePart.spokeHoleDiameter)) {
+      return _HubGuideScene.flange;
+    }
+    return _HubGuideScene.side;
   }
 
-  bool get _anySelected => current != null && current!.isNotEmpty;
+  Color _mix(Color a, Color b, double amount) =>
+      Color.lerp(a, b, amount.clamp(0, 1))!;
 
-  /// How much the non-selected dimensions recede.
-  double get _recede {
-    final now = _anySelected ? 1.0 : 0.0;
-    final before = previous != null && previous!.isNotEmpty ? 1.0 : 0.0;
-    return before + (now - before) * progress;
+  Paint _stroke(Color color, [double width = 1.4]) => Paint()
+    ..color = color
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = math.max(1, width * (0.58 + 0.42 * _scale))
+    ..strokeCap = StrokeCap.round
+    ..strokeJoin = StrokeJoin.round;
+
+  Paint _fill(Color color) => Paint()
+    ..color = color
+    ..style = PaintingStyle.fill;
+
+  void _register(HubGuidePart part, Rect rect) {
+    final expanded = rect.inflate(_d(10));
+    hits[part] = hits.containsKey(part)
+        ? hits[part]!.expandToInclude(expanded)
+        : expanded;
   }
 
-  Color _mix(Color a, Color b, double t) => Color.lerp(a, b, t)!;
+  void _dashedLine(Canvas canvas, Offset start, Offset end, Paint paint) {
+    final distance = (end - start).distance;
+    if (distance == 0) return;
+    final direction = (end - start) / distance;
+    var cursor = 0.0;
+    while (cursor < distance) {
+      final dashEnd = math.min(cursor + _d(10), distance);
+      canvas.drawLine(
+          start + direction * cursor, start + direction * dashEnd, paint);
+      cursor += _d(17);
+    }
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
     hits.clear();
-    _s = math.min(size.width / _G.w, size.height / _G.h);
-    _dx = (size.width - _G.w * _s) / 2;
-    _dy = (size.height - _G.h * _s) / 2;
+    _scale = math.min(size.width / _G.w, size.height / _G.h);
+    _dx = (size.width - _G.w * _scale) / 2;
+    _dy = (size.height - _G.h * _scale) / 2;
 
-    _paintCentreLines(canvas);
-    _paintSection(canvas);
-    _paintEndView(canvas);
-    _paintDimensions(canvas);
-    _paintCaptions(canvas);
+    switch (_scene) {
+      case _HubGuideScene.side:
+        _paintSideScene(canvas);
+      case _HubGuideScene.flange:
+        _paintFlangeScene(canvas);
+    }
   }
 
-  // ---------------------------------------------------------------- lines --
+  void _paintSideScene(Canvas canvas) {
+    _orientation(canvas);
+    _dashedLine(
+      canvas,
+      _p(80, _G.cy),
+      _p(920, _G.cy),
+      _stroke(palette.inkMuted.withValues(alpha: 0.46), 1),
+    );
 
-  /// Line weights follow the scale only in part: at sidebar size a purely
-  /// proportional hairline vanishes, at dialog size a fixed one looks thin.
-  double _lineWidth(double width) => math.max(1.0, width * (0.55 + 0.45 * _s));
+    _paintAxle(canvas);
+    _paintHubShell(canvas);
+    _paintRotorInterface(canvas);
+    _paintDriveInterface(canvas);
+    _paintBearings(canvas);
+    _paintSideMeasurement(canvas);
 
-  Paint _stroke(Color color, double width) => Paint()
-    ..color = color
-    ..style = PaintingStyle.stroke
-    ..strokeWidth = _lineWidth(width)
-    ..strokeCap = StrokeCap.butt
-    ..strokeJoin = StrokeJoin.miter;
+    _caption(canvas, _p(500, 567), 'VISTA LATERAL');
+  }
 
-  Paint _fillPaint(Color color) => Paint()
-    ..color = color
-    ..style = PaintingStyle.fill;
+  void _orientation(Canvas canvas) {
+    // At sidebar width the active upper dimension occupies the same vertical
+    // band as the orientation captions. Its own label names the side, so keep
+    // that measurement readable instead of stacking three labels together.
+    if (!_compact || !_usesTopDimension) {
+      _caption(canvas, _p(128, 52), 'LADO IZQUIERDO',
+          align: Alignment.centerLeft);
+      _caption(canvas, _p(872, 52), 'LADO DERECHO',
+          align: Alignment.centerRight);
+      _caption(canvas, _p(_G.centreX, 72), 'CENTRO');
+    }
+    _dashedLine(
+      canvas,
+      _p(_G.centreX, 82),
+      _p(_G.centreX, 488),
+      _stroke(palette.inkMuted.withValues(alpha: 0.52), 1),
+    );
+  }
 
-  void _dashed(Canvas canvas, Path path, Paint paint, List<double> pattern) {
-    for (final metric in path.computeMetrics()) {
-      var distance = 0.0;
-      var index = 0;
-      while (distance < metric.length) {
-        final segment = _d(pattern[index % pattern.length]);
-        if (index.isEven) {
-          canvas.drawPath(
-              metric.extractPath(distance, math.min(distance + segment, metric.length)),
-              paint);
+  void _paintAxle(Canvas canvas) {
+    final bodyFocus = math.max(
+      _focus(HubGuidePart.axleBody),
+      _focus(HubGuidePart.axleDiameter),
+    );
+    final endFocus = _focus(HubGuidePart.axleEnds);
+    final axleColor =
+        _mix(palette.fillDeep, palette.accentContainer, bodyFocus);
+    final axleEdge = _mix(palette.ink, palette.accent, bodyFocus);
+    final axleRadius =
+        configuration.axleMount == HubGuideAxleMount.thruAxle ? 17.0 : 12.0;
+    final axleRect = Rect.fromPoints(
+      _p(_G.axleLeft, _G.cy - axleRadius),
+      _p(_G.axleRight, _G.cy + axleRadius),
+    );
+    final axle = RRect.fromRectAndRadius(axleRect, Radius.circular(_d(6)));
+    canvas.drawRRect(axle, _fill(axleColor));
+    canvas.drawRRect(axle, _stroke(axleEdge, 1.6));
+    _register(HubGuidePart.axleBody, axleRect);
+    _register(HubGuidePart.axleDiameter, axleRect);
+
+    if (configuration.axleMount == HubGuideAxleMount.thruAxle ||
+        configuration.axleMount == HubGuideAxleMount.quickRelease) {
+      final bore = _stroke(
+        _mix(palette.inkMuted, palette.accent, bodyFocus),
+        1.1,
+      );
+      canvas.drawLine(
+          _p(_G.axleLeft, _G.cy - 4), _p(_G.axleRight, _G.cy - 4), bore);
+      canvas.drawLine(
+          _p(_G.axleLeft, _G.cy + 4), _p(_G.axleRight, _G.cy + 4), bore);
+    }
+
+    final leftEnd = Rect.fromPoints(
+      _p(_G.axleLeft - 8, _G.cy - 28),
+      _p(_G.oldLeft + 24, _G.cy + 28),
+    );
+    final rightEnd = Rect.fromPoints(
+      _p(_G.oldRight - 24, _G.cy - 28),
+      _p(_G.axleRight + 8, _G.cy + 28),
+    );
+    _paintAxleEnds(canvas, leftEnd, rightEnd, endFocus);
+    _register(HubGuidePart.axleEnds, leftEnd);
+    _register(HubGuidePart.axleEnds, rightEnd);
+  }
+
+  void _paintAxleEnds(
+      Canvas canvas, Rect leftEnd, Rect rightEnd, double focus) {
+    final edge = _mix(palette.ink, palette.accent, focus);
+    final fill = _mix(palette.fillDeep, palette.accentContainer, focus);
+    switch (configuration.axleMount) {
+      case HubGuideAxleMount.quickRelease:
+        final skewer = _stroke(edge, 1.3);
+        canvas.drawLine(_p(82, _G.cy), _p(918, _G.cy), skewer);
+        final lever = Path()
+          ..moveTo(_p(90, _G.cy).dx, _p(90, _G.cy).dy)
+          ..quadraticBezierTo(
+              _p(56, 275).dx, _p(42, 236).dy, _p(64, 207).dx, _p(64, 207).dy);
+        canvas.drawPath(lever, _stroke(edge, 4));
+        canvas.drawCircle(_p(88, _G.cy), _d(8), _fill(fill));
+        canvas.drawCircle(_p(88, _G.cy), _d(8), _stroke(edge, 1.4));
+        _hex(canvas, _p(910, _G.cy), 18, fill, edge);
+      case HubGuideAxleMount.nutted:
+        _threadMarks(canvas, 105, 154, _G.cy - 12, _G.cy + 12, edge);
+        _threadMarks(canvas, 846, 895, _G.cy - 12, _G.cy + 12, edge);
+        _hex(canvas, _p(_G.oldLeft, _G.cy), 27, fill, edge);
+        _hex(canvas, _p(_G.oldRight, _G.cy), 27, fill, edge);
+      case HubGuideAxleMount.femaleBolt:
+        for (final x in [_G.oldLeft, _G.oldRight]) {
+          canvas.drawCircle(_p(x, _G.cy), _d(25), _fill(fill));
+          canvas.drawCircle(_p(x, _G.cy), _d(25), _stroke(edge, 1.5));
+          canvas.drawLine(
+              _p(x - 9, _G.cy), _p(x + 9, _G.cy), _stroke(edge, 2.2));
         }
-        distance += segment;
-        index++;
-      }
+      case HubGuideAxleMount.thruAxle:
+        for (final x in [_G.oldLeft, _G.oldRight]) {
+          canvas.drawCircle(_p(x, _G.cy), _d(23), _fill(fill));
+          canvas.drawCircle(_p(x, _G.cy), _d(23), _stroke(edge, 1.5));
+          canvas.drawCircle(_p(x, _G.cy), _d(9), _stroke(edge, 1.3));
+        }
+      case HubGuideAxleMount.generic:
+      case HubGuideAxleMount.unknown:
+        for (final x in [_G.oldLeft, _G.oldRight]) {
+          final rect = Rect.fromCenter(
+              center: _p(x, _G.cy), width: _d(38), height: _d(54));
+          final shape = RRect.fromRectAndRadius(rect, Radius.circular(_d(7)));
+          canvas.drawRRect(shape, _fill(fill));
+          canvas.drawRRect(shape, _stroke(edge, 1.5));
+        }
     }
   }
 
-  void _centreLine(Canvas canvas, Offset a, Offset b, Color color) {
-    final path = Path()
-      ..moveTo(a.dx, a.dy)
-      ..lineTo(b.dx, b.dy);
-    _dashed(canvas, path, _stroke(color, 1.2), const [14, 5, 3, 5]);
-  }
-
-  void _paintCentreLines(Canvas canvas) {
-    final ink = palette.inkMuted.withValues(alpha: 0.7);
-    // axle axis
-    _centreLine(canvas, _p(_G.axleLeft - 24, _G.axisY),
-        _p(_G.axleDimX + 16, _G.axisY), ink);
-    // wheel centre line, lit with the centre-to-flange dimensions
-    final lit = math.max(_lit(HubGuidePart.centerToLeft),
-        _lit(HubGuidePart.centerToRight));
-    _centreLine(canvas, _p(_G.centerX, _G.centerY - 26),
-        _p(_G.centerX, _G.oldY - 14), _mix(ink, palette.accent, lit));
-    // flange centre lines (short, above the flanges)
-    for (final x in [_G.flangeLX, _G.flangeRX]) {
-      _centreLine(canvas, _p(x, _G.ftfY - 18),
-          _p(x, _G.axisY - _G.pcdL / 2 - _G.flangeLip - 6), ink);
-    }
-    // end view centre lines
-    _centreLine(canvas, _p(_G.evCx - _G.evR - 18, _G.evCy),
-        _p(_G.evCx + _G.evR + 18, _G.evCy), ink);
-    _centreLine(canvas, _p(_G.evCx, _G.evCy - _G.evR - 18),
-        _p(_G.evCx, _G.evCy + _G.evR + 18), ink);
-  }
-
-  // -------------------------------------------------------------- section --
-
-  void _part(Canvas canvas, Path path, double lit,
-      {bool deep = false}) {
-    final fill = _mix(deep ? palette.fillDeep : palette.fill,
-        palette.accentContainer, lit);
-    final edge = _mix(palette.ink.withValues(alpha: 0.85), palette.accent, lit);
-    canvas.drawPath(path, _fillPaint(fill));
-    canvas.drawPath(path, _stroke(edge, 1.6 + 0.8 * lit));
-  }
-
-  Path _rect(double x1, double y1, double x2, double y2, [double radius = 0]) {
-    final rect = Rect.fromPoints(_p(x1, y1), _p(x2, y2));
-    return Path()
-      ..addRRect(RRect.fromRectAndRadius(rect, Radius.circular(_d(radius))));
-  }
-
-  void _paintSection(Canvas canvas) {
-    final axleLit = _lit(HubGuidePart.axleBody);
-    final endsLit = _lit(HubGuidePart.axleEnds);
-    final rotorLit = _lit(HubGuidePart.rotorMount);
-    final driveLit = _lit(HubGuidePart.driveReceiver);
-    final bearingLit = _lit(HubGuidePart.bearings);
-    final holesLit = _lit(HubGuidePart.spokeHoles);
-
-    // Axle (hollow): body first so every other part sits on top of it.
-    _part(
-        canvas,
-        _rect(_G.axleLeft, _G.axisY - _G.axleR, _G.axleRight,
-            _G.axisY + _G.axleR, 3),
-        math.max(axleLit, endsLit),
-        deep: true);
-    // bore lines
-    final bore = _stroke(
-        _mix(palette.inkMuted, palette.accent, math.max(axleLit, endsLit)), 1);
-    canvas.drawLine(_p(_G.axleLeft, _G.axisY - _G.boreR),
-        _p(_G.axleRight, _G.axisY - _G.boreR), bore);
-    canvas.drawLine(_p(_G.axleLeft, _G.axisY + _G.boreR),
-        _p(_G.axleRight, _G.axisY + _G.boreR), bore);
-    // axle ends (where a QR skewer or a thru axle passes)
-    if (endsLit > 0) {
-      final glow = _fillPaint(palette.accent.withValues(alpha: 0.28 * endsLit));
-      canvas.drawRect(
-          Rect.fromPoints(_p(_G.axleLeft - 4, _G.axisY - _G.axleR - 6),
-              _p(_G.oldLeft, _G.axisY + _G.axleR + 6)),
-          glow);
-      canvas.drawRect(
-          Rect.fromPoints(_p(_G.oldRight, _G.axisY - _G.axleR - 6),
-              _p(_G.axleRight + 4, _G.axisY + _G.axleR + 6)),
-          glow);
-    }
-
-    // Barrel between the flanges.
-    _part(
-        canvas,
-        _rect(_G.flangeLX, _G.axisY - _G.barrelR, _G.flangeRX,
-            _G.axisY + _G.barrelR, 10),
-        0);
-
-    // Freehub body: splined cylinder from the drive flange to the right cap.
-    const fhTop = _G.axisY - _G.freehubR;
-    const fhBottom = _G.axisY + _G.freehubR;
-    _part(
-        canvas,
-        _rect(_G.flangeRX + _G.flangeT / 2, fhTop, _G.freehubRight, fhBottom, 6),
-        driveLit);
-    final spline = _stroke(
-        _mix(palette.inkMuted, palette.accent, driveLit).withValues(alpha: 0.9),
-        1);
-    for (var i = 1; i <= 3; i++) {
-      final y = fhTop + (fhBottom - fhTop) * i / 4;
-      canvas.drawLine(_p(_G.flangeRX + _G.flangeT / 2 + 8, y),
-          _p(_G.freehubRight - 8, y), spline);
-    }
-
-    // End caps / locknuts at the OLD faces.
-    _part(
-        canvas,
-        _rect(_G.oldLeft, _G.axisY - _G.capR, _G.oldLeft + _G.capW,
-            _G.axisY + _G.capR, 3),
-        endsLit,
-        deep: true);
-    _part(
-        canvas,
-        _rect(_G.oldRight - _G.capW, _G.axisY - _G.capR, _G.oldRight,
-            _G.axisY + _G.capR, 3),
-        endsLit,
-        deep: true);
-
-    // Rotor mount flange (6 bolts) beside the left cap.
-    _part(
-        canvas,
-        _rect(_G.rotorX - _G.rotorW / 2, _G.axisY - _G.rotorR,
-            _G.rotorX + _G.rotorW / 2, _G.axisY + _G.rotorR, 4),
-        rotorLit);
-    final bolt = _stroke(_mix(palette.ink, palette.accent, rotorLit), 1.2);
-    for (final sign in [-1, 1]) {
-      canvas.drawCircle(_p(_G.rotorX, _G.axisY + sign * _G.rotorBoltY),
-          _d(4), bolt);
-    }
-
-    // Spoke flanges with their holes (section shows the top and bottom hole).
-    for (final side in [
-      (x: _G.flangeLX, pcd: _G.pcdL),
-      (x: _G.flangeRX, pcd: _G.pcdR),
-    ]) {
-      final outer = side.pcd / 2 + _G.flangeLip;
-      _part(
-          canvas,
-          _rect(side.x - _G.flangeT / 2, _G.axisY - outer,
-              side.x + _G.flangeT / 2, _G.axisY + outer, 5),
-          0);
-      final holeEdge = _stroke(_mix(palette.ink, palette.accent, holesLit),
-          1.4 + holesLit);
-      final holeFill = _fillPaint(_mix(palette.paper,
-          palette.accentContainer, holesLit));
-      for (final sign in [-1, 1]) {
-        final c = _p(side.x, _G.axisY + sign * side.pcd / 2);
-        canvas.drawCircle(c, _d(_G.holeR), holeFill);
-        canvas.drawCircle(c, _d(_G.holeR), holeEdge);
-      }
-    }
-
-    // Bearings: cartridge sections above and below the axle.
-    final bearingEdge = _stroke(
-        _mix(palette.ink.withValues(alpha: 0.85), palette.accent, bearingLit),
-        1.4);
-    final bearingFill =
-        _fillPaint(_mix(palette.paper, palette.accentContainer, bearingLit));
-    // Shell bearings sit just inside each flange; the freehub carries its own.
-    for (final x in [_G.flangeLX + 24, _G.flangeRX - 24, _G.freehubRight - 22]) {
-      final r = x > _G.flangeRX ? _G.freehubR : _G.barrelR;
-      for (final sign in [-1, 1]) {
-        final rect = Rect.fromCenter(
-            center: _p(x, _G.axisY + sign * (_G.axleR + (r - _G.axleR) / 2)),
-            width: _d(20),
-            height: _d(r - _G.axleR - 8));
-        final rr = RRect.fromRectAndRadius(rect, Radius.circular(_d(2)));
-        canvas.drawRRect(rr, bearingFill);
-        canvas.drawRRect(rr, bearingEdge);
-        canvas.drawCircle(rect.center, _d(4), bearingEdge);
-      }
-    }
-  }
-
-  // ------------------------------------------------------------- end view --
-
-  void _paintEndView(Canvas canvas) {
-    final holesLit = _lit(HubGuidePart.spokeHoles);
-    final holeDiaLit = _lit(HubGuidePart.spokeHoleDiameter);
-    final pcdLit = math.max(_lit(HubGuidePart.pcdLeft), _lit(HubGuidePart.pcdRight));
-    final rotorLit = _lit(HubGuidePart.rotorMount);
-    final axleLit = math.max(_lit(HubGuidePart.axleDiameter), _lit(HubGuidePart.axleBody));
-    final c = _p(_G.evCx, _G.evCy);
-
-    // flange disc
-    canvas.drawCircle(c, _d(_G.evR), _fillPaint(palette.fill));
-    canvas.drawCircle(c, _d(_G.evR), _stroke(palette.ink.withValues(alpha: 0.85), 1.6));
-    // pitch circle
-    final pcdPath = Path()..addOval(Rect.fromCircle(center: c, radius: _d(_G.evPcd)));
-    _dashed(canvas, pcdPath,
-        _stroke(_mix(palette.inkMuted, palette.accent, pcdLit), 1.1 + pcdLit),
-        const [10, 4, 2, 4]);
-    // spoke holes
-    final count = (spokeHoleCount ?? 0) >= 12 && (spokeHoleCount ?? 0) <= 48
-        ? spokeHoleCount!
-        : 16;
-    final holeEdge = _stroke(_mix(palette.ink, palette.accent, holesLit), 1.3 + holesLit);
-    final holeFill = _fillPaint(_mix(palette.paper, palette.accentContainer, holesLit));
-    final holeRadius = count > 32 ? 5.0 : 6.5;
-    for (var i = 0; i < count; i++) {
-      final a = -math.pi / 2 + 2 * math.pi * i / count;
-      final h = Offset(c.dx + _d(_G.evPcd) * math.cos(a),
-          c.dy + _d(_G.evPcd) * math.sin(a));
-      canvas.drawCircle(h, _d(holeRadius), holeFill);
-      canvas.drawCircle(h, _d(holeRadius), holeEdge);
-    }
-    // rotor bolts (6)
-    final boltEdge = _stroke(_mix(palette.ink, palette.accent, rotorLit), 1.2 + rotorLit);
-    final boltFill = _fillPaint(_mix(palette.paper, palette.accentContainer, rotorLit));
+  void _hex(
+      Canvas canvas, Offset center, double radius, Color fill, Color edge) {
+    final path = Path();
     for (var i = 0; i < 6; i++) {
-      final a = -math.pi / 2 + 2 * math.pi * i / 6;
-      final b = Offset(c.dx + _d(_G.evBoltR) * math.cos(a),
-          c.dy + _d(_G.evBoltR) * math.sin(a));
-      canvas.drawCircle(b, _d(4.5), boltFill);
-      canvas.drawCircle(b, _d(4.5), boltEdge);
+      final angle = math.pi / 6 + i * math.pi / 3;
+      final point = center +
+          Offset(_d(radius) * math.cos(angle), _d(radius) * math.sin(angle));
+      if (i == 0) {
+        path.moveTo(point.dx, point.dy);
+      } else {
+        path.lineTo(point.dx, point.dy);
+      }
     }
-    // axle bore in the middle
-    canvas.drawCircle(c, _d(_G.axleR),
-        _fillPaint(_mix(palette.fillDeep, palette.accentContainer, axleLit)));
-    canvas.drawCircle(c, _d(_G.axleR),
-        _stroke(_mix(palette.ink, palette.accent, axleLit), 1.4));
-    canvas.drawCircle(c, _d(_G.boreR), _stroke(palette.inkMuted, 1));
-
-    // PCD as a diameter through two opposite holes (only when the count is even
-    // the holes are opposite; the arrows still end on the pitch circle).
-    const angle = -math.pi / 4;
-    final a1 = Offset(c.dx + _d(_G.evPcd) * math.cos(angle),
-        c.dy + _d(_G.evPcd) * math.sin(angle));
-    final a2 = Offset(c.dx - _d(_G.evPcd) * math.cos(angle),
-        c.dy - _d(_G.evPcd) * math.sin(angle));
-    _dimensionLine(canvas, a2, a1, 'PCD',
-        lit: pcdLit, part: HubGuidePart.pcdLeft, labelAt: 0.76);
-
-    // spoke hole diameter: leader from the top-right hole to a label
-    final holeAngle = -math.pi / 2 + 2 * math.pi * (count >= 16 ? 2 : 1) / count;
-    final hole = Offset(c.dx + _d(_G.evPcd) * math.cos(holeAngle),
-        c.dy + _d(_G.evPcd) * math.sin(holeAngle));
-    final leaderEnd = _p(_G.evCx + _G.evR + 6, _G.evCy - _G.evR + 4);
-    _leader(canvas, hole, leaderEnd, 'Ø hoyo',
-        lit: holeDiaLit, part: HubGuidePart.spokeHoleDiameter);
-    if (holeDiaLit > 0) {
-      canvas.drawCircle(hole, _d(holeRadius + 6),
-          _stroke(palette.accent.withValues(alpha: holeDiaLit), 1.6));
-    }
+    path.close();
+    canvas.drawPath(path, _fill(fill));
+    canvas.drawPath(path, _stroke(edge, 1.5));
   }
 
-  // ----------------------------------------------------------- dimensions --
-
-  void _paintDimensions(Canvas canvas) {
-    const topL = _G.axisY - _G.pcdL / 2;
-    const bottomL = _G.axisY + _G.pcdL / 2;
-    const topR = _G.axisY - _G.pcdR / 2;
-    const bottomR = _G.axisY + _G.pcdR / 2;
-
-    // OLD: locknut face to locknut face.
-    _extension(canvas, _p(_G.oldLeft, _G.axisY + _G.capR), _p(_G.oldLeft, _G.oldY),
-        lit: _lit(HubGuidePart.old));
-    _extension(canvas, _p(_G.oldRight, _G.axisY + _G.capR), _p(_G.oldRight, _G.oldY),
-        lit: _lit(HubGuidePart.old));
-    _dimensionLine(canvas, _p(_G.oldLeft, _G.oldY), _p(_G.oldRight, _G.oldY), 'OLD',
-        lit: _lit(HubGuidePart.old), part: HubGuidePart.old);
-
-    // Flange to flange, centre to centre.
-    _dimensionLine(canvas, _p(_G.flangeLX, _G.ftfY), _p(_G.flangeRX, _G.ftfY),
-        'entre bridas',
-        lit: _lit(HubGuidePart.flangeToFlange), part: HubGuidePart.flangeToFlange);
-
-    // Centre to each flange.
-    _dimensionLine(canvas, _p(_G.flangeLX, _G.centerY), _p(_G.centerX, _G.centerY),
-        'centro→izq',
-        lit: _lit(HubGuidePart.centerToLeft), part: HubGuidePart.centerToLeft);
-    _dimensionLine(canvas, _p(_G.centerX, _G.centerY), _p(_G.flangeRX, _G.centerY),
-        'centro→der',
-        lit: _lit(HubGuidePart.centerToRight), part: HubGuidePart.centerToRight);
-
-    // PCD left, drawn outside the left end, from hole centre to hole centre.
-    final pcdLLit = _lit(HubGuidePart.pcdLeft);
-    _extension(canvas, _p(_G.flangeLX - _G.flangeT / 2 - 2, topL), _p(_G.pcdLeftX - 8, topL),
-        lit: pcdLLit);
-    _extension(canvas, _p(_G.flangeLX - _G.flangeT / 2 - 2, bottomL),
-        _p(_G.pcdLeftX - 8, bottomL),
-        lit: pcdLLit);
-    _dimensionLine(canvas, _p(_G.pcdLeftX, topL), _p(_G.pcdLeftX, bottomL), 'PCD izq',
-        lit: pcdLLit, part: HubGuidePart.pcdLeft, labelAt: 0.3);
-
-    // PCD right, outside the right end.
-    final pcdRLit = _lit(HubGuidePart.pcdRight);
-    _extension(canvas, _p(_G.flangeRX + _G.flangeT / 2 + 2, topR), _p(_G.pcdRightX + 8, topR),
-        lit: pcdRLit);
-    _extension(canvas, _p(_G.flangeRX + _G.flangeT / 2 + 2, bottomR),
-        _p(_G.pcdRightX + 8, bottomR),
-        lit: pcdRLit);
-    _dimensionLine(canvas, _p(_G.pcdRightX, topR), _p(_G.pcdRightX, bottomR), 'PCD der',
-        lit: pcdRLit, part: HubGuidePart.pcdRight, labelAt: 0.3);
-
-    // Axle diameter at the protruding end.
-    final axleLit = _lit(HubGuidePart.axleDiameter);
-    _extension(canvas, _p(_G.axleRight + 2, _G.axisY - _G.axleR),
-        _p(_G.axleDimX + 8, _G.axisY - _G.axleR),
-        lit: axleLit);
-    _extension(canvas, _p(_G.axleRight + 2, _G.axisY + _G.axleR),
-        _p(_G.axleDimX + 8, _G.axisY + _G.axleR),
-        lit: axleLit);
-    _dimensionLine(canvas, _p(_G.axleDimX, _G.axisY - _G.axleR),
-        _p(_G.axleDimX, _G.axisY + _G.axleR), 'Ø eje',
-        lit: axleLit, part: HubGuidePart.axleDiameter, labelAt: 1.9);
-  }
-
-  Color _dimColor(double lit) {
-    final base = _mix(palette.inkMuted,
-        palette.inkMuted.withValues(alpha: 0.32), _recede);
-    return _mix(base, palette.accent, lit);
-  }
-
-  void _extension(Canvas canvas, Offset from, Offset to, {required double lit}) {
-    canvas.drawLine(from, to, _stroke(_dimColor(lit), 0.9));
-  }
-
-  void _arrow(Canvas canvas, Offset tip, Offset from, Paint paint) {
-    final v = (tip - from);
-    final len = v.distance;
-    if (len == 0) return;
-    final u = v / len;
-    final n = Offset(-u.dy, u.dx);
-    final l = _d(11);
-    final w = _d(3.4);
-    final path = Path()
-      ..moveTo(tip.dx, tip.dy)
-      ..lineTo(tip.dx - u.dx * l + n.dx * w, tip.dy - u.dy * l + n.dy * w)
-      ..lineTo(tip.dx - u.dx * l - n.dx * w, tip.dy - u.dy * l - n.dy * w)
+  void _paintHubShell(Canvas canvas) {
+    final body = Path()
+      ..moveTo(_p(_G.shellLeft, 232).dx, _p(_G.shellLeft, 232).dy)
+      ..cubicTo(_p(365, 238).dx, _p(365, 238).dy, _p(380, 258).dx,
+          _p(380, 258).dy, _p(410, 265).dx, _p(410, 265).dy)
+      ..lineTo(_p(552, 265).dx, _p(552, 265).dy)
+      ..cubicTo(_p(585, 258).dx, _p(585, 258).dy, _p(600, 238).dx,
+          _p(600, 238).dy, _p(_G.shellRight, 232).dx, _p(_G.shellRight, 232).dy)
+      ..lineTo(_p(_G.shellRight, 388).dx, _p(_G.shellRight, 388).dy)
+      ..cubicTo(_p(600, 382).dx, _p(600, 382).dy, _p(585, 362).dx,
+          _p(585, 362).dy, _p(552, 355).dx, _p(552, 355).dy)
+      ..lineTo(_p(410, 355).dx, _p(410, 355).dy)
+      ..cubicTo(_p(380, 362).dx, _p(380, 362).dy, _p(365, 382).dx,
+          _p(365, 382).dy, _p(_G.shellLeft, 388).dx, _p(_G.shellLeft, 388).dy)
       ..close();
-    canvas.drawPath(path, paint..style = PaintingStyle.fill);
+    canvas.drawPath(body, _fill(palette.fill));
+    canvas.drawPath(body, _stroke(palette.ink, 1.8));
+
+    _paintFlange(
+        canvas, _G.flangeLeft, _G.flangeLeftRadius, HubGuidePart.pcdLeft);
+    _paintFlange(
+        canvas, _G.flangeRight, _G.flangeRightRadius, HubGuidePart.pcdRight);
   }
 
-  /// A linear dimension: line with an arrowhead at each end and its label on
-  /// the line, on a small pill of paper so it reads over the drawing.
-  void _dimensionLine(Canvas canvas, Offset a, Offset b, String text,
-      {required double lit, required HubGuidePart part, double labelAt = 0.5}) {
-    final color = _dimColor(lit);
-    final line = _stroke(color, 1.1 + 1.1 * lit);
-    canvas.drawLine(a, b, line);
-    _arrow(canvas, a, b, Paint()..color = color);
-    _arrow(canvas, b, a, Paint()..color = color);
-    final mid = Offset(a.dx + (b.dx - a.dx) * labelAt, a.dy + (b.dy - a.dy) * labelAt);
-    _label(canvas, mid, text, lit: lit, part: part);
+  void _paintFlange(Canvas canvas, double x, double radius, HubGuidePart part) {
+    final focus = math.max(_focus(part), _focus(HubGuidePart.spokeHoles));
+    final rect = Rect.fromCenter(
+      center: _p(x, _G.cy),
+      width: _d(30),
+      height: _d(radius * 2),
+    );
+    final shape = RRect.fromRectAndRadius(rect, Radius.circular(_d(13)));
+    canvas.drawRRect(
+        shape, _fill(_mix(palette.fillDeep, palette.accentContainer, focus)));
+    canvas.drawRRect(
+        shape, _stroke(_mix(palette.ink, palette.accent, focus), 1.8));
+    for (final offset in [-0.72, -0.36, 0.0, 0.36, 0.72]) {
+      final hole = _p(x, _G.cy + radius * offset);
+      canvas.drawCircle(hole, _d(6.5), _fill(palette.paper));
+      canvas.drawCircle(hole, _d(6.5),
+          _stroke(_mix(palette.ink, palette.accent, focus), 1.2));
+    }
+    _register(part, rect);
+    _register(HubGuidePart.spokeHoles, rect);
   }
 
-  void _leader(Canvas canvas, Offset from, Offset to, String text,
-      {required double lit, required HubGuidePart part}) {
-    final color = _dimColor(lit);
-    canvas.drawLine(from, to, _stroke(color, 1 + lit));
-    canvas.drawCircle(from, _d(2.2), Paint()..color = color);
-    _label(canvas, to + Offset(_d(4), 0), text,
-        lit: lit, part: part, anchor: Alignment.centerLeft);
-  }
-
-  /// Below dialog size only the lit dimension carries its name: at sidebar
-  /// width twenty labels collide and hide the drawing they describe.
-  bool get _labelsForAll => _s >= 0.5;
-
-  void _label(Canvas canvas, Offset at, String text,
-      {required double lit,
-      required HubGuidePart part,
-      Alignment anchor = Alignment.center}) {
-    final fontSize = _s < 0.4 ? 10.5 : (_s < 0.7 ? 12.0 : 13.5);
-    if (!_labelsForAll && lit < 0.05) {
-      // keep the hit target so a tap still opens the field
-      final probe = TextPainter(
-          text: TextSpan(text: text, style: labelStyle.copyWith(fontSize: fontSize)),
-          textDirection: TextDirection.ltr)
-        ..layout();
-      final rect = Rect.fromCenter(
-          center: at, width: probe.width + 10, height: probe.height + 4);
-      hits[part] = hits.containsKey(part) ? hits[part]!.expandToInclude(rect) : rect;
+  void _paintRotorInterface(Canvas canvas) {
+    final kind = configuration.rotorInterface;
+    if (kind == HubGuideRotorInterface.none ||
+        kind == HubGuideRotorInterface.unknown) {
       return;
     }
-    final color = _mix(_dimColor(lit), palette.onAccentContainer, lit);
-    final painter = TextPainter(
-      text: TextSpan(
-          text: text,
-          style: labelStyle.copyWith(
-              fontSize: fontSize,
-              fontWeight: FontWeight.w600,
-              color: color,
-              height: 1.1,
-              fontFeatures: const [ui.FontFeature.tabularFigures()])),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    const padX = 5.0, padY = 2.0;
-    final w = painter.width + padX * 2;
-    final h = painter.height + padY * 2;
-    final left = at.dx - w / 2 - anchor.x * (-w / 2);
-    final top = at.dy - h / 2 - anchor.y * (-h / 2);
-    final rect = Rect.fromLTWH(left, top, w, h);
-    final pill = RRect.fromRectAndRadius(rect, Radius.circular(h / 2));
-    canvas.drawRRect(
-        pill,
-        _fillPaint(_mix(palette.paper, palette.accentContainer, lit)));
-    if (lit > 0) {
-      canvas.drawRRect(pill, _stroke(palette.accent.withValues(alpha: lit), 1));
+    final focus = _focus(HubGuidePart.rotorMount);
+    final edge = _mix(palette.ink, palette.accent, focus);
+    final fill = _mix(palette.fillDeep, palette.accentContainer, focus);
+    final rect = Rect.fromPoints(_p(220, 222), _p(278, 398));
+    if (kind == HubGuideRotorInterface.centerLock) {
+      final body = RRect.fromRectAndRadius(rect, Radius.circular(_d(10)));
+      canvas.drawRRect(body, _fill(fill));
+      canvas.drawRRect(body, _stroke(edge, 1.6));
+      for (var i = 0; i < 7; i++) {
+        final y = 242 + i * 23.0;
+        canvas.drawLine(_p(226, y), _p(244, y + 8), _stroke(edge, 1.1));
+      }
+    } else {
+      final disc = Rect.fromCenter(
+          center: _p(247, _G.cy), width: _d(18), height: _d(224));
+      final shape = RRect.fromRectAndRadius(disc, Radius.circular(_d(8)));
+      canvas.drawRRect(shape, _fill(fill));
+      canvas.drawRRect(shape, _stroke(edge, 1.6));
+      if (kind == HubGuideRotorInterface.sixBolt) {
+        for (final offset in [-72.0, -36.0, 0.0, 36.0, 72.0]) {
+          canvas.drawCircle(
+              _p(247, _G.cy + offset), _d(4.5), _fill(palette.paper));
+          canvas.drawCircle(_p(247, _G.cy + offset), _d(4.5), _stroke(edge, 1));
+        }
+      }
     }
-    painter.paint(canvas, Offset(rect.left + padX, rect.top + padY));
-    hits[part] = hits.containsKey(part) ? hits[part]!.expandToInclude(rect) : rect;
+    _register(HubGuidePart.rotorMount, rect);
   }
 
-  void _paintCaptions(Canvas canvas) {
-    final style = labelStyle.copyWith(
-        fontSize: _s < 0.4 ? 9.5 : 11,
-        color: palette.inkMuted,
-        fontStyle: FontStyle.italic);
-    for (final caption in [
-      ('Corte por el eje', _p(_G.centerX, _G.h - 34)),
-      ('Brida de frente', _p(_G.evCx, _G.h - 34)),
-    ]) {
-      final painter = TextPainter(
-          text: TextSpan(text: caption.$1, style: style),
-          textDirection: TextDirection.ltr)
-        ..layout();
-      painter.paint(canvas,
-          caption.$2 - Offset(painter.width / 2, painter.height / 2));
+  void _paintDriveInterface(Canvas canvas) {
+    final kind = configuration.driveInterface;
+    if (kind == HubGuideDriveInterface.none ||
+        kind == HubGuideDriveInterface.unknown) {
+      return;
     }
+    final focus = _focus(HubGuidePart.driveReceiver);
+    final edge = _mix(palette.ink, palette.accent, focus);
+    final fill = _mix(palette.fillDeep, palette.accentContainer, focus);
+    final right = kind == HubGuideDriveInterface.bmxDriver ? 755.0 : 810.0;
+    final rect = Rect.fromPoints(_p(670, 258), _p(right, 362));
+    final body = RRect.fromRectAndRadius(rect, Radius.circular(_d(10)));
+    canvas.drawRRect(body, _fill(fill));
+    canvas.drawRRect(body, _stroke(edge, 1.7));
+    switch (kind) {
+      case HubGuideDriveInterface.cassette:
+        for (final y in [272.0, 290.0, 310.0, 330.0, 348.0]) {
+          canvas.drawLine(_p(682, y), _p(right - 10, y), _stroke(edge, 1));
+        }
+      case HubGuideDriveInterface.threadedFreewheel:
+        _threadMarks(canvas, 684, right - 10, 270, 350, edge);
+      case HubGuideDriveInterface.fixedThread:
+        _threadMarks(canvas, 684, 758, 270, 350, edge);
+        _threadMarks(canvas, 768, right - 8, 278, 342, edge);
+      case HubGuideDriveInterface.lockringCog:
+        for (var i = 0; i < 6; i++) {
+          final x = 688 + i * (right - 702) / 5;
+          canvas.drawLine(_p(x, 272), _p(x, 348), _stroke(edge, 1));
+        }
+        canvas.drawLine(
+            _p(right - 13, 265), _p(right - 13, 355), _stroke(edge, 2.2));
+      case HubGuideDriveInterface.bmxDriver:
+        canvas.drawCircle(_p(716, _G.cy), _d(34), _stroke(edge, 2));
+        canvas.drawCircle(_p(716, _G.cy), _d(18), _stroke(edge, 1.2));
+      case HubGuideDriveInterface.generic:
+      case HubGuideDriveInterface.none:
+      case HubGuideDriveInterface.unknown:
+        break;
+    }
+    _register(HubGuidePart.driveReceiver, rect);
+  }
+
+  void _threadMarks(Canvas canvas, double left, double right, double top,
+      double bottom, Color color) {
+    if (right <= left) return;
+    for (var i = 0; i < 7; i++) {
+      final x = left + (right - left) * i / 6;
+      canvas.drawLine(_p(x - 5, bottom), _p(x + 5, top),
+          _stroke(color.withValues(alpha: 0.84), 1));
+    }
+  }
+
+  void _paintBearings(Canvas canvas) {
+    final kind = configuration.bearingSystem;
+    if (kind == HubGuideBearingSystem.unknown) return;
+    final focus = _focus(HubGuidePart.bearings);
+    final edge = _mix(palette.ink, palette.accent, focus);
+    final fill = _mix(palette.paper, palette.accentContainer, focus);
+    for (final x in [372.0, 590.0]) {
+      final rect =
+          Rect.fromCenter(center: _p(x, _G.cy), width: _d(34), height: _d(70));
+      if (kind == HubGuideBearingSystem.sealed ||
+          kind == HubGuideBearingSystem.mixed) {
+        final ring = RRect.fromRectAndRadius(rect, Radius.circular(_d(8)));
+        canvas.drawRRect(ring, _fill(fill));
+        canvas.drawRRect(ring, _stroke(edge, 1.4));
+        canvas.drawLine(_p(x - 10, 282), _p(x - 10, 338), _stroke(edge, 1));
+        canvas.drawLine(_p(x + 10, 282), _p(x + 10, 338), _stroke(edge, 1));
+      }
+      if (kind == HubGuideBearingSystem.loose ||
+          kind == HubGuideBearingSystem.mixed) {
+        for (final y in [284.0, 300.0, 320.0, 336.0]) {
+          canvas.drawCircle(_p(x, y), _d(4.5), _fill(fill));
+          canvas.drawCircle(_p(x, y), _d(4.5), _stroke(edge, 1));
+        }
+      }
+      _register(HubGuidePart.bearings, rect);
+    }
+  }
+
+  void _paintSideMeasurement(Canvas canvas) {
+    if (current == null || current!.isEmpty) return;
+    if (_selected(HubGuidePart.old)) {
+      _extension(canvas, _p(_G.oldLeft, 342), _p(_G.oldLeft, 510));
+      _extension(canvas, _p(_G.oldRight, 342), _p(_G.oldRight, 510));
+      _dimension(canvas, _p(_G.oldLeft, 505), _p(_G.oldRight, 505),
+          _compact ? 'OLD' : 'Ancho entre apoyos (OLD)', HubGuidePart.old);
+      return;
+    }
+    if (_selected(HubGuidePart.flangeToFlange)) {
+      _extension(canvas, _p(_G.flangeLeft, 164), _p(_G.flangeLeft, 116));
+      _extension(canvas, _p(_G.flangeRight, 184), _p(_G.flangeRight, 116));
+      _dimension(
+          canvas,
+          _p(_G.flangeLeft, 120),
+          _p(_G.flangeRight, 120),
+          _compact ? 'Entre lados' : 'Entre los círculos de hoyos',
+          HubGuidePart.flangeToFlange);
+      return;
+    }
+    if (_selected(HubGuidePart.centerToLeft)) {
+      _extension(canvas, _p(_G.flangeLeft, 164), _p(_G.flangeLeft, 116));
+      _dimension(
+          canvas,
+          _p(_G.flangeLeft, 120),
+          _p(_G.centreX, 120),
+          _compact ? 'Centro → izq.' : 'Centro → círculo izquierdo',
+          HubGuidePart.centerToLeft);
+      return;
+    }
+    if (_selected(HubGuidePart.centerToRight)) {
+      _extension(canvas, _p(_G.flangeRight, 184), _p(_G.flangeRight, 116));
+      _dimension(
+          canvas,
+          _p(_G.centreX, 120),
+          _p(_G.flangeRight, 120),
+          _compact ? 'Centro → der.' : 'Centro → círculo derecho',
+          HubGuidePart.centerToRight);
+      return;
+    }
+    if (_selected(HubGuidePart.axleDiameter)) {
+      _dimension(canvas, _p(910, 292), _p(910, 328),
+          _compact ? 'Ø eje' : 'Diámetro del eje', HubGuidePart.axleDiameter,
+          labelOffset: const Offset(48, 0));
+      return;
+    }
+    if (_selected(HubGuidePart.spokeHoles)) {
+      final text = spokeHoleCount == null
+          ? 'Cantidad total de hoyos'
+          : '$spokeHoleCount hoyos totales';
+      _callout(canvas, _p(_G.flangeLeft, 202), _p(195, 112), text,
+          HubGuidePart.spokeHoles);
+      _callout(
+          canvas,
+          _p(_G.flangeRight, 215),
+          _p(805, 112),
+          _compact ? 'Ambos lados' : 'Se cuentan en toda la maza',
+          HubGuidePart.spokeHoles);
+      return;
+    }
+    if (_selected(HubGuidePart.axleEnds)) {
+      _callout(canvas, _p(_G.oldLeft, _G.cy), _p(190, 145), _axleLabel(),
+          HubGuidePart.axleEnds);
+      return;
+    }
+    if (_selected(HubGuidePart.axleBody)) {
+      _callout(canvas, _p(520, _G.cy), _p(560, 445),
+          _compact ? 'Eje' : 'Zona medida del eje', HubGuidePart.axleBody);
+      return;
+    }
+    if (_selected(HubGuidePart.rotorMount)) {
+      if (configuration.rotorInterface == HubGuideRotorInterface.none) {
+        _status(canvas, 'Sin anclaje de disco');
+      } else if (configuration.rotorInterface ==
+          HubGuideRotorInterface.unknown) {
+        _status(canvas, 'Anclaje de disco sin confirmar');
+      } else {
+        _callout(canvas, _p(247, 236), _p(172, 126), _rotorLabel(),
+            HubGuidePart.rotorMount);
+      }
+      return;
+    }
+    if (_selected(HubGuidePart.driveReceiver)) {
+      if (configuration.driveInterface == HubGuideDriveInterface.none) {
+        _status(canvas, 'Sin montaje para piñón');
+      } else if (configuration.driveInterface ==
+          HubGuideDriveInterface.unknown) {
+        _status(canvas, 'Montaje del piñón sin confirmar');
+      } else {
+        _callout(canvas, _p(745, 270), _p(800, 132), _driveLabel(),
+            HubGuidePart.driveReceiver);
+      }
+      return;
+    }
+    if (_selected(HubGuidePart.bearings)) {
+      if (configuration.bearingSystem == HubGuideBearingSystem.unknown) {
+        _status(canvas, 'Rodamientos sin confirmar');
+      } else {
+        _callout(canvas, _p(372, 282), _p(250, 138), _bearingLabel(),
+            HubGuidePart.bearings);
+      }
+    }
+  }
+
+  String _axleLabel() => switch (configuration.axleMount) {
+        HubGuideAxleMount.quickRelease => 'Cierre rápido',
+        HubGuideAxleMount.thruAxle => 'Eje pasante',
+        HubGuideAxleMount.nutted => 'Eje con tuercas',
+        HubGuideAxleMount.femaleBolt => 'Eje hembra con pernos',
+        HubGuideAxleMount.generic => 'Sujeción OEM',
+        HubGuideAxleMount.unknown => 'Sujeción sin confirmar',
+      };
+
+  String _rotorLabel() => switch (configuration.rotorInterface) {
+        HubGuideRotorInterface.sixBolt => 'Anclaje de 6 pernos',
+        HubGuideRotorInterface.centerLock => 'Anclaje Centerlock',
+        HubGuideRotorInterface.generic => 'Anclaje de disco',
+        HubGuideRotorInterface.none => 'Sin anclaje de disco',
+        HubGuideRotorInterface.unknown => 'Anclaje sin confirmar',
+      };
+
+  String _driveLabel() => switch (configuration.driveInterface) {
+        HubGuideDriveInterface.cassette => 'Núcleo de cassette',
+        HubGuideDriveInterface.threadedFreewheel => 'Rosca para rueda libre',
+        HubGuideDriveInterface.fixedThread => 'Rosca para piñón fijo',
+        HubGuideDriveInterface.lockringCog => 'Piñón con anillo',
+        HubGuideDriveInterface.bmxDriver => 'Núcleo BMX (driver)',
+        HubGuideDriveInterface.generic => 'Montaje del piñón',
+        HubGuideDriveInterface.none => 'Sin montaje para piñón',
+        HubGuideDriveInterface.unknown => 'Montaje sin confirmar',
+      };
+
+  String _bearingLabel() => switch (configuration.bearingSystem) {
+        HubGuideBearingSystem.sealed => 'Rodamientos sellados',
+        HubGuideBearingSystem.loose => 'Bolas sueltas',
+        HubGuideBearingSystem.mixed => 'Rodamientos mixtos',
+        HubGuideBearingSystem.unknown => 'Rodamientos sin confirmar',
+      };
+
+  void _paintFlangeScene(Canvas canvas) {
+    final isRight = _selected(HubGuidePart.pcdRight);
+    final side = isRight ? 'LADO DERECHO' : 'LADO IZQUIERDO';
+    _caption(canvas, _p(500, 58), side);
+
+    final centre = _p(470, 310);
+    final outerRadius = _d(190);
+    final pcdRadius = _d(144);
+    canvas.drawCircle(centre, outerRadius, _fill(palette.fill));
+    canvas.drawCircle(centre, outerRadius, _stroke(palette.ink, 1.8));
+    canvas.drawCircle(centre, _d(51), _fill(palette.fillDeep));
+    canvas.drawCircle(centre, _d(51), _stroke(palette.ink, 1.6));
+    canvas.drawCircle(centre, _d(17), _fill(palette.paper));
+    canvas.drawCircle(centre, _d(17), _stroke(palette.ink, 1.4));
+
+    final pcdFocus =
+        math.max(_focus(HubGuidePart.pcdLeft), _focus(HubGuidePart.pcdRight));
+    final holeFocus = _focus(HubGuidePart.spokeHoleDiameter);
+    final pcdPaint = _stroke(
+        _mix(palette.inkMuted, palette.accent, pcdFocus), 1.2 + pcdFocus);
+    _dashedCircle(canvas, centre, pcdRadius, pcdPaint);
+
+    const displayHoleCount = 16;
+    Offset? focusedHole;
+    for (var i = 0; i < displayHoleCount; i++) {
+      final angle = -math.pi / 2 + 2 * math.pi * i / displayHoleCount;
+      final hole = Offset(centre.dx + pcdRadius * math.cos(angle),
+          centre.dy + pcdRadius * math.sin(angle));
+      final chosen = i == 2;
+      final focus = chosen ? holeFocus : pcdFocus;
+      canvas.drawCircle(hole, _d(8),
+          _fill(_mix(palette.paper, palette.accentContainer, focus)));
+      canvas.drawCircle(hole, _d(8),
+          _stroke(_mix(palette.ink, palette.accent, focus), 1.2 + focus));
+      if (chosen) focusedHole = hole;
+    }
+
+    final flangeRect = Rect.fromCircle(center: centre, radius: outerRadius);
+    _register(
+        isRight ? HubGuidePart.pcdRight : HubGuidePart.pcdLeft, flangeRect);
+    _register(HubGuidePart.spokeHoleDiameter, flangeRect);
+
+    if (pcdFocus > 0) {
+      const angle = -math.pi / 4;
+      final first = Offset(centre.dx + pcdRadius * math.cos(angle),
+          centre.dy + pcdRadius * math.sin(angle));
+      final second = Offset(centre.dx - pcdRadius * math.cos(angle),
+          centre.dy - pcdRadius * math.sin(angle));
+      _dimension(
+        canvas,
+        second,
+        first,
+        _compact ? 'Ø círculo' : 'Diámetro del círculo de hoyos',
+        isRight ? HubGuidePart.pcdRight : HubGuidePart.pcdLeft,
+        labelOffset: const Offset(40, -28),
+      );
+    } else if (holeFocus > 0 && focusedHole != null) {
+      _paintHoleDetail(canvas, focusedHole);
+    }
+
+    _caption(canvas, _p(470, 556), 'VISTA FRONTAL DEL LADO DE LOS RAYOS');
+  }
+
+  void _paintHoleDetail(Canvas canvas, Offset source) {
+    final detailCentre = _p(795, 260);
+    final radius = _d(58);
+    _dashedLine(canvas, source, detailCentre + Offset(-radius, 0),
+        _stroke(palette.inkMuted, 1));
+    canvas.drawCircle(detailCentre, radius, _fill(palette.paper));
+    canvas.drawCircle(detailCentre, radius, _stroke(palette.accent, 2));
+    _dimension(
+      canvas,
+      detailCentre - Offset(radius, 0),
+      detailCentre + Offset(radius, 0),
+      _compact ? 'Ø' : 'Ø del agujero',
+      HubGuidePart.spokeHoleDiameter,
+      labelOffset: const Offset(0, -36),
+    );
+    _register(HubGuidePart.spokeHoleDiameter,
+        Rect.fromCircle(center: detailCentre, radius: radius));
+  }
+
+  void _dashedCircle(Canvas canvas, Offset centre, double radius, Paint paint) {
+    final path = Path()
+      ..addOval(Rect.fromCircle(center: centre, radius: radius));
+    for (final metric in path.computeMetrics()) {
+      var cursor = 0.0;
+      while (cursor < metric.length) {
+        final end = math.min(cursor + _d(10), metric.length);
+        canvas.drawPath(metric.extractPath(cursor, end), paint);
+        cursor += _d(17);
+      }
+    }
+  }
+
+  void _extension(Canvas canvas, Offset from, Offset to) {
+    canvas.drawLine(
+        from, to, _stroke(palette.inkMuted.withValues(alpha: 0.72), 1));
+  }
+
+  void _dimension(
+      Canvas canvas, Offset start, Offset end, String text, HubGuidePart part,
+      {Offset labelOffset = Offset.zero}) {
+    final paint = _stroke(palette.accent, 1.8);
+    canvas.drawLine(start, end, paint);
+    _arrow(canvas, start, end, palette.accent);
+    _arrow(canvas, end, start, palette.accent);
+    final middle = Offset((start.dx + end.dx) / 2, (start.dy + end.dy) / 2) +
+        Offset(_d(labelOffset.dx), _d(labelOffset.dy));
+    final labelRect = _label(canvas, middle, text, active: true);
+    _register(part, Rect.fromPoints(start, end).expandToInclude(labelRect));
+  }
+
+  void _arrow(Canvas canvas, Offset tip, Offset from, Color color) {
+    final vector = tip - from;
+    if (vector.distance == 0) return;
+    final unit = vector / vector.distance;
+    final normal = Offset(-unit.dy, unit.dx);
+    final length = _d(13);
+    final width = _d(4.5);
+    final path = Path()
+      ..moveTo(tip.dx, tip.dy)
+      ..lineTo(tip.dx - unit.dx * length + normal.dx * width,
+          tip.dy - unit.dy * length + normal.dy * width)
+      ..lineTo(tip.dx - unit.dx * length - normal.dx * width,
+          tip.dy - unit.dy * length - normal.dy * width)
+      ..close();
+    canvas.drawPath(path, _fill(color));
+  }
+
+  void _callout(Canvas canvas, Offset source, Offset labelAt, String text,
+      HubGuidePart part) {
+    final elbow = Offset(labelAt.dx, source.dy);
+    final paint = _stroke(palette.accent, 1.5);
+    canvas.drawCircle(source, _d(5), _fill(palette.accent));
+    canvas.drawLine(source, elbow, paint);
+    canvas.drawLine(elbow, labelAt, paint);
+    final labelRect = _label(canvas, labelAt, text, active: true);
+    _register(
+        part, Rect.fromPoints(source, labelAt).expandToInclude(labelRect));
+  }
+
+  void _status(Canvas canvas, String text) {
+    _label(canvas, _p(500, 118), text, active: true);
+  }
+
+  Rect _label(Canvas canvas, Offset centre, String text,
+      {required bool active}) {
+    final fontSize = _compact ? 10.5 : 13.5;
+    final painter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: labelStyle.copyWith(
+          fontSize: fontSize,
+          height: 1.1,
+          fontWeight: FontWeight.w600,
+          color: active ? palette.onAccentContainer : palette.inkMuted,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout();
+    final horizontal = _d(_compact ? 14 : 18);
+    final vertical = _d(_compact ? 8 : 10);
+    final rect = Rect.fromCenter(
+      center: centre,
+      width: painter.width + horizontal * 2,
+      height: painter.height + vertical * 2,
+    );
+    final pill =
+        RRect.fromRectAndRadius(rect, Radius.circular(rect.height / 2));
+    canvas.drawRRect(
+        pill,
+        _fill(active
+            ? palette.accentContainer
+            : palette.fill.withValues(alpha: 0.9)));
+    if (active) canvas.drawRRect(pill, _stroke(palette.accent, 1.1));
+    painter.paint(
+        canvas,
+        Offset(rect.center.dx - painter.width / 2,
+            rect.center.dy - painter.height / 2));
+    return rect;
+  }
+
+  void _caption(Canvas canvas, Offset at, String text,
+      {Alignment align = Alignment.center}) {
+    final painter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: labelStyle.copyWith(
+          fontSize: _compact ? 9.5 : 11,
+          fontWeight: FontWeight.w600,
+          letterSpacing: _compact ? 0.2 : 0.5,
+          color: palette.inkMuted,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout();
+    final x = switch (align) {
+      Alignment.centerLeft => at.dx,
+      Alignment.centerRight => at.dx - painter.width,
+      _ => at.dx - painter.width / 2,
+    };
+    painter.paint(canvas, Offset(x, at.dy - painter.height / 2));
   }
 
   @override
   bool shouldRepaint(_HubGuidePainter old) =>
       old.current != current ||
-      old.previous != previous ||
       old.progress != progress ||
       old.spokeHoleCount != spokeHoleCount ||
+      old.configuration != configuration ||
       old.palette != palette ||
       old.labelStyle != labelStyle;
 }
@@ -816,6 +1214,7 @@ class HubMeasureGuidePanel extends StatelessWidget {
     required this.availableKeys,
     required this.onSelect,
     this.spokeHoleCount,
+    this.configuration = const HubGuideConfiguration(),
     this.onExpand,
     this.showChips = true,
   });
@@ -829,6 +1228,7 @@ class HubMeasureGuidePanel extends StatelessWidget {
   final List<String> availableKeys;
   final ValueChanged<String> onSelect;
   final int? spokeHoleCount;
+  final HubGuideConfiguration configuration;
   final VoidCallback? onExpand;
 
   /// The list of measures to jump to; the sidebar leaves it to the dialog.
@@ -855,6 +1255,7 @@ class HubMeasureGuidePanel extends StatelessWidget {
             child: HubMeasureGuide(
               highlightedKey: key,
               spokeHoleCount: spokeHoleCount,
+              configuration: configuration,
               onFieldTap: onSelect,
             ),
           ),
@@ -927,6 +1328,7 @@ Future<void> showHubMeasureGuideDialog(
   required String? Function(String key) helperFor,
   required List<String> availableKeys,
   int? spokeHoleCount,
+  HubGuideConfiguration configuration = const HubGuideConfiguration(),
 }) {
   return showDialog<void>(
     context: context,
@@ -950,8 +1352,10 @@ Future<void> showHubMeasureGuideDialog(
                         children: [
                           Expanded(
                             child: Text('Dónde se mide cada dato de la maza',
-                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.w700)),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w700)),
                           ),
                           IconButton(
                             tooltip: 'Cerrar',
@@ -967,6 +1371,7 @@ Future<void> showHubMeasureGuideDialog(
                         helperFor: helperFor,
                         availableKeys: availableKeys,
                         spokeHoleCount: spokeHoleCount,
+                        configuration: configuration,
                         onSelect: (key) => setState(() => selected = key),
                       ),
                     ],

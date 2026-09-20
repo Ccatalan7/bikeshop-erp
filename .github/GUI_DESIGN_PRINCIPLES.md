@@ -80,7 +80,7 @@ Tres reglas que generan el resto:
   midió, e invita a aprobar por umbral. Se dice en palabras lo que el sistema
   honestamente sabe.
 
-**Fichas técnicas (2026-09-17).** El dueño abrió la ficha de una maza y no
+**Fichas técnicas (2026-09-17; corregido 2026-09-19).** El dueño abrió la ficha de una maza y no
 la entendió: «PCD brida izquierda», «Centro a brida izquierda», «Completa
 primero Fuente de la declaración, Posición de la maza». Las palabras de una
 ficha viven en tres lugares y los tres se corrigen juntos: el rótulo del campo
@@ -89,13 +89,39 @@ tienda, el taller y los mensajes «X: falta confirmar…» que arma el SQL), la
 ayuda es `spec_templates.form_contract->'helpers'` de esa plantilla, y la frase
 de espera la arma el formulario (`_specPrerequisiteSentence`: «Se habilita
 cuando completes A y B», no «Completa primero A, B»). Una medida se explica
-como la mide el mecánico, con los valores usuales de ejemplo («de tuerca a
-tuerca: 100 delante, 135 atrás con cierre rápido»), y cuando el dato es una
+como la mide el mecánico, con los valores usuales de ejemplo («entre los
+apoyos: 100 delante, 135 atrás con cierre rápido»), y cuando el dato es una
 cota, el formulario la muestra en un dibujo técnico que se enciende al tocar
-el campo (`HubMeasureGuide`, ver `docs/development/AGENT_VISUAL_WORKFLOW.md`
-no aplica: es un componente de la ficha, no un frame de Design). Cada familia
+el campo (`HubMeasureGuide`). El contrato de
+`docs/development/AGENT_VISUAL_WORKFLOW.md` también rige ese componente: la
+guía general y DesignSync siguen siendo dueños de sus valores visuales. El
+dibujo técnico es una proyección de la configuración ya declarada, no una
+maza genérica que inventa disco, núcleo o rodamientos. Si falta el prerrequisito
+se omite esa pieza; si la posición la hace imposible se bloquea el dato antes
+de dibujarlo. La cantidad de hoyos sólo se representa como exacta cuando está
+declarada, y un dato de empaque no se ilumina sobre una geometría que no lo
+representa. El dibujo enseña una sola medición protagonista: la vista lateral
+sirve para anchos, centros, eje y componentes; PCD y diámetro de agujero cambian
+a una vista frontal ampliada del lado donde entran los rayos. En compacto se elimina cualquier
+rótulo secundario que invada esa medición. El total de agujeros pertenece a la
+maza completa y nunca se simula como esa misma cantidad en un solo lado; el
+tipo de sujeción declarado también cambia los extremos del eje. La regresión
+de interacción toca las piezas dibujadas, no sólo sus chips: cuando sus zonas
+se superponen, gana la pieza visible más específica y no el rectángulo grande
+del eje que pasa por detrás. La regresión mínima prueba al menos
+delantera/trasera, 6 pernos /
+Centerlock, cassette/rueda libre y dato ausente. Cada familia
 con cotas —llanta, rayo, biela, eje— merece el mismo trato antes de darse por
 «llenable».
+
+La corrección del 19 de septiembre retira también `brida`: cambiar una sigla
+por otra palabra que el taller chileno tampoco usa no vuelve clara la ficha.
+La etiqueta parte con castellano local y deja el nombre OEM o la sigla en la
+ayuda: `Diámetro del círculo de hoyos izquierdo` y luego «puede aparecer como
+PCD»; `Alcance del manubrio` en vez de `Reach`; `Tubo de asiento` en vez de
+`tija`. El vocabulario, sus fuentes chilenas y el límite entre traducción de UI
+y tokens mecánicos están en
+[`../docs/architecture/chilean-bicycle-language.md`](../docs/architecture/chilean-bicycle-language.md).
 
 ### Un estado se deriva del PORQUÉ, no de un número
 

@@ -1134,8 +1134,8 @@ void main() {
         productSpecs: {'spoke_length_mm': 263, 'spoke_gauge': '14G'},
       );
       expect(assessment.level, ProductCompatibilityLevel.caution);
-      expect(assessment.detail, contains('ERD y offset'));
-      expect(assessment.detail, contains('bridas por lado'));
+      expect(assessment.detail, contains('ERD y desplazamiento del aro'));
+      expect(assessment.detail, contains('círculos de hoyos de la maza'));
       expect(assessment.detail, contains('patrón y niple'));
       expect(assessment.detail, contains('delantera 32H'));
     });
@@ -1447,7 +1447,8 @@ void main() {
         },
       );
       expect(matches.level, ProductCompatibilityLevel.caution);
-      expect(matches.detail, contains('aro 29" / 700c para neumático 49.5-55.9 mm'));
+      expect(matches.detail,
+          contains('aro 29" / 700c para neumático 49.5-55.9 mm'));
       expect(matches.detail, contains('válvula Presta'));
 
       final other = await _assessProduct(
@@ -1610,7 +1611,10 @@ void main() {
       const teeth = [10, 12, 14, 16, 18, 21, 24, 28, 33, 39, 45, 51];
       final assessment = await _assessProduct(
         technicalFamily: 'cassette',
-        bikeTechnicalValues: {'drivetrainConfig': '1x12', 'largestCogTeeth': 51},
+        bikeTechnicalValues: {
+          'drivetrainConfig': '1x12',
+          'largestCogTeeth': 51
+        },
         productSpecs: {
           'cog_sequence': _rows([
             for (var i = 0; i < teeth.length; i++)
@@ -1662,7 +1666,10 @@ void main() {
       ]);
       final fits = await _assessProduct(
         technicalFamily: 'rear_derailleur',
-        bikeTechnicalValues: {'drivetrainConfig': '1x12', 'largestCogTeeth': 51},
+        bikeTechnicalValues: {
+          'drivetrainConfig': '1x12',
+          'largestCogTeeth': 51
+        },
         productSpecs: {'rear_derailleur_application_configurations': rows},
       );
       expect(fits.level, ProductCompatibilityLevel.caution);
@@ -1673,7 +1680,10 @@ void main() {
 
       final tooSmall = await _assessProduct(
         technicalFamily: 'rear_derailleur',
-        bikeTechnicalValues: {'drivetrainConfig': '1x12', 'largestCogTeeth': 52},
+        bikeTechnicalValues: {
+          'drivetrainConfig': '1x12',
+          'largestCogTeeth': 52
+        },
         productSpecs: {'rear_derailleur_application_configurations': rows},
       );
       expect(tooSmall.level, ProductCompatibilityLevel.incompatible);
@@ -1688,7 +1698,10 @@ void main() {
 
       final noFit = await _assessProduct(
         technicalFamily: 'rear_derailleur',
-        bikeTechnicalValues: {'drivetrainConfig': '2x12', 'largestCogTeeth': 46},
+        bikeTechnicalValues: {
+          'drivetrainConfig': '2x12',
+          'largestCogTeeth': 46
+        },
         productSpecs: {'rear_derailleur_application_configurations': rows},
       );
       expect(noFit.level, ProductCompatibilityLevel.caution);
@@ -1705,7 +1718,8 @@ void main() {
           'shiftActuationFamily': 'SRAM Eagle',
         },
         productSpecs: {
-          'rear_derailleur_actuation_ratio_declaration': 'Shimano Dynasys 11/12v',
+          'rear_derailleur_actuation_ratio_declaration':
+              'Shimano Dynasys 11/12v',
         },
       );
       expect(ratio.level, ProductCompatibilityLevel.incompatible);
@@ -1866,7 +1880,8 @@ void main() {
       expect(assessment.detail, contains('friccion/universal'));
     });
 
-    test('crankset spindle from the junction rows and its required bottom bracket',
+    test(
+        'crankset spindle from the junction rows and its required bottom bracket',
         () async {
       final specs = <String, dynamic>{
         'crank_axle_interface_declarations': _rows([
@@ -2130,7 +2145,10 @@ void main() {
       };
       final matches = await _assessProduct(
         technicalFamily: 'brake_caliper',
-        bikeTechnicalValues: {'brakeType': 'hydraulic_disc', 'frontRotorSizeMm': 160},
+        bikeTechnicalValues: {
+          'brakeType': 'hydraulic_disc',
+          'frontRotorSizeMm': 160
+        },
         productSpecs: specs,
       );
       expect(matches.level, ProductCompatibilityLevel.caution);
@@ -2141,7 +2159,10 @@ void main() {
 
       final other = await _assessProduct(
         technicalFamily: 'brake_caliper',
-        bikeTechnicalValues: {'brakeType': 'hydraulic_disc', 'frontRotorSizeMm': 180},
+        bikeTechnicalValues: {
+          'brakeType': 'hydraulic_disc',
+          'frontRotorSizeMm': 180
+        },
         productSpecs: specs,
       );
       expect(other.level, ProductCompatibilityLevel.caution);

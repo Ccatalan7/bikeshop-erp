@@ -864,8 +864,7 @@
             {
               "key": "drive_interface_present",
               "label": "Esta pieza recibe la transmisión",
-              "type": "boolean",
-              "required": true
+              "type": "boolean"
             },
             {
               "key": "evidence_source",
@@ -1885,13 +1884,9 @@
               [
                 {
                   "field": "hub_package_position",
-                  "operator": "in",
+                  "operator": "eq",
                   "value_type": "token",
-                  "value": [
-                    "Delantera",
-                    "Trasera",
-                    "Universal"
-                  ]
+                  "value": "Trasera"
                 }
               ]
             ]
@@ -1902,13 +1897,9 @@
               [
                 {
                   "field": "hub_package_position",
-                  "operator": "in",
+                  "operator": "eq",
                   "value_type": "token",
-                  "value": [
-                    "Delantera",
-                    "Trasera",
-                    "Universal"
-                  ]
+                  "value": "Trasera"
                 },
                 {
                   "field": "hub_drive_receiver_present",
@@ -1925,13 +1916,9 @@
               [
                 {
                   "field": "hub_package_position",
-                  "operator": "in",
+                  "operator": "eq",
                   "value_type": "token",
-                  "value": [
-                    "Delantera",
-                    "Trasera",
-                    "Universal"
-                  ]
+                  "value": "Trasera"
                 },
                 {
                   "field": "hub_drive_receiver_present",
@@ -2122,13 +2109,9 @@
               [
                 {
                   "field": "hub_package_position",
-                  "operator": "in",
+                  "operator": "eq",
                   "value_type": "token",
-                  "value": [
-                    "Delantera",
-                    "Trasera",
-                    "Universal"
-                  ]
+                  "value": "Trasera"
                 }
               ]
             ]
@@ -2139,13 +2122,9 @@
               [
                 {
                   "field": "hub_package_position",
-                  "operator": "in",
+                  "operator": "eq",
                   "value_type": "token",
-                  "value": [
-                    "Delantera",
-                    "Trasera",
-                    "Universal"
-                  ]
+                  "value": "Trasera"
                 },
                 {
                   "field": "hub_drive_receiver_present",
@@ -2162,13 +2141,9 @@
               [
                 {
                   "field": "hub_package_position",
-                  "operator": "in",
+                  "operator": "eq",
                   "value_type": "token",
-                  "value": [
-                    "Delantera",
-                    "Trasera",
-                    "Universal"
-                  ]
+                  "value": "Trasera"
                 },
                 {
                   "field": "hub_drive_receiver_present",
@@ -2305,10 +2280,29 @@
           "fields": {
             "hub_package_pieces": {
               "allowed_when": {
+                "drive_interface_present": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "piece_position",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Trasera"
+                      }
+                    ]
+                  ]
+                },
                 "drive_receiver_kind": {
                   "kind": "when",
                   "rows": [
                     [
+                      {
+                        "field": "piece_position",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Trasera"
+                      },
                       {
                         "field": "drive_interface_present",
                         "operator": "eq",
@@ -2322,6 +2316,12 @@
                   "kind": "when",
                   "rows": [
                     [
+                      {
+                        "field": "piece_position",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Trasera"
+                      },
                       {
                         "field": "drive_interface_present",
                         "operator": "eq",
@@ -2378,10 +2378,29 @@
                 }
               },
               "required_when": {
+                "drive_interface_present": {
+                  "kind": "when",
+                  "rows": [
+                    [
+                      {
+                        "field": "piece_position",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Trasera"
+                      }
+                    ]
+                  ]
+                },
                 "drive_receiver_kind": {
                   "kind": "when",
                   "rows": [
                     [
+                      {
+                        "field": "piece_position",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Trasera"
+                      },
                       {
                         "field": "drive_interface_present",
                         "operator": "eq",
@@ -2395,6 +2414,12 @@
                   "kind": "when",
                   "rows": [
                     [
+                      {
+                        "field": "piece_position",
+                        "operator": "eq",
+                        "value_type": "token",
+                        "value": "Trasera"
+                      },
                       {
                         "field": "drive_interface_present",
                         "operator": "eq",
@@ -4737,6 +4762,11 @@
     "https://www.parktool.com/en-us/product/thru-axle-tap-tap-20-2",
     "https://www.profileracing.com/profiles-tech-tip-29-mind-the-gap-converting-your-axle-from-14mm-to-38/",
     "https://www.parktool.com/en-us/blog/repair-help/wheel-tension-measurement",
+    "https://www.parktool.com/en-us/blog/repair-help/hub-overhaul-and-adjustment",
+    "https://www.parktool.com/en-us/blog/repair-help/determining-cassette-freewheel-type",
+    "https://www.parktool.com/en-us/blog/repair-help/determining-spoke-length-for-wheel-building",
+    "https://sheldonbrown.com/free-k7.html",
+    "https://www.sheldonbrown.com/spoke-length.html",
     "https://www.ryde.nl/andra-29-r/",
     "https://www.dtswiss.com/en/components/rims-road/endurance/r-470",
     "https://www.tufo.com/en/tubular/"

@@ -2188,5 +2188,21 @@
    }
   },
   "note": "La exportación de bindings lista 3 040 filas para 1 520 fichas activas (cada ficha aparece dos veces en read-bindings.sql); los porcentajes no cambian: 23,2 % → 25,3 % de los campos del contrato con dato."
+ },
+ "codex_hub_contract_audit_2026_09_19": {
+  "scope": "Chat de Claude, lecturas de producción, contrato actual, código y variantes renderizadas de la guía de mazas",
+  "finding": "El texto decía que el receptor de transmisión era sólo trasero, pero las condiciones escalares y de filas permitían declararlo en una maza delantera; la guía dibujaba siempre una maza trasera con disco de 6 pernos, cassette y rodamientos sellados.",
+  "live_invalid_scalar_products": 0,
+  "live_invalid_pair_rows": 0,
+  "fix_status": "production_deployed_verified",
+  "migration": "supabase/migrations/20260919120000_hub_drive_receiver_rear_only.sql",
+  "migration_sha256": "ff59c36c4a3513f198e77420338d79653f0977caf53934bc79d5ecf6d7bad102",
+  "deployed_at_utc": "2026-09-19T19:13:33Z",
+  "production_migration_stamp": "APPLIED",
+  "client_regressions": 13,
+  "production_predeploy_verifier": "failed_as_expected",
+  "production_postdeploy_verifier": "PASS",
+  "local_migration_and_verifier": "PASS",
+  "overall_percent": null
  }
 }

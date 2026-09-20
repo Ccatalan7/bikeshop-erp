@@ -527,7 +527,7 @@ const List<_StructuredDiagnosisComponentSpec>
   _StructuredDiagnosisComponentSpec(
     systemKey: 'front_wheel',
     componentKey: 'tire',
-    label: 'Cubierta',
+    label: 'Neumático',
     icon: Icons.trip_origin,
   ),
   _StructuredDiagnosisComponentSpec(
@@ -551,7 +551,7 @@ const List<_StructuredDiagnosisComponentSpec>
   _StructuredDiagnosisComponentSpec(
     systemKey: 'rear_wheel',
     componentKey: 'tire',
-    label: 'Cubierta',
+    label: 'Neumático',
     icon: Icons.trip_origin,
   ),
   _StructuredDiagnosisComponentSpec(
@@ -9845,7 +9845,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     }
 
     final tire = _describeWheelComponentSentence(
-      'La cubierta',
+      'El neumático',
       sheet.tireCondition,
     );
     if (tire != null) {
@@ -10147,7 +10147,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
 
     if (sheet.symptomKeys.contains('spongy_lever')) {
       recommendations.add(
-          'revisar el sistema del $brakeLabel para recuperar firmeza en la maneta');
+          'revisar el sistema del $brakeLabel para recuperar firmeza en la manilla');
     }
     if (sheet.symptomKeys.contains('low_power')) {
       recommendations.add(
@@ -10164,10 +10164,10 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     final recommendations = <String>{};
 
     if (sheet.tireCondition == 'worn') {
-      recommendations.add('evaluar cambio de cubierta en la $wheelLabel');
+      recommendations.add('evaluar cambio de neumático en la $wheelLabel');
     }
     if (sheet.tireCondition == 'damaged' || sheet.tireCondition == 'replace') {
-      recommendations.add('reemplazar la cubierta de la $wheelLabel');
+      recommendations.add('reemplazar el neumático de la $wheelLabel');
     }
 
     if (sheet.rimCondition == 'attention' || sheet.rimCondition == 'bent') {
@@ -12801,7 +12801,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
             _buildDiagnosisSelectField(
               keySuffix:
                   'diag_${systemKey}_tire_${currentTab.tabId}_${wheelSheet.tireCondition ?? 'empty'}',
-              label: 'Estado cubierta',
+              label: 'Estado del neumático',
               icon: Icons.trip_origin,
               value: wheelSheet.tireCondition,
               options: _kWheelTireConditionOptions,
