@@ -1129,7 +1129,13 @@ disposición: un concepto «adicional» no cuelga de una línea de la semana).
 valiendo, un gasto sin proveedor es legítimo.
 
 Lo que queda sin contraparte después del relleno son gastos que el dueño
-escribió a mano sin decir a quién: no se inventa.
+escribió a mano sin decir a quién: no se inventa. **Decisión del dueño
+(2026-09-19): los seis que quedan se dejan así** —cuatro «Gastos Varios», uno
+de «Costo de Ventas» y un sueldo de diciembre de 2025 cargado a la cuenta
+madre `6101`, que es de todos—. No son deuda técnica ni un relleno pendiente:
+son gastos cuya contraparte no consta, y el ERP lo dice en vez de inventarla.
+Ninguna guardia los marca: el verificador de `20260919230000` sólo exige
+nombre cuando la línea carga la cuenta de salario de un trabajador.
 
 ## Una suite que no corre completa esconde tres cosas distintas (2026-09-19)
 
