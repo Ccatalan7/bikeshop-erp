@@ -1,20 +1,26 @@
--- SUPERSEDED: nunca se desplegó. Su contenido, con el contacto de la foto de
--- la tienda limitado a campos públicos, se desplegó como
--- 20260923200000_public_checkout_capabilities. No aplicar este archivo.
+-- El checkout vuelve a ofrecer medios de pago.
 --
--- Make public checkout payment availability a tenant-scoped server contract
--- and freeze the storefront identity used by customer order artifacts.
+-- La tienda publicada llama `get_public_checkout_capabilities` para saber qué
+-- medios de pago mostrar, pero esa función venía en
+-- `20260728220000_harden_public_checkout_capabilities`, que nunca se desplegó.
+-- Cada visita al checkout recibía 404 y la página decía «No pudimos verificar
+-- los medios de pago disponibles»: nadie podía pagar en la web. El último
+-- pedido web es del 19 de julio (diagnóstico web del 2026-09-23).
 --
--- Forward behavior:
---   * public callers see only method availability and safe reason codes;
---   * a first checkout attempt fails before order insertion when its selected
---     method is not effectively configured;
---   * an exact idempotent replay remains recoverable if configuration changes;
---   * new orders receive one immutable server-derived storefront snapshot.
+-- Es el contenido de esa migración con un cambio, que encontró la revisión de
+-- Codex: la identidad de la tienda que se congela con cada pedido y ve quien
+-- tiene el enlace del pedido sólo toma contacto de campos públicos
+-- (`contact_email`/`contact_phone` del sitio, `public_email`/`support_phone`
+-- de la empresa). Antes caía al correo y teléfono internos de la empresa y al
+-- correo del dueño del tenant.
 --
--- Recovery:
---   This migration is additive. The prior function definitions can be restored
---   without deleting snapshot rows. Snapshot rows deliberately reject mutation.
+-- Frente a los cuerpos de producción, crear pedido sólo agrega la comprobación
+-- del medio de pago en el primer intento y la foto de la tienda; leer pedido
+-- por token sólo agrega esa foto (o «Tienda» en los pedidos anteriores).
+--
+-- Recuperación: las funciones anteriores se pueden restaurar sin borrar las
+-- fotos; las fotos rechazan cambios y borrados, igual que las otras doce
+-- tablas que referencian `online_orders` con RESTRICT.
 
 begin;
 
@@ -238,9 +244,7 @@ declare
   company_legal_name_value text;
   company_fantasy_name_value text;
   company_public_email_value text;
-  company_email_value text;
   company_support_phone_value text;
-  company_phone_value text;
   store_name_value text;
   business_name_value text;
   store_tagline_value text;
@@ -268,8 +272,7 @@ begin
   select
     tenant.id,
     nullif(btrim(tenant.shop_name), '') as shop_name,
-    nullif(btrim(tenant.logo_url), '') as logo_url,
-    nullif(btrim(tenant.owner_email), '') as owner_email
+    nullif(btrim(tenant.logo_url), '') as logo_url
   into strict tenant_row
   from public.tenants tenant
   where tenant.id = p_tenant_id
@@ -280,26 +283,20 @@ begin
     selected_company.legal_name,
     selected_company.fantasy_name,
     selected_company.public_email,
-    selected_company.email,
-    selected_company.support_phone,
-    selected_company.phone
+    selected_company.support_phone
   into
     company_name_value,
     company_legal_name_value,
     company_fantasy_name_value,
     company_public_email_value,
-    company_email_value,
-    company_support_phone_value,
-    company_phone_value
+    company_support_phone_value
   from (
     select
       nullif(btrim(company.name), '') as name,
       nullif(btrim(company.legal_name), '') as legal_name,
       nullif(btrim(company.fantasy_name), '') as fantasy_name,
       nullif(btrim(company.public_email), '') as public_email,
-      nullif(btrim(company.email), '') as email,
-      nullif(btrim(company.support_phone), '') as support_phone,
-      nullif(btrim(company.phone), '') as phone
+      nullif(btrim(company.support_phone), '') as support_phone
     from public.companies company
     where company.tenant_id = p_tenant_id
     order by company.is_default desc nulls last, company.created_at, company.id
@@ -365,17 +362,16 @@ begin
   if effective_logo_url_value !~* '^https://[^[:space:]]+$' then
     effective_logo_url_value := null;
   end if;
+  -- Sólo campos que la tienda ya publica: quien tiene el enlace del pedido no
+  -- ve el correo ni el teléfono internos de la empresa ni el correo del dueño.
   support_email_value := left(coalesce(
     contact_email_value,
     company_public_email_value,
-    company_email_value,
-    tenant_row.owner_email,
     ''
   ), 254);
   support_phone_value := left(coalesce(
     contact_phone_value,
     company_support_phone_value,
-    company_phone_value,
     ''
   ), 60);
 
