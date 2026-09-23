@@ -8,6 +8,7 @@ import 'package:vinabike_erp/modules/website/models/website_catalog_presentation
 import 'package:vinabike_erp/modules/website/models/website_seo_settings_aliases.dart';
 import 'package:vinabike_erp/public_store/models/public_commerce_product_projection.dart';
 import 'package:vinabike_erp/public_store/models/public_product_seo_copy.dart';
+import 'package:vinabike_erp/shared/models/public_product_visibility_policy.dart';
 
 /// Generates static HTML "SEO snapshots" for product routes.
 ///
@@ -235,12 +236,22 @@ void main(List<String> args) async {
   final presentationRegistry = WebsiteCatalogPresentationRegistry.decode(
     settings[websiteCatalogPresentationsSettingKey],
   );
+  // Las fichas existen con y sin stock; catálogo y categorías listan lo mismo
+  // que la tienda según `product_visibility_stock_policy`.
+  final listingStockPolicy = PublicCatalogStockPolicyLabel.fromStorageValue(
+    settings[PublicProductVisibilityPolicy.stockPolicyKey],
+  );
+  final listingProducts = products
+      .where(
+        (product) => isSeoListingStockEligible(product, listingStockPolicy),
+      )
+      .toList(growable: false);
   final catalogPresentation = presentationRegistry.forCatalogRoot(
         WebsiteCatalogRoot.products,
       ) ??
       WebsiteCatalogPresentation.catalogRoot(WebsiteCatalogRoot.products);
   final catalogIndexable =
-      catalogPresentation.allowIndexing && products.isNotEmpty;
+      catalogPresentation.allowIndexing && listingProducts.isNotEmpty;
   // `/servicios` es en la tienda el catálogo de servicios del taller, no una
   // página del editor. Sin esto el generador sólo la publicaba si existía una
   // página «servicios» con bloques, y si no escribía una página «no
@@ -253,7 +264,7 @@ void main(List<String> args) async {
   final servicesCatalogIndexable =
       servicesPresentation.allowIndexing && services.isNotEmpty;
   final categories = buildCanonicalCategorySeoProjections(
-    products: products,
+    products: listingProducts,
     activeCategories: activeCategoryRows,
     presentationRegistry: presentationRegistry,
     storeUrl: storeUrl,
@@ -508,7 +519,7 @@ void main(List<String> args) async {
       ogImageUrl: catalogPresentation.socialImageUrl,
       allowIndexing: catalogIndexable,
       jsonLd: _buildCatalogJsonLd(
-        products: products,
+        products: listingProducts,
         storeUrl: storeUrl,
         storeName: storeName,
         catalogUrl: catalogUrl,
@@ -516,7 +527,7 @@ void main(List<String> args) async {
         resolvedBrandNamesById: resolvedBrandNamesById,
       ),
       fallbackHtml: _buildCatalogFallbackHtml(
-        products: products,
+        products: listingProducts,
         title: catalogTitle,
         description: catalogDescription,
       ),
@@ -2856,7 +2867,10 @@ Future<Map<String, int>> _fetchPublicProductAvailability({
       body: {
         'p_tenant_id': tenantId,
         'p_product_ids': productIds,
-        'p_only_in_stock': true,
+        // Una ficha agotada conserva su snapshot (con OutOfStock) y su lugar
+        // en el sitemap; los listados aplican aparte el ajuste de stock del
+        // sitio (20260923210000).
+        'p_only_in_stock': false,
         'p_sort_by': 'name',
         'p_limit': pageSize,
         'p_offset': offset,
@@ -3711,6 +3725,28 @@ String _buildCatalogFallbackHtml({
     </ul>
     <p><a href="/productos">Ver catálogo completo</a></p>
   </main>''';
+}
+
+/// Si un producto ya proyectado (con la cantidad pública disponible) aparece
+/// en los listados de la tienda según su ajuste de stock. Mismo criterio que
+/// `PublicProductVisibilityPolicy` usa en la app.
+bool isSeoListingStockEligible(
+  Map<String, dynamic> product,
+  PublicCatalogStockPolicy policy,
+) {
+  if ((product['product_type'] ?? '').toString() == 'service') return true;
+  final tracksStock = product['track_stock'] != false;
+  final quantity = _toInt(product['stock_quantity']) ??
+      _toInt(product['inventory_qty']) ??
+      0;
+  switch (policy) {
+    case PublicCatalogStockPolicy.availableOnly:
+      return !tracksStock || quantity > 0;
+    case PublicCatalogStockPolicy.outOfStockOnly:
+      return tracksStock && quantity <= 0;
+    case PublicCatalogStockPolicy.all:
+      return true;
+  }
 }
 
 /// Escribe `/servicios` como el catálogo de servicios del taller: cada
