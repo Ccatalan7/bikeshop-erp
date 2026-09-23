@@ -6541,18 +6541,24 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                 alignment: Alignment.centerLeft,
                               ),
                               const SizedBox(height: 16),
-                              Text(
-                                storeDescription.isNotEmpty
-                                    ? storeDescription
-                                    : 'Información pública de la tienda.',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(
-                                      color: Colors.white70,
-                                    ),
-                              ),
-                              const SizedBox(height: 24),
+                              // El texto de ayuda sólo se ve en el editor: un
+                              // cliente no debe leer «Información pública de
+                              // la tienda.» cuando falta la descripción.
+                              if (storeDescription.isNotEmpty ||
+                                  isEditMode) ...[
+                                Text(
+                                  storeDescription.isNotEmpty
+                                      ? storeDescription
+                                      : 'Información pública de la tienda.',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(
+                                        color: Colors.white70,
+                                      ),
+                                ),
+                                const SizedBox(height: 24),
+                              ],
                               Wrap(
                                 spacing: 8,
                                 children: [
