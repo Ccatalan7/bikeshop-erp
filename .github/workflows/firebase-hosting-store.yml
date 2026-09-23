@@ -3,6 +3,8 @@ name: Deploy Storefront to Firebase Hosting
 run-name: >-
   ${{ github.event_name == 'workflow_dispatch'
       && format('Storefront publication · {0}', inputs.request_id)
+      || github.event_name == 'schedule'
+      && format('Storefront diario · {0}', github.sha)
       || format('Storefront push · {0}', github.sha) }}
 
 on:
@@ -26,6 +28,12 @@ on:
       - "scripts/releases/storefront_publication_workflow.test.mjs"
       - ".firebaserc"
       - ".github/workflows/firebase-hosting-store.yml"
+  # Guardar en el editor o cambiar stock en el ERP no toca este repositorio,
+  # así que sin esto el HTML, los snapshots y el sitemap que lee Google sólo
+  # cambian con un cambio de código. Cada día a las 05:00 de Chile (08:00
+  # UTC) se reconstruyen con los datos del día.
+  schedule:
+    - cron: "0 8 * * *"
   workflow_dispatch:
     inputs:
       request_id:
@@ -50,7 +58,7 @@ jobs:
     steps:
       - name: Use code-push publication context
         id: push
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || github.event_name == 'schedule'
         run: |
           echo "is_publication=false" >> "$GITHUB_OUTPUT"
           echo "should_run=true" >> "$GITHUB_OUTPUT"
