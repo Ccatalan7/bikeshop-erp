@@ -20,6 +20,7 @@ import 'public_store/theme/public_store_theme.dart';
 import 'public_store/widgets/public_store_bootstrap.dart';
 import 'shared/config/supabase_config.dart';
 import 'shared/services/error_reporting_service.dart';
+import 'shared/services/public_catalog_client.dart';
 import 'shared/services/tenant_detection_service.dart';
 import 'shared/utils/web_url.dart';
 import 'shared/widgets/app_selection_scope.dart';
@@ -145,6 +146,10 @@ Future<void> main() async {
 
     final prefs = await preferencesFuture;
     await supabaseFuture;
+    PublicCatalogClient.configure(
+      url: SupabaseConfig.url,
+      anonKey: SupabaseConfig.anonKey,
+    );
     WebsiteService.setSharedPreferences(prefs);
 
     await _resetLocalStoreDebugStateIfNeeded(prefs);
