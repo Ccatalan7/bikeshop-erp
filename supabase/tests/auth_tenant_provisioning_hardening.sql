@@ -973,6 +973,7 @@ select ok(
         'public.get_public_product_technical_specs(uuid,uuid)'::regprocedure,
         'public.create_public_online_order_with_access(jsonb,jsonb)'::regprocedure,
         'public.get_public_online_order_by_access_token(text)'::regprocedure,
+        'public.get_public_checkout_capabilities(uuid)'::regprocedure,
         'public.get_public_product_tax_classifications(uuid,uuid[])'::regprocedure,
         'public.quote_public_online_shipping(uuid,text,numeric,text)'::regprocedure,
         'public.get_public_store_data(uuid)'::regprocedure,
