@@ -1184,3 +1184,71 @@ Lo que esto **no** resuelve, y conviene decirlo: un bloqueo temporal no es una
 suspensión. Si a alguien se le quita el acceso de verdad, va en los estados
 (`user_profiles.is_active`, `employees.status`, la cuenta de portal), no en
 una fecha que vence sola.
+
+## Un cliente publicado que llama una RPC sin desplegar deja la tienda sin vender (2026-09-23)
+
+La tienda publicada llamaba `get_public_checkout_capabilities` para decidir qué
+medios de pago mostrar. Esa función venía en
+`20260728220000_harden_public_checkout_capabilities`, cuya primera línea decía
+`-- NOT DEPLOYED.` y que nunca se desplegó. PostgREST respondía 404 y el
+checkout decía «No pudimos verificar los medios de pago disponibles»: **nadie
+pudo pagar en la web** y el último pedido web fue del 19 de julio. Nadie lo
+vio en dos meses, porque el error sólo aparecía en el paso de pago y la
+tienda no mide eventos.
+
+- Un archivo `NOT DEPLOYED` que el cliente ya llama no es un borrador: es una
+  caída de producción. Antes de publicar un cliente, cada RPC que agrega se
+  pasa por `migration_status.sh` (o `to_regprocedure` en producción) y tiene
+  que estar `APPLIED`.
+- Tampoco se despliega el archivo viejo tal cual: se compara cada función que
+  reescribe contra `pg_get_functiondef` de producción y contra las
+  migraciones posteriores. Ésta sólo agregaba, pero la revisión de Codex
+  encontró que la foto de la tienda caía al correo del dueño; se desplegó como
+  `20260923200000` y el archivo de julio quedó `SUPERSEDED`.
+- `migration_status.sh` sobre las 721 migraciones desplegables da 118
+  `NOT_APPLIED`. Muchas son antiguas y se aplicaron por otra vía sin stamp, así
+  que **ese número no es una lista de objetos faltantes**: para cada una hay
+  que preguntar por el objeto en producción. Las tres del 28 de julio que tocan
+  la web sí faltaban (checkout, menú del sitio y publicación).
+
+## Permisos por columna cuando el RLS abre la fila a anónimo (2026-09-23)
+
+El RLS decide **qué filas** se ven, nunca **qué columnas**. `products` tenía
+`public_products_select` para `anon` y el grant de tabla por defecto, así que
+cualquiera leía `cost` y `supplier_name` de 1.599 productos con la clave
+pública. Lo que funcionó (`20260923180000`):
+
+- `revoke all on table ... from anon` también retira los grants por columna
+  (INSERT/UPDATE en 97 columnas); se comprobó en local con `has_column_privilege`.
+- `grant select (lista) ... to anon` con **la unión de las listas que pide la
+  tienda más las columnas por las que filtra u ordena**. La lista sale del
+  código y se contrasta con los registros de la API (`edge_logs`, parámetro
+  `select` por rol): un filtro sobre una columna sin grant falla igual que un
+  `select`.
+- Las RPC SECURITY DEFINER, la clave de servicio y los embebidos que no pasan
+  por `anon` no cambian. Las funciones SECURITY INVOKER que anónimo puede
+  ejecutar sí: `search_products` devolvía `p.*` y era otra puerta al costo
+  (`20260923201000`).
+- **`authenticated` no se arregla así**, porque el staff usa el mismo rol y
+  necesita el costo. La rama «publicado» de `products_select` dejaba a
+  cualquier cuenta de cliente (registro abierto con correo o Google) leerlo
+  todo. Se cerró quitando esa rama (`20260923190000`) y haciendo que la
+  tienda lea el catálogo con un cliente anónimo aunque haya sesión
+  (`PublicCatalogClient`).
+- Read-back real: como anónimo por REST (`select=cost` → 42501) y, en
+  producción y sólo lectura, con `set local role authenticated` y los claims
+  de una cuenta de cliente existente (0 filas) y de un usuario del staff (sus
+  productos, con costo).
+
+## La base local se reconstruye a mitad de ronda (2026-09-23)
+
+`ensure_local.sh` rearma el esquema local desde `core_schema.sql` cuando
+cambia el hash de sus entradas, y la base local es compartida entre sesiones y
+worktrees. A mitad de una tanda de pruebas se reconstruyó y borró las
+migraciones candidatas que había aplicado: una prueba que había pasado volvió
+a fallar, y otra dio un «antes» sobre una versión que no era la de producción.
+
+Antes de confiar en un resultado local de «antes y después», se compara
+`md5(prosrc)` de cada función involucrada contra producción. Si difieren, se
+carga en local el cuerpo exacto de producción (`pg_get_functiondef`), se corre
+la prueba —tiene que fallar— y recién entonces se aplica la migración.

@@ -8,6 +8,7 @@ import 'package:vinabike_erp/modules/website/models/website_catalog_presentation
 import 'package:vinabike_erp/modules/website/models/website_seo_settings_aliases.dart';
 import 'package:vinabike_erp/public_store/models/public_commerce_product_projection.dart';
 import 'package:vinabike_erp/public_store/models/public_product_seo_copy.dart';
+import 'package:vinabike_erp/shared/models/public_product_visibility_policy.dart';
 
 /// Generates static HTML "SEO snapshots" for product routes.
 ///
@@ -235,14 +236,35 @@ void main(List<String> args) async {
   final presentationRegistry = WebsiteCatalogPresentationRegistry.decode(
     settings[websiteCatalogPresentationsSettingKey],
   );
+  // Las fichas existen con y sin stock; catálogo y categorías listan lo mismo
+  // que la tienda según `product_visibility_stock_policy`.
+  final listingStockPolicy = PublicCatalogStockPolicyLabel.fromStorageValue(
+    settings[PublicProductVisibilityPolicy.stockPolicyKey],
+  );
+  final listingProducts = products
+      .where(
+        (product) => isSeoListingStockEligible(product, listingStockPolicy),
+      )
+      .toList(growable: false);
   final catalogPresentation = presentationRegistry.forCatalogRoot(
         WebsiteCatalogRoot.products,
       ) ??
       WebsiteCatalogPresentation.catalogRoot(WebsiteCatalogRoot.products);
   final catalogIndexable =
-      catalogPresentation.allowIndexing && products.isNotEmpty;
+      catalogPresentation.allowIndexing && listingProducts.isNotEmpty;
+  // `/servicios` es en la tienda el catálogo de servicios del taller, no una
+  // página del editor. Sin esto el generador sólo la publicaba si existía una
+  // página «servicios» con bloques, y si no escribía una página «no
+  // disponible» con noindex: Google no veía ningún servicio con su precio.
+  final services = seoOwnerSource.publishedServiceOwners;
+  final servicesPresentation = presentationRegistry.forCatalogRoot(
+        WebsiteCatalogRoot.services,
+      ) ??
+      WebsiteCatalogPresentation.catalogRoot(WebsiteCatalogRoot.services);
+  final servicesCatalogIndexable =
+      servicesPresentation.allowIndexing && services.isNotEmpty;
   final categories = buildCanonicalCategorySeoProjections(
-    products: products,
+    products: listingProducts,
     activeCategories: activeCategoryRows,
     presentationRegistry: presentationRegistry,
     storeUrl: storeUrl,
@@ -259,7 +281,11 @@ void main(List<String> args) async {
   final pages = websiteContentSnapshot.pages;
   final pageBlocks = websiteContentSnapshot.pageBlocks;
   final dynamicCmsPages = buildPublishedDynamicCmsSeoProjections(
-    pages: pages,
+    pages: servicesCatalogIndexable
+        ? pages
+            .where((page) => _routeForWebsitePage(page) != '/servicios')
+            .toList(growable: false)
+        : pages,
     pageBlocks: pageBlocks,
     storeUrl: storeUrl,
     storeName: storeName,
@@ -282,6 +308,7 @@ void main(List<String> args) async {
   );
   final publicFallbackPaths = <String>{
     if (catalogIndexable) '/productos',
+    if (servicesCatalogIndexable) '/servicios',
     ...eligibleStaticTrustPagePaths,
     ...dynamicCmsPages.map((page) => page.canonicalPath),
   };
@@ -492,7 +519,7 @@ void main(List<String> args) async {
       ogImageUrl: catalogPresentation.socialImageUrl,
       allowIndexing: catalogIndexable,
       jsonLd: _buildCatalogJsonLd(
-        products: products,
+        products: listingProducts,
         storeUrl: storeUrl,
         storeName: storeName,
         catalogUrl: catalogUrl,
@@ -500,7 +527,7 @@ void main(List<String> args) async {
         resolvedBrandNamesById: resolvedBrandNamesById,
       ),
       fallbackHtml: _buildCatalogFallbackHtml(
-        products: products,
+        products: listingProducts,
         title: catalogTitle,
         description: catalogDescription,
       ),
@@ -597,8 +624,24 @@ void main(List<String> args) async {
     storeName: storeName,
     pages: dynamicCmsPages,
     availablePublicPaths: publicFallbackPaths,
+    catalogOwnedPaths: {if (servicesCatalogIndexable) '/servicios'},
   );
   stdout.writeln('✅ Dynamic CMS SEO pages generated: $dynamicCmsPagesWritten');
+  if (servicesCatalogIndexable) {
+    await _writeServicesCatalogSnapshot(
+      buildDir: buildDir,
+      baseHtml: baseHtml,
+      storeUrl: storeUrl,
+      storeName: storeName,
+      storeLocality: storeLocality,
+      presentation: servicesPresentation,
+      services: services,
+      activeCategoryPathsById: activeCategoryPathsById,
+    );
+    stdout.writeln(
+      '✅ Services catalog SEO page generated: ${services.length} servicios',
+    );
+  }
   await _writeCrawlerFiles(
     buildDir: buildDir,
     storeUrl: storeUrl,
@@ -609,6 +652,8 @@ void main(List<String> args) async {
     dynamicCmsPages: dynamicCmsPages,
     staticTrustPagePaths: staticTrustPagePaths,
     productsCatalogIndexable: catalogIndexable,
+    servicesCatalogIndexable: servicesCatalogIndexable,
+    services: services,
     resolvedBrandNamesById: resolvedBrandNamesById,
     websiteSettingsUpdatedAt: seoOwnerSource.websiteSettings.updatedAt,
     brandRows: seoOwnerSource.brandRows,
@@ -1363,6 +1408,7 @@ Future<int> _writeStaticDynamicCmsPages({
   required String storeName,
   required List<PublishedDynamicCmsSeoProjection> pages,
   required Set<String> availablePublicPaths,
+  Set<String> catalogOwnedPaths = const {},
 }) async {
   final outputDirectory = Directory(pathJoin(buildDir.path, 'pagina'));
   if (outputDirectory.existsSync()) {
@@ -1398,7 +1444,10 @@ Future<int> _writeStaticDynamicCmsPages({
   }
   for (final slug in websiteDynamicDirectPageSlugs) {
     final canonicalPath = '/$slug';
-    if (writtenPaths.contains(canonicalPath)) continue;
+    if (writtenPaths.contains(canonicalPath) ||
+        catalogOwnedPaths.contains(canonicalPath)) {
+      continue;
+    }
     await File(pathJoin(buildDir.path, slug)).writeAsString(
       buildUnavailableStaticCmsPageSnapshotHtml(
         baseHtml: baseHtml,
@@ -2626,6 +2675,7 @@ Uri buildSeoSnapshotProductPageUri({
   required bool onlyMerchant,
   required int pageSize,
   String? afterId,
+  String productType = 'product',
 }) {
   return Uri.parse('$supabaseUrl/rest/v1/products').replace(
     queryParameters: {
@@ -2634,7 +2684,7 @@ Uri buildSeoSnapshotProductPageUri({
       'is_active': 'eq.true',
       'is_published': 'eq.true',
       'show_on_website': 'eq.true',
-      'product_type': 'eq.product',
+      'product_type': 'eq.$productType',
       'select':
           'id,name,description,website_description,website_name,website_price,website_image_url,website_image_url_optimized,website_image_urls,website_seo_title,website_seo_description,website_search_terms,website_merchant_title,website_merchant_description,website_merchant_gtin,website_merchant_mpn,website_merchant_brand,website_google_product_category,is_google_merchant,price,price_currency,sku,gtin,barcode,image_url,image_url_optimized,image_urls,brand_id,brand,category_id,category_name,stock_quantity,inventory_qty,track_stock,is_set,product_type,is_active,is_published,show_on_website,updated_at,created_at',
       'order': 'id.asc',
@@ -2651,6 +2701,7 @@ Future<List<Map<String, dynamic>>> fetchSeoSnapshotProductCandidates({
   required bool onlyMerchant,
   int pageSize = 1000,
   SeoSnapshotProductPageLoader? pageLoader,
+  String productType = 'product',
 }) async {
   // Keep this aligned with the public storefront surface, not only the much
   // smaller Google Merchant subset. Merchant can still be requested explicitly
@@ -2677,6 +2728,7 @@ Future<List<Map<String, dynamic>>> fetchSeoSnapshotProductCandidates({
       onlyMerchant: onlyMerchant,
       pageSize: pageSize,
       afterId: afterId,
+      productType: productType,
     );
     final page = await loadPage(url);
     products.addAll(page);
@@ -2815,7 +2867,10 @@ Future<Map<String, int>> _fetchPublicProductAvailability({
       body: {
         'p_tenant_id': tenantId,
         'p_product_ids': productIds,
-        'p_only_in_stock': true,
+        // Una ficha agotada conserva su snapshot (con OutOfStock) y su lugar
+        // en el sitemap; los listados aplican aparte el ajuste de stock del
+        // sitio (20260923210000).
+        'p_only_in_stock': false,
         'p_sort_by': 'name',
         'p_limit': pageSize,
         'p_offset': offset,
@@ -3152,12 +3207,16 @@ class SeoOwnerSourceSnapshot {
     required this.activeCategoryRows,
     required this.productUrlAliases,
     required this.websiteContent,
+    this.publishedServiceOwners = const [],
   }) {
     final editorialProjection = <String, dynamic>{
       'websiteSettings': _sortedSeoSourceRowRevisions(websiteSettings.rows),
       'publishedProductOwners': _sortedSeoSourceRowRevisions(
         publishedProductOwners.map(_withoutTransientProductStock),
       ),
+      if (publishedServiceOwners.isNotEmpty)
+        'publishedServiceOwners':
+            _sortedSeoSourceRowRevisions(publishedServiceOwners),
       'brandRows': _sortedSeoSourceRowRevisions(brandRows),
       'activeCategoryRows': _sortedSeoSourceRowRevisions(activeCategoryRows),
       'productUrlAliases': _sortedSeoSourceRowRevisions(productUrlAliases),
@@ -3192,6 +3251,10 @@ class SeoOwnerSourceSnapshot {
   final List<Map<String, dynamic>> activeCategoryRows;
   final List<Map<String, dynamic>> productUrlAliases;
   final SeoWebsiteContentSnapshot websiteContent;
+
+  /// Servicios del taller publicados en la web. Sólo alimentan `/servicios`:
+  /// no tienen ficha propia en el snapshot ni entran a Merchant.
+  final List<Map<String, dynamic>> publishedServiceOwners;
   late final String ownerSourceRevision;
   late final String revision;
   late final String ownerSourceSha256;
@@ -3253,6 +3316,13 @@ Future<SeoOwnerSourceSnapshot> _readSeoOwnerSourceSnapshot({
     serviceRoleKey: serviceRoleKey,
     onlyMerchant: false,
   );
+  final publishedServiceOwners = await fetchSeoSnapshotProductCandidates(
+    supabaseUrl: supabaseUrl,
+    tenantId: tenantId,
+    serviceRoleKey: serviceRoleKey,
+    onlyMerchant: false,
+    productType: 'service',
+  );
   final productIds = publishedProductOwners
       .map((product) => (product['id'] ?? '').toString().trim())
       .where((id) => id.isNotEmpty)
@@ -3303,6 +3373,7 @@ Future<SeoOwnerSourceSnapshot> _readSeoOwnerSourceSnapshot({
       pages: pages,
       pageBlocks: pageBlocks,
     ),
+    publishedServiceOwners: List.unmodifiable(publishedServiceOwners),
   );
 }
 
@@ -3656,6 +3727,208 @@ String _buildCatalogFallbackHtml({
   </main>''';
 }
 
+/// Si un producto ya proyectado (con la cantidad pública disponible) aparece
+/// en los listados de la tienda según su ajuste de stock. Mismo criterio que
+/// `PublicProductVisibilityPolicy` usa en la app.
+bool isSeoListingStockEligible(
+  Map<String, dynamic> product,
+  PublicCatalogStockPolicy policy,
+) {
+  if ((product['product_type'] ?? '').toString() == 'service') return true;
+  final tracksStock = product['track_stock'] != false;
+  final quantity = _toInt(product['stock_quantity']) ??
+      _toInt(product['inventory_qty']) ??
+      0;
+  switch (policy) {
+    case PublicCatalogStockPolicy.availableOnly:
+      return !tracksStock || quantity > 0;
+    case PublicCatalogStockPolicy.outOfStockOnly:
+      return tracksStock && quantity <= 0;
+    case PublicCatalogStockPolicy.all:
+      return true;
+  }
+}
+
+/// Escribe `/servicios` como el catálogo de servicios del taller: cada
+/// servicio con su precio en el HTML inicial y en datos estructurados.
+///
+/// Los servicios no tienen ficha propia en el snapshot, así que la lista no
+/// enlaza a fichas: un enlace a una ficha sin snapshot entrega la portada.
+Future<void> _writeServicesCatalogSnapshot({
+  required Directory buildDir,
+  required String baseHtml,
+  required String storeUrl,
+  required String storeName,
+  required String storeLocality,
+  required WebsiteCatalogPresentation presentation,
+  required List<Map<String, dynamic>> services,
+  required Map<String, String> activeCategoryPathsById,
+}) async {
+  final servicesUrl = _joinUrl(storeUrl, '/servicios');
+  final locality = _cleanText(storeLocality);
+  final title = presentation.seoTitle.trim().isNotEmpty
+      ? presentation.seoTitle.trim()
+      : 'Servicios y precios del taller de bicicletas | $storeName'
+          '${locality.isEmpty ? '' : ' $locality'}';
+  final description = presentation.seoDescription.trim().isNotEmpty
+      ? presentation.seoDescription.trim()
+      : 'Mantenciones, ajustes y reparaciones de bicicletas en el taller de '
+          '$storeName${locality.isEmpty ? '' : ' en $locality'}, '
+          'con precios en CLP.';
+  final entries = buildSeoServiceCatalogEntries(
+    services: services,
+    activeCategoryPathsById: activeCategoryPathsById,
+  );
+  final html = _buildCategoryHtml(
+    baseHtml: baseHtml,
+    title: _truncate(_cleanText(title), 120),
+    description: _truncate(_cleanText(description), 320),
+    canonicalUrl: servicesUrl,
+    ogImageUrl: presentation.socialImageUrl,
+    allowIndexing: true,
+    jsonLd: buildSeoServicesCatalogJsonLd(
+      entries: entries,
+      servicesUrl: servicesUrl,
+      title: _cleanText(title),
+    ),
+    fallbackHtml: buildSeoServicesCatalogFallbackHtml(
+      entries: entries,
+      title: _cleanText(title),
+      description: _cleanText(description),
+    ),
+  );
+  final file = _snapshotFileForPublicPath(buildDir, '/servicios');
+  file.parent.createSync(recursive: true);
+  await file.writeAsString(html);
+}
+
+class SeoServiceCatalogEntry {
+  const SeoServiceCatalogEntry({
+    required this.name,
+    required this.price,
+    required this.group,
+  });
+
+  final String name;
+  final double price;
+  final String group;
+}
+
+/// Servicios publicados con nombre y precio, ordenados por grupo y nombre.
+/// Un servicio sin precio no se lista: la página promete precios.
+List<SeoServiceCatalogEntry> buildSeoServiceCatalogEntries({
+  required List<Map<String, dynamic>> services,
+  Map<String, String> activeCategoryPathsById = const {},
+}) {
+  final entries = <SeoServiceCatalogEntry>[];
+  for (final service in services) {
+    final categoryId = (service['category_id'] ?? '').toString().trim();
+    final commerce = projectSeoSnapshotCommerceProduct(
+      service,
+      categoryPath: activeCategoryPathsById[categoryId],
+    );
+    final name = _cleanText(commerce.title);
+    if (name.isEmpty || commerce.price <= 0) continue;
+    final categoryPath = _cleanText(commerce.categoryPath);
+    final categoryName = categoryPath.isEmpty
+        ? ''
+        : categoryPath.split(RegExp(r'\s*[>/]\s*')).last.trim();
+    // Una categoría llamada «Servicio(s)» no distingue nada en esta página.
+    final group = categoryName.isEmpty ||
+            const {'servicio', 'servicios'}.contains(categoryName.toLowerCase())
+        ? 'Servicios'
+        : categoryName;
+    entries.add(
+      SeoServiceCatalogEntry(name: name, price: commerce.price, group: group),
+    );
+  }
+  entries.sort((a, b) {
+    final byGroup = a.group.toLowerCase().compareTo(b.group.toLowerCase());
+    if (byGroup != 0) return byGroup;
+    return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+  });
+  return List.unmodifiable(entries);
+}
+
+/// El local ya está declarado una vez en la página como `LocalBusiness`, y la
+/// validación exige uno solo; por eso cada servicio no repite su proveedor.
+String buildSeoServicesCatalogJsonLd({
+  required List<SeoServiceCatalogEntry> entries,
+  required String servicesUrl,
+  required String title,
+}) {
+  return jsonEncode({
+    '@context': 'https://schema.org',
+    '@type': 'ItemList',
+    'name': title,
+    'url': servicesUrl,
+    'numberOfItems': entries.length,
+    'itemListElement': [
+      for (var i = 0; i < entries.length; i++)
+        {
+          '@type': 'ListItem',
+          'position': i + 1,
+          'item': {
+            '@type': 'Service',
+            'name': entries[i].name,
+            'serviceType': entries[i].group,
+            'offers': {
+              '@type': 'Offer',
+              'price': entries[i].price.toStringAsFixed(0),
+              'priceCurrency': 'CLP',
+            },
+          },
+        },
+    ],
+  });
+}
+
+String buildSeoServicesCatalogFallbackHtml({
+  required List<SeoServiceCatalogEntry> entries,
+  required String title,
+  required String description,
+}) {
+  final groups = <String, List<SeoServiceCatalogEntry>>{};
+  for (final entry in entries) {
+    groups.putIfAbsent(entry.group, () => []).add(entry);
+  }
+  final sections = groups.entries.map((group) {
+    final items = group.value
+        .map(
+          (entry) => '<li>${_escapeHtml(entry.name)}: '
+              '${_escapeHtml(formatSeoClpAmount(entry.price))}</li>',
+        )
+        .join('\n        ');
+    return '''
+    <section>
+      <h2>${_escapeHtml(group.key)}</h2>
+      <ul>
+        $items
+      </ul>
+    </section>''';
+  }).join('\n');
+
+  return '''
+  <main id="seo-services-fallback" class="storefront-nojs-fallback">
+    <h1>${_escapeHtml(title)}</h1>
+    <p>${_escapeHtml(description)}</p>
+$sections
+    <p><a href="/contacto">Agenda tu servicio o escríbenos</a></p>
+    <p><a href="/productos">Ver repuestos y accesorios</a></p>
+  </main>''';
+}
+
+/// `18000` → `$18.000`: el formato de precio que se lee en Chile.
+String formatSeoClpAmount(num amount) {
+  final digits = amount.round().abs().toString();
+  final grouped = StringBuffer();
+  for (var i = 0; i < digits.length; i++) {
+    if (i > 0 && (digits.length - i) % 3 == 0) grouped.write('.');
+    grouped.write(digits[i]);
+  }
+  return '${amount < 0 ? '-' : ''}\$$grouped';
+}
+
 /// Builds the exact active catalog-category path projection used by product
 /// metadata.
 ///
@@ -3918,6 +4191,8 @@ Future<void> _writeCrawlerFiles({
   required List<PublishedDynamicCmsSeoProjection> dynamicCmsPages,
   required Set<String> staticTrustPagePaths,
   required bool productsCatalogIndexable,
+  bool servicesCatalogIndexable = false,
+  List<Map<String, dynamic>> services = const [],
   required Map<String, String> resolvedBrandNamesById,
   required DateTime? websiteSettingsUpdatedAt,
   required List<Map<String, dynamic>> brandRows,
@@ -3977,6 +4252,19 @@ Future<void> _writeCrawlerFiles({
       ),
       changefreq: 'daily',
       priority: '0.9',
+    );
+  }
+  if (servicesCatalogIndexable) {
+    addUrl(
+      '/servicios',
+      lastmod: maxFactualSeoUpdatedAt(
+        [
+          websiteSettingsUpdatedAt,
+          ...services.map((service) => _parseDateTime(service['updated_at'])),
+        ],
+      ),
+      changefreq: 'weekly',
+      priority: '0.7',
     );
   }
   for (final path in staticTrustPagePaths) {
