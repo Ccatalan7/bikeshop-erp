@@ -30,6 +30,7 @@ import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provide
 import 'package:vinabike_erp/public_store/utils/product_url.dart';
 import 'package:vinabike_erp/public_store/utils/structured_data.dart';
 import 'package:vinabike_erp/shared/widgets/safe_layout_builder.dart';
+import 'package:vinabike_erp/public_store/services/ga4_commerce_events.dart';
 import 'package:vinabike_erp/public_store/services/meta_pixel_service.dart';
 import '../utils/public_spec_display.dart';
 
@@ -435,6 +436,17 @@ class _ProductDetailPageState extends State<ProductDetailPage>
             ),
             contentName: _commerceProjection(_product!).title,
             value: _commerceProjection(_product!).price,
+          );
+          Ga4CommerceEvents.instance.viewItem(
+            Ga4Item(
+              id: MetaPixelService.catalogContentId(
+                sku: _product!.sku,
+                productId: _product!.id,
+              ),
+              name: _commerceProjection(_product!).title,
+              price: _commerceProjection(_product!).price,
+              quantity: 1,
+            ),
           );
         }
         _productDetailDebugLog(

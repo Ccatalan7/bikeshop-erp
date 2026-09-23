@@ -19,6 +19,7 @@ import '../services/address_autocomplete_service.dart';
 import '../services/checkout_exit_guard.dart';
 import '../services/checkout_session_store.dart';
 import '../services/cart_store.dart';
+import '../services/ga4_commerce_events.dart';
 import '../services/meta_pixel_service.dart';
 import '../services/public_checkout_capability_service.dart';
 import '../widgets/public_store_layout.dart';
@@ -178,6 +179,23 @@ class _CheckoutPageState extends State<CheckoutPage>
               .where((item) => item.contentId.isNotEmpty)
               .toList(),
           value: checkoutTotal,
+        );
+        Ga4CommerceEvents.instance.beginCheckout(
+          cart.items
+              .map(
+                (item) => Ga4Item(
+                  id: MetaPixelService.catalogContentId(
+                    sku: item.commerce.sku,
+                    productId: item.commerce.id,
+                  ),
+                  name: item.commerce.title,
+                  price: item.commerce.price,
+                  quantity: item.quantity,
+                ),
+              )
+              .where((item) => item.id.isNotEmpty)
+              .toList(),
+          checkoutTotal,
         );
       }
 

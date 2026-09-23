@@ -101,6 +101,29 @@ select lives_ok($$
     null, null, null, null, 10, 0)
 $$, 'el catálogo público por RPC sigue respondiendo a anónimo');
 
+-- Las RPC públicas declaran `cost` en su resultado, pero lo proyectan en 0
+-- desde la función interna. Si un cambio interno empezara a llenarlo, esto
+-- falla antes de exponer el costo (en vez de rehacer sus firmas, fase 1c).
+select is(
+  (select count(*)::int
+     from public.get_public_products(
+       p_tenant_id := 'a1790000-0000-4000-8000-000000000001',
+       p_only_in_stock := false)
+    where cost is distinct from 0),
+  0, 'get_public_products no devuelve el costo guardado');
+select ok(
+  (select count(*) > 0
+     from public.get_public_products(
+       p_tenant_id := 'a1790000-0000-4000-8000-000000000001',
+       p_only_in_stock := false)),
+  'la guardia de costo mira filas reales');
+select is(
+  (select count(*)::int
+     from public.search_public_products(
+       'cadena', 'a1790000-0000-4000-8000-000000000001', 5)
+    where cost is distinct from 0),
+  0, 'search_public_products no devuelve el costo guardado');
+
 reset role;
 
 select ok(has_column_privilege('authenticated', 'public.products', 'cost',
