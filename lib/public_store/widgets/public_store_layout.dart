@@ -23,6 +23,7 @@ import '../providers/public_store_tenant_provider.dart';
 import '../routes/deferred_commerce_route_page.dart';
 import '../routes/deferred_customer_route_page.dart';
 import '../services/checkout_exit_guard.dart';
+import '../services/ga4_commerce_events.dart';
 import '../services/public_category_publication.dart';
 import '../services/public_page_publication.dart';
 import '../services/public_inventory_service.dart';
@@ -383,6 +384,7 @@ class PublicStoreLayout extends StatefulWidget {
 
     if (authoredIsAbsoluteHttp && (normalized == authored || openInNewTab)) {
       if (authoredUri.host.isNotEmpty) {
+        Ga4CommerceEvents.instance.contactFromUrl(authoredUri.toString());
         final didLaunch = await launchUrl(
           authoredUri,
           mode: LaunchMode.platformDefault,
@@ -6539,18 +6541,24 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                 alignment: Alignment.centerLeft,
                               ),
                               const SizedBox(height: 16),
-                              Text(
-                                storeDescription.isNotEmpty
-                                    ? storeDescription
-                                    : 'Información pública de la tienda.',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(
-                                      color: Colors.white70,
-                                    ),
-                              ),
-                              const SizedBox(height: 24),
+                              // El texto de ayuda sólo se ve en el editor: un
+                              // cliente no debe leer «Información pública de
+                              // la tienda.» cuando falta la descripción.
+                              if (storeDescription.isNotEmpty ||
+                                  isEditMode) ...[
+                                Text(
+                                  storeDescription.isNotEmpty
+                                      ? storeDescription
+                                      : 'Información pública de la tienda.',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodyMedium
+                                      ?.copyWith(
+                                        color: Colors.white70,
+                                      ),
+                                ),
+                                const SizedBox(height: 24),
+                              ],
                               Wrap(
                                 spacing: 8,
                                 children: [
@@ -7444,6 +7452,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // below as normalized internal routes so they share guards and history.
     if (authoredIsAbsoluteHttp && (normalized == authored || openInNewTab)) {
       if (authoredUri.host.isNotEmpty) {
+        Ga4CommerceEvents.instance.contactFromUrl(authoredUri.toString());
         final didLaunch = await launchUrl(
           authoredUri,
           mode: LaunchMode.platformDefault,

@@ -7,6 +7,7 @@ import '../../shared/models/product.dart';
 import '../models/public_commerce_product_projection.dart';
 import '../models/storefront_tax_summary.dart';
 import '../services/cart_store.dart';
+import '../services/ga4_commerce_events.dart';
 import '../services/meta_pixel_service.dart';
 
 /// Re-reads the authoritative catalog rows for a restored basket.
@@ -221,6 +222,17 @@ class CartProvider with ChangeNotifier {
       contentName: commerce.title,
       itemPrice: commerce.price,
       quantity: addedQuantity,
+    );
+    Ga4CommerceEvents.instance.addToCart(
+      Ga4Item(
+        id: MetaPixelService.catalogContentId(
+          sku: product.sku,
+          productId: product.id,
+        ),
+        name: commerce.title,
+        price: commerce.price,
+        quantity: addedQuantity,
+      ),
     );
     _queueMutation(
       productIds: {product.id},

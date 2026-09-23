@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../services/ga4_commerce_events.dart';
 import '../theme/public_store_theme.dart';
 
 class FloatingWhatsAppButton extends StatelessWidget {
@@ -18,6 +19,7 @@ class FloatingWhatsAppButton extends StatelessWidget {
     if (phoneNumber.isEmpty) return;
     final encodedMessage = Uri.encodeComponent(message);
     final url = Uri.parse('https://wa.me/$phoneNumber?text=$encodedMessage');
+    Ga4CommerceEvents.instance.contactFromUrl(url.toString());
 
     if (await canLaunchUrl(url)) {
       await launchUrl(url, mode: LaunchMode.externalApplication);
