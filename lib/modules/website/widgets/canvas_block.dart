@@ -5,6 +5,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../shared/services/public_catalog_client.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/widgets/safe_layout_builder.dart';
 import '../models/website_action.dart';
@@ -199,7 +200,12 @@ class _CanvasBlockState extends State<CanvasBlock> {
 
     _isLoadingProducts = true;
     try {
-      var query = Supabase.instance.client
+      // El editor lee con la sesión del staff (ve borradores); la página
+      // publicada, como anónimo.
+      final client = widget.editable
+          ? Supabase.instance.client
+          : PublicCatalogClient.instance;
+      var query = client
           .from('products')
           .select(
               'id,name,price,image_url,show_on_website,is_active,is_published')
@@ -229,7 +235,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
     final tenantId = await _effectiveTenantId();
     if (tenantId == null || tenantId.isEmpty) return const [];
     try {
-      final response = await Supabase.instance.client
+      final response = await PublicCatalogClient.instance
           .from('products')
           .select(
               'id,name,price,image_url,show_on_website,is_active,is_published')

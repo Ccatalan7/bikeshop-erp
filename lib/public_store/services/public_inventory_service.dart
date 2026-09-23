@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' hide Category;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../shared/models/product.dart';
 import '../../shared/models/public_product_visibility_policy.dart';
+import '../../shared/services/public_catalog_client.dart';
 import '../../modules/inventory/models/category_models.dart';
 import 'public_product_snapshot_cache.dart';
 
@@ -433,7 +434,7 @@ class PublicInventoryService extends ChangeNotifier {
     if (ids.isEmpty) return rows;
 
     try {
-      final response = await _supabase
+      final response = await PublicCatalogClient.instance
           .from('products')
           .select(
             'id,is_set,set_type,parent_set_id,component_label,component_position,'
@@ -973,7 +974,7 @@ class PublicInventoryService extends ChangeNotifier {
         return _productsCache[cacheKey] ?? [];
       }
       // Build base query
-      var query = _supabase
+      var query = PublicCatalogClient.instance
           .from('products')
           .select(Product.storefrontPreviewSelect)
           .eq('tenant_id', tenantId);
