@@ -14,6 +14,7 @@ import '../models/storefront_tax_summary.dart';
 import '../models/order_confirmation_policy.dart';
 import '../services/cart_store.dart';
 import '../services/checkout_session_store.dart';
+import '../services/ga4_commerce_events.dart';
 import '../services/meta_pixel_service.dart';
 import '../widgets/public_store_layout.dart';
 import '../../modules/website/services/mercadopago_service.dart';
@@ -1028,6 +1029,24 @@ class _OrderConfirmationPageState extends State<OrderConfirmationPage>
       orderId: order.id,
       items: metaItems,
       value: order.total,
+    );
+    Ga4CommerceEvents.instance.purchase(
+      order.id,
+      order.items
+          .map(
+            (item) => Ga4Item(
+              id: MetaPixelService.catalogContentId(
+                sku: item.productSku ?? item.liveProductSku,
+                productId: item.productId,
+              ),
+              name: item.productName,
+              price: item.unitPrice,
+              quantity: item.quantity,
+            ),
+          )
+          .where((item) => item.id.isNotEmpty)
+          .toList(),
+      order.total,
     );
   }
 

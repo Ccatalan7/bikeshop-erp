@@ -8,6 +8,7 @@ import '../../modules/website/services/website_service.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../../modules/website/theme/website_resolved_theme.dart';
 import '../providers/public_store_tenant_provider.dart';
+import '../services/ga4_commerce_events.dart';
 import '../services/public_page_publication.dart';
 import '../../shared/widgets/safe_layout_builder.dart';
 
@@ -51,6 +52,7 @@ class _ContactPageState extends State<ContactPage>
   bool get wantKeepAlive => true;
 
   Future<void> _launchUrl(String url) async {
+    Ga4CommerceEvents.instance.contactFromUrl(url);
     final uri = Uri.parse(url);
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       debugPrint('Could not launch $url');
