@@ -878,6 +878,17 @@ Chrome profile, login, or extension.
   visual/layout evidence, not after every click.
 - Avoid fixed sleeps, repeated full screenshots/snapshots, redundant `goto` or
   reload calls, and console/network/terminal polling after every action.
+
+### Un panel de navegador oculto no mide tiempos (2026-09-23)
+
+El navegador integrado sigue funcionando con el panel oculto, pero la página
+queda `document.visibilityState = "hidden"` y Chrome espacia sus temporizadores.
+Una ficha de la tienda mostró un hueco de 29 s sin red entre la carga del sitio
+y la del producto; en Chrome headless (visible) el mismo producto llegaba en
+2,4–3,1 s. Antes de reportar lentitud, se lee `document.visibilityState`; si
+dice `hidden`, los tiempos se miden en headless (Playwright con
+`channel: 'chrome'`) o con el panel a la vista. Los eventos de GA4 salen en
+lote: `view_item` llega a `/g/collect` unos 5 s después del evento.
 - After two failed locator attempts, refresh the snapshot once. If no stable
   hook exists, add a durable Flutter `Semantics` label or equivalent test
   contract instead of continuing coordinate retries.
