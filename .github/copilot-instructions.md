@@ -698,6 +698,21 @@ remain outside that implied authorization unless separately included.
 > terminada ni se deja activa contra una etapa incompatible: se completa el
 > rollout o se mantiene un fallback funcional y explícito.
 
+### El repositorio es público y `main` exige rama al día (2026-09-23)
+
+`Ccatalan7/bikeshop-erp` es **público**. Un commit, un PR o un comentario que
+explica cómo se lee un dato ajeno es una guía para leerlo: la fuga se cierra
+primero (migración reversible desplegada y verificada) y recién después se
+empuja el texto que la describe. Si el cierre necesita un release de la app, el
+PR se redacta sin el paso a paso hasta que esté cerrado. El 2026-09-23 se abrió
+un PR que describía la lectura de costos por una cuenta de cliente antes de
+desplegar el cierre; hubo que adelantar la migración.
+
+`main` tiene `strict: true`: cada merge deja atrasados los demás PR. Con varios
+abiertos se integran de a uno en orden de prioridad (`gh pr update-branch N` al
+siguiente) y se cancelan (`gh run cancel`) las corridas que igual quedarán
+atrasadas; los runners se saturan y el despliegue de la tienda queda en cola.
+
 ## Definition Of Done For Implementations
 
 Unless the user explicitly requests analysis-only or local-only work, the agent
@@ -3961,6 +3976,36 @@ Implemented and deployed on 2026-06-14:
   fetches the home page `meta_title` and rewrites the built root index before
   deployment. Do not update only one of these sources or reintroduce vague,
   unprovable copy such as “la mejor tienda”.
+
+**Tienda, 2026-09-23 (diagnóstico web; ver `AGENT_DATABASE_CONTRACT.md` para
+la parte de base de datos):**
+
+- La descripción de la portada tiene **cinco** fuentes: la fila `inicio` de
+  `website_pages` (`meta_title`/`meta_description`), `seo_meta_*` y las claves
+  heredadas `meta_*` de `website_settings` (el editor escribe las cuatro
+  iguales) y `web/index.html`. En el HTML estático el generador pone el título
+  de la página y la descripción de los ajustes, pero al hidratar
+  `public_store_layout` pone la descripción de la **página**. Se corrigieron los ajustes y la fila de la página seguía diciendo
+  «Compra bicicletas» —justo lo que Google lee al renderizar—. Se revisan las
+  cinco con una sola consulta.
+- **Una ficha agotada existe.** `get_public_products` con ids o SKU explícitos
+  y `p_only_in_stock = false` no aplica la política de stock del sitio; los
+  listados sí. El generador hace snapshot de todo producto publicado y lo pone
+  en el sitemap, y filtra catálogo y categorías con
+  `isSeoListingStockEligible`. Antes, 901 de 1.598 publicados no tenían ficha
+  para Google.
+- `/servicios` se genera desde los servicios publicados con precio (`ItemList`
+  de `Service` con `Offer`). Un JSON-LD nuevo no repite `LocalBusiness`: la
+  validación exige uno por página.
+- La tienda se reconstruye todos los días (08:00 UTC), porque editar contenido
+  en el ERP no publica nada; antes sólo llegaba a Google con un push de código.
+- Medición: `Ga4CommerceEvents` envía `view_item`, `add_to_cart`,
+  `begin_checkout`, `purchase` y `contact` (con `method`). Marcarlos como
+  eventos clave se hace en GA4.
+- Correr el generador con datos reales exige `build/web_store` (con
+  `web/index.html` basta; otro `--build-dir` aborta) y **reescribe**
+  `firebase.json` y `scripts/generated_product_redirects.json`: se restauran
+  al terminar, porque CI los regenera en cada build.
 
 Current external follow-up:
 
