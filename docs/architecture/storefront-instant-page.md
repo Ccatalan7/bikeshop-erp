@@ -113,7 +113,8 @@ que puede tener hasta un día.
 - **Lo que no se revalida:** el nombre y la foto de una ficha que sigue
   publicada (hasta un día de antigüedad, igual que el `<noscript>`), la
   portada de una categoría despublicada o renombrada después del build, y el
-  precio de una ficha sin SKU (`/productos/<id>`), que queda neutro.
+  precio de una ficha sin SKU (`/productos/<id>`), que queda neutro (0
+  fichas publicadas sin SKU en Viñabike el 2026-09-24: caso residual).
 
 La normalización de la firma está dos veces —`seoInstantFreshnessSignature`
 en Dart y `norm` en `web/index.html`— y la prueba
@@ -166,6 +167,33 @@ No se despliega hasta que el dueño corra `/design-login` desde un `claude`
 interactivo y cada valor se compare con `GUÍA GENERAL Viñabike -
 Componentes` (en particular, si la guía ya tiene un estado de carga que
 reemplace los esqueletos y la barra).
+
+### Carrusel en teléfono: las flechas tapan el texto y no se ocultan
+
+En un teléfono las flechas del carrusel (46×46 px, centradas en el alto)
+tapan el texto del slide. Moverlas exige medidas nuevas, así que quedaron en
+su lugar hasta Design. Se evaluó (2026-09-24) ocultarlas sólo en
+`WebsiteViewport.mobile` cuando hay puntos (`showIndicators`, el caso del
+único carrusel público de hoy), dejando deslizar y puntos, sin ninguna medida
+nueva. **Se descartó por accesibilidad**, medido con una prueba de widget a
+375 px:
+
+- Cada punto mide 22×22 con paso de 22 px, pero sólo toma el toque el
+  círculo de 12 px (el `GestureDetector` delega la prueba de toque en el
+  hijo): un toque a 5 px del centro cambia el slide; a 7 px, no.
+- WCAG 2.2, 2.5.8 (AA) pide 24×24 px o que círculos de 24 px centrados en
+  cada objetivo no se toquen; con 12 px a 22 px de paso se tocan. Hoy se
+  cumple por la excepción de **control equivalente**: las flechas de 46 px
+  hacen lo mismo. Sin flechas, el único control de un toque serían los
+  puntos (deslizar no cuenta: 2.5.1 pide una alternativa de un solo puntero).
+- Agrandar el toque de los puntos a su caja (`HitTestBehavior.opaque`) no
+  alcanza: 22 px con paso de 22 siguen fallando; llegar a 24 es una medida
+  nueva.
+- Ni puntos ni flechas tienen etiqueta ni rol de botón para un lector de
+  pantalla (defecto previo, aparte de éste).
+
+El arreglo necesita valores de Design: el tamaño de toque de los puntos o la
+posición de las flechas en teléfono.
 
 ## Revisión independiente (Codex, 2026-09-24)
 
