@@ -4047,6 +4047,20 @@ la parte de base de datos):**
   `/shop/category/**` y `/shop/**` al final. El destino se toma del sitemap
   vivo: un slug inexacto o una ficha sin snapshot (sin foto) entrega la
   portada. `test/unit/legacy_shop_redirects_test.dart` guarda orden y forma.
+- **El LCP del navegador no mide la tienda.** Flutter dibuja en un lienzo, que
+  no es candidato a LCP: lo que el navegador (y PageSpeed) reporta es el logo
+  del splash HTML. El tiempo real hasta ver la tienda es el evento GA4
+  `store_ready` (`value` en segundos, `load_bucket` con los umbrales de Core
+  Web Vitals), que se envía al primer cuadro después de ocultar el splash.
+  Perfil del 2026-09-24 en móvil lento (red ~1,5 Mbps, CPU ×4): 1,3 MB de
+  `main.dart.js` y 1,6 MB de CanvasKit en paralelo hasta los ~20 s, fuentes
+  (~0,5 MB) al final y datos a los 20,6 s, sin esperas muertas. La «espera de
+  ~6 s» del diagnóstico no se reproduce: con caché en escritorio los
+  productos se piden a los 0,8 s. Lo que queda es peso, no una espera.
+- `google-places-proxy` lo llaman clientes sin cuenta con la clave pública
+  (sin clave, el gateway da 401). La protección de la llave de Google está en
+  la función: tenant activo, entradas acotadas, y sólo los campos que lee el
+  checkout (`opening_hours` se cobra aparte y no se pide).
 - Correr el generador con datos reales exige `build/web_store` (con
   `web/index.html` basta; otro `--build-dir` aborta) y **reescribe**
   `firebase.json` y `scripts/generated_product_redirects.json`: se restauran

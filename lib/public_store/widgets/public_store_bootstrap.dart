@@ -7,6 +7,7 @@ import '../../modules/website/services/website_service.dart';
 import '../../shared/utils/web_url.dart';
 import '../providers/cart_provider.dart';
 import '../providers/public_store_tenant_provider.dart';
+import '../services/ga4_commerce_events.dart';
 import '../services/meta_pixel_service.dart';
 import '../services/public_inventory_service.dart';
 
@@ -222,7 +223,7 @@ class _PublicStoreBootstrapState extends State<PublicStoreBootstrap>
         _error = null;
       });
       _startFreshnessMonitoring();
-      _hideHtmlSplashAfterFrame();
+      _hideHtmlSplashAfterFrame(storeReady: true);
     } catch (e) {
       setState(() {
         _isBootstrapping = false;
@@ -352,10 +353,17 @@ class _PublicStoreBootstrapState extends State<PublicStoreBootstrap>
     );
   }
 
-  void _hideHtmlSplashAfterFrame() {
+  void _hideHtmlSplashAfterFrame({bool storeReady = false}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      final firstReveal = !_splashHidden;
       _hideHtmlSplash();
+      if (storeReady && firstReveal) {
+        final elapsedMs = navigationElapsedMs();
+        if (elapsedMs != null) {
+          Ga4CommerceEvents.instance.storeReady(elapsedMs);
+        }
+      }
     });
   }
 
