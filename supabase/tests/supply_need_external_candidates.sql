@@ -197,6 +197,35 @@ insert into public.category_tech_mappings(
   'chain', '99c90000-0000-4000-8000-000000000031', 'active'
 );
 
+-- Piñones tiene su propia plantilla con velocidades. Un valor sólo es
+-- evidencia si el campo está activo en la ficha del producto
+-- (`spec_product_field_is_active_internal_v1`): sin esta plantilla, las 12
+-- velocidades de PIN-01 quedaban `unresolved`, PIN-01 seguía elegible y la
+-- necesidad terminaba en `no_historical_candidates` en vez de contradicción.
+insert into public.spec_templates(
+  id, tenant_id, key, name, technical_family, is_active
+) values (
+  '99c90000-0000-4000-8000-000000000032',
+  '99c90000-0000-4000-8000-000000000001',
+  'cassette_template', 'Piñones', 'cassette', true
+);
+insert into public.spec_template_fields(
+  id, tenant_id, template_id, spec_definition_id
+) values (
+  '99c90000-0000-4000-8000-000000000042',
+  '99c90000-0000-4000-8000-000000000001',
+  '99c90000-0000-4000-8000-000000000032',
+  '99c90000-0000-4000-8000-000000000021'
+);
+insert into public.category_tech_mappings(
+  id, tenant_id, category_id, technical_family, template_id, status
+) values (
+  '99c90000-0000-4000-8000-000000000052',
+  '99c90000-0000-4000-8000-000000000001',
+  '99c90000-0000-4000-8000-000000000014',
+  'cassette', '99c90000-0000-4000-8000-000000000032', 'active'
+);
+
 -- Dos marcas: una del taller, una global.
 insert into public.product_brands(id, tenant_id, name, is_active) values
   (
@@ -419,6 +448,10 @@ insert into public.suppliers(id, tenant_id, name, comuna, city) values (
   'Distribuidora Andes', 'Providencia', 'Santiago'
 );
 
+-- Las fechas salen de la fecha de negocio del taller, la misma que usa
+-- `purchase_candidate_metrics_v1` para medir la antigüedad. Con
+-- `current_date` (UTC) la antigüedad era 29 días entre las 21:00 y las 24:00
+-- de Chile, y los puntajes exactos de la sección 7 fallaban esas tres horas.
 insert into public.purchase_invoices(
   id, tenant_id, supplier_id, supplier_name, invoice_number, date, status,
   tax_treatment
@@ -427,27 +460,31 @@ insert into public.purchase_invoices(
     '99c90000-0000-4000-8000-0000000000a1',
     '99c90000-0000-4000-8000-000000000001',
     '99c90000-0000-4000-8000-000000000091', 'Distribuidora Andes',
-    'EC-0001', current_date - 30, 'paid', 'no_tax'
+    'EC-0001', public.tenant_business_date('99c90000-0000-4000-8000-000000000001') - 30,
+    'paid', 'no_tax'
   ),
   -- Factura en USD: el candidato queda denominado en USD.
   (
     '99c90000-0000-4000-8000-0000000000a2',
     '99c90000-0000-4000-8000-000000000001',
     '99c90000-0000-4000-8000-000000000091', 'Distribuidora Andes',
-    'EC-0002', current_date - 30, 'paid', 'no_tax'
+    'EC-0002', public.tenant_business_date('99c90000-0000-4000-8000-000000000001') - 30,
+    'paid', 'no_tax'
   ),
   -- Factura con flete en otra moneda: la asignación no es reproducible.
   (
     '99c90000-0000-4000-8000-0000000000a3',
     '99c90000-0000-4000-8000-000000000001',
     '99c90000-0000-4000-8000-000000000091', 'Distribuidora Andes',
-    'EC-0003', current_date - 30, 'paid', 'no_tax'
+    'EC-0003', public.tenant_business_date('99c90000-0000-4000-8000-000000000001') - 30,
+    'paid', 'no_tax'
   ),
   (
     '99c90000-0000-4000-8000-0000000000a4',
     '99c90000-0000-4000-8000-000000000001',
     '99c90000-0000-4000-8000-000000000091', 'Distribuidora Andes',
-    'EC-0004', current_date - 30, 'paid', 'no_tax'
+    'EC-0004', public.tenant_business_date('99c90000-0000-4000-8000-000000000001') - 30,
+    'paid', 'no_tax'
   );
 
 insert into public.purchase_invoice_lines(

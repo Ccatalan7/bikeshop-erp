@@ -90,12 +90,20 @@ select matches(
   'la gama pedida se valida contra un vocabulario cerrado'
 );
 
--- La gama ordena, nunca elimina: no aparece en ningún filtro del WHERE.
+-- La gama ordena, nunca elimina. Desde el núcleo de puntaje
+-- (20260817190000) el peso vive en `purchase_candidate_scores_internal_v1` y
+-- el ranking sólo le entrega la gama pedida.
+select isnt_empty(
+  $$select 1 where pg_get_functiondef(
+      'public.purchase_candidate_scores_internal_v1(uuid,uuid[],text,text)'::regprocedure
+    ) like '%else 0.25 * gama_score end%'$$,
+  'la gama entra como peso del puntaje, no como criterio de exclusión'
+);
 select isnt_empty(
   $$select 1 where pg_get_functiondef(
       'public.rank_purchase_candidates_v1(text,uuid,uuid,text,integer,text)'::regprocedure
-    ) like '%0.25 * gama_score%'$$,
-  'la gama entra como peso del puntaje, no como criterio de exclusión'
+    ) like '%p_profile, p_gama%'$$,
+  'el ranking le entrega la gama pedida al núcleo de puntaje'
 );
 
 select * from finish();
