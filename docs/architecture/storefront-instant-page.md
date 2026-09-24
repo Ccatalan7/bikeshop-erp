@@ -69,14 +69,27 @@ cada build de la tienda.
 
 ## Traspaso
 
-1. El generador inserta en cada snapshot `<template id="instant-page-template">`
-   antes de `#app-shell`, el tema como `<style id="instant-page-theme">` y un
-   `preload` de la foto principal con prioridad alta. Quita el `preload` del
-   logo del splash y lo vuelve `lazy`: la instantánea lo tapa, y no debe
-   competir con la foto.
-2. Un script inline de `web/index.html` clona la plantilla en `#instant-page`
-   (capa fija encima del splash) y expone `window.vinabikeInstantPage`
-   (`release`, `arm`).
+1. El generador inserta en cada snapshot, en `<head>`, la hoja
+   (`<style id="instant-page-style">`, de
+   `scripts/storefront_instant_page/instant_page.css`), el tema
+   (`<style id="instant-page-theme">`) y un `preload` de la foto principal con
+   prioridad alta; y antes de `#app-shell`, `<template id="instant-page-template">`
+   seguido del script (`<script id="instant-page-script">`, de
+   `instant_page.js`). Quita el `preload` del logo del splash y lo vuelve
+   `lazy`: la instantánea lo tapa, y no debe competir con la foto.
+2. El script clona la plantilla en `#instant-page` (capa fija encima del
+   splash), marca `<html class="ip-covered">` para ocultar el logo (el splash
+   todavía no existe cuando corre) y expone `window.vinabikeInstantPage`
+   (`release`, `arm`). En una página sin script, la tienda recibe `undefined`
+   y no hace nada.
+
+**Por qué la hoja y el script no viven en `web/index.html`:** CI no publica
+ese archivo. Antes de cada build, `scripts/sync_seo_index.sh` lo reescribe
+entero desde la plantilla que lleva adentro. La primera publicación (PR #50,
+2026-09-24) tenía la hoja y el script en `web/index.html`: funcionó en local y
+en las pruebas, y en vivo la plantilla llegaba sin nada que la montara (logo a
+los 0,8 s, tienda a los 20,6 s, igual que antes). Ahora el generador es su
+único dueño y aborta si `web/index.html` vuelve a traer el script.
 3. `PublicStoreBootstrap` oculta el splash como siempre; `hideHtmlLoadingScreen`
    además llama `arm()`, que retira la instantánea a los 8 s si la ruta nunca
    avisa. Un error de arranque la retira de inmediato.
@@ -119,14 +132,14 @@ que su antigüedad no tiene tope garantizado.
   fichas publicadas sin SKU en Viñabike el 2026-09-24: caso residual).
 
 La normalización de la firma está dos veces —`seoInstantFreshnessSignature`
-en Dart y `norm` en `web/index.html`— y la prueba
+en Dart y `norm` en `instant_page.js`— y la prueba
 `storefront_instant_page_test` exige que lean los mismos campos.
 
 ## SEO y medición
 
 - Las fuentes se resuelven con `WebsiteFontRegistry`, como la tienda: sólo
   Oswald y Barlow; cualquier otro valor de `theme_heading_font` o
-  `theme_body_font` cae en la de omisión. `web/index.html` declara ambas con
+  `theme_body_font` cae en la de omisión. `instant_page.css` declara ambas con
   los mismos archivos que `pubspec.yaml`.
 - Oswald va sólo en peso 400: `pubspec.yaml` registra `Oswald-wght.ttf` para
   400–700 sin variar el eje, así que la tienda dibuja la instancia 400 y
@@ -220,11 +233,15 @@ migraciones involucrados.
 
 ## Verificación
 
-- Local: `test/unit/storefront_instant_page_test.dart`, el validador del
-  generador y un build con snapshots reales medido con Chrome headless
-  limitado (1,6 Mbps / 150 ms / CPU ×4) contra el mismo build sin plantilla.
-- Para probar un cambio de `web/index.html` sin recompilar no basta copiarlo
-  a `build/web_store/index.html`: el build reemplaza `$FLUTTER_BASE_HREF` y
+- Local: `test/unit/storefront_instant_page_test.dart` (incluye la inyección
+  sobre la plantilla de `sync_seo_index.sh`, que es la que publica CI), el
+  validador del generador y un build **en el orden de CI** —
+  `sync_seo_index.sh`, `flutter build web`, generador; después se restaura
+  `web/index.html`— medido con Chrome headless limitado (1,6 Mbps / 150 ms /
+  CPU ×4) contra el mismo build sin plantilla. Un build sin el paso de sync
+  mide algo que no se publica.
+- Para probar un cambio sin recompilar no basta copiar `web/index.html` a
+  `build/web_store/index.html`: el build reemplaza `$FLUTTER_BASE_HREF` y
   **pega `flutter_bootstrap.js` en `{{flutter_bootstrap_js}}`**. Con el
   marcador sin reemplazar Flutter nunca arranca y la instantánea se queda
   encima sin error visible (costó una medición de 90 s).

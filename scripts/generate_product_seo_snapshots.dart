@@ -3895,9 +3895,38 @@ String buildSeoInstantCategoryTemplate({
       '</div></template>';
 }
 
-/// Inserta la página instantánea en una ruta generada: el tema y la foto
-/// principal en `<head>` (la foto con prioridad alta, para que baje antes que
-/// el motor de Flutter), y la plantilla justo antes del splash.
+/// Hoja y script de la página instantánea. Viven aquí y no en
+/// `web/index.html` porque `scripts/sync_seo_index.sh` reescribe ese archivo
+/// entero desde su propia plantilla antes de cada build de CI: lo que sólo
+/// estaba en `web/index.html` no llegaba a producción (2026-09-24, la
+/// instantánea se publicó inerte). El generador corre desde la raíz del repo.
+const seoInstantStylePath = 'scripts/storefront_instant_page/instant_page.css';
+const seoInstantScriptPath = 'scripts/storefront_instant_page/instant_page.js';
+
+String? _seoInstantStyle;
+String? _seoInstantScript;
+
+String get seoInstantStyle =>
+    _seoInstantStyle ??= _readSeoInstantAsset(seoInstantStylePath, 'style');
+String get seoInstantScript =>
+    _seoInstantScript ??= _readSeoInstantAsset(seoInstantScriptPath, 'script');
+
+String _readSeoInstantAsset(String path, String closingTag) {
+  final file = File(path);
+  if (!file.existsSync()) {
+    throw StateError('Falta $path: la página instantánea no se puede montar.');
+  }
+  final text = file.readAsStringSync();
+  if (text.toLowerCase().contains('</$closingTag')) {
+    throw StateError('$path contiene </$closingTag>: cerraría su etiqueta.');
+  }
+  return text;
+}
+
+/// Inserta la página instantánea en una ruta generada: su hoja, el tema y la
+/// foto principal en `<head>` (la foto con prioridad alta, para que baje antes
+/// que el motor de Flutter), y la plantilla con el script que la monta justo
+/// antes del splash. No depende de nada de `web/index.html` salvo el splash.
 String injectSeoInstantPage(
   String html, {
   required SeoInstantPageTheme theme,
@@ -3911,7 +3940,14 @@ String injectSeoInstantPage(
       'instantánea no tiene dónde montarse.',
     );
   }
+  if (html.contains('vinabikeInstantPage')) {
+    throw StateError(
+      'web/index.html ya trae el script de la página instantánea; su único '
+      'dueño es $seoInstantScriptPath (se montaría dos veces).',
+    );
+  }
   final head = StringBuffer(
+    '  <style id="instant-page-style">\n$seoInstantStyle  </style>\n'
     '  <style id="instant-page-theme">${theme.css}</style>\n',
   );
   if (preloadImageUrl.isNotEmpty) {
@@ -3930,9 +3966,12 @@ String injectSeoInstantPage(
         RegExp(r'(<img\s+id="loading-logo"[^>]*?)fetchpriority="high"'),
         (match) => '${match.group(1)}loading="lazy"',
       );
-  return withoutSplashLogo
-      .replaceFirst('</head>', '$head</head>')
-      .replaceFirst(shellMarker, '$templateHtml\n  $shellMarker');
+  return withoutSplashLogo.replaceFirst('</head>', '$head</head>').replaceFirst(
+        shellMarker,
+        '$templateHtml\n'
+        '  <script id="instant-page-script">\n$seoInstantScript  </script>\n'
+        '  $shellMarker',
+      );
 }
 
 String _buildProductFallbackHtml({
