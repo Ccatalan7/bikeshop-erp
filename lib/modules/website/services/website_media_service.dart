@@ -294,6 +294,40 @@ class WebsiteMediaService {
     return WebsiteProductMediaItem.fromRows(rows);
   }
 
+  /// Una imagen de la biblioteca anterior al flujo de subida (2026-07-24) se
+  /// guardó tal como llegó: el carrusel de la portada llegó a bajar un PNG de
+  /// 1 MB con extensión `.avif`, servido como `image/jpeg`. Al usarla se pasa
+  /// por el mismo flujo que una subida nueva.
+  bool needsWebOptimization(WebsiteMediaAsset asset) {
+    final path = asset.path.trim();
+    if (asset.isWebOptimized || asset.comesFromProduct) return false;
+    if (path.isEmpty || Uri.tryParse(path)?.hasScheme == true) return false;
+    if (path.startsWith('$libraryFolder/')) return false;
+    if (path.contains('/optimized/')) return false;
+    return _legacyFolders.any((folder) => path.startsWith('$folder/'));
+  }
+
+  /// Baja una imagen antigua de la biblioteca y la sube por [uploadImage]:
+  /// queda normalizada, con su original oculto y su variante web.
+  Future<WebsiteMediaAsset> optimizeLibraryAsset(
+    WebsiteMediaAsset asset, {
+    String? tenantId,
+    WebsiteEditorWriteGuard? writeGuard,
+  }) async {
+    final bytes = await _client.storage
+        .from(StorageConfig.defaultBucket)
+        .download(asset.path);
+    writeGuard?.call();
+    return uploadImage(
+      bytes: bytes,
+      fileName: asset.name,
+      tenantId: tenantId,
+      writeGuard: writeGuard,
+      operation: 'optimize_library',
+      originalUrl: asset.publicUrl,
+    );
+  }
+
   Future<WebsiteMediaAsset> uploadImage({
     required Uint8List bytes,
     required String fileName,

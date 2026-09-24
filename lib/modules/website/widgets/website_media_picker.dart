@@ -412,6 +412,7 @@ class _WebsiteMediaPickerDialogState extends State<WebsiteMediaPickerDialog> {
   WebsiteMediaAsset? _selected;
   WebsiteProductMediaItem? _selectedProduct;
   bool _uploading = false;
+  bool _optimizing = false;
   String? _error;
 
   @override
@@ -472,6 +473,47 @@ class _WebsiteMediaPickerDialogState extends State<WebsiteMediaPickerDialog> {
       if (mounted) setState(() => _error = _cleanError(error));
     } finally {
       if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  /// Una imagen antigua de la biblioteca se optimiza antes de usarla, igual
+  /// que una subida nueva. Si el editor no sabe leer su formato (un AVIF
+  /// real), se usa como antes.
+  Future<void> _useLibraryAsset(WebsiteMediaAsset asset) async {
+    if (_uploading || _optimizing) return;
+    if (!_service.needsWebOptimization(asset)) {
+      Navigator.of(context).pop(asset);
+      return;
+    }
+    setState(() {
+      _optimizing = true;
+      _error = null;
+    });
+    try {
+      final authority = widget.remoteWriteAuthority?.call();
+      if (widget.remoteWriteAuthority != null && authority == null) {
+        throw const WebsiteEditorWriteSupersededException(
+          'La sesión del editor cambió antes de optimizar la imagen.',
+        );
+      }
+      final writeGuard = authority?.claimForWrite();
+      WebsiteMediaAsset result;
+      try {
+        result = await _service.optimizeLibraryAsset(
+          asset,
+          tenantId: authority?.tenantId,
+          writeGuard: writeGuard,
+        );
+      } on FormatException {
+        result = asset;
+      }
+      authority?.ensureCurrent();
+      if (!mounted) return;
+      Navigator.of(context).pop(result);
+    } catch (error) {
+      if (mounted) setState(() => _error = _cleanError(error));
+    } finally {
+      if (mounted) setState(() => _optimizing = false);
     }
   }
 
@@ -662,7 +704,7 @@ class _WebsiteMediaPickerDialogState extends State<WebsiteMediaPickerDialog> {
                       child: InkWell(
                         key: ValueKey('website_media_${asset.path}'),
                         onTap: () => setState(() => _selected = asset),
-                        onDoubleTap: () => Navigator.of(context).pop(asset),
+                        onDoubleTap: () => _useLibraryAsset(asset),
                         borderRadius: BorderRadius.circular(10),
                         child: Container(
                           decoration: BoxDecoration(
@@ -1144,7 +1186,8 @@ class _WebsiteMediaPickerDialogState extends State<WebsiteMediaPickerDialog> {
   }
 
   Widget _buildFooter() {
-    final canApply = _tab == WebsiteMediaPickerTab.url || _selected != null;
+    final canApply = !_optimizing &&
+        (_tab == WebsiteMediaPickerTab.url || _selected != null);
     final actions = <Widget>[
       TextButton(
         onPressed: () => Navigator.of(context).pop(),
@@ -1175,8 +1218,8 @@ class _WebsiteMediaPickerDialogState extends State<WebsiteMediaPickerDialog> {
                   ? _useAdvancedUrl
                   : _tab == WebsiteMediaPickerTab.products
                       ? () => _finishProductSelection(linkProduct: false)
-                      : () => Navigator.of(context).pop(_selected),
-          child: const Text('Usar imagen'),
+                      : () => _useLibraryAsset(_selected!),
+          child: Text(_optimizing ? 'Optimizando…' : 'Usar imagen'),
         ),
     ];
 
