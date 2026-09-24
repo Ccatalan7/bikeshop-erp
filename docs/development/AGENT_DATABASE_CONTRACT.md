@@ -1280,7 +1280,9 @@ cerrarlas (`20260924020000`):
   `authenticated` necesitan USAGE en ese esquema para las pruebas que cambian
   de rol: la base de `production_validation.sh` lo creaba sin grants y
   `products_anon_public_columns` falló con `function lives_ok(unknown,
-  unknown) does not exist` hasta que se replicó el grant de Supabase.
+  unknown) does not exist` hasta que se replicó el grant de Supabase. Esa
+  base instala pgTAP en `extensions`, igual que producción: instalado en
+  `public` escondería una prueba que dependa de ese esquema.
 - **Una función SECURITY DEFINER que anónimo puede ejecutar no es un
   hallazgo por sí sola.** De las 29 que marca el linter, las de la tienda son
   la fachada pública, las que devuelven `trigger` no las expone PostgREST y
