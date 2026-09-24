@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:vinabike_erp/modules/website/models/website_catalog_presentation.dart';
 import 'package:vinabike_erp/modules/website/widgets/premium_product_card.dart';
 import 'package:vinabike_erp/public_store/services/crawler_semantics.dart';
 import 'package:vinabike_erp/public_store/widgets/public_link_semantics.dart';
@@ -106,6 +107,41 @@ void main() {
         '/productos?category=abc');
     expect(canonicalPublicHref(context, 'https://wa.me/56998357797'),
         'https://wa.me/56998357797');
+  });
+
+  test('una categoría sin presentación propia enlaza a su colección de '
+      'respaldo y conserva los filtros', () {
+    WebsiteCatalogPresentation? presentationFor(String id) => id == 'cad-1'
+        ? WebsiteCatalogPresentation.fallback(
+            categoryId: id,
+            categoryName: 'Cadenas y Piñones',
+          )
+        : null;
+    final fallbackPath = publicCategoryPath(
+      presentation: presentationFor('cad-1')!,
+    );
+    expect(fallbackPath, startsWith('/productos/categoria/'));
+    expect(
+      canonicalStoreHref('/productos?category=cad-1',
+          presentationFor: presentationFor),
+      fallbackPath,
+    );
+    expect(
+      canonicalStoreHref('/tienda/productos?q=kmc&category_id=cad-1&page=2',
+          presentationFor: presentationFor),
+      '$fallbackPath?q=kmc&page=2',
+    );
+    expect(
+      canonicalStoreHref('/servicios?categoria=cad-1',
+          presentationFor: presentationFor),
+      fallbackPath.replaceFirst('/productos/', '/servicios/'),
+    );
+    // Una categoría que la tienda no conoce queda como la escribió el editor.
+    expect(
+      canonicalStoreHref('/productos?category=otra&q=kmc',
+          presentationFor: presentationFor),
+      '/productos?category=otra&q=kmc',
+    );
   });
 
   testWidgets('en el ERP (Edit y Preview bajo /tienda) no se declara enlace',

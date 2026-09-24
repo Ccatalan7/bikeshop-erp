@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 
 import '../../modules/website/models/website_catalog_presentation.dart';
 import '../../modules/website/services/website_service.dart';
+import '../providers/public_store_tenant_provider.dart';
+import '../services/public_inventory_service.dart';
 
 /// Declara que [child] lleva a [href], para que el árbol de accesibilidad lo
 /// exponga como enlace.
@@ -65,13 +67,27 @@ Uri? publicLinkUri(String? href) {
   return uri;
 }
 
-const _categoryQueryKeys = ['category', 'category_id', 'cat'];
+const _categoryQueryKeys = ['category', 'category_id', 'cat', 'categoria'];
 
 /// El destino canónico de un href escrito en el editor, el mismo al que
 /// termina llegando la navegación: `/tienda/...` es la ruta montada del ERP y
-/// `/productos?category=<id>` se reemplaza por la ruta de la colección. Un
-/// rastreador que siguiera el href crudo llegaría a otra URL canónica.
-String? canonicalPublicHref(BuildContext context, String? href) {
+/// `/productos?category=<id>` se reemplaza por la ruta de la colección,
+/// conservando los demás filtros como lo hace el catálogo. Un rastreador que
+/// siguiera el href crudo llegaría a otra URL canónica.
+String? canonicalPublicHref(BuildContext context, String? href) =>
+    canonicalStoreHref(
+      href,
+      presentationFor: (categoryId) =>
+          _presentationForCategory(context, categoryId),
+    );
+
+/// [canonicalPublicHref] sin la tienda montada: [presentationFor] resuelve la
+/// colección de una categoría, o null si no la conoce.
+String? canonicalStoreHref(
+  String? href, {
+  required WebsiteCatalogPresentation? Function(String categoryId)
+      presentationFor,
+}) {
   final value = href?.trim() ?? '';
   final uri = Uri.tryParse(value);
   if (uri == null || uri.hasScheme || !value.startsWith('/')) return href;
@@ -85,30 +101,58 @@ String? canonicalPublicHref(BuildContext context, String? href) {
 
   final isCatalogRoot = path == '/productos' || path == '/servicios';
   final categoryId = !isCatalogRoot
-      ? null
+      ? ''
       : _categoryQueryKeys
           .map((key) => uri.queryParameters[key]?.trim() ?? '')
           .firstWhere((id) => id.isNotEmpty, orElse: () => '');
-  if (categoryId != null && categoryId.isNotEmpty) {
-    WebsiteCatalogPresentation? presentation;
-    try {
-      presentation = context
-          .read<WebsiteService>()
-          .catalogPresentationRegistry
-          .forCategory(categoryId);
-    } catch (_) {
-      presentation = null;
-    }
-    if (presentation != null) {
-      return publicCategoryPath(
+  final presentation = categoryId.isEmpty ? null : presentationFor(categoryId);
+  if (presentation != null) {
+    final query = Map<String, String>.from(uri.queryParameters)
+      ..removeWhere((key, _) => _categoryQueryKeys.contains(key));
+    return Uri(
+      path: publicCategoryPath(
         presentation: presentation,
         services: path == '/servicios',
-      );
-    }
+      ),
+      queryParameters: query.isEmpty ? null : query,
+    ).toString();
   }
 
   return Uri(
     path: path,
     queryParameters: uri.queryParameters.isEmpty ? null : uri.queryParameters,
   ).toString();
+}
+
+/// La presentación publicada o, si la categoría no tiene una, la de respaldo
+/// que arma el catálogo con su nombre: las dos terminan en
+/// `/productos/categoria/<slug>`.
+WebsiteCatalogPresentation? _presentationForCategory(
+  BuildContext context,
+  String categoryId,
+) {
+  try {
+    final registered = context
+        .read<WebsiteService>()
+        .catalogPresentationRegistry
+        .forCategory(categoryId);
+    if (registered != null) return registered;
+    final tenantId = context.read<PublicStoreTenantProvider>().tenantId;
+    if (tenantId == null) return null;
+    final categories = context
+        .read<PublicInventoryService>()
+        .cachedCategoriesForTenant(tenantId: tenantId)
+        ?.categories;
+    for (final category in categories ?? const []) {
+      if (category.id == categoryId) {
+        return WebsiteCatalogPresentation.fallback(
+          categoryId: categoryId,
+          categoryName: category.name,
+        );
+      }
+    }
+  } catch (_) {
+    // Sin los providers de la tienda se deja el href como está.
+  }
+  return null;
 }
