@@ -20,6 +20,7 @@ on:
       - "analysis_options.yaml"
       - "firebase.json"
       - "scripts/generate_product_seo_snapshots.dart"
+      - "scripts/storefront_instant_page/**"
       - "scripts/generated_product_redirects.json"
       - "scripts/check_storefront_bundle_budget.sh"
       - "scripts/sync_seo_index.sh"
