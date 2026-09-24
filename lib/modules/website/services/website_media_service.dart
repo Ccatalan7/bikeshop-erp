@@ -300,20 +300,79 @@ class WebsiteMediaService {
   /// por el mismo flujo que una subida nueva.
   bool needsWebOptimization(WebsiteMediaAsset asset) {
     final path = asset.path.trim();
-    if (asset.isWebOptimized || asset.comesFromProduct) return false;
+    if (asset.comesFromProduct) return false;
     if (path.isEmpty || Uri.tryParse(path)?.hasScheme == true) return false;
     if (path.startsWith('$libraryFolder/')) return false;
     if (path.contains('/optimized/')) return false;
-    return _legacyFolders.any((folder) => path.startsWith('$folder/'));
+    if (!_legacyFolders.any((folder) => path.startsWith('$folder/'))) {
+      return false;
+    }
+    // Un `.webp` antiguo no está optimizado por su extensión: también se
+    // subían originales grandes en WebP.
+    final size = (asset.metadata['size'] as num?)?.toInt();
+    if (asset.isWebOptimized) {
+      return size != null && size > legacyWebMaxBytes;
+    }
+    return true;
+  }
+
+  /// Sobre esto una imagen antigua en WebP se vuelve a optimizar.
+  static const int legacyWebMaxBytes = 400 * 1024;
+
+  /// El nombre base que `website-optimize-image` le da a la variante web
+  /// (`safeFileStem`): `<base>-<uuid>-web.webp`. Si no coincide con la
+  /// versión de la función (un carácter raro), sólo se pierde la
+  /// reutilización.
+  static String webVariantStem(String fileName) {
+    const from = 'áàäâãéèëêíìïîóòöôõúùüûñçÁÀÄÂÃÉÈËÊÍÌÏÎÓÒÖÔÕÚÙÜÛÑÇ';
+    const to = 'aaaaaeeeeiiiiooooouuuuncAAAAAEEEEIIIIOOOOOUUUUNC';
+    final raw = fileName.trim().replaceAll(RegExp(r'\.[^.]+$'), '');
+    final buffer = StringBuffer();
+    for (final rune in raw.runes) {
+      final char = String.fromCharCode(rune);
+      final index = from.indexOf(char);
+      buffer.write(index == -1 ? char : to[index]);
+    }
+    var stem = buffer
+        .toString()
+        .replaceAll(RegExp(r'[^a-zA-Z0-9_-]+'), '-')
+        .replaceAll(RegExp(r'-+'), '-')
+        .replaceAll(RegExp(r'^-|-$'), '')
+        .toLowerCase();
+    if (stem.isEmpty) stem = 'website-image';
+    return stem.length > 72 ? stem.substring(0, 72) : stem;
+  }
+
+  /// La variante web que ya se hizo de [legacy], si está en [library]: elegir
+  /// dos veces la misma imagen antigua no la vuelve a subir.
+  WebsiteMediaAsset? existingWebVariant(
+    WebsiteMediaAsset legacy,
+    Iterable<WebsiteMediaAsset> library,
+  ) {
+    final pattern = RegExp(
+      '^${RegExp.escape(webVariantStem(legacy.name))}'
+      r'-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-web\.webp$',
+    );
+    for (final asset in library) {
+      if (asset.path.startsWith('$libraryFolder/') &&
+          pattern.hasMatch(asset.name)) {
+        return asset;
+      }
+    }
+    return null;
   }
 
   /// Baja una imagen antigua de la biblioteca y la sube por [uploadImage]:
-  /// queda normalizada, con su original oculto y su variante web.
+  /// queda normalizada, con su original oculto y su variante web. Si
+  /// [library] ya trae su variante, se devuelve ésa.
   Future<WebsiteMediaAsset> optimizeLibraryAsset(
     WebsiteMediaAsset asset, {
     String? tenantId,
     WebsiteEditorWriteGuard? writeGuard,
+    Iterable<WebsiteMediaAsset> library = const <WebsiteMediaAsset>[],
   }) async {
+    final existing = existingWebVariant(asset, library);
+    if (existing != null) return existing;
     final bytes = await _client.storage
         .from(StorageConfig.defaultBucket)
         .download(asset.path);

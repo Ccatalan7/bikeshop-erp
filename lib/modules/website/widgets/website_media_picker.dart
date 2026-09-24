@@ -478,7 +478,9 @@ class _WebsiteMediaPickerDialogState extends State<WebsiteMediaPickerDialog> {
 
   /// Una imagen antigua de la biblioteca se optimiza antes de usarla, igual
   /// que una subida nueva. Si el editor no sabe leer su formato (un AVIF
-  /// real), se usa como antes.
+  /// real, un SVG), se usa como antes; si lo lee y no puede prepararla, se
+  /// avisa en vez de publicar el original pesado. Mientras optimiza, el
+  /// diálogo no se cierra ni cambia de pestaña.
   Future<void> _useLibraryAsset(WebsiteMediaAsset asset) async {
     if (_uploading || _optimizing) return;
     if (!_service.needsWebOptimization(asset)) {
@@ -497,14 +499,19 @@ class _WebsiteMediaPickerDialogState extends State<WebsiteMediaPickerDialog> {
         );
       }
       final writeGuard = authority?.claimForWrite();
+      final library = await _assetsFuture.catchError(
+        (Object _) => const <WebsiteMediaAsset>[],
+      );
       WebsiteMediaAsset result;
       try {
         result = await _service.optimizeLibraryAsset(
           asset,
           tenantId: authority?.tenantId,
           writeGuard: writeGuard,
+          library: library,
         );
       } on FormatException {
+        if (_editorReadsFormat(asset.name)) rethrow;
         result = asset;
       }
       authority?.ensureCurrent();
@@ -516,6 +523,11 @@ class _WebsiteMediaPickerDialogState extends State<WebsiteMediaPickerDialog> {
       if (mounted) setState(() => _optimizing = false);
     }
   }
+
+  static bool _editorReadsFormat(String fileName) => RegExp(
+        r'\.(jpe?g|png|webp|gif|bmp)$',
+        caseSensitive: false,
+      ).hasMatch(fileName.trim());
 
   void _useAdvancedUrl() {
     final value = _urlController.text.trim();
@@ -533,23 +545,26 @@ class _WebsiteMediaPickerDialogState extends State<WebsiteMediaPickerDialog> {
     final screen = MediaQuery.sizeOf(context);
     final maxDialogHeight = screen.height * .86;
     final minDialogHeight = maxDialogHeight < 560 ? maxDialogHeight : 560.0;
-    return Dialog(
-      insetPadding: const EdgeInsets.all(24),
-      clipBehavior: Clip.antiAlias,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: 920,
-          maxHeight: maxDialogHeight,
-          minHeight: minDialogHeight,
-        ),
-        child: Column(
-          children: [
-            _buildHeader(),
-            _buildTabs(),
-            if (_error != null) _buildError(),
-            Expanded(child: _buildBody()),
-            _buildFooter(),
-          ],
+    return PopScope(
+      canPop: !_optimizing,
+      child: Dialog(
+        insetPadding: const EdgeInsets.all(24),
+        clipBehavior: Clip.antiAlias,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: 920,
+            maxHeight: maxDialogHeight,
+            minHeight: minDialogHeight,
+          ),
+          child: Column(
+            children: [
+              _buildHeader(),
+              _buildTabs(),
+              if (_error != null) _buildError(),
+              Expanded(child: _buildBody()),
+              _buildFooter(),
+            ],
+          ),
         ),
       ),
     );
@@ -577,7 +592,7 @@ class _WebsiteMediaPickerDialogState extends State<WebsiteMediaPickerDialog> {
           ),
           IconButton(
             tooltip: 'Cerrar',
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: _optimizing ? null : () => Navigator.of(context).pop(),
             icon: const Icon(Icons.close),
           ),
         ],
@@ -617,12 +632,14 @@ class _WebsiteMediaPickerDialogState extends State<WebsiteMediaPickerDialog> {
               ),
             ],
             selected: {_tab},
-            onSelectionChanged: (value) => setState(() {
-              _tab = value.first;
-              _selected = null;
-              _selectedProduct = null;
-              _error = null;
-            }),
+            onSelectionChanged: _optimizing
+                ? null
+                : (value) => setState(() {
+                      _tab = value.first;
+                      _selected = null;
+                      _selectedProduct = null;
+                      _error = null;
+                    }),
           ),
         ),
       ),
@@ -1190,7 +1207,7 @@ class _WebsiteMediaPickerDialogState extends State<WebsiteMediaPickerDialog> {
         (_tab == WebsiteMediaPickerTab.url || _selected != null);
     final actions = <Widget>[
       TextButton(
-        onPressed: () => Navigator.of(context).pop(),
+        onPressed: _optimizing ? null : () => Navigator.of(context).pop(),
         child: const Text('Cancelar'),
       ),
       if (_tab == WebsiteMediaPickerTab.products &&

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -22,6 +24,7 @@ class _FakeWebsiteMediaService extends WebsiteMediaService {
   _FakeWebsiteMediaService({
     this.library = const [],
     this.unreadableLegacy = false,
+    this.pending,
   }) : super(
           client: SupabaseClient(
             'http://localhost:54321',
@@ -34,6 +37,7 @@ class _FakeWebsiteMediaService extends WebsiteMediaService {
 
   final List<WebsiteMediaAsset> library;
   final bool unreadableLegacy;
+  final Completer<WebsiteMediaAsset>? pending;
   final optimized = <String>[];
 
   @override
@@ -45,8 +49,10 @@ class _FakeWebsiteMediaService extends WebsiteMediaService {
     WebsiteMediaAsset asset, {
     String? tenantId,
     WebsiteEditorWriteGuard? writeGuard,
+    Iterable<WebsiteMediaAsset> library = const <WebsiteMediaAsset>[],
   }) async {
     optimized.add(asset.path);
+    if (pending != null) return pending!.future;
     if (unreadableLegacy) {
       throw const FormatException('No se pudo leer la imagen.');
     }
@@ -189,8 +195,10 @@ void main() {
 
   Future<WebsiteMediaAsset?> pickLegacy(
     WidgetTester tester,
-    _FakeWebsiteMediaService service,
-  ) async {
+    _FakeWebsiteMediaService service, {
+    WebsiteMediaAsset legacy = _legacyAsset,
+    bool settle = true,
+  }) async {
     WebsiteMediaAsset? result;
     await tester.pumpWidget(
       MaterialApp(
@@ -212,14 +220,18 @@ void main() {
     await tester.tap(find.text('Abrir picker'));
     await tester.pumpAndSettle();
     await tester.tap(
-      find.byKey(ValueKey('website_media_${_legacyAsset.path}')),
+      find.byKey(ValueKey('website_media_${legacy.path}')),
     );
     // La tarjeta también escucha doble toque: el toque simple se confirma
     // cuando vence la espera del doble.
     await tester.pump(kDoubleTapTimeout + const Duration(milliseconds: 50));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Usar imagen'));
-    await tester.pumpAndSettle();
+    if (settle) {
+      await tester.pumpAndSettle();
+    } else {
+      await tester.pump();
+    }
     return result;
   }
 
@@ -240,5 +252,89 @@ void main() {
     final result = await pickLegacy(tester, service);
     expect(service.optimized, [_legacyAsset.path]);
     expect(result?.publicUrl, _legacyAsset.publicUrl);
+  });
+
+  test('una WebP antigua pesada también se optimiza; una liviana no', () {
+    final service = _FakeWebsiteMediaService();
+    WebsiteMediaAsset webp(int size) => WebsiteMediaAsset(
+          name: 'bici.webp',
+          path: 'website-images/bici.webp',
+          publicUrl: 'https://cdn.example.com/bici.webp',
+          metadata: {'size': size},
+        );
+    expect(service.needsWebOptimization(webp(1024 * 1024)), isTrue);
+    expect(service.needsWebOptimization(webp(120 * 1024)), isFalse);
+  });
+
+  test('el nombre base calza con el de website-optimize-image', () {
+    expect(
+      WebsiteMediaService.webVariantStem(
+          'website_1770066134089_scaled_mechanic.avif'),
+      'website_1770066134089_scaled_mechanic',
+    );
+    expect(WebsiteMediaService.webVariantStem('Cámara Ñandú 29.png'),
+        'camara-nandu-29');
+  });
+
+  test('una imagen antigua ya optimizada no se vuelve a subir', () async {
+    final service = WebsiteMediaService(
+      client: SupabaseClient(
+        'http://localhost:54321',
+        'test-anon-key',
+        authOptions: const AuthClientOptions(autoRefreshToken: false),
+      ),
+    );
+    const variant = WebsiteMediaAsset(
+      name: 'website_1770066134089_scaled_mechanic-'
+          '0f8c2d9e-1b2a-4c3d-9e8f-123456789abc-web.webp',
+      path: 'website/media/tenant/website_1770066134089_scaled_mechanic-'
+          '0f8c2d9e-1b2a-4c3d-9e8f-123456789abc-web.webp',
+      publicUrl: 'https://cdn.example.com/website/media/mechanic-web.webp',
+    );
+    final result = await service.optimizeLibraryAsset(
+      _legacyAsset,
+      library: const [_legacyAsset, variant],
+    );
+    expect(result.publicUrl, variant.publicUrl);
+  });
+
+  testWidgets('una imagen legible que no se puede preparar avisa y no se usa',
+      (tester) async {
+    const legacyPng = WebsiteMediaAsset(
+      name: 'banner-enorme.png',
+      path: 'website-images/banner-enorme.png',
+      publicUrl: 'https://cdn.example.com/banner-enorme.png',
+    );
+    final service = _FakeWebsiteMediaService(
+      library: const [legacyPng],
+      unreadableLegacy: true,
+    );
+    final result = await pickLegacy(tester, service, legacy: legacyPng);
+    expect(service.optimized, [legacyPng.path]);
+    expect(result, isNull);
+    expect(find.text('Usar imagen'), findsOneWidget);
+  });
+
+  testWidgets('mientras optimiza, el diálogo no se cierra ni cambia de pestaña',
+      (tester) async {
+    final pending = Completer<WebsiteMediaAsset>();
+    final service = _FakeWebsiteMediaService(
+      library: const [_legacyAsset],
+      pending: pending,
+    );
+    await pickLegacy(tester, service, settle: false);
+    await tester.pump();
+    expect(find.text('Optimizando…'), findsOneWidget);
+    final cancel = tester.widget<TextButton>(
+      find.widgetWithText(TextButton, 'Cancelar'),
+    );
+    expect(cancel.onPressed, isNull);
+    final tabs = tester.widget<SegmentedButton<WebsiteMediaPickerTab>>(
+      find.byType(SegmentedButton<WebsiteMediaPickerTab>),
+    );
+    expect(tabs.onSelectionChanged, isNull);
+    pending.complete(_optimizedAsset);
+    await tester.pumpAndSettle();
+    expect(find.text('Optimizando…'), findsNothing);
   });
 }
