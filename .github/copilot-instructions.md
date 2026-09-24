@@ -4020,8 +4020,17 @@ la parte de base de datos):**
 - `/servicios` se genera desde los servicios publicados con precio (`ItemList`
   de `Service` con `Offer`). Un JSON-LD nuevo no repite `LocalBusiness`: la
   validación exige uno por página.
-- La tienda se reconstruye todos los días (08:00 UTC), porque editar contenido
-  en el ERP no publica nada; antes sólo llegaba a Google con un push de código.
+- La tienda se reconstruye una vez al día, porque editar contenido en el ERP
+  no publica nada; antes sólo llegaba a Google con un push de código.
+  **El cron es la hora pedida, no la de publicación** (corregido 2026-09-24).
+  `0 8 * * *` va en UTC: 05:00 de Chile en horario de verano y 04:00 en
+  invierno. GitHub dispara `schedule` con atraso cuando tiene carga, sobre
+  todo al inicio de cada hora, y bajo carga alta puede saltarse la corrida.
+  La primera (run `36003903361`) se creó el 24-sep a las 13:10:54 UTC, 5 h
+  11 min tarde, y el `release.json` quedó con `built_at` 13:30:12 UTC; el otro
+  cron del repositorio (`technology-radar`, lunes 13:17 UTC) llegó entre
+  35 min y 6 h 13 min tarde en agosto y septiembre. No se promete una hora ni
+  «menos de 24 h»: lo editado sale en la próxima corrida que GitHub dispare.
 - Medición: `Ga4CommerceEvents` envía `view_item`, `add_to_cart`,
   `begin_checkout`, `purchase` y `contact` (con `method`). Marcarlos como
   eventos clave se hace en GA4.

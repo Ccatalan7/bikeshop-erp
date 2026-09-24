@@ -30,8 +30,10 @@ on:
       - ".github/workflows/firebase-hosting-store.yml"
   # Guardar en el editor o cambiar stock en el ERP no toca este repositorio,
   # así que sin esto el HTML, los snapshots y el sitemap que lee Google sólo
-  # cambian con un cambio de código. Cada día a las 05:00 de Chile (08:00
-  # UTC) se reconstruyen con los datos del día.
+  # cambian con un cambio de código. Una vez al día se reconstruyen con los
+  # datos del día. 08:00 UTC es la hora pedida, no la de publicación: GitHub
+  # atrasa `schedule` cuando tiene carga y puede saltarse una corrida (la
+  # primera, el 24-sep, partió a las 13:10 UTC).
   schedule:
     - cron: "0 8 * * *"
   workflow_dispatch:
