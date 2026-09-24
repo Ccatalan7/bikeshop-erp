@@ -1252,3 +1252,39 @@ Antes de confiar en un resultado local de «antes y después», se compara
 `md5(prosrc)` de cada función involucrada contra producción. Si difieren, se
 carga en local el cuerpo exacto de producción (`pg_get_functiondef`), se corre
 la prueba —tiene que fallar— y recién entonces se aplica la migración.
+
+## Lo que no se lee sin sesión se prueba por REST, relación por relación (2026-09-24)
+
+Contar filas como `anon` en las 177 relaciones con grant de SELECT
+(`set local role anon` + `query_to_xml(format('select count(*) ... %I'))`,
+porque un read-back alojado no admite `do $$`) encontró las dos puertas que el
+RLS no cubre, y ambas se confirmaron con la clave pública por REST antes de
+cerrarlas (`20260924020000`):
+
+- **Una vista materializada no tiene RLS.** `product_gama_bands_mv` llevaba el
+  costo neto promedio de compra por marca y categoría, con grant a `anon` y a
+  `authenticated`: 107 filas para cualquiera, y los costos de todos los
+  tenants para cualquier sesión. Una vista `security_invoker` encima no
+  protege nada si lee la materializada. Sus consumidores eran SECURITY
+  DEFINER, así que el grant sobraba. El linter de Supabase la marca como
+  `materialized_view_in_api`.
+- **pgTAP instalado en `public` queda en la API.** 1.074 funciones y dos
+  vistas: `GET /rest/v1/tap_funky` lista cada función del esquema con su
+  `is_definer`, y `POST /rest/v1/rpc/lives_ok` (cuerpo `text/plain`) ejecuta
+  el SQL que recibe. Sus objetos son de `supabase_admin`: un `revoke` de
+  `postgres` termina sin error y sin quitar nada. Lo que funcionó fue
+  `drop extension pgtap; create extension pgtap with schema extensions` (es
+  una extensión privilegiada de supautils; `postgres` puede hacerlo), y las
+  pruebas lo siguen resolviendo sin prefijo porque `extensions` está en el
+  search_path de `postgres` en producción y en local. `anon` y
+  `authenticated` necesitan USAGE en ese esquema para las pruebas que cambian
+  de rol: la base de `production_validation.sh` lo creaba sin grants y
+  `products_anon_public_columns` falló con `function lives_ok(unknown,
+  unknown) does not exist` hasta que se replicó el grant de Supabase. Esa
+  base instala pgTAP en `extensions`, igual que producción: instalado en
+  `public` escondería una prueba que dependa de ese esquema.
+- **Una función SECURITY DEFINER que anónimo puede ejecutar no es un
+  hallazgo por sí sola.** De las 29 que marca el linter, las de la tienda son
+  la fachada pública, las que devuelven `trigger` no las expone PostgREST y
+  las del asistente exigen `assistant_require_capability_internal_v1` adentro.
+  Se lee el cuerpo antes de revocar.

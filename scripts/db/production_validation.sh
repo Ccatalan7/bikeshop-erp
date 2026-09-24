@@ -9,7 +9,7 @@ readonly PRODUCTION_VALIDATION_PROJECT_REF="xzdvtzdqjeyqxnkqprtf"
 readonly PRODUCTION_VALIDATION_DIRECT_HOST="db.${PRODUCTION_VALIDATION_PROJECT_REF}.supabase.co"
 readonly PRODUCTION_VALIDATION_DIRECT_PORT="5432"
 readonly PRODUCTION_VALIDATION_CONNECT_TIMEOUT_SECONDS="10"
-readonly PRODUCTION_VALIDATION_CACHE_FORMAT="5-direct-ipv6-public-private-runtime-acl"
+readonly PRODUCTION_VALIDATION_CACHE_FORMAT="7-direct-ipv6-public-private-runtime-acl-pgtap-in-extensions"
 readonly PRODUCTION_VALIDATION_CATALOG_SQL="$DB_ROOT/scripts/db/production_validation_catalog.sql"
 readonly PRODUCTION_VALIDATION_ACL_ROLES_SQL="$DB_ROOT/scripts/db/production_validation_acl_roles.sql"
 readonly PRODUCTION_VALIDATION_ROOT="${VINABIKE_PROD_VALIDATION_ROOT:-$DB_CACHE_DIR/production-validation}"
@@ -679,6 +679,10 @@ production_validation_build_template() {
 
   PGOPTIONS='' psql "$build_url" -X -v ON_ERROR_STOP=1 -q <<'SQL'
 create schema if not exists extensions;
+-- Supabase gives the API roles USAGE on `extensions`; without it a test that
+-- switches to anon/authenticated cannot reach anything installed there
+-- (pgTAP moved there on 2026-09-24).
+grant usage on schema extensions to anon, authenticated, service_role;
 create extension if not exists pgcrypto with schema extensions;
 create extension if not exists "uuid-ossp" with schema extensions;
 create extension if not exists pg_net with schema extensions;
@@ -726,7 +730,7 @@ SQL
     die "Managed late post-data restore failed; full log: $restore_log"
   fi
   PGOPTIONS='' psql "$build_url" -X -v ON_ERROR_STOP=1 -q \
-    -c 'create extension if not exists pgtap with schema public;'
+    -c 'create extension if not exists pgtap with schema extensions;'
 
   PGOPTIONS='' psql "$PRODUCTION_VALIDATION_LOCAL_DB_URL" \
     -X -v ON_ERROR_STOP=1 \
