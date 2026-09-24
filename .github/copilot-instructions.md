@@ -4065,7 +4065,10 @@ la parte de base de datos):**
   `errorPageBuilder`: esa página no registra un `GoRouterState` y el layout lo
   lee (pantalla gris en release). El layout no le pisa el SEO porque la ruta
   pasa `pageOwnsSeo: true`. Una ruta nueva va antes del comodín;
-  `test/unit/public_store_missing_route_test.dart` lo guarda.
+  `test/unit/public_store_missing_route_test.dart` lo guarda. Dos reglas
+  que salieron de la revisión: con `push` la página de abajo sigue montada,
+  así que el SEO sólo lo escribe la ruta visible (`TickerMode`), y
+  `/tienda/:resto(.*)` redirige las rutas montadas del ERP a su ruta pública.
 - `google-places-proxy` lo llaman clientes sin cuenta con la clave pública
   (sin clave, el gateway da 401). La protección de la llave de Google está en
   la función: tenant activo, entradas acotadas, y sólo los campos que lee el
