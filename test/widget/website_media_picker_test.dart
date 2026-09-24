@@ -9,9 +9,9 @@ import 'package:vinabike_erp/modules/website/services/website_service.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_media_picker.dart';
 
 const _legacyAsset = WebsiteMediaAsset(
-  name: 'website_1770066134089_scaled_mechanic.avif',
-  path: 'website-images/website_1770066134089_scaled_mechanic.avif',
-  publicUrl: 'https://cdn.example.com/website-images/mechanic.avif',
+  name: 'website_1770066134089_scaled_mechanic.png',
+  path: 'website-images/website_1770066134089_scaled_mechanic.png',
+  publicUrl: 'https://cdn.example.com/website-images/mechanic.png',
 );
 const _optimizedAsset = WebsiteMediaAsset(
   name: 'mechanic.webp',
@@ -49,12 +49,11 @@ class _FakeWebsiteMediaService extends WebsiteMediaService {
     WebsiteMediaAsset asset, {
     String? tenantId,
     WebsiteEditorWriteGuard? writeGuard,
-    Iterable<WebsiteMediaAsset> library = const <WebsiteMediaAsset>[],
   }) async {
     optimized.add(asset.path);
     if (pending != null) return pending!.future;
     if (unreadableLegacy) {
-      throw const FormatException('No se pudo leer la imagen.');
+      throw const FormatException('La imagen supera 15 MB.');
     }
     return _optimizedAsset;
   }
@@ -81,6 +80,41 @@ class _FakeWebsiteMediaService extends WebsiteMediaService {
           imageUrls: [],
         ),
       ];
+}
+
+/// Usa el `optimizeLibraryAsset` real con la búsqueda de variantes inyectada:
+/// si encuentra la suya, no baja ni sube nada.
+class _VariantLookupService extends WebsiteMediaService {
+  _VariantLookupService(this.variants)
+      : super(
+          client: SupabaseClient(
+            'http://localhost:54321',
+            'test-anon-key',
+            authOptions: const AuthClientOptions(autoRefreshToken: false),
+          ),
+        );
+
+  final List<WebsiteMediaAsset> variants;
+  final searched = <String>[];
+
+  @override
+  Future<List<WebsiteMediaAsset>> listWebVariants(
+    String stem,
+    String tenantId,
+  ) async {
+    searched.add('$tenantId/$stem');
+    return variants;
+  }
+}
+
+WebsiteMediaAsset _webVariantOf(WebsiteMediaAsset legacy) {
+  final name = '${WebsiteMediaService.legacyVariantStem(legacy)}'
+      '-0f8c2d9e-1b2a-4c3d-9e8f-123456789abc-web.webp';
+  return WebsiteMediaAsset(
+    name: name,
+    path: 'website/media/tenant/$name',
+    publicUrl: 'https://cdn.example.com/website/media/tenant/$name',
+  );
 }
 
 void main() {
@@ -243,17 +277,6 @@ void main() {
     expect(result?.publicUrl, _optimizedAsset.publicUrl);
   });
 
-  testWidgets('si el formato no se puede leer, se usa la imagen como antes',
-      (tester) async {
-    final service = _FakeWebsiteMediaService(
-      library: const [_legacyAsset],
-      unreadableLegacy: true,
-    );
-    final result = await pickLegacy(tester, service);
-    expect(service.optimized, [_legacyAsset.path]);
-    expect(result?.publicUrl, _legacyAsset.publicUrl);
-  });
-
   test('una WebP antigua pesada también se optimiza; una liviana no', () {
     final service = _FakeWebsiteMediaService();
     WebsiteMediaAsset webp(int size) => WebsiteMediaAsset(
@@ -264,54 +287,82 @@ void main() {
         );
     expect(service.needsWebOptimization(webp(1024 * 1024)), isTrue);
     expect(service.needsWebOptimization(webp(120 * 1024)), isFalse);
+    expect(
+      service.needsWebOptimization(const WebsiteMediaAsset(
+        name: 'sin-tamano.webp',
+        path: 'website-images/sin-tamano.webp',
+        publicUrl: 'https://cdn.example.com/sin-tamano.webp',
+      )),
+      isTrue,
+    );
   });
 
-  test('el nombre base calza con el de website-optimize-image', () {
-    expect(
-      WebsiteMediaService.webVariantStem(
-          'website_1770066134089_scaled_mechanic.avif'),
-      'website_1770066134089_scaled_mechanic',
+  test('el nombre de la versión web distingue la imagen por su ruta', () {
+    const png = WebsiteMediaAsset(
+      name: 'logo.png',
+      path: 'website-images/logo.png',
+      publicUrl: 'https://cdn.example.com/logo.png',
     );
-    expect(WebsiteMediaService.webVariantStem('Cámara Ñandú 29.png'),
-        'camara-nandu-29');
+    const jpg = WebsiteMediaAsset(
+      name: 'logo.jpg',
+      path: 'website-images/logo.jpg',
+      publicUrl: 'https://cdn.example.com/logo.jpg',
+    );
+    const otherFolder = WebsiteMediaAsset(
+      name: 'logo.png',
+      path: 'website/blocks/logo.png',
+      publicUrl: 'https://cdn.example.com/blocks/logo.png',
+    );
+    final stem = WebsiteMediaService.legacyVariantStem(png);
+    expect(stem, matches(RegExp(r'^logo-src[0-9a-f]{8}$')));
+    expect(WebsiteMediaService.legacyVariantStem(png), stem);
+    expect(WebsiteMediaService.legacyVariantStem(jpg), isNot(stem));
+    expect(WebsiteMediaService.legacyVariantStem(otherFolder), isNot(stem));
+
+    final service = _VariantLookupService(const []);
+    expect(service.existingWebVariant(png, [_webVariantOf(jpg)]), isNull);
+    expect(
+      service.existingWebVariant(
+          png, [_webVariantOf(jpg), _webVariantOf(png)])?.path,
+      _webVariantOf(png).path,
+    );
+  });
+
+  test('el nombre sale en ASCII y cabe en el nombre base de la función', () {
+    final stem = WebsiteMediaService.legacyVariantStem(WebsiteMediaAsset(
+      name: 'Ångström Cámara Ñandú ${'x' * 90}.PNG',
+      path: 'website-images/angstrom.PNG',
+      publicUrl: 'https://cdn.example.com/angstrom.PNG',
+    ));
+    // `safeFileStem` de website-optimize-image deja intacto un nombre
+    // [a-z0-9_-] sin guiones dobles ni en los bordes y de hasta 72.
+    expect(stem, matches(RegExp(r'^[a-z0-9_]+(-[a-z0-9_]+)*$')));
+    expect(stem.length, lessThanOrEqualTo(72));
+    expect(stem, startsWith('angstrom-camara-nandu-'));
   });
 
   test('una imagen antigua ya optimizada no se vuelve a subir', () async {
-    final service = WebsiteMediaService(
-      client: SupabaseClient(
-        'http://localhost:54321',
-        'test-anon-key',
-        authOptions: const AuthClientOptions(autoRefreshToken: false),
-      ),
-    );
-    const variant = WebsiteMediaAsset(
-      name: 'website_1770066134089_scaled_mechanic-'
-          '0f8c2d9e-1b2a-4c3d-9e8f-123456789abc-web.webp',
-      path: 'website/media/tenant/website_1770066134089_scaled_mechanic-'
-          '0f8c2d9e-1b2a-4c3d-9e8f-123456789abc-web.webp',
-      publicUrl: 'https://cdn.example.com/website/media/mechanic-web.webp',
-    );
+    final service = _VariantLookupService([_webVariantOf(_legacyAsset)]);
     final result = await service.optimizeLibraryAsset(
       _legacyAsset,
-      library: const [_legacyAsset, variant],
+      tenantId: 'tenant',
     );
-    expect(result.publicUrl, variant.publicUrl);
+    expect(result.publicUrl, _webVariantOf(_legacyAsset).publicUrl);
+    expect(service.searched, [
+      'tenant/${WebsiteMediaService.legacyVariantStem(_legacyAsset)}',
+    ]);
   });
 
-  testWidgets('una imagen legible que no se puede preparar avisa y no se usa',
+  testWidgets('una imagen antigua que no se puede preparar avisa y no se usa',
       (tester) async {
-    const legacyPng = WebsiteMediaAsset(
-      name: 'banner-enorme.png',
-      path: 'website-images/banner-enorme.png',
-      publicUrl: 'https://cdn.example.com/banner-enorme.png',
-    );
     final service = _FakeWebsiteMediaService(
-      library: const [legacyPng],
+      library: const [_legacyAsset],
       unreadableLegacy: true,
     );
-    final result = await pickLegacy(tester, service, legacy: legacyPng);
-    expect(service.optimized, [legacyPng.path]);
+    final result = await pickLegacy(tester, service);
+    expect(service.optimized, [_legacyAsset.path]);
     expect(result, isNull);
+    expect(find.text('La imagen supera 15 MB.'), findsOneWidget);
     expect(find.text('Usar imagen'), findsOneWidget);
   });
 
@@ -325,6 +376,7 @@ void main() {
     await pickLegacy(tester, service, settle: false);
     await tester.pump();
     expect(find.text('Optimizando…'), findsOneWidget);
+    expect(find.textContaining('Se optimiza al usarla'), findsOneWidget);
     final cancel = tester.widget<TextButton>(
       find.widgetWithText(TextButton, 'Cancelar'),
     );
@@ -333,6 +385,10 @@ void main() {
       find.byType(SegmentedButton<WebsiteMediaPickerTab>),
     );
     expect(tabs.onSelectionChanged, isNull);
+    final search = tester.widget<TextField>(
+      find.widgetWithText(TextField, 'Buscar en la biblioteca'),
+    );
+    expect(search.enabled, isFalse);
     pending.complete(_optimizedAsset);
     await tester.pumpAndSettle();
     expect(find.text('Optimizando…'), findsNothing);

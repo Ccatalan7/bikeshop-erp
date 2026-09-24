@@ -477,10 +477,10 @@ class _WebsiteMediaPickerDialogState extends State<WebsiteMediaPickerDialog> {
   }
 
   /// Una imagen antigua de la biblioteca se optimiza antes de usarla, igual
-  /// que una subida nueva. Si el editor no sabe leer su formato (un AVIF
-  /// real, un SVG), se usa como antes; si lo lee y no puede prepararla, se
-  /// avisa en vez de publicar el original pesado. Mientras optimiza, el
-  /// diálogo no se cierra ni cambia de pestaña.
+  /// que una subida nueva. Si no se puede preparar (más de 15 MB, bytes que
+  /// no son una imagen legible), se avisa en vez de publicar el original.
+  /// Mientras optimiza, el diálogo no se cierra, no cambia de pestaña ni
+  /// acepta otra elección.
   Future<void> _useLibraryAsset(WebsiteMediaAsset asset) async {
     if (_uploading || _optimizing) return;
     if (!_service.needsWebOptimization(asset)) {
@@ -499,21 +499,11 @@ class _WebsiteMediaPickerDialogState extends State<WebsiteMediaPickerDialog> {
         );
       }
       final writeGuard = authority?.claimForWrite();
-      final library = await _assetsFuture.catchError(
-        (Object _) => const <WebsiteMediaAsset>[],
+      final result = await _service.optimizeLibraryAsset(
+        asset,
+        tenantId: authority?.tenantId,
+        writeGuard: writeGuard,
       );
-      WebsiteMediaAsset result;
-      try {
-        result = await _service.optimizeLibraryAsset(
-          asset,
-          tenantId: authority?.tenantId,
-          writeGuard: writeGuard,
-          library: library,
-        );
-      } on FormatException {
-        if (_editorReadsFormat(asset.name)) rethrow;
-        result = asset;
-      }
       authority?.ensureCurrent();
       if (!mounted) return;
       Navigator.of(context).pop(result);
@@ -523,11 +513,6 @@ class _WebsiteMediaPickerDialogState extends State<WebsiteMediaPickerDialog> {
       if (mounted) setState(() => _optimizing = false);
     }
   }
-
-  static bool _editorReadsFormat(String fileName) => RegExp(
-        r'\.(jpe?g|png|webp|gif|bmp)$',
-        caseSensitive: false,
-      ).hasMatch(fileName.trim());
 
   void _useAdvancedUrl() {
     final value = _urlController.text.trim();
@@ -561,7 +546,12 @@ class _WebsiteMediaPickerDialogState extends State<WebsiteMediaPickerDialog> {
               _buildHeader(),
               _buildTabs(),
               if (_error != null) _buildError(),
-              Expanded(child: _buildBody()),
+              Expanded(
+                child: IgnorePointer(
+                  ignoring: _optimizing,
+                  child: _buildBody(),
+                ),
+              ),
               _buildFooter(),
             ],
           ),
@@ -679,6 +669,7 @@ class _WebsiteMediaPickerDialogState extends State<WebsiteMediaPickerDialog> {
         children: [
           TextField(
             controller: _searchController,
+            enabled: !_optimizing,
             decoration: const InputDecoration(
               prefixIcon: Icon(Icons.search),
               labelText: 'Buscar en la biblioteca',
@@ -1257,7 +1248,7 @@ class _WebsiteMediaPickerDialogState extends State<WebsiteMediaPickerDialog> {
           final selectedLabel = Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (_selected?.isWebOptimized == true) ...[
+              if (_selected != null && _selectedIsWebReady) ...[
                 const Icon(
                   Icons.check_circle_outline_rounded,
                   size: 15,
@@ -1269,9 +1260,11 @@ class _WebsiteMediaPickerDialogState extends State<WebsiteMediaPickerDialog> {
                 child: Text(
                   _selected == null
                       ? ''
-                      : _selected!.isWebOptimized
-                          ? '${_selected!.name} · Optimizada para web'
-                          : _selected!.name,
+                      : _service.needsWebOptimization(_selected!)
+                          ? '${_selected!.name} · Se optimiza al usarla'
+                          : _selectedIsWebReady
+                              ? '${_selected!.name} · Optimizada para web'
+                              : _selected!.name,
                   overflow: TextOverflow.ellipsis,
                   maxLines: 1,
                   style: const TextStyle(fontSize: 12, color: Colors.black54),
@@ -1305,8 +1298,12 @@ class _WebsiteMediaPickerDialogState extends State<WebsiteMediaPickerDialog> {
     );
   }
 
-  static String _cleanError(Object error) =>
-      error.toString().replaceFirst('Exception: ', '');
+  bool get _selectedIsWebReady =>
+      _selected!.isWebOptimized && !_service.needsWebOptimization(_selected!);
+
+  static String _cleanError(Object error) => error is FormatException
+      ? error.message
+      : error.toString().replaceFirst('Exception: ', '');
 }
 
 class WebsiteImagePickerField extends StatefulWidget {

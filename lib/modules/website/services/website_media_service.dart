@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/constants/storage_constants.dart';
@@ -308,52 +310,60 @@ class WebsiteMediaService {
       return false;
     }
     // Un `.webp` antiguo no está optimizado por su extensión: también se
-    // subían originales grandes en WebP.
+    // subían originales grandes en WebP. Sin tamaño conocido, se optimiza.
     final size = (asset.metadata['size'] as num?)?.toInt();
     if (asset.isWebOptimized) {
-      return size != null && size > legacyWebMaxBytes;
+      return size == null || size > legacyWebMaxBytes;
     }
     return true;
   }
 
-  /// Sobre esto una imagen antigua en WebP se vuelve a optimizar.
-  static const int legacyWebMaxBytes = 400 * 1024;
+  /// Sobre esto una imagen antigua en WebP se vuelve a optimizar: el mismo
+  /// umbral con que se inventarió la tienda el 2026-09-24.
+  static const int legacyWebMaxBytes = 300 * 1024;
 
-  /// El nombre base que `website-optimize-image` le da a la variante web
-  /// (`safeFileStem`): `<base>-<uuid>-web.webp`. Si no coincide con la
-  /// versión de la función (un carácter raro), sólo se pierde la
-  /// reutilización.
-  static String webVariantStem(String fileName) {
-    const from = 'áàäâãéèëêíìïîóòöôõúùüûñçÁÀÄÂÃÉÈËÊÍÌÏÎÓÒÖÔÕÚÙÜÛÑÇ';
-    const to = 'aaaaaeeeeiiiiooooouuuuncAAAAAEEEEIIIIOOOOOUUUUNC';
-    final raw = fileName.trim().replaceAll(RegExp(r'\.[^.]+$'), '');
+  /// El nombre base con que se sube la versión web de una imagen antigua:
+  /// su nombre legible más `-src` y ocho caracteres del SHA-1 de su ruta.
+  ///
+  /// La ruta distingue `logo.jpg` de `logo.png` y de otro `logo.jpg` en otra
+  /// carpeta; el nombre solo, no. Sale en ASCII, sin guiones dobles y bajo
+  /// 72 caracteres, así que `safeFileStem` de `website-optimize-image` lo deja
+  /// intacto y la variante queda en `<base>-<uuid>-web.webp`.
+  static String legacyVariantStem(WebsiteMediaAsset legacy) {
+    const from = 'áàäâãåéèëêíìïîóòöôõúùüûýÿñçÁÀÄÂÃÅÉÈËÊÍÌÏÎÓÒÖÔÕÚÙÜÛÝÑÇ';
+    const to = 'aaaaaaeeeeiiiiooooouuuuyyncAAAAAAEEEEIIIIOOOOOUUUUYNC';
+    final raw = legacy.name.trim().replaceAll(RegExp(r'\.[^.]+$'), '');
     final buffer = StringBuffer();
     for (final rune in raw.runes) {
       final char = String.fromCharCode(rune);
       final index = from.indexOf(char);
       buffer.write(index == -1 ? char : to[index]);
     }
-    var stem = buffer
+    var base = buffer
         .toString()
         .replaceAll(RegExp(r'[^a-zA-Z0-9_-]+'), '-')
         .replaceAll(RegExp(r'-+'), '-')
         .replaceAll(RegExp(r'^-|-$'), '')
         .toLowerCase();
-    if (stem.isEmpty) stem = 'website-image';
-    return stem.length > 72 ? stem.substring(0, 72) : stem;
+    if (base.length > 52) {
+      base = base.substring(0, 52).replaceAll(RegExp(r'-+$'), '');
+    }
+    if (base.isEmpty) base = 'website-image';
+    final hash = sha1.convert(utf8.encode(legacy.path.trim())).toString();
+    return '$base-src${hash.substring(0, 8)}';
   }
 
-  /// La variante web que ya se hizo de [legacy], si está en [library]: elegir
-  /// dos veces la misma imagen antigua no la vuelve a subir.
+  /// La versión web que ya se hizo de [legacy], si está entre [candidates]:
+  /// elegir dos veces la misma imagen antigua no la vuelve a subir.
   WebsiteMediaAsset? existingWebVariant(
     WebsiteMediaAsset legacy,
-    Iterable<WebsiteMediaAsset> library,
+    Iterable<WebsiteMediaAsset> candidates,
   ) {
     final pattern = RegExp(
-      '^${RegExp.escape(webVariantStem(legacy.name))}'
+      '^${RegExp.escape(legacyVariantStem(legacy))}'
       r'-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-web\.webp$',
     );
-    for (final asset in library) {
+    for (final asset in candidates) {
       if (asset.path.startsWith('$libraryFolder/') &&
           pattern.hasMatch(asset.name)) {
         return asset;
@@ -362,25 +372,67 @@ class WebsiteMediaService {
     return null;
   }
 
+  /// Las versiones web de la tienda que empiezan con [stem]. Se buscan por
+  /// prefijo en su carpeta, no en la biblioteca que muestra el selector: ésa
+  /// viene filtrada por la búsqueda y cortada en 100 por carpeta.
+  Future<List<WebsiteMediaAsset>> listWebVariants(
+    String stem,
+    String tenantId,
+  ) async {
+    final folder = '$libraryFolder/$tenantId';
+    final bucket = _client.storage.from(StorageConfig.defaultBucket);
+    final objects = await bucket.list(
+      path: folder,
+      searchOptions: SearchOptions(search: '$stem-', limit: 20),
+    );
+    return [
+      for (final object in objects)
+        WebsiteMediaAsset(
+          name: object.name,
+          path: '$folder/${object.name}',
+          publicUrl: bucket.getPublicUrl('$folder/${object.name}'),
+          createdAt: _parseDate(object.createdAt),
+          updatedAt: _parseDate(object.updatedAt),
+          metadata: Map<String, dynamic>.from(
+            object.metadata ?? const <String, dynamic>{},
+          ),
+        ),
+    ];
+  }
+
   /// Baja una imagen antigua de la biblioteca y la sube por [uploadImage]:
-  /// queda normalizada, con su original oculto y su variante web. Si
-  /// [library] ya trae su variante, se devuelve ésa.
+  /// queda normalizada, con su original oculto y su versión web. Si esa
+  /// versión ya existe, se devuelve sin subir nada.
   Future<WebsiteMediaAsset> optimizeLibraryAsset(
     WebsiteMediaAsset asset, {
     String? tenantId,
     WebsiteEditorWriteGuard? writeGuard,
-    Iterable<WebsiteMediaAsset> library = const <WebsiteMediaAsset>[],
   }) async {
-    final existing = existingWebVariant(asset, library);
+    final resolvedTenantId =
+        tenantId ?? await (_tenantService ?? TenantService()).getTenantId();
+    if (resolvedTenantId == null || resolvedTenantId.isEmpty) {
+      throw StateError('No se pudo determinar la tienda activa.');
+    }
+    final stem = legacyVariantStem(asset);
+    List<WebsiteMediaAsset> variants;
+    try {
+      variants = await listWebVariants(stem, resolvedTenantId);
+    } catch (_) {
+      // Sin poder buscarla, se optimiza igual: una copia de más pesa menos
+      // que dejar la imagen original en la tienda.
+      variants = const <WebsiteMediaAsset>[];
+    }
+    final existing = existingWebVariant(asset, variants);
     if (existing != null) return existing;
     final bytes = await _client.storage
         .from(StorageConfig.defaultBucket)
         .download(asset.path);
     writeGuard?.call();
+    final extension = RegExp(r'\.[a-zA-Z0-9]+$').firstMatch(asset.name.trim());
     return uploadImage(
       bytes: bytes,
-      fileName: asset.name,
-      tenantId: tenantId,
+      fileName: '$stem${extension?.group(0)?.toLowerCase() ?? '.img'}',
+      tenantId: resolvedTenantId,
       writeGuard: writeGuard,
       operation: 'optimize_library',
       originalUrl: asset.publicUrl,
