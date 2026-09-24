@@ -208,6 +208,119 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  group('teléfono', () {
+    const phone = MediaQueryData(size: Size(375, 812));
+    const twoSlides = <String, dynamic>{
+      'autoPlay': false,
+      'showArrows': true,
+      'slides': <Map<String, dynamic>>[
+        <String, dynamic>{'title': 'Primero'},
+        <String, dynamic>{'title': 'Segundo'},
+      ],
+    };
+
+    Widget phoneHost({
+      double width = 375,
+      WebsiteCarouselEditBinding? editBinding,
+    }) =>
+        MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(size: Size(width, 812)),
+            child: Scaffold(
+              body: Center(
+                child: SizedBox(
+                  width: width,
+                  height: 520,
+                  child: WebsiteCarouselBlockContent(
+                    data: twoSlides,
+                    surfaceStyle: WebsiteBlockSurfaceStyle.forLogicalWidth(
+                      data: twoSlides,
+                      logicalWidth: width,
+                    ),
+                    primaryColor: const Color(0xFF123456),
+                    accentColor: const Color(0xFF00A09D),
+                    previewMode: false,
+                    editBinding: editBinding,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+
+    testWidgets('deslizar cambia de slide', (tester) async {
+      tester.view.physicalSize = phone.size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(phoneHost());
+      expect(find.text('PRIMERO'), findsOneWidget);
+
+      await tester.fling(
+        find.byKey(WebsiteCarouselBlockContent.rootKey),
+        const Offset(-240, 0),
+        900,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('SEGUNDO'), findsOneWidget);
+
+      await tester.fling(
+        find.byKey(WebsiteCarouselBlockContent.rootKey),
+        const Offset(240, 0),
+        900,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('PRIMERO'), findsOneWidget);
+    });
+
+    testWidgets('un arrastre lento cambia si recorre un cuarto del ancho',
+        (tester) async {
+      tester.view.physicalSize = phone.size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(phoneHost());
+      final root = find.byKey(WebsiteCarouselBlockContent.rootKey);
+
+      Future<void> slowDrag(double dx) async {
+        final gesture = await tester.startGesture(tester.getCenter(root));
+        for (var i = 1; i <= 20; i++) {
+          await gesture.moveBy(Offset(dx / 20, 0));
+          await tester.pump(const Duration(milliseconds: 100));
+        }
+        await tester.pump(const Duration(milliseconds: 300));
+        await gesture.up();
+        await tester.pumpAndSettle();
+      }
+
+      await slowDrag(-60);
+      expect(find.text('PRIMERO'), findsOneWidget);
+      await slowDrag(-160);
+      expect(find.text('SEGUNDO'), findsOneWidget);
+    });
+
+    testWidgets('en el editor un arrastre no cambia el slide', (tester) async {
+      tester.view.physicalSize = phone.size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final selected = <int>[];
+      await tester.pumpWidget(phoneHost(
+        editBinding: WebsiteCarouselEditBinding(
+          selectedSlideIndex: 0,
+          onSlideSelected: selected.add,
+          canvasBindingForSlide: _inertCanvasBinding,
+        ),
+      ));
+
+      await tester.fling(
+        find.byKey(WebsiteCarouselBlockContent.rootKey),
+        const Offset(-240, 0),
+        900,
+      );
+      await tester.pumpAndSettle();
+      expect(selected, isEmpty);
+      expect(find.text('PRIMERO'), findsOneWidget);
+    });
+  });
+
   testWidgets('an authored CTA with an empty href stays inert', (tester) async {
     final navigations = <String>[];
     final presenters = WebsiteBlockContentPresenters(

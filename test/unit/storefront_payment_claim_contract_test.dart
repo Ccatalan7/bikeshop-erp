@@ -152,7 +152,7 @@ void main() {
       expect(resolution.allowsBundledAsset, isTrue);
       expect(
         StorefrontLogoResolution.bundledAssetPath,
-        'assets/images/vinabike_logo.png',
+        'assets/images/vinabike_logo.webp',
       );
     });
 

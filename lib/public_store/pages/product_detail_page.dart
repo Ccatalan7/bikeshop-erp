@@ -34,6 +34,7 @@ import 'package:vinabike_erp/shared/widgets/safe_layout_builder.dart';
 import 'package:vinabike_erp/public_store/services/ga4_commerce_events.dart';
 import 'package:vinabike_erp/public_store/services/meta_pixel_service.dart';
 import '../utils/public_spec_display.dart';
+import '../utils/instant_page_release.dart';
 
 void _productDetailDebugLog(String message) {
   if (kDebugMode || const bool.fromEnvironment('STORE_PERF_LOGS')) {
@@ -1358,6 +1359,13 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     if (_isLoading) {
       return const FullPageLoading();
     }
+    releaseInstantPageWhenReady(
+      context,
+      _product == null ? 'product-missing' : 'product',
+      imageUrl: _product == null
+          ? null
+          : _commerceProjection(_product!).imageUrls.firstOrNull,
+    );
 
     if (_product == null) {
       final loadFailed = _productValidationFailed;
@@ -2353,11 +2361,14 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     for (final row in raw.split(RegExp(r'\s*\|\s*|\n'))) {
       final bsd = RegExp(r'BSD\)?\s*:\s*([0-9]+)').firstMatch(row);
       if (bsd == null) continue;
-      final rodado = wheelSizeLabelForBsd(bsd.group(1)!) ?? 'ISO ${bsd.group(1)}';
-      final min = RegExp(r'm[ií]nimo\s*:\s*([0-9]+(?:[.,][0-9]+)?)', caseSensitive: false)
+      final rodado =
+          wheelSizeLabelForBsd(bsd.group(1)!) ?? 'ISO ${bsd.group(1)}';
+      final min = RegExp(r'm[ií]nimo\s*:\s*([0-9]+(?:[.,][0-9]+)?)',
+              caseSensitive: false)
           .firstMatch(row)
           ?.group(1);
-      final max = RegExp(r'm[aá]ximo\s*:\s*([0-9]+(?:[.,][0-9]+)?)', caseSensitive: false)
+      final max = RegExp(r'm[aá]ximo\s*:\s*([0-9]+(?:[.,][0-9]+)?)',
+              caseSensitive: false)
           .firstMatch(row)
           ?.group(1);
       final ancho = min != null && max != null

@@ -343,6 +343,13 @@ root, port = sys.argv[1], int(sys.argv[2])
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *a, **k):
         super().__init__(*a, directory=root, **k)
+    def guess_type(self, path):
+        # Generated SEO snapshots are extensionless HTML files. Without this,
+        # the local preview downloads /productos/<slug>/<sku> instead of
+        # rendering it, hiding the instant-page handoff from browser checks.
+        if os.path.isfile(path) and not os.path.splitext(path)[1]:
+            return 'text/html; charset=utf-8'
+        return super().guess_type(path)
     def send_head(self):
         clean = self.path.split('?', 1)[0].split('#', 1)[0]
         if not os.path.isfile(self.translate_path(clean)):

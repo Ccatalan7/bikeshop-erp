@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/website_font_registry.dart';
 import '../models/website_page_composition.dart';
+import 'website_theme_color_value.dart';
 
 typedef WebsiteThemeSettingReader = String Function(
   String key,
@@ -161,45 +162,8 @@ class WebsiteResolvedTheme extends ThemeExtension<WebsiteResolvedTheme> {
   }
 
   static Color? _tryResolveColor(String raw) {
-    final value = raw.trim();
-    if (value.isEmpty) return null;
-
-    var cleaned = value.toLowerCase();
-    if (cleaned.startsWith('color(') && cleaned.endsWith(')')) {
-      cleaned = cleaned.substring(6, cleaned.length - 1).trim();
-      final wrapped = int.tryParse(cleaned);
-      return wrapped == null ? null : Color(wrapped);
-    }
-
-    if (cleaned.startsWith('0x')) {
-      final prefixed = int.tryParse(cleaned);
-      return prefixed == null ? null : Color(prefixed);
-    }
-
-    final explicitlyHex = cleaned.startsWith('#');
-    if (explicitlyHex) cleaned = cleaned.substring(1);
-    final isHex = RegExp(r'^[0-9a-f]+$').hasMatch(cleaned);
-    // Six/eight-character bare values are the legacy RGB/ARGB form even when
-    // they contain digits only. Parse them before decimal so `123456` cannot
-    // silently become the integer color 0x0001E240.
-    final unambiguousBareHex =
-        !explicitlyHex && (cleaned.length == 6 || cleaned.length == 8);
-    if (isHex && (explicitlyHex || unambiguousBareHex)) {
-      final hex = int.tryParse(cleaned, radix: 16);
-      if (hex == null) return null;
-      return Color(cleaned.length <= 6 ? 0xFF000000 | hex : hex);
-    }
-
-    final decimal = int.tryParse(cleaned);
-    if (decimal != null) return Color(decimal);
-
-    if (isHex) {
-      final hex = int.tryParse(cleaned, radix: 16);
-      if (hex != null) {
-        return Color(cleaned.length <= 6 ? 0xFF000000 | hex : hex);
-      }
-    }
-    return null;
+    final value = parseWebsiteThemeColorValue(raw);
+    return value == null ? null : Color(value);
   }
 
   static Color _readableTextFallback(Color background) {

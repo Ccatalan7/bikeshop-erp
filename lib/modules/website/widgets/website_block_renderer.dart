@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart' show kMinFlingVelocity;
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:provider/provider.dart';
@@ -2184,6 +2185,7 @@ class _WebsiteCarouselBlockContentState
   int _mediaPreloadGeneration = 0;
   int _slideIntentGeneration = 0;
   int? _pendingSlideIndex;
+  double _dragDistance = 0;
   late String _configurationSignature;
   bool _initialMediaPreloadScheduled = false;
   bool _dependenciesReady = false;
@@ -2337,103 +2339,123 @@ class _WebsiteCarouselBlockContentState
             constraints.maxHeight.isFinite ? constraints.maxHeight : 520.0;
         final transitionDuration =
             _motionDisabled ? Duration.zero : _transitionDuration;
+        final swipeEnabled = _slides.length > 1 && widget.editBinding == null;
         return SizedBox(
           key: WebsiteCarouselBlockContent.rootKey,
           height: height,
           width: double.infinity,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              AnimatedSwitcher(
-                duration: transitionDuration,
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
-                transitionBuilder: _buildTransition,
-                child: _buildSlide(context, _slides[_currentIndex],
-                    _currentIndex, constraints.maxWidth),
-              ),
-              if (_showIndicators && _slides.length > 1)
-                Positioned(
-                  bottom: 32,
-                  left: 0,
-                  right: 0,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(_slides.length, (index) {
-                      final isActive = index == _currentIndex;
-                      final isPending = index == _pendingSlideIndex;
-                      return GestureDetector(
-                        key: WebsiteCarouselBlockContent.indicatorKey(index),
-                        onTapDown: (_) => _warmSlide(index),
-                        onTap: () => _goToSlide(index),
-                        child: SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: Center(
-                            child: isPending
-                                ? const SizedBox(
-                                    width: 12,
-                                    height: 12,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
+          // En un teléfono el slide también cambia deslizando. En el editor
+          // no: ahí un arrastre sobre el bloque es del editor, y el slide lo
+          // elige el inspector.
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onHorizontalDragStart:
+                swipeEnabled ? (_) => _dragDistance = 0 : null,
+            onHorizontalDragUpdate: swipeEnabled
+                ? (details) => _dragDistance += details.primaryDelta ?? 0
+                : null,
+            onHorizontalDragEnd: swipeEnabled
+                ? (details) => _endSwipe(
+                      details.primaryVelocity ?? 0,
+                      constraints.maxWidth,
+                    )
+                : null,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                AnimatedSwitcher(
+                  duration: transitionDuration,
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: _buildTransition,
+                  child: _buildSlide(context, _slides[_currentIndex],
+                      _currentIndex, constraints.maxWidth),
+                ),
+                if (_showIndicators && _slides.length > 1)
+                  Positioned(
+                    bottom: 32,
+                    left: 0,
+                    right: 0,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(_slides.length, (index) {
+                        final isActive = index == _currentIndex;
+                        final isPending = index == _pendingSlideIndex;
+                        return GestureDetector(
+                          key: WebsiteCarouselBlockContent.indicatorKey(index),
+                          onTapDown: (_) => _warmSlide(index),
+                          onTap: () => _goToSlide(index),
+                          child: SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: Center(
+                              child: isPending
+                                  ? const SizedBox(
+                                      width: 12,
+                                      height: 12,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : AnimatedContainer(
+                                      duration:
+                                          const Duration(milliseconds: 250),
+                                      width: 12,
+                                      height: 12,
+                                      decoration: BoxDecoration(
+                                        color: isActive
+                                            ? Colors.white
+                                            : Colors.white
+                                                .withValues(alpha: 0.4),
+                                        shape: BoxShape.circle,
+                                      ),
                                     ),
-                                  )
-                                : AnimatedContainer(
-                                    duration: const Duration(milliseconds: 250),
-                                    width: 12,
-                                    height: 12,
-                                    decoration: BoxDecoration(
-                                      color: isActive
-                                          ? Colors.white
-                                          : Colors.white.withValues(alpha: 0.4),
-                                      shape: BoxShape.circle,
-                                    ),
-                                  ),
+                            ),
                           ),
-                        ),
-                      );
-                    }),
+                        );
+                      }),
+                    ),
                   ),
-                ),
-              if (_showArrows && _slides.length > 1) ...[
-                Positioned(
-                  left: 24,
-                  top: 0,
-                  bottom: 0,
-                  child: Center(
-                    child: Builder(builder: (context) {
-                      final target =
-                          (_currentIndex - 1 + _slides.length) % _slides.length;
-                      return _buildArrowButton(
-                        key: WebsiteCarouselBlockContent.previousButtonKey,
-                        icon: Icons.chevron_left,
-                        isPending: _pendingSlideIndex == target,
-                        onWarmUp: () => _warmSlide(target),
-                        onTap: _previousSlide,
-                      );
-                    }),
+                if (_showArrows && _slides.length > 1) ...[
+                  Positioned(
+                    left: 24,
+                    top: 0,
+                    bottom: 0,
+                    child: Center(
+                      child: Builder(builder: (context) {
+                        final target = (_currentIndex - 1 + _slides.length) %
+                            _slides.length;
+                        return _buildArrowButton(
+                          key: WebsiteCarouselBlockContent.previousButtonKey,
+                          icon: Icons.chevron_left,
+                          isPending: _pendingSlideIndex == target,
+                          onWarmUp: () => _warmSlide(target),
+                          onTap: _previousSlide,
+                        );
+                      }),
+                    ),
                   ),
-                ),
-                Positioned(
-                  right: 24,
-                  top: 0,
-                  bottom: 0,
-                  child: Center(
-                    child: Builder(builder: (context) {
-                      final target = (_currentIndex + 1) % _slides.length;
-                      return _buildArrowButton(
-                        key: WebsiteCarouselBlockContent.nextButtonKey,
-                        icon: Icons.chevron_right,
-                        isPending: _pendingSlideIndex == target,
-                        onWarmUp: () => _warmSlide(target),
-                        onTap: _nextSlide,
-                      );
-                    }),
+                  Positioned(
+                    right: 24,
+                    top: 0,
+                    bottom: 0,
+                    child: Center(
+                      child: Builder(builder: (context) {
+                        final target = (_currentIndex + 1) % _slides.length;
+                        return _buildArrowButton(
+                          key: WebsiteCarouselBlockContent.nextButtonKey,
+                          icon: Icons.chevron_right,
+                          isPending: _pendingSlideIndex == target,
+                          onWarmUp: () => _warmSlide(target),
+                          onTap: _nextSlide,
+                        );
+                      }),
+                    ),
                   ),
-                ),
+                ],
               ],
-            ],
+            ),
           ),
         );
       },
@@ -2903,6 +2925,22 @@ class _WebsiteCarouselBlockContentState
         ),
       ),
     );
+  }
+
+  /// Un gesto rápido cambia el slide como en PageView; uno lento, si
+  /// recorrió un cuarto del ancho.
+  void _endSwipe(double velocity, double width) {
+    final direction = velocity.abs() >= kMinFlingVelocity
+        ? velocity
+        : _dragDistance.abs() >= width / 4
+            ? _dragDistance
+            : 0.0;
+    _dragDistance = 0;
+    if (direction < 0) {
+      _nextSlide();
+    } else if (direction > 0) {
+      _previousSlide();
+    }
   }
 
   void _nextSlide() {

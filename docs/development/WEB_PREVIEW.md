@@ -10,7 +10,7 @@ below cost real time and every one of them looks exactly like "the app is just
 slow".
 
 ```bash
-scripts/dev/web_preview.sh start --erp --release  # ERP visual: build if needed + serve on :54330
+scripts/dev/web_preview.sh start --erp --release  # ERP visual: reuse existing bundle or build if absent, then serve on :54330
 scripts/dev/web_preview.sh build --erp --release  # rebuild after a verified edit round
 scripts/dev/web_preview.sh url /profile   # the URL you must open
 scripts/dev/web_preview.sh stop
@@ -36,10 +36,23 @@ compiled bundle that boots in seconds and is immune to Traps
 service to hold state:
 
 ```bash
-scripts/dev/web_preview.sh start --store --release   # build if needed + serve on :54331
+scripts/dev/web_preview.sh start --store --release   # reuse existing bundle or build if absent, then serve on :54331
 scripts/dev/web_preview.sh build --store --release   # rebuild after code changes
 scripts/dev/web_preview.sh stop --store              # stops both store variants
 ```
+
+**Corrección 2026-09-24:** `start --release` comprueba si existe un bundle, no
+si corresponde al código actual. En esta ronda reutilizó uno del 16-sep aunque
+el código acababa de cambiar; para verificar una edición, ejecutar `build`
+antes de `start`. Ese build tampoco genera snapshots por ruta: sin el paso
+`generate_product_seo_snapshots.dart`, `/productos/...` cae al `index.html`
+base y no ejercita la página instantánea. No declarar verificado su traspaso
+por abrir sólo esa ruta en el preview base.
+
+Los snapshots generados son archivos HTML sin extensión. Antes de esta
+corrección el servidor release del preview los enviaba como descarga; ahora
+los sirve con `text/html`. La comprobación debe leer el `Content-Type` de una
+ruta generada y ver la página en un navegador, no sólo recibir HTTP 200.
 
 `web_preview.sh` is the single owner of preview lifecycle — debug and release
 are modes of the same script, sharing the port-ownership rules below.

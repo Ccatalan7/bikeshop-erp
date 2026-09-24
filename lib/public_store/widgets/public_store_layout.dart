@@ -1,3 +1,5 @@
+export '../models/storefront_logo_source.dart' show VinabikeCanonicalTenant;
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:ui' as ui;
@@ -32,6 +34,7 @@ import '../theme/public_store_theme.dart';
 import '../theme/public_header_contrast.dart';
 import '../../shared/models/public_product_visibility_policy.dart';
 import '../models/public_checkout_capabilities.dart';
+import '../models/storefront_logo_source.dart';
 import '../services/public_checkout_capability_service.dart';
 import 'floating_whatsapp_button.dart';
 import 'customer_account_menu.dart';
@@ -100,19 +103,6 @@ part 'store_layout/page_navigator.dart';
 part 'store_layout/scroll_and_chrome.dart';
 part 'store_layout/compact_editor_chrome.dart';
 
-/// The ONE named owner of Viñabike's canonical tenant identity in the
-/// storefront. Consumers must use this owner — never repeat the UUID —
-/// so brand-bound behavior (e.g. the bundled logo asset) can only ever
-/// attach to this tenant. `TenantDetectionService._knownDomainTenants`
-/// still spells the id per domain; converging it here is a separate task.
-class VinabikeCanonicalTenant {
-  const VinabikeCanonicalTenant._();
-
-  static const String id = '5443b130-cc28-45af-a420-cd500b288890';
-
-  static bool owns(String? tenantId) => tenantId?.trim() == id;
-}
-
 /// Tenant-safe storefront logo resolution — the ONE owner of the logo
 /// precedence consumed by the header, the desktop footer and the mobile
 /// footer:
@@ -120,7 +110,7 @@ class VinabikeCanonicalTenant {
 /// 1. Website `logo_url` staged in the editor (pending, editor context only)
 /// 2. Website `logo_url` saved
 /// 3. Hydrated tenant `logoUrl`
-/// 4. Bundled `assets/images/vinabike_logo.png` ONLY for the canonical
+/// 4. Bundled `assets/images/vinabike_logo.webp` ONLY for the canonical
 ///    Viñabike tenant
 /// 5. This store's typographic wordmark
 ///
@@ -134,7 +124,7 @@ class StorefrontLogoResolution {
     required this.allowsBundledAsset,
   });
 
-  static const String bundledAssetPath = 'assets/images/vinabike_logo.png';
+  static const String bundledAssetPath = storefrontBundledLogoAsset;
 
   /// Ordered, deduplicated, non-empty network sources (configured first,
   /// then the hydrated tenant logo when different).
@@ -5490,8 +5480,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                       onTap: isEditMode
                                           ? null
                                           : () {
-                                              final path =
-                                                  _routeForPublicStore('/tienda');
+                                              final path = _routeForPublicStore(
+                                                  '/tienda');
                                               _navigateToHref(
                                                 context,
                                                 path,
@@ -5508,7 +5498,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                             textColor: textColor,
                                             isDarkMode: usesLightForeground,
                                             height: headerGeometry.logoHeight,
-                                            maxWidth: headerGeometry.logoMaxWidth,
+                                            maxWidth:
+                                                headerGeometry.logoMaxWidth,
                                           ),
                                         ),
                                       ),
@@ -7770,7 +7761,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           onTap: isEditMode
               ? null
               : () {
-                  _navigateToHref(context, href, openInNewTab: nav.openInNewTab);
+                  _navigateToHref(context, href,
+                      openInNewTab: nav.openInNewTab);
                 },
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 5),
@@ -7790,7 +7782,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       fontSize: 14,
                       letterSpacing: 0.1,
-                      fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                      fontWeight:
+                          isActive ? FontWeight.w600 : FontWeight.normal,
                       color: isActive
                           ? primaryColor
                           : (primaryColor == Colors.white
@@ -7801,7 +7794,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             ),
           ),
         ),
-        ),
+      ),
     );
   }
 
