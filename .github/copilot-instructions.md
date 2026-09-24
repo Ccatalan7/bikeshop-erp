@@ -4025,6 +4025,28 @@ la parte de base de datos):**
 - Medición: `Ga4CommerceEvents` envía `view_item`, `add_to_cart`,
   `begin_checkout`, `purchase` y `contact` (con `method`). Marcarlos como
   eventos clave se hace en GA4.
+- **Google sólo ve enlaces si la tienda los declara.** La tienda se dibuja
+  en canvas: el render de Google tenía 0 `<a href>` fuera de `<noscript>` y
+  0 caracteres de texto. Para los rastreadores (`enableSemanticsForCrawlers`,
+  por user agent: Googlebot, Storebot-Google, Bingbot…) se activa la
+  semántica y cada destino envuelto en `PublicLinkSemantics(href:)` sale como
+  `<a href>` real con su texto. Para un cliente no cambia nada: con semántica
+  el DOM toma punteros y scroll, por eso no se activa para todos. Un widget
+  nuevo que navega (tarjeta, enlace de menú, miga, paginación) lleva
+  `PublicLinkSemantics` con la misma URL que usa `navigateToHref`; si no, Google
+  no lo sigue. La guardia de clic de `web/index.html` evita que un `<a>` de
+  accesibilidad recargue la página. Se mide con Playwright y UA de Googlebot
+  sirviendo el build local con `context.route('https://vinabike.cl/**')`
+  (en `localhost` el build release no resuelve tenant).
+- **URLs del sitio anterior (Odoo, `/shop/<sku>-<nombre>-<id>`).** Google
+  les seguía mostrando impresiones (109 URL, 16 meses) y caían en la portada
+  con canónica a la portada. Son reglas manuales 301 de `firebase.json`
+  (el generador las conserva en orden; la primera que calza gana): ficha por
+  SKU + primera palabra del nombre (`/shop/s56467-aceite-**`), categorías de
+  Odoo a su equivalente publicado, y comodines `/shop`, `/shop/cart`,
+  `/shop/category/**` y `/shop/**` al final. El destino se toma del sitemap
+  vivo: un slug inexacto o una ficha sin snapshot (sin foto) entrega la
+  portada. `test/unit/legacy_shop_redirects_test.dart` guarda orden y forma.
 - Correr el generador con datos reales exige `build/web_store` (con
   `web/index.html` basta; otro `--build-dir` aborta) y **reescribe**
   `firebase.json` y `scripts/generated_product_redirects.json`: se restauran

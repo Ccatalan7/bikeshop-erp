@@ -695,6 +695,631 @@
           "type": 302
         },
         {
+          "source": "/shop/1161022-postiza-**",
+          "destination": "/productos/postiza-aluminio-mod-a-hg022/1161022",
+          "type": 301
+        },
+        {
+          "source": "/shop/2000000140704-perno-**",
+          "destination": "/productos/perno-para-porta-caramayolas-taiwan-20-unid/2000000140704",
+          "type": 301
+        },
+        {
+          "source": "/shop/ae0301-tee-**",
+          "destination": "/productos/tee-aluminio-wake-mtb-31-8mm-x-45mm-golden/AE0301",
+          "type": 301
+        },
+        {
+          "source": "/shop/ae0300-espaciador-**",
+          "destination": "/productos/espaciador-de-aluminio-2mm-negro-para-motor-integrado/AE0300",
+          "type": 301
+        },
+        {
+          "source": "/shop/ae0204-cassette-**",
+          "destination": "/productos/cassette-sunshine-12v-11-50t/AE0204",
+          "type": 301
+        },
+        {
+          "source": "/shop/s56467-aceite-**",
+          "destination": "/productos/aceite-mineral-shimano-sm-dboil-1000cc-bulk-ksmdboilo/S56467",
+          "type": 301
+        },
+        {
+          "source": "/shop/ae0219-pedales-**",
+          "destination": "/productos/pedales-aluminio-goldix-3-rodamientos-sellados-negros/AE0219",
+          "type": 301
+        },
+        {
+          "source": "/shop/ae0245-maza-**",
+          "destination": "/productos/maza-trasera-hassns-pro-7-32h-135mm/AE0245",
+          "type": 301
+        },
+        {
+          "source": "/shop/19161-neumatico-**",
+          "destination": "/productos/neumatico-freedom-gangster-27-5x2-10/19161",
+          "type": 301
+        },
+        {
+          "source": "/shop/nnv47-dr-**",
+          "destination": "/productos",
+          "type": 301
+        },
+        {
+          "source": "/shop/ae0130-maza-**",
+          "destination": "/productos/maza-trasera-nucleo-fastace-ruta-130-old-28h/AE0130",
+          "type": 301
+        },
+        {
+          "source": "/shop/19126-motor-**",
+          "destination": "/productos/motor-sellado-neco-122-5x68mm/19126",
+          "type": 301
+        },
+        {
+          "source": "/shop/c114-canastillo-**",
+          "destination": "/productos/canastillo-rodamiento-rueda-trasera-20-unid/C114",
+          "type": 301
+        },
+        {
+          "source": "/shop/nnv56-freno-**",
+          "destination": "/productos/freno-hidraulico-delantero-tanke-4-pistones-morado-metalico/NNV56",
+          "type": 301
+        },
+        {
+          "source": "/shop/19131-juego-**",
+          "destination": "/productos/juego-de-direccion-neco-1-1-8-con-rodamientos-en-caja/19131",
+          "type": 301
+        },
+        {
+          "source": "/shop/136-set-**",
+          "destination": "/productos/set-100pcs-cable-cambio-largo-2-10-mts-mtb-compatible-generico-minimo-de-venta-s/136",
+          "type": 301
+        },
+        {
+          "source": "/shop/ae0093-volante-**",
+          "destination": "/productos/volante-ixf-integrado-black-170mm-motor-bsa-corona-34t/AE0093",
+          "type": 301
+        },
+        {
+          "source": "/shop/r010-rayos-**",
+          "destination": "/productos/rayos-28-5-cms-gruesa/R010",
+          "type": 301
+        },
+        {
+          "source": "/shop/4715575890654-cadena-**",
+          "destination": "/productos/cadena-1-2-x-3-32-kmc-x8-plata-gris/4715575890654",
+          "type": 301
+        },
+        {
+          "source": "/shop/5813-horquilla-**",
+          "destination": "/productos/horquilla-ozono-ruta-1-1-8-con-hilo-aluminio-fina-negra/5813",
+          "type": 301
+        },
+        {
+          "source": "/shop/c1651-cubetas-**",
+          "destination": "/productos/cubetas-de-motor-tsc-stacked-mid-22mm-rojo/C1651",
+          "type": 301
+        },
+        {
+          "source": "/shop/23511-neumatico-**",
+          "destination": "/productos/neumatico-10ten-24x1-3-8-black/23511",
+          "type": 301
+        },
+        {
+          "source": "/shop/ae0206-desviador-**",
+          "destination": "/productos/desviador-trasero-shimano-deore-rd-m6100-sgs-12v/AE0206",
+          "type": 301
+        },
+        {
+          "source": "/shop/c070-canastillo-**",
+          "destination": "/productos/canastillo-rodamiento-para-direccion-20unid/C070",
+          "type": 301
+        },
+        {
+          "source": "/shop/6927116108656-camara-**",
+          "destination": "/productos/camara-chao-yang-700x18-23-f-v-60mm-con-liquido/6927116108656",
+          "type": 301
+        },
+        {
+          "source": "/shop/ae0244-groupset-**",
+          "destination": "/productos/groupset-shimano-cues-sl-u6000-11v-11-50t-no-window/AE0244",
+          "type": 301
+        },
+        {
+          "source": "/shop/ae0156-juego-**",
+          "destination": "/productos/juego-coronas-prowheel-triple-plato-44-32-22t-8-9v/AE0156",
+          "type": 301
+        },
+        {
+          "source": "/shop/7274-cassette-**",
+          "destination": "/productos/cassette-eclipse-8-velocidades-11-42t/7274",
+          "type": 301
+        },
+        {
+          "source": "/shop/252375-camara-**",
+          "destination": "/productos/camara-aro-29-x-1-95c-v-a-48mm-uniqua/252375",
+          "type": 301
+        },
+        {
+          "source": "/shop/c1087-cubetas-**",
+          "destination": "/productos/cubetas-motor-bmx-americana-sellada-eje-19mm/C1087",
+          "type": 301
+        },
+        {
+          "source": "/shop/ae0181-pedal-**",
+          "destination": "/productos/pedal-cala-mtb-racework-gold-carbon-juego/AE0181",
+          "type": 301
+        },
+        {
+          "source": "/shop/277070-eje-**",
+          "destination": "/productos/eje-trasero-con-rodamientos-sellados-3-8-x145mm/277070",
+          "type": 301
+        },
+        {
+          "source": "/shop/v486-volante-**",
+          "destination": "/productos/volante-prowheel-fixed-44t-170mm-single-speed/V486",
+          "type": 301
+        },
+        {
+          "source": "/shop/4717784029900-neumatico-**",
+          "destination": "/productos/neumatico-xc-27-5x2-30-k-maxxis-tomahawk-3c-tr-exo/4717784029900",
+          "type": 301
+        },
+        {
+          "source": "/shop/7290001284261-candado-**",
+          "destination": "/productos/candado-onguard-clave-espiral-ns-180cmx8mm-naranjo/7290001284261",
+          "type": 301
+        },
+        {
+          "source": "/shop/ae0170-desviador-**",
+          "destination": "/productos/desviador-shimano-altus-9v-rd-m370-sgs-negro/AE0170",
+          "type": 301
+        },
+        {
+          "source": "/shop/6009685090348-liquido-**",
+          "destination": "/productos/categoria/componentes",
+          "type": 301
+        },
+        {
+          "source": "/shop/21465-guante-**",
+          "destination": "/productos/guante-ridexc-corto-gel-pro-black-blue-king-talla-l/21465",
+          "type": 301
+        },
+        {
+          "source": "/shop/23341-neumatico-**",
+          "destination": "/productos/neumatico-ridexc-bmx-20x2-40-black/23341",
+          "type": 301
+        },
+        {
+          "source": "/shop/18501-neumatico-**",
+          "destination": "/productos/neumatico-ralco-26-x-2-125-57-559-fire-alambre-r-4109-alambre-rigido/18501",
+          "type": 301
+        },
+        {
+          "source": "/shop/1985-terminal-**",
+          "destination": "/productos/categoria/componentes",
+          "type": 301
+        },
+        {
+          "source": "/shop/19227-cable-**",
+          "destination": "/productos/cable-cambio-largo-2-10-mts-mtb-compatible-generico-100pcs-2022-econom/19227",
+          "type": 301
+        },
+        {
+          "source": "/shop/ae0198-aguja-**",
+          "destination": "/productos/aguja-con-manometro-para-inyeccion-de-nitrogeno-en-suspension-de-aire/AE0198",
+          "type": 301
+        },
+        {
+          "source": "/shop/11852-d-motor-**",
+          "destination": "/productos/motor-sellado-kl-08a-caja-68x124-mm-kenli/11852-D",
+          "type": 301
+        },
+        {
+          "source": "/shop/7290001284339-candado-**",
+          "destination": "/productos/candado-onguard-llave-espiral-ns-180cmx12mm-naranjo/7290001284339",
+          "type": 301
+        },
+        {
+          "source": "/shop/ae0087-golilla-**",
+          "destination": "/productos/golilla-espaciadora-para-perno-m8-2mm/AE0087",
+          "type": 301
+        },
+        {
+          "source": "/shop/nnv112-pack-**",
+          "destination": "/productos",
+          "type": 301
+        },
+        {
+          "source": "/shop/1969-canastillo-**",
+          "destination": "/productos/canastillo-direccion-oversize-1-1-8-min-20-pcs-compatible-generico/1969",
+          "type": 301
+        },
+        {
+          "source": "/shop/4717784040202-camara-**",
+          "destination": "/productos/camara-maxxis-29x1-75-2-40-a-v-48mm/4717784040202",
+          "type": 301
+        },
+        {
+          "source": "/shop/476-pata-**",
+          "destination": "/productos/pata-cambio-cromada-index-compatible-generico/476",
+          "type": 301
+        },
+        {
+          "source": "/shop/759-camara-**",
+          "destination": "/productos/camara-genuine-29x1-95-2-125-va-48mm/759",
+          "type": 301
+        },
+        {
+          "source": "/shop/ae0224-pedales-**",
+          "destination": "/productos/pedales-enlee-aluminio-rodamientos-sellados-morado-metalico/AE0224",
+          "type": 301
+        },
+        {
+          "source": "/shop/nnv161-rodamiento-**",
+          "destination": "/productos",
+          "type": 301
+        },
+        {
+          "source": "/shop/445105-rollo-**",
+          "destination": "/productos/rollo-50mts-funda-de-cambio-4mm-negra/445105",
+          "type": 301
+        },
+        {
+          "source": "/shop/2000000248288-rayos-**",
+          "destination": "/productos/categoria/componentes",
+          "type": 301
+        },
+        {
+          "source": "/shop/l102-llanta-**",
+          "destination": "/productos/llanta-kt-aluminio-700c-doble-pared-36h-negra/L102",
+          "type": 301
+        },
+        {
+          "source": "/shop/ae0133-shimano-**",
+          "destination": "/productos/shimano-cues-u4000-groupset-9v/AE0133",
+          "type": 301
+        },
+        {
+          "source": "/shop/ae0091-perno-**",
+          "destination": "/productos/perno-corona-hassns-m8-8-5mm-negro/AE0091",
+          "type": 301
+        },
+        {
+          "source": "/shop/103-casco-**",
+          "destination": "/productos/casco-trip-urbano-black-m-ajustable/103",
+          "type": 301
+        },
+        {
+          "source": "/shop/c069-canastillo-**",
+          "destination": "/productos/canastillo-rodamiento-para-motor-20unid/C069",
+          "type": 301
+        },
+        {
+          "source": "/shop/ae0036-parche-**",
+          "destination": "/productos/parche-thumbs-up-1un/AE0036",
+          "type": 301
+        },
+        {
+          "source": "/shop/4715575890432-cadena-**",
+          "destination": "/productos/cadena-kmc-x10-1-2x11-128-10v-ti-dorada/4715575890432",
+          "type": 301
+        },
+        {
+          "source": "/shop/4717784039732-camara-**",
+          "destination": "/productos/camara-maxxis-26x1-5-2-5-francesa-48mm/4717784039732",
+          "type": 301
+        },
+        {
+          "source": "/shop/2450170007140007-aceite-**",
+          "destination": "/productos",
+          "type": 301
+        },
+        {
+          "source": "/shop/a02776019313a-25pcs-**",
+          "destination": "/productos/25pcs-cubre-camara-media-pista-goma/A02776019313A",
+          "type": 301
+        },
+        {
+          "source": "/shop/4524667979630-cambio-**",
+          "destination": "/productos/cambio-shimano-9v-rd-m370-l-sgs-altus-negro/4524667979630",
+          "type": 301
+        },
+        {
+          "source": "/shop/4524667428701-pinon-**",
+          "destination": "/productos/pinon-shimano-xt-cs-m771-10-10v-11-36/4524667428701",
+          "type": 301
+        },
+        {
+          "source": "/shop/ae0280-manetas-**",
+          "destination": "/productos/categoria/componentes",
+          "type": 301
+        },
+        {
+          "source": "/shop/ae0291-biela-**",
+          "destination": "/productos/categoria/volantes",
+          "type": 301
+        },
+        {
+          "source": "/shop/3680-manubrio-**",
+          "destination": "/productos/categoria/componentes",
+          "type": 301
+        },
+        {
+          "source": "/shop/bps001-rayo-**",
+          "destination": "/productos/categoria/componentes",
+          "type": 301
+        },
+        {
+          "source": "/shop/nnv166-set-**",
+          "destination": "/productos",
+          "type": 301
+        },
+        {
+          "source": "/shop/4329-horquilla-**",
+          "destination": "/productos/categoria/componentes",
+          "type": 301
+        },
+        {
+          "source": "/shop/nnv174-terminal-**",
+          "destination": "/productos/categoria/componentes",
+          "type": 301
+        },
+        {
+          "source": "/shop/nnv129-piola-**",
+          "destination": "/productos/categoria/componentes",
+          "type": 301
+        },
+        {
+          "source": "/shop/bps003-rayo-**",
+          "destination": "/productos/categoria/componentes",
+          "type": 301
+        },
+        {
+          "source": "/shop/ae0296-postiza-**",
+          "destination": "/productos/categoria/componentes",
+          "type": 301
+        },
+        {
+          "source": "/shop/bps002-niple-**",
+          "destination": "/productos/categoria/componentes",
+          "type": 301
+        },
+        {
+          "source": "/shop/nnv113-parche-**",
+          "destination": "/productos",
+          "type": 301
+        },
+        {
+          "source": "/shop/4757-rayos-**",
+          "destination": "/productos/categoria/componentes",
+          "type": 301
+        },
+        {
+          "source": "/shop/1258-eje-**",
+          "destination": "/productos/categoria/transmision",
+          "type": 301
+        },
+        {
+          "source": "/shop/vittal4057-horquilla-**",
+          "destination": "/productos/categoria/componentes",
+          "type": 301
+        },
+        {
+          "source": "/shop/nnv133-piola-**",
+          "destination": "/productos",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/componentes-frenos-v-brake-1646",
+          "destination": "/productos/categoria/componentes",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/componentes-frenos-v-brake-1646/**",
+          "destination": "/productos/categoria/componentes",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/herramientas-corta-cadena-1684",
+          "destination": "/productos",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/herramientas-corta-cadena-1684/**",
+          "destination": "/productos",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/componentes-frenos-calipers-1639",
+          "destination": "/productos/categoria/componentes",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/componentes-frenos-calipers-1639/**",
+          "destination": "/productos/categoria/componentes",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/componentes-frenos-rotores-1645",
+          "destination": "/productos/categoria/componentes",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/componentes-frenos-rotores-1645/**",
+          "destination": "/productos/categoria/componentes",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/componentes-frenos-rotor-bmx-1644",
+          "destination": "/productos/categoria/componentes",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/componentes-frenos-rotor-bmx-1644/**",
+          "destination": "/productos/categoria/componentes",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/componentes-frenos-frenos-hidraulicos-1640",
+          "destination": "/productos/categoria/componentes",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/componentes-frenos-frenos-hidraulicos-1640/**",
+          "destination": "/productos/categoria/componentes",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/ruedas-y-sus-partes-1",
+          "destination": "/productos/categoria/componentes",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/ruedas-y-sus-partes-1/**",
+          "destination": "/productos/categoria/componentes",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/componentes-shock-1653",
+          "destination": "/productos/categoria/componentes",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/componentes-shock-1653/**",
+          "destination": "/productos/categoria/componentes",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/componentes-direccion-1649",
+          "destination": "/productos/categoria/componentes",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/componentes-direccion-1649/**",
+          "destination": "/productos/categoria/componentes",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/accesorios-porta-caramagiola-1680",
+          "destination": "/productos/categoria/accesorios",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/accesorios-porta-caramagiola-1680/**",
+          "destination": "/productos/categoria/accesorios",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/accesorios-bombines-1663",
+          "destination": "/productos/categoria/accesorios",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/accesorios-bombines-1663/**",
+          "destination": "/productos/categoria/accesorios",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/mantenimiento-pegamento-parches-1659",
+          "destination": "/productos",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/mantenimiento-pegamento-parches-1659/**",
+          "destination": "/productos",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/accesorios-9",
+          "destination": "/productos/categoria/accesorios",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/accesorios-9/**",
+          "destination": "/productos/categoria/accesorios",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/componentes-groupset-1651",
+          "destination": "/productos/categoria/transmision",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/componentes-groupset-1651/**",
+          "destination": "/productos/categoria/transmision",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/mantenimiento-silicona-1661",
+          "destination": "/productos",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/mantenimiento-silicona-1661/**",
+          "destination": "/productos",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/componentes-frenos-manillas-1641",
+          "destination": "/productos/categoria/componentes",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/componentes-frenos-manillas-1641/**",
+          "destination": "/productos/categoria/componentes",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/ruedas-y-sus-partes-camaras-2",
+          "destination": "/productos/categoria/camaras",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/ruedas-y-sus-partes-camaras-2/**",
+          "destination": "/productos/categoria/camaras",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/mantenimiento-liquido-frenos-1655",
+          "destination": "/productos",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/mantenimiento-liquido-frenos-1655/**",
+          "destination": "/productos",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/ruedas-y-sus-partes-llantas-10",
+          "destination": "/productos/categoria/componentes",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/ruedas-y-sus-partes-llantas-10/**",
+          "destination": "/productos/categoria/componentes",
+          "type": 301
+        },
+        {
+          "source": "/shop",
+          "destination": "/productos",
+          "type": 301
+        },
+        {
+          "source": "/shop/cart",
+          "destination": "/carrito",
+          "type": 301
+        },
+        {
+          "source": "/shop/category/**",
+          "destination": "/productos",
+          "type": 301
+        },
+        {
+          "source": "/shop/**",
+          "destination": "/productos",
+          "type": 301
+        },
+        {
           "source": "/productos/000ca591-e26b-4397-b56d-fcbab4ee36bb",
           "destination": "/productos/camara-bicicleta-aro-27-5-x-1-75-a-2-35-v-francesa-arisun/6927116164430",
           "type": 301

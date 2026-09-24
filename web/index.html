@@ -374,6 +374,31 @@
     }, { passive: false });
   </script>
   <script>
+    // Con la semántica activa (rastreadores o lector de pantalla) Flutter
+    // dibuja cada destino como <a href>. Flutter ya navega dentro de la app al
+    // recibir el clic (o abre la pestaña de un enlace externo); sin esto el
+    // navegador además navegaría la pestaña actual. Un clic con modificador
+    // (pestaña o ventana nueva) es sólo del navegador: no le llega a Flutter,
+    // que si no navegaría también esta pestaña.
+    document.addEventListener('click', function (event) {
+      if (event.defaultPrevented || event.button !== 0) return;
+      var target = event.target;
+      var link = target && target.closest &&
+          target.closest('flt-semantics-host a[href]');
+      if (!link) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+        event.stopPropagation();
+        return;
+      }
+      event.preventDefault();
+      // Flutter escucha el clic en el nodo tocable de adentro (el botón),
+      // no en el <a>: si activaron el enlace mismo (Enter del teclado o un
+      // lector de pantalla), el clic se le entrega a ese nodo.
+      var tappable = link.querySelector('[flt-tappable]');
+      if (tappable && !tappable.contains(target)) tappable.click();
+    }, true);
+  </script>
+  <script>
     {{flutter_bootstrap_js}}
   </script>
   <!-- 

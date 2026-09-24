@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../../modules/website/models/website_catalog_presentation.dart';
+import 'public_link_semantics.dart';
 
 class CatalogCollectionNavigationItem {
   const CatalogCollectionNavigationItem({
@@ -10,12 +11,17 @@ class CatalogCollectionNavigationItem {
     required this.label,
     this.selected = false,
     this.onTap,
+    this.href,
   });
 
   final String id;
   final String label;
   final bool selected;
   final VoidCallback? onTap;
+
+  /// Ruta pública de la colección, para exponerla como enlace a los
+  /// rastreadores. Nula en Edit y en superficies que no navegan.
+  final String? href;
 }
 
 /// Shared category/collection presentation used by public, Edit and Preview.
@@ -288,16 +294,20 @@ class _CatalogCollectionNavigationLink extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = item.selected ? Colors.black87 : Colors.grey.shade600;
-    return InkWell(
-      onTap: item.selected ? null : item.onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
-        child: Text(
-          item.label,
-          style: TextStyle(
-            color: color,
-            fontSize: 11,
-            fontWeight: item.selected ? FontWeight.w800 : FontWeight.w600,
+    return PublicLinkSemantics(
+      href: item.href,
+      enabled: !item.selected && item.onTap != null,
+      child: InkWell(
+        onTap: item.selected ? null : item.onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 3),
+          child: Text(
+            item.label,
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: item.selected ? FontWeight.w800 : FontWeight.w600,
+            ),
           ),
         ),
       ),
