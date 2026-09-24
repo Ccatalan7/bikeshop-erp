@@ -193,8 +193,9 @@ LocalKey publicStoreModeContentKey(GoRouterState state) {
 Page<dynamic> _buildPage(
   BuildContext context,
   GoRouterState state,
-  Widget child,
-) {
+  Widget child, {
+  bool pageOwnsSeo = false,
+}) {
   final mediaQuery = MediaQuery.maybeOf(context);
   final disableAnimations = mediaQuery?.disableAnimations ?? false;
   final accessibleNavigation = mediaQuery?.accessibleNavigation ?? false;
@@ -225,6 +226,7 @@ Page<dynamic> _buildPage(
     child: PublicStoreLayout(
       routePath: state.uri.path,
       enablePageViewScrolling: true,
+      pageOwnsSeo: pageOwnsSeo,
       child: child,
     ),
   );
@@ -901,6 +903,33 @@ class PublicStoreRouter {
           path: '/tienda/pagina/:slug',
           redirect: (context, state) =>
               '/pagina/${state.pathParameters['slug']}',
+        ),
+        // Cualquier otra ruta montada del ERP (`/tienda/productos/categoria/
+        // camaras`, fichas bajo `/tienda/productos/...`) es la misma ruta sin
+        // el prefijo, con su consulta. Va antes del comodín.
+        GoRoute(
+          path: '/tienda/:resto(.*)',
+          redirect: (context, state) => Uri(
+            path: '/${state.pathParameters['resto']}',
+            query: state.uri.hasQuery ? state.uri.query : null,
+          ).toString(),
+        ),
+
+        // Una ruta que no existe no es la portada. Sin esto go_router mostraba
+        // su pantalla de error en inglés y la URL quedaba con el
+        // `index,follow` y la canónica de la portada. Va última: sólo recibe
+        // lo que ninguna ruta anterior reconoce. No es `errorPageBuilder`
+        // porque esa página no registra un GoRouterState y el layout lo lee.
+        // Reutiliza el estado de página ausente del CMS («Página no
+        // encontrada», «Volver al inicio») con título propio y `noindex`.
+        GoRoute(
+          path: '/:rutaInexistente(.*)',
+          pageBuilder: (context, state) => _buildPage(
+            context,
+            state,
+            const DynamicWebsitePage.missingRoute(),
+            pageOwnsSeo: true,
+          ),
         ),
       ],
     );

@@ -7,6 +7,7 @@ import '../../modules/website/services/website_service.dart';
 import '../../shared/utils/web_url.dart';
 import '../providers/cart_provider.dart';
 import '../providers/public_store_tenant_provider.dart';
+import '../services/ga4_commerce_events.dart';
 import '../services/meta_pixel_service.dart';
 import '../services/public_inventory_service.dart';
 
@@ -73,6 +74,7 @@ class PublicStoreBootstrap extends StatefulWidget {
 class _PublicStoreBootstrapState extends State<PublicStoreBootstrap>
     with WidgetsBindingObserver {
   bool _splashHidden = false;
+  bool _storeReadyReported = false;
   bool _isBootstrapping = true;
   bool _hasTenant = false;
   String? _error;
@@ -222,7 +224,7 @@ class _PublicStoreBootstrapState extends State<PublicStoreBootstrap>
         _error = null;
       });
       _startFreshnessMonitoring();
-      _hideHtmlSplashAfterFrame();
+      _hideHtmlSplashAfterFrame(storeReady: true);
     } catch (e) {
       setState(() {
         _isBootstrapping = false;
@@ -352,10 +354,19 @@ class _PublicStoreBootstrapState extends State<PublicStoreBootstrap>
     );
   }
 
-  void _hideHtmlSplashAfterFrame() {
+  void _hideHtmlSplashAfterFrame({bool storeReady = false}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _hideHtmlSplash();
+      // Una carga que falló y se recuperó con «Reintentar» también cuenta:
+      // el splash ya estaba oculto, pero la tienda recién ahora está lista.
+      if (storeReady && !_storeReadyReported) {
+        _storeReadyReported = true;
+        final elapsedMs = navigationElapsedMs();
+        if (elapsedMs != null) {
+          Ga4CommerceEvents.instance.storeReady(elapsedMs);
+        }
+      }
     });
   }
 

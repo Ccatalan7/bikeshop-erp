@@ -70,4 +70,21 @@ void main() {
     expect(sent.single.$1, 'contact');
     expect(sent.single.$2, {'method': 'whatsapp'});
   });
+
+  test('store_ready manda segundos y el tramo de Core Web Vitals', () {
+    expect(Ga4CommerceEvents.storeReadyBucket(2500), 'bueno_hasta_2_5s');
+    expect(Ga4CommerceEvents.storeReadyBucket(2501), 'mejorable_hasta_4s');
+    expect(Ga4CommerceEvents.storeReadyBucket(8000), 'lento_hasta_8s');
+    expect(Ga4CommerceEvents.storeReadyBucket(20066), 'muy_lento_mas_de_8s');
+
+    events.storeReady(0);
+    events.storeReady(3456);
+    expect(sent, hasLength(1));
+    expect(sent.single.$1, 'store_ready');
+    expect(sent.single.$2, {
+      'value': 3.5,
+      'load_ms': 3456,
+      'load_bucket': 'mejorable_hasta_4s',
+    });
+  });
 }

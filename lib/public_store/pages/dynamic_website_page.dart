@@ -33,10 +33,18 @@ import 'static_policy_page.dart'
 class DynamicWebsitePage extends StatefulWidget {
   final String slug;
 
+  /// La URL no corresponde a ninguna ruta de la tienda: se muestra el estado
+  /// de página ausente sin consultar el CMS, con `noindex` y sin canónica.
+  final bool missingRoute;
+
   const DynamicWebsitePage({
     super.key,
     required this.slug,
-  });
+  }) : missingRoute = false;
+
+  const DynamicWebsitePage.missingRoute({super.key})
+      : slug = '',
+        missingRoute = true;
 
   @override
   State<DynamicWebsitePage> createState() => _DynamicWebsitePageState();
@@ -73,6 +81,13 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
   @override
   void initState() {
     super.initState();
+    if (widget.missingRoute) {
+      // El SEO se escribe en didChangeDependencies, cada vez que la ruta
+      // vuelve a estar visible.
+      _isLoading = false;
+      _error = 'Esta página no está disponible.';
+      return;
+    }
     _seedFromSnapshot(widget.slug);
     _loadPageData();
   }
@@ -80,6 +95,10 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (widget.missingRoute) {
+      if (TickerMode.of(context)) _scheduleMissingRouteSeo();
+      return;
+    }
     final websiteService = context.read<WebsiteService>();
     if (!identical(_observedWebsiteService, websiteService)) {
       _observedWebsiteService?.cmsPageFreshnessSignal
@@ -98,6 +117,7 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
   @override
   void didUpdateWidget(DynamicWebsitePage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.missingRoute) return;
     if (oldWidget.slug != widget.slug) {
       _seedFromSnapshot(widget.slug, clearOnMiss: true);
       // The rebuild after loading binds the new page document idempotently.
@@ -112,8 +132,27 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
     super.dispose();
   }
 
+  void _scheduleMissingRouteSeo() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final websiteService = context.read<WebsiteService>();
+      final storeName = websiteService
+          .getSetting(
+            'seo_business_name',
+            websiteService.getSetting('store_name', ''),
+          )
+          .trim();
+      SeoHelper.updateSeo(
+        title: storeName.isEmpty
+            ? 'Página no encontrada'
+            : 'Página no encontrada | $storeName',
+        robots: 'noindex,follow',
+      );
+    });
+  }
+
   void _handleCmsPageFreshnessSignal() {
-    if (!mounted) return;
+    if (!mounted || widget.missingRoute) return;
     if (!TickerMode.of(context)) {
       _cmsRevalidationPending = true;
       return;

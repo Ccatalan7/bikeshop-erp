@@ -16,6 +16,9 @@ void hideHtmlLoadingScreen() {
   // No-op on non-web platforms
 }
 
+/// Stub - native platforms have no page navigation to time.
+int? navigationElapsedMs() => null;
+
 /// Stub - never skip Firebase on native platforms
 bool shouldSkipFirebase() {
   return false;

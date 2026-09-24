@@ -34,6 +34,9 @@ void hideHtmlLoadingScreen() {
   loadingScreen?.classList.add('hidden');
 }
 
+/// Milliseconds since this page's navigation started (`performance.now()`).
+int? navigationElapsedMs() => web.window.performance.now().round();
+
 /// Check if Firebase should be skipped (Safari/iOS don't support FCM properly)
 /// This reads the window.skipFCM flag set in index.html
 bool shouldSkipFirebase() {

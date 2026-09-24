@@ -84,6 +84,28 @@ class Ga4CommerceEvents {
     _track('contact', {'method': method});
   }
 
+  /// La tienda dejó la pantalla de carga y muestra su primer cuadro con la
+  /// tienda armada. El navegador no sirve para medirlo: Flutter dibuja en un
+  /// lienzo, que no es candidato a LCP, y el LCP que reporta es el logo del
+  /// splash HTML. `value` son segundos (promedio sin configurar GA4) y
+  /// `load_bucket` usa los umbrales de LCP de Core Web Vitals.
+  void storeReady(int elapsedMs) {
+    if (elapsedMs <= 0) return;
+    _track('store_ready', {
+      'value': (elapsedMs / 100).round() / 10,
+      'load_ms': elapsedMs,
+      'load_bucket': storeReadyBucket(elapsedMs),
+    });
+  }
+
+  @visibleForTesting
+  static String storeReadyBucket(int elapsedMs) {
+    if (elapsedMs <= 2500) return 'bueno_hasta_2_5s';
+    if (elapsedMs <= 4000) return 'mejorable_hasta_4s';
+    if (elapsedMs <= 8000) return 'lento_hasta_8s';
+    return 'muy_lento_mas_de_8s';
+  }
+
   @visibleForTesting
   static String? contactMethodFor(String url) {
     final uri = Uri.tryParse(url.trim());

@@ -4047,6 +4047,32 @@ la parte de base de datos):**
   `/shop/category/**` y `/shop/**` al final. El destino se toma del sitemap
   vivo: un slug inexacto o una ficha sin snapshot (sin foto) entrega la
   portada. `test/unit/legacy_shop_redirects_test.dart` guarda orden y forma.
+- **El LCP del navegador no mide la tienda.** Flutter dibuja en un lienzo, que
+  no es candidato a LCP: lo que el navegador (y PageSpeed) reporta es el logo
+  del splash HTML. El tiempo real hasta ver la tienda es el evento GA4
+  `store_ready` (`value` en segundos, `load_bucket` con los umbrales de Core
+  Web Vitals), que se envía al primer cuadro después de ocultar el splash.
+  Perfil del 2026-09-24 en móvil lento (red ~1,5 Mbps, CPU ×4): 1,3 MB de
+  `main.dart.js` y 1,6 MB de CanvasKit en paralelo hasta los ~20 s, fuentes
+  (~0,5 MB) al final y datos a los 20,6 s, sin esperas muertas. La «espera de
+  ~6 s» del diagnóstico no se reproduce: con caché en escritorio los
+  productos se piden a los 0,8 s. Lo que queda es peso, no una espera.
+- **Una URL que la tienda no conoce no es la portada.** go_router mostraba su
+  pantalla de error en inglés y la URL quedaba con el `index,follow` y la
+  canónica de la portada (soft 404). La ruta comodín `/:rutaInexistente(.*)`
+  va **última** en `PublicStoreRouter` y usa `DynamicWebsitePage.missingRoute()`
+  («Página no encontrada», `noindex`, sin canónica). No sirve
+  `errorPageBuilder`: esa página no registra un `GoRouterState` y el layout lo
+  lee (pantalla gris en release). El layout no le pisa el SEO porque la ruta
+  pasa `pageOwnsSeo: true`. Una ruta nueva va antes del comodín;
+  `test/unit/public_store_missing_route_test.dart` lo guarda. Dos reglas
+  que salieron de la revisión: con `push` la página de abajo sigue montada,
+  así que el SEO sólo lo escribe la ruta visible (`TickerMode`), y
+  `/tienda/:resto(.*)` redirige las rutas montadas del ERP a su ruta pública.
+- `google-places-proxy` lo llaman clientes sin cuenta con la clave pública
+  (sin clave, el gateway da 401). La protección de la llave de Google está en
+  la función: tenant activo, entradas acotadas, y sólo los campos que lee el
+  checkout (`opening_hours` se cobra aparte y no se pide).
 - Correr el generador con datos reales exige `build/web_store` (con
   `web/index.html` basta; otro `--build-dir` aborta) y **reescribe**
   `firebase.json` y `scripts/generated_product_redirects.json`: se restauran
@@ -4176,7 +4202,7 @@ This applies to:
 **Implementation pattern:**
 - Google Business Profile sync lives in `lib/modules/website/services/google_business_service.dart` and the website editor sync UI in `lib/modules/website/widgets/website_editor_panel.dart`.
 - The `google-business-reviews` Edge Function already fetches Business Profile location data including `regularHours` and `metadata`.
-- The `google-places-proxy` Edge Function is the correct server-side path for Google Places details such as `opening_hours`, `place_id`, and canonical Maps URL. Do not expose or call the Places API key directly from public Flutter code.
+- The `google-places-proxy` Edge Function serves only the checkout address lookup (autocomplete + details with `place_id`, `formatted_address`, `address_components`, `geometry`). Since 2026-09-24 it no longer requests `opening_hours` or the Maps URL: Google bills them as contact data and no caller read them. Opening hours and the Maps URL come from `google-public-data-refresh`. Do not expose or call the Places API key directly from public Flutter code.
 - The `google-public-data-refresh` Edge Function is the automatic refresh path for public Google review/rating data. It reads saved `google_maps_place_id` + tenant `google_places_api_key`, writes normalized reviews/rating totals back to `website_settings`, and is scheduled in production through `pg_cron` + `pg_net` using a private `GOOGLE_PUBLIC_DATA_REFRESH_SECRET` header. Manual Business Profile review sync may still exist for editor workflows, but public storefront freshness should not depend on a browser session or temporary OAuth provider token.
 - If `google_reviews_auto_sync_status = error` and `google_reviews_auto_sync_error` contains `Google Places details failed (REQUEST_DENIED): You must enable Billing on the Google Cloud Project`, the public Google Places refresh is blocked at Google Cloud billing. A Firebase deploy, Flutter code change, or Supabase cron retry will not refresh hours/reviews until billing/API access is fixed or the editor-side Google Business Profile sync writes fresh `google_business_regular_hours`.
 - Public renderers such as `lib/public_store/pages/contact_page.dart` should support both Google Business Profile `regularHours` and Google Places `opening_hours` payload shapes when displaying hours.
