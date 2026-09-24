@@ -4089,8 +4089,9 @@ la parte de base de datos):**
   (`PublicStoreHeaderGeometry`, `_productImageStageHeight`,
   `CatalogCollectionPresentationHeader`, Oswald en 400, Barlow de cuerpo): si
   cambian allá, cambian las clases `.ip-*`, o el traspaso salta. Copiar el
-  código **no acredita** esos valores: siguen pendientes de Design y la
-  instantánea no se despliega hasta compararlos. El precio nace neutro y sólo
+  código **no acredita** esos valores: siguen pendientes de Design. El dueño
+  autorizó publicar el 2026-09-24 sin esperar esa comparación; no presentar
+  esos valores como validados por Design. El precio nace neutro y sólo
   se muestra si la API pública confirma el del build; el stock no se muestra
   (lo descuentan reservas que la fila no refleja). Medido en móvil lento:
   contenido a los 0,27 s (antes sólo el logo hasta los ~21 s) sin atrasar a

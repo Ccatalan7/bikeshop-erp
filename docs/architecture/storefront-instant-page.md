@@ -1,8 +1,8 @@
 # Página instantánea de la tienda
 
-**Estado:** construida y medida en local el 2026-09-24; **no está en
-producción**. Espera la trazabilidad de sus valores visuales a Design (ver
-«Trazabilidad visual»). Cubre fichas y categorías; portada, catálogo raíz y
+**Estado:** construida y medida en local el 2026-09-24; publicación autorizada
+por el dueño con la trazabilidad visual pendiente (ver «Trazabilidad visual»).
+Cubre fichas y categorías; portada, catálogo raíz y
 resto de las rutas siguen sólo con Flutter.
 
 ## Por qué existe
@@ -165,10 +165,11 @@ acreditado en Design:
   esqueletos (radio 6 px, tono `--ip-soft` al 7 % del texto, pulso de 1,4 s,
   proporciones de las líneas) y el tono secundario `--ip-secondary`.
 
-No se despliega hasta que el dueño corra `/design-login` desde un `claude`
-interactivo y cada valor se compare con `GUÍA GENERAL Viñabike -
-Componentes` (en particular, si la guía ya tiene un estado de carga que
-reemplace los esqueletos y la barra).
+**Decisión del dueño, 2026-09-24:** publicar con estos valores sin esperar
+`/design-login` ni la comparación con `GUÍA GENERAL Viñabike - Componentes`.
+La inspección visual local del traspaso de ficha y categoría y las pruebas
+focalizadas pasaron; los valores siguen sin acreditarse en Design. Una revisión
+posterior de Design puede proponer cambios a los esqueletos y la barra.
 
 ### Carrusel en teléfono: las flechas tapan el texto y no se ocultan
 
