@@ -119,6 +119,15 @@ F-04, E-01, O-04) mientras el API estaba cerrado; ni un valor salió de una
 captura. Lo que **no** trae la copia es lo que tampoco trae el API: lo que
 cae después del cap de 256 KiB.
 
+**Corrección 2026-09-24: la copia no es permanente.** Ese día el `find` no
+devolvió nada: ninguno de los 20 resultados de más de 200 KB traía la guía,
+porque una limpieza de disco se había llevado los de sesiones anteriores. Sin
+API y sin copia no hay valores legítimos. La página «no encontrada» de la
+tienda salió igual, reutilizando un estado que ya estaba construido
+(`DynamicWebsitePage.missingRoute()`), sin un solo valor nuevo. Si la tarea
+exige valores nuevos, se reportan como ilegibles y el dueño corre
+`/design-login`; no se estiman.
+
 ### La copia de rescate del `get_file` anterior ya no existe (2026-09-17)
 
 La receta de arriba —recuperar la guía íntegra desde los resultados de
