@@ -4038,6 +4038,15 @@ la parte de base de datos):**
   accesibilidad recargue la página. Se mide con Playwright y UA de Googlebot
   sirviendo el build local con `context.route('https://vinabike.cl/**')`
   (en `localhost` el build release no resuelve tenant).
+- **URLs del sitio anterior (Odoo, `/shop/<sku>-<nombre>-<id>`).** Google
+  les seguía mostrando impresiones (109 URL, 16 meses) y caían en la portada
+  con canónica a la portada. Son reglas manuales 301 de `firebase.json`
+  (el generador las conserva en orden; la primera que calza gana): ficha por
+  SKU + primera palabra del nombre (`/shop/s56467-aceite-**`), categorías de
+  Odoo a su equivalente publicado, y comodines `/shop`, `/shop/cart`,
+  `/shop/category/**` y `/shop/**` al final. El destino se toma del sitemap
+  vivo: un slug inexacto o una ficha sin snapshot (sin foto) entrega la
+  portada. `test/unit/legacy_shop_redirects_test.dart` guarda orden y forma.
 - Correr el generador con datos reales exige `build/web_store` (con
   `web/index.html` basta; otro `--build-dir` aborta) y **reescribe**
   `firebase.json` y `scripts/generated_product_redirects.json`: se restauran

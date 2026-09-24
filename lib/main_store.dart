@@ -18,6 +18,7 @@ import 'public_store/services/public_store_scroll_state.dart';
 import 'public_store/services/customer_account_service.dart';
 import 'public_store/services/public_inventory_service.dart';
 import 'public_store/theme/public_store_theme.dart';
+import 'public_store/widgets/public_link_semantics.dart';
 import 'public_store/widgets/public_store_bootstrap.dart';
 import 'shared/config/supabase_config.dart';
 import 'shared/services/error_reporting_service.dart';
@@ -121,6 +122,7 @@ Future<void> main() async {
 
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
+    PublicLinkSemantics.publicStoreRuntime = true;
     enableSemanticsForCrawlers();
 
     // Start independent browser-storage and Supabase initialization together.

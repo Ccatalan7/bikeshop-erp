@@ -9,6 +9,9 @@ import 'package:vinabike_erp/public_store/widgets/public_link_semantics.dart';
 /// no hay ni texto ni `<a href>` en el DOM. Los destinos se declaran como
 /// enlaces y la semántica se activa para los rastreadores.
 void main() {
+  setUp(() => PublicLinkSemantics.publicStoreRuntime = true);
+  tearDown(() => PublicLinkSemantics.publicStoreRuntime = false);
+
   group('isKnownCrawlerUserAgent', () {
     test('reconoce los rastreadores de Google, Merchant y Bing', () {
       const agents = [
@@ -61,6 +64,7 @@ void main() {
         'tel:+56998357797',
         'mailto:contacto@vinabike.cl',
         'productos',
+        '//otro-sitio.cl/productos',
       ]) {
         expect(publicLinkUri(href), isNull, reason: '$href');
       }
@@ -83,6 +87,44 @@ void main() {
     final data = tester.getSemantics(find.text('Cadenas')).getSemanticsData();
     expect(data.hasFlag(SemanticsFlag.isLink), isTrue);
     expect(data.linkUrl.toString(), '/productos/categoria/cadenas');
+    handle.dispose();
+  });
+
+  testWidgets('canonicalPublicHref quita la ruta montada del ERP',
+      (tester) async {
+    late BuildContext context;
+    await tester.pumpWidget(Builder(builder: (c) {
+      context = c;
+      return const SizedBox();
+    }));
+    expect(canonicalPublicHref(context, '/tienda'), '/');
+    expect(canonicalPublicHref(context, '/tienda/productos'), '/productos');
+    expect(canonicalPublicHref(context, '/productos?q=ruta'),
+        '/productos?q=ruta');
+    // Sin registro de presentaciones no hay ruta de colección que inventar.
+    expect(canonicalPublicHref(context, '/productos?category=abc'),
+        '/productos?category=abc');
+    expect(canonicalPublicHref(context, 'https://wa.me/56998357797'),
+        'https://wa.me/56998357797');
+  });
+
+  testWidgets('en el ERP (Edit y Preview bajo /tienda) no se declara enlace',
+      (tester) async {
+    PublicLinkSemantics.publicStoreRuntime = false;
+    final handle = tester.ensureSemantics();
+    await tester.pumpWidget(
+      const Directionality(
+        textDirection: TextDirection.ltr,
+        child: PublicLinkSemantics(
+          href: '/productos',
+          child: Text('Productos'),
+        ),
+      ),
+    );
+
+    final data =
+        tester.getSemantics(find.text('Productos')).getSemanticsData();
+    expect(data.hasFlag(SemanticsFlag.isLink), isFalse);
     handle.dispose();
   });
 

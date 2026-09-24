@@ -68,6 +68,9 @@ class _PremiumProductCardState extends State<PremiumProductCard> {
         fallbackProductId: widget.productId,
       );
 
+  bool get _declaresLink =>
+      _isInteractive && PublicLinkSemantics.publicStoreRuntime;
+
   void _openProduct() {
     widget.onNavigate?.call(_productPath);
   }
@@ -78,9 +81,10 @@ class _PremiumProductCardState extends State<PremiumProductCard> {
 
     return Semantics(
       button: _isInteractive,
-      // Con la semántica activa (rastreadores) sale como `<a href>`.
-      link: _isInteractive,
-      linkUrl: _isInteractive ? publicLinkUri(_productPath) : null,
+      // En la tienda pública, con la semántica activa (rastreadores), sale
+      // como `<a href>`; en Edit/Preview del ERP sigue siendo un botón.
+      link: _declaresLink,
+      linkUrl: _declaresLink ? publicLinkUri(_productPath) : null,
       enabled: _isInteractive ? true : null,
       label: _semanticLabel,
       child: MouseRegion(

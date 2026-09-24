@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../public_store/widgets/public_link_semantics.dart';
 import '../models/website_action.dart';
 
 typedef WebsiteActionLabelPresenter = Widget Function(
@@ -73,6 +74,11 @@ class WebsiteActionButton extends StatelessWidget {
           child: child,
         ),
     };
-    return expand ? SizedBox(width: double.infinity, child: button) : button;
+    final linked = PublicLinkSemantics(
+      href: action.href,
+      enabled: onPressed != null,
+      child: button,
+    );
+    return expand ? SizedBox(width: double.infinity, child: linked) : linked;
   }
 }
