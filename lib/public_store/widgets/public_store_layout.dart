@@ -186,6 +186,10 @@ class PublicStoreLayout extends StatefulWidget {
   final String? routePath;
   final WebsiteEditorNavigationIntent? backNavigationIntent;
 
+  /// La página hija escribe su propio SEO y el actualizador genérico no la
+  /// pisa. Lo usa la ruta inexistente, que no tiene un patrón propio.
+  final bool pageOwnsSeo;
+
   /// Injection seam for the tenant-scoped checkout capability read.
   ///
   /// Production uses the canonical `PublicCheckoutCapabilityService`; tests
@@ -201,6 +205,7 @@ class PublicStoreLayout extends StatefulWidget {
     this.routePath,
     this.backNavigationIntent,
     this.checkoutCapabilityLoader,
+    this.pageOwnsSeo = false,
   });
 
   static bool isCheckoutPath(String path) {
@@ -2114,7 +2119,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       // only after their canonical owner and eligibility have loaded. This
       // also covers the `/tienda/...` ERP mount without letting the generic
       // page updater overwrite their metadata.
-      if (isCatalogSeoManagedPath(currentPath) ||
+      if (widget.pageOwnsSeo ||
+          isCatalogSeoManagedPath(currentPath) ||
           isProductDetailSeoManagedPath(currentPath) ||
           isStaticPolicySeoManagedPath(currentPath) ||
           isDynamicWebsitePageSeoManagedPath(currentPath)) {

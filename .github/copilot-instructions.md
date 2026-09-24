@@ -4057,6 +4057,15 @@ la parte de base de datos):**
   (~0,5 MB) al final y datos a los 20,6 s, sin esperas muertas. La «espera de
   ~6 s» del diagnóstico no se reproduce: con caché en escritorio los
   productos se piden a los 0,8 s. Lo que queda es peso, no una espera.
+- **Una URL que la tienda no conoce no es la portada.** go_router mostraba su
+  pantalla de error en inglés y la URL quedaba con el `index,follow` y la
+  canónica de la portada (soft 404). La ruta comodín `/:rutaInexistente(.*)`
+  va **última** en `PublicStoreRouter` y usa `DynamicWebsitePage.missingRoute()`
+  («Página no encontrada», `noindex`, sin canónica). No sirve
+  `errorPageBuilder`: esa página no registra un `GoRouterState` y el layout lo
+  lee (pantalla gris en release). El layout no le pisa el SEO porque la ruta
+  pasa `pageOwnsSeo: true`. Una ruta nueva va antes del comodín;
+  `test/unit/public_store_missing_route_test.dart` lo guarda.
 - `google-places-proxy` lo llaman clientes sin cuenta con la clave pública
   (sin clave, el gateway da 401). La protección de la llave de Google está en
   la función: tenant activo, entradas acotadas, y sólo los campos que lee el
