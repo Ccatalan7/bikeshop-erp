@@ -889,6 +889,18 @@ y la del producto; en Chrome headless (visible) el mismo producto llegaba en
 dice `hidden`, los tiempos se miden en headless (Playwright con
 `channel: 'chrome'`) o con el panel a la vista. Los eventos de GA4 salen en
 lote: `view_item` llega a `/g/collect` unos 5 s después del evento.
+
+### Un formulario de Flutter se lee antes de enviarlo (2026-09-23)
+
+Con Playwright sobre la tienda, `fill` en los campos de la semántica de Flutter
+a veces no queda: en una de tres corridas del checkout los cuatro campos
+quedaron vacíos y el botón se presionó igual (no se creó nada porque la
+validación lo frenó). Antes de un clic irreversible se leen los valores
+(`inputValue`) y el estado de los radios, y el envío se aborta si no calzan.
+Un pedido web de prueba por transferencia nace `confirmed` con una factura
+`sent`, sin asientos ni movimiento de stock; se anula con
+`transition_online_order_status(..., 'cancelled', ...)` como usuario del staff
+(claims por `query.sh`), y pedido y factura quedan `cancelled`.
 - After two failed locator attempts, refresh the snapshot once. If no stable
   hook exists, add a durable Flutter `Semantics` label or equivalent test
   contract instead of continuing coordinate retries.
