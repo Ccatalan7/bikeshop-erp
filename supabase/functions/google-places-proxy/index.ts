@@ -17,9 +17,11 @@ const corsHeaders = {
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const PLACE_ID = /^[A-Za-z0-9_-]{10,512}$/;
+// Google no garantiza un largo máximo para un place_id; el tope sólo acota abuso.
+const PLACE_ID = /^[A-Za-z0-9_-]{10,4096}$/;
 const SESSION_TOKEN = /^[A-Za-z0-9-]{1,64}$/;
-const MAX_INPUT_LENGTH = 120;
+// El checkout no limita el campo: una dirección larga se recorta, no se rechaza.
+const MAX_INPUT_LENGTH = 200;
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -48,7 +50,9 @@ serve(async (req: Request): Promise<Response> => {
     } | null;
     const action = typeof body?.action === "string" ? body.action : "";
     const tenantId = typeof body?.tenantId === "string" ? body.tenantId.trim() : "";
-    const input = typeof body?.input === "string" ? body.input.trim() : "";
+    const input = typeof body?.input === "string"
+      ? body.input.trim().slice(0, MAX_INPUT_LENGTH).trim()
+      : "";
     const placeId = typeof body?.placeId === "string" ? body.placeId.trim() : "";
     const sessionToken =
       typeof body?.sessionToken === "string" ? body.sessionToken.trim() : "";
@@ -62,8 +66,7 @@ serve(async (req: Request): Promise<Response> => {
     if (sessionToken && !SESSION_TOKEN.test(sessionToken)) {
       return json({ error: "Invalid sessionToken" }, 400);
     }
-    if (action === "autocomplete" &&
-        (input.length < 3 || input.length > MAX_INPUT_LENGTH)) {
+    if (action === "autocomplete" && input.length < 3) {
       return json({ error: "Invalid input" }, 400);
     }
     if (action === "details" && !PLACE_ID.test(placeId)) {
@@ -119,6 +122,7 @@ serve(async (req: Request): Promise<Response> => {
       const predictions = Array.isArray(data?.predictions) ? data.predictions : [];
       return json({
         status: data?.status ?? "UNKNOWN_ERROR",
+        error_message: data?.error_message,
         predictions: predictions.map((prediction: Record<string, unknown>) => ({
           place_id: prediction.place_id,
           description: prediction.description,
@@ -140,6 +144,7 @@ serve(async (req: Request): Promise<Response> => {
     const result = data?.result;
     return json({
       status: data?.status ?? "UNKNOWN_ERROR",
+      error_message: data?.error_message,
       result: result
         ? {
           place_id: result.place_id,

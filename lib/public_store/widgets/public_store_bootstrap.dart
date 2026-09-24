@@ -74,6 +74,7 @@ class PublicStoreBootstrap extends StatefulWidget {
 class _PublicStoreBootstrapState extends State<PublicStoreBootstrap>
     with WidgetsBindingObserver {
   bool _splashHidden = false;
+  bool _storeReadyReported = false;
   bool _isBootstrapping = true;
   bool _hasTenant = false;
   String? _error;
@@ -356,9 +357,11 @@ class _PublicStoreBootstrapState extends State<PublicStoreBootstrap>
   void _hideHtmlSplashAfterFrame({bool storeReady = false}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final firstReveal = !_splashHidden;
       _hideHtmlSplash();
-      if (storeReady && firstReveal) {
+      // Una carga que falló y se recuperó con «Reintentar» también cuenta:
+      // el splash ya estaba oculto, pero la tienda recién ahora está lista.
+      if (storeReady && !_storeReadyReported) {
+        _storeReadyReported = true;
         final elapsedMs = navigationElapsedMs();
         if (elapsedMs != null) {
           Ga4CommerceEvents.instance.storeReady(elapsedMs);
