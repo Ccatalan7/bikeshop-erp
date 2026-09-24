@@ -88,7 +88,9 @@ import 'search_overlay.dart';
 import 'storefront_navigation_guard_scope.dart';
 import '../../shared/widgets/safe_layout_builder.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import '../services/crawler_semantics.dart';
 import 'mega_menu.dart';
+import 'public_link_semantics.dart';
 
 part 'store_layout/runtime_href.dart';
 part 'store_layout/header_geometry.dart';
@@ -5468,32 +5470,37 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                   // Logo - uses URL if set, otherwise falls back to asset, then text
                                   // Logo - Force use of local asset for consistency and to fix "white block" issue
                                   // (Database logo_url might be opaque, causing white tint to fill the box)
-                                  InkWell(
-                                    key: const ValueKey(
-                                      'public-store-header-home',
-                                    ),
-                                    onTap: isEditMode
-                                        ? null
-                                        : () {
-                                            final path =
-                                                _routeForPublicStore('/tienda');
-                                            _navigateToHref(
-                                              context,
-                                              path,
-                                              forceHomeRefresh: true,
-                                            );
-                                          },
-                                    child: SizedBox(
-                                      height: headerGeometry.logoHitBox,
-                                      child: Center(
-                                        child: _buildLogo(
-                                          context: context,
-                                          logoUrl: logoUrl,
-                                          storeName: storeName,
-                                          textColor: textColor,
-                                          isDarkMode: usesLightForeground,
-                                          height: headerGeometry.logoHeight,
-                                          maxWidth: headerGeometry.logoMaxWidth,
+                                  PublicLinkSemantics(
+                                    href: _routeForPublicStore('/tienda'),
+                                    enabled: !isEditMode,
+                                    label: storeName,
+                                    child: InkWell(
+                                      key: const ValueKey(
+                                        'public-store-header-home',
+                                      ),
+                                      onTap: isEditMode
+                                          ? null
+                                          : () {
+                                              final path =
+                                                  _routeForPublicStore('/tienda');
+                                              _navigateToHref(
+                                                context,
+                                                path,
+                                                forceHomeRefresh: true,
+                                              );
+                                            },
+                                      child: SizedBox(
+                                        height: headerGeometry.logoHitBox,
+                                        child: Center(
+                                          child: _buildLogo(
+                                            context: context,
+                                            logoUrl: logoUrl,
+                                            storeName: storeName,
+                                            textColor: textColor,
+                                            isDarkMode: usesLightForeground,
+                                            height: headerGeometry.logoHeight,
+                                            maxWidth: headerGeometry.logoMaxWidth,
+                                          ),
                                         ),
                                       ),
                                     ),
@@ -6088,21 +6095,25 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       alignment: Alignment.centerLeft,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
-        child: InkWell(
-          onTap: isEditMode
-              ? null
-              : () {
-                  _navigateToHref(
-                    context,
-                    route,
-                    forceHomeRefresh: forceHomeRefresh,
-                  );
-                },
-          child: Text(
-            text,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.white70,
-                ),
+        child: PublicLinkSemantics(
+          href: route,
+          enabled: !isEditMode,
+          child: InkWell(
+            onTap: isEditMode
+                ? null
+                : () {
+                    _navigateToHref(
+                      context,
+                      route,
+                      forceHomeRefresh: forceHomeRefresh,
+                    );
+                  },
+            child: Text(
+              text,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Colors.white70,
+                  ),
+            ),
           ),
         ),
       ),
@@ -6922,23 +6933,27 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               cursor: isEditMode ? SystemMouseCursors.click : MouseCursor.defer,
               onEnter:
                   isEditMode ? null : (_) => _warmDeferredRouteForPath(href),
-              child: InkWell(
-                onTap: isEditMode
-                    ? () => _beginInlineFooterNavEdit(editProvider, effective)
-                    : () {
-                        _navigateToHref(
-                          context,
-                          href,
-                          openInNewTab: effective.openInNewTab,
-                        );
-                      },
-                child: Text(
-                  effective.label,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.white70,
-                        fontWeight:
-                            isActive ? FontWeight.bold : FontWeight.normal,
-                      ),
+              child: PublicLinkSemantics(
+                href: href,
+                enabled: !isEditMode,
+                child: InkWell(
+                  onTap: isEditMode
+                      ? () => _beginInlineFooterNavEdit(editProvider, effective)
+                      : () {
+                          _navigateToHref(
+                            context,
+                            href,
+                            openInNewTab: effective.openInNewTab,
+                          );
+                        },
+                  child: Text(
+                    effective.label,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.white70,
+                          fontWeight:
+                              isActive ? FontWeight.bold : FontWeight.normal,
+                        ),
+                  ),
                 ),
               ),
             ),
@@ -6988,6 +7003,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           Theme(
             data: theme.copyWith(dividerColor: Colors.transparent),
             child: ExpansionTile(
+              initiallyExpanded: crawlerSemanticsActive,
               title: Text(parent.label.toUpperCase(), style: titleStyle),
               iconColor: Colors.white,
               collapsedIconColor: Colors.white,
@@ -7013,6 +7029,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       Theme(
         data: theme.copyWith(dividerColor: Colors.transparent),
         child: ExpansionTile(
+          initiallyExpanded: crawlerSemanticsActive,
           title: Text('ENLACES', style: titleStyle),
           iconColor: Colors.white,
           collapsedIconColor: Colors.white,
@@ -7735,43 +7752,47 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     final href = _routeForPublicStore(nav.href ?? '/');
     final isActive = GoRouterState.of(context).matchedLocation == href;
 
-    return MouseRegion(
-      onEnter: isEditMode ? null : (_) => _warmDeferredRouteForPath(href),
-      child: InkWell(
-        onTap: isEditMode
-            ? null
-            : () {
-                _navigateToHref(context, href, openInNewTab: nav.openInNewTab);
-              },
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 5),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: isActive ? primaryColor : Colors.transparent,
-                width: 2,
+    return PublicLinkSemantics(
+      href: href,
+      enabled: !isEditMode,
+      child: MouseRegion(
+        onEnter: isEditMode ? null : (_) => _warmDeferredRouteForPath(href),
+        child: InkWell(
+          onTap: isEditMode
+              ? null
+              : () {
+                  _navigateToHref(context, href, openInNewTab: nav.openInNewTab);
+                },
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 5),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: isActive ? primaryColor : Colors.transparent,
+                  width: 2,
+                ),
+              ),
+            ),
+            child: Semantics(
+              label: nav.label,
+              excludeSemantics: true,
+              child: Text(
+                uppercaseLabel ? nav.label.toUpperCase() : nav.label,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontSize: 14,
+                      letterSpacing: 0.1,
+                      fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                      color: isActive
+                          ? primaryColor
+                          : (primaryColor == Colors.white
+                              ? Colors.white
+                              : PublicStoreTheme.textPrimary),
+                    ),
               ),
             ),
           ),
-          child: Semantics(
-            label: nav.label,
-            excludeSemantics: true,
-            child: Text(
-              uppercaseLabel ? nav.label.toUpperCase() : nav.label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontSize: 14,
-                    letterSpacing: 0.1,
-                    fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                    color: isActive
-                        ? primaryColor
-                        : (primaryColor == Colors.white
-                            ? Colors.white
-                            : PublicStoreTheme.textPrimary),
-                  ),
-            ),
-          ),
         ),
-      ),
+        ),
     );
   }
 

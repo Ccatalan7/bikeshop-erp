@@ -4025,6 +4025,19 @@ la parte de base de datos):**
 - Medición: `Ga4CommerceEvents` envía `view_item`, `add_to_cart`,
   `begin_checkout`, `purchase` y `contact` (con `method`). Marcarlos como
   eventos clave se hace en GA4.
+- **Google sólo ve enlaces si la tienda los declara.** La tienda se dibuja
+  en canvas: el render de Google tenía 0 `<a href>` fuera de `<noscript>` y
+  0 caracteres de texto. Para los rastreadores (`enableSemanticsForCrawlers`,
+  por user agent: Googlebot, Storebot-Google, Bingbot…) se activa la
+  semántica y cada destino envuelto en `PublicLinkSemantics(href:)` sale como
+  `<a href>` real con su texto. Para un cliente no cambia nada: con semántica
+  el DOM toma punteros y scroll, por eso no se activa para todos. Un widget
+  nuevo que navega (tarjeta, enlace de menú, miga, paginación) lleva
+  `PublicLinkSemantics` con la misma URL que usa `navigateToHref`; si no, Google
+  no lo sigue. La guardia de clic de `web/index.html` evita que un `<a>` de
+  accesibilidad recargue la página. Se mide con Playwright y UA de Googlebot
+  sirviendo el build local con `context.route('https://vinabike.cl/**')`
+  (en `localhost` el build release no resuelve tenant).
 - Correr el generador con datos reales exige `build/web_store` (con
   `web/index.html` basta; otro `--build-dir` aborta) y **reescribe**
   `firebase.json` y `scripts/generated_product_redirects.json`: se restauran

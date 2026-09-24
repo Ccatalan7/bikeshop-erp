@@ -13,6 +13,7 @@ import 'public_store/providers/cart_provider.dart';
 import 'public_store/providers/public_store_tenant_provider.dart';
 import 'public_store/routes/public_store_router.dart';
 import 'public_store/services/checkout_exit_guard.dart';
+import 'public_store/services/crawler_semantics.dart';
 import 'public_store/services/public_store_scroll_state.dart';
 import 'public_store/services/customer_account_service.dart';
 import 'public_store/services/public_inventory_service.dart';
@@ -120,6 +121,7 @@ Future<void> main() async {
 
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
+    enableSemanticsForCrawlers();
 
     // Start independent browser-storage and Supabase initialization together.
     // Both still complete before providers mount, but neither needlessly waits

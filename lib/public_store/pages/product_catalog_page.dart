@@ -30,6 +30,7 @@ import '../../modules/website/models/website_catalog_query.dart';
 import '../../modules/website/models/website_page_models.dart';
 import '../../modules/website/services/website_service.dart';
 import '../../shared/widgets/safe_layout_builder.dart';
+import '../widgets/public_link_semantics.dart';
 import '../widgets/public_store_layout.dart';
 
 void _catalogDebugLog(String message) {
@@ -1761,6 +1762,18 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     _handleFiltersChanged();
   }
 
+  /// Ruta canónica de una colección publicada, la misma que arma
+  /// [_replaceCategoryRoute]; nula si la categoría no tiene presentación.
+  String? _publicCategoryHref(String categoryId) {
+    final presentation = _presentationForCategory(categoryId);
+    if (presentation == null) return null;
+    final currentPath = GoRouterState.of(context).uri.path;
+    return publicCategoryPath(
+      presentation: presentation,
+      services: storefrontCatalogRootPath(currentPath) == '/servicios',
+    );
+  }
+
   bool _replaceCategoryRoute(
     String? categoryId, {
     bool preserveCategoryScope = false,
@@ -2631,6 +2644,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
               id: child.id,
               label: child.name,
               onTap: () => _selectCategory(child.id),
+              href: _publicCategoryHref(child.id),
             ),
           )
           .toList(growable: false),
@@ -4358,26 +4372,47 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     return pages;
   }
 
+  /// La misma URL que deja [_goToPage] al sincronizar la ruta: con ella un
+  /// rastreador llega a todas las páginas del catálogo.
+  String _catalogPageHref(int page) {
+    final current = GoRouterState.of(context).uri;
+    final parameters = Map<String, String>.from(current.queryParameters)
+      ..remove('pagina');
+    if (page <= 1) {
+      parameters.remove('page');
+    } else {
+      parameters['page'] = '$page';
+    }
+    return Uri(
+      path: current.path,
+      queryParameters: parameters.isEmpty ? null : parameters,
+    ).toString();
+  }
+
   Widget _buildPageButton(int page) {
     final isSelected = page == _currentPage;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2),
-      child: InkWell(
-        onTap: () => _goToPage(page),
-        child: Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFFB71C1C) : Colors.transparent,
-            borderRadius: BorderRadius.circular(4),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            '$page',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-              color: isSelected ? Colors.white : Colors.grey.shade700,
+      child: PublicLinkSemantics(
+        href: _catalogPageHref(page),
+        enabled: !isSelected,
+        child: InkWell(
+          onTap: () => _goToPage(page),
+          child: Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: isSelected ? const Color(0xFFB71C1C) : Colors.transparent,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              '$page',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                color: isSelected ? Colors.white : Colors.grey.shade700,
+              ),
             ),
           ),
         ),
@@ -4422,188 +4457,191 @@ class _CatalogProductCardState extends State<_CatalogProductCard> {
 
     final hoverActive = _isHovered && !reduceMotion;
 
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => PublicStoreLayout.navigateToHref(
-            context, publicProductPath(product)),
-        child: AnimatedContainer(
-          duration: hoverDuration,
-          curve: Curves.easeOutCubic,
-          decoration: BoxDecoration(
-            color: hoverActive ? Colors.white : Colors.transparent,
-            boxShadow: hoverActive
-                ? [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.10),
-                      blurRadius: 34,
-                      spreadRadius: 2,
-                      offset: const Offset(0, 18),
-                    ),
-                  ]
-                : const [],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Product Image Area
-              Expanded(
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Container(
-                      color: Colors.white,
-                      padding: EdgeInsets.fromLTRB(
-                        12,
-                        10,
-                        12,
-                        hasBrand ? 28 : 10,
+    return PublicLinkSemantics(
+      href: publicProductPath(product),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => PublicStoreLayout.navigateToHref(
+              context, publicProductPath(product)),
+          child: AnimatedContainer(
+            duration: hoverDuration,
+            curve: Curves.easeOutCubic,
+            decoration: BoxDecoration(
+              color: hoverActive ? Colors.white : Colors.transparent,
+              boxShadow: hoverActive
+                  ? [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.10),
+                        blurRadius: 34,
+                        spreadRadius: 2,
+                        offset: const Offset(0, 18),
                       ),
-                      child: hasImage
-                          ? Image.network(
-                              displayImageUrl,
-                              fit: BoxFit.contain,
-                              gaplessPlayback: true,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Center(
-                                  child: Icon(
-                                    Icons.pedal_bike_outlined,
-                                    size: 48,
-                                    color: Colors.grey.shade300,
-                                  ),
-                                );
-                              },
-                            )
-                          : Center(
-                              child: Icon(
-                                Icons.pedal_bike_outlined,
-                                size: 48,
-                                color: Colors.grey.shade300,
+                    ]
+                  : const [],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Product Image Area
+                Expanded(
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Container(
+                        color: Colors.white,
+                        padding: EdgeInsets.fromLTRB(
+                          12,
+                          10,
+                          12,
+                          hasBrand ? 28 : 10,
+                        ),
+                        child: hasImage
+                            ? Image.network(
+                                displayImageUrl,
+                                fit: BoxFit.contain,
+                                gaplessPlayback: true,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Center(
+                                    child: Icon(
+                                      Icons.pedal_bike_outlined,
+                                      size: 48,
+                                      color: Colors.grey.shade300,
+                                    ),
+                                  );
+                                },
+                              )
+                            : Center(
+                                child: Icon(
+                                  Icons.pedal_bike_outlined,
+                                  size: 48,
+                                  color: Colors.grey.shade300,
+                                ),
                               ),
-                            ),
-                    ),
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      child: IgnorePointer(
-                        child: AnimatedContainer(
-                          duration: hoverDuration,
-                          curve: Curves.easeOutCubic,
-                          height: hoverActive ? 42 : 0,
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          color: logoBlue.withValues(alpha: 0.78),
-                          child: AnimatedOpacity(
+                      ),
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: IgnorePointer(
+                          child: AnimatedContainer(
                             duration: hoverDuration,
                             curve: Curves.easeOutCubic,
-                            opacity: hoverActive ? 1 : 0,
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    hasBrand ? brand.toUpperCase() : '',
+                            height: hoverActive ? 42 : 0,
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            color: logoBlue.withValues(alpha: 0.78),
+                            child: AnimatedOpacity(
+                              duration: hoverDuration,
+                              curve: Curves.easeOutCubic,
+                              opacity: hoverActive ? 1 : 0,
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      hasBrand ? brand.toUpperCase() : '',
+                                      style: const TextStyle(
+                                        fontFamily: null,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white,
+                                        letterSpacing: 0.65,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    stockLabel,
                                     style: const TextStyle(
                                       fontFamily: null,
                                       fontSize: 10,
-                                      fontWeight: FontWeight.w700,
+                                      fontWeight: FontWeight.w800,
                                       color: Colors.white,
-                                      letterSpacing: 0.65,
+                                      letterSpacing: 0.75,
                                     ),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
-                                ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  stockLabel,
-                                  style: const TextStyle(
-                                    fontFamily: null,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w800,
-                                    color: Colors.white,
-                                    letterSpacing: 0.75,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                         ),
                       ),
+                      if (hasBrand && !hoverActive)
+                        Positioned(
+                          left: 12,
+                          right: 12,
+                          bottom: 6,
+                          child: Text(
+                            brand.toUpperCase(),
+                            style: TextStyle(
+                              fontFamily: null,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey.shade500,
+                              letterSpacing: 0.45,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                // Product Info Area — fixed height keeps separators aligned; content stays top-stacked.
+                SizedBox(
+                  height: 90,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border(
+                        top: BorderSide(
+                          color: hoverActive
+                              ? Colors.transparent
+                              : const Color(0xFFE8E2D8),
+                          width: 1,
+                        ),
+                      ),
                     ),
-                    if (hasBrand && !hoverActive)
-                      Positioned(
-                        left: 12,
-                        right: 12,
-                        bottom: 6,
-                        child: Text(
-                          brand.toUpperCase(),
-                          style: TextStyle(
+                    padding: const EdgeInsets.fromLTRB(8, 12, 8, 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          product.name.toUpperCase(),
+                          style: const TextStyle(
                             fontFamily: null,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey.shade500,
-                            letterSpacing: 0.45,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.black87,
+                            height: 1.3,
+                            letterSpacing: 0.2,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          ChileanUtils.formatCurrency(product.price),
+                          style: const TextStyle(
+                            fontFamily: null,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.black,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                  ],
-                ),
-              ),
-              // Product Info Area — fixed height keeps separators aligned; content stays top-stacked.
-              SizedBox(
-                height: 90,
-                child: Container(
-                  decoration: BoxDecoration(
-                    border: Border(
-                      top: BorderSide(
-                        color: hoverActive
-                            ? Colors.transparent
-                            : const Color(0xFFE8E2D8),
-                        width: 1,
-                      ),
+                      ],
                     ),
                   ),
-                  padding: const EdgeInsets.fromLTRB(8, 12, 8, 10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        product.name.toUpperCase(),
-                        style: const TextStyle(
-                          fontFamily: null,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.black87,
-                          height: 1.3,
-                          letterSpacing: 0.2,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        ChileanUtils.formatCurrency(product.price),
-                        style: const TextStyle(
-                          fontFamily: null,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.black,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

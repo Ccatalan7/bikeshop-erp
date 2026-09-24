@@ -374,6 +374,21 @@
     }, { passive: false });
   </script>
   <script>
+    // Con la semántica activa (rastreadores o lector de pantalla) Flutter
+    // dibuja cada destino como <a href>. Flutter ya navega dentro de la app al
+    // recibir el clic; sin esto el navegador además recargaría la página.
+    // Un clic con modificador (pestaña nueva) sigue siendo del navegador.
+    document.addEventListener('click', function (event) {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey ||
+          event.ctrlKey || event.shiftKey || event.altKey) return;
+      var target = event.target;
+      var link = target && target.closest &&
+          target.closest('flt-semantics-host a[href]');
+      if (!link || link.origin !== window.location.origin) return;
+      event.preventDefault();
+    }, true);
+  </script>
+  <script>
     {{flutter_bootstrap_js}}
   </script>
   <!-- 
