@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../public_store/utils/product_url.dart';
+import '../../../public_store/widgets/public_link_semantics.dart';
 import '../../../shared/utils/chilean_utils.dart';
 
 /// Commencal-style clean, minimal product card used across the website.
@@ -61,14 +62,17 @@ class _PremiumProductCardState extends State<PremiumProductCard> {
     return parts.join('. ');
   }
 
-  void _openProduct() {
-    widget.onNavigate?.call(
-      buildPublicProductPath(
+  String get _productPath => buildPublicProductPath(
         name: widget.name,
         sku: widget.productSku ?? '',
         fallbackProductId: widget.productId,
-      ),
-    );
+      );
+
+  bool get _declaresLink =>
+      _isInteractive && PublicLinkSemantics.publicStoreRuntime;
+
+  void _openProduct() {
+    widget.onNavigate?.call(_productPath);
   }
 
   @override
@@ -77,6 +81,10 @@ class _PremiumProductCardState extends State<PremiumProductCard> {
 
     return Semantics(
       button: _isInteractive,
+      // En la tienda pública, con la semántica activa (rastreadores), sale
+      // como `<a href>`; en Edit/Preview del ERP sigue siendo un botón.
+      link: _declaresLink,
+      linkUrl: _declaresLink ? publicLinkUri(_productPath) : null,
       enabled: _isInteractive ? true : null,
       label: _semanticLabel,
       child: MouseRegion(

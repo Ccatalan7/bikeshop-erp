@@ -17,6 +17,7 @@ import '../services/catalog_page_prefetch_cache.dart';
 import '../services/public_inventory_service.dart';
 import '../utils/public_store_tenant_resolver.dart';
 import '../widgets/full_page_loading.dart';
+import '../widgets/public_link_semantics.dart';
 import '../widgets/public_store_layout.dart';
 import '../../shared/models/product.dart';
 import '../../shared/models/public_product_visibility_policy.dart';
@@ -1538,15 +1539,9 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       runSpacing: 6,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        _buildBreadcrumbLink(
-          'Inicio',
-          () => PublicStoreLayout.navigateToHref(context, '/'),
-        ),
+        _buildBreadcrumbLink('Inicio', '/'),
         _buildBreadcrumbSeparator(),
-        _buildBreadcrumbLink(
-          catalogLabel,
-          () => PublicStoreLayout.navigateToHref(context, catalogHref),
-        ),
+        _buildBreadcrumbLink(catalogLabel, catalogHref),
         _buildBreadcrumbSeparator(),
         for (final category in breadcrumbCategories) ...[
           Builder(
@@ -1577,12 +1572,9 @@ class _ProductDetailPageState extends State<ProductDetailPage>
               }
               return _buildBreadcrumbLink(
                 category.name,
-                () => PublicStoreLayout.navigateToHref(
-                  context,
-                  publicCategoryPath(
-                    presentation: presentation,
-                    services: isService,
-                  ),
+                publicCategoryPath(
+                  presentation: presentation,
+                  services: isService,
                 ),
               );
             },
@@ -2586,126 +2578,132 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         commerce.imageUrls.isNotEmpty ? commerce.imageUrls.first : null;
     final hasImage = displayImageUrl != null && displayImageUrl.isNotEmpty;
 
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: () {
-          PublicStoreLayout.navigateToHref(
-            context,
-            publicProductPath(product),
-          );
-        },
-        child: Container(
-          color: _storeTheme.surface,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: Stack(
-                  children: [
-                    Container(
-                      color: _storeTheme.surface,
-                      padding: EdgeInsets.fromLTRB(
-                        12,
-                        10,
-                        12,
-                        hasBrand ? 28 : 10,
-                      ),
-                      child: hasImage
-                          ? Image.network(
-                              displayImageUrl,
-                              fit: BoxFit.contain,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Center(
-                                  child: Icon(
-                                    Icons.pedal_bike_outlined,
-                                    size: 40,
-                                    color: _storeTheme.commerceTextMuted,
-                                  ),
-                                );
-                              },
-                            )
-                          : Center(
-                              child: Icon(
-                                Icons.pedal_bike_outlined,
-                                size: 48,
-                                color: _storeTheme.commerceTextMuted,
-                              ),
-                            ),
-                    ),
-                    if (hasBrand)
-                      Positioned(
-                        left: 12,
-                        right: 12,
-                        bottom: 6,
-                        child: Text(
-                          brand.toUpperCase(),
-                          style: _storeTheme.text.labelSmall?.copyWith(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: _storeTheme.commerceTextMuted,
-                            letterSpacing: 0.45,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              SizedBox(
-                height: 88,
-                child: Container(
-                  decoration: BoxDecoration(
-                    border: Border(
-                      top: BorderSide(color: _storeTheme.commerceLine),
-                    ),
-                  ),
-                  padding: const EdgeInsets.fromLTRB(8, 12, 8, 10),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+    return PublicLinkSemantics(
+      href: publicProductPath(product),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: () {
+            PublicStoreLayout.navigateToHref(
+              context,
+              publicProductPath(product),
+            );
+          },
+          child: Container(
+            color: _storeTheme.surface,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: Stack(
                     children: [
-                      Text(
-                        commerce.title.toUpperCase(),
-                        style: _storeTheme.text.bodySmall?.copyWith(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
-                          color: _storeTheme.commerceTextPrimary,
-                          height: 1.3,
-                          letterSpacing: 0.2,
+                      Container(
+                        color: _storeTheme.surface,
+                        padding: EdgeInsets.fromLTRB(
+                          12,
+                          10,
+                          12,
+                          hasBrand ? 28 : 10,
                         ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                        child: hasImage
+                            ? Image.network(
+                                displayImageUrl,
+                                fit: BoxFit.contain,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Center(
+                                    child: Icon(
+                                      Icons.pedal_bike_outlined,
+                                      size: 40,
+                                      color: _storeTheme.commerceTextMuted,
+                                    ),
+                                  );
+                                },
+                              )
+                            : Center(
+                                child: Icon(
+                                  Icons.pedal_bike_outlined,
+                                  size: 48,
+                                  color: _storeTheme.commerceTextMuted,
+                                ),
+                              ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        ChileanUtils.formatCurrency(commerce.price),
-                        style: _storeTheme.text.bodyLarge?.copyWith(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: _storeTheme.commerceTextPrimary,
+                      if (hasBrand)
+                        Positioned(
+                          left: 12,
+                          right: 12,
+                          bottom: 6,
+                          child: Text(
+                            brand.toUpperCase(),
+                            style: _storeTheme.text.labelSmall?.copyWith(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: _storeTheme.commerceTextMuted,
+                              letterSpacing: 0.45,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 ),
-              ),
-            ],
+                SizedBox(
+                  height: 88,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border(
+                        top: BorderSide(color: _storeTheme.commerceLine),
+                      ),
+                    ),
+                    padding: const EdgeInsets.fromLTRB(8, 12, 8, 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          commerce.title.toUpperCase(),
+                          style: _storeTheme.text.bodySmall?.copyWith(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: _storeTheme.commerceTextPrimary,
+                            height: 1.3,
+                            letterSpacing: 0.2,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          ChileanUtils.formatCurrency(commerce.price),
+                          style: _storeTheme.text.bodyLarge?.copyWith(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: _storeTheme.commerceTextPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildBreadcrumbLink(String label, VoidCallback onTap) {
-    return InkWell(
-      onTap: onTap,
-      child: Text(
-        label,
-        style: _storeTheme.text.bodyMedium?.copyWith(
-          fontSize: 14,
-          fontWeight: FontWeight.w600,
-          color: _storeTheme.commerceAccent,
+  Widget _buildBreadcrumbLink(String label, String href) {
+    return PublicLinkSemantics(
+      href: href,
+      child: InkWell(
+        onTap: () => PublicStoreLayout.navigateToHref(context, href),
+        child: Text(
+          label,
+          style: _storeTheme.text.bodyMedium?.copyWith(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: _storeTheme.commerceAccent,
+          ),
         ),
       ),
     );

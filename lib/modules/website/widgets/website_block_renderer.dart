@@ -10,6 +10,7 @@ import '../services/website_service.dart';
 import '../../../public_store/providers/public_store_tenant_provider.dart';
 import '../../../public_store/services/public_category_publication.dart';
 import '../../../public_store/services/public_inventory_service.dart';
+import '../../../public_store/widgets/public_link_semantics.dart';
 import '../../../shared/models/public_product_visibility_policy.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/models/product.dart';
@@ -1954,113 +1955,117 @@ class _CategoryCard extends StatelessWidget {
     final imageUrl = data['imageUrl']?.toString();
     final hasImage = imageUrl != null && imageUrl.isNotEmpty;
 
-    return Container(
-      height: height,
-      decoration: BoxDecoration(
-        color: const Color(0xFF2a2a2a),
-        image: hasImage
-            ? DecorationImage(
-                image: NetworkImage(imageUrl),
-                fit: BoxFit.cover,
-                alignment: WebsiteBlockRenderer._resolveFocalAlignment(data),
-                colorFilter: const ColorFilter.mode(
-                  Colors.black38,
-                  BlendMode.darken,
-                ),
-              )
-            : null,
-      ),
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          // Placeholder gradient for cards without images
-          if (!hasImage)
-            Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Color(0xFF3a3a3a),
-                    Color(0xFF1a1a1a),
-                  ],
+    return PublicLinkSemantics(
+      href: href,
+      enabled: visitorInteractionsEnabled && onNavigate != null,
+      child: Container(
+        height: height,
+        decoration: BoxDecoration(
+          color: const Color(0xFF2a2a2a),
+          image: hasImage
+              ? DecorationImage(
+                  image: NetworkImage(imageUrl),
+                  fit: BoxFit.cover,
+                  alignment: WebsiteBlockRenderer._resolveFocalAlignment(data),
+                  colorFilter: const ColorFilter.mode(
+                    Colors.black38,
+                    BlendMode.darken,
+                  ),
+                )
+              : null,
+        ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Placeholder gradient for cards without images
+            if (!hasImage)
+              Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color(0xFF3a3a3a),
+                      Color(0xFF1a1a1a),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          // Material + InkWell for interaction and hover effect
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              // Visitor navigation works in Preview and Public; only Edit
-              // (visitorInteractionsEnabled=false) is inert.
-              onTap: visitorInteractionsEnabled
-                  ? () => onNavigate?.call(href)
-                  : null,
-              hoverColor: Colors.black.withValues(alpha: 0.2),
-              splashColor: Colors.white.withValues(alpha: 0.1),
-              highlightColor: Colors.white.withValues(alpha: 0.05),
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Text(
-                      title.toUpperCase(),
-                      style: TextStyle(
-                        fontFamily: bodyFont,
-                        color: Colors.white,
-                        fontSize: height > 300 ? 28 : 20,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1,
-                        shadows: [
-                          Shadow(
-                            color: Colors.black.withValues(alpha: 0.5),
-                            blurRadius: 8,
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (subtitle.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6),
-                        child: Text(
-                          subtitle,
-                          style: TextStyle(
-                            fontFamily: bodyFont,
-                            color: Colors.white70,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 16),
-                    // Commencal-style black button with white text
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black,
-                        border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.3)),
-                      ),
-                      child: Text(
-                        ctaText.toUpperCase(),
-                        style: const TextStyle(
+            // Material + InkWell for interaction and hover effect
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                // Visitor navigation works in Preview and Public; only Edit
+                // (visitorInteractionsEnabled=false) is inert.
+                onTap: visitorInteractionsEnabled
+                    ? () => onNavigate?.call(href)
+                    : null,
+                hoverColor: Colors.black.withValues(alpha: 0.2),
+                splashColor: Colors.white.withValues(alpha: 0.1),
+                highlightColor: Colors.white.withValues(alpha: 0.05),
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Text(
+                        title.toUpperCase(),
+                        style: TextStyle(
+                          fontFamily: bodyFont,
                           color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 1.5,
+                          fontSize: height > 300 ? 28 : 20,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1,
+                          shadows: [
+                            Shadow(
+                              color: Colors.black.withValues(alpha: 0.5),
+                              blurRadius: 8,
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                  ],
+                      if (subtitle.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                            subtitle,
+                            style: TextStyle(
+                              fontFamily: bodyFont,
+                              color: Colors.white70,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 16),
+                      // Commencal-style black button with white text
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black,
+                          border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.3)),
+                        ),
+                        child: Text(
+                          ctaText.toUpperCase(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 1.5,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
