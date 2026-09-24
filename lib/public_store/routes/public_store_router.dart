@@ -904,6 +904,16 @@ class PublicStoreRouter {
           redirect: (context, state) =>
               '/pagina/${state.pathParameters['slug']}',
         ),
+        // Cualquier otra ruta montada del ERP (`/tienda/productos/categoria/
+        // camaras`, fichas bajo `/tienda/productos/...`) es la misma ruta sin
+        // el prefijo, con su consulta. Va antes del comodín.
+        GoRoute(
+          path: '/tienda/:resto(.*)',
+          redirect: (context, state) => Uri(
+            path: '/${state.pathParameters['resto']}',
+            query: state.uri.hasQuery ? state.uri.query : null,
+          ).toString(),
+        ),
 
         // Una ruta que no existe no es la portada. Sin esto go_router mostraba
         // su pantalla de error en inglés y la URL quedaba con el

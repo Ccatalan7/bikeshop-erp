@@ -82,24 +82,10 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
   void initState() {
     super.initState();
     if (widget.missingRoute) {
+      // El SEO se escribe en didChangeDependencies, cada vez que la ruta
+      // vuelve a estar visible.
       _isLoading = false;
       _error = 'Esta página no está disponible.';
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        final websiteService = context.read<WebsiteService>();
-        final storeName = websiteService
-            .getSetting(
-              'seo_business_name',
-              websiteService.getSetting('store_name', ''),
-            )
-            .trim();
-        SeoHelper.updateSeo(
-          title: storeName.isEmpty
-              ? 'Página no encontrada'
-              : 'Página no encontrada | $storeName',
-          robots: 'noindex,follow',
-        );
-      });
       return;
     }
     _seedFromSnapshot(widget.slug);
@@ -109,6 +95,10 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (widget.missingRoute) {
+      if (TickerMode.of(context)) _scheduleMissingRouteSeo();
+      return;
+    }
     final websiteService = context.read<WebsiteService>();
     if (!identical(_observedWebsiteService, websiteService)) {
       _observedWebsiteService?.cmsPageFreshnessSignal
@@ -140,6 +130,25 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
     _observedWebsiteService?.cmsPageFreshnessSignal
         .removeListener(_handleCmsPageFreshnessSignal);
     super.dispose();
+  }
+
+  void _scheduleMissingRouteSeo() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final websiteService = context.read<WebsiteService>();
+      final storeName = websiteService
+          .getSetting(
+            'seo_business_name',
+            websiteService.getSetting('store_name', ''),
+          )
+          .trim();
+      SeoHelper.updateSeo(
+        title: storeName.isEmpty
+            ? 'Página no encontrada'
+            : 'Página no encontrada | $storeName',
+        robots: 'noindex,follow',
+      );
+    });
   }
 
   void _handleCmsPageFreshnessSignal() {

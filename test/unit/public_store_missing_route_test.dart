@@ -28,6 +28,13 @@ void main() {
     expect(matchedPath('/productos/a/b/c/d'), catchAll);
   });
 
+  test('una ruta montada del ERP bajo /tienda se redirige, no se pierde', () {
+    expect(matchedPath('/tienda/productos/categoria/camaras'),
+        '/tienda/:resto(.*)');
+    expect(matchedPath('/tienda/productos/cadena-kmc/10266'),
+        '/tienda/:resto(.*)');
+  });
+
   test('las rutas de la tienda no caen en el comodín', () {
     for (final location in [
       '/',

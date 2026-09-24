@@ -2107,8 +2107,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // ========================================================================
     // SEO BACKGROUND UPDATE
     // ========================================================================
-    // Automatically update browser title and meta tags based on current page
-    if (kIsWeb && !isEditMode) {
+    // Automatically update browser title and meta tags based on current page.
+    // Only the visible route writes: a layout left mounted under a pushed
+    // route would otherwise restore its own `index,follow` and canonical over
+    // the page on top. TickerMode re-runs this build when it becomes visible.
+    if (kIsWeb && !isEditMode && TickerMode.of(context)) {
       final seoUri = resolvePublicStoreSeoUri(
         routerUri: currentUri,
         routePath: currentRoute,
