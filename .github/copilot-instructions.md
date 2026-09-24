@@ -4081,8 +4081,9 @@ la parte de base de datos):**
   productos se piden a los 0,8 s. Lo que queda es peso, no una espera.
 - **Fichas y categorías se ven al instante**
   (`docs/architecture/storefront-instant-page.md`, 2026-09-24). El generador
-  de snapshots escribe la ruta en `<template id="instant-page-template">`,
-  `web/index.html` la muestra con el primer paint y la ruta la retira con
+  de snapshots escribe la ruta en `<template id="instant-page-template">` y
+  pega junto a ella su hoja y su script (`scripts/storefront_instant_page/`),
+  que la muestran con el primer paint; la ruta la retira con
   `releaseInstantPageWhenReady` después de dibujar sus datos. Una página que
   reemplace a la ficha o al catálogo debe avisar igual, o la instantánea queda
   encima hasta 8 s después del splash. Sus medidas copian el código Flutter
@@ -4095,7 +4096,20 @@ la parte de base de datos):**
   se muestra si la API pública confirma el del build; el stock no se muestra
   (lo descuentan reservas que la fila no refleja). Medido en móvil lento:
   contenido a los 0,27 s (antes sólo el logo hasta los ~21 s) sin atrasar a
-  la tienda.
+  la tienda. **La primera publicación (#50) salió inerte:** la hoja y el
+  script vivían en `web/index.html`, que CI reescribe (ver abajo); en vivo el
+  24-sep seguía sólo el logo (0,8 s) y la tienda a los 20,6 s.
+- **`web/index.html` no es lo que se publica** (2026-09-24). Antes de cada
+  build de la tienda, `scripts/sync_seo_index.sh` lo **reescribe entero**
+  desde la plantilla que lleva adentro (`cat > "$INDEX_FILE" << HEREDOC`).
+  Lo que sólo está en `web/index.html` funciona en local, pasa las pruebas
+  que leen ese archivo y no llega a producción. Un cambio a la página base va
+  en esa plantilla, o lo inyecta el generador de snapshots; una prueba que lo
+  cubra lee la plantilla de `sync_seo_index.sh`, no `web/index.html`. Para
+  verificar como CI: correr `sync_seo_index.sh`, compilar y generar, en ese
+  orden, y restaurar `web/index.html` después. Costó una publicación entera
+  que no hacía nada y una tarde reportando mediciones locales que en vivo no
+  se daban.
 - **Una validación nueva del cliente se prueba contra la respuesta real del
   servidor.** Desde 2026-07-31 la tienda exige `tenant_id` en
   `get_public_store_data`, y la función nunca lo devolvió: cada carga
@@ -4295,7 +4309,9 @@ This applies to:
    stored links before marking the work complete.
 
 ### ❌ DON'T
-1. Edit `web/index.html` directly (will be overwritten by sync script)
+1. Edit `web/index.html` directly (will be overwritten by sync script: CI
+   regenerates the whole file from the heredoc inside
+   `scripts/sync_seo_index.sh`; see «`web/index.html` no es lo que se publica»)
 2. Assume changes are live without deploying
 3. Forget that legal pages ALSO need SEO (meta_title, meta_description)
 4. Use placeholder data ("+56 9 contacto", "test@test.com")

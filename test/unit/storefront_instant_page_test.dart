@@ -110,7 +110,7 @@ void main() {
     });
 
     test('resuelve las fuentes como la tienda y todas tienen @font-face', () {
-      final indexHtml = File('web/index.html').readAsStringSync();
+      final instantCss = File(snapshots.seoInstantStylePath).readAsStringSync();
       for (final (heading, body) in [
         (null, null),
         ('Barlow', 'Oswald'),
@@ -129,7 +129,7 @@ void main() {
         expect(instant.bodyFont, resolved.bodyFont, reason: '$body');
         expect(instant.css, isNot(contains('";}')));
         for (final family in [instant.headingFont, instant.bodyFont]) {
-          expect(indexHtml, contains('font-family: "$family";'),
+          expect(instantCss, contains('font-family: "$family";'),
               reason: 'sin @font-face, el navegador cambia de fuente');
         }
       }
@@ -179,7 +179,7 @@ void main() {
     });
 
     test('el precio nace neutro hasta verificarse', () {
-      // web/index.html sólo lo muestra con data-ip-state="verified".
+      // instant_page.css sólo lo muestra con data-ip-state="verified".
       expect(template(productRow()), contains('data-ip-state="pending"'));
       expect(template(productRow()), contains('ip-price-skeleton'));
     });
@@ -233,9 +233,9 @@ void main() {
           snapshots.seoInstantFreshnessSignature(productRow(stock: 0)), base);
     });
 
-    test('web/index.html vuelve a leer exactamente los mismos campos', () {
-      final index = File('web/index.html').readAsStringSync();
-      final match = RegExp(r"var fields = \[([^\]]+)\]").firstMatch(index);
+    test('el script vuelve a leer exactamente los mismos campos', () {
+      final script = File(snapshots.seoInstantScriptPath).readAsStringSync();
+      final match = RegExp(r"var fields = \[([^\]]+)\]").firstMatch(script);
       expect(match, isNotNull);
       final fields = RegExp(r"'([a-z_]+)'")
           .allMatches(match!.group(1)!)
@@ -299,6 +299,67 @@ void main() {
 
   group('inyección', () {
     final index = File('web/index.html').readAsStringSync();
+    final css = File(snapshots.seoInstantStylePath).readAsStringSync();
+    final js = File(snapshots.seoInstantScriptPath).readAsStringSync();
+
+    // CI no publica web/index.html: scripts/sync_seo_index.sh lo reescribe
+    // entero desde su plantilla antes del build. El 2026-09-24 la instantánea
+    // salió inerte porque su hoja y su script sólo vivían en web/index.html.
+    String ciIndexTemplate() {
+      final sync = File('scripts/sync_seo_index.sh').readAsStringSync();
+      final start = sync.indexOf('cat > "\$INDEX_FILE" << HEREDOC\n');
+      expect(start, isNonNegative, reason: 'sync_seo_index.sh cambió');
+      final body = sync.substring(sync.indexOf('\n', start) + 1);
+      return body.substring(0, body.indexOf('\nHEREDOC'));
+    }
+
+    void expectSelfSufficient(String html) {
+      final shell = html.indexOf('<div id="app-shell">');
+      final template = html.indexOf('<template id="instant-page-template">');
+      final script = html.indexOf('<script id="instant-page-script">');
+      final head = html.substring(0, html.indexOf('</head>'));
+      expect(head, contains('<style id="instant-page-style">'));
+      expect(head, contains('html.ip-covered #loading-logo'));
+      expect(template, allOf(isNonNegative, lessThan(script)));
+      expect(script, lessThan(shell),
+          reason: 'debe montarse antes de que se pinte el splash');
+      expect(html, contains('window.vinabikeInstantPage = api'));
+      expect('vinabikeInstantPage'.allMatches(html).length,
+          'vinabikeInstantPage'.allMatches(js).length,
+          reason: 'un solo script de montaje');
+    }
+
+    test('la página queda completa sobre el index.html que publica CI', () {
+      final ciIndex = ciIndexTemplate();
+      expect(ciIndex, isNot(contains('vinabikeInstantPage')));
+      expectSelfSufficient(snapshots.injectSeoInstantPage(
+        ciIndex,
+        theme: theme(),
+        templateHtml: '<template id="instant-page-template"></template>',
+      ));
+    });
+
+    test('y sobre web/index.html, que ya no trae nada de la instantánea', () {
+      expect(index, isNot(contains('vinabikeInstantPage')));
+      expect(index, isNot(contains('#instant-page')));
+      expectSelfSufficient(snapshots.injectSeoInstantPage(
+        index,
+        theme: theme(),
+        templateHtml: '<template id="instant-page-template"></template>',
+      ));
+    });
+
+    test('falla fuerte si web/index.html vuelve a traer el script', () {
+      expect(
+        () => snapshots.injectSeoInstantPage(
+          index.replaceFirst(
+              '</body>', '<script>vinabikeInstantPage</script></body>'),
+          theme: theme(),
+          templateHtml: '<template id="instant-page-template"></template>',
+        ),
+        throwsStateError,
+      );
+    });
 
     test('pone el tema y la foto en head y la plantilla antes del splash', () {
       final html = snapshots.injectSeoInstantPage(
@@ -344,21 +405,21 @@ void main() {
       );
     });
 
-    test('web/index.html monta la plantilla y expone release/arm', () {
-      expect(index, contains("getElementById('instant-page-template')"));
-      expect(index, contains('window.vinabikeInstantPage = api'));
-      expect(index, contains('api.release = function'));
-      expect(index, contains('api.arm = function'));
+    test('el script monta la plantilla y expone release/arm', () {
+      expect(js, contains("getElementById('instant-page-template')"));
+      expect(js, contains('window.vinabikeInstantPage = api'));
+      expect(js, contains('api.release = function'));
+      expect(js, contains('api.arm = function'));
     });
 
     test('una ficha retirada después del build no queda a la vista', () {
       // La lectura anónima sólo ve fichas activas, publicadas y en la web.
-      expect(index, contains("api.release('withdrawn')"));
-      expect(index, contains("shell.classList.remove('ip-covered')"));
+      expect(js, contains("api.release('withdrawn')"));
+      expect(js, contains("root.classList.remove('ip-covered')"));
     });
 
     test('un logo que no carga no deja una imagen rota', () {
-      expect(index, contains("logo.addEventListener('error', hideLogo)"));
+      expect(js, contains("logo.addEventListener('error', hideLogo)"));
     });
 
     test('la categoría no reserva grilla donde la tienda pone filtros', () {
@@ -366,7 +427,7 @@ void main() {
         r'@media \(min-width: 700px\) \{[\s\S]*?\.ip-catalog-heading,\s*'
         r'\.ip-grid \{\s*display: none;',
       );
-      expect(desktop.hasMatch(index), isTrue,
+      expect(desktop.hasMatch(css), isTrue,
           reason: 'ProductCatalogPage usa columna de filtros desde 700 px');
     });
   });
