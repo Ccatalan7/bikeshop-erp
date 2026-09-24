@@ -5,10 +5,15 @@ import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:vinabike_erp/modules/website/models/website_block_public_visibility.dart';
 import 'package:vinabike_erp/modules/website/models/website_catalog_presentation.dart';
+import 'package:vinabike_erp/modules/website/models/website_font_registry.dart';
 import 'package:vinabike_erp/modules/website/models/website_seo_settings_aliases.dart';
+import 'package:vinabike_erp/modules/website/theme/website_theme_color_value.dart';
 import 'package:vinabike_erp/public_store/models/public_commerce_product_projection.dart';
 import 'package:vinabike_erp/public_store/models/public_product_seo_copy.dart';
+import 'package:vinabike_erp/public_store/models/storefront_logo_source.dart';
+import 'package:vinabike_erp/shared/config/supabase_config.dart';
 import 'package:vinabike_erp/shared/models/public_product_visibility_policy.dart';
+import 'package:vinabike_erp/shared/utils/chilean_utils.dart';
 
 /// Generates static HTML "SEO snapshots" for product routes.
 ///
@@ -349,6 +354,16 @@ void main(List<String> args) async {
   }
   outDir.createSync(recursive: true);
 
+  final instantTheme = SeoInstantPageTheme.fromSettings(
+    settings,
+    storeName: storeName,
+    tenantLogoUrl: await _fetchTenantLogoUrl(
+      supabaseUrl: supabaseUrl,
+      tenantId: tenantId,
+      serviceRoleKey: serviceRoleKey,
+    ),
+    tenantId: tenantId,
+  );
   final productHtmlById = <String, String>{};
   var written = 0;
   for (final product in products) {
@@ -409,7 +424,7 @@ void main(List<String> args) async {
     final title = seoCopy.title;
     final description = seoCopy.description;
 
-    final html = _buildProductHtml(
+    final seoHtml = _buildProductHtml(
       baseHtml: baseHtml,
       title: title.isNotEmpty ? title : productName,
       description: description.isNotEmpty
@@ -440,6 +455,17 @@ void main(List<String> args) async {
         inStock: inStock,
       ),
       isProduct: true,
+    );
+    final html = injectSeoInstantPage(
+      seoHtml,
+      theme: instantTheme,
+      templateHtml: buildSeoInstantProductTemplate(
+        theme: instantTheme,
+        tenantId: tenantId,
+        commerce: commerce,
+        product: product,
+      ),
+      preloadImageUrl: imageUrl,
     );
 
     final relativeProductPath =
@@ -547,7 +573,7 @@ void main(List<String> args) async {
       category: category,
       storeName: storeName,
     );
-    final html = _buildCategoryHtml(
+    final seoHtml = _buildCategoryHtml(
       baseHtml: baseHtml,
       title: _truncate(_cleanText(title), 120),
       description: _truncate(_cleanText(description), 320),
@@ -565,6 +591,16 @@ void main(List<String> args) async {
         storeName: storeName,
         category: category,
       ),
+    );
+    final html = injectSeoInstantPage(
+      seoHtml,
+      theme: instantTheme,
+      templateHtml: buildSeoInstantCategoryTemplate(
+        theme: instantTheme,
+        tenantId: tenantId,
+        category: category,
+      ),
+      preloadImageUrl: category.imageUrl,
     );
     await File(pathJoin(categoryOutDir.path, category.slug))
         .writeAsString(html);
@@ -2641,6 +2677,21 @@ class SeoWebsiteSettingsSource {
       );
 }
 
+/// `tenants.logo_url`, el segundo candidato del logo del encabezado.
+Future<String?> _fetchTenantLogoUrl({
+  required String supabaseUrl,
+  required String tenantId,
+  required String serviceRoleKey,
+}) async {
+  final response = await _httpGet(
+    Uri.parse('$supabaseUrl/rest/v1/tenants?id=eq.$tenantId&select=logo_url'),
+    headers: {'apikey': serviceRoleKey},
+  );
+  final rows = jsonDecode(response) as List<dynamic>;
+  if (rows.isEmpty) return null;
+  return (rows.first as Map)['logo_url']?.toString();
+}
+
 Future<SeoWebsiteSettingsSource> _fetchWebsiteSettingsSource({
   required String supabaseUrl,
   required String tenantId,
@@ -3607,6 +3658,283 @@ List<String> _stringList(dynamic value) {
       .toList(growable: false);
 }
 
+// -----------------------------------------------------------------------------
+// Página instantánea (docs/architecture/storefront-instant-page.md)
+// -----------------------------------------------------------------------------
+
+/// Colores y tipografía con que la página instantánea imita la ficha y la
+/// categoría de la tienda. Salen de los mismos ajustes `theme_*` que
+/// `WebsiteResolvedTheme` lee en la app, con sus mismos valores por defecto
+/// (la prueba `storefront_instant_page_test` los compara).
+class SeoInstantPageTheme {
+  const SeoInstantPageTheme({
+    required this.background,
+    required this.text,
+    required this.accent,
+    required this.line,
+    required this.headingFont,
+    required this.bodyFont,
+    required this.logoUrl,
+    required this.storeName,
+  });
+
+  static const int defaultBackground = 0xFFFFFFFF;
+  static const int defaultCommerceText = 0xFF1E293B;
+  static const int defaultCommerceAccent = 0xFF123F68;
+  static const int defaultCommerceLine = 0xFFE8E2D8;
+
+  factory SeoInstantPageTheme.fromSettings(
+    Map<String, String> settings, {
+    required String storeName,
+    String? tenantLogoUrl,
+    String? tenantId,
+  }) {
+    int color(String key, int fallback) =>
+        (parseWebsiteThemeColorValue(settings[key] ?? '') ?? fallback) &
+        0xFFFFFFFF;
+    return SeoInstantPageTheme(
+      background: color('theme_background_color', defaultBackground),
+      text: color('theme_product_detail_text_color', defaultCommerceText),
+      accent: color('theme_product_detail_accent_color', defaultCommerceAccent),
+      line: color('theme_product_detail_line_color', defaultCommerceLine),
+      // Mismo registro que WebsiteResolvedTheme: sólo las fuentes empaquetadas
+      // (las que web/index.html declara); cualquier otra cae en la de
+      // omisión, igual que en la tienda.
+      headingFont: WebsiteFontRegistry.resolveHeadingFont(
+        settings['theme_heading_font'],
+      ),
+      bodyFont: WebsiteFontRegistry.resolveBodyFont(
+        settings['theme_body_font'],
+      ),
+      // El mismo logo que dibuja primero el encabezado de la tienda: así la
+      // tienda lo encuentra ya descargado.
+      logoUrl: storefrontFirstLogoSource(
+        configuredUrl: settings['logo_url'] ?? '',
+        tenantLogoUrl: tenantLogoUrl,
+        tenantId: tenantId,
+      ),
+      storeName: _cleanText(storeName),
+    );
+  }
+
+  final int background;
+  final int text;
+  final int accent;
+  final int line;
+  final String headingFont;
+  final String bodyFont;
+  final String logoUrl;
+  final String storeName;
+
+  String get css => ':root{'
+      '--ip-bg:${seoInstantCssColor(background)};'
+      '--ip-text:${seoInstantCssColor(text)};'
+      '--ip-accent:${seoInstantCssColor(accent)};'
+      '--ip-line:${seoInstantCssColor(line)};'
+      '--ip-heading-font:"$headingFont";'
+      '--ip-body-font:"$bodyFont"'
+      '}';
+}
+
+String seoInstantCssColor(int argb) {
+  final a = (argb >> 24) & 0xFF;
+  final r = (argb >> 16) & 0xFF;
+  final g = (argb >> 8) & 0xFF;
+  final b = argb & 0xFF;
+  if (a == 0xFF) {
+    return '#${[
+      r,
+      g,
+      b
+    ].map((v) => v.toRadixString(16).padLeft(2, '0')).join()}';
+  }
+  return 'rgba($r,$g,$b,${(a / 255).toStringAsFixed(3)})';
+}
+
+/// Campos crudos que deciden el precio visible
+/// (`PublicCommerceProductProjection.fromJson`). La página instantánea los
+/// vuelve a leer por la API pública al abrir y sólo muestra el precio si la
+/// firma coincide; mientras tanto, o si la lectura falla o no coincide, queda
+/// neutra hasta que la tienda dibuja el vigente. `web/index.html` normaliza
+/// igual.
+///
+/// El stock no se firma ni se muestra: `get_public_products` descuenta las
+/// reservas vigentes de pedidos web (`online_order_inventory_reservations`), y
+/// una reserva puede agotar un producto sin cambiar ningún campo de la fila.
+const List<String> seoInstantFreshnessFields = [
+  'website_price',
+  'price',
+];
+
+String seoInstantFreshnessSignature(Map<String, dynamic> product) {
+  String norm(Object? value) {
+    if (value == null) return '';
+    if (value is bool) return value ? 'true' : 'false';
+    if (value is num) return value.toStringAsFixed(2);
+    final text = value.toString().trim();
+    final number = RegExp(r'^-?\d+(\.\d+)?$').hasMatch(text)
+        ? double.tryParse(text)
+        : null;
+    return number == null ? text : number.toStringAsFixed(2);
+  }
+
+  return seoInstantFreshnessFields.map((f) => norm(product[f])).join('|');
+}
+
+String _seoInstantTemplateOpen({
+  required String kind,
+  required String tenantId,
+}) {
+  return '<template id="instant-page-template" data-ip-kind="$kind" '
+      'data-ip-tenant="${_escapeHtml(tenantId)}" '
+      'data-ip-api="${_escapeHtml(SupabaseConfig.url)}" '
+      'data-ip-key="${_escapeHtml(SupabaseConfig.anonKey)}">';
+}
+
+String _seoInstantHeader(SeoInstantPageTheme theme) {
+  final logo = theme.logoUrl.isEmpty
+      ? '<span class="ip-store-name">${_escapeHtml(theme.storeName)}</span>'
+      : '<img class="ip-logo" src="${_escapeHtml(theme.logoUrl)}" '
+          'alt="${_escapeHtml(theme.storeName)}" fetchpriority="low" '
+          'decoding="async" crossorigin="anonymous">';
+  return '<header class="ip-header"><a class="ip-home" href="/">$logo</a>'
+      '<div class="ip-progress" role="progressbar" '
+      'aria-label="Cargando la tienda"></div></header>';
+}
+
+/// La ficha como la dibuja `ProductDetailPage` en su primer frame con datos:
+/// foto, nombre y precio. Sin botones: nada acá compra ni agrega al carrito
+/// hasta que la tienda toma el control.
+///
+/// El precio nace neutro (`data-ip-state="pending"`) y `web/index.html` lo
+/// muestra sólo tras verificarlo. La disponibilidad no aparece: depende de
+/// reservas que la fila no refleja, y la dibuja la tienda.
+String buildSeoInstantProductTemplate({
+  required SeoInstantPageTheme theme,
+  required String tenantId,
+  required PublicCommerceProductProjection commerce,
+  required Map<String, dynamic> product,
+}) {
+  final title = _cleanText(commerce.title);
+  final imageUrl = commerce.imageUrls.isEmpty ? '' : commerce.imageUrls.first;
+  final media = imageUrl.isEmpty
+      ? ''
+      : '<div class="ip-media"><img src="${_escapeHtml(imageUrl)}" '
+          'alt="${_escapeHtml(title)}" width="600" height="600" '
+          'fetchpriority="high" decoding="async" crossorigin="anonymous">'
+          '</div>';
+  final heroPrice =
+      ChileanUtils.formatCurrency(commerce.price).replaceFirst(r'$ ', r'$');
+  final price = commerce.price > 0
+      ? '<hr class="ip-rule"><div class="ip-price-block">'
+          '<p class="ip-price">${_escapeHtml(heroPrice)}</p>'
+          '<p class="ip-price-note">Precio final con IVA incluido</p>'
+          '<div class="ip-skeleton ip-price-skeleton" aria-hidden="true">'
+          '</div></div>'
+      : '';
+  return '${_seoInstantTemplateOpen(kind: 'product', tenantId: tenantId)}'
+      '${_seoInstantHeader(theme)}'
+      '<div class="ip-body ip-product" role="main" data-ip-state="pending" '
+      'data-ip-sku="${_escapeHtml(commerce.sku)}" '
+      'data-ip-sig="${_escapeHtml(seoInstantFreshnessSignature(product))}">'
+      '$media<div class="ip-info">'
+      '<p class="ip-title" role="heading" aria-level="1">'
+      '${_escapeHtml(title)}</p>'
+      '$price</div></div></template>';
+}
+
+/// La portada de la categoría como la dibuja
+/// `CatalogCollectionPresentationHeader`, y la grilla como espacio reservado:
+/// qué productos van primero lo decide la consulta de la tienda (orden,
+/// stock y tamaño de página), que la página instantánea no replica.
+String buildSeoInstantCategoryTemplate({
+  required SeoInstantPageTheme theme,
+  required String tenantId,
+  required SeoCategoryProjection category,
+}) {
+  final wideHeight = category.heroDesktopHeight * 0.5;
+  final compactHeight = min(180.0, wideHeight * 0.72);
+  final overlay = category.heroOverlay.clamp(0.0, 0.78);
+  final image = category.imageUrl.isEmpty
+      ? ''
+      : '<img class="ip-hero-image" src="${_escapeHtml(category.imageUrl)}" '
+          'alt="" fetchpriority="high" decoding="async" '
+          'crossorigin="anonymous">';
+  final eyebrow = category.heroEyebrow.isEmpty
+      ? ''
+      : '<p class="ip-eyebrow">${_escapeHtml(category.heroEyebrow)}</p>';
+  final description = category.description.isEmpty
+      ? ''
+      : '<p class="ip-hero-description">'
+          '${_escapeHtml(category.description)}</p>';
+  final cards = List.filled(
+    6,
+    '<div class="ip-card"><div class="ip-skeleton ip-card-image"></div>'
+    '<div class="ip-skeleton ip-card-line"></div>'
+    '<div class="ip-skeleton ip-card-line ip-short"></div></div>',
+  ).join();
+  return '${_seoInstantTemplateOpen(kind: 'category', tenantId: tenantId)}'
+      '${_seoInstantHeader(theme)}'
+      '<div class="ip-category" role="main">'
+      '<section class="ip-hero${category.heroCentered ? ' ip-centered' : ''}" '
+      'style="--ip-hero-h:${wideHeight.toStringAsFixed(0)}px;'
+      '--ip-hero-h-compact:${compactHeight.toStringAsFixed(0)}px">'
+      '$image<div class="ip-hero-overlay" '
+      'style="background:rgba(0,0,0,${overlay.toStringAsFixed(2)})"></div>'
+      '<div class="ip-hero-text">$eyebrow'
+      '<p class="ip-hero-title" role="heading" aria-level="1">'
+      '${_escapeHtml(category.displayTitle)}</p>$description</div></section>'
+      // Migas, conteo y filtros de ProductCatalogPage, reservados con su
+      // alto para que la grilla no salte al traspaso.
+      '<div class="ip-catalog-heading" aria-hidden="true">'
+      '<div class="ip-skeleton ip-heading-line"></div>'
+      '<div class="ip-skeleton ip-heading-line ip-short"></div>'
+      '<div class="ip-skeleton ip-count-line"></div>'
+      '<div class="ip-skeleton ip-controls-line"></div></div>'
+      '<div class="ip-grid" aria-hidden="true">$cards</div>'
+      '</div></template>';
+}
+
+/// Inserta la página instantánea en una ruta generada: el tema y la foto
+/// principal en `<head>` (la foto con prioridad alta, para que baje antes que
+/// el motor de Flutter), y la plantilla justo antes del splash.
+String injectSeoInstantPage(
+  String html, {
+  required SeoInstantPageTheme theme,
+  required String templateHtml,
+  String preloadImageUrl = '',
+}) {
+  const shellMarker = '<div id="app-shell">';
+  if (!html.contains(shellMarker) || !html.contains('</head>')) {
+    throw StateError(
+      'web/index.html perdió `$shellMarker` o `</head>`: la página '
+      'instantánea no tiene dónde montarse.',
+    );
+  }
+  final head = StringBuffer(
+    '  <style id="instant-page-theme">${theme.css}</style>\n',
+  );
+  if (preloadImageUrl.isNotEmpty) {
+    head.write('  <link rel="preload" as="image" '
+        'href="${_escapeHtml(preloadImageUrl)}" fetchpriority="high" '
+        'crossorigin="anonymous">\n');
+  }
+  // La instantánea tapa el splash: el logo pulsante ya no se ve, así que no
+  // compite con la foto principal por el ancho de banda del primer segundo.
+  final withoutSplashLogo = html
+      .replaceFirst(
+        RegExp(r'\s*<link rel="preload" href="loading-logo\.png"[^>]*>'),
+        '',
+      )
+      .replaceFirstMapped(
+        RegExp(r'(<img\s+id="loading-logo"[^>]*?)fetchpriority="high"'),
+        (match) => '${match.group(1)}loading="lazy"',
+      );
+  return withoutSplashLogo
+      .replaceFirst('</head>', '$head</head>')
+      .replaceFirst(shellMarker, '$templateHtml\n  $shellMarker');
+}
+
 String _buildProductFallbackHtml({
   required String title,
   required String description,
@@ -4087,6 +4415,11 @@ List<SeoCategoryProjection> buildCanonicalCategorySeoProjections({
         sortOrder: _toInt(row['sort_order']) ?? 0,
         updatedAt: _parseDateTime(row['updated_at']),
         products: List.unmodifiable(categoryProducts),
+        heroDesktopHeight: presentation.heroSize.desktopHeight,
+        heroOverlay: presentation.heroOverlay,
+        heroEyebrow: _cleanText(presentation.heroEyebrow),
+        heroCentered:
+            presentation.heroAlignment == WebsiteCatalogHeroAlignment.center,
       ),
     );
   }
@@ -4893,6 +5226,14 @@ class SeoCategoryProjection {
   final DateTime? updatedAt;
   final List<SeoCategoryProductProjection> products;
 
+  /// Portada de la colección (`WebsiteCatalogPresentation`), para que la
+  /// página instantánea la dibuje con la altura, el velo y la alineación que
+  /// usa `CatalogCollectionPresentationHeader`.
+  final double heroDesktopHeight;
+  final double heroOverlay;
+  final String heroEyebrow;
+  final bool heroCentered;
+
   const SeoCategoryProjection({
     required this.categoryId,
     required this.name,
@@ -4910,6 +5251,10 @@ class SeoCategoryProjection {
     required this.sortOrder,
     required this.updatedAt,
     required this.products,
+    this.heroDesktopHeight = 360,
+    this.heroOverlay = 0.42,
+    this.heroEyebrow = '',
+    this.heroCentered = false,
   });
 
   int get productCount => products.length;

@@ -32,6 +32,7 @@ import '../../modules/website/services/website_service.dart';
 import '../../shared/widgets/safe_layout_builder.dart';
 import '../widgets/public_link_semantics.dart';
 import '../widgets/public_store_layout.dart';
+import '../utils/instant_page_release.dart';
 
 void _catalogDebugLog(String message) {
   if (kDebugMode || const bool.fromEnvironment('STORE_PERF_LOGS')) {
@@ -2658,6 +2659,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     _scheduleCatalogSeo(editProvider);
     // Cheap identity check; the menu list is replaced wholesale when it loads.
     _syncCategoryPublicationWithNavigation();
+    if (!_isLoading) releaseInstantPageWhenReady(context, 'catalog');
 
     final modeKey = editProvider.isEditMode
         ? 'edit'

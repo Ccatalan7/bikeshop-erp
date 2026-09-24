@@ -4057,6 +4057,22 @@ la parte de base de datos):**
   (~0,5 MB) al final y datos a los 20,6 s, sin esperas muertas. La «espera de
   ~6 s» del diagnóstico no se reproduce: con caché en escritorio los
   productos se piden a los 0,8 s. Lo que queda es peso, no una espera.
+- **Fichas y categorías se ven al instante**
+  (`docs/architecture/storefront-instant-page.md`, 2026-09-24). El generador
+  de snapshots escribe la ruta en `<template id="instant-page-template">`,
+  `web/index.html` la muestra con el primer paint y la ruta la retira con
+  `releaseInstantPageWhenReady` después de dibujar sus datos. Una página que
+  reemplace a la ficha o al catálogo debe avisar igual, o la instantánea queda
+  encima hasta 8 s después del splash. Sus medidas copian el código Flutter
+  (`PublicStoreHeaderGeometry`, `_productImageStageHeight`,
+  `CatalogCollectionPresentationHeader`, Oswald en 400, Barlow de cuerpo): si
+  cambian allá, cambian las clases `.ip-*`, o el traspaso salta. Copiar el
+  código **no acredita** esos valores: siguen pendientes de Design y la
+  instantánea no se despliega hasta compararlos. El precio nace neutro y sólo
+  se muestra si la API pública confirma el del build; el stock no se muestra
+  (lo descuentan reservas que la fila no refleja). Medido en móvil lento:
+  contenido a los 0,27 s (antes sólo el logo hasta los ~21 s) sin atrasar a
+  la tienda.
 - **Una validación nueva del cliente se prueba contra la respuesta real del
   servidor.** Desde 2026-07-31 la tienda exige `tenant_id` en
   `get_public_store_data`, y la función nunca lo devolvió: cada carga
