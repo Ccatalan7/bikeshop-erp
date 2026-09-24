@@ -297,9 +297,13 @@ class WebsiteMediaService {
   }
 
   /// Una imagen de la biblioteca anterior al flujo de subida (2026-07-24) se
-  /// guardó tal como llegó: el carrusel de la portada llegó a bajar un PNG de
-  /// 1 MB con extensión `.avif`, servido como `image/jpeg`. Al usarla se pasa
-  /// por el mismo flujo que una subida nueva.
+  /// guardó tal como llegó. Al usarla se pasa por el mismo flujo que una
+  /// subida nueva.
+  ///
+  /// El caso que lo destapó —un PNG de 1 MB con extensión `.avif` en el
+  /// carrusel de la portada— no pasa por aquí: [listAssets] no lista `.avif`,
+  /// así que llegó por un flujo anterior al selector. Esto cubre el resto de
+  /// las imágenes antiguas que sí se pueden elegir.
   bool needsWebOptimization(WebsiteMediaAsset asset) {
     final path = asset.path.trim();
     if (asset.comesFromProduct) return false;
