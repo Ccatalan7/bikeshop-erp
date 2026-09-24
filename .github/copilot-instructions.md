@@ -4057,6 +4057,15 @@ la parte de base de datos):**
   (~0,5 MB) al final y datos a los 20,6 s, sin esperas muertas. La «espera de
   ~6 s» del diagnóstico no se reproduce: con caché en escritorio los
   productos se piden a los 0,8 s. Lo que queda es peso, no una espera.
+- **Una validación nueva del cliente se prueba contra la respuesta real del
+  servidor.** Desde 2026-07-31 la tienda exige `tenant_id` en
+  `get_public_store_data`, y la función nunca lo devolvió: cada carga
+  descartaba la precarga del borde y la respuesta directa, y rehacía el
+  trabajo con consultas separadas. Pasó dos meses sin verse porque el respaldo
+  funcionaba; sólo lo delataba `All methods failed, falling back to separate
+  queries` en la consola. Corregido en `20260924030000`. El worker desplegado
+  en Cloudflare es más viejo que `cloudflare-worker/src/index.js` (servía
+  entradas sin `tenant_id` como HIT).
 - **Una URL que la tienda no conoce no es la portada.** go_router mostraba su
   pantalla de error en inglés y la URL quedaba con el `index,follow` y la
   canónica de la portada (soft 404). La ruta comodín `/:rutaInexistente(.*)`
