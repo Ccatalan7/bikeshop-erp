@@ -1288,3 +1288,22 @@ cerrarlas (`20260924020000`):
   la fachada pública, las que devuelven `trigger` no las expone PostgREST y
   las del asistente exigen `assistant_require_capability_internal_v1` adentro.
   Se lee el cuerpo antes de revocar.
+
+## Una fixture fecha con el mismo reloj que la función que prueba (2026-09-24)
+
+`purchase_candidate_metrics_v1` mide la antigüedad de la última compra con
+`tenant_business_date(tenant)` (hora de Chile), y el fixture de
+`supply_need_external_candidates.sql` fechaba las compras con
+`current_date - 30` (UTC). Entre las 21:00 y las 24:00 de Chile las dos
+fechas difieren en un día, la antigüedad sale 29 y los puntajes exactos
+fallan. Fallaba tres horas al día y pasaba el resto: la misma prueba falló a
+las 01:47 UTC y pasó a las 04:30 sin tocar nada. Una fixture de fechas usa la
+función que usa el código (`tenant_business_date(...) - n`), no
+`current_date` ni `now()`. Ante una prueba que pasa y falla sin cambios, la
+primera pregunta es a qué hora corrió.
+
+En el mismo repaso, dos pruebas que parecían regresiones eran reglas vigentes
+de producción: el peso de la gama se había movido al núcleo de puntaje, y un
+valor de ficha sólo es evidencia si el campo está activo en la plantilla del
+producto (`spec_product_field_is_active_internal_v1`). Antes de «arreglar»
+producción para que pase una prueba, se busca dónde vive hoy la regla.
