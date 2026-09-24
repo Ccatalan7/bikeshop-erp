@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/constants/storage_constants.dart';
@@ -292,6 +294,153 @@ class WebsiteMediaService {
       }
     }
     return WebsiteProductMediaItem.fromRows(rows);
+  }
+
+  /// Una imagen de la biblioteca anterior al flujo de subida (2026-07-24) se
+  /// guardó tal como llegó. Al usarla se pasa por el mismo flujo que una
+  /// subida nueva.
+  ///
+  /// El caso que lo destapó —un PNG de 1 MB con extensión `.avif` en el
+  /// carrusel de la portada— no pasa por aquí: [listAssets] no lista `.avif`,
+  /// así que llegó por un flujo anterior al selector. Esto cubre el resto de
+  /// las imágenes antiguas que sí se pueden elegir.
+  bool needsWebOptimization(WebsiteMediaAsset asset) {
+    final path = asset.path.trim();
+    if (asset.comesFromProduct) return false;
+    if (path.isEmpty || Uri.tryParse(path)?.hasScheme == true) return false;
+    if (path.startsWith('$libraryFolder/')) return false;
+    if (path.contains('/optimized/')) return false;
+    if (!_legacyFolders.any((folder) => path.startsWith('$folder/'))) {
+      return false;
+    }
+    // Un `.webp` antiguo no está optimizado por su extensión: también se
+    // subían originales grandes en WebP. Sin tamaño conocido, se optimiza.
+    final size = (asset.metadata['size'] as num?)?.toInt();
+    if (asset.isWebOptimized) {
+      return size == null || size > legacyWebMaxBytes;
+    }
+    return true;
+  }
+
+  /// Sobre esto una imagen antigua en WebP se vuelve a optimizar: el mismo
+  /// umbral con que se inventarió la tienda el 2026-09-24.
+  static const int legacyWebMaxBytes = 300 * 1024;
+
+  /// El nombre base con que se sube la versión web de una imagen antigua:
+  /// su nombre legible más `-src` y ocho caracteres del SHA-1 de su ruta.
+  ///
+  /// La ruta distingue `logo.jpg` de `logo.png` y de otro `logo.jpg` en otra
+  /// carpeta; el nombre solo, no. Sale en ASCII, sin guiones dobles y bajo
+  /// 72 caracteres, así que `safeFileStem` de `website-optimize-image` lo deja
+  /// intacto y la variante queda en `<base>-<uuid>-web.webp`.
+  static String legacyVariantStem(WebsiteMediaAsset legacy) {
+    const from = 'áàäâãåéèëêíìïîóòöôõúùüûýÿñçÁÀÄÂÃÅÉÈËÊÍÌÏÎÓÒÖÔÕÚÙÜÛÝÑÇ';
+    const to = 'aaaaaaeeeeiiiiooooouuuuyyncAAAAAAEEEEIIIIOOOOOUUUUYNC';
+    final raw = legacy.name.trim().replaceAll(RegExp(r'\.[^.]+$'), '');
+    final buffer = StringBuffer();
+    for (final rune in raw.runes) {
+      final char = String.fromCharCode(rune);
+      final index = from.indexOf(char);
+      buffer.write(index == -1 ? char : to[index]);
+    }
+    var base = buffer
+        .toString()
+        .replaceAll(RegExp(r'[^a-zA-Z0-9_-]+'), '-')
+        .replaceAll(RegExp(r'-+'), '-')
+        .replaceAll(RegExp(r'^-|-$'), '')
+        .toLowerCase();
+    if (base.length > 52) {
+      base = base.substring(0, 52).replaceAll(RegExp(r'-+$'), '');
+    }
+    if (base.isEmpty) base = 'website-image';
+    final hash = sha1.convert(utf8.encode(legacy.path.trim())).toString();
+    return '$base-src${hash.substring(0, 8)}';
+  }
+
+  /// La versión web que ya se hizo de [legacy], si está entre [candidates]:
+  /// elegir dos veces la misma imagen antigua no la vuelve a subir.
+  WebsiteMediaAsset? existingWebVariant(
+    WebsiteMediaAsset legacy,
+    Iterable<WebsiteMediaAsset> candidates,
+  ) {
+    final pattern = RegExp(
+      '^${RegExp.escape(legacyVariantStem(legacy))}'
+      r'-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-web\.webp$',
+    );
+    for (final asset in candidates) {
+      if (asset.path.startsWith('$libraryFolder/') &&
+          pattern.hasMatch(asset.name)) {
+        return asset;
+      }
+    }
+    return null;
+  }
+
+  /// Las versiones web de la tienda que empiezan con [stem]. Se buscan por
+  /// prefijo en su carpeta, no en la biblioteca que muestra el selector: ésa
+  /// viene filtrada por la búsqueda y cortada en 100 por carpeta.
+  Future<List<WebsiteMediaAsset>> listWebVariants(
+    String stem,
+    String tenantId,
+  ) async {
+    final folder = '$libraryFolder/$tenantId';
+    final bucket = _client.storage.from(StorageConfig.defaultBucket);
+    final objects = await bucket.list(
+      path: folder,
+      searchOptions: SearchOptions(search: '$stem-', limit: 20),
+    );
+    return [
+      for (final object in objects)
+        WebsiteMediaAsset(
+          name: object.name,
+          path: '$folder/${object.name}',
+          publicUrl: bucket.getPublicUrl('$folder/${object.name}'),
+          createdAt: _parseDate(object.createdAt),
+          updatedAt: _parseDate(object.updatedAt),
+          metadata: Map<String, dynamic>.from(
+            object.metadata ?? const <String, dynamic>{},
+          ),
+        ),
+    ];
+  }
+
+  /// Baja una imagen antigua de la biblioteca y la sube por [uploadImage]:
+  /// queda normalizada, con su original oculto y su versión web. Si esa
+  /// versión ya existe, se devuelve sin subir nada.
+  Future<WebsiteMediaAsset> optimizeLibraryAsset(
+    WebsiteMediaAsset asset, {
+    String? tenantId,
+    WebsiteEditorWriteGuard? writeGuard,
+  }) async {
+    final resolvedTenantId =
+        tenantId ?? await (_tenantService ?? TenantService()).getTenantId();
+    if (resolvedTenantId == null || resolvedTenantId.isEmpty) {
+      throw StateError('No se pudo determinar la tienda activa.');
+    }
+    final stem = legacyVariantStem(asset);
+    List<WebsiteMediaAsset> variants;
+    try {
+      variants = await listWebVariants(stem, resolvedTenantId);
+    } catch (_) {
+      // Sin poder buscarla, se optimiza igual: una copia de más pesa menos
+      // que dejar la imagen original en la tienda.
+      variants = const <WebsiteMediaAsset>[];
+    }
+    final existing = existingWebVariant(asset, variants);
+    if (existing != null) return existing;
+    final bytes = await _client.storage
+        .from(StorageConfig.defaultBucket)
+        .download(asset.path);
+    writeGuard?.call();
+    final extension = RegExp(r'\.[a-zA-Z0-9]+$').firstMatch(asset.name.trim());
+    return uploadImage(
+      bytes: bytes,
+      fileName: '$stem${extension?.group(0)?.toLowerCase() ?? '.img'}',
+      tenantId: resolvedTenantId,
+      writeGuard: writeGuard,
+      operation: 'optimize_library',
+      originalUrl: asset.publicUrl,
+    );
   }
 
   Future<WebsiteMediaAsset> uploadImage({
