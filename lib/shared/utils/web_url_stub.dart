@@ -16,6 +16,9 @@ void hideHtmlLoadingScreen() {
   // No-op on non-web platforms
 }
 
+/// Sin navegador no hay página instantánea que retirar.
+void releaseInstantPage(String reason) {}
+
 /// Stub - native platforms have no page navigation to time.
 int? navigationElapsedMs() => null;
 

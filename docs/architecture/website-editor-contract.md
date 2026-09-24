@@ -598,6 +598,29 @@ must preserve these independent planes:
 3. **Google evidence:** dated Search Console evidence. A submitted or downloaded
    sitemap is not proof that one URL was crawled or indexed.
 
+**2026-09-23 Search Console interpretation:** the default page-indexing view
+includes every URL Google knows, including redirects and alternate canonicals;
+its excluded total is not the exclusion rate of the current sitemap. Filter
+the report to the submitted sitemap and keep its snapshot date beside the
+deployed-build date before drawing a publication conclusion. Merchant-listing
+and product-snippet enhancement reports show samples of structured-data
+*items*, not an exhaustive count of recognized product pages. Inspect
+representative URLs individually before concluding that Google cannot read
+their product markup.
+
+**2026-09-23 stockout measurement correction, updated 2026-09-24:** at
+diagnosis the snapshot generator used the active availability policy, so an
+out-of-stock product could disappear from the next build and sitemap. That was
+a build-output exclusion, not proof that Google deindexed it. The current
+generator asks `get_public_products` with `p_only_in_stock: false` for product
+snapshots, retains eligible stockouts with `OutOfStock`, and leaves listing
+filters to the site's stock policy. Verify the same fixed URL cohort in the
+deployed HTML and sitemap first, then inspect Google's URL status after
+recrawl; impressions are a later outcome, not an immediate acceptance gate.
+Count availability through the public catalog projection rather than raw
+`stock_quantity`: a set can have zero stock on its parent row while its
+components make it sellable.
+
 The center is read-only. Site metadata and the canonical origin remain owned by
 site settings (`store_url` is canonical and `seo_canonical_url` is only a
 compatibility mirror); page metadata remains owned by `website_pages`; product

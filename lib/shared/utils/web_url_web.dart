@@ -32,6 +32,22 @@ void clearSensitiveAuthFragment() {
 void hideHtmlLoadingScreen() {
   final loadingScreen = web.document.getElementById('app-shell');
   loadingScreen?.classList.add('hidden');
+  // La página instantánea sigue encima hasta que la ruta avisa que dibujó sus
+  // datos; desde acá corre su plazo máximo por si la ruta nunca avisa.
+  _instantPage()?.callMethod<JSAny?>('arm'.toJS);
+}
+
+/// Retira la página instantánea (docs/architecture/storefront-instant-page.md)
+/// cuando la ruta ya dibujó sus datos. Sin página instantánea no hace nada;
+/// la página ignora cualquier aviso después del primero.
+void releaseInstantPage(String reason) {
+  _instantPage()?.callMethod<JSAny?>('release'.toJS, reason.toJS);
+}
+
+JSObject? _instantPage() {
+  // `undefined` (una página sin el script, el ERP) llega como null.
+  final api = globalContext.getProperty<JSAny?>('vinabikeInstantPage'.toJS);
+  return api == null ? null : api as JSObject;
 }
 
 /// Milliseconds since this page's navigation started (`performance.now()`).

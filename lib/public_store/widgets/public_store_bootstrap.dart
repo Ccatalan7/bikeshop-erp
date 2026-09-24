@@ -358,6 +358,9 @@ class _PublicStoreBootstrapState extends State<PublicStoreBootstrap>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _hideHtmlSplash();
+      // Sin tienda (no se identificó o falló la carga) no hay página que
+      // reemplace a la instantánea: se retira ya para mostrar el error.
+      if (!storeReady && _error != null) releaseInstantPage('error');
       // Una carga que falló y se recuperó con «Reintentar» también cuenta:
       // el splash ya estaba oculto, pero la tienda recién ahora está lista.
       if (storeReady && !_storeReadyReported) {
