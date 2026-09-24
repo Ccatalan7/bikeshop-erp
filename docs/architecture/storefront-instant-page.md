@@ -93,8 +93,10 @@ interactivo que no funcione hasta que Flutter tome el control. Sus enlaces
 
 ## Frescura
 
-El snapshot se genera en cada build (push a `main` y diario 05:00 Chile), así
-que puede tener hasta un día.
+El snapshot se genera en cada build: un push a `main` o la corrida diaria,
+pedida para las 08:00 UTC. GitHub la dispara con atraso cuando tiene carga y
+puede saltarse un día (la primera, el 24-sep, partió a las 13:10 UTC), así
+que su antigüedad no tiene tope garantizado.
 
 - **Precio:** nace neutro (`data-ip-state="pending"`, un espacio del alto de
   precio + nota). El script relee por la API pública los campos que lo
@@ -111,7 +113,7 @@ que puede tener hasta un día.
   respuesta vacía es una ficha retirada después del build: la instantánea se
   retira y vuelve el splash.
 - **Lo que no se revalida:** el nombre y la foto de una ficha que sigue
-  publicada (hasta un día de antigüedad, igual que el `<noscript>`), la
+  publicada (la antigüedad del último build, igual que el `<noscript>`), la
   portada de una categoría despublicada o renombrada después del build, y el
   precio de una ficha sin SKU (`/productos/<id>`), que queda neutro (0
   fichas publicadas sin SKU en Viñabike el 2026-09-24: caso residual).
