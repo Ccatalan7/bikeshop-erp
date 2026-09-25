@@ -1147,6 +1147,11 @@ workflow, information architecture, hierarchy, layout and responsive
 composition. A module-specific Claude/Design proposal is optional and is used
 only when the owner explicitly requests it.
 
+**Excepción, el sitio público (dueño, 2026-09-24):** tienda, portal de
+clientes, checkout y el HTML que genera el build quedan a criterio del agente
+que los trabaja; lo de abajo rige el ERP, incluido el editor del sitio. Ver
+`.github/GUI_DESIGN_PRINCIPLES.md` «El sitio público no pasa por Design».
+
 **How that source is read is not optional.** Every visual value — colour,
 radius, shadow, border, spacing, font, height — is obtained from a Design file
 with the **`DesignSync`** tool, which returns literal values. Reproducing a

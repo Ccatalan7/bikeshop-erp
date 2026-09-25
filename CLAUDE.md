@@ -20,7 +20,7 @@ before the first command of a task, not to restate it.
 | **Probar la app y compararla con Design** (sesión de debug, clics, lectura de pantalla, frames) | `docs/development/AGENT_VISUAL_WORKFLOW.md` — es el procedimiento; el runbook macOS es la referencia de cada herramienta |
 | Running, clicking and screenshotting the app; reading the Design window | `docs/development/AGENT_MACOS_APP_CONTROL.md` |
 | Palettes, light/dark, semantic roles | `docs/architecture/appearance-palette-contract.md` |
-| **Any visual value, or any shared component** | `docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md` — read it through `DesignSync`, never off a screenshot |
+| **Any visual value, or any shared component** (ERP) | `docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md` — read it through `DesignSync`, never off a screenshot. The public website is the exception: `.github/GUI_DESIGN_PRINCIPLES.md` «El sitio público no pasa por Design» |
 | Duplicados, matching de catálogo, «¿ya existe este producto?» | `docs/architecture/product-identity-matching-contract.md` |
 | Bike workshop architecture | `BIKE_WORKSHOP_MASTER_SCHEMA.md`, updated in the same task when behavior/schema/data-flow changes |
 
@@ -38,6 +38,13 @@ For every visual or interaction redesign, Codex is the product-design lead.
 Shared visual truth comes from `GUÍA GENERAL Viñabike - Componentes` in Design
 project `ERP Bikeshop UI Mockups` through `DesignSync`. Claude participates
 only when the owner explicitly requests an independent proposal or review.
+
+**Excepción: el sitio público (dueño, 2026-09-24).** Tienda, portal de
+clientes, checkout y el HTML que genera el build quedan a criterio del agente
+que los trabaja, Claude o Codex: no pasan por `DesignSync` ni por
+`GUÍA GENERAL`, y nadie espera un `/design-login` para ellos. El ERP, incluido
+el editor del sitio, sigue con la regla de siempre. Alcance y lo que no cambia
+(la marca sale del editor): `.github/GUI_DESIGN_PRINCIPLES.md` «El sitio público no pasa por Design».
 
 ### Abrir DesignSync: el id va explícito, `list_projects` NO sirve
 
@@ -62,7 +69,8 @@ no se carga. La guía **ya pasó el cap de 256 KiB** y se corta en 262 144 bytes
 **sin avisar** — si un rol no aparece, puede estar fuera del corte, no ausente.
 Procedimiento completo en `docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md`.
 
-- **Every visual value comes from a Design file, read with `DesignSync`.**
+- **Every visual value comes from a Design file, read with `DesignSync`**
+  (ERP; not the public website, see the exception above).
   Colour, radius, shadow, border, spacing, font, height. Reading them off a
   screenshot of the Design window, or estimating them, is prohibited. A value
   that cannot be read is reported as unreadable — never replaced with a

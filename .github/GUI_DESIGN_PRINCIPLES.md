@@ -25,6 +25,42 @@ The mechanics, including how to grep a 260 KB canvas without loading it into
 context, are in
 [`../docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md`](../docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md).
 
+### El sitio público no pasa por Design (dueño, 2026-09-24)
+
+«the designs on the website can be open to the agent criteria» — el dueño, al
+pedir rehacer el portal de clientes (`/cuenta`), que se veía «AI'ish and
+childish», y encontrarse con que la regla de arriba lo dejaba esperando un
+`/design-login`.
+
+**Alcance:** lo que ve un cliente en el sitio público. Es decir, la tienda
+(`lib/public_store/`), el portal de clientes (`/cuenta/**`), el checkout, la
+página instantánea y los snapshots HTML de
+`scripts/generate_product_seo_snapshots.dart`, y el render público de los
+bloques del sitio. **No** entra el ERP, tampoco el editor del sitio (sus
+paneles, inspector y cromo): ahí la regla de arriba sigue igual.
+
+En ese alcance:
+
+- Los valores visuales (color, radio, sombra, borde, espaciado, fuente, alto)
+  los decide el agente que hace el trabajo. No se leen con `DesignSync`, no se
+  reportan como «ilegibles» y no dejan una rama sin desplegar por falta de
+  Design. Tampoco se exige un componente de `GUÍA GENERAL` ni la compuerta de
+  seis dimensiones por frame: no hay frame que evaluar. Si un frame de Design
+  sirvió de inspiración, se nombra.
+- La dirección visual y la composición las lleva el agente que trabaja en el
+  sitio (Claude o Codex), sin esperar que Codex lidere ni pedir una propuesta
+  aparte.
+- La marca sigue siendo del editor. Los colores y las fuentes que el dueño
+  elige en el editor web (`website_settings`, vía el tema de la tienda) mandan
+  en el color de marca y la tipografía; el resto lo decide el agente. Un literal
+  que repite un color de marca rompe esa cadena, y también la tienda de otro
+  tenant, que usa el mismo código con su propia marca.
+- Siguen valiendo esta guía (jerarquía, palabras, estados, accesibilidad,
+  retorno de navegación), la guía móvil y los contratos del sitio
+  (`docs/architecture/storefront-instant-page.md`, «HTML-first storefront» en
+  `.github/copilot-instructions.md`). Un cambio visual se demuestra igual: con
+  capturas reales en teléfono y escritorio antes de darlo por listo.
+
 ### Visual grammar and product composition are different owners
 
 The component guide answers **how a control looks and behaves**. Codex answers
