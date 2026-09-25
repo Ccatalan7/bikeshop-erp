@@ -1,3 +1,4 @@
+import '../../modules/bikeshop/models/bikeshop_models.dart';
 import '../../modules/website/models/website_models.dart';
 import 'order_confirmation_policy.dart';
 
@@ -314,15 +315,19 @@ class CustomerWorkshopPresentation {
       portalParseDate(job['created_at']);
 }
 
-/// Detalle de una bici en palabras del cliente: color y aro.
+/// Detalle de una bici en palabras del cliente: tipo, color y aro.
 ///
-/// El tipo (`bike_type`) no se muestra: el formulario del ERP lo trae
-/// marcado en `mountain_hardtail`, y así quedó en 409 de 468 bicis, gravel y
-/// paseo incluidas (2026-09-25). Mostrarlo le diría al cliente algo falso de
-/// su propia bici.
+/// El tipo usa las mismas palabras que el ERP ([BikeType.displayName]). Que
+/// el formulario del ERP parta en `mountain_hardtail` es intencional: la
+/// mayoría de las bicis que llegan al taller son MTB rígidas (el dueño,
+/// 2026-09-25). «Otra» no dice nada y no se muestra.
 String customerBikeDetails(Map<String, dynamic> bike) {
   final color = (bike['color'] ?? bike['bike_color'] ?? '').toString().trim();
+  final type = BikeType.fromDbValue(
+    (bike['bike_type'] ?? '').toString().trim(),
+  );
   return [
+    if (type != null && type != BikeType.other) type.displayName,
     if (color.isNotEmpty) color[0].toUpperCase() + color.substring(1),
     if (customerWheelSize(bike['wheel_size']) case final wheel?) 'aro $wheel',
     if (bike['year'] case final num year) '${year.toInt()}',

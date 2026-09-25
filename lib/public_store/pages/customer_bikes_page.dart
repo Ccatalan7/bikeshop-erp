@@ -103,9 +103,6 @@ class _CustomerBikesPageState extends State<CustomerBikesPage>
 }
 
 /// La lista de bicis, sin el marco ni el servicio.
-///
-/// No muestra el tipo de bici: el ERP lo trae marcado en `mountain_hardtail`
-/// y casi todas quedaron así (ver [customerBikeDetails]).
 class CustomerBikesBody extends StatelessWidget {
   const CustomerBikesBody({
     super.key,

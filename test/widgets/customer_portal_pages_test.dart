@@ -158,14 +158,13 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('bicicletas a $width px: sin el tipo falso del ERP',
-        (tester) async {
+    testWidgets('bicicletas a $width px: tipo, color y aro', (tester) async {
       await _pumpPage(
           tester, width, '/cuenta/bicicletas', const CustomerBikesPage());
       expect(tester.takeException(), isNull);
       expect(find.text('Trek Marlin 7'), findsOneWidget);
-      expect(find.textContaining('Negra · aro 29'), findsOneWidget);
-      expect(find.textContaining('MTB'), findsNothing);
+      expect(
+          find.textContaining('MTB hardtail · Negra · aro 29'), findsOneWidget);
       expect(find.textContaining('mountain'), findsNothing);
 
       await tester.tap(find.text('Trek Marlin 7'));

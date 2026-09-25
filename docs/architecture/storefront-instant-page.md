@@ -306,6 +306,16 @@ nueva. **Se descartó por accesibilidad**, medido con una prueba de widget a
 El arreglo necesita valores de Design: el tamaño de toque de los puntos o la
 posición de las flechas en teléfono.
 
+**Resuelto el 2026-09-25** (el sitio público ya no espera a Design): en
+`WebsiteViewport.mobile` las flechas bajan a la fila de los puntos, a 16 px del
+borde, con 38 px (glifo de 24) en vez de 46; siguen siendo el control de un
+toque equivalente a deslizar. Los puntos toman el toque en toda su caja de
+28 px (`HitTestBehavior.opaque`), y puntos y flechas tienen etiqueta y rol de
+botón. En escritorio las flechas siguen a los costados. La instantánea mueve
+sus puntos igual (`.ip-dots-with-arrows`, 21 px en teléfono) para que no
+salten al montar Flutter. Pruebas: `website_carousel_block_content_contract_test.dart`
+(«en teléfono las flechas van abajo…»).
+
 ## Revisión independiente (Codex, 2026-09-24)
 
 | Hallazgo | Resolución |

@@ -1956,6 +1956,17 @@ class _CategoryCard extends StatelessWidget {
     final imageUrl = data['imageUrl']?.toString();
     final hasImage = imageUrl != null && imageUrl.isNotEmpty;
 
+    if (hasImage && data['imageFit'] == 'contain') {
+      return _buildProductCard(
+        context,
+        title: title,
+        subtitle: subtitle,
+        ctaText: ctaText,
+        href: href,
+        imageUrl: imageUrl,
+      );
+    }
+
     return PublicLinkSemantics(
       href: href,
       enabled: visitorInteractionsEnabled && onNavigate != null,
@@ -2066,6 +2077,132 @@ class _CategoryCard extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  /// Tarjeta con la foto de un producto (`imageFit: 'contain'`).
+  ///
+  /// Las fotos del catálogo vienen sobre fondo blanco: con el fondo oscuro y
+  /// el velo de la tarjeta de ambiente quedaban grises y recortadas. Aquí la
+  /// foto entra completa sobre un fondo claro; el blanco de la foto se
+  /// multiplica contra ese fondo para que no se vea un recuadro. El texto va
+  /// debajo, oscuro, y toda la tarjeta es el enlace.
+  static const productCardBackground = Color(0xFFF1F0ED);
+
+  Widget _buildProductCard(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required String ctaText,
+    required String href,
+    required String imageUrl,
+  }) {
+    final compact = height < 260;
+    final altText = (data['altText'] ?? '').toString().trim();
+    return PublicLinkSemantics(
+      href: href,
+      enabled: visitorInteractionsEnabled && onNavigate != null,
+      child: Material(
+        color: productCardBackground,
+        child: InkWell(
+          onTap:
+              visitorInteractionsEnabled ? () => onNavigate?.call(href) : null,
+          hoverColor: Colors.black.withValues(alpha: 0.04),
+          splashColor: Colors.black.withValues(alpha: 0.06),
+          child: SizedBox(
+            height: height,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      compact ? 16 : 32,
+                      compact ? 16 : 32,
+                      compact ? 16 : 32,
+                      compact ? 4 : 12,
+                    ),
+                    child: Image.network(
+                      imageUrl,
+                      fit: BoxFit.contain,
+                      color: productCardBackground,
+                      colorBlendMode: BlendMode.multiply,
+                      semanticLabel: altText.isEmpty ? null : altText,
+                      errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    compact ? 16 : 24,
+                    0,
+                    compact ? 16 : 24,
+                    compact ? 14 : 22,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        title.toUpperCase(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontFamily: bodyFont,
+                          color: const Color(0xFF141414),
+                          fontSize: compact ? 17 : (height > 300 ? 26 : 20),
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                      if (subtitle.isNotEmpty && !compact)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontFamily: bodyFont,
+                              color: const Color(0xFF55544F),
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      SizedBox(height: compact ? 4 : 10),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: Text(
+                              ctaText.toUpperCase(),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontFamily: bodyFont,
+                                color: const Color(0xFF141414),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 1.5,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          const Icon(
+                            Icons.arrow_forward,
+                            size: 14,
+                            color: Color(0xFF141414),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -2340,6 +2477,7 @@ class _WebsiteCarouselBlockContentState
         final transitionDuration =
             _motionDisabled ? Duration.zero : _transitionDuration;
         final swipeEnabled = _slides.length > 1 && widget.editBinding == null;
+        final isPhone = widget.surfaceStyle.viewport == WebsiteViewport.mobile;
         return SizedBox(
           key: WebsiteCarouselBlockContent.rootKey,
           height: height,
@@ -2371,87 +2509,54 @@ class _WebsiteCarouselBlockContentState
                   child: _buildSlide(context, _slides[_currentIndex],
                       _currentIndex, constraints.maxWidth),
                 ),
-                if (_showIndicators && _slides.length > 1)
+                // En un teléfono las flechas al centro del alto tapaban el
+                // texto y la imagen del slide (2026-09-24/25): bajan a una
+                // fila con los puntos, abajo. Siguen ahí porque son el
+                // control de un toque equivalente a deslizar (WCAG 2.5.1).
+                if (isPhone &&
+                    _slides.length > 1 &&
+                    (_showArrows || _showIndicators))
+                  Positioned(
+                    bottom: 16,
+                    left: 0,
+                    right: 0,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (_showArrows) ...[
+                          _buildPreviousArrow(compact: true),
+                          const SizedBox(width: 12),
+                        ],
+                        if (_showIndicators) ..._buildIndicators(),
+                        if (_showArrows) ...[
+                          const SizedBox(width: 12),
+                          _buildNextArrow(compact: true),
+                        ],
+                      ],
+                    ),
+                  ),
+                if (!isPhone && _showIndicators && _slides.length > 1)
                   Positioned(
                     bottom: 32,
                     left: 0,
                     right: 0,
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(_slides.length, (index) {
-                        final isActive = index == _currentIndex;
-                        final isPending = index == _pendingSlideIndex;
-                        return GestureDetector(
-                          key: WebsiteCarouselBlockContent.indicatorKey(index),
-                          onTapDown: (_) => _warmSlide(index),
-                          onTap: () => _goToSlide(index),
-                          child: SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: Center(
-                              child: isPending
-                                  ? const SizedBox(
-                                      width: 12,
-                                      height: 12,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: Colors.white,
-                                      ),
-                                    )
-                                  : AnimatedContainer(
-                                      duration:
-                                          const Duration(milliseconds: 250),
-                                      width: 12,
-                                      height: 12,
-                                      decoration: BoxDecoration(
-                                        color: isActive
-                                            ? Colors.white
-                                            : Colors.white
-                                                .withValues(alpha: 0.4),
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
-                            ),
-                          ),
-                        );
-                      }),
+                      children: _buildIndicators(),
                     ),
                   ),
-                if (_showArrows && _slides.length > 1) ...[
+                if (!isPhone && _showArrows && _slides.length > 1) ...[
                   Positioned(
                     left: 24,
                     top: 0,
                     bottom: 0,
-                    child: Center(
-                      child: Builder(builder: (context) {
-                        final target = (_currentIndex - 1 + _slides.length) %
-                            _slides.length;
-                        return _buildArrowButton(
-                          key: WebsiteCarouselBlockContent.previousButtonKey,
-                          icon: Icons.chevron_left,
-                          isPending: _pendingSlideIndex == target,
-                          onWarmUp: () => _warmSlide(target),
-                          onTap: _previousSlide,
-                        );
-                      }),
-                    ),
+                    child: Center(child: _buildPreviousArrow()),
                   ),
                   Positioned(
                     right: 24,
                     top: 0,
                     bottom: 0,
-                    child: Center(
-                      child: Builder(builder: (context) {
-                        final target = (_currentIndex + 1) % _slides.length;
-                        return _buildArrowButton(
-                          key: WebsiteCarouselBlockContent.nextButtonKey,
-                          icon: Icons.chevron_right,
-                          isPending: _pendingSlideIndex == target,
-                          onWarmUp: () => _warmSlide(target),
-                          onTap: _nextSlide,
-                        );
-                      }),
-                    ),
+                    child: Center(child: _buildNextArrow()),
                   ),
                 ],
               ],
@@ -2880,13 +2985,96 @@ class _WebsiteCarouselBlockContentState
     }
   }
 
+  /// Un punto por slide. El toque es la caja de 28 px, no el círculo de
+  /// 12: con 22 px y sólo el círculo tomando el toque, un dedo a 7 px del
+  /// centro no cambiaba el slide (WCAG 2.5.8 pide 24 px).
+  List<Widget> _buildIndicators() {
+    return List.generate(_slides.length, (index) {
+      final isActive = index == _currentIndex;
+      final isPending = index == _pendingSlideIndex;
+      return Semantics(
+        button: true,
+        selected: isActive,
+        label: 'Diapositiva ${index + 1} de ${_slides.length}',
+        excludeSemantics: true,
+        child: GestureDetector(
+          key: WebsiteCarouselBlockContent.indicatorKey(index),
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (_) => _warmSlide(index),
+          onTap: () => _goToSlide(index),
+          child: SizedBox(
+            width: 28,
+            height: 28,
+            child: Center(
+              child: isPending
+                  ? const SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : AnimatedContainer(
+                      duration: const Duration(milliseconds: 250),
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: isActive
+                            ? Colors.white
+                            : Colors.white.withValues(alpha: 0.4),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+            ),
+          ),
+        ),
+      );
+    });
+  }
+
+  Widget _buildPreviousArrow({bool compact = false}) {
+    final target = (_currentIndex - 1 + _slides.length) % _slides.length;
+    return Semantics(
+      button: true,
+      label: 'Diapositiva anterior',
+      child: _buildArrowButton(
+        key: WebsiteCarouselBlockContent.previousButtonKey,
+        icon: Icons.chevron_left,
+        isPending: _pendingSlideIndex == target,
+        onWarmUp: () => _warmSlide(target),
+        onTap: _previousSlide,
+        compact: compact,
+      ),
+    );
+  }
+
+  Widget _buildNextArrow({bool compact = false}) {
+    final target = (_currentIndex + 1) % _slides.length;
+    return Semantics(
+      button: true,
+      label: 'Diapositiva siguiente',
+      child: _buildArrowButton(
+        key: WebsiteCarouselBlockContent.nextButtonKey,
+        icon: Icons.chevron_right,
+        isPending: _pendingSlideIndex == target,
+        onWarmUp: () => _warmSlide(target),
+        onTap: _nextSlide,
+        compact: compact,
+      ),
+    );
+  }
+
   Widget _buildArrowButton({
     required Key key,
     required IconData icon,
     required bool isPending,
     required VoidCallback onTap,
     required VoidCallback onWarmUp,
+    bool compact = false,
   }) {
+    // En teléfono la flecha va en la fila de los puntos: 38 px en vez de 46.
+    final glyph = compact ? 24.0 : 28.0;
     return InkWell(
       key: key,
       onTap: onTap,
@@ -2905,10 +3093,10 @@ class _WebsiteCarouselBlockContentState
             color: WebsiteCarouselBlockContent.arrowBoundaryColor,
           ),
         ),
-        padding: const EdgeInsets.all(8),
+        padding: EdgeInsets.all(compact ? 6 : 8),
         child: SizedBox(
-          width: 28,
-          height: 28,
+          width: glyph,
+          height: glyph,
           child: isPending
               ? const Padding(
                   padding: EdgeInsets.all(5),
@@ -2920,7 +3108,7 @@ class _WebsiteCarouselBlockContentState
               : Icon(
                   icon,
                   color: WebsiteCarouselBlockContent.arrowForegroundColor,
-                  size: 28,
+                  size: glyph,
                 ),
         ),
       ),

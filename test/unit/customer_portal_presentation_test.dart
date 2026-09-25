@@ -164,13 +164,16 @@ void main() {
   });
 
   group('bicicleta', () {
-    test('color y aro, nunca el tipo que el ERP trae marcado', () {
+    test('tipo con las palabras del ERP, color y aro', () {
       final details = customerBikeDetails({
         'color': 'negra',
         'wheel_size': "29''",
         'bike_type': 'mountain_hardtail',
       });
-      expect(details, 'Negra · aro 29');
+      expect(details, 'MTB hardtail · Negra · aro 29');
+      expect(customerBikeDetails({'bike_type': 'other'}), '',
+          reason: '«Otra» no dice nada');
+      expect(customerBikeDetails({'bike_type': 'gravel'}), 'Gravel');
       expect(customerBikeDetails(const {}), '');
     });
 

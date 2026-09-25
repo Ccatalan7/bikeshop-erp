@@ -516,6 +516,53 @@ void main() {
     });
 
     testWidgets(
+        'una tarjeta con foto de producto la muestra completa sobre fondo '
+        'claro y navega igual', (tester) async {
+      // Las fotos del catálogo vienen sobre blanco: con el velo oscuro de la
+      // tarjeta de ambiente quedaban grises (portada, 2026-09-25).
+      final routes = <String>[];
+      const data = <String, dynamic>{
+        'categories': <Map<String, dynamic>>[
+          <String, dynamic>{
+            'title': 'Ruedas',
+            'subtitle': 'Neumáticos, cámaras y llantas',
+            'imageUrl': 'https://invalid.local/neumatico.jpg',
+            'imageFit': 'contain',
+            'ctaText': 'Ver productos',
+            'link': '/productos',
+            'size': 'large',
+          },
+        ],
+      };
+      await tester.pumpWidget(
+        parityHost(
+          blockType: 'categoryGrid',
+          data: data,
+          onNavigate: routes.add,
+        ),
+      );
+      await settleWithNetworkImages(tester);
+
+      final image = tester.widget<Image>(find.byType(Image).first);
+      expect(image.fit, BoxFit.contain);
+      expect(image.colorBlendMode, BlendMode.multiply);
+      expect(find.text('RUEDAS'), findsOneWidget);
+      expect(find.text('VER PRODUCTOS'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate((widget) =>
+            widget is DecoratedBox &&
+            widget.decoration is BoxDecoration &&
+            (widget.decoration as BoxDecoration).image != null),
+        findsNothing,
+        reason: 'sin foto de fondo oscurecida',
+      );
+
+      await tester.tap(find.byType(InkWell));
+      expect(routes, ['/productos']);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
         'product cards and view-all navigate in Preview and Public; Edit '
         'inert', (tester) async {
       final routes = <String>[];

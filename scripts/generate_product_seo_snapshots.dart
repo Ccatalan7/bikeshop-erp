@@ -4235,8 +4235,12 @@ String? buildSeoInstantHomeTemplate({
   }
   content.write('</div>');
   final showsDots = data['showIndicators'] != false && slides.length > 1;
+  // En teléfono las flechas van en la fila de los puntos y la suben 5 px:
+  // la clase deja los puntos donde Flutter los dibuja, sin salto.
+  final withArrows = data['showArrows'] != false;
   final dots = showsDots
-      ? '<div class="ip-dots" aria-hidden="true">'
+      ? '<div class="ip-dots${withArrows ? ' ip-dots-with-arrows' : ''}" '
+          'aria-hidden="true">'
           '${List.generate(slides.length, (i) => '<span class="ip-dot${i == 0 ? ' ip-dot-active' : ''}"></span>').join()}'
           '</div>'
       : '';

@@ -547,8 +547,10 @@ html.ip-covered #loading-logo {
   white-space: nowrap;
 }
 
-/* Puntos: la fila a 32 px del borde inferior, cajas de 22 px y círculos de
-   12; el activo blanco, los demás al 40 %. */
+/* Puntos: la fila a 32 px del borde inferior, cajas de 28 px y círculos de
+   12; el activo blanco, los demás al 40 %. En teléfono (< 640 px, como
+   WebsiteViewport.mobile) la fila baja a 16 px y, con flechas de 38 px a
+   los lados, los puntos quedan centrados 5 px más arriba. */
 .ip-dots {
   position: absolute;
   right: 0;
@@ -562,8 +564,18 @@ html.ip-covered #loading-logo {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
+}
+
+@media (max-width: 639.98px) {
+  .ip-dots {
+    bottom: 16px;
+  }
+
+  .ip-dots-with-arrows {
+    bottom: 21px;
+  }
 }
 
 .ip-dot::after {

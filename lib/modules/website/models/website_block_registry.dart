@@ -1536,6 +1536,22 @@ class WebsiteBlockRegistry {
               },
             ),
             WebsiteBlockFieldSchema(
+              key: 'imageFit',
+              label: 'Tipo de imagen',
+              type: WebsiteBlockFieldType.select,
+              defaultValue: 'cover',
+              options: [
+                WebsiteBlockFieldOption(
+                  value: 'cover',
+                  label: 'Foto de ambiente (llena la tarjeta)',
+                ),
+                WebsiteBlockFieldOption(
+                  value: 'contain',
+                  label: 'Foto de producto (fondo claro)',
+                ),
+              ],
+            ),
+            WebsiteBlockFieldSchema(
               key: 'link',
               label: 'Enlace',
               type: WebsiteBlockFieldType.link,

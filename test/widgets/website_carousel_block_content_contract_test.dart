@@ -143,6 +143,91 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+      'en teléfono las flechas van abajo con los puntos y no tapan el slide',
+      (tester) async {
+    // En la portada (2026-09-24) las flechas de 46 px, centradas en el alto,
+    // tapaban el texto de los slides en un teléfono.
+    const data = <String, dynamic>{
+      'autoPlay': false,
+      'showArrows': true,
+      'showIndicators': true,
+      'slides': <Map<String, dynamic>>[
+        <String, dynamic>{'title': 'Primero'},
+        <String, dynamic>{'title': 'Segundo'},
+        <String, dynamic>{'title': 'Tercero'},
+      ],
+    };
+    await tester.pumpWidget(
+      _host(
+        data: data,
+        mediaQueryData: const MediaQueryData(size: Size(375, 812)),
+      ),
+    );
+    await tester.pump();
+
+    final root =
+        tester.getRect(find.byKey(WebsiteCarouselBlockContent.rootKey));
+    final previous = tester
+        .getRect(find.byKey(WebsiteCarouselBlockContent.previousButtonKey));
+    final next =
+        tester.getRect(find.byKey(WebsiteCarouselBlockContent.nextButtonKey));
+    final firstDot =
+        tester.getRect(find.byKey(WebsiteCarouselBlockContent.indicatorKey(0)));
+
+    expect(previous.center.dy, closeTo(firstDot.center.dy, 1),
+        reason: 'la flecha va en la fila de los puntos');
+    expect(previous.bottom, lessThanOrEqualTo(root.bottom - 12));
+    expect(previous.top, greaterThan(root.bottom - 80),
+        reason: 'abajo, no al centro del alto');
+    expect(previous.right, lessThan(firstDot.left));
+    expect(
+        next.left,
+        greaterThan(tester
+            .getRect(find.byKey(WebsiteCarouselBlockContent.indicatorKey(2)))
+            .right));
+    expect(firstDot.width, greaterThanOrEqualTo(24),
+        reason: 'WCAG 2.5.8: el toque del punto mide al menos 24 px');
+
+    // Un toque en el borde de la caja del punto también cambia el slide.
+    await tester.tapAt(
+      tester
+              .getRect(find.byKey(WebsiteCarouselBlockContent.indicatorKey(1)))
+              .topLeft +
+          const Offset(3, 3),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('SEGUNDO'), findsOneWidget);
+    expect(find.bySemanticsLabel('Diapositiva siguiente'), findsOneWidget);
+    expect(find.bySemanticsLabel('Diapositiva 2 de 3'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('en escritorio las flechas siguen a los costados',
+      (tester) async {
+    const data = <String, dynamic>{
+      'autoPlay': false,
+      'showArrows': true,
+      'slides': <Map<String, dynamic>>[
+        <String, dynamic>{'title': 'Primero'},
+        <String, dynamic>{'title': 'Segundo'},
+      ],
+    };
+    await tester.pumpWidget(
+      _host(
+        data: data,
+        mediaQueryData: const MediaQueryData(size: Size(1280, 900)),
+      ),
+    );
+    await tester.pump();
+    final root =
+        tester.getRect(find.byKey(WebsiteCarouselBlockContent.rootKey));
+    final previous = tester
+        .getRect(find.byKey(WebsiteCarouselBlockContent.previousButtonKey));
+    expect(previous.center.dy, closeTo(root.center.dy, 1));
+    expect(previous.left, closeTo(root.left + 24, 1));
+  });
+
   testWidgets('slide selection is transient and creates no dirty or undo state',
       (tester) async {
     const blocks = <Map<String, dynamic>>[
