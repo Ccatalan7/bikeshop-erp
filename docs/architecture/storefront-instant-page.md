@@ -33,6 +33,9 @@ mediana de 3 cargas; «sin» es la misma página sin la plantilla:
 | Categoría, sin | 0,4 s (logo) | 0,5 s (logo) | 20,3 s | — |
 | Categoría, con | 0,26 s | 0,26 s (título) | 20,3 s | 22,0 s |
 | Categoría, con, escritorio 1366×900 | 0,36 s | 0,36 s (título) | 21,1 s | 23,1 s |
+| Portada, sin | 0,4 s (logo) | 0,5 s (logo) | 20,6 s | — |
+| Portada, con | 0,29 s | 4,1 s (foto) | 21,8 s | 22,4 s |
+| Portada, con, escritorio 1366×900 (1 carga) | 0,28 s | 4,3 s (foto) | 21,7 s | 22,5 s |
 
 La tienda no llega más tarde. Lo que costaba ~1 s era el logo del
 encabezado (PNG de 3300×887, 104 KB), que la instantánea bajaba en los
@@ -104,6 +107,13 @@ generador lo informa.
 
 La portada avisa desde `PublicHomePage` al tener la composición pública, con
 la foto de la primera diapositiva decodificada.
+
+En la portada la tienda queda lista ~1,2 s más tarde (tabla de «Medición»):
+la foto de la diapositiva (165 KB) y las fuentes bajan mientras carga Flutter,
+cuando antes la foto se pedía recién al arrancar la tienda. La portada
+completa aparece a la misma hora que antes; lo que cambia es que desde 0,3 s
+se ve la portada en vez del logo. Achicar esa foto es lo que acerca su LCP a
+los 2,6 s de la ficha.
 
 ## Traspaso
 
