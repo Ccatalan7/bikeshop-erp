@@ -162,6 +162,10 @@ void main() {
       expect(html, isNot(contains('<Shimano>')));
     });
 
+    test('marca su foto como la principal', () {
+      expect('data-ip-lcp'.allMatches(template(productRow())).length, 1);
+    });
+
     test('escapa el texto del catálogo', () {
       final html = template(productRow(name: 'Grasa & aceite "Pro"'));
       expect(html, contains('Grasa &amp; aceite'));
@@ -291,6 +295,17 @@ void main() {
       expect(html, isNot(contains('<h1')));
     });
 
+    test('marca su imagen como la principal sólo si la tiene', () {
+      String html(String imageUrl) => snapshots.buildSeoInstantCategoryTemplate(
+            theme: theme(),
+            tenantId: tenantId,
+            category: category(imageUrl: imageUrl),
+          );
+      expect('data-ip-lcp'.allMatches(html('https://x/cadenas.jpg')).length, 1);
+      expect(html(''), isNot(contains('data-ip-lcp')),
+          reason: 'sin imagen, lo principal es el título: Flutter no espera');
+    });
+
     test('la grilla es un espacio reservado, no productos inventados', () {
       final html = snapshots.buildSeoInstantCategoryTemplate(
         theme: theme(),
@@ -373,6 +388,63 @@ void main() {
         preloadImageUrl: 'https://cdn.example.com/S56467.jpg',
       );
       expect(twice, once);
+    });
+
+    test('con foto principal, Flutter no se pide desde <head>', () {
+      const preload = '<link rel="preload" href="main.dart.js" as="script">';
+      const withPhoto = '<template id="instant-page-template">'
+          '<img data-ip-lcp src="https://x/a.jpg"></template>';
+      const withoutPhoto =
+          '<template id="instant-page-template"><p>x</p></template>';
+      for (final base in [index, ciIndexTemplate()]) {
+        expect(base, contains(preload),
+            reason: 'si cambia el preload, la espera deja de retenerlo');
+        final held = snapshots.injectSeoInstantPage(
+          base,
+          theme: theme(),
+          templateHtml: withPhoto,
+        );
+        expect(held, isNot(contains('href="main.dart.js"')));
+        final kept = snapshots.injectSeoInstantPage(
+          base,
+          theme: theme(),
+          templateHtml: withoutPhoto,
+        );
+        expect(kept, contains(preload));
+        final stripped = snapshots.stripSeoInstantPage(held);
+        expect(stripped, contains(preload),
+            reason: 'la base de los demás snapshots recupera su preload');
+        expect(
+          snapshots.injectSeoInstantPage(
+            stripped,
+            theme: theme(),
+            templateHtml: withPhoto,
+          ),
+          held,
+        );
+      }
+    });
+
+    test('el script retiene el cargador tal como lo crea flutter.js', () {
+      // El script recibe `window._flutter.loader` en su asignación. Si
+      // flutter.js deja de asignarlo así, la espera no hace nada y la foto
+      // vuelve a compartir la red con el motor: esto lo avisa al subir de
+      // versión.
+      final root = Platform.environment['FLUTTER_ROOT'];
+      expect(root, isNotNull, reason: 'flutter test define FLUTTER_ROOT');
+      final sources = [
+        '$root/engine/src/flutter/lib/web_ui/flutter_js/src/flutter.js',
+        '$root/bin/cache/flutter_web_sdk/flutter_js/flutter.js',
+      ].where((path) => File(path).existsSync()).toList();
+      expect(sources, isNotEmpty, reason: 'no se encontró flutter.js');
+      for (final path in sources) {
+        expect(File(path).readAsStringSync(),
+            matches(RegExp(r'window\._flutter\.loader\s*=\s*new\s')),
+            reason: path);
+      }
+      expect(js, contains("page.querySelector('img[data-ip-lcp]')"));
+      expect(js, contains("Object.defineProperty(flutter, 'loader'"));
+      expect(js, contains('heroPainted(hero, 3000)'));
     });
 
     test('falla fuerte si web/index.html vuelve a traer el script', () {
@@ -543,6 +615,7 @@ void main() {
       expect(html, contains('--ip-focus-mobile:72.00% 57.00%'),
           reason: 'teléfono: mobileFocalPointX/Y');
       expect(html, contains('fetchpriority="high"'));
+      expect('data-ip-lcp'.allMatches(html).length, 1);
       expect(html, isNot(contains('ip-slide-scrim')),
           reason: 'showOverlay: false');
       expect(

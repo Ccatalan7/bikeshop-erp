@@ -153,6 +153,38 @@ La instantánea no tiene botones de compra, carrito ni búsqueda: nada
 interactivo que no funcione hasta que Flutter tome el control. Sus enlaces
 (logo) son navegaciones reales.
 
+## Primero la foto
+
+**Causa (2026-09-24, PR #52):** con la portada instantánea, PageSpeed móvil de
+la portada bajó de 62 a 38 y su LCP de 0,9 s a 18,2 s, aunque en la traza el
+LCP observado era la foto a ~1,3 s (desglose: 340 ms de espera, 620 ms de
+descarga, 360 ms de render). Lighthouse no usa ese tiempo: simula la carga en
+«Slow 4G» y cuenta como previo al LCP todo pedido que **terminó** antes que él
+en la traza sin limitar. `main.dart.js` (1,4 MB, con `preload` en `<head>`) y
+`canvaskit.wasm` (1,6 MB) terminaban antes de pintarse la foto, así que la
+simulación la ponía detrás de 3 MB. Antes, el LCP era el logo del splash, que se
+pintaba antes de que terminaran; por eso daba 0,9 s sin mostrar nada útil.
+
+**Qué hace:**
+
+- La foto principal de cada plantilla lleva `data-ip-lcp`
+  (`seoInstantLcpAttribute`): la de la ficha, la de la portada de categoría si
+  tiene imagen y la de la primera diapositiva. Una categoría sin imagen no
+  espera nada: su LCP es el título.
+- Con esa marca, `injectSeoInstantPage` cambia el `preload` de `main.dart.js`
+  por un comentario; `stripSeoInstantPage` lo devuelve, así la base de los
+  demás snapshots lo conserva.
+- `instant_page.js` recibe `window._flutter.loader` en la asignación que hace
+  `flutter.js` y su `load()` espera a que la foto esté decodificada y pintada
+  (dos cuadros), a que falle, o 3 s. Una prueba lee `flutter.js` del SDK
+  (`FLUTTER_ROOT`) y falla si deja de crear el cargador así: sin esa forma, la
+  espera no retiene nada y vuelve el LCP de 18 s.
+
+**Costo, medido** (mismo build local, 412×823, red de 1,6 Mbps / 150 ms,
+CPU ×4, mediana de 3): la foto pasa de 2,9 s a 1,9 s y la tienda queda lista
+de 21,5 s a 22,8 s. Mientras la foto baja, Flutter todavía no pide nada; con
+una red común la foto tarda décimas y el costo es ése.
+
 ## Frescura
 
 El snapshot se genera en cada build: un push a `main` o la corrida diaria,
@@ -210,7 +242,8 @@ en Dart y `norm` en `instant_page.js`— y la prueba
   sigue siendo el contenido para rastreadores sin JS. Usa `role="heading"` y
   `role="main"`, así cada snapshot mantiene un solo `<h1>` y un solo `<main>`
   (lo valida el generador).
-- Con JavaScript, el LCP pasa a ser la foto o el título de la instantánea.
+- Con JavaScript, el LCP pasa a ser la foto o el título de la instantánea;
+  con foto, Flutter espera a que se pinte (ver «Primero la foto»).
   `store_ready` sigue midiendo cuándo Flutter está listo.
 - `window.vinabikeInstantPageReleased` guarda el motivo y el instante de la
   retirada, para medir el traspaso en el navegador.

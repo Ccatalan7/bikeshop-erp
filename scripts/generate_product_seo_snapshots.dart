@@ -3859,7 +3859,8 @@ String buildSeoInstantProductTemplate({
       ? ''
       : '<div class="ip-media"><img src="${_escapeHtml(imageUrl)}" '
           'alt="${_escapeHtml(title)}" width="600" height="600" '
-          'fetchpriority="high" decoding="async" crossorigin="anonymous">'
+          '$seoInstantLcpAttribute fetchpriority="high" decoding="async" '
+          'crossorigin="anonymous">'
           '</div>';
   final heroPrice =
       ChileanUtils.formatCurrency(commerce.price).replaceFirst(r'$ ', r'$');
@@ -3896,8 +3897,8 @@ String buildSeoInstantCategoryTemplate({
   final image = category.imageUrl.isEmpty
       ? ''
       : '<img class="ip-hero-image" src="${_escapeHtml(category.imageUrl)}" '
-          'alt="" fetchpriority="high" decoding="async" '
-          'crossorigin="anonymous">';
+          'alt="" $seoInstantLcpAttribute fetchpriority="high" '
+          'decoding="async" crossorigin="anonymous">';
   final eyebrow = category.heroEyebrow.isEmpty
       ? ''
       : '<p class="ip-eyebrow">${_escapeHtml(category.heroEyebrow)}</p>';
@@ -4207,7 +4208,8 @@ String? buildSeoInstantHomeTemplate({
   final image = '<img class="ip-slide-img" src="${_escapeHtml(imageUrl)}" '
       'alt="${_escapeHtml(alt.trim())}" '
       'style="--ip-focus:$sharedFocus;--ip-focus-mobile:$mobileFocus" '
-      'fetchpriority="high" decoding="async" crossorigin="anonymous">';
+      '$seoInstantLcpAttribute fetchpriority="high" decoding="async" '
+      'crossorigin="anonymous">';
   final overlayOpacity = unit(slide['overlayOpacity'], 0.55);
   final scrim = slide['showOverlay'] == false
       ? ''
@@ -4275,11 +4277,22 @@ String _readSeoInstantAsset(String path, String closingTag) {
   return text;
 }
 
+/// Marca la foto principal de una plantilla instantánea: el script espera a
+/// que se pinte antes de dejar que Flutter pida su programa y su motor.
+const seoInstantLcpAttribute = 'data-ip-lcp';
+
+const _seoInstantMainJsPreload =
+    '<link rel="preload" href="main.dart.js" as="script">';
+const _seoInstantHeldMainJsPreload =
+    '<!-- main.dart.js sin preload: espera la foto principal -->';
+
 /// Quita lo que [injectSeoInstantPage] agregó (hoja, tema, `preload` de la
-/// foto, plantilla y script), por sus ids. Deja intacto todo lo demás, así el
-/// generador se puede volver a correr sobre el mismo build.
+/// foto, plantilla y script), por sus ids, y devuelve el `preload` de
+/// `main.dart.js` que retuvo. Deja intacto todo lo demás, así el generador se
+/// puede volver a correr sobre el mismo build.
 String stripSeoInstantPage(String html) {
   return html
+      .replaceAll(_seoInstantHeldMainJsPreload, _seoInstantMainJsPreload)
       .replaceAll(
         RegExp(r'[ \t]*<style id="instant-page-(?:style|theme)">'
             r'[\s\S]*?</style>\n?'),
@@ -4343,7 +4356,16 @@ String injectSeoInstantPage(
         RegExp(r'(<img\s+id="loading-logo"[^>]*?)fetchpriority="high"'),
         (match) => '${match.group(1)}loading="lazy"',
       );
-  return withoutSplashLogo.replaceFirst('</head>', '$head</head>').replaceFirst(
+  // Con foto principal, `main.dart.js` no se pide al leer `<head>`: el script
+  // de la instantánea arranca Flutter cuando esa foto ya se pintó (ver
+  // «Primero la foto» en docs/architecture/storefront-instant-page.md).
+  final withHeldEngine = templateHtml.contains(seoInstantLcpAttribute)
+      ? withoutSplashLogo.replaceFirst(
+          _seoInstantMainJsPreload,
+          _seoInstantHeldMainJsPreload,
+        )
+      : withoutSplashLogo;
+  return withHeldEngine.replaceFirst('</head>', '$head</head>').replaceFirst(
         shellMarker,
         '$templateHtml\n'
         '  <script id="instant-page-script">\n$seoInstantScript  </script>\n'
