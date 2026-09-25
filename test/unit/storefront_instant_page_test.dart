@@ -1,8 +1,13 @@
 import 'dart:io';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:vinabike_erp/modules/website/models/website_responsive_authoring.dart';
 import 'package:vinabike_erp/modules/website/theme/website_resolved_theme.dart';
+import 'package:vinabike_erp/modules/website/theme/website_theme_builder.dart';
 import 'package:vinabike_erp/public_store/models/public_commerce_product_projection.dart';
+import 'package:vinabike_erp/public_store/theme/public_store_theme.dart';
+import 'package:vinabike_erp/shared/utils/responsive_breakpoints.dart';
 import 'package:vinabike_erp/public_store/widgets/public_store_layout.dart'
     show StorefrontLogoResolution;
 
@@ -349,6 +354,27 @@ void main() {
       ));
     });
 
+    test('se puede volver a generar sobre el mismo build', () {
+      final once = snapshots.injectSeoInstantPage(
+        index,
+        theme: theme(),
+        templateHtml:
+            '<template id="instant-page-template"><p>x</p></template>',
+        preloadImageUrl: 'https://cdn.example.com/S56467.jpg',
+      );
+      final stripped = snapshots.stripSeoInstantPage(once);
+      expect(stripped, isNot(contains('instant-page')));
+      expect(stripped, isNot(contains('vinabikeInstantPage')));
+      final twice = snapshots.injectSeoInstantPage(
+        stripped,
+        theme: theme(),
+        templateHtml:
+            '<template id="instant-page-template"><p>x</p></template>',
+        preloadImageUrl: 'https://cdn.example.com/S56467.jpg',
+      );
+      expect(twice, once);
+    });
+
     test('falla fuerte si web/index.html vuelve a traer el script', () {
       expect(
         () => snapshots.injectSeoInstantPage(
@@ -429,6 +455,259 @@ void main() {
       );
       expect(desktop.hasMatch(css), isTrue,
           reason: 'ProductCatalogPage usa columna de filtros desde 700 px');
+    });
+  });
+
+  group('portada', () {
+    // El carrusel de la portada de Viñabike, como está en producción el
+    // 2026-09-24 (primera diapositiva completa).
+    Map<String, dynamic> carousel({
+      Map<String, dynamic> slide = const {},
+      Map<String, dynamic> data = const {},
+      int slides = 3,
+    }) =>
+        {
+          'id': 'b-0',
+          'block_type': 'carousel',
+          'order_index': 0,
+          'is_visible': true,
+          'block_data': {
+            'autoPlay': true,
+            'animation': 'fade',
+            'showArrows': true,
+            'blockHeight': 750,
+            'spacingAfter': 36,
+            'schemaVersion': 1,
+            'showIndicators': true,
+            'intervalSeconds': 8,
+            'transitionDuration': 1600,
+            'animationDurationMs': 1600,
+            ...data,
+            'slides': [
+              {
+                'title': 'TALLER DE BICICLETAS EN VIÑA DEL MAR',
+                'actions': [
+                  {
+                    'to': '/productos',
+                    'type': 'navigate',
+                    'label': 'Ver catálogo',
+                    'variant': 'outline',
+                  },
+                ],
+                'ctaLink': '/productos',
+                'ctaText': 'Ver catálogo',
+                'imageUrl': 'https://cdn.example.com/taller.jpg',
+                'subtitle': 'La mejor selección de repuestos y accesorios',
+                'buttonLink': '/productos',
+                'buttonText': 'Ver catálogo',
+                'showOverlay': false,
+                'videoFileUrl': '',
+                'actionVariant': 'outline',
+                'overlayOpacity': 0.45,
+                'titleFormatting': {'fontSize': 36},
+                'mobileFocalPointX': 0.72,
+                'mobileFocalPointY': 0.57,
+                'subtitleFormatting': {'fontSize': 24},
+                ...slide,
+              },
+              for (var i = 1; i < slides; i++)
+                {'title': 'Otra $i', 'imageUrl': 'https://cdn.example.com/$i'},
+            ],
+          },
+        };
+
+    const sticky = {'header_style': 'sticky', 'header_color_mode': 'auto'};
+
+    String? build(
+      Map<String, dynamic> block, {
+      Map<String, String> settings = sticky,
+      Set<String> eligible = const {'/', '/productos'},
+    }) =>
+        snapshots.buildSeoInstantHomeTemplate(
+          theme: theme(settings),
+          tenantId: tenantId,
+          settings: settings,
+          firstBlock: block,
+          eligibleHrefs: eligible,
+        );
+
+    test('dibuja la primera diapositiva como el carrusel de la tienda', () {
+      final html = build(carousel())!;
+      expect(html, contains('data-ip-kind="home"'));
+      expect(html, contains('data-ip-path="/"'));
+      expect(html, contains('class="ip-header ip-header-overlay"'));
+      expect(html, contains('<section class="ip-slide" style="height:750px">'));
+      expect(html, contains('src="https://cdn.example.com/taller.jpg"'));
+      expect(html, contains('--ip-focus:50.00% 50.00%;'),
+          reason: 'tablet y escritorio: focalPointX/Y (centro por omisión)');
+      expect(html, contains('--ip-focus-mobile:72.00% 57.00%'),
+          reason: 'teléfono: mobileFocalPointX/Y');
+      expect(html, contains('fetchpriority="high"'));
+      expect(html, isNot(contains('ip-slide-scrim')),
+          reason: 'showOverlay: false');
+      expect(
+          html,
+          contains('role="heading" aria-level="1" style="font-size:36px">'
+              'TALLER DE BICICLETAS EN VIÑA DEL MAR</p>'));
+      expect(
+          html,
+          contains('<p class="ip-slide-subtitle" style="font-size:24px">'
+              'La mejor selección de repuestos y accesorios</p>'));
+      expect(
+          html,
+          contains('<span class="ip-slide-cta" style="height:40px;'
+              'padding:0 20px;border-radius:8px">VER CATÁLOGO</span>'));
+      expect('<span class="ip-dot'.allMatches(html).length, 3);
+      expect('ip-dot-active'.allMatches(html).length, 1);
+      expect(html, isNot(contains('<h1')));
+      expect(html, isNot(contains('<main')));
+    });
+
+    test('el velo por omisión es el de la diapositiva (0,55)', () {
+      final html = build(carousel(
+          slide: {'showOverlay': null}..removeWhere((_, v) => v == null)))!;
+      expect(html, isNot(contains('ip-slide-scrim')),
+          reason: 'showOverlay sigue en false en la base');
+      final withOverlay = Map<String, dynamic>.from(carousel());
+      final data = Map<String, dynamic>.from(withOverlay['block_data'] as Map);
+      final first = Map<String, dynamic>.from((data['slides'] as List).first);
+      first.remove('showOverlay');
+      first.remove('overlayOpacity');
+      data['slides'] = [first, ...(data['slides'] as List).skip(1)];
+      withOverlay['block_data'] = data;
+      expect(build(withOverlay),
+          contains('linear-gradient(rgba(0,0,0,0.220),rgba(0,0,0,0.385))'));
+    });
+
+    test('sin instantánea ante lo que no dibuja igual', () {
+      final cases = <String, String?>{
+        'otro bloque primero': build({...carousel(), 'block_type': 'hero'}),
+        'video': build(carousel(slide: {'videoUrl': 'https://youtu.be/x'})),
+        'composición': build(carousel(slide: {'useComposition': true})),
+        'respuesta por viewport': build(carousel(data: {'responsive': {}})),
+        'formato con peso': build(carousel(slide: {
+          'titleFormatting': {'fontSize': 36, 'bold': true},
+        })),
+        'título alineado a la izquierda': build(carousel(slide: {
+          'titleFormatting': {'fontSize': 36, 'textAlign': 'left'},
+        })),
+        'botón relleno': build(carousel(slide: {'actionVariant': 'filled'})),
+        'destino no publicado': build(carousel(), eligible: const {'/'}),
+        'encabezado sólido':
+            build(carousel(), settings: const {'header_style': 'solid'}),
+        'contraste forzado': build(carousel(), settings: const {
+          'header_style': 'sticky',
+          'header_color_mode': 'dark',
+        }),
+        'banda superior': build(carousel(), settings: const {
+          ...sticky,
+          'header_show_top_banner': 'true',
+        }),
+        'sin alto': build(carousel(data: {'blockHeight': null})),
+      };
+      for (final entry in cases.entries) {
+        expect(entry.value, isNull, reason: entry.key);
+      }
+    });
+
+    test('una sola diapositiva no lleva puntos', () {
+      expect(build(carousel(slides: 1)), isNot(contains('ip-dots')));
+    });
+
+    test('el botón mide lo mismo que el OutlinedButton del sitio', () {
+      final base = PublicStoreTheme.theme;
+      expect(base.visualDensity,
+          const VisualDensity(horizontal: -1, vertical: -1));
+      expect(base.materialTapTargetSize, MaterialTapTargetSize.shrinkWrap);
+      for (final style in ['', 'sharp', 'pill', 'rounded']) {
+        for (final size in ['', 'small', 'medium', 'large']) {
+          final settings = {'button_style': style, 'button_size': size};
+          final built = WebsiteThemeBuilder.build(
+            base: base,
+            resolved: WebsiteResolvedTheme.resolve(
+              (key, fallback) => settings[key] ?? fallback,
+            ),
+          ).outlinedButtonTheme.style!;
+          final padding = built.padding!.resolve({})! as EdgeInsets;
+          final minimum = built.minimumSize!.resolve({})!;
+          final shape = built.shape!.resolve({})! as RoundedRectangleBorder;
+          final radius = (shape.borderRadius as BorderRadius).topLeft.x;
+          final geometry = snapshots.seoInstantButtonGeometry(settings);
+          final reason = '$style/$size';
+          expect(geometry.paddingX, padding.left, reason: reason);
+          // Densidad (-1, -1): el alto mínimo baja 4 px; el relleno
+          // horizontal no cambia.
+          expect(geometry.height, minimum.height - 4, reason: reason);
+          expect(geometry.radius, radius, reason: reason);
+        }
+      }
+    });
+
+    test('la firma cambia con lo que se dibuja y el script lee lo mismo', () {
+      final base = snapshots.seoInstantHomeSignature(carousel());
+      expect(snapshots.seoInstantHomeSignature(carousel()), base);
+      expect(
+          snapshots.seoInstantHomeSignature(carousel(slide: {'title': 'Otro'})),
+          isNot(base));
+      expect(
+          snapshots
+              .seoInstantHomeSignature(carousel(data: {'blockHeight': 600})),
+          isNot(base));
+      expect(
+          snapshots.seoInstantHomeSignature(carousel(slides: 2)), isNot(base));
+      final script = File(snapshots.seoInstantScriptPath).readAsStringSync();
+      final match = RegExp(r"var homePaths = \[([^\]]+)\]").firstMatch(script);
+      expect(match, isNotNull);
+      final paths = RegExp(r"'([^']+)'")
+          .allMatches(match!.group(1)!)
+          .map((m) => m.group(1))
+          .toList();
+      expect(paths, snapshots.seoInstantHomeFreshnessPaths);
+    });
+
+    test('toma el primer bloque visible de la única portada', () {
+      final pages = [
+        {'id': 'home', 'is_home': true},
+        {'id': 'otra', 'is_home': false},
+      ];
+      final first =
+          snapshots.seoInstantHomeFirstBlock(pages: pages, pageBlocks: {
+        'home': [
+          {'id': 'b', 'order_index': 1, 'is_visible': true},
+          {'id': 'z', 'order_index': 0, 'is_visible': false},
+          {'id': 'c', 'order_index': 0, 'is_visible': true},
+          {'id': 'a', 'order_index': 1, 'is_visible': true},
+        ],
+      });
+      expect(first?['id'], 'c');
+      expect(
+        snapshots.seoInstantHomeFirstBlock(
+          pages: [
+            ...pages,
+            {'id': 'x', 'is_home': true}
+          ],
+          pageBlocks: const {},
+        ),
+        isNull,
+        reason: 'dos portadas: no se adivina cuál publica la tienda',
+      );
+    });
+
+    test('el encuadre móvil cambia en el mismo ancho que WebsiteViewport', () {
+      final css = File(snapshots.seoInstantStylePath).readAsStringSync();
+      expect(
+        css,
+        contains('@media (max-width: '
+            '${(ResponsiveBreakpoints.phoneMaxExclusive - 0.02).toStringAsFixed(2)}px)'),
+      );
+      expect(WebsiteViewport.fromLogicalWidth(599.98), WebsiteViewport.mobile);
+      expect(WebsiteViewport.fromLogicalWidth(600), WebsiteViewport.tablet);
+    });
+
+    test('el script sólo la monta en su ruta', () {
+      final script = File(snapshots.seoInstantScriptPath).readAsStringSync();
+      expect(script, contains("template.getAttribute('data-ip-path')"));
+      expect(script, contains("api.release('stale')"));
     });
   });
 }

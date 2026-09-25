@@ -2,8 +2,9 @@
 
 **Estado:** construida y medida en local el 2026-09-24; publicación autorizada
 por el dueño con la trazabilidad visual pendiente (ver «Trazabilidad visual»).
-Cubre fichas y categorías; portada, catálogo raíz y
-resto de las rutas siguen sólo con Flutter.
+Cubre fichas, categorías y la portada (cuando su primer bloque es un carrusel
+que dibuja igual, ver «Portada»); catálogo raíz y resto de las rutas siguen
+sólo con Flutter.
 
 ## Por qué existe
 
@@ -52,10 +53,10 @@ cada build de la tienda.
 
 ## Rutas
 
-- **Con instantánea:** `/productos/<slug>/<sku>` y
-  `/productos/categoria/<slug>`.
-- **Sin ella (Flutter solo, splash con logo):** portada, `/productos`,
-  `/servicios`, páginas del CMS, carrito, checkout, cuenta y todo lo demás.
+- **Con instantánea:** `/productos/<slug>/<sku>`,
+  `/productos/categoria/<slug>` y `/` (portada, con condiciones).
+- **Sin ella (Flutter solo, splash con logo):** `/productos`, `/servicios`,
+  páginas del CMS, carrito, checkout, cuenta y todo lo demás.
 - La categoría muestra la portada real y, bajo 700 px, una **grilla
   reservada**, no productos: qué productos van primero lo decide la consulta
   de la tienda (orden, política de stock, tamaño de página según el ancho),
@@ -66,6 +67,43 @@ cada build de la tienda.
   traspaso (medido a 1366×900: empezaba ~90 px más abajo y 300 px más a la
   izquierda), así que bajo la portada queda el fondo y Flutter llena ese
   espacio vacío sin mover nada de lo que ya estaba.
+
+## Portada
+
+La portada es el `index.html` de la raíz, y Firebase sirve ese mismo archivo
+en toda ruta sin snapshot propio (carrito, checkout, cuenta…). Por eso:
+
+- La plantilla lleva `data-ip-path="/"` y el script sólo la monta en `/`
+  (o `/index.html`). En el carrito no se monta y el splash queda como antes.
+- La foto no se precarga en `<head>`: la baja el `<img>` de la instantánea al
+  montarse (prioridad alta), así ninguna otra ruta la descarga.
+- El generador la inyecta en el `index.html` que escribe en la raíz, no en
+  `baseHtml`, que es la base de los demás snapshots.
+
+Dibuja lo que `PublicHomePage` muestra en la primera pantalla cuando el primer
+bloque visible es un carrusel: el encabezado flotante (velo automático de
+`PublicStoreLayout`, negro 52 % → 24 %, logo en blanco), la primera
+diapositiva (`WebsiteCarouselBlockContent._buildSlide`: foto «cover» sobre
+`#1a1a1a` con su punto focal, título en la fuente de títulos a 900 con 3 px de
+espaciado y alto 1,12 de `displayLarge` M3, subtítulo en la de cuerpo a 600,
+blanco al 70 %, alto 1,33 de `headlineSmall`, botón «outline» de
+`WebsiteThemeBuilder` con la densidad (-1, -1) y `shrinkWrap` de
+`PublicStoreTheme`) y los puntos. Las flechas llegan con la tienda: sólo se
+agregan, no mueven nada.
+
+Medido contra la portada real a 412 px: título en tres líneas a 40 px, subtítulo
+en dos a 32 px y botón de 145 × 40 px con 20 px a los lados, la columna
+centrada en los 750 px de la diapositiva.
+
+Sin instantánea (queda el splash) si el primer bloque no es un carrusel, si la
+diapositiva tiene video, composición o una clave que la instantánea no conoce,
+si el formato del texto hace algo más que tamaño y centrado, si el botón no es
+«outline» o apunta a una ruta no publicada, o si el encabezado no es el
+flotante automático. `buildSeoInstantHomeTemplate` devuelve `null` y el
+generador lo informa.
+
+La portada avisa desde `PublicHomePage` al tener la composición pública, con
+la foto de la primera diapositiva decodificada.
 
 ## Traspaso
 
@@ -95,7 +133,8 @@ los 0,8 s, tienda a los 20,6 s, igual que antes). Ahora el generador es su
    avisa. Un error de arranque la retira de inmediato.
 4. La ruta avisa con `releaseInstantPageWhenReady`: la ficha cuando tiene el
    producto (o sabe que no existe) **y** su foto principal está decodificada
-   (máx. 1,5 s); el catálogo cuando dejó de cargar. La retirada ocurre después
+   (máx. 1,5 s); el catálogo cuando dejó de cargar; la portada cuando tiene su
+   composición y la foto de la primera diapositiva. La retirada ocurre después
    de ese frame, con un fundido de 200 ms, y el nodo se elimina del DOM (no
    queda un duplicado oculto para lectores de pantalla ni para el render de
    Google).
@@ -125,6 +164,14 @@ que su antigüedad no tiene tope garantizado.
   activas, publicadas y en la web (política `public_products_select`). Una
   respuesta vacía es una ficha retirada después del build: la instantánea se
   retira y vuelve el splash.
+- **Portada:** su firma (`seoInstantHomeFreshnessPaths`: tipo, claves, alto,
+  puntos y lo que dibuja la primera diapositiva) se compara con el primer
+  bloque de la precarga pública que la página ya pidió
+  (`window.flutter_injected_preloaded_data`, `get_public_store_data` por el
+  worker del borde). Si el carrusel cambió desde el build, se retira
+  (`stale`) y vuelve el splash. Sin precarga (otro dominio, error) no se
+  verifica. Dart y el script normalizan igual; comprobado con la portada real
+  el 2026-09-24.
 - **Lo que no se revalida:** el nombre y la foto de una ficha que sigue
   publicada (la antigüedad del último build, igual que el `<noscript>`), la
   portada de una categoría despublicada o renombrada después del build, y el

@@ -18,6 +18,7 @@ import '../../shared/services/tenant_service.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../services/public_inventory_service.dart';
 import '../services/public_store_scroll_state.dart';
+import '../utils/instant_page_release.dart';
 import '../widgets/page_composition.dart';
 import '../widgets/public_store_layout.dart';
 
@@ -674,6 +675,9 @@ class _PublicHomePageState extends State<PublicHomePage>
       logicalWidth: logicalWidth,
       sectionSpacing: sectionSpacing,
     );
+    if (mode == WebsitePageCompositionMode.public) {
+      _releaseInstantHome(composition);
+    }
     final effectiveTenantId = tenantProvider.tenantId ?? _resolvedTenantId;
     final isEditMode = mode == WebsitePageCompositionMode.edit;
     _scheduleProgressiveExpansionIfNeeded(
@@ -709,6 +713,22 @@ class _PublicHomePageState extends State<PublicHomePage>
         primaryColor: primaryColor,
       ),
     );
+  }
+
+  /// La portada instantánea (docs/architecture/storefront-instant-page.md)
+  /// dibuja la primera diapositiva del carrusel: se retira cuando la tienda
+  /// ya tiene la portada, con esa foto decodificada para no dejar el marco
+  /// vacío en el traspaso.
+  void _releaseInstantHome(WebsitePageComposition composition) {
+    String? imageUrl;
+    final first = composition.blocks.isEmpty ? null : composition.blocks.first;
+    if (first != null && first.blockType == 'carousel') {
+      final slides = first.blockData['slides'];
+      if (slides is List && slides.isNotEmpty && slides.first is Map) {
+        imageUrl = (slides.first as Map)['imageUrl']?.toString();
+      }
+    }
+    releaseInstantPageWhenReady(context, 'home', imageUrl: imageUrl);
   }
 
   Widget _buildEmptyCompositionState(

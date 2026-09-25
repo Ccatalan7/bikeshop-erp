@@ -153,7 +153,9 @@ void main(List<String> args) async {
     return;
   }
 
-  final baseIndexHtml = await baseIndexFile.readAsString();
+  // Una corrida anterior sobre el mismo build dejó la portada instantánea en
+  // la raíz; se quita para que ningún otro snapshot la herede.
+  final baseIndexHtml = stripSeoInstantPage(await baseIndexFile.readAsString());
 
   Future<SeoOwnerSourceSnapshot> readSeoOwnerSource() {
     return _readSeoOwnerSourceSnapshot(
@@ -364,6 +366,37 @@ void main(List<String> args) async {
     ),
     tenantId: tenantId,
   );
+  // La portada instantánea va sólo en el `index.html` de la raíz, escrito
+  // aparte: `baseHtml` es la base de todos los demás snapshots y no debe
+  // llevarla. Firebase sirve ese archivo también en las rutas sin snapshot
+  // (carrito, cuenta…): el script la monta sólo en `/`.
+  final homeFirstBlock = seoInstantHomeFirstBlock(
+    pages: pages,
+    pageBlocks: pageBlocks,
+  );
+  final homeTemplate = homeFirstBlock == null
+      ? null
+      : buildSeoInstantHomeTemplate(
+          theme: instantTheme,
+          tenantId: tenantId,
+          settings: settings,
+          firstBlock: homeFirstBlock,
+          eligibleHrefs: {'/', ...publicFallbackPaths},
+        );
+  if (homeTemplate != null) {
+    await baseIndexFile.writeAsString(
+      injectSeoInstantPage(
+        baseHtml,
+        theme: instantTheme,
+        templateHtml: homeTemplate,
+      ),
+    );
+    stdout.writeln('✅ Portada instantánea: primer carrusel de la portada');
+  } else {
+    stdout.writeln(
+      'ℹ️  Portada sin instantánea: su primer bloque no se dibuja igual',
+    );
+  }
   final productHtmlById = <String, String>{};
   var written = 0;
   for (final product in products) {
@@ -3784,20 +3817,25 @@ String seoInstantFreshnessSignature(Map<String, dynamic> product) {
 String _seoInstantTemplateOpen({
   required String kind,
   required String tenantId,
+  String onlyPath = '',
 }) {
+  final pathGuard =
+      onlyPath.isEmpty ? '' : 'data-ip-path="${_escapeHtml(onlyPath)}" ';
   return '<template id="instant-page-template" data-ip-kind="$kind" '
+      '$pathGuard'
       'data-ip-tenant="${_escapeHtml(tenantId)}" '
       'data-ip-api="${_escapeHtml(SupabaseConfig.url)}" '
       'data-ip-key="${_escapeHtml(SupabaseConfig.anonKey)}">';
 }
 
-String _seoInstantHeader(SeoInstantPageTheme theme) {
+String _seoInstantHeader(SeoInstantPageTheme theme, {bool overlay = false}) {
   final logo = theme.logoUrl.isEmpty
       ? '<span class="ip-store-name">${_escapeHtml(theme.storeName)}</span>'
       : '<img class="ip-logo" src="${_escapeHtml(theme.logoUrl)}" '
           'alt="${_escapeHtml(theme.storeName)}" fetchpriority="low" '
           'decoding="async" crossorigin="anonymous">';
-  return '<header class="ip-header"><a class="ip-home" href="/">$logo</a>'
+  final headerClass = overlay ? 'ip-header ip-header-overlay' : 'ip-header';
+  return '<header class="$headerClass"><a class="ip-home" href="/">$logo</a>'
       '<div class="ip-progress" role="progressbar" '
       'aria-label="Cargando la tienda"></div></header>';
 }
@@ -3895,6 +3933,320 @@ String buildSeoInstantCategoryTemplate({
       '</div></template>';
 }
 
+// -----------------------------------------------------------------------------
+// Portada instantánea
+// -----------------------------------------------------------------------------
+
+/// Campos del primer bloque de la portada que deciden lo que dibuja la
+/// instantánea. `instant_page.js` los relee de la precarga pública
+/// (`get_public_store_data`, la misma que usa la tienda) y retira la portada
+/// si difieren del build: un carrusel editado no se muestra viejo. Cada
+/// entrada es un camino de claves; `#keys` son las claves del objeto
+/// ordenadas y `#length` el largo de la lista.
+const List<String> seoInstantHomeFreshnessPaths = [
+  'block_type',
+  'block_data.#keys',
+  'block_data.blockHeight',
+  'block_data.showIndicators',
+  'block_data.slides.#length',
+  'block_data.slides.0.#keys',
+  'block_data.slides.0.imageUrl',
+  'block_data.slides.0.title',
+  'block_data.slides.0.subtitle',
+  'block_data.slides.0.ctaText',
+  'block_data.slides.0.buttonText',
+  'block_data.slides.0.ctaLink',
+  'block_data.slides.0.buttonLink',
+  'block_data.slides.0.actionVariant',
+  'block_data.slides.0.actions.0.variant',
+  'block_data.slides.0.showOverlay',
+  'block_data.slides.0.overlayOpacity',
+  'block_data.slides.0.focalPointX',
+  'block_data.slides.0.focalPointY',
+  'block_data.slides.0.mobileFocalPointX',
+  'block_data.slides.0.mobileFocalPointY',
+  'block_data.slides.0.titleFormatting.#keys',
+  'block_data.slides.0.titleFormatting.fontSize',
+  'block_data.slides.0.titleFormatting.textAlign',
+  'block_data.slides.0.subtitleFormatting.#keys',
+  'block_data.slides.0.subtitleFormatting.fontSize',
+  'block_data.slides.0.subtitleFormatting.textAlign',
+];
+
+String _seoInstantNorm(Object? value) {
+  if (value == null) return '';
+  if (value is bool) return value ? 'true' : 'false';
+  if (value is num) return value.toStringAsFixed(2);
+  final text = value.toString().trim();
+  final number =
+      RegExp(r'^-?\d+(\.\d+)?$').hasMatch(text) ? double.tryParse(text) : null;
+  return number == null ? text : number.toStringAsFixed(2);
+}
+
+Object? _seoInstantPathValue(Object? root, String path) {
+  Object? value = root;
+  for (final segment in path.split('.')) {
+    if (segment == '#keys') {
+      if (value is! Map) return null;
+      return (value.keys.map((key) => key.toString()).toList()..sort())
+          .join(',');
+    }
+    if (segment == '#length') return value is List ? value.length : null;
+    final index = int.tryParse(segment);
+    if (index != null) {
+      value = value is List && index < value.length ? value[index] : null;
+    } else {
+      value = value is Map ? value[segment] : null;
+    }
+  }
+  return value;
+}
+
+String seoInstantHomeSignature(Map<String, dynamic> firstBlock) =>
+    seoInstantHomeFreshnessPaths
+        .map((path) => _seoInstantNorm(_seoInstantPathValue(firstBlock, path)))
+        .join('|');
+
+/// Primer bloque visible de la portada publicada, en el orden de
+/// `get_public_store_data` (`order_index`, luego `id`). `null` si la portada
+/// no es única o no tiene bloques.
+Map<String, dynamic>? seoInstantHomeFirstBlock({
+  required List<Map<String, dynamic>> pages,
+  required Map<String, List<Map<String, dynamic>>> pageBlocks,
+}) {
+  final homes = pages.where((page) => page['is_home'] == true).toList();
+  if (homes.length != 1) return null;
+  final blocks = [
+    ...?pageBlocks[(homes.single['id'] ?? '').toString()],
+  ].where((block) => block['is_visible'] != false).toList()
+    ..sort((a, b) {
+      final byOrder = ((a['order_index'] as num?) ?? 0)
+          .compareTo((b['order_index'] as num?) ?? 0);
+      return byOrder != 0
+          ? byOrder
+          : (a['id'] ?? '').toString().compareTo((b['id'] ?? '').toString());
+    });
+  return blocks.isEmpty ? null : blocks.first;
+}
+
+/// Claves que la instantánea sabe dibujar igual que
+/// `WebsiteCarouselBlockContent`. Una clave fuera de esta lista (respuesta
+/// por viewport, fondo propio, composición, video…) deja la portada sin
+/// instantánea: mejor el splash que un traspaso que salta.
+const Set<String> _seoInstantHomeCarouselKeys = {
+  'autoPlay',
+  'animation',
+  'showArrows',
+  'blockHeight',
+  'spacingAfter',
+  'schemaVersion',
+  'showIndicators',
+  'intervalSeconds',
+  'transitionDuration',
+  'animationDurationMs',
+  'slides',
+};
+
+const Set<String> _seoInstantHomeSlideKeys = {
+  'title',
+  'subtitle',
+  'actions',
+  'ctaLink',
+  'ctaText',
+  'imageUrl',
+  'buttonLink',
+  'buttonText',
+  'showOverlay',
+  'videoFileUrl',
+  'videoUrl',
+  'actionVariant',
+  'overlayOpacity',
+  'titleFormatting',
+  'subtitleFormatting',
+  'focalPointX',
+  'focalPointY',
+  // Encuadre en teléfono: `WebsiteResponsiveFocalProjection` lo lee en el
+  // viewport móvil (bajo 600 px) en vez de focalPointX/Y.
+  'mobileFocalPointX',
+  'mobileFocalPointY',
+  // Sólo lo usa una diapositiva compuesta; en una simple no mueve nada.
+  'mobileDesignWidth',
+  'imageAltText',
+  'altText',
+};
+
+/// Botón «outline» del carrusel con el tema del sitio: radio por
+/// `button_style` y relleno horizontal y alto mínimo por `button_size`
+/// (`WebsiteThemeBuilder`), con la densidad (-1, -1) y `shrinkWrap` de
+/// `PublicStoreTheme`: el alto mínimo baja 4 px y el texto nunca lo supera.
+({double radius, double paddingX, double height}) seoInstantButtonGeometry(
+  Map<String, String> settings,
+) {
+  final radius =
+      switch ((settings['button_style'] ?? '').trim().toLowerCase()) {
+    'sharp' => 0.0,
+    'pill' => 999.0,
+    _ => 8.0,
+  };
+  final (paddingX, minimumHeight) =
+      switch ((settings['button_size'] ?? '').trim().toLowerCase()) {
+    'small' => (14.0, 36.0),
+    'large' => (28.0, 52.0),
+    _ => (20.0, 44.0),
+  };
+  return (radius: radius, paddingX: paddingX, height: minimumHeight - 4);
+}
+
+/// La portada como la dibuja `PublicHomePage` cuando su primer bloque es un
+/// carrusel: encabezado flotante sobre la primera diapositiva (foto, título,
+/// subtítulo y botón) y sus puntos. Las flechas llegan con la tienda (sólo
+/// se agregan, no mueven nada). Devuelve `null` —la portada sigue con el
+/// splash— ante cualquier configuración que no se dibuje exactamente igual.
+String? buildSeoInstantHomeTemplate({
+  required SeoInstantPageTheme theme,
+  required String tenantId,
+  required Map<String, String> settings,
+  required Map<String, dynamic> firstBlock,
+  required Set<String> eligibleHrefs,
+}) {
+  if (firstBlock['block_type'] != 'carousel') return null;
+  final rawData = firstBlock['block_data'];
+  if (rawData is! Map) return null;
+  final data = Map<String, dynamic>.from(rawData);
+  if (!_seoInstantHomeCarouselKeys.containsAll(data.keys)) return null;
+
+  // Encabezado: sólo el flotante automático de la portada (sticky o
+  // transparent sobre el hero, sin banda superior).
+  final headerStyle = (settings['header_style'] ?? '').trim();
+  final contrast = (settings['header_color_mode'] ?? '').trim().toLowerCase();
+  if (headerStyle != 'sticky' && headerStyle != 'transparent') return null;
+  if (contrast == 'light' || contrast == 'dark') return null;
+  if ((settings['header_show_top_banner'] ?? '').trim() == 'true') return null;
+
+  final height = data['blockHeight'];
+  if (height is! num || !height.isFinite || height <= 0) return null;
+  final slides = data['slides'];
+  if (slides is! List || slides.isEmpty || slides.first is! Map) return null;
+  final slide = Map<String, dynamic>.from(slides.first as Map);
+  if (!_seoInstantHomeSlideKeys.containsAll(slide.keys)) return null;
+  final imageUrl = (slide['imageUrl'] ?? '').toString().trim();
+  if (imageUrl.isEmpty) return null;
+  if ((slide['videoUrl'] ?? '').toString().trim().isNotEmpty ||
+      (slide['videoFileUrl'] ?? '').toString().trim().isNotEmpty) {
+    return null;
+  }
+
+  double? fontSizeOf(Object? formatting) {
+    if (formatting is! Map) return null;
+    if (!{'fontSize', 'textAlign'}.containsAll(formatting.keys)) return null;
+    final align = (formatting['textAlign'] ?? 'center').toString();
+    if (align != 'center' && align != 'start') return null;
+    final size = formatting['fontSize'];
+    return size is num && size > 0 ? size.toDouble() : null;
+  }
+
+  final title = (slide['title'] ?? '').toString().trim();
+  final subtitle = (slide['subtitle'] ?? '').toString().trim();
+  final titleSize = fontSizeOf(slide['titleFormatting']);
+  final subtitleSize = fontSizeOf(slide['subtitleFormatting']);
+  if (title.isNotEmpty && titleSize == null) return null;
+  if (subtitle.isNotEmpty && subtitleSize == null) return null;
+
+  // Botón: mismas claves y precedencia que `_resolveSlideAction`. Sin rótulo
+  // o sin destino, la tienda no lo dibuja.
+  final actions = slide['actions'];
+  final firstAction =
+      actions is List && actions.isNotEmpty && actions.first is Map
+          ? Map<String, dynamic>.from(actions.first as Map)
+          : const <String, dynamic>{};
+  String firstPresent(List<String> keys, String fallbackKey) {
+    for (final key in keys) {
+      if (slide.containsKey(key)) return (slide[key] ?? '').toString().trim();
+    }
+    return (firstAction[fallbackKey] ?? '').toString().trim();
+  }
+
+  final ctaLabel = firstPresent(const ['ctaText', 'buttonText'], 'label');
+  final ctaHref = firstPresent(const ['ctaLink', 'buttonLink'], 'to');
+  final ctaVariant =
+      (slide['actionVariant'] ?? firstAction['variant'] ?? 'outline')
+          .toString()
+          .trim();
+  final showsCta = ctaLabel.isNotEmpty && ctaHref.isNotEmpty;
+  if (showsCta) {
+    if (ctaVariant != 'outline') return null;
+    final external =
+        ctaHref.startsWith('https://') || ctaHref.startsWith('http://');
+    if (!external && !eligibleHrefs.contains(ctaHref)) return null;
+  }
+
+  double unit(Object? value, double fallback) {
+    final parsed = value is num
+        ? value.toDouble()
+        : double.tryParse((value ?? '').toString());
+    return (parsed ?? fallback).clamp(0.0, 1.0).toDouble();
+  }
+
+  String px(num value) => value == value.roundToDouble()
+      ? '${value.toInt()}px'
+      : '${value.toStringAsFixed(2)}px';
+
+  // Encuadre: focalPointX/Y en tablet y escritorio; en teléfono (bajo
+  // 600 px) mobileFocalPointX/Y si existe, como
+  // WebsiteResponsiveFocalProjection. `object-position` equivale a la
+  // Alignment(x·2−1, y·2−1) de un BoxFit.cover.
+  String focus(Object? x, Object? y) =>
+      '${(unit(x, 0.5) * 100).toStringAsFixed(2)}% '
+      '${(unit(y, 0.5) * 100).toStringAsFixed(2)}%';
+  final sharedFocus = focus(slide['focalPointX'], slide['focalPointY']);
+  final mobileFocus = focus(
+    slide['mobileFocalPointX'] ?? slide['focalPointX'],
+    slide['mobileFocalPointY'] ?? slide['focalPointY'],
+  );
+  final alt = (slide['imageAltText'] ?? slide['altText'] ?? '').toString();
+  final image = '<img class="ip-slide-img" src="${_escapeHtml(imageUrl)}" '
+      'alt="${_escapeHtml(alt.trim())}" '
+      'style="--ip-focus:$sharedFocus;--ip-focus-mobile:$mobileFocus" '
+      'fetchpriority="high" decoding="async" crossorigin="anonymous">';
+  final overlayOpacity = unit(slide['overlayOpacity'], 0.55);
+  final scrim = slide['showOverlay'] == false
+      ? ''
+      : '<div class="ip-slide-scrim" style="background:linear-gradient('
+          'rgba(0,0,0,${(overlayOpacity * 0.4).toStringAsFixed(3)}),'
+          'rgba(0,0,0,${(overlayOpacity * 0.7).toStringAsFixed(3)}))"></div>';
+  final button = seoInstantButtonGeometry(settings);
+  final content = StringBuffer('<div class="ip-slide-content">');
+  if (title.isNotEmpty) {
+    content.write('<p class="ip-slide-title" role="heading" aria-level="1" '
+        'style="font-size:${px(titleSize!)}">'
+        '${_escapeHtml(title.toUpperCase())}</p>');
+  }
+  if (subtitle.isNotEmpty) {
+    content.write('<p class="ip-slide-subtitle" '
+        'style="font-size:${px(subtitleSize!)}">${_escapeHtml(subtitle)}</p>');
+  }
+  if (showsCta) {
+    content.write('<span class="ip-slide-cta" style="height:'
+        '${px(button.height)};padding:0 ${px(button.paddingX)};'
+        'border-radius:${px(button.radius)}">'
+        '${_escapeHtml(ctaLabel.toUpperCase())}</span>');
+  }
+  content.write('</div>');
+  final showsDots = data['showIndicators'] != false && slides.length > 1;
+  final dots = showsDots
+      ? '<div class="ip-dots" aria-hidden="true">'
+          '${List.generate(slides.length, (i) => '<span class="ip-dot${i == 0 ? ' ip-dot-active' : ''}"></span>').join()}'
+          '</div>'
+      : '';
+
+  return '${_seoInstantTemplateOpen(kind: 'home', tenantId: tenantId, onlyPath: '/')}'
+      '${_seoInstantHeader(theme, overlay: true)}'
+      '<div class="ip-front" role="main" '
+      'data-ip-home-sig="${_escapeHtml(seoInstantHomeSignature(firstBlock))}">'
+      '<section class="ip-slide" style="height:${px(height)}">'
+      '$image$scrim$content$dots</section></div></template>';
+}
+
 /// Hoja y script de la página instantánea. Viven aquí y no en
 /// `web/index.html` porque `scripts/sync_seo_index.sh` reescribe ese archivo
 /// entero desde su propia plantilla antes de cada build de CI: lo que sólo
@@ -3921,6 +4273,31 @@ String _readSeoInstantAsset(String path, String closingTag) {
     throw StateError('$path contiene </$closingTag>: cerraría su etiqueta.');
   }
   return text;
+}
+
+/// Quita lo que [injectSeoInstantPage] agregó (hoja, tema, `preload` de la
+/// foto, plantilla y script), por sus ids. Deja intacto todo lo demás, así el
+/// generador se puede volver a correr sobre el mismo build.
+String stripSeoInstantPage(String html) {
+  return html
+      .replaceAll(
+        RegExp(r'[ \t]*<style id="instant-page-(?:style|theme)">'
+            r'[\s\S]*?</style>\n?'),
+        '',
+      )
+      .replaceAll(
+        RegExp(r'[ \t]*<link rel="preload" as="image" [^>]*'
+            r'fetchpriority="high" crossorigin="anonymous">\n?'),
+        '',
+      )
+      .replaceAll(
+        RegExp(r'<template id="instant-page-template"[\s\S]*?</template>\n?'),
+        '',
+      )
+      .replaceAll(
+        RegExp(r'[ \t]*<script id="instant-page-script">[\s\S]*?</script>\n?'),
+        '',
+      );
 }
 
 /// Inserta la página instantánea en una ruta generada: su hoja, el tema y la

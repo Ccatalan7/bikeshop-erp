@@ -14,6 +14,11 @@
   window.vinabikeInstantPage = api;
   var template = document.getElementById('instant-page-template');
   if (!template || !('content' in template)) return;
+  // La portada vive en el index.html de la raíz, que Firebase sirve también
+  // en las rutas sin snapshot (carrito, cuenta…): se monta sólo en su ruta.
+  var onlyPath = template.getAttribute('data-ip-path');
+  if (onlyPath && location.pathname !== onlyPath &&
+      location.pathname !== onlyPath + 'index.html') return;
 
   var page = document.createElement('div');
   page.id = 'instant-page';
@@ -58,6 +63,54 @@
     setTimeout(function () { api.release('timeout'); }, 8000);
   };
 
+  // Portada: su primer bloque se compara con la precarga pública que la
+  // página ya pidió (get_public_store_data, la misma que usa la tienda). Si
+  // el carrusel cambió desde el build, se retira en vez de mostrarlo viejo.
+  // Mismos caminos que seoInstantHomeFreshnessPaths en el generador.
+  var front = page.querySelector('[data-ip-home-sig]');
+  var preloaded = window.flutter_injected_preloaded_data;
+  if (front && preloaded && typeof preloaded.then === 'function') {
+    var homePaths = [
+      'block_type',
+      'block_data.#keys',
+      'block_data.blockHeight',
+      'block_data.showIndicators',
+      'block_data.slides.#length',
+      'block_data.slides.0.#keys',
+      'block_data.slides.0.imageUrl',
+      'block_data.slides.0.title',
+      'block_data.slides.0.subtitle',
+      'block_data.slides.0.ctaText',
+      'block_data.slides.0.buttonText',
+      'block_data.slides.0.ctaLink',
+      'block_data.slides.0.buttonLink',
+      'block_data.slides.0.actionVariant',
+      'block_data.slides.0.actions.0.variant',
+      'block_data.slides.0.showOverlay',
+      'block_data.slides.0.overlayOpacity',
+      'block_data.slides.0.focalPointX',
+      'block_data.slides.0.focalPointY',
+      'block_data.slides.0.mobileFocalPointX',
+      'block_data.slides.0.mobileFocalPointY',
+      'block_data.slides.0.titleFormatting.#keys',
+      'block_data.slides.0.titleFormatting.fontSize',
+      'block_data.slides.0.titleFormatting.textAlign',
+      'block_data.slides.0.subtitleFormatting.#keys',
+      'block_data.slides.0.subtitleFormatting.fontSize',
+      'block_data.slides.0.subtitleFormatting.textAlign'
+    ];
+    preloaded.then(function (result) {
+      var blocks = result && result.payload && result.payload.blocks;
+      if (!Array.isArray(blocks)) return;
+      var signature = homePaths.map(function (path) {
+        return norm(pathValue(blocks[0], path));
+      }).join('|');
+      if (signature !== front.getAttribute('data-ip-home-sig')) {
+        api.release('stale');
+      }
+    }).catch(function () {});
+  }
+
   // Frescura: el snapshot se generó en el último build. El precio nace
   // neutro (data-ip-state="pending") y sólo se muestra si una lectura
   // pública de los campos que lo deciden coincide con la firma del build.
@@ -72,6 +125,28 @@
   var tenant = template.getAttribute('data-ip-tenant');
   if (!sku || !base || !key || !tenant || !window.fetch) return;
   var fields = ['website_price', 'price'];
+  function pathValue(root, path) {
+    var value = root;
+    var segments = path.split('.');
+    for (var i = 0; i < segments.length; i++) {
+      var segment = segments[i];
+      var isObject = value !== null && typeof value === 'object' &&
+          !Array.isArray(value);
+      if (segment === '#keys') {
+        return isObject ? Object.keys(value).sort().join(',') : null;
+      }
+      if (segment === '#length') {
+        return Array.isArray(value) ? value.length : null;
+      }
+      if (/^\d+$/.test(segment)) {
+        value = Array.isArray(value) ? value[Number(segment)] : null;
+      } else {
+        value = isObject ? value[segment] : null;
+      }
+      if (value === undefined) value = null;
+    }
+    return value;
+  }
   function norm(value) {
     if (value === null || value === undefined) return '';
     if (typeof value === 'boolean') return value ? 'true' : 'false';

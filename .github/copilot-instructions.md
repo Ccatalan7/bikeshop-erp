@@ -4079,12 +4079,16 @@ la parte de base de datos):**
   (~0,5 MB) al final y datos a los 20,6 s, sin esperas muertas. La «espera de
   ~6 s» del diagnóstico no se reproduce: con caché en escritorio los
   productos se piden a los 0,8 s. Lo que queda es peso, no una espera.
-- **Fichas y categorías se ven al instante**
+- **Fichas, categorías y portada se ven al instante**
   (`docs/architecture/storefront-instant-page.md`, 2026-09-24). El generador
   de snapshots escribe la ruta en `<template id="instant-page-template">` y
   pega junto a ella su hoja y su script (`scripts/storefront_instant_page/`),
   que la muestran con el primer paint; la ruta la retira con
-  `releaseInstantPageWhenReady` después de dibujar sus datos. Una página que
+  `releaseInstantPageWhenReady` después de dibujar sus datos. La portada va en
+  el `index.html` de la raíz, que Firebase sirve también en carrito, cuenta y
+  toda ruta sin snapshot: se monta sólo en `/` (`data-ip-path`), no precarga
+  su foto en `<head>` y sólo existe si el primer bloque es un carrusel que la
+  instantánea dibuja igual (si no, `buildSeoInstantHomeTemplate` da `null`). Una página que
   reemplace a la ficha o al catálogo debe avisar igual, o la instantánea queda
   encima hasta 8 s después del splash. Sus medidas copian el código Flutter
   (`PublicStoreHeaderGeometry`, `_productImageStageHeight`,
