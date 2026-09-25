@@ -93,7 +93,7 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      expect(find.text('Nueva Dirección'), findsOneWidget);
+      expect(find.text('NUEVA DIRECCIÓN'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

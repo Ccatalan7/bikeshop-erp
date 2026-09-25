@@ -4,9 +4,10 @@ import 'package:provider/provider.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../services/address_autocomplete_service.dart';
 import '../services/customer_account_service.dart';
-import '../theme/public_store_theme.dart';
+import '../models/customer_portal_presentation.dart';
 import '../../shared/models/customer_address.dart';
 import '../widgets/customer_portal_layout.dart';
+import '../widgets/customer_portal_style.dart';
 
 class CustomerAddressesPage extends StatelessWidget {
   const CustomerAddressesPage({super.key});
@@ -14,169 +15,57 @@ class CustomerAddressesPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final accountService = context.watch<CustomerAccountService>();
+    final addresses = List<CustomerAddress>.from(accountService.addresses)
+      ..sort((a, b) => (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0));
 
     return CustomerPortalLayout(
-      title: 'Mis Direcciones',
-      headerAction: FilledButton.icon(
-        onPressed: () => _showAddressDialog(context, null),
-        icon: const Icon(Icons.add, size: 18),
-        label: const Text('Nueva dirección'),
-        style: FilledButton.styleFrom(
-          backgroundColor: const Color(0xFF102A43),
-          foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildIntro(),
-          const SizedBox(height: 18),
-          if (accountService.addresses.isEmpty)
-            _buildEmptyState(context)
-          else
-            _buildAddressesList(context, accountService),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAddressesList(
-      BuildContext context, CustomerAccountService accountService) {
-    // Sort: Default first
-    final addresses = List<CustomerAddress>.from(accountService.addresses);
-    addresses.sort((a, b) => (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0));
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final useGrid = constraints.maxWidth >= 760;
-            if (!useGrid) {
-              return Column(
-                children: addresses.map((address) {
-                  return _AddressCard(
-                    address: address,
-                    onEdit: () => _showAddressDialog(context, address),
-                    onDelete: () => _confirmDelete(context, address),
-                    onSetDefault: () async {
-                      await accountService.setDefaultAddress(address.id);
-                    },
-                  );
-                }).toList(),
-              );
-            }
-            return GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: addresses.length,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 14,
-                mainAxisSpacing: 14,
-                childAspectRatio: 2.25,
-              ),
-              itemBuilder: (context, index) {
-                final address = addresses[index];
-                return _AddressCard(
-                  address: address,
-                  onEdit: () => _showAddressDialog(context, address),
-                  onDelete: () => _confirmDelete(context, address),
-                  onSetDefault: () async {
-                    await accountService.setDefaultAddress(address.id);
-                  },
-                );
-              },
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildIntro() {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE0E4EA)),
-      ),
-      child: const Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.lock_outline, color: Color(0xFF102A43), size: 22),
-          SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Checkout más rápido y claro',
-                  style: TextStyle(
-                    color: Color(0xFF18212F),
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                SizedBox(height: 4),
-                Text(
-                  'Guarda casa, trabajo u otra dirección frecuente para no volver a escribirla en cada compra.',
-                  style: TextStyle(
-                    color: Color(0xFF667085),
-                    fontSize: 13,
-                    height: 1.35,
+      title: 'Direcciones',
+      subtitle: addresses.isEmpty
+          ? null
+          : 'La principal aparece primero al pagar un pedido.',
+      headerAction: addresses.isEmpty
+          ? null
+          : OutlinedButton.icon(
+              onPressed: () => _showAddressDialog(context, null),
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Agregar dirección'),
+              style: PortalStyle.of(context).secondaryButton,
+            ),
+      child: addresses.isEmpty
+          ? PortalEmptyState(
+              title: 'No tienes direcciones guardadas.',
+              message: 'Guarda la de tu casa o tu trabajo y no tendrás que '
+                  'escribirla en cada compra.',
+              actions: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 4, bottom: 4),
+                  child: FilledButton.icon(
+                    onPressed: () => _showAddressDialog(context, null),
+                    icon: const Icon(Icons.add, size: 18),
+                    label: const Text('Agregar la primera dirección'),
+                    style: portalPrimaryButton(context),
                   ),
                 ),
               ],
+            )
+          : LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 560;
+                return PortalPanel(
+                  children: [
+                    for (final address in addresses)
+                      _AddressRow(
+                        address: address,
+                        compact: compact,
+                        onEdit: () => _showAddressDialog(context, address),
+                        onDelete: () => _confirmDelete(context, address),
+                        onSetDefault: () =>
+                            _setDefault(context, accountService, address),
+                      ),
+                  ],
+                );
+              },
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyState(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(32),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE0E4EA)),
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade50,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(Icons.location_off_outlined,
-                size: 48, color: Colors.grey[400]),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'No tienes direcciones guardadas',
-            style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey[800]),
-          ),
-          const SizedBox(height: 24),
-          FilledButton.icon(
-            onPressed: () => _showAddressDialog(context, null),
-            icon: const Icon(Icons.add),
-            label: const Text('Agregar la primera dirección'),
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF102A43),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -191,25 +80,66 @@ class CustomerAddressesPage extends StatelessWidget {
     );
   }
 
+  Future<void> _setDefault(
+    BuildContext context,
+    CustomerAccountService accountService,
+    CustomerAddress address,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await accountService.setDefaultAddress(address.id);
+    } catch (_) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('No pudimos cambiar la principal. Intenta de nuevo.'),
+        ),
+      );
+    }
+  }
+
   void _confirmDelete(BuildContext context, CustomerAddress address) {
+    final style = PortalStyle.of(context);
+    final danger = Theme.of(context).colorScheme.error;
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Eliminar Dirección'),
-        content: Text('¿Estás seguro de eliminar "${address.label}"?'),
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: style.panel,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(PortalStyle.panelRadius),
+        ),
+        title: Text('¿Eliminar «${address.label}»?', style: style.rowTitle),
+        content: Text(address.fullAddress, style: style.rowMeta),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
+            style: TextButton.styleFrom(foregroundColor: style.inkSecondary),
             child: const Text('Cancelar'),
           ),
           FilledButton(
             onPressed: () async {
-              await context
-                  .read<CustomerAccountService>()
-                  .deleteAddress(address.id);
-              if (context.mounted) Navigator.pop(context);
+              final messenger = ScaffoldMessenger.of(context);
+              try {
+                await dialogContext
+                    .read<CustomerAccountService>()
+                    .deleteAddress(address.id);
+              } catch (_) {
+                messenger.showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'No pudimos eliminar la dirección. Intenta de nuevo.',
+                    ),
+                  ),
+                );
+              }
+              if (dialogContext.mounted) Navigator.pop(dialogContext);
             },
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: portalPrimaryButton(context).copyWith(
+              backgroundColor: WidgetStatePropertyAll(danger),
+              foregroundColor: WidgetStatePropertyAll(
+                Theme.of(context).colorScheme.onError,
+              ),
+            ),
             child: const Text('Eliminar'),
           ),
         ],
@@ -218,155 +148,74 @@ class CustomerAddressesPage extends StatelessWidget {
   }
 }
 
-class _AddressCard extends StatelessWidget {
-  final CustomerAddress address;
-  final VoidCallback onEdit;
-  final VoidCallback onDelete;
-  final VoidCallback onSetDefault;
-
-  const _AddressCard({
+/// Una dirección: su nombre, la dirección completa y a quién se entrega. La
+/// fila edita; el menú hace principal o elimina.
+class _AddressRow extends StatelessWidget {
+  const _AddressRow({
     required this.address,
+    required this.compact,
     required this.onEdit,
     required this.onDelete,
     required this.onSetDefault,
   });
 
+  final CustomerAddress address;
+  final bool compact;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+  final VoidCallback onSetDefault;
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE0E4EA)),
-      ),
-      child: Column(
+    final style = PortalStyle.of(context);
+    final contact = [
+      address.recipientName.trim(),
+      address.phone.trim(),
+    ].where((part) => part.isNotEmpty).join(' · ');
+    const principal = PortalStatusPill(
+      label: 'Principal',
+      tone: PortalTone.info,
+    );
+    return PortalRow(
+      leading: const PortalThumb(fallbackIcon: Icons.location_on_outlined),
+      title: address.label,
+      meta: [address.fullAddress, if (contact.isNotEmpty) contact].join('\n'),
+      footer: compact && address.isDefault ? principal : null,
+      semanticsLabel: 'Editar ${address.label}',
+      onTap: onEdit,
+      showChevron: false,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF0F4F8),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Icon(Icons.location_on_outlined,
-                          color: Color(0xFF102A43), size: 20),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Text(
-                                address.label,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              if (address.isDefault) ...[
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 6,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFE6F4EA),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: const Text(
-                                    'Principal',
-                                    style: TextStyle(
-                                      color: Color(0xFF1E7E34),
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w800,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                          Text(
-                            address.recipientName,
-                            style: TextStyle(
-                                color: Colors.grey[600], fontSize: 13),
-                          ),
-                        ],
-                      ),
-                    ),
-                    PopupMenuButton(
-                      icon: const Icon(Icons.more_vert, color: Colors.grey),
-                      itemBuilder: (context) => [
-                        const PopupMenuItem(
-                          value: 'edit',
-                          child: Row(
-                            children: [
-                              Icon(Icons.edit, size: 18),
-                              SizedBox(width: 8),
-                              Text('Editar'),
-                            ],
-                          ),
-                        ),
-                        if (!address.isDefault)
-                          const PopupMenuItem(
-                            value: 'default',
-                            child: Row(
-                              children: [
-                                Icon(Icons.star, size: 18),
-                                SizedBox(width: 8),
-                                Text('Hacer principal'),
-                              ],
-                            ),
-                          ),
-                        const PopupMenuItem(
-                          value: 'delete',
-                          child: Row(
-                            children: [
-                              Icon(Icons.delete, size: 18, color: Colors.red),
-                              SizedBox(width: 8),
-                              Text('Eliminar',
-                                  style: TextStyle(color: Colors.red)),
-                            ],
-                          ),
-                        ),
-                      ],
-                      onSelected: (value) {
-                        if (value == 'edit') onEdit();
-                        if (value == 'delete') onDelete();
-                        if (value == 'default') onSetDefault();
-                      },
-                    ),
-                  ],
+          if (!compact && address.isDefault) ...[
+            principal,
+            const SizedBox(width: 4),
+          ],
+          PopupMenuButton<String>(
+            tooltip: 'Opciones de ${address.label}',
+            icon: Icon(Icons.more_vert, color: style.inkSecondary),
+            color: style.panel,
+            surfaceTintColor: Colors.transparent,
+            onSelected: (value) {
+              if (value == 'edit') onEdit();
+              if (value == 'default') onSetDefault();
+              if (value == 'delete') onDelete();
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(value: 'edit', child: Text('Editar')),
+              if (!address.isDefault)
+                const PopupMenuItem(
+                  value: 'default',
+                  child: Text('Usar como principal'),
                 ),
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Divider(height: 1),
+              PopupMenuItem(
+                value: 'delete',
+                child: Text(
+                  'Eliminar',
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
-                Text(
-                  address.fullAddress,
-                  style: const TextStyle(fontSize: 14),
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Icon(Icons.phone, size: 14, color: Colors.grey[500]),
-                    const SizedBox(width: 4),
-                    Text(address.phone,
-                        style:
-                            TextStyle(color: Colors.grey[600], fontSize: 13)),
-                  ],
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ],
       ),
@@ -401,6 +250,7 @@ class _AddressFormDialogState extends State<_AddressFormDialog> {
   bool _isResolvingAddress = false;
   bool _useProfileContact = false;
   bool _isDefault = false;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -467,9 +317,22 @@ class _AddressFormDialogState extends State<_AddressFormDialog> {
     final profileName = _readProfileText(profile, 'name');
     final profilePhone = _readProfileText(profile, 'phone');
 
+    final style = PortalStyle.of(context);
     return AlertDialog(
-      title:
-          Text(widget.address == null ? 'Nueva Dirección' : 'Editar Dirección'),
+      backgroundColor: style.panel,
+      surfaceTintColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(PortalStyle.panelRadius),
+      ),
+      title: Semantics(
+        header: true,
+        child: Text(
+          (widget.address == null ? 'Nueva dirección' : 'Editar dirección')
+              .toUpperCase(),
+          style: style.pageTitle(compact: true).copyWith(fontSize: 22),
+        ),
+      ),
       content: ConstrainedBox(
         constraints: BoxConstraints(maxHeight: dialogMaxHeight),
         child: SizedBox(
@@ -568,10 +431,15 @@ class _AddressFormDialogState extends State<_AddressFormDialog> {
                   ),
                   const SizedBox(height: 12),
                   CheckboxListTile(
-                    title: const Text('Dirección principal'),
+                    title: Text(
+                      'Usar como dirección principal',
+                      style: style.rowTitle,
+                    ),
                     value: _isDefault,
+                    activeColor: style.accent,
                     onChanged: (v) => setState(() => _isDefault = v ?? false),
                     contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
                   ),
                 ],
               ),
@@ -580,36 +448,25 @@ class _AddressFormDialogState extends State<_AddressFormDialog> {
         ),
       ),
       actions: [
-        TextButton.icon(
-          onPressed: () => Navigator.pop(context),
-          icon: const Icon(Icons.close, size: 18),
-          label: const Text('Cancelar'),
+        TextButton(
+          onPressed: _isSaving ? null : () => Navigator.pop(context),
           style: TextButton.styleFrom(
-            foregroundColor: PublicStoreTheme.textSecondary,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
+            foregroundColor: style.inkSecondary,
+            minimumSize: const Size(0, 44),
           ),
+          child: const Text('Cancelar'),
         ),
-        FilledButton.icon(
-          onPressed: _save,
-          icon: const Icon(Icons.check, size: 18),
-          label: const Text('Guardar'),
-          style: FilledButton.styleFrom(
-            backgroundColor: PublicStoreTheme.logoBlue,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
+        FilledButton(
+          onPressed: _isSaving ? null : _save,
+          style: portalPrimaryButton(context),
+          child: Text(_isSaving ? 'Guardando…' : 'Guardar dirección'),
         ),
       ],
     );
   }
 
   Widget _buildProfileContactOption(String profileName, String profilePhone) {
+    final style = PortalStyle.of(context);
     final hasProfileContact = profileName.isNotEmpty && profilePhone.isNotEmpty;
     final contactLabel = [
       if (profileName.isNotEmpty) profileName,
@@ -628,9 +485,9 @@ class _AddressFormDialogState extends State<_AddressFormDialog> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: const Color(0xFFF8FAFC),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: const Color(0xFFE0E4EA)),
+          color: style.canvas,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: style.line),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -644,7 +501,7 @@ class _AddressFormDialogState extends State<_AddressFormDialog> {
                         profilePhone: profilePhone,
                       )
                   : null,
-              activeColor: PublicStoreTheme.logoBlue,
+              activeColor: style.accent,
               visualDensity: VisualDensity.compact,
             ),
             const SizedBox(width: 6),
@@ -652,23 +509,13 @@ class _AddressFormDialogState extends State<_AddressFormDialog> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Usar mis datos de cuenta',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      color: Color(0xFF18212F),
-                    ),
-                  ),
+                  Text('Usar mis datos de cuenta', style: style.rowTitle),
                   const SizedBox(height: 2),
                   Text(
                     hasProfileContact
                         ? contactLabel
                         : 'Agrega nombre y teléfono en tu perfil para reutilizarlos.',
-                    style: const TextStyle(
-                      color: Color(0xFF667085),
-                      fontSize: 12,
-                      height: 1.25,
-                    ),
+                    style: style.rowMeta,
                   ),
                 ],
               ),
@@ -820,6 +667,7 @@ class _AddressFormDialogState extends State<_AddressFormDialog> {
       updatedAt: DateTime.now(),
     );
 
+    setState(() => _isSaving = true);
     try {
       if (widget.address == null) {
         await accountService.addAddress(address);
@@ -828,10 +676,13 @@ class _AddressFormDialogState extends State<_AddressFormDialog> {
       }
 
       if (mounted) Navigator.pop(context);
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
+        setState(() => _isSaving = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          const SnackBar(
+            content: Text('No pudimos guardar la dirección. Intenta de nuevo.'),
+          ),
         );
       }
     }

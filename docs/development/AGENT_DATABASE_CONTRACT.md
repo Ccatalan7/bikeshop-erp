@@ -1307,3 +1307,17 @@ de producción: el peso de la gama se había movido al núcleo de puntaje, y un
 valor de ficha sólo es evidencia si el campo está activo en la plantilla del
 producto (`spec_product_field_is_active_internal_v1`). Antes de «arreglar»
 producción para que pase una prueba, se busca dónde vive hoy la regla.
+
+## Una columna que no existe no falla: se muestra vacía (2026-09-25)
+
+Las páginas que leen una fila de Supabase como `Map<String, dynamic>` no
+avisan cuando piden una columna que no existe: `row['description']` devuelve
+`null`, la página no pinta nada y ninguna prueba falla. En el portal de
+clientes pasó dos veces desde que se escribió: «Taller» leía
+`mechanic_jobs.description` (no existe; lo que el cliente pidió está en
+`client_request`, lleno en 409 de 505 trabajos) y «Soporte» leía
+`conversations.last_message` (no existe; el último mensaje viene en las filas
+`messages` que trae la misma consulta). El cliente nunca vio qué había pedido
+ni el último mensaje. Antes de atar un campo nuevo a una pantalla se leen las
+columnas reales (`information_schema.columns` por `scripts/db/query.sh`) y
+cuántas filas lo traen lleno; lo segundo decide si vale la pena mostrarlo.

@@ -1119,65 +1119,66 @@ class CustomerAccountService extends ChangeNotifier {
   // BIKES MANAGEMENT
   // ============================================================================
 
-  /// Load customer's registered bikes with service count
+  /// Las bicis del cliente, con cuántos trabajos tienen y cuándo entró la
+  /// última. Dos consultas en total, no dos por bici.
   Future<void> loadBikes() async {
-    if (_customerProfile == null) return;
+    final profile = _customerProfile;
+    if (profile == null) return;
+    final tenantId = profile['tenant_id'];
 
     try {
       _isLoading = true;
       notifyListeners();
 
-      // Get bikes with brand/model info
-      final response = await _supabase
+      final bikes = List<Map<String, dynamic>>.from(await _supabase
           .from('bikes')
           .select('''
             *,
             bike_brands(name),
             bike_models(name)
           ''')
-          .eq('customer_id', _customerProfile!['id'])
+          .eq('tenant_id', tenantId)
+          .eq('customer_id', profile['id'])
           .eq('is_active', true)
-          .order('created_at', ascending: false);
+          .order('created_at', ascending: false));
 
-      _bikes = List<Map<String, dynamic>>.from(response);
+      final jobs = bikes.isEmpty
+          ? const <dynamic>[]
+          : await _supabase
+              .from('mechanic_jobs')
+              .select('bike_id, arrival_date, created_at')
+              .eq('tenant_id', tenantId)
+              .eq('customer_id', profile['id'])
+              .isFilter('deleted_at', null);
 
-      // Enrich with service count and last service date
-      for (var i = 0; i < _bikes.length; i++) {
-        final bikeId = _bikes[i]['id'];
-
-        // Get service count
-        final countResponse = await _supabase
-            .from('mechanic_jobs')
-            .select('id')
-            .eq('bike_id', bikeId)
-            .isFilter('deleted_at', null);
-
-        _bikes[i]['service_count'] = (countResponse as List).length;
-
-        // Get last service date
-        final lastServiceResponse = await _supabase
-            .from('mechanic_jobs')
-            .select('completed_at, delivered_at')
-            .eq('bike_id', bikeId)
-            .isFilter('deleted_at', null)
-            .order('created_at', ascending: false)
-            .limit(1);
-
-        if ((lastServiceResponse as List).isNotEmpty) {
-          final lastService = lastServiceResponse.first;
-          _bikes[i]['last_service_date'] =
-              lastService['delivered_at'] ?? lastService['completed_at'];
-        }
-
-        // Extract brand/model names from joins
-        if (_bikes[i]['bike_brands'] != null) {
-          _bikes[i]['brand_name'] = _bikes[i]['bike_brands']['name'];
-        }
-        if (_bikes[i]['bike_models'] != null) {
-          _bikes[i]['model_name'] = _bikes[i]['bike_models']['name'];
+      final counts = <String, int>{};
+      final lastArrival = <String, DateTime>{};
+      for (final job in jobs) {
+        final bikeId = job['bike_id']?.toString();
+        if (bikeId == null) continue;
+        counts[bikeId] = (counts[bikeId] ?? 0) + 1;
+        final arrived = DateTime.tryParse(
+            (job['arrival_date'] ?? job['created_at'] ?? '').toString());
+        if (arrived != null &&
+            (lastArrival[bikeId] == null ||
+                arrived.isAfter(lastArrival[bikeId]!))) {
+          lastArrival[bikeId] = arrived;
         }
       }
 
+      for (final bike in bikes) {
+        final bikeId = bike['id']?.toString();
+        bike['service_count'] = counts[bikeId] ?? 0;
+        bike['last_service_date'] = lastArrival[bikeId]?.toIso8601String();
+        if (bike['bike_brands'] != null) {
+          bike['brand_name'] = bike['bike_brands']['name'];
+        }
+        if (bike['bike_models'] != null) {
+          bike['model_name'] = bike['bike_models']['name'];
+        }
+      }
+
+      _bikes = bikes;
       notifyListeners();
     } catch (e) {
       debugPrint('Error loading bikes: $e');
@@ -1217,53 +1218,55 @@ class CustomerAccountService extends ChangeNotifier {
   // SERVICE HISTORY (MECHANIC JOBS / PEGAS)
   // ============================================================================
 
-  /// Load customer's service history (mechanic jobs)
+  /// Los trabajos de taller del cliente, con la marca y el modelo de cada
+  /// bici. Dos consultas en total, no una por trabajo.
   Future<void> loadServiceHistory() async {
-    if (_customerProfile == null) return;
+    final profile = _customerProfile;
+    if (profile == null) return;
+    final tenantId = profile['tenant_id'];
 
     try {
       _isLoading = true;
       notifyListeners();
 
-      debugPrint(
-          '📋 Loading service history for customer: ${_customerProfile!['id']}');
-
-      // Query mechanic_jobs without join first (RLS might block joins)
-      final response = await _supabase
+      // Sin join: el RLS de bikes puede cortar la fila anidada.
+      final jobs = List<Map<String, dynamic>>.from(await _supabase
           .from('mechanic_jobs')
           .select('*')
-          .eq('customer_id', _customerProfile!['id'])
+          .eq('tenant_id', tenantId)
+          .eq('customer_id', profile['id'])
           .isFilter('deleted_at', null)
-          .order('created_at', ascending: false);
+          .order('created_at', ascending: false));
 
-      debugPrint('📋 Found ${response.length} mechanic jobs');
-
-      _serviceHistory = List<Map<String, dynamic>>.from(response);
-
-      // Load bike info separately for each job
-      for (var i = 0; i < _serviceHistory.length; i++) {
-        final bikeId = _serviceHistory[i]['bike_id'];
-        if (bikeId != null) {
-          try {
-            final bikeResponse = await _supabase
-                .from('bikes')
-                .select('brand, model, color, bike_type')
-                .eq('id', bikeId)
-                .maybeSingle();
-
-            if (bikeResponse != null) {
-              _serviceHistory[i]['bike_brand'] = bikeResponse['brand'] ?? '';
-              _serviceHistory[i]['bike_model'] = bikeResponse['model'] ?? '';
-              _serviceHistory[i]['bike_color'] = bikeResponse['color'];
-              _serviceHistory[i]['bike_type'] = bikeResponse['bike_type'];
-            }
-          } catch (e) {
-            debugPrint('⚠️ Could not load bike $bikeId: $e');
+      final bikeIds = {
+        for (final job in jobs)
+          if (job['bike_id'] != null) job['bike_id'].toString(),
+      };
+      if (bikeIds.isNotEmpty) {
+        try {
+          final bikes = await _supabase
+              .from('bikes')
+              .select('id, brand, model, color, bike_type, wheel_size')
+              .eq('tenant_id', tenantId)
+              .inFilter('id', bikeIds.toList());
+          final byId = {
+            for (final bike in bikes) bike['id'].toString(): bike,
+          };
+          for (final job in jobs) {
+            final bike = byId[job['bike_id']?.toString()];
+            if (bike == null) continue;
+            job['bike_brand'] = bike['brand'] ?? '';
+            job['bike_model'] = bike['model'] ?? '';
+            job['bike_color'] = bike['color'];
+            job['bike_type'] = bike['bike_type'];
+            job['bike_wheel_size'] = bike['wheel_size'];
           }
+        } catch (e) {
+          debugPrint('⚠️ Could not load bikes for service history: $e');
         }
       }
 
-      debugPrint('📋 Service history loaded: ${_serviceHistory.length} items');
+      _serviceHistory = jobs;
       notifyListeners();
     } catch (e) {
       debugPrint('❌ Error loading service history: $e');

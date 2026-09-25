@@ -274,6 +274,7 @@ class PortalRow extends StatelessWidget {
     this.onTap,
     this.semanticsLabel,
     this.footer,
+    this.showChevron = true,
   });
 
   final Widget? leading;
@@ -285,6 +286,9 @@ class PortalRow extends StatelessWidget {
   final Widget? trailing;
   final VoidCallback? onTap;
   final String? semanticsLabel;
+
+  /// Sin flecha cuando la fila ya lleva su propio menú a la derecha.
+  final bool showChevron;
 
   @override
   Widget build(BuildContext context) {
@@ -321,7 +325,7 @@ class PortalRow extends StatelessWidget {
             ),
           ),
           if (trailing != null) ...[const SizedBox(width: 12), trailing!],
-          if (onTap != null) ...[
+          if (onTap != null && showChevron) ...[
             const SizedBox(width: 6),
             Icon(Icons.chevron_right, size: 20, color: style.inkMuted),
           ],
@@ -531,4 +535,275 @@ class PortalTrailingColumns extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Filtro en forma de píldora, con su cantidad: «Todos 12», «En curso 2».
+class PortalFilterChip extends StatelessWidget {
+  const PortalFilterChip({
+    super.key,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.count,
+  });
+
+  final String label;
+  final int? count;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = PortalStyle.of(context);
+    final foreground = selected ? style.onAccent : style.ink;
+    return Semantics(
+      selected: selected,
+      button: true,
+      child: Material(
+        color: selected ? style.accent : style.panel,
+        shape: StadiumBorder(
+          side: BorderSide(color: selected ? style.accent : style.line),
+        ),
+        child: InkWell(
+          customBorder: const StadiumBorder(),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: style.rowMeta.copyWith(
+                      color: foreground,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                if (count != null) ...[
+                  const SizedBox(width: 6),
+                  Text(
+                    '$count',
+                    style: style.rowMeta.copyWith(
+                      color: foreground.withValues(alpha: 0.72),
+                      fontFeatures: style.figure.fontFeatures,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Lo que se ve cuando una sección no tiene nada: una frase, por qué, y
+/// adónde ir. Sin ilustraciones ni íconos gigantes.
+class PortalEmptyState extends StatelessWidget {
+  const PortalEmptyState({
+    super.key,
+    required this.title,
+    this.message,
+    this.actions = const [],
+  });
+
+  final String title;
+  final String? message;
+  final List<Widget> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = PortalStyle.of(context);
+    return PortalPanel(
+      children: [
+        Padding(
+          padding: EdgeInsets.fromLTRB(16, 16, 8, actions.isEmpty ? 16 : 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: style.rowTitle),
+              if (message != null) ...[
+                const SizedBox(height: 4),
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Text(message!, style: style.rowMeta),
+                ),
+              ],
+              if (actions.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Wrap(spacing: 4, runSpacing: 4, children: actions),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Datos de una ficha: el rótulo arriba, chico, y el valor debajo. Los que
+/// vienen vacíos no se muestran.
+class PortalFacts extends StatelessWidget {
+  const PortalFacts({super.key, required this.facts});
+
+  final List<(String label, String? value)> facts;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = PortalStyle.of(context);
+    final visible = [
+      for (final (label, value) in facts)
+        if (value != null && value.trim().isNotEmpty) (label, value.trim()),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < visible.length; i++) ...[
+          if (i > 0) Divider(height: 25, thickness: 1, color: style.line),
+          Text(visible[i].$1.toUpperCase(), style: style.sectionLabel),
+          const SizedBox(height: 4),
+          Text(visible[i].$2, style: style.rowTitle.copyWith(height: 1.4)),
+        ],
+      ],
+    );
+  }
+}
+
+/// Abre la ficha de algo del portal (un trabajo, una bici): diálogo en ancho,
+/// hoja desde abajo en teléfono. El título va en la fuente del sitio, como el
+/// de la página.
+Future<void> showPortalDetail(
+  BuildContext context, {
+  required String title,
+  String? subtitle,
+  Widget? status,
+  required Widget body,
+  List<Widget> actions = const [],
+}) {
+  final style = PortalStyle.of(context);
+  final compact = MediaQuery.sizeOf(context).width < 600;
+
+  Widget content(BuildContext sheetContext) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 12, 0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Semantics(
+                        header: true,
+                        child: Text(
+                          title.toUpperCase(),
+                          style: style
+                              .pageTitle(compact: true)
+                              .copyWith(fontSize: 22),
+                        ),
+                      ),
+                      if (subtitle != null) ...[
+                        const SizedBox(height: 4),
+                        Text(subtitle, style: style.rowMeta),
+                      ],
+                      if (status != null) ...[
+                        const SizedBox(height: 12),
+                        status,
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Cerrar',
+                onPressed: () => Navigator.of(sheetContext).pop(),
+                icon: Icon(Icons.close, color: style.inkSecondary),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        Divider(height: 1, thickness: 1, color: style.line),
+        Flexible(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+            child: body,
+          ),
+        ),
+        if (actions.isNotEmpty) ...[
+          Divider(height: 1, thickness: 1, color: style.line),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            child: Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 8,
+              runSpacing: 8,
+              children: actions,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  if (compact) {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: style.panel,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(PortalStyle.panelRadius),
+        ),
+      ),
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * 0.88,
+      ),
+      builder: (sheetContext) =>
+          SafeArea(top: false, child: content(sheetContext)),
+    );
+  }
+  return showDialog<void>(
+    context: context,
+    builder: (dialogContext) => Dialog(
+      backgroundColor: style.panel,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(PortalStyle.panelRadius),
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 520,
+          maxHeight: MediaQuery.sizeOf(dialogContext).height * 0.84,
+        ),
+        child: content(dialogContext),
+      ),
+    ),
+  );
+}
+
+/// Botón principal del portal: relleno en el color de comercio. Uno por
+/// pantalla o por ficha, para lo que el cliente vino a hacer.
+ButtonStyle portalPrimaryButton(BuildContext context) {
+  final style = PortalStyle.of(context);
+  return FilledButton.styleFrom(
+    backgroundColor: style.accent,
+    foregroundColor: style.onAccent,
+    textStyle: style.link,
+    minimumSize: const Size(0, 44),
+    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+  );
 }

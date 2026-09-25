@@ -4,16 +4,17 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../modules/messaging/services/messaging_service.dart';
+import '../models/customer_portal_presentation.dart';
 import '../services/customer_account_service.dart';
 import '../widgets/customer_portal_layout.dart';
 import '../widgets/customer_chat_view.dart';
 import '../widgets/customer_chat_context_support.dart';
 import '../widgets/deferred_customer_chat_context_panel.dart';
+import '../widgets/customer_portal_style.dart';
 import '../widgets/public_store_layout.dart';
-import '../../shared/widgets/safe_layout_builder.dart';
 
-/// Unified customer chat page handling both list and detail views
-/// Uses standard CustomerPortalLayout but animates the right panel content
+/// «Soporte» (`/cuenta/chats`, `/cuenta/chats/:id`): la lista de
+/// conversaciones con la tienda y, al abrir una, el chat en el mismo marco.
 class CustomerChatHubPage extends StatefulWidget {
   final String? initialConversationId;
 
@@ -130,189 +131,118 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Determine the right sidebar content
+    final selectedId = _selectedConversationId;
+    final selected = selectedId == null
+        ? null
+        : CustomerConversationPresentation.of(
+            _selectedConversation ?? const {},
+            currentUserId: _messagingService.currentUserId,
+          );
+
+    // En ancho, un chat con contexto (un trabajo, una factura) lleva el
+    // resumen a la derecha. Un chat sin contexto no lleva columna: antes
+    // mostraba un «Iniciado: Hoy» fijo, que no era verdad.
     Widget? rightContent;
-
-    if (_selectedConversationId != null) {
-      final contextType =
-          _selectedConversation?['context_type']?.toString().trim();
-      final contextId = _selectedConversation?['context_id']?.toString().trim();
-
-      if (CustomerChatContextSupport.supports(contextType) &&
-          contextId != null &&
-          contextId.isNotEmpty) {
-        // Show context panel (job/invoice details)
-        rightContent = Container(
-          key: ValueKey('context-$contextId'),
-          padding: const EdgeInsets.only(top: 16),
-          child: DeferredCustomerChatContextPanel(
-            contextType: contextType!,
-            contextId: contextId,
-          ),
-        );
-      } else {
-        // Show a "chat info" placeholder when no context
-        rightContent = Container(
-          key: ValueKey('chat-info-$_selectedConversationId'),
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  CircleAvatar(
-                    backgroundColor: Colors.blue.shade100,
-                    child: const Icon(Icons.support_agent, color: Colors.blue),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Soporte Vinabike',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        Text(
-                          _conversationStatusLabel(
-                            _selectedConversation?['status']?.toString(),
-                          ),
-                          style:
-                              const TextStyle(fontSize: 12, color: Colors.grey),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              const Divider(),
-              const SizedBox(height: 16),
-              const Text('Información',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              const SizedBox(height: 12),
-              _buildInfoRow(
-                Icons.access_time,
-                'Estado',
-                _conversationStatusLabel(
-                  _selectedConversation?['status']?.toString(),
-                ),
-              ),
-              _buildInfoRow(Icons.calendar_today, 'Iniciado', 'Hoy'),
-            ],
-          ),
-        );
-      }
+    final contextType =
+        _selectedConversation?['context_type']?.toString().trim();
+    final contextId = _selectedConversation?['context_id']?.toString().trim();
+    final hasContext = selectedId != null &&
+        CustomerChatContextSupport.supports(contextType) &&
+        contextId != null &&
+        contextId.isNotEmpty;
+    if (hasContext) {
+      rightContent = DeferredCustomerChatContextPanel(
+        key: ValueKey('context-$contextId'),
+        contextType: contextType!,
+        contextId: contextId,
+      );
     }
 
+    final wide = MediaQuery.sizeOf(context).width >= PortalStyle.wideBreakpoint;
+
     return CustomerPortalLayout(
-      title: 'Mis Conversaciones',
-      // Pass custom sidebar content - animation handled by layout
+      title: selected?.title ?? 'Soporte',
+      subtitle: selected == null
+          ? 'Escríbele a la tienda y al taller: pedidos, tu bici o lo que '
+              'necesites.'
+          : null,
+      headerAction: selected == null && _conversations.isNotEmpty
+          ? FilledButton.icon(
+              onPressed: _showNewChatDialog,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Nueva consulta'),
+              style: portalPrimaryButton(context),
+            )
+          : null,
+      // En teléfono, el chat abierto usa todo el alto: sin título, con
+      // «Volver» a la lista.
+      showHeader: selected == null || wide,
+      backPath: selectedId == null ? null : '/cuenta/chats',
       rightSidebarContent: rightContent,
-      // Disable scroll wrapping so chat can manage its own height/scrolling
+      // El chat maneja su propio alto y su scroll.
       enableContentScrolling: false,
-
-      // Main Center Content
-      child: MediaQueryLayoutBuilder(
-        builder: (context, constraints) {
-          final isDesktop = constraints.maxWidth > 900;
-
-          if (isDesktop) {
-            // Desktop: Show List on Left is managed by Portal Layout?
-            // Wait, CustomerPortalLayout defines LEFT COLUMN structure for us.
-            // The 'child' we pass goes into the "Main Content" area (Left Column Body).
-
-            // So on Desktop:
-            // The 'child' should be EITHER the "List" OR "Chat View" (if we want single pane).
-            // OR checks how user wants it.
-            // Previous 'CustomerChatListPage' showed LIST in center.
-            // Previous 'CustomerChatDetailPage' showed CHAT in center.
-
-            return AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
-              switchInCurve: Curves.easeOut,
-              switchOutCurve: Curves.easeIn,
-              child: _selectedConversationId == null
-                  ? _buildConversationList()
-                  : _buildChatView(constraints),
-            );
-          } else {
-            // Mobile: Full screen switch
-            return _selectedConversationId == null
-                ? _buildConversationList()
-                : _buildChatViewMobile(constraints);
-          }
-        },
-      ),
+      child: selectedId == null
+          ? _buildConversationList()
+          : _ChatFrame(
+              child: CustomerChatView(
+                key: ValueKey('chat-$selectedId'),
+                conversationId: selectedId,
+                onInfoPressed: !wide && hasContext ? _showMobileContext : null,
+              ),
+            ),
     );
   }
 
   Widget _buildConversationList() {
-    return Container(
-      key: const ValueKey('list-view'),
-      constraints: const BoxConstraints(minHeight: 400),
-      child: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _conversations.isEmpty
-              ? _buildEmptyState()
-              : Column(
-                  children: _conversations.map((conv) {
-                    return _ConversationTile(
-                      conversation: conv,
-                      onTap: () => _selectConversation(conv['id']),
-                    );
-                  }).toList(),
-                ),
-    );
-  }
-
-  Widget _buildChatView(BoxConstraints constraints) {
-    // Explicitly constrain the height to the available space using SizedBox.
-    // This allows the Expanded widget inside to function correctly.
-    // If constraints are unbounded (e.g., inside ScrollView or editor viewport),
-    // fallback to a calculated height based on MediaQuery.
-    final height = constraints.hasBoundedHeight
-        ? constraints.maxHeight
-        : MediaQuery.of(context).size.height - 200; // Fallback for editor mode
-
-    return SizedBox(
-      height: height,
-      child: Column(
-        children: [
-          // Desktop back button to list
-          Row(
-            children: [
-              TextButton.icon(
-                onPressed: () => _selectConversation(null),
-                icon: const Icon(Icons.arrow_back),
-                label: const Text('Volver a la lista'),
+    if (_isLoading) {
+      return const Align(
+        alignment: Alignment.topCenter,
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 48),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+    if (_conversations.isEmpty) {
+      return SingleChildScrollView(
+        child: PortalEmptyState(
+          title: 'No tienes conversaciones.',
+          message: 'Pregúntanos por un pedido, un repuesto o tu bici en el '
+              'taller. Te respondemos aquí mismo.',
+          actions: [
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: FilledButton.icon(
+                onPressed: _showNewChatDialog,
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Nueva consulta'),
+                style: portalPrimaryButton(context),
               ),
+            ),
+          ],
+        ),
+      );
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 560;
+        return SingleChildScrollView(
+          padding: const EdgeInsets.only(bottom: 48),
+          child: PortalPanel(
+            children: [
+              for (final conversation in _conversations)
+                _ConversationRow(
+                  conversation: conversation,
+                  currentUserId: _messagingService.currentUserId,
+                  compact: compact,
+                  onTap: () => _selectConversation(
+                    conversation['id']?.toString(),
+                  ),
+                ),
             ],
           ),
-          Expanded(
-            child: CustomerChatView(
-              conversationId: _selectedConversationId!,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildChatViewMobile(BoxConstraints constraints) {
-    // Similarly for mobile, use the available constraints to ensure
-    // the chat view fills the screen properly.
-    final height = constraints.hasBoundedHeight
-        ? constraints.maxHeight
-        : MediaQuery.of(context).size.height - 200;
-
-    return SizedBox(
-      height: height,
-      child: CustomerChatView(
-        conversationId: _selectedConversationId!,
-        onInfoPressed: _showMobileContext,
-      ),
+        );
+      },
     );
   }
 
@@ -322,13 +252,6 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
     if (!CustomerChatContextSupport.supports(contextType) ||
         contextId == null ||
         contextId.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Este chat no tiene un resumen de cuenta disponible.',
-          ),
-        ),
-      );
       return;
     }
 
@@ -336,6 +259,7 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
+      backgroundColor: PortalStyle.of(context).panel,
       builder: (sheetContext) => SizedBox(
         height: MediaQuery.sizeOf(sheetContext).height * 0.88,
         child: DeferredCustomerChatContextPanel(
@@ -346,79 +270,53 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
     );
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(48),
-        child: Column(
-          children: [
-            Icon(Icons.chat_bubble_outline, size: 48, color: Colors.grey[400]),
-            const SizedBox(height: 16),
-            const Text('No tienes conversaciones iniciadas'),
-            const SizedBox(height: 24),
-            FilledButton(
-              onPressed: _showNewChatDialog,
-              child: const Text('NUEVA CONSULTA'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInfoRow(IconData icon, String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: Colors.grey),
-          const SizedBox(width: 12),
-          Text(label, style: const TextStyle(color: Colors.grey)),
-          const Spacer(),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
-        ],
-      ),
-    );
-  }
-
-  String _conversationStatusLabel(String? status) {
-    return switch (status?.trim().toLowerCase()) {
-      'pending' => 'Esperando al equipo',
-      'active' => 'Activa',
-      'resolved' || 'closed' || 'archived' => 'Archivada',
-      'rejected' => 'Cerrada',
-      _ => 'No disponible',
-    };
-  }
-
   void _showNewChatDialog() {
     final accountService = context.read<CustomerAccountService>();
+    final style = PortalStyle.of(context);
     final controller = TextEditingController();
+    final messenger = ScaffoldMessenger.of(context);
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (modalContext) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      useSafeArea: true,
+      backgroundColor: style.panel,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(PortalStyle.panelRadius),
         ),
+      ),
+      constraints: const BoxConstraints(maxWidth: 560),
+      builder: (modalContext) => Padding(
         padding: EdgeInsets.only(
-            left: 24,
-            right: 24,
-            top: 24,
-            bottom: MediaQuery.of(modalContext).viewInsets.bottom + 24),
+          left: 24,
+          right: 24,
+          top: 24,
+          bottom: MediaQuery.of(modalContext).viewInsets.bottom + 24,
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text('Nueva Consulta',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            Semantics(
+              header: true,
+              child: Text(
+                'NUEVA CONSULTA',
+                style: style.pageTitle(compact: true).copyWith(fontSize: 22),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Cuéntanos qué necesitas. Si es por un pedido o tu bici, '
+              'indica cuál.',
+              style: style.pageSubtitle,
+            ),
             const SizedBox(height: 16),
             TextField(
               controller: controller,
               maxLines: 4,
+              minLines: 3,
+              textCapitalization: TextCapitalization.sentences,
               decoration: const InputDecoration(
                 hintText: '¿En qué podemos ayudarte?',
                 border: OutlineInputBorder(),
@@ -427,36 +325,41 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
             ),
             const SizedBox(height: 16),
             FilledButton(
+              style: portalPrimaryButton(modalContext),
               onPressed: () async {
                 final message = controller.text.trim();
-                // Get tenantId before closing
+                if (message.isEmpty) return;
                 final tenantId = accountService.tenantId;
+                Navigator.pop(modalContext);
                 if (tenantId == null) {
-                  Navigator.pop(modalContext);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                          content: Text('Error: Tienda no identificada')),
-                    );
-                  }
+                  messenger.showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'No pudimos enviar tu consulta. Recarga la página e '
+                        'intenta de nuevo.',
+                      ),
+                    ),
+                  );
                   return;
                 }
-
-                if (message.isNotEmpty) {
-                  Navigator.pop(modalContext);
-                  try {
-                    final id = await _messagingService.createChatRequest(
-                      initialMessage: message,
-                      tenantId: tenantId,
-                    );
-                    _loadConversations();
-                    _selectConversation(id);
-                  } catch (e) {
-                    // Handle error
-                  }
+                try {
+                  final id = await _messagingService.createChatRequest(
+                    initialMessage: message,
+                    tenantId: tenantId,
+                  );
+                  await _loadConversations(showLoading: false);
+                  if (mounted) _selectConversation(id);
+                } catch (_) {
+                  messenger.showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'No pudimos enviar tu consulta. Intenta de nuevo.',
+                      ),
+                    ),
+                  );
                 }
               },
-              child: const Text('ENVIAR'),
+              child: const Text('Enviar'),
             ),
           ],
         ),
@@ -465,46 +368,82 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
   }
 }
 
-class _ConversationTile extends StatelessWidget {
-  final Map<String, dynamic> conversation;
-  final VoidCallback onTap;
+/// El chat abierto, en un panel con borde como el resto del portal.
+class _ChatFrame extends StatelessWidget {
+  const _ChatFrame({required this.child});
 
-  const _ConversationTile({required this.conversation, required this.onTap});
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    final lastMessage = conversation['last_message'] as String? ?? '';
-    final updatedAt = conversation['updated_at'] as String?;
-
-    // Simple Tile
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: Colors.grey.shade200)),
-      child: ListTile(
-        onTap: onTap,
-        contentPadding: const EdgeInsets.all(16),
-        leading: CircleAvatar(
-          backgroundColor: Colors.blue.withValues(alpha: 0.1),
-          child: const Icon(Icons.chat_bubble, color: Colors.blue),
-        ),
-        title: const Text('Consulta',
-            style: TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 4),
-            Text(lastMessage, maxLines: 2, overflow: TextOverflow.ellipsis),
-            const SizedBox(height: 8),
-            if (updatedAt != null)
-              Text('Actualizado recientemente',
-                  style: TextStyle(fontSize: 12, color: Colors.grey[500])),
-          ],
-        ),
-        trailing: const Icon(Icons.chevron_right),
+    final style = PortalStyle.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: style.panel,
+        borderRadius: BorderRadius.circular(PortalStyle.panelRadius),
+        border: Border.all(color: style.line),
       ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(PortalStyle.panelRadius - 1),
+        child: child,
+      ),
+    );
+  }
+}
+
+/// Una conversación en la lista: de qué se trata, el último mensaje y
+/// cuándo. `conversations` no tiene `last_message`: el último mensaje sale
+/// de los `messages` que trae la consulta.
+class _ConversationRow extends StatelessWidget {
+  const _ConversationRow({
+    required this.conversation,
+    required this.currentUserId,
+    required this.compact,
+    required this.onTap,
+  });
+
+  final Map<String, dynamic> conversation;
+  final String? currentUserId;
+  final bool compact;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = PortalStyle.of(context);
+    final p = CustomerConversationPresentation.of(
+      conversation,
+      currentUserId: currentUserId,
+    );
+    final when =
+        p.lastActivity == null ? null : portalRelativeDay(p.lastActivity!);
+    final icon = switch (conversation['context_type']?.toString()) {
+      'invoice' => Icons.receipt_long_outlined,
+      'job' => Icons.build_outlined,
+      _ => Icons.chat_bubble_outline,
+    };
+    final pill = p.statusLabel == null
+        ? null
+        : PortalStatusPill(label: p.statusLabel!, tone: p.tone);
+    return PortalRow(
+      leading: PortalThumb(fallbackIcon: icon),
+      title: p.title,
+      meta: [
+        p.preview ?? 'Sin mensajes todavía',
+        if (compact && when != null) when,
+      ].join(' · '),
+      footer: compact ? pill : null,
+      semanticsLabel: [p.title, if (when != null) when].join(', '),
+      trailing: compact
+          ? null
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (when != null) Text(when, style: style.rowMeta),
+                if (pill != null) ...[const SizedBox(height: 6), pill],
+              ],
+            ),
+      onTap: onTap,
     );
   }
 }

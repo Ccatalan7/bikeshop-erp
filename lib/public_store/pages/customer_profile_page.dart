@@ -2,12 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show AuthException;
+import '../models/customer_portal_presentation.dart';
 import '../services/customer_account_service.dart';
-import '../theme/public_store_theme.dart';
 import '../widgets/customer_portal_layout.dart';
+import '../widgets/customer_portal_style.dart';
 import '../../shared/services/self_password_service.dart';
 import '../../shared/utils/auth_input_validation.dart';
 
+/// «Perfil y seguridad» (`/cuenta/perfil`): los datos con que la tienda
+/// prepara pedidos y boletas, y la contraseña. El nombre y el correo ya están
+/// en el menú de la cuenta; aquí no se repiten en una tarjeta.
 class CustomerProfilePage extends StatefulWidget {
   const CustomerProfilePage({super.key});
 
@@ -34,10 +38,21 @@ class _CustomerProfilePageState extends State<CustomerProfilePage>
   void initState() {
     super.initState();
     final profile = context.read<CustomerAccountService>().customerProfile;
-    _nameController = TextEditingController(text: profile?['name'] ?? '');
-    _emailController = TextEditingController(text: profile?['email'] ?? '');
-    _phoneController = TextEditingController(text: profile?['phone'] ?? '');
-    _rutController = TextEditingController(text: profile?['rut'] ?? '');
+    _nameController = TextEditingController();
+    _emailController = TextEditingController();
+    _phoneController = TextEditingController();
+    _rutController = TextEditingController();
+    _fillFrom(profile);
+  }
+
+  /// «Usuario» y «Cliente» son relleno guardado, no un nombre: el campo
+  /// empieza vacío para que el cliente escriba el suyo.
+  void _fillFrom(Map<String, dynamic>? profile) {
+    _nameController.text =
+        customerFirstName(profile) == null ? '' : '${profile?['name'] ?? ''}';
+    _emailController.text = profile?['email'] ?? '';
+    _phoneController.text = profile?['phone'] ?? '';
+    _rutController.text = profile?['rut'] ?? '';
   }
 
   @override
@@ -57,20 +72,27 @@ class _CustomerProfilePageState extends State<CustomerProfilePage>
 
     if (profile == null) {
       return const CustomerPortalLayout(
-        title: 'Mi Perfil',
-        child: Center(child: CircularProgressIndicator()),
+        title: 'Perfil y seguridad',
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 48),
+          child: Center(child: CircularProgressIndicator()),
+        ),
       );
     }
 
     return CustomerPortalLayout(
-      title: 'Mi Perfil',
+      title: 'Perfil y seguridad',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildIdentityCard(profile),
-          const SizedBox(height: 20),
-          _buildProfileForm(),
-          const SizedBox(height: 20),
+          PortalSection(
+            label: 'Datos personales',
+            actionLabel: _isEditing ? null : 'Editar',
+            onAction: _isEditing ? null : _startEditing,
+            child:
+                _isEditing ? _buildProfileForm() : _buildProfileFacts(profile),
+          ),
+          const SizedBox(height: 32),
           _buildSecuritySection(
             context,
             hasPendingOtherSessionsRevocation:
@@ -81,186 +103,179 @@ class _CustomerProfilePageState extends State<CustomerProfilePage>
     );
   }
 
-  Widget _buildIdentityCard(Map<String, dynamic> profile) {
-    final name = (profile['name'] ?? 'Sin nombre').toString();
-    final email = (profile['email'] ?? '').toString();
-    final initial = name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : 'C';
+  void _startEditing() {
+    _fillFrom(context.read<CustomerAccountService>().customerProfile);
+    setState(() => _isEditing = true);
+  }
 
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE0E4EA)),
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final compact = constraints.maxWidth < 560;
-          final identity = Row(
-            children: [
-              CircleAvatar(
-                radius: 28,
-                backgroundColor:
-                    PublicStoreTheme.primaryBlue.withValues(alpha: 0.1),
-                child: Text(
-                  initial,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: PublicStoreTheme.primaryBlue,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF18212F),
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      email,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: Color(0xFF667085),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          );
-          final action = _isEditing
-              ? FilledButton.icon(
-                  onPressed: _isLoading ? null : _saveProfile,
-                  icon: _isLoading
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.check, size: 18),
-                  label: const Text('Guardar cambios'),
-                )
-              : FilledButton.icon(
-                  onPressed: () => setState(() => _isEditing = true),
-                  icon: const Icon(Icons.edit_outlined, size: 18),
-                  label: const Text('Editar datos'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF102A43),
-                    foregroundColor: Colors.white,
-                  ),
-                );
+  void _cancelEditing() {
+    _fillFrom(context.read<CustomerAccountService>().customerProfile);
+    setState(() => _isEditing = false);
+  }
 
-          if (compact) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [identity, const SizedBox(height: 14), action],
-            );
-          }
-          return Row(
-            children: [
-              Expanded(child: identity),
-              const SizedBox(width: 14),
-              action,
-            ],
-          );
-        },
-      ),
+  Widget _buildProfileFacts(Map<String, dynamic> profile) {
+    final style = PortalStyle.of(context);
+    Widget fact(String label, String? value, {String? note}) {
+      final text = (value ?? '').trim();
+      return PortalRow(
+        title: label,
+        meta: note,
+        trailing: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 280),
+          child: text.isEmpty
+              ? Text('Agregar', style: style.link)
+              : Text(
+                  text,
+                  textAlign: TextAlign.right,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: style.rowMeta.copyWith(color: style.ink),
+                ),
+        ),
+        onTap: text.isEmpty ? _startEditing : null,
+      );
+    }
+
+    return PortalPanel(
+      children: [
+        fact(
+          'Nombre',
+          customerFirstName(profile) == null
+              ? null
+              : profile['name']?.toString(),
+        ),
+        fact('RUT', profile['rut']?.toString(), note: 'Para tus boletas'),
+        fact('Teléfono', profile['phone']?.toString()),
+        PortalRow(
+          title: 'Correo',
+          meta: 'Es tu acceso a la cuenta; no se cambia desde aquí.',
+          trailing: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 280),
+            child: Text(
+              (profile['email'] ?? '').toString(),
+              textAlign: TextAlign.right,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: style.rowMeta.copyWith(color: style.ink),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
   Widget _buildProfileForm() {
+    final style = PortalStyle.of(context);
     return Form(
       key: _formKey,
-      child: _ProfileSection(
-        title: 'Datos personales',
-        description:
-            'Usamos esta información para preparar pedidos, boletas y soporte. Tu email queda bloqueado porque es tu acceso seguro.',
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final compact = constraints.maxWidth < 620;
-            final fields = [
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Nombre completo',
-                  border: OutlineInputBorder(),
-                ),
-                enabled: _isEditing,
-                validator: (v) =>
-                    v == null || v.isEmpty ? 'Nombre requerido' : null,
-              ),
-              TextFormField(
-                controller: _rutController,
-                decoration: const InputDecoration(
-                  labelText: 'RUT',
-                  border: OutlineInputBorder(),
-                ),
-                enabled: _isEditing,
-              ),
-              TextFormField(
-                controller: _emailController,
-                decoration: const InputDecoration(
-                  labelText: 'Email de acceso',
-                  border: OutlineInputBorder(),
-                  filled: true,
-                ),
-                enabled: false,
-                style: const TextStyle(color: Color(0xFF667085)),
-              ),
-              TextFormField(
-                controller: _phoneController,
-                decoration: const InputDecoration(
-                  labelText: 'Teléfono',
-                  border: OutlineInputBorder(),
-                ),
-                enabled: _isEditing,
-              ),
-            ];
+      child: PortalPanel(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final compact = constraints.maxWidth < 560;
+                final fields = [
+                  TextFormField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Nombre completo',
+                      border: OutlineInputBorder(),
+                    ),
+                    textCapitalization: TextCapitalization.words,
+                    autofillHints: const [AutofillHints.name],
+                    validator: (v) => v == null || v.trim().isEmpty
+                        ? 'Escribe tu nombre'
+                        : null,
+                  ),
+                  TextFormField(
+                    controller: _rutController,
+                    decoration: const InputDecoration(
+                      labelText: 'RUT',
+                      hintText: '12.345.678-9',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  TextFormField(
+                    controller: _phoneController,
+                    decoration: const InputDecoration(
+                      labelText: 'Teléfono',
+                      hintText: '+56 9 1234 5678',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.phone,
+                    autofillHints: const [AutofillHints.telephoneNumber],
+                  ),
+                  TextFormField(
+                    controller: _emailController,
+                    decoration: const InputDecoration(
+                      labelText: 'Correo de acceso',
+                      border: OutlineInputBorder(),
+                    ),
+                    enabled: false,
+                    style: TextStyle(color: style.inkSecondary),
+                  ),
+                ];
 
-            if (compact) {
-              return Column(
-                children: fields
-                    .map((field) => Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: field,
-                        ))
-                    .toList(),
-              );
-            }
+                final grid = compact
+                    ? Column(
+                        children: [
+                          for (final field in fields)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 14),
+                              child: field,
+                            ),
+                        ],
+                      )
+                    : Column(
+                        children: [
+                          Row(children: [
+                            Expanded(child: fields[0]),
+                            const SizedBox(width: 14),
+                            Expanded(child: fields[1]),
+                          ]),
+                          const SizedBox(height: 14),
+                          Row(children: [
+                            Expanded(child: fields[2]),
+                            const SizedBox(width: 14),
+                            Expanded(child: fields[3]),
+                          ]),
+                          const SizedBox(height: 14),
+                        ],
+                      );
 
-            return Column(
-              children: [
-                Row(children: [
-                  Expanded(child: fields[0]),
-                  const SizedBox(width: 14),
-                  Expanded(child: fields[1])
-                ]),
-                const SizedBox(height: 14),
-                Row(children: [
-                  Expanded(child: fields[2]),
-                  const SizedBox(width: 14),
-                  Expanded(child: fields[3])
-                ]),
-              ],
-            );
-          },
-        ),
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    grid,
+                    Wrap(
+                      alignment: WrapAlignment.end,
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        TextButton(
+                          onPressed: _isLoading ? null : _cancelEditing,
+                          style: TextButton.styleFrom(
+                            foregroundColor: style.inkSecondary,
+                            minimumSize: const Size(0, 44),
+                          ),
+                          child: const Text('Cancelar'),
+                        ),
+                        FilledButton(
+                          onPressed: _isLoading ? null : _saveProfile,
+                          style: portalPrimaryButton(context),
+                          child: Text(
+                            _isLoading ? 'Guardando…' : 'Guardar cambios',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -269,88 +284,46 @@ class _CustomerProfilePageState extends State<CustomerProfilePage>
     BuildContext context, {
     required bool hasPendingOtherSessionsRevocation,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return _ProfileSection(
-      title: 'Seguridad',
-      description:
-          'Mantén tu cuenta protegida. Los cambios de contraseña se aplican a tu acceso web.',
-      child: Material(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(10),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            InkWell(
-              onTap: () => _showPasswordChangeDialog(context),
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFFE0E4EA)),
-                      ),
-                      child: const Icon(
-                        Icons.lock_outline,
-                        color: Color(0xFF102A43),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Contraseña',
-                            style: TextStyle(fontWeight: FontWeight.w800),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            hasPendingOtherSessionsRevocation
-                                ? 'Tu nueva contraseña ya está activa'
-                                : 'Cambiar tu contraseña de acceso',
-                            style: const TextStyle(
-                              color: Color(0xFF667085),
-                              fontSize: 13,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Icon(
-                      Icons.chevron_right,
-                      color: Color(0xFF667085),
-                    ),
-                  ],
-                ),
+    final style = PortalStyle.of(context);
+    final warning = style.tone(PortalTone.warning);
+    return PortalSection(
+      label: 'Seguridad',
+      child: PortalPanel(
+        children: [
+          PortalRow(
+            leading: const PortalThumb(fallbackIcon: Icons.lock_outline),
+            title: 'Contraseña',
+            meta: hasPendingOtherSessionsRevocation
+                ? 'Tu nueva contraseña ya está activa'
+                : 'Cambia la contraseña con que entras a la tienda',
+            onTap: () => _showPasswordChangeDialog(context),
+          ),
+          if (hasPendingOtherSessionsRevocation)
+            ColoredBox(
+              key: const ValueKey(
+                'customer-password-session-revocation-pending',
               ),
-            ),
-            if (hasPendingOtherSessionsRevocation) ...[
-              const Divider(height: 1),
-              Container(
-                key: const ValueKey(
-                  'customer-password-session-revocation-pending',
-                ),
-                color: colorScheme.errorContainer.withValues(alpha: 0.45),
-                padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+              color: warning.background,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 8, 10),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'Quedó pendiente cerrar las demás sesiones.',
-                      style: TextStyle(
-                        color: colorScheme.onErrorContainer,
-                        fontWeight: FontWeight.w700,
+                      style: style.rowTitle.copyWith(
+                        color: warning.foreground,
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      'No vuelvas a cambiar la contraseña: puedes reintentar solamente el cierre de sesiones.',
-                      style: TextStyle(color: colorScheme.onErrorContainer),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: Text(
+                        'No vuelvas a cambiar la contraseña: puedes reintentar solamente el cierre de sesiones.',
+                        style: style.rowMeta.copyWith(
+                          color: warning.foreground,
+                        ),
+                      ),
                     ),
                     Align(
                       alignment: AlignmentDirectional.centerEnd,
@@ -360,7 +333,9 @@ class _CustomerProfilePageState extends State<CustomerProfilePage>
                           startWithRevocationRetry: true,
                         ),
                         style: TextButton.styleFrom(
+                          foregroundColor: warning.foreground,
                           minimumSize: const Size(48, 48),
+                          textStyle: style.link,
                         ),
                         child: const Text('Completar cierre'),
                       ),
@@ -368,9 +343,8 @@ class _CustomerProfilePageState extends State<CustomerProfilePage>
                   ],
                 ),
               ),
-            ],
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }
@@ -399,10 +373,7 @@ class _CustomerProfilePageState extends State<CustomerProfilePage>
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Perfil actualizado correctamente'),
-            backgroundColor: Colors.green,
-          ),
+          const SnackBar(content: Text('Guardamos tus datos.')),
         );
       }
     } catch (_) {
@@ -411,9 +382,8 @@ class _CustomerProfilePageState extends State<CustomerProfilePage>
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
-              'No pudimos actualizar el perfil. Inténtalo nuevamente.',
+              'No pudimos guardar tus datos. Inténtalo nuevamente.',
             ),
-            backgroundColor: Colors.red,
           ),
         );
       }
@@ -700,17 +670,28 @@ class _CustomerPasswordChangeDialogState
     final isSessionRevocation =
         _step == _CustomerPasswordChangeStep.sessionRevocation;
 
+    final style = PortalStyle.of(context);
     return PopScope(
       canPop: !_isBusy,
       child: AlertDialog(
         scrollable: true,
+        backgroundColor: style.panel,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(PortalStyle.panelRadius),
+        ),
         insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-        title: Text(
-          isSessionRevocation
-              ? 'Completar seguridad'
-              : isVerification
-                  ? 'Verifica que eres tú'
-                  : 'Cambiar contraseña',
+        title: Semantics(
+          header: true,
+          child: Text(
+            (isSessionRevocation
+                    ? 'Completar seguridad'
+                    : isVerification
+                        ? 'Verifica que eres tú'
+                        : 'Cambiar contraseña')
+                .toUpperCase(),
+            style: style.pageTitle(compact: true).copyWith(fontSize: 22),
+          ),
         ),
         content: SizedBox(
           width: 420,
@@ -727,6 +708,7 @@ class _CustomerPasswordChangeDialogState
           TextButton(
             onPressed: _isBusy ? null : () => Navigator.of(context).pop(),
             style: TextButton.styleFrom(
+              foregroundColor: style.inkSecondary,
               minimumSize: const Size(48, 48),
             ),
             child: Text(
@@ -739,6 +721,7 @@ class _CustomerPasswordChangeDialogState
                   ? null
                   : () => _requestVerificationCode(isResend: true),
               style: TextButton.styleFrom(
+                foregroundColor: style.accent,
                 minimumSize: const Size(48, 48),
               ),
               child: const Text('Reenviar código'),
@@ -751,16 +734,16 @@ class _CustomerPasswordChangeDialogState
                     : isVerification
                         ? _submitVerificationCode
                         : _submitPassword,
-            style: FilledButton.styleFrom(
-              minimumSize: const Size(48, 48),
+            style: portalPrimaryButton(context).copyWith(
+              minimumSize: const WidgetStatePropertyAll(Size(48, 48)),
             ),
             child: _isBusy
-                ? const SizedBox(
+                ? SizedBox(
                     width: 18,
                     height: 18,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: Colors.white,
+                      color: style.onAccent,
                     ),
                   )
                 : Text(
@@ -930,57 +913,9 @@ class _CustomerPasswordChangeDialogState
             Text(
               _verificationNotice!,
               key: const ValueKey('customer-password-verification-notice'),
-              style: TextStyle(color: Theme.of(context).colorScheme.primary),
+              style: TextStyle(color: PortalStyle.of(context).accent),
             ),
           ],
-        ],
-      ),
-    );
-  }
-}
-
-class _ProfileSection extends StatelessWidget {
-  final String title;
-  final String description;
-  final Widget child;
-
-  const _ProfileSection({
-    required this.title,
-    required this.description,
-    required this.child,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE0E4EA)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              color: Color(0xFF18212F),
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            description,
-            style: const TextStyle(
-              color: Color(0xFF667085),
-              fontSize: 13,
-              height: 1.35,
-            ),
-          ),
-          const SizedBox(height: 16),
-          child,
         ],
       ),
     );
