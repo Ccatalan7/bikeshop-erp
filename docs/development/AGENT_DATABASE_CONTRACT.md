@@ -1321,3 +1321,17 @@ clientes pasó dos veces desde que se escribió: «Taller» leía
 ni el último mensaje. Antes de atar un campo nuevo a una pantalla se leen las
 columnas reales (`information_schema.columns` por `scripts/db/query.sh`) y
 cuántas filas lo traen lleno; lo segundo decide si vale la pena mostrarlo.
+
+## Contar productos de una categoría como los ve el cliente (2026-09-25)
+
+`get_public_products_faceted_v2(tenant, array[<categoría>], …)` filtra por
+`category_id` exacto: con una categoría padre («Ruedas», «Transmisión»)
+devuelve cero filas, porque los productos cuelgan de las hojas. La página de
+catálogo expande el subárbol en el cliente (`_getCategoryAndDescendantIds`),
+así que para contar lo que un cliente ve en una categoría se pasa el arreglo
+del subárbol completo (CTE recursiva sobre `product_categories.parent_id`).
+Y se cuenta con esa función, no con `is_active and show_on_website and
+is_published`: esa condición daba 128 cámaras y la tienda muestra 22. Así se
+eligió la grilla de la portada del 2026-09-25 (Ruedas 152, Transmisión 63,
+Accesorios 61, Frenos 61, Cambios 58, Dirección 33 visibles). Una categoría
+sólo es destino público con `show_on_website`; el 2026-09-25 había 7 de 137.
