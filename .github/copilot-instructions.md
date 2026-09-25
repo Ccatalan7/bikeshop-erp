@@ -4098,7 +4098,13 @@ la parte de base de datos):**
   el `index.html` de la raíz, que Firebase sirve también en carrito, cuenta y
   toda ruta sin snapshot: se monta sólo en `/` (`data-ip-path`), no precarga
   su foto en `<head>` y sólo existe si el primer bloque es un carrusel que la
-  instantánea dibuja igual (si no, `buildSeoInstantHomeTemplate` da `null`). Una página que
+  instantánea dibuja igual (si no, `buildSeoInstantHomeTemplate` da `null`).
+  Con foto principal (`data-ip-lcp`) Flutter no pide nada hasta que la foto
+  se pintó: Lighthouse simula como previo al LCP todo lo que terminó de bajar
+  antes que él, y con `main.dart.js` y CanvasKit en paralelo la portada pasó
+  de 62 a 38 en PageSpeed (LCP simulado 18,2 s con la foto pintada a 1,3 s).
+  Un `preload` nuevo de `main.dart.js` o un cambio en cómo `flutter.js` crea
+  `_flutter.loader` rompe esa espera; la prueba lo vigila. Una página que
   reemplace a la ficha o al catálogo debe avisar igual, o la instantánea queda
   encima hasta 8 s después del splash. Sus medidas copian el código Flutter
   (`PublicStoreHeaderGeometry`, `_productImageStageHeight`,

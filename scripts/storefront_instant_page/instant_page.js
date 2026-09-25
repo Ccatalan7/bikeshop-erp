@@ -36,6 +36,67 @@
     if (logo.complete && logo.naturalWidth === 0) hideLogo();
   }
 
+  // Primero la foto: con foto principal, Flutter no pide su programa
+  // (1,4 MB) ni su motor (1,6 MB) hasta que esa foto se pintó, o hasta 3 s.
+  // Compartiendo la red con ellos, la foto llegaba varios segundos tarde; y
+  // Lighthouse cuenta como previo a la foto todo lo que terminó de bajar
+  // antes que ella. El generador ya quitó el preload de main.dart.js.
+  var hero = page.querySelector('img[data-ip-lcp]');
+  if (hero) holdFlutterUntil(heroPainted(hero, 3000));
+
+  function heroPainted(img, capMs) {
+    return new Promise(function (resolve) {
+      var done = false;
+      function finish() {
+        if (done) return;
+        done = true;
+        resolve();
+      }
+      // Dos cuadros después de decodificar: el primero la pinta.
+      function afterPaint() {
+        requestAnimationFrame(function () { requestAnimationFrame(finish); });
+      }
+      function decoded() {
+        if (img.decode) img.decode().then(afterPaint, afterPaint);
+        else afterPaint();
+      }
+      if (img.complete) {
+        if (img.naturalWidth) decoded(); else finish();
+      } else {
+        img.addEventListener('load', decoded);
+        img.addEventListener('error', finish);
+      }
+      setTimeout(finish, capMs);
+    });
+  }
+
+  // flutter.js crea el cargador con
+  // `window._flutter.loader || (window._flutter.loader = new b)`: se recibe
+  // en esa asignación y su load() espera a `ready`. Si algo falla, la
+  // tienda arranca como siempre.
+  function holdFlutterUntil(ready) {
+    try {
+      var flutter = window._flutter || (window._flutter = {});
+      if (flutter.loader) return;
+      var loader;
+      Object.defineProperty(flutter, 'loader', {
+        configurable: true,
+        enumerable: true,
+        get: function () { return loader; },
+        set: function (value) {
+          loader = value;
+          if (!value || typeof value.load !== 'function') return;
+          var load = value.load;
+          value.load = function () {
+            var self = this;
+            var args = arguments;
+            return ready.then(function () { return load.apply(self, args); });
+          };
+        }
+      });
+    } catch (e) { /* sin espera */ }
+  }
+
   var released = false;
   var armed = false;
   api.release = function (reason) {
