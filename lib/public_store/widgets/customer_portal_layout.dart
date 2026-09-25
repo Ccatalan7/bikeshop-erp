@@ -71,6 +71,9 @@ class CustomerPortalLayout extends StatelessWidget {
         builder: (context, constraints) {
           final wide = constraints.maxWidth >= PortalStyle.wideBreakpoint;
           final bounded = constraints.hasBoundedHeight;
+          // Una página que maneja su propio alto (el chat abierto) recibe el
+          // espacio que queda bajo el título, sin el scroll del portal.
+          final fitsViewport = bounded && !enableContentScrolling;
           final content = _PortalContent(
             title: title,
             subtitle: subtitle,
@@ -79,22 +82,36 @@ class CustomerPortalLayout extends StatelessWidget {
             showBackButton: showBackButton,
             backPath: backPath,
             compact: !wide,
+            expandChild: fitsViewport,
             child: child,
           );
 
           if (wide) {
-            final scrollingContent = SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(0, 36, 0, 72),
-              child: Align(
-                alignment: Alignment.topLeft,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    maxWidth: PortalStyle.contentMaxWidth,
-                  ),
-                  child: content,
-                ),
-              ),
-            );
+            final scrollingContent = fitsViewport
+                ? Padding(
+                    padding: const EdgeInsets.fromLTRB(0, 36, 0, 24),
+                    child: Align(
+                      alignment: Alignment.topLeft,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          maxWidth: PortalStyle.contentMaxWidth,
+                        ),
+                        child: content,
+                      ),
+                    ),
+                  )
+                : SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(0, 36, 0, 72),
+                    child: Align(
+                      alignment: Alignment.topLeft,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          maxWidth: PortalStyle.contentMaxWidth,
+                        ),
+                        child: content,
+                      ),
+                    ),
+                  );
             final row = Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -141,6 +158,21 @@ class CustomerPortalLayout extends StatelessWidget {
           }
 
           final bar = _CompactAccountBar(identity: identity);
+          if (fitsViewport) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                bar,
+                Expanded(
+                  child: Padding(
+                    padding:
+                        EdgeInsets.fromLTRB(16, showHeader ? 20 : 8, 16, 12),
+                    child: content,
+                  ),
+                ),
+              ],
+            );
+          }
           final body = Padding(
             padding: const EdgeInsets.fromLTRB(16, 20, 16, 48),
             child: content,
@@ -176,6 +208,9 @@ class _PortalIdentity {
   }
 }
 
+/// Lo que ve quien entra a `/cuenta/**` sin sesión, o con una sesión que no
+/// es cliente de esta tienda. Mismo lenguaje que el portal: el título en la
+/// fuente del sitio y el botón en el color de comercio, no el verde del sitio.
 class _CustomerPortalAuthBoundary extends StatelessWidget {
   const _CustomerPortalAuthBoundary({
     required this.accountService,
@@ -185,71 +220,116 @@ class _CustomerPortalAuthBoundary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final style = PortalStyle.of(context);
     final isLoading = accountService.isCustomerMembershipLoading;
     final hasSession = accountService.hasAuthSession;
+    final title = isLoading
+        ? 'Preparando tu cuenta…'
+        : hasSession
+            ? 'No pudimos abrir esta cuenta'
+            : 'Entra a tu cuenta';
+    final message = isLoading
+        ? 'Estamos verificando tu acceso a esta tienda.'
+        : hasSession
+            ? 'Tu sesión está abierta, pero no está registrada como cliente '
+                'de esta tienda.'
+            : 'Aquí ves tus pedidos, tu bici en el taller y tus '
+                'conversaciones con la tienda.';
 
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 440, minHeight: 360),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (isLoading)
-                const CircularProgressIndicator()
-              else
-                Icon(
-                  hasSession
-                      ? Icons.verified_user_outlined
-                      : Icons.lock_outline,
-                  size: 48,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              const SizedBox(height: 18),
-              Text(
-                isLoading
-                    ? 'Preparando tu cuenta…'
-                    : hasSession
-                        ? 'No pudimos abrir esta cuenta'
-                        : 'Inicia sesión para continuar',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleLarge,
+    return ColoredBox(
+      color: style.canvas,
+      child: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 48),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: style.panel,
+                borderRadius: BorderRadius.circular(PortalStyle.panelRadius),
+                border: Border.all(color: style.line),
               ),
-              const SizedBox(height: 10),
-              Text(
-                isLoading
-                    ? 'Estamos verificando tu acceso para esta tienda.'
-                    : hasSession
-                        ? 'Tu sesión existe, pero no tiene una membresía válida para esta tienda.'
-                        : 'Tu información se mostrará sólo después de verificar la membresía de esta tienda.',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              if (!isLoading) ...[
-                const SizedBox(height: 22),
-                FilledButton(
-                  onPressed: hasSession
-                      ? () => accountService.reloadCustomerMembership()
-                      : () => PublicStoreLayout.navigateToHref(
-                            context,
-                            '/cuenta/login',
-                          ),
-                  child: Text(hasSession ? 'REINTENTAR' : 'INICIAR SESIÓN'),
-                ),
-                if (hasSession) ...[
-                  const SizedBox(height: 8),
-                  TextButton(
-                    onPressed: () => PublicStoreLayout.signOutCustomer(
-                      context,
-                      accountService,
-                      destination: '/cuenta/login',
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(28, 32, 28, 28),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (isLoading)
+                      SizedBox(
+                        width: 28,
+                        height: 28,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: style.accent,
+                        ),
+                      )
+                    else
+                      PortalThumb(
+                        fallbackIcon: hasSession
+                            ? Icons.verified_user_outlined
+                            : Icons.person_outline,
+                        size: 44,
+                      ),
+                    const SizedBox(height: 20),
+                    Semantics(
+                      header: true,
+                      child: Text(
+                        title.toUpperCase(),
+                        style: style.pageTitle(compact: true),
+                      ),
                     ),
-                    child: const Text('CERRAR ESTA SESIÓN'),
-                  ),
-                ],
-              ],
-            ],
+                    const SizedBox(height: 8),
+                    Text(message, style: style.pageSubtitle),
+                    if (!isLoading) ...[
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          onPressed: hasSession
+                              ? () => accountService.reloadCustomerMembership()
+                              : () => PublicStoreLayout.navigateToHref(
+                                    context,
+                                    '/cuenta/login',
+                                  ),
+                          style: portalPrimaryButton(context),
+                          child: Text(
+                            hasSession ? 'Reintentar' : 'Iniciar sesión',
+                          ),
+                        ),
+                      ),
+                      if (hasSession) ...[
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: TextButton(
+                            onPressed: () => PublicStoreLayout.signOutCustomer(
+                              context,
+                              accountService,
+                              destination: '/cuenta/login',
+                            ),
+                            style: TextButton.styleFrom(
+                              foregroundColor: style.inkSecondary,
+                              minimumSize: const Size(0, 44),
+                            ),
+                            child: const Text('Cerrar esta sesión'),
+                          ),
+                        ),
+                      ] else ...[
+                        const SizedBox(height: 12),
+                        Center(
+                          child: Text(
+                            '¿Primera vez? Puedes crear tu cuenta ahí mismo.',
+                            textAlign: TextAlign.center,
+                            style: style.rowMeta,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       ),
@@ -266,6 +346,7 @@ class _PortalContent extends StatelessWidget {
     required this.showBackButton,
     required this.backPath,
     required this.compact,
+    required this.expandChild,
     required this.child,
   });
 
@@ -276,6 +357,7 @@ class _PortalContent extends StatelessWidget {
   final bool showBackButton;
   final String? backPath;
   final bool compact;
+  final bool expandChild;
   final Widget child;
 
   @override
@@ -317,7 +399,7 @@ class _PortalContent extends StatelessWidget {
           ),
           SizedBox(height: compact ? 20 : 28),
         ],
-        child,
+        if (expandChild) Expanded(child: child) else child,
       ],
     );
   }
@@ -350,6 +432,14 @@ bool _matches(String location, String path) {
     return location == '/cuenta' || location == '/tienda/cuenta';
   }
   return location == path || location == '/tienda$path';
+}
+
+/// La sección del menú que se marca: una conversación abierta
+/// (`/cuenta/chats/:id`) sigue en «Soporte».
+bool _inSection(String location, String path) {
+  if (_matches(location, path)) return true;
+  if (path == '/cuenta') return false;
+  return location.startsWith('$path/') || location.startsWith('/tienda$path/');
 }
 
 Future<void> _signOut(BuildContext context) async {
@@ -406,7 +496,7 @@ class _PortalNavigation extends StatelessWidget {
           for (final item in items)
             _PortalNavItem(
               item: item,
-              isSelected: _matches(location, item.path),
+              isSelected: _inSection(location, item.path),
             ),
         ],
       );
@@ -516,14 +606,48 @@ class _PortalNavItem extends StatelessWidget {
   }
 }
 
-class _CompactAccountBar extends StatelessWidget {
+class _CompactAccountBar extends StatefulWidget {
   const _CompactAccountBar({required this.identity});
 
   final _PortalIdentity identity;
 
   @override
+  State<_CompactAccountBar> createState() => _CompactAccountBarState();
+}
+
+class _CompactAccountBarState extends State<_CompactAccountBar> {
+  final _selectedKey = GlobalKey();
+
+  @override
+  void initState() {
+    super.initState();
+    _revealSelected();
+  }
+
+  @override
+  void didUpdateWidget(_CompactAccountBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _revealSelected();
+  }
+
+  /// «Soporte» y «Direcciones» quedan fuera del ancho de un teléfono: la
+  /// pestaña de la página abierta se trae a la vista.
+  void _revealSelected() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final selected = _selectedKey.currentContext;
+      if (selected == null || !mounted) return;
+      Scrollable.ensureVisible(
+        selected,
+        alignment: 0.5,
+        alignmentPolicy: ScrollPositionAlignmentPolicy.explicit,
+      );
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final style = PortalStyle.of(context);
+    final identity = widget.identity;
     final location = GoRouterState.of(context).uri.path;
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -565,8 +689,9 @@ class _CompactAccountBar extends StatelessWidget {
               children: [
                 for (final item in _PortalDestination.items)
                   _CompactTab(
+                    key: _inSection(location, item.path) ? _selectedKey : null,
                     label: item.shortLabel,
-                    selected: _matches(location, item.path),
+                    selected: _inSection(location, item.path),
                     onTap: () => _navigateWithinPortal(context, item.path),
                   ),
               ],
@@ -580,6 +705,7 @@ class _CompactAccountBar extends StatelessWidget {
 
 class _CompactTab extends StatelessWidget {
   const _CompactTab({
+    super.key,
     required this.label,
     required this.selected,
     required this.onTap,

@@ -5,6 +5,7 @@ import '../../modules/website/models/website_models.dart';
 import '../models/customer_portal_presentation.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../services/customer_account_service.dart';
+import '../widgets/customer_job_row.dart';
 import '../widgets/customer_portal_layout.dart';
 import '../widgets/customer_order_row.dart';
 import '../widgets/customer_portal_style.dart';
@@ -152,10 +153,14 @@ class CustomerDashboardBody extends StatelessWidget {
                                   onTap: () =>
                                       onNavigate('/pedido/${item.order!.id}'),
                                 )
-                              : _JobRow(
+                              : CustomerJobRow(
                                   job: item.job!,
                                   compact: compact,
-                                  onTap: () => onNavigate('/cuenta/servicios'),
+                                  onTap: () => showCustomerJobDetail(
+                                    context,
+                                    job: item.job!,
+                                    onNavigate: onNavigate,
+                                  ),
                                 ),
                       ],
                     ),
@@ -189,8 +194,9 @@ class CustomerDashboardBody extends StatelessWidget {
                   children: [
                     for (final bike in bikes.take(3))
                       PortalRow(
-                        leading: const PortalThumb(
+                        leading: PortalThumb(
                           fallbackIcon: Icons.pedal_bike_outlined,
+                          imageUrl: customerBikeImage(bike),
                         ),
                         title: CustomerWorkshopPresentation.bikeTitle(bike),
                         meta: _bikeMeta(bike),
@@ -244,16 +250,8 @@ class CustomerDashboardBody extends StatelessWidget {
     return null;
   }
 
-  static String _bikeMeta(Map<String, dynamic> bike) {
-    final count = (bike['service_count'] as num?)?.toInt() ?? 0;
-    final last = portalParseDate(bike['last_service_date']);
-    final services = switch (count) {
-      0 => 'Sin servicios todavía',
-      1 => '1 servicio',
-      _ => '$count servicios',
-    };
-    return last == null ? services : '$services · último ${portalDate(last)}';
-  }
+  static String _bikeMeta(Map<String, dynamic> bike) =>
+      customerBikeServiceSummary(bike);
 }
 
 class _CurrentItem {
@@ -274,41 +272,6 @@ class _CurrentItem {
   final DateTime date;
 }
 
-class _JobRow extends StatelessWidget {
-  const _JobRow(
-      {required this.job, required this.compact, required this.onTap});
-
-  final Map<String, dynamic> job;
-  final bool compact;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final style = PortalStyle.of(context);
-    final presentation = CustomerWorkshopPresentation.of(job);
-    final received = portalParseDate(job['created_at']);
-    final pill = PortalStatusPill(
-      label: presentation.label,
-      tone: presentation.tone,
-    );
-    final nextStep = presentation.needsCustomer ? presentation.nextStep : null;
-    return PortalRow(
-      leading: const PortalThumb(fallbackIcon: Icons.pedal_bike_outlined),
-      title: CustomerWorkshopPresentation.bikeTitle(job),
-      meta: received == null
-          ? 'En el taller'
-          : 'En el taller desde el ${portalDate(received)}',
-      footer: compact
-          ? PortalStatusLine(pill: pill, nextStep: nextStep)
-          : nextStep == null
-              ? null
-              : Text(nextStep, style: style.nextStep),
-      trailing: compact ? null : PortalTrailingColumns(pill: pill),
-      onTap: onTap,
-    );
-  }
-}
-
 class _NothingInProgress extends StatelessWidget {
   const _NothingInProgress({required this.onNavigate});
 
@@ -316,40 +279,18 @@ class _NothingInProgress extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final style = PortalStyle.of(context);
-    return PortalPanel(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 8, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'No tienes pedidos ni bicis en el taller.',
-                style: style.rowTitle,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Cuando compres o dejes tu bici con nosotros, vas a ver '
-                'aquí en qué va.',
-                style: style.rowMeta,
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 4,
-                children: [
-                  PortalLink(
-                    label: 'Ver productos',
-                    onTap: () => onNavigate('/productos'),
-                  ),
-                  PortalLink(
-                    label: 'Hablar con el taller',
-                    onTap: () => onNavigate('/cuenta/chats'),
-                  ),
-                ],
-              ),
-            ],
-          ),
+    return PortalEmptyState(
+      title: 'No tienes pedidos ni bicis en el taller.',
+      message: 'Cuando compres o dejes tu bici con nosotros, vas a ver aquí '
+          'en qué va.',
+      actions: [
+        PortalLink(
+          label: 'Ver productos',
+          onTap: () => onNavigate('/productos'),
+        ),
+        PortalLink(
+          label: 'Hablar con el taller',
+          onTap: () => onNavigate('/cuenta/chats'),
         ),
       ],
     );

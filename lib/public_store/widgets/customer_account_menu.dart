@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/customer_portal_presentation.dart';
 import '../services/customer_account_service.dart';
 import '../theme/public_store_theme.dart';
 import 'public_store_layout.dart';
@@ -68,8 +69,14 @@ class CustomerAccountMenu extends StatelessWidget {
     }
 
     final profile = accountService.customerProfile;
-    final userName = profile?['name'] as String? ?? 'Usuario';
-    final userInitial = userName.isNotEmpty ? userName[0].toUpperCase() : '?';
+    // «Usuario» y «Cliente» son relleno guardado: no se saluda con eso.
+    final firstName = customerFirstName(profile);
+    final userName = firstName ?? 'Mi cuenta';
+    final email = (profile?['email'] ?? '').toString().trim();
+    final initialSource = firstName ?? email;
+    final userInitial = initialSource.isNotEmpty
+        ? initialSource.characters.first.toUpperCase()
+        : '·';
 
     if (isMobile) {
       return Column(
@@ -85,20 +92,13 @@ class CustomerAccountMenu extends StatelessWidget {
             ),
             title: Text(userName,
                 style: const TextStyle(fontWeight: FontWeight.bold)),
-            subtitle: const Text('Mi Cuenta'),
+            subtitle: email.isEmpty ? null : Text(email),
           ),
-          _buildMobileMenuItem(context, Icons.dashboard_outlined,
-              'Panel de cuenta', '/tienda/cuenta'),
-          _buildMobileMenuItem(context, Icons.shopping_bag_outlined,
-              'Mis pedidos', '/tienda/cuenta/pedidos'),
-          _buildMobileMenuItem(context, Icons.location_on_outlined,
-              'Mis direcciones', '/tienda/cuenta/direcciones'),
-          _buildMobileMenuItem(context, Icons.chat_bubble_outline,
-              'Ayuda y Soporte', '/tienda/cuenta/chats'),
+          for (final item in _items)
+            _buildMobileMenuItem(context, item.icon, item.label, item.path),
           ListTile(
-            leading: const Icon(Icons.logout, color: Colors.red),
-            title: const Text('Cerrar sesión',
-                style: TextStyle(color: Colors.red)),
+            leading: const Icon(Icons.logout),
+            title: const Text('Cerrar sesión'),
             onTap: () async {
               await PublicStoreLayout.signOutCustomer(
                 context,
@@ -141,110 +141,89 @@ class CustomerAccountMenu extends StatelessWidget {
                   color: effectiveTextColor,
                 ),
               ),
-              Text(
-                'Mi Cuenta',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: effectiveTextColor.withValues(alpha: 0.6),
+              if (firstName != null)
+                Text(
+                  'Mi cuenta',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: effectiveTextColor.withValues(alpha: 0.6),
+                  ),
                 ),
-              ),
             ],
           ),
           Icon(Icons.arrow_drop_down, color: effectiveTextColor),
         ],
       ),
       itemBuilder: (context) => [
-        const PopupMenuItem(
-          value: 'account',
-          child: Row(
-            children: [
-              Icon(Icons.dashboard_outlined, size: 18),
-              SizedBox(width: 12),
-              Text('Panel de cuenta'),
-            ],
+        for (final item in _items) ...[
+          PopupMenuItem(
+            value: item.path,
+            child: Row(
+              children: [
+                Icon(item.icon, size: 18),
+                const SizedBox(width: 12),
+                Text(item.label),
+              ],
+            ),
           ),
-        ),
-        const PopupMenuDivider(),
-        const PopupMenuItem(
-          value: 'orders',
-          child: Row(
-            children: [
-              Icon(Icons.shopping_bag_outlined, size: 18),
-              SizedBox(width: 12),
-              Text('Mis pedidos'),
-            ],
-          ),
-        ),
-        const PopupMenuItem(
-          value: 'addresses',
-          child: Row(
-            children: [
-              Icon(Icons.location_on_outlined, size: 18),
-              SizedBox(width: 12),
-              Text('Mis direcciones'),
-            ],
-          ),
-        ),
-        const PopupMenuItem(
-          value: 'profile',
-          child: Row(
-            children: [
-              Icon(Icons.person_outline, size: 18),
-              SizedBox(width: 12),
-              Text('Mi perfil'),
-            ],
-          ),
-        ),
-        const PopupMenuItem(
-          value: 'chat',
-          child: Row(
-            children: [
-              Icon(Icons.chat_bubble_outline, size: 18),
-              SizedBox(width: 12),
-              Text('Ayuda y Soporte'),
-            ],
-          ),
-        ),
+          if (item.path == '/tienda/cuenta') const PopupMenuDivider(),
+        ],
         const PopupMenuDivider(),
         const PopupMenuItem(
           value: 'logout',
           child: Row(
             children: [
-              Icon(Icons.logout, size: 18, color: Colors.red),
+              Icon(Icons.logout, size: 18),
               SizedBox(width: 12),
-              Text('Cerrar sesión', style: TextStyle(color: Colors.red)),
+              Text('Cerrar sesión'),
             ],
           ),
         ),
       ],
       onSelected: (value) async {
-        switch (value) {
-          case 'account':
-            PublicStoreLayout.navigateToHref(context, '/tienda/cuenta');
-            break;
-          case 'orders':
-            PublicStoreLayout.navigateToHref(context, '/tienda/cuenta/pedidos');
-            break;
-          case 'addresses':
-            PublicStoreLayout.navigateToHref(
-                context, '/tienda/cuenta/direcciones');
-            break;
-          case 'profile':
-            PublicStoreLayout.navigateToHref(context, '/tienda/cuenta/perfil');
-            break;
-          case 'chat':
-            PublicStoreLayout.navigateToHref(context, '/tienda/cuenta/chats');
-            break;
-          case 'logout':
-            await PublicStoreLayout.signOutCustomer(
-              context,
-              accountService,
-            );
-            break;
+        if (value == 'logout') {
+          await PublicStoreLayout.signOutCustomer(context, accountService);
+          return;
         }
+        PublicStoreLayout.navigateToHref(context, value);
       },
     );
   }
+
+  /// Las mismas secciones, con las mismas palabras, que el menú del portal.
+  static const _items = [
+    (icon: Icons.home_outlined, label: 'Resumen', path: '/tienda/cuenta'),
+    (
+      icon: Icons.receipt_long_outlined,
+      label: 'Pedidos',
+      path: '/tienda/cuenta/pedidos'
+    ),
+    (
+      icon: Icons.build_outlined,
+      label: 'Taller',
+      path: '/tienda/cuenta/servicios'
+    ),
+    (
+      icon: Icons.pedal_bike_outlined,
+      label: 'Bicicletas',
+      path: '/tienda/cuenta/bicicletas'
+    ),
+    (
+      icon: Icons.chat_bubble_outline,
+      label: 'Soporte',
+      path: '/tienda/cuenta/chats'
+    ),
+    (
+      icon: Icons.person_outline,
+      label: 'Perfil y seguridad',
+      path: '/tienda/cuenta/perfil'
+    ),
+    (
+      icon: Icons.location_on_outlined,
+      label: 'Direcciones',
+      path: '/tienda/cuenta/direcciones'
+    ),
+  ];
 
   Widget _buildMobileMenuItem(
       BuildContext context, IconData icon, String label, String path) {

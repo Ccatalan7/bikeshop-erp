@@ -961,6 +961,7 @@ Important meaning:
 - `technical_profile.sources` = where each technical fact came from
 - `technical_profile.confirmed` = whether the fact is confirmed or still suggestive
 - `bikes.bike_type` is the active visual platform selector for workshop diagrams; it now includes `mountain_hardtail` so the base identity form can distinguish hardtail from generic mountain/full-suspension flows without a second subtype field
+- **Data caveat (2026-09-25):** the bike form starts `_selectedType` at `BikeType.mountainHardtail` (`lib/modules/bikeshop/pages/bike_form_dialog.dart`), so an untouched field saves `mountain_hardtail`. In production 409 of 468 active Viñabike bikes carry it, including gravel and touring bikes (Fuji Jari, Oxford Cyclotour). Treat a stored `mountain_hardtail` as unconfirmed: the customer portal never shows `bike_type`, and any diagram or diagnosis gating driven by it inherits the same error.
 
 ### 3A. Atomic bicycle aggregate persistence boundary
 

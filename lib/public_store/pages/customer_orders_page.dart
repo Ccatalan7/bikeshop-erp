@@ -79,29 +79,15 @@ class CustomerOrdersBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final style = PortalStyle.of(context);
     if (orders.isEmpty) {
-      return PortalPanel(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 8, 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Todavía no tienes pedidos.', style: style.rowTitle),
-                const SizedBox(height: 4),
-                Text(
-                  'Cuando compres en la tienda, cada pedido aparecerá aquí '
-                  'con su estado.',
-                  style: style.rowMeta,
-                ),
-                const SizedBox(height: 8),
-                PortalLink(
-                  label: 'Ver productos',
-                  onTap: () => onNavigate('/productos'),
-                ),
-              ],
-            ),
+      return PortalEmptyState(
+        title: 'Todavía no tienes pedidos.',
+        message: 'Cuando compres en la tienda, cada pedido aparecerá aquí '
+            'con su estado.',
+        actions: [
+          PortalLink(
+            label: 'Ver productos',
+            onTap: () => onNavigate('/productos'),
           ),
         ],
       );
@@ -131,7 +117,7 @@ class CustomerOrdersBody extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
-                _GroupChip(
+                PortalFilterChip(
                   label: 'Todos',
                   count: orders.length,
                   selected: effectiveGroup == null,
@@ -139,7 +125,7 @@ class CustomerOrdersBody extends StatelessWidget {
                 ),
                 for (final entry in _labels.entries)
                   if ((counts[entry.key] ?? 0) > 0)
-                    _GroupChip(
+                    PortalFilterChip(
                       label: entry.value,
                       count: counts[entry.key]!,
                       selected: effectiveGroup == entry.key,
@@ -171,62 +157,5 @@ class CustomerOrdersBody extends StatelessWidget {
       if (url != null) return url;
     }
     return null;
-  }
-}
-
-class _GroupChip extends StatelessWidget {
-  const _GroupChip({
-    required this.label,
-    required this.count,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final int count;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final style = PortalStyle.of(context);
-    final foreground = selected ? style.onAccent : style.ink;
-    return Semantics(
-      selected: selected,
-      button: true,
-      child: Material(
-        color: selected ? style.accent : style.panel,
-        shape: StadiumBorder(
-          side: BorderSide(color: selected ? style.accent : style.line),
-        ),
-        child: InkWell(
-          customBorder: const StadiumBorder(),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  label,
-                  style: style.rowMeta.copyWith(
-                    color: foreground,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  '$count',
-                  style: style.rowMeta.copyWith(
-                    color: foreground.withValues(alpha: 0.72),
-                    fontFeatures: style.figure.fontFeatures,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }

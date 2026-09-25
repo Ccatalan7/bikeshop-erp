@@ -123,6 +123,124 @@ void main() {
       expect(p.label, 'En el taller');
       expect(p.isActive, isTrue);
     });
+
+    test('lo pedido sale de client_request, en una línea', () {
+      // Tal como los anota el taller (PG-00574, PG-00575, PG-00573).
+      String of(String raw) =>
+          CustomerWorkshopPresentation.requestSummary({'client_request': raw});
+      expect(
+        of('+Enrayado rueda delantera.\n+Mantención para maza trasera.'),
+        'Enrayado rueda delantera · Mantención para maza trasera',
+      );
+      expect(
+        of('Cambio de maneta izquierda +Diagnostico'),
+        'Cambio de maneta izquierda · Diagnostico',
+      );
+      expect(of('DIAGNÓSTICO'), 'Diagnóstico');
+      expect(of('   '), '');
+      expect(
+        CustomerWorkshopPresentation.requestSummary(
+            {'description': 'no existe en mechanic_jobs'}),
+        '',
+      );
+    });
+
+    test('el total es el primero con precio', () {
+      expect(
+        CustomerWorkshopPresentation.total(
+            {'total_cost': 0, 'final_cost': 0, 'estimated_cost': 0}),
+        isNull,
+      );
+      expect(
+        CustomerWorkshopPresentation.total({'total_cost': '16000.00'}),
+        16000,
+      );
+      expect(
+        CustomerWorkshopPresentation.total(
+            {'total_cost': 0, 'estimated_cost': 32000}),
+        32000,
+      );
+    });
+  });
+
+  group('bicicleta', () {
+    test('color y aro, nunca el tipo que el ERP trae marcado', () {
+      final details = customerBikeDetails({
+        'color': 'negra',
+        'wheel_size': "29''",
+        'bike_type': 'mountain_hardtail',
+      });
+      expect(details, 'Negra · aro 29');
+      expect(customerBikeDetails(const {}), '');
+    });
+
+    test('el aro se escribe de una sola manera', () {
+      expect(customerWheelSize('29"'), '29');
+      expect(customerWheelSize("26''"), '26');
+      expect(customerWheelSize('700'), '700c');
+      expect(customerWheelSize('27,5'), '27.5');
+      expect(customerWheelSize(''), isNull);
+      expect(customerWheelSize(null), isNull);
+    });
+
+    test('servicios y último ingreso', () {
+      expect(customerBikeServiceSummary(const {}), 'Sin servicios todavía');
+      expect(
+        customerBikeServiceSummary({
+          'service_count': 3,
+          'last_service_date': '2026-09-12T15:00:00Z',
+        }),
+        '3 servicios · último 12 sep 2026',
+      );
+    });
+  });
+
+  group('conversación', () {
+    test('título, último mensaje y quién lo escribió', () {
+      final p = CustomerConversationPresentation.of(
+        {
+          'title': 'Chat: Factura #FV-00573',
+          'status': 'active',
+          'messages': [
+            {
+              'content': 'Hola, ¿ya está?',
+              'sender_id': 'me',
+              'created_at': '2026-09-20T10:00:00Z',
+            },
+            {
+              'content': 'Sí,  lista\npara retirar',
+              'sender_id': 'staff',
+              'created_at': '2026-09-21T10:00:00Z',
+            },
+          ],
+        },
+        currentUserId: 'me',
+      );
+      expect(p.title, 'Factura #FV-00573');
+      expect(p.preview, 'Sí, lista para retirar');
+      expect(p.statusLabel, isNull, reason: 'abierta es lo normal');
+
+      final mine = CustomerConversationPresentation.of(
+        {
+          'status': 'pending',
+          'messages': [
+            {'content': 'Necesito una cámara', 'sender_id': 'me'},
+          ],
+        },
+        currentUserId: 'me',
+      );
+      expect(mine.title, 'Consulta');
+      expect(mine.preview, 'Tú: Necesito una cámara');
+      expect(mine.statusLabel, 'Esperando al equipo');
+    });
+
+    test('hoy, ayer o la fecha', () {
+      final now = DateTime(2026, 9, 25, 18);
+      expect(portalRelativeDay(DateTime(2026, 9, 25, 9), now: now), 'hoy');
+      expect(portalRelativeDay(DateTime(2026, 9, 24, 23), now: now), 'ayer');
+      expect(
+          portalRelativeDay(DateTime(2026, 9, 2, 9), now: now), '2 sep 2026');
+    });
   });
 
   group('nombre', () {

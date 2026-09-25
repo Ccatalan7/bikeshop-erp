@@ -272,6 +272,162 @@ class CustomerWorkshopPresentation {
     final title = '$brand $model'.trim();
     return title.isEmpty ? 'Bicicleta' : title;
   }
+
+  /// Lo que el cliente pidió, en una línea. El taller lo anota en
+  /// `client_request` como lista («+Enrayado rueda delantera.\n+Mantención
+  /// maza trasera.»); `mechanic_jobs` no tiene `description`, que es lo que
+  /// el portal leía antes y nunca mostraba nada.
+  static String requestSummary(Map<String, dynamic> job) {
+    final raw = (job['client_request'] ?? '').toString();
+    return raw
+        .split(RegExp(r'[\n\r]+|(?:^|\s)\+'))
+        .map((part) => part.trim().replaceAll(RegExp(r'^[+\-•·]+\s*'), ''))
+        .map((part) => part.replaceAll(RegExp(r'\.$'), '').trim())
+        .where((part) => part.isNotEmpty)
+        .map(_sentenceCaseIfShouting)
+        .join(' · ');
+  }
+
+  /// «DIAGNÓSTICO» → «Diagnóstico»: el taller a veces escribe en mayúsculas.
+  static String _sentenceCaseIfShouting(String part) {
+    final letters = part.replaceAll(RegExp(r'[^A-Za-zÁÉÍÓÚÑÜáéíóúñü]'), '');
+    if (letters.length < 4 || letters != letters.toUpperCase()) return part;
+    final lower = part.toLowerCase();
+    return lower[0].toUpperCase() + lower.substring(1);
+  }
+
+  /// El total del trabajo, o `null` si todavía no tiene precio.
+  static double? total(Map<String, dynamic> job) {
+    for (final key in const ['total_cost', 'final_cost', 'estimated_cost']) {
+      final value = job[key];
+      final amount =
+          value is num ? value.toDouble() : double.tryParse('${value ?? ''}');
+      if (amount != null && amount > 0) return amount;
+    }
+    return null;
+  }
+
+  /// Cuándo entró la bici: `arrival_date` está en todos los trabajos;
+  /// `completed_at` y `delivered_at` no son confiables.
+  static DateTime? receivedAt(Map<String, dynamic> job) =>
+      portalParseDate(job['arrival_date']) ??
+      portalParseDate(job['created_at']);
+}
+
+/// Detalle de una bici en palabras del cliente: color y aro.
+///
+/// El tipo (`bike_type`) no se muestra: el formulario del ERP lo trae
+/// marcado en `mountain_hardtail`, y así quedó en 409 de 468 bicis, gravel y
+/// paseo incluidas (2026-09-25). Mostrarlo le diría al cliente algo falso de
+/// su propia bici.
+String customerBikeDetails(Map<String, dynamic> bike) {
+  final color = (bike['color'] ?? bike['bike_color'] ?? '').toString().trim();
+  return [
+    if (color.isNotEmpty) color[0].toUpperCase() + color.substring(1),
+    if (customerWheelSize(bike['wheel_size']) case final wheel?) 'aro $wheel',
+    if (bike['year'] case final num year) '${year.toInt()}',
+  ].join(' · ');
+}
+
+/// «3 servicios · último 12 sep 2026». `service_count` y
+/// `last_service_date` los arma `CustomerAccountService.loadBikes` con la
+/// fecha de ingreso del último trabajo.
+String customerBikeServiceSummary(Map<String, dynamic> bike) {
+  final count = (bike['service_count'] as num?)?.toInt() ?? 0;
+  final last = portalParseDate(bike['last_service_date']);
+  final services = switch (count) {
+    0 => 'Sin servicios todavía',
+    1 => '1 servicio',
+    _ => '$count servicios',
+  };
+  return last == null ? services : '$services · último ${portalDate(last)}';
+}
+
+/// La foto de la bici, si el taller le sacó una.
+String? customerBikeImage(Map<String, dynamic> bike) {
+  final single = (bike['image_url'] ?? '').toString().trim();
+  if (single.isNotEmpty) return single;
+  for (final url in (bike['image_urls'] as List? ?? const [])) {
+    final value = (url ?? '').toString().trim();
+    if (value.isNotEmpty) return value;
+  }
+  return null;
+}
+
+/// «29», «27.5», «700c». El taller lo escribe de mil maneras: `29"`, `29''`,
+/// `29`, `700`.
+String? customerWheelSize(Object? raw) {
+  var value = (raw ?? '').toString().trim().replaceAll(RegExp("[\"'”″]"), '');
+  value = value.replaceAll(',', '.').trim();
+  if (value.isEmpty) return null;
+  if (value == '700') return '700c';
+  return value;
+}
+
+/// Cómo ve el cliente una conversación con la tienda.
+class CustomerConversationPresentation {
+  const CustomerConversationPresentation._({
+    required this.title,
+    required this.preview,
+    required this.lastActivity,
+    this.statusLabel,
+    this.tone = PortalTone.neutral,
+  });
+
+  factory CustomerConversationPresentation.of(
+    Map<String, dynamic> conversation, {
+    String? currentUserId,
+  }) {
+    final rawTitle = (conversation['title'] ?? '').toString().trim();
+    final title = rawTitle
+        .replaceFirst(RegExp(r'^chat:\s*', caseSensitive: false), '')
+        .trim();
+
+    final messages = [
+      for (final message in (conversation['messages'] as List? ?? const []))
+        if (message is Map) Map<String, dynamic>.from(message),
+    ]..sort((a, b) => (portalParseDate(a['created_at']) ?? DateTime(0))
+        .compareTo(portalParseDate(b['created_at']) ?? DateTime(0)));
+    final last = messages.isEmpty ? null : messages.last;
+    final content = (last?['content'] ?? '')
+        .toString()
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    final mine = currentUserId != null && last?['sender_id'] == currentUserId;
+
+    final (label, tone) =
+        switch ((conversation['status'] ?? '').toString().toLowerCase()) {
+      'pending' => ('Esperando al equipo', PortalTone.warning),
+      'rejected' => ('Cerrada', PortalTone.neutral),
+      'resolved' || 'closed' || 'archived' => ('Archivada', PortalTone.neutral),
+      _ => (null, PortalTone.neutral),
+    };
+
+    return CustomerConversationPresentation._(
+      title: title.isEmpty ? 'Consulta' : title,
+      preview: content.isEmpty
+          ? null
+          : mine
+              ? 'Tú: $content'
+              : content,
+      lastActivity: portalParseDate(conversation['last_message_at']) ??
+          portalParseDate(last?['created_at']) ??
+          portalParseDate(conversation['created_at']),
+      statusLabel: label,
+      tone: tone,
+    );
+  }
+
+  /// «Factura #FV-00573», «Trabajo #PG-00305» o «Consulta».
+  final String title;
+
+  /// El último mensaje, con «Tú:» si lo escribió el cliente.
+  final String? preview;
+  final DateTime? lastActivity;
+
+  /// Sólo cuando no está abierta: una conversación activa es lo normal.
+  final String? statusLabel;
+  final PortalTone tone;
 }
 
 /// El nombre con que el portal saluda, o `null` si la cuenta no tiene uno
@@ -324,6 +480,17 @@ const _longMonths = [
 String portalDate(DateTime date) {
   final local = date.toLocal();
   return '${local.day} ${_shortMonths[local.month - 1]} ${local.year}';
+}
+
+/// «hoy», «ayer» o «19 jul 2026»: para la última actividad de un chat.
+String portalRelativeDay(DateTime date, {DateTime? now}) {
+  final local = date.toLocal();
+  final today = (now ?? DateTime.now()).toLocal();
+  final day = DateTime(local.year, local.month, local.day);
+  final diff = DateTime(today.year, today.month, today.day).difference(day);
+  if (diff.inDays == 0) return 'hoy';
+  if (diff.inDays == 1) return 'ayer';
+  return portalDate(local);
 }
 
 /// «septiembre de 2025».

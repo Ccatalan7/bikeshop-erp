@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import '../models/customer_portal_presentation.dart';
 import '../services/customer_account_service.dart';
 import '../widgets/customer_portal_layout.dart';
+import '../widgets/customer_portal_style.dart';
 import '../widgets/public_store_layout.dart';
-import '../../shared/utils/chilean_utils.dart';
 
-/// Customer bikes page - view registered bikes and their service history
+/// «Bicicletas» (`/cuenta/bicicletas`): las bicis que el taller registró a
+/// nombre del cliente, con cuántas veces pasaron por el taller.
 class CustomerBikesPage extends StatefulWidget {
   const CustomerBikesPage({super.key});
 
@@ -15,7 +18,6 @@ class CustomerBikesPage extends StatefulWidget {
 
 class _CustomerBikesPageState extends State<CustomerBikesPage>
     with AutomaticKeepAliveClientMixin {
-  // Keep this page alive in memory to prevent reloading on navigation
   @override
   bool get wantKeepAlive => true;
 
@@ -29,635 +31,174 @@ class _CustomerBikesPageState extends State<CustomerBikesPage>
 
   @override
   Widget build(BuildContext context) {
-    super.build(context); // Required for AutomaticKeepAliveClientMixin
+    super.build(context);
     final accountService = context.watch<CustomerAccountService>();
+    void navigate(String href) =>
+        PublicStoreLayout.navigateToHref(context, href);
 
-    if (!accountService.isAuthenticated) {
-      return CustomerPortalLayout(
-        title: 'Mis Bicicletas',
-        child: _buildLoginPrompt(),
+    return CustomerPortalLayout(
+      title: 'Bicicletas',
+      child: CustomerBikesBody(
+        bikes: accountService.bikes,
+        isLoading: accountService.isLoading && accountService.bikes.isEmpty,
+        onOpenBike: (bike) => _showBike(context, bike, navigate),
+        onNavigate: navigate,
+      ),
+    );
+  }
+
+  void _showBike(
+    BuildContext context,
+    Map<String, dynamic> bike,
+    ValueChanged<String> navigate,
+  ) {
+    final warranty = portalParseDate(bike['warranty_until']);
+    final purchased = portalParseDate(bike['purchase_date']);
+    final count = (bike['service_count'] as num?)?.toInt() ?? 0;
+    String? text(String key) {
+      final value = (bike[key] ?? '').toString().trim();
+      return value.isEmpty ? null : value;
+    }
+
+    final warrantyActive = warranty != null &&
+        !warranty.isBefore(DateUtils.dateOnly(DateTime.now()));
+
+    showPortalDetail(
+      context,
+      title: CustomerWorkshopPresentation.bikeTitle(bike),
+      subtitle:
+          customerBikeDetails(bike).isEmpty ? null : customerBikeDetails(bike),
+      status: warranty == null
+          ? null
+          : PortalStatusPill(
+              label: warrantyActive
+                  ? 'Garantía hasta el ${portalDate(warranty)}'
+                  : 'Garantía vencida el ${portalDate(warranty)}',
+              tone: warrantyActive ? PortalTone.success : PortalTone.neutral,
+            ),
+      body: PortalFacts(
+        facts: [
+          ('Taller', customerBikeServiceSummary(bike)),
+          ('Talla de cuadro', text('frame_size')),
+          ('Número de serie', text('serial_number')),
+          ('Comprada', purchased == null ? null : portalDate(purchased)),
+          ('Notas', text('notes')),
+        ],
+      ),
+      actions: [
+        if (count > 0)
+          Builder(
+            builder: (buttonContext) => FilledButton(
+              style: portalPrimaryButton(buttonContext),
+              onPressed: () {
+                Navigator.of(buttonContext).pop();
+                navigate('/cuenta/servicios?bike_id=${bike['id']}');
+              },
+              child: const Text('Ver sus trabajos de taller'),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// La lista de bicis, sin el marco ni el servicio.
+///
+/// No muestra el tipo de bici: el ERP lo trae marcado en `mountain_hardtail`
+/// y casi todas quedaron así (ver [customerBikeDetails]).
+class CustomerBikesBody extends StatelessWidget {
+  const CustomerBikesBody({
+    super.key,
+    required this.bikes,
+    required this.onOpenBike,
+    required this.onNavigate,
+    this.isLoading = false,
+  });
+
+  final List<Map<String, dynamic>> bikes;
+  final bool isLoading;
+  final ValueChanged<Map<String, dynamic>> onOpenBike;
+  final ValueChanged<String> onNavigate;
+
+  @override
+  Widget build(BuildContext context) {
+    if (isLoading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 48),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (bikes.isEmpty) {
+      return PortalEmptyState(
+        title: 'Todavía no hay bicicletas en tu cuenta.',
+        message: 'El taller registra tu bici la primera vez que la traes, y '
+            'desde ahí vas a ver aquí cada servicio que le hagamos.',
+        actions: [
+          PortalLink(
+            label: 'Ver servicios y precios',
+            onTap: () => onNavigate('/servicios'),
+          ),
+        ],
       );
     }
 
-    final hasBikes =
-        !accountService.isLoading && accountService.bikes.isNotEmpty;
-
-    return CustomerPortalLayout(
-      title: 'Mis Bicicletas',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Intro Text (only if has bikes, otherwise empty state handles it)
-          if (hasBikes) ...[
-            Text(
-              'Gestiona tus bicicletas y revisa su historial de servicios.',
-              style: TextStyle(color: Colors.grey[600]),
-            ),
-            const SizedBox(height: 24),
-          ],
-
-          // Content
-          if (accountService.isLoading)
-            const Padding(
-              padding: EdgeInsets.all(48),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (accountService.bikes.isEmpty)
-            _buildEmptyState()
-          else
-            _buildBikesList(accountService),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLoginPrompt() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 560;
+        final style = PortalStyle.of(context);
+        return PortalPanel(
           children: [
-            Icon(Icons.lock_outline, size: 64, color: Colors.grey[400]),
-            const SizedBox(height: 16),
-            Text(
-              'Inicia sesión',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Debes iniciar sesión para ver tus bicicletas.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey),
-            ),
-            const SizedBox(height: 24),
-            FilledButton(
-              onPressed: () =>
-                  PublicStoreLayout.navigateToHref(context, '/cuenta/login'),
-              child: const Text('IR AL LOGIN'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Container(
-      padding: const EdgeInsets.all(40),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.blue.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.pedal_bike_outlined,
-              size: 48,
-              color: Colors.blue[700],
-            ),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            'No tienes bicicletas registradas',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Tus bicicletas aparecerán aquí cuando las registres en nuestra tienda o las lleves a servicio técnico.',
-            style: TextStyle(
-              color: Colors.grey[600],
-              fontSize: 16,
-              height: 1.5,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 32),
-          FilledButton.icon(
-            onPressed: () =>
-                PublicStoreLayout.navigateToHref(context, '/contacto'),
-            icon: const Icon(Icons.contact_support_outlined),
-            label: const Text('CONTACTAR TIENDA'),
-            style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+            for (final bike in bikes)
+              _BikeRow(
+                bike: bike,
+                compact: compact,
+                style: style,
+                onTap: () => onOpenBike(bike),
               ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBikesList(CustomerAccountService accountService) {
-    return Column(
-      children: accountService.bikes.map((bike) {
-        return _BikeCard(
-          bike: bike,
-          onTap: () => _showBikeDetails(bike),
-          onViewServices: () => PublicStoreLayout.navigateToHref(
-            context,
-            '/cuenta/servicios?bike_id=${bike['id']}',
-          ),
+          ],
         );
-      }).toList(),
-    );
-  }
-
-  void _showBikeDetails(Map<String, dynamic> bike) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _BikeDetailSheet(
-        bike: bike,
-        onViewHistory: () => PublicStoreLayout.navigateToHref(
-          this.context,
-          '/cuenta/servicios?bike_id=${bike['id']}',
-        ),
-      ),
+      },
     );
   }
 }
 
-class _BikeCard extends StatelessWidget {
-  final Map<String, dynamic> bike;
-  final VoidCallback onTap;
-  final VoidCallback onViewServices;
-
-  const _BikeCard({
+class _BikeRow extends StatelessWidget {
+  const _BikeRow({
     required this.bike,
+    required this.compact,
+    required this.style,
     required this.onTap,
-    required this.onViewServices,
   });
 
-  @override
-  Widget build(BuildContext context) {
-    final brand = bike['brand'] ?? bike['brand_name'] ?? 'Sin marca';
-    final model = bike['model'] ?? bike['model_name'] ?? 'Sin modelo';
-    final year = bike['year'];
-    final bikeType = bike['bike_type'];
-    final serviceCount = bike['service_count'] ?? 0;
-    final lastService = bike['last_service_date'];
-    final imageUrl = bike['image_url'];
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Column(
-          children: [
-            // Image Section
-            if (imageUrl != null && imageUrl.isNotEmpty)
-              AspectRatio(
-                aspectRatio: 2.5, // Wider aspect ratio for header feel
-                child: Image.network(
-                  imageUrl,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => _buildPlaceholderImage(),
-                ),
-              )
-            else
-              _buildPlaceholderImage(),
-
-            // Content Section
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '$brand $model',
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black87,
-                              ),
-                            ),
-                            if (year != null)
-                              Text(
-                                'Año $year',
-                                style: TextStyle(
-                                  color: Colors.grey[600],
-                                  fontSize: 14,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      if (bikeType != null)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: _getBikeTypeColor(bikeType)
-                                .withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            _getBikeTypeLabel(bikeType),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: _getBikeTypeColor(bikeType),
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  const Divider(height: 1),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      _buildInfoItem(
-                        Icons.build_circle_outlined,
-                        'Servicios',
-                        '$serviceCount',
-                      ),
-                      const SizedBox(width: 24),
-                      _buildInfoItem(
-                        Icons.calendar_month_outlined,
-                        'Último',
-                        lastService != null
-                            ? ChileanUtils.formatDate(
-                                DateTime.parse(lastService))
-                            : '-',
-                      ),
-                      const Spacer(),
-                      FilledButton.icon(
-                        onPressed: onViewServices,
-                        icon: const Icon(Icons.history, size: 16),
-                        label: const Text('HISTORIAL'),
-                        style: FilledButton.styleFrom(
-                          visualDensity: VisualDensity.compact,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInfoItem(IconData icon, String label, String value) {
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: Colors.grey[400]),
-        const SizedBox(width: 8),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                color: Colors.grey[500],
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            Text(
-              value,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Colors.black87,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPlaceholderImage() {
-    return Container(
-      height: 120, // Shorter placeholder
-      color: Colors.grey[100],
-      child: Center(
-        child: Icon(
-          Icons.pedal_bike,
-          size: 48,
-          color: Colors.grey[300],
-        ),
-      ),
-    );
-  }
-
-  Color _getBikeTypeColor(String type) {
-    switch (type.toLowerCase()) {
-      case 'road':
-        return Colors.red;
-      case 'mountain':
-        return Colors.green;
-      case 'electric':
-        return Colors.blue;
-      case 'hybrid':
-        return Colors.purple;
-      case 'gravel':
-        return Colors.orange;
-      case 'bmx':
-        return Colors.amber;
-      default:
-        return Colors.grey;
-    }
-  }
-
-  String _getBikeTypeLabel(String type) {
-    switch (type.toLowerCase()) {
-      case 'road':
-        return 'Ruta';
-      case 'mountain':
-        return 'MTB';
-      case 'electric':
-        return 'Eléctrica';
-      case 'hybrid':
-        return 'Híbrida';
-      case 'gravel':
-        return 'Gravel';
-      case 'bmx':
-        return 'BMX';
-      case 'folding':
-        return 'Plegable';
-      case 'cruiser':
-        return 'Cruiser';
-      default:
-        return type;
-    }
-  }
-}
-
-class _BikeDetailSheet extends StatelessWidget {
   final Map<String, dynamic> bike;
-  final VoidCallback onViewHistory;
-
-  const _BikeDetailSheet({
-    required this.bike,
-    required this.onViewHistory,
-  });
+  final bool compact;
+  final PortalStyle style;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final brand = bike['brand'] ?? bike['brand_name'] ?? 'Sin marca';
-    final model = bike['model'] ?? bike['model_name'] ?? 'Sin modelo';
-    final year = bike['year'];
-    final serialNumber = bike['serial_number'];
-    final color = bike['color'];
-    final frameSize = bike['frame_size'];
-    final wheelSize = bike['wheel_size'];
-    final bikeType = bike['bike_type'];
-    final purchaseDate = bike['purchase_date'];
-    final warrantyUntil = bike['warranty_until'];
-    final notes = bike['notes'];
-    final imageUrl = bike['image_url'];
-
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    final details = customerBikeDetails(bike);
+    final services = customerBikeServiceSummary(bike);
+    return PortalRow(
+      leading: PortalThumb(
+        fallbackIcon: Icons.pedal_bike_outlined,
+        imageUrl: customerBikeImage(bike),
       ),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Header Image
-            if (imageUrl != null)
-              ClipRRect(
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(24)),
-                child: AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: Image.network(imageUrl, fit: BoxFit.cover),
-                ),
-              )
-            else
-              Container(
-                height: 100,
-                decoration: BoxDecoration(
-                  color: Colors.grey[100],
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(24)),
-                ),
-                child: Center(
-                  child:
-                      Icon(Icons.pedal_bike, size: 40, color: Colors.grey[300]),
-                ),
-              ),
-
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          '$brand $model',
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineSmall
-                              ?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black87,
-                              ),
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.close),
-                        style: IconButton.styleFrom(
-                          backgroundColor: Colors.grey[100],
-                        ),
-                      )
-                    ],
-                  ),
-                  if (year != null)
-                    Text(
-                      'Año $year',
-                      style: TextStyle(
-                        color: Colors.grey[600],
-                        fontSize: 16,
-                      ),
-                    ),
-                  const SizedBox(height: 24),
-                  _buildDetailSection('Especificaciones', [
-                    if (bikeType != null)
-                      _DetailRow('Tipo', _getBikeTypeLabel(bikeType)),
-                    if (color != null) _DetailRow('Color', color),
-                    if (frameSize != null) _DetailRow('Talla', frameSize),
-                    if (wheelSize != null) _DetailRow('Ruedas', wheelSize),
-                    if (serialNumber != null)
-                      _DetailRow('N° Serie', serialNumber),
-                  ]),
-                  if (purchaseDate != null || warrantyUntil != null) ...[
-                    const SizedBox(height: 24),
-                    _buildDetailSection('Compra y Garantía', [
-                      if (purchaseDate != null)
-                        _DetailRow(
-                          'Fecha de compra',
-                          ChileanUtils.formatDate(DateTime.parse(purchaseDate)),
-                        ),
-                      if (warrantyUntil != null)
-                        _DetailRow(
-                          'Garantía hasta',
-                          ChileanUtils.formatDate(
-                              DateTime.parse(warrantyUntil)),
-                          valueColor: DateTime.parse(warrantyUntil)
-                                  .isAfter(DateTime.now())
-                              ? Colors.green
-                              : Colors.red,
-                        ),
-                    ]),
-                  ],
-                  if (notes != null && notes.isNotEmpty) ...[
-                    const SizedBox(height: 24),
-                    Text(
-                      'Notas',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey[800],
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[50],
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.shade200),
-                      ),
-                      child: Text(
-                        notes,
-                        style: TextStyle(color: Colors.grey[700]),
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 32),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        onViewHistory();
-                      },
-                      icon: const Icon(Icons.history),
-                      label: const Text('VER HISTORIAL COMPLETO'),
-                      style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+      title: CustomerWorkshopPresentation.bikeTitle(bike),
+      meta: compact
+          ? [if (details.isNotEmpty) details, services].join(' · ')
+          : (details.isEmpty ? null : details),
+      trailing: compact
+          ? null
+          : ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 240),
+              child: Text(
+                services,
+                textAlign: TextAlign.right,
+                style: style.rowMeta,
               ),
             ),
-          ],
-        ),
-      ),
+      onTap: onTap,
     );
   }
-
-  Widget _buildDetailSection(String title, List<_DetailRow> rows) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: Colors.grey[500],
-            letterSpacing: 0.5,
-          ),
-        ),
-        const SizedBox(height: 12),
-        ...rows.map((row) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(row.label, style: TextStyle(color: Colors.grey[600])),
-                  Text(
-                    row.value,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: row.valueColor ?? Colors.black87,
-                    ),
-                  ),
-                ],
-              ),
-            )),
-      ],
-    );
-  }
-
-  String _getBikeTypeLabel(String type) {
-    switch (type.toLowerCase()) {
-      case 'road':
-        return 'Ruta';
-      case 'mountain':
-        return 'MTB';
-      default:
-        return type;
-    }
-  }
-}
-
-class _DetailRow {
-  final String label;
-  final String value;
-  final Color? valueColor;
-
-  _DetailRow(this.label, this.value, {this.valueColor});
 }
