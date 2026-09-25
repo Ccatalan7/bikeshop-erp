@@ -434,6 +434,150 @@ html.ip-covered #loading-logo {
   }
 }
 
+/* Portada: PublicHomePage con su primer carrusel. El encabezado flota
+   sobre la diapositiva con el velo automático de PublicStoreLayout (negro
+   52 % → 24 %) y el logo en blanco (ColorFilter srcIn). */
+.ip-header-overlay {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 2;
+  background: linear-gradient(rgba(0, 0, 0, 0.52), rgba(0, 0, 0, 0.24));
+}
+
+.ip-header-overlay .ip-logo {
+  filter: brightness(0) invert(1);
+}
+
+.ip-header-overlay .ip-store-name {
+  color: #ffffff;
+}
+
+.ip-front {
+  position: relative;
+}
+
+/* WebsiteCarouselBlockContent._buildSlide: foto «cover» sobre #1a1a1a y el
+   contenido centrado, con 32 px a los lados y 900 de ancho máximo. El alto
+   es el blockHeight del bloque (lo escribe el generador). */
+.ip-slide {
+  position: relative;
+  overflow: hidden;
+  background: #1a1a1a;
+}
+
+.ip-slide-img,
+.ip-slide-scrim {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.ip-slide-img {
+  object-fit: cover;
+  object-position: var(--ip-focus, 50% 50%);
+}
+
+/* WebsiteViewport.mobile (bajo ResponsiveBreakpoints.phoneMaxExclusive =
+   600): el carrusel usa el encuadre móvil de la diapositiva. */
+@media (max-width: 599.98px) {
+  .ip-slide-img {
+    object-position: var(--ip-focus-mobile, var(--ip-focus, 50% 50%));
+  }
+}
+
+.ip-slide-content {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 32px;
+  color: #ffffff;
+  text-align: center;
+}
+
+.ip-slide-title,
+.ip-slide-subtitle {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 900px;
+  overflow-wrap: break-word;
+}
+
+/* displayLarge de Material 3 (alto 1,12, interlineado parejo) en la fuente
+   de títulos, 900 y 3 px de espaciado. El tamaño viene del formato. */
+.ip-slide-title {
+  font-family: var(--ip-heading-font, "Oswald"), "Arial Narrow", sans-serif;
+  font-weight: 900;
+  line-height: 1.12;
+  letter-spacing: 3px;
+}
+
+/* headlineSmall de Material 3 (alto 1,33) en la fuente de cuerpo, 600,
+   blanco al 70 %, 20 px bajo el título. */
+#instant-page .ip-slide-subtitle {
+  margin-top: 20px;
+  color: rgba(255, 255, 255, 0.702);
+  font-family: var(--ip-body-font, "Barlow"), sans-serif;
+  font-weight: 600;
+  line-height: 1.33;
+}
+
+/* OutlinedButton del carrusel, 40 px bajo el subtítulo: trazo blanco de
+   1 px por dentro (RoundedRectangleBorder), rótulo de 13 px en 600 con
+   1,5 px de espaciado. Alto, relleno y radio los escribe el generador. */
+.ip-slide-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 64px;
+  margin-top: 40px;
+  box-shadow: inset 0 0 0 1px #ffffff;
+  color: #ffffff;
+  font-family: var(--ip-body-font, "Barlow"), sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  white-space: nowrap;
+}
+
+/* Puntos: la fila a 32 px del borde inferior, cajas de 22 px y círculos de
+   12; el activo blanco, los demás al 40 %. */
+.ip-dots {
+  position: absolute;
+  right: 0;
+  bottom: 32px;
+  left: 0;
+  display: flex;
+  justify-content: center;
+}
+
+.ip-dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+}
+
+.ip-dot::after {
+  content: "";
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.ip-dot-active::after {
+  background: #ffffff;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ip-progress::after {
     left: 0;
