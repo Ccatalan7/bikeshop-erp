@@ -466,10 +466,13 @@ class PublicStoreRouter {
           ),
         ),
 
-        // Account dashboard
+        // Account dashboard. Las rutas del portal van sin el scroll de página
+        // de la tienda: el menú de la cuenta queda fijo y sólo el contenido se
+        // desplaza (CustomerPortalLayout). Con el scroll de página, el menú se
+        // iba con el contenido y dejaba la columna flotando.
         GoRoute(
           path: '/cuenta',
-          pageBuilder: (context, state) => _buildPage(
+          pageBuilder: (context, state) => _buildPageNoScroll(
             context,
             state,
             const DeferredCustomerRoutePage(routeKey: 'dashboard'),
@@ -641,7 +644,7 @@ class PublicStoreRouter {
         ),
         GoRoute(
           path: '/cuenta/perfil',
-          pageBuilder: (context, state) => _buildPage(
+          pageBuilder: (context, state) => _buildPageNoScroll(
             context,
             state,
             const DeferredCustomerRoutePage(routeKey: 'profile'),
@@ -649,7 +652,7 @@ class PublicStoreRouter {
         ),
         GoRoute(
           path: '/cuenta/direcciones',
-          pageBuilder: (context, state) => _buildPage(
+          pageBuilder: (context, state) => _buildPageNoScroll(
             context,
             state,
             const DeferredCustomerRoutePage(routeKey: 'addresses'),
@@ -657,7 +660,7 @@ class PublicStoreRouter {
         ),
         GoRoute(
           path: '/cuenta/pedidos',
-          pageBuilder: (context, state) => _buildPage(
+          pageBuilder: (context, state) => _buildPageNoScroll(
             context,
             state,
             const DeferredCustomerRoutePage(routeKey: 'orders'),
@@ -665,7 +668,7 @@ class PublicStoreRouter {
         ),
         GoRoute(
           path: '/cuenta/bicicletas',
-          pageBuilder: (context, state) => _buildPage(
+          pageBuilder: (context, state) => _buildPageNoScroll(
             context,
             state,
             const DeferredCustomerRoutePage(routeKey: 'bikes'),
@@ -675,7 +678,7 @@ class PublicStoreRouter {
           path: '/cuenta/servicios',
           pageBuilder: (context, state) {
             final bikeId = state.uri.queryParameters['bike_id'];
-            return _buildPage(
+            return _buildPageNoScroll(
               context,
               state,
               DeferredCustomerRoutePage(
@@ -689,7 +692,7 @@ class PublicStoreRouter {
         // Chat / Support
         GoRoute(
           path: '/cuenta/mensajes',
-          pageBuilder: (context, state) => _buildPage(
+          pageBuilder: (context, state) => _buildPageNoScroll(
             context,
             state,
             const DeferredCustomerRoutePage(routeKey: 'messages'),
@@ -711,7 +714,7 @@ class PublicStoreRouter {
         ),
         GoRoute(
           path: '/cuenta/chats',
-          pageBuilder: (context, state) => _buildPage(
+          pageBuilder: (context, state) => _buildPageNoScroll(
             context,
             state,
             const DeferredCustomerRoutePage(routeKey: 'chats'),

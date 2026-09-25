@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../modules/website/models/website_models.dart';
+import '../models/customer_portal_presentation.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../services/customer_account_service.dart';
 import '../widgets/customer_portal_layout.dart';
+import '../widgets/customer_order_row.dart';
+import '../widgets/customer_portal_style.dart';
 import '../widgets/public_store_layout.dart';
-import '../../shared/utils/chilean_utils.dart';
 
 class CustomerDashboardPage extends StatefulWidget {
   const CustomerDashboardPage({super.key});
@@ -40,529 +43,351 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage>
   Widget build(BuildContext context) {
     super.build(context);
     final accountService = context.watch<CustomerAccountService>();
-    final profile = accountService.customerProfile;
-    final fullName = (profile?['name'] ?? 'Cliente').toString();
-    final firstName = fullName.trim().isEmpty
-        ? 'Cliente'
-        : fullName.trim().split(RegExp(r'\s+')).first;
-    final activeServices = accountService.serviceHistory
-        .where((service) =>
-            !['ENTREGADO', 'CANCELADO'].contains(service['status']))
-        .toList();
 
     return CustomerPortalLayout(
-      title: 'Mi cuenta',
+      title: 'Resumen',
       showBackButton: false,
       showHeader: false,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _WelcomePanel(firstName: firstName),
-          const SizedBox(height: 18),
-          const _DashboardHeading(),
-          const SizedBox(height: 16),
-          _AccountMetrics(
-            ordersCount: accountService.orders.length,
-            addressesCount: accountService.addresses.length,
-            bikesCount: accountService.bikes.length,
-            activeServicesCount: activeServices.length,
-          ),
-          const SizedBox(height: 18),
-          _PortalSection(
-            title: 'Actividad reciente',
-            actionLabel: 'Ver pedidos',
-            onAction: () => PublicStoreLayout.navigateToHref(
-              context,
-              '/cuenta/pedidos',
-            ),
-            child: _RecentOrdersPreview(orders: accountService.orders),
-          ),
-          const SizedBox(height: 18),
-          _PortalSection(
-            title: 'Taller y bicicletas',
-            actionLabel: 'Ver taller',
-            onAction: () => PublicStoreLayout.navigateToHref(
-              context,
-              '/cuenta/servicios',
-            ),
-            child: _WorkshopPreview(
-              activeServices: activeServices,
-              bikes: accountService.bikes,
-            ),
-          ),
-        ],
+      child: CustomerDashboardBody(
+        profile: accountService.customerProfile,
+        orders: accountService.orders,
+        orderImages: accountService.orderProductImages,
+        jobs: accountService.serviceHistory,
+        bikes: accountService.bikes,
+        addressesCount: accountService.addresses.length,
+        onNavigate: (href) => PublicStoreLayout.navigateToHref(context, href),
       ),
     );
   }
 }
 
-class _DashboardHeading extends StatelessWidget {
-  const _DashboardHeading();
+/// El resumen de la cuenta, sin el marco ni el servicio: recibe los datos y
+/// dice adónde ir. Así se prueba y se mira sin una sesión.
+///
+/// Orden: lo que está pasando ahora (pedidos en curso y bicis en el taller,
+/// primero lo que espera al cliente), lo anterior, las bicicletas y los datos
+/// de la cuenta. Sin baldosas de cifras: un cero no le dice nada a nadie.
+class CustomerDashboardBody extends StatelessWidget {
+  const CustomerDashboardBody({
+    super.key,
+    required this.profile,
+    required this.orders,
+    required this.orderImages,
+    required this.jobs,
+    required this.bikes,
+    required this.addressesCount,
+    required this.onNavigate,
+  });
+
+  final Map<String, dynamic>? profile;
+  final List<OnlineOrder> orders;
+  final Map<String, String> orderImages;
+  final List<Map<String, dynamic>> jobs;
+  final List<Map<String, dynamic>> bikes;
+  final int addressesCount;
+  final ValueChanged<String> onNavigate;
 
   @override
   Widget build(BuildContext context) {
-    return const Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Mi cuenta',
-          style: TextStyle(
-            color: Color(0xFF18212F),
-            fontSize: 22,
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0,
-          ),
-        ),
-        SizedBox(height: 4),
-        Text(
-          'Compra, revisa tus datos y vuelve a lo importante sin fricción.',
-          style: TextStyle(
-            color: Color(0xFF667085),
-            fontSize: 13,
-            height: 1.35,
-          ),
-        ),
-      ],
-    );
-  }
-}
+    final firstName = customerFirstName(profile);
+    final since = portalParseDate(profile?['created_at']);
 
-class _WelcomePanel extends StatelessWidget {
-  final String firstName;
+    final current = <_CurrentItem>[
+      for (final order in orders)
+        if (CustomerOrderPresentation.of(order).group ==
+            CustomerOrderGroup.inProgress)
+          _CurrentItem.order(order),
+      for (final job in jobs)
+        if (CustomerWorkshopPresentation.of(job).isActive)
+          _CurrentItem.job(job),
+    ]..sort((a, b) {
+        if (a.needsCustomer != b.needsCustomer) {
+          return a.needsCustomer ? -1 : 1;
+        }
+        return b.date.compareTo(a.date);
+      });
+    final previous = orders
+        .where((order) =>
+            CustomerOrderPresentation.of(order).group !=
+            CustomerOrderGroup.inProgress)
+        .take(3)
+        .toList(growable: false);
 
-  const _WelcomePanel({required this.firstName});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        color: const Color(0xFF102A43),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final copy = Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Hola, $firstName',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 28,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0,
-                ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 560;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            PortalPageHeader(
+              title: firstName == null ? 'Tu cuenta' : 'Hola, $firstName',
+              subtitle: since == null
+                  ? null
+                  : 'Cliente desde ${portalMonthYear(since)}',
+              compact: compact,
+            ),
+            if (firstName == null) ...[
+              const SizedBox(height: 20),
+              PortalNotice(
+                icon: Icons.badge_outlined,
+                message: 'Agrega tu nombre para que el taller sepa quién '
+                    'eres cuando escribas o traigas tu bici.',
+                actionLabel: 'Completar perfil',
+                onAction: () => onNavigate('/cuenta/perfil'),
               ),
-              const SizedBox(height: 8),
-              const Text(
-                'Tus compras, datos personales, direcciones y bicicletas en un solo lugar.',
-                style: TextStyle(
-                  color: Color(0xFFD9E2EC),
-                  fontSize: 14,
-                  height: 1.4,
+            ],
+            SizedBox(height: compact ? 24 : 32),
+            PortalSection(
+              label: 'En curso',
+              child: current.isEmpty
+                  ? _NothingInProgress(onNavigate: onNavigate)
+                  : PortalPanel(
+                      children: [
+                        for (final item in current)
+                          item.order != null
+                              ? CustomerOrderRow(
+                                  order: item.order!,
+                                  imageUrl: _firstImage(item.order!),
+                                  compact: compact,
+                                  onTap: () =>
+                                      onNavigate('/pedido/${item.order!.id}'),
+                                )
+                              : _JobRow(
+                                  job: item.job!,
+                                  compact: compact,
+                                  onTap: () => onNavigate('/cuenta/servicios'),
+                                ),
+                      ],
+                    ),
+            ),
+            if (previous.isNotEmpty) ...[
+              const SizedBox(height: 32),
+              PortalSection(
+                label: 'Pedidos anteriores',
+                actionLabel: 'Ver todos',
+                onAction: () => onNavigate('/cuenta/pedidos'),
+                child: PortalPanel(
+                  children: [
+                    for (final order in previous)
+                      CustomerOrderRow(
+                        order: order,
+                        imageUrl: _firstImage(order),
+                        compact: compact,
+                        onTap: () => onNavigate('/pedido/${order.id}'),
+                      ),
+                  ],
                 ),
               ),
             ],
-          );
-          return copy;
-        },
-      ),
-    );
-  }
-}
-
-class _AccountMetrics extends StatelessWidget {
-  final int ordersCount;
-  final int addressesCount;
-  final int bikesCount;
-  final int activeServicesCount;
-
-  const _AccountMetrics({
-    required this.ordersCount,
-    required this.addressesCount,
-    required this.bikesCount,
-    required this.activeServicesCount,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final columns = constraints.maxWidth < 620 ? 2 : 4;
-        return GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: columns,
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
-          childAspectRatio: columns == 2 ? 1.55 : 1.25,
-          children: [
-            _MetricTile(
-              icon: Icons.receipt_long_outlined,
-              value: ordersCount.toString(),
-              label: 'Pedidos',
-            ),
-            _MetricTile(
-              icon: Icons.location_on_outlined,
-              value: addressesCount.toString(),
-              label: 'Direcciones',
-            ),
-            _MetricTile(
-              icon: Icons.pedal_bike_outlined,
-              value: bikesCount.toString(),
-              label: 'Bicicletas',
-            ),
-            _MetricTile(
-              icon: Icons.build_outlined,
-              value: activeServicesCount.toString(),
-              label: 'Servicios activos',
+            if (bikes.isNotEmpty) ...[
+              const SizedBox(height: 32),
+              PortalSection(
+                label: 'Tus bicicletas',
+                actionLabel: 'Ver todas',
+                onAction: () => onNavigate('/cuenta/bicicletas'),
+                child: PortalPanel(
+                  children: [
+                    for (final bike in bikes.take(3))
+                      PortalRow(
+                        leading: const PortalThumb(
+                          fallbackIcon: Icons.pedal_bike_outlined,
+                        ),
+                        title: CustomerWorkshopPresentation.bikeTitle(bike),
+                        meta: _bikeMeta(bike),
+                        onTap: () => onNavigate(
+                          '/cuenta/servicios?bike_id=${bike['id']}',
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 32),
+            PortalSection(
+              label: 'Contacto y envío',
+              child: PortalPanel(
+                children: [
+                  _AccountFact(
+                    label: 'Correo',
+                    value: (profile?['email'] ?? '').toString(),
+                  ),
+                  _AccountFact(
+                    label: 'Teléfono',
+                    value: (profile?['phone'] ?? '').toString(),
+                    emptyAction: 'Agregar',
+                    onTap: () => onNavigate('/cuenta/perfil'),
+                  ),
+                  _AccountFact(
+                    label: 'Direcciones de envío',
+                    value: switch (addressesCount) {
+                      0 => '',
+                      1 => '1 guardada',
+                      _ => '$addressesCount guardadas',
+                    },
+                    emptyAction: 'Agregar',
+                    onTap: () => onNavigate('/cuenta/direcciones'),
+                  ),
+                ],
+              ),
             ),
           ],
         );
       },
     );
   }
+
+  String? _firstImage(OnlineOrder order) {
+    for (final item in order.items) {
+      final url = orderImages[item.productId];
+      if (url != null) return url;
+    }
+    return null;
+  }
+
+  static String _bikeMeta(Map<String, dynamic> bike) {
+    final count = (bike['service_count'] as num?)?.toInt() ?? 0;
+    final last = portalParseDate(bike['last_service_date']);
+    final services = switch (count) {
+      0 => 'Sin servicios todavía',
+      1 => '1 servicio',
+      _ => '$count servicios',
+    };
+    return last == null ? services : '$services · último ${portalDate(last)}';
+  }
 }
 
-class _MetricTile extends StatelessWidget {
-  final IconData icon;
-  final String value;
-  final String label;
+class _CurrentItem {
+  _CurrentItem.order(OnlineOrder this.order)
+      : job = null,
+        needsCustomer = CustomerOrderPresentation.of(order).needsCustomer,
+        date = order.createdAt;
 
-  const _MetricTile({
-    required this.icon,
-    required this.value,
-    required this.label,
-  });
+  _CurrentItem.job(Map<String, dynamic> this.job)
+      : order = null,
+        needsCustomer = CustomerWorkshopPresentation.of(job).needsCustomer,
+        date = portalParseDate(job['created_at']) ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+
+  final OnlineOrder? order;
+  final Map<String, dynamic>? job;
+  final bool needsCustomer;
+  final DateTime date;
+}
+
+class _JobRow extends StatelessWidget {
+  const _JobRow(
+      {required this.job, required this.compact, required this.onTap});
+
+  final Map<String, dynamic> job;
+  final bool compact;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE0E4EA)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Icon(icon, color: const Color(0xFF102A43), size: 22),
-          Column(
+    final style = PortalStyle.of(context);
+    final presentation = CustomerWorkshopPresentation.of(job);
+    final received = portalParseDate(job['created_at']);
+    final pill = PortalStatusPill(
+      label: presentation.label,
+      tone: presentation.tone,
+    );
+    final nextStep = presentation.needsCustomer ? presentation.nextStep : null;
+    return PortalRow(
+      leading: const PortalThumb(fallbackIcon: Icons.pedal_bike_outlined),
+      title: CustomerWorkshopPresentation.bikeTitle(job),
+      meta: received == null
+          ? 'En el taller'
+          : 'En el taller desde el ${portalDate(received)}',
+      footer: compact
+          ? PortalStatusLine(pill: pill, nextStep: nextStep)
+          : nextStep == null
+              ? null
+              : Text(nextStep, style: style.nextStep),
+      trailing: compact ? null : PortalTrailingColumns(pill: pill),
+      onTap: onTap,
+    );
+  }
+}
+
+class _NothingInProgress extends StatelessWidget {
+  const _NothingInProgress({required this.onNavigate});
+
+  final ValueChanged<String> onNavigate;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = PortalStyle.of(context);
+    return PortalPanel(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 8, 12),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                value,
-                style: const TextStyle(
-                  color: Color(0xFF18212F),
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
-                ),
+                'No tienes pedidos ni bicis en el taller.',
+                style: style.rowTitle,
               ),
+              const SizedBox(height: 4),
               Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Color(0xFF667085),
-                  fontSize: 12,
-                ),
+                'Cuando compres o dejes tu bici con nosotros, vas a ver '
+                'aquí en qué va.',
+                style: style.rowMeta,
               ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PortalSection extends StatelessWidget {
-  final String title;
-  final String actionLabel;
-  final VoidCallback onAction;
-  final Widget child;
-
-  const _PortalSection({
-    required this.title,
-    required this.actionLabel,
-    required this.onAction,
-    required this.child,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE0E4EA)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    color: Color(0xFF18212F),
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 4,
+                children: [
+                  PortalLink(
+                    label: 'Ver productos',
+                    onTap: () => onNavigate('/productos'),
                   ),
-                ),
-              ),
-              TextButton(
-                onPressed: onAction,
-                child: Text(actionLabel),
+                  PortalLink(
+                    label: 'Hablar con el taller',
+                    onTap: () => onNavigate('/cuenta/chats'),
+                  ),
+                ],
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          child,
-        ],
-      ),
-    );
-  }
-}
-
-class _RecentOrdersPreview extends StatelessWidget {
-  final List<dynamic> orders;
-
-  const _RecentOrdersPreview({required this.orders});
-
-  @override
-  Widget build(BuildContext context) {
-    if (orders.isEmpty) {
-      return _EmptyInlineState(
-        icon: Icons.receipt_long_outlined,
-        title: 'Aún no hay compras',
-        message: 'Cuando compres en Viñabike, tus pedidos aparecerán aquí.',
-        actionLabel: 'Ver productos',
-        onAction: () => PublicStoreLayout.navigateToHref(context, '/productos'),
-      );
-    }
-
-    return Column(
-      children: orders.take(3).map((order) {
-        final orderNumber = _read(order, 'orderNumber') ??
-            _read(order, 'order_number') ??
-            'N/A';
-        final total = _read(order, 'total');
-        final status = (_read(order, 'paymentStatus') ??
-                _read(order, 'payment_status') ??
-                'pending')
-            .toString();
-        return _CompactRow(
-          icon: Icons.receipt_long_outlined,
-          title: 'Pedido #$orderNumber',
-          subtitle: _statusLabel(status),
-          trailing: total is num
-              ? ChileanUtils.formatCurrency(total.toDouble())
-              : null,
-        );
-      }).toList(),
-    );
-  }
-
-  static dynamic _read(dynamic object, String key) {
-    if (object is Map<String, dynamic>) return object[key];
-    try {
-      final value = switch (key) {
-        'orderNumber' => object.orderNumber,
-        'paymentStatus' => object.paymentStatus,
-        'total' => object.total,
-        _ => null,
-      };
-      return value;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  static String _statusLabel(String status) {
-    switch (status) {
-      case 'approved':
-      case 'paid':
-        return 'Pago confirmado';
-      case 'pending':
-        return 'Pago pendiente';
-      case 'cancelled':
-      case 'rejected':
-        return 'Cancelado';
-      case 'shipped':
-        return 'Enviado';
-      case 'delivered':
-        return 'Entregado';
-      default:
-        return status;
-    }
-  }
-}
-
-class _WorkshopPreview extends StatelessWidget {
-  final List<dynamic> activeServices;
-  final List<dynamic> bikes;
-
-  const _WorkshopPreview({required this.activeServices, required this.bikes});
-
-  @override
-  Widget build(BuildContext context) {
-    if (activeServices.isEmpty && bikes.isEmpty) {
-      return _EmptyInlineState(
-        icon: Icons.pedal_bike_outlined,
-        title: 'Sin actividad de taller',
-        message:
-            'Tus bicicletas y servicios aparecerán cuando visites el taller.',
-        actionLabel: 'Contactar tienda',
-        onAction: () => PublicStoreLayout.navigateToHref(context, '/contacto'),
-      );
-    }
-
-    return Column(
-      children: [
-        if (activeServices.isNotEmpty)
-          ...activeServices.take(2).map((service) => _CompactRow(
-                icon: Icons.build_outlined,
-                title:
-                    '${service['bike_brand'] ?? ''} ${service['bike_model'] ?? 'Servicio'}'
-                        .trim(),
-                subtitle: 'Estado: ${service['status'] ?? 'en revisión'}',
-              )),
-        if (bikes.isNotEmpty)
-          ...bikes.take(2).map((bike) => _CompactRow(
-                icon: Icons.pedal_bike_outlined,
-                title:
-                    '${bike['brand'] ?? bike['brand_name'] ?? ''} ${bike['model'] ?? bike['model_name'] ?? 'Bicicleta'}'
-                        .trim(),
-                subtitle: 'Ficha de bicicleta guardada',
-              )),
+        ),
       ],
     );
   }
 }
 
-class _CompactRow extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final String? trailing;
-
-  const _CompactRow({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    this.trailing,
+class _AccountFact extends StatelessWidget {
+  const _AccountFact({
+    required this.label,
+    required this.value,
+    this.emptyAction,
+    this.onTap,
   });
+
+  final String label;
+  final String value;
+  final String? emptyAction;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: const Color(0xFF102A43), size: 20),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title.isEmpty ? 'Registro' : title,
-                  style: const TextStyle(
-                    color: Color(0xFF18212F),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                    color: Color(0xFF667085),
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (trailing != null) ...[
-            const SizedBox(width: 12),
-            Text(
-              trailing!,
-              style: const TextStyle(
-                color: Color(0xFF102A43),
-                fontWeight: FontWeight.w800,
+    final style = PortalStyle.of(context);
+    final empty = value.trim().isEmpty;
+    return PortalRow(
+      title: label,
+      trailing: empty && emptyAction != null
+          ? Text(emptyAction!, style: style.link)
+          : ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 260),
+              child: Text(
+                empty ? '—' : value,
+                textAlign: TextAlign.right,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: style.rowMeta.copyWith(color: style.ink),
               ),
             ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _EmptyInlineState extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String message;
-  final String actionLabel;
-  final VoidCallback onAction;
-
-  const _EmptyInlineState({
-    required this.icon,
-    required this.title,
-    required this.message,
-    required this.actionLabel,
-    required this.onAction,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: const Color(0xFF102A43), size: 24),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    color: Color(0xFF18212F),
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  message,
-                  style: const TextStyle(
-                    color: Color(0xFF667085),
-                    fontSize: 12,
-                    height: 1.35,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 10),
-          TextButton(onPressed: onAction, child: Text(actionLabel)),
-        ],
-      ),
+      onTap: onTap,
     );
   }
 }
