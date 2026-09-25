@@ -43,9 +43,22 @@ preservar sus cambios. En el diagnóstico del sitio se desarrolló la página
 instantánea en una rama local separada de `main` y quedó sin integrar; eso
 complicó el seguimiento y obligó al dueño a reiterar su preferencia.
 
-La configuración del remoto no cambia dónde se desarrolla localmente; resolver
-la publicación remota en la fase de release, sin trasladar antes el trabajo a
-otra rama local.
+**Corrección del dueño, 2026-09-25: tampoco en el remoto.** Sin ramas y sin
+pull requests, ni para publicar: se comitea en `main` del checkout compartido
+y se empuja con `git push origin main`. La versión anterior de este párrafo
+(«resolver la publicación remota en la fase de release») dejó abierto el
+camino de rama + PR + esperar checks + merge, y los agentes lo siguieron: el
+portal de clientes pasó por los PR #55 y #56, el dueño tuvo que volver a
+escribir para pedir el merge y terminó diciendo que no sabe qué es un PR ni lo
+quiere. La cuenta del dueño es administradora y la protección de `main` tiene
+`enforce_admins: false`, así que el push directo pasa (GitHub lo anota como
+«bypassed rule violations»); no hay que tocar la configuración del repo.
+
+Lo que no se pierde: cada workflow que despliega en un push a `main`
+(`firebase-hosting-merge.yml`, `firebase-hosting-store.yml`, macOS, Windows)
+corre `erp-integrity-gate.yml` antes de publicar, así que un commit roto no
+llega a producción. Antes de empujar se corren localmente el analyzer y las
+pruebas afectadas; después, se mira que el deploy termine y se verifica en vivo.
 
 ## Dónde va cada aprendizaje
 
@@ -711,7 +724,7 @@ remain outside that implied authorization unless separately included.
 > terminada ni se deja activa contra una etapa incompatible: se completa el
 > rollout o se mantiene un fallback funcional y explícito.
 
-### El repositorio es público y `main` exige rama al día (2026-09-23)
+### El repositorio es público (2026-09-23)
 
 `Ccatalan7/bikeshop-erp` es **público**. Un commit, un PR o un comentario que
 explica cómo se lee un dato ajeno es una guía para leerlo: la fuga se cierra
@@ -721,10 +734,11 @@ PR se redacta sin el paso a paso hasta que esté cerrado. El 2026-09-23 se abri�
 un PR que describía la lectura de costos por una cuenta de cliente antes de
 desplegar el cierre; hubo que adelantar la migración.
 
-`main` tiene `strict: true`: cada merge deja atrasados los demás PR. Con varios
-abiertos se integran de a uno en orden de prioridad (`gh pr update-branch N` al
-siguiente) y se cancelan (`gh run cancel`) las corridas que igual quedarán
-atrasadas; los runners se saturan y el despliegue de la tienda queda en cola.
+Desde el 2026-09-25 no se abren PR (ver «Trabajar directamente en `main`»): el
+texto que describe una fuga va en el mensaje del commit, así que el orden es el
+mismo —primero se despliega el cierre, después se empuja el commit que lo
+explica—. Si alguien más abre un PR, `strict: true` lo deja atrasado con cada
+push a `main`.
 
 ## Definition Of Done For Implementations
 

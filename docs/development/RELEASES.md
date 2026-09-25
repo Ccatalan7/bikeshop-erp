@@ -3,9 +3,15 @@
 The canonical promotion path is:
 
 ```text
-feature/current line → pull request to protected main → integrity + preview
-→ intentional merge → Production environment → post-deploy smoke
+commit on main (shared checkout) → git push origin main → integrity gate
+→ Production environment → post-deploy smoke
 ```
+
+Owner decision, 2026-09-25: no feature branches and no pull requests. The
+owner's account is a repository admin and `enforce_admins` is off, so a direct
+push to `main` bypasses the pull-request requirement; every deploy workflow
+still runs `erp-integrity-gate.yml` before publishing. See
+`.github/copilot-instructions.md` «Trabajar directamente en `main`».
 
 - `main` is protected and rejects force-pushes/deletion.
 - Firebase ERP/store and Windows release workflows consume the merged commit.
