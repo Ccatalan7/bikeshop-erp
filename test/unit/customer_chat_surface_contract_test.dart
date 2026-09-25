@@ -80,7 +80,9 @@ void main() {
     expect(surface, contains('context.watch<ChatProvider>()'));
     expect(surface, contains('CustomerChatView('));
     expect(surface, isNot(contains('getMessagesStream(')));
-    expect(portal, contains('CustomerChatSurface()'));
+    // El marco del portal ya no lleva un segundo chat en una columna
+    // derecha (2026-09-24): el chat vive en «Soporte» y en el botón flotante.
+    expect(portal, isNot(contains('CustomerChatSurface')));
     expect(launcher, contains('CustomerChatSurface('));
   });
 

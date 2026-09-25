@@ -9,6 +9,9 @@ import '../../shared/services/tenant_detection_service.dart';
 import '../../shared/utils/auth_input_validation.dart';
 import '../../shared/utils/web_url.dart';
 import '../../modules/website/models/website_models.dart';
+import '../../shared/services/public_catalog_client.dart';
+import '../models/customer_portal_presentation.dart';
+import '../models/public_commerce_product_projection.dart';
 
 /// Service for managing customer accounts on the public store
 ///
@@ -163,6 +166,7 @@ class CustomerAccountService extends ChangeNotifier {
   String? get tenantId => _tenantId;
   List<CustomerAddress> _addresses = [];
   List<OnlineOrder> _orders = [];
+  Map<String, String> _orderProductImages = const {};
   List<Map<String, dynamic>> _bikes = [];
   List<Map<String, dynamic>> _serviceHistory = [];
   bool _isLoading = false;
@@ -192,6 +196,11 @@ class CustomerAccountService extends ChangeNotifier {
   Map<String, dynamic>? get customerProfile => _customerProfile;
   List<CustomerAddress> get addresses => _addresses;
   List<OnlineOrder> get orders => _orders;
+
+  /// Foto principal de cada producto de los pedidos, por id de producto, con
+  /// la misma regla de imágenes que la ficha pública. Un producto que ya no
+  /// está publicado no trae foto y el portal muestra un ícono.
+  Map<String, String> get orderProductImages => _orderProductImages;
   List<Map<String, dynamic>> get bikes => _bikes;
   List<Map<String, dynamic>> get serviceHistory => _serviceHistory;
   bool get isLoading => _isLoading;
@@ -299,6 +308,7 @@ class CustomerAccountService extends ChangeNotifier {
         _customerProfile = null;
         _addresses = [];
         _orders = [];
+        _orderProductImages = const {};
         _bikes = [];
         _serviceHistory = [];
         notifyListeners();
@@ -477,6 +487,7 @@ class CustomerAccountService extends ChangeNotifier {
         _customerProfile = null;
         _addresses = [];
         _orders = [];
+        _orderProductImages = const {};
         return CustomerAuthResult.emailVerificationRequired;
       }
 
@@ -616,6 +627,7 @@ class CustomerAccountService extends ChangeNotifier {
       _customerProfile = null;
       _addresses = [];
       _orders = [];
+      _orderProductImages = const {};
       _bikes = [];
       _serviceHistory = [];
       _isPasswordRecoverySession = false;
@@ -870,6 +882,7 @@ class CustomerAccountService extends ChangeNotifier {
       _customerProfile = null;
       _addresses = [];
       _orders = [];
+      _orderProductImages = const {};
       _bikes = [];
       _serviceHistory = [];
       _error = 'No pudimos cargar la cuenta de esta tienda.';
@@ -1038,9 +1051,46 @@ class CustomerAccountService extends ChangeNotifier {
         return OnlineOrder.fromJson(json).copyWith(items: items);
       }).toList();
 
+      unawaited(_loadOrderProductImages());
+
       notifyListeners();
     } catch (e) {
       debugPrint('Error loading orders: $e');
+    }
+  }
+
+  Future<void> _loadOrderProductImages() async {
+    final tenantId = _tenantId;
+    final ids = _orders
+        .expand((order) => order.items)
+        .map((item) => item.productId?.trim() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (tenantId == null || tenantId.isEmpty || ids.isEmpty) {
+      _orderProductImages = const {};
+      return;
+    }
+    try {
+      final rows = await PublicCatalogClient.instance
+          .from('products')
+          .select(
+            'id,website_image_url_optimized,website_image_url,'
+            'image_url_optimized,image_url,website_image_urls,image_urls',
+          )
+          .eq('tenant_id', tenantId)
+          .inFilter('id', ids);
+      final images = <String, String>{};
+      for (final raw in rows as List) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        final id = row['id']?.toString() ?? '';
+        final urls = PublicCommerceProductProjection.fromJson(row).imageUrls;
+        if (id.isNotEmpty && urls.isNotEmpty) images[id] = urls.first;
+      }
+      _orderProductImages = images;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error loading order product images: $e');
     }
   }
 
@@ -1264,10 +1314,10 @@ class CustomerAccountService extends ChangeNotifier {
     }
   }
 
-  /// Get active services count (not delivered or cancelled)
+  /// Trabajos con la bici todavía en el taller (o lista para retirar).
   int get activeServicesCount {
     return _serviceHistory
-        .where((s) => !['ENTREGADO', 'CANCELADO'].contains(s['status']))
+        .where((job) => CustomerWorkshopPresentation.of(job).isActive)
         .length;
   }
 
