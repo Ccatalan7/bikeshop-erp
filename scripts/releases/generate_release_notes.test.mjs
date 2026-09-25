@@ -58,10 +58,20 @@ async function createFixtureRepo(t) {
     path.join(os.tmpdir(), "vinabike-release-notes-test-"),
   );
   t.after(async () => {
-    await rm(repoDir, { recursive: true, force: true });
+    // Git puede seguir escribiendo en .git un instante después de un commit
+    // (gc/maintenance automáticos): sin reintentos, rm falla con ENOTEMPTY
+    // al azar y tumba el gate (run del 2026-09-25 sobre 25c69013).
+    await rm(repoDir, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 100,
+    });
   });
 
   runGit(repoDir, ["init", "--quiet"]);
+  runGit(repoDir, ["config", "gc.auto", "0"]);
+  runGit(repoDir, ["config", "maintenance.auto", "false"]);
   runGit(repoDir, ["config", "user.email", "release-tests@vinabike.local"]);
   runGit(repoDir, ["config", "user.name", "Vinabike Release Tests"]);
 
@@ -129,10 +139,20 @@ async function createPrivacyFixtureRepo(t) {
     path.join(os.tmpdir(), "vinabike-private-release-notes-test-"),
   );
   t.after(async () => {
-    await rm(repoDir, { recursive: true, force: true });
+    // Git puede seguir escribiendo en .git un instante después de un commit
+    // (gc/maintenance automáticos): sin reintentos, rm falla con ENOTEMPTY
+    // al azar y tumba el gate (run del 2026-09-25 sobre 25c69013).
+    await rm(repoDir, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 100,
+    });
   });
 
   runGit(repoDir, ["init", "--quiet"]);
+  runGit(repoDir, ["config", "gc.auto", "0"]);
+  runGit(repoDir, ["config", "maintenance.auto", "false"]);
   runGit(repoDir, ["config", "user.email", "release-tests@vinabike.local"]);
   runGit(repoDir, ["config", "user.name", "Vinabike Release Tests"]);
 
@@ -240,8 +260,7 @@ function candidateForInventory(inventory) {
       "Ahora puedes revisar las existencias de cada producto con mayor claridad.",
     sales:
       "Ahora puedes revisar ventas, cobros y pagos desde una vista más clara.",
-    general:
-      "Ahora la actualización muestra sus novedades antes de reiniciar.",
+    general: "Ahora la actualización muestra sus novedades antes de reiniciar.",
   };
   const labels = {
     workshop: "Taller",
@@ -501,11 +520,7 @@ test("rejects stale, tampered, or generic Codex candidates without blocking fall
   for (const scenario of cases) {
     const envelope = structuredClone(validEnvelope);
     scenario.mutate(envelope);
-    const outputPath = path.join(
-      repoDir,
-      "out",
-      `codex-${scenario.name}.json`,
-    );
+    const outputPath = path.join(repoDir, "out", `codex-${scenario.name}.json`);
     const result = await generateReleaseNotes({
       repoDir,
       fromCommit,
@@ -567,9 +582,19 @@ test("never exposes protected paths when a range has no safe AI metadata", async
     path.join(os.tmpdir(), "vinabike-protected-release-test-"),
   );
   t.after(async () => {
-    await rm(repoDir, { recursive: true, force: true });
+    // Git puede seguir escribiendo en .git un instante después de un commit
+    // (gc/maintenance automáticos): sin reintentos, rm falla con ENOTEMPTY
+    // al azar y tumba el gate (run del 2026-09-25 sobre 25c69013).
+    await rm(repoDir, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 100,
+    });
   });
   runGit(repoDir, ["init", "--quiet"]);
+  runGit(repoDir, ["config", "gc.auto", "0"]);
+  runGit(repoDir, ["config", "maintenance.auto", "false"]);
   runGit(repoDir, ["config", "user.email", "release-tests@vinabike.local"]);
   runGit(repoDir, ["config", "user.name", "Vinabike Release Tests"]);
 
@@ -1446,8 +1471,7 @@ test("el prompt no le pide al modelo lo que el validador rechaza", async (t) => 
     geminiApiKey: "test-only-gemini-key",
     maxAttempts: 1,
     fetchImpl: async (_endpoint, init) => {
-      systemInstruction =
-        JSON.parse(init.body).systemInstruction.parts[0].text;
+      systemInstruction = JSON.parse(init.body).systemInstruction.parts[0].text;
       return geminiResponseWithCandidate(candidateForInventory(inventory));
     },
   });
