@@ -1416,6 +1416,16 @@ that way. So: count clones, not bytes; one per open browser is normal, several
 per browser is the leak. A restart clears any leftover, together with orphaned
 `flutter_tester` processes.
 
+#### Headless Chrome profiles in `$TMPDIR` (2026-09-24)
+
+A load-time harness that starts headless Chrome with
+`--user-data-dir=$(mktemp -d)` leaves a ~33 MB profile per load in
+`$TMPDIR` (`/var/folders/<xx>/<hash>/T/`), not in `/private/tmp`: one
+afternoon of storefront measurements left 26 of them, **852 MB**, invisible
+to the `/private/tmp` check above. A measurement script moves its own profile
+to `~/.Trash/limpieza-<date>/` when Chrome exits; when disk pressure is
+reported, also run `du -sh "$TMPDIR"`.
+
 **How to clean here:** the repo hook blocks `rm -rf`, `find -delete` and
 `kill`. Move targets with `mv` into one dated folder, `~/.Trash/limpieza-<date>/`
 (same APFS volume, so it is an instant rename), report the size, and let the
