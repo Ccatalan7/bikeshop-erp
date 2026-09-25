@@ -64,6 +64,12 @@
   lista proyectos de tipo *design-system*, y éste no lo es—, así que un `[]`
   **no** es falta de permiso y no hay nada que pedirle al dueño. Verifícalo con
   `get_project` sobre ese id: `canEdit: true`.
+- **El sitio público queda a criterio del agente (dueño, 2026-09-24).** Tienda,
+  portal de clientes, checkout y el HTML que genera el build no pasan por
+  `DesignSync` ni por `GUÍA GENERAL`; el agente que los trabaja decide sus
+  valores y su composición, y la marca sigue saliendo del editor web. Las
+  reglas de abajo rigen el ERP, incluido el editor del sitio. Alcance
+  completo: `.github/GUI_DESIGN_PRINCIPLES.md` «El sitio público no pasa por Design».
 - **Every visual value is read from a Design file with the `DesignSync` tool** —
   colour, radius, shadow, border, spacing, font, height. Estimating a value, or
   reproducing it from a screenshot of the Design window, is prohibited for both

@@ -268,6 +268,11 @@ acreditado en Design:
   esqueletos (radio 6 px, tono `--ip-soft` al 7 % del texto, pulso de 1,4 s,
   proporciones de las líneas) y el tono secundario `--ip-secondary`.
 
+**Superado el mismo día:** el dueño sacó el sitio público de esa regla
+(«the designs on the website can be open to the agent criteria»; ver
+`.github/GUI_DESIGN_PRINCIPLES.md` «El sitio público no pasa por Design»). Los valores de la instantánea quedan como
+decisión del agente; lo que sigue es el registro de por qué son éstos.
+
 **Decisión del dueño, 2026-09-24:** publicar con estos valores sin esperar
 `/design-login` ni la comparación con `GUÍA GENERAL Viñabike - Componentes`.
 La inspección visual local del traspaso de ficha y categoría y las pruebas

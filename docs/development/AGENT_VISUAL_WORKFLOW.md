@@ -18,7 +18,9 @@ canvas opcional nunca bloquea el primer track.
 
 ## 0. Las cuatro reglas que no se negocian
 
-1. **Un valor visual se lee del archivo de Design con `DesignSync`.** Color,
+1. **Un valor visual se lee del archivo de Design con `DesignSync`** (en el
+   ERP; el sitio público queda a criterio del agente desde el 2026-09-24, ver
+   `.github/GUI_DESIGN_PRINCIPLES.md` «El sitio público no pasa por Design»). Color,
    radio, sombra, borde, espaciado, tipografía, altura. Nunca de una captura,
    nunca estimado. Un valor que no se puede leer **se reporta como ilegible**,
    no se reemplaza por uno plausible.

@@ -8,6 +8,11 @@ screenshots, and how it proves it is not implementing against a stale turn.
 This is a standing rule. It is requested from Design **once**; every later turn
 follows it automatically.
 
+**Scope (owner, 2026-09-24):** the ERP, including the website editor. The
+public website — store, customer portal, checkout and the HTML the build
+generates — is left to the working agent's criteria and does not go through
+this contract; see `.github/GUI_DESIGN_PRINCIPLES.md` «El sitio público no pasa por Design».
+
 ## Why it exists
 
 Code can read the Design project directly with `DesignSync`, subject to one
