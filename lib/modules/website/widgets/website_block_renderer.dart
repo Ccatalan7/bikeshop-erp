@@ -1387,7 +1387,7 @@ class _BrandLogosCarouselState extends State<_BrandLogosCarousel> {
                       margin: const EdgeInsets.symmetric(horizontal: 4),
                       decoration: BoxDecoration(
                         color: active
-                            ? const Color(0xFF00A09D)
+                            ? Theme.of(context).colorScheme.primary
                             : Colors.grey.shade300,
                         borderRadius: BorderRadius.circular(5),
                       ),

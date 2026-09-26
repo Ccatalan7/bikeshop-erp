@@ -1049,7 +1049,7 @@ class _CanvasBlockControls extends StatelessWidget {
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
                           color: isActive
-                              ? const Color(0xFF00A09D)
+                              ? websiteEditorAccent(context)
                               : Colors.white.withValues(alpha: 0.08),
                         ),
                       ),
@@ -1567,7 +1567,7 @@ class _CanvasBlockControls extends StatelessWidget {
             surface.color('bgColor', label: 'Color del botón', layerId: id),
             (binding) => WebsiteColorPickerField(
               label: '',
-              value: binding.value ?? '#00A09D',
+              value: binding.value ?? '#123F68',
               allowAlpha: true,
               asyncBinding: _asyncFieldBinding(binding),
               onChanged: binding.write,
@@ -3025,7 +3025,7 @@ class _CanvasProductSelectorState extends State<_CanvasProductSelector> {
             TextButton(
               onPressed: _isLoadingProducts ? null : _pickProduct,
               style: TextButton.styleFrom(
-                foregroundColor: const Color(0xFF00A09D),
+                foregroundColor: websiteEditorAccent(context),
                 padding: EdgeInsets.zero,
                 minimumSize: Size.zero,
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,

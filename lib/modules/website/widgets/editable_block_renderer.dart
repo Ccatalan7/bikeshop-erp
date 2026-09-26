@@ -25,6 +25,7 @@ import 'website_inline_action_editor.dart';
 import 'website_media_picker.dart';
 import '../services/website_service.dart';
 import '../../../shared/models/product.dart';
+import 'website_editor_host_theme.dart';
 
 WebsiteEditorRemoteWriteAuthority? _canvasRemoteWriteAuthority({
   required WebsiteEditModeProvider provider,
@@ -470,7 +471,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
                 decoration: BoxDecoration(
                   border: Border.all(
                     color: widget.isSelected
-                        ? const Color(0xFF00A09D)
+                        ? websiteEditorAccent(context)
                         : Colors.transparent,
                     width: 2,
                   ),

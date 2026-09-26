@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'website_editor_control_density.dart';
+import 'website_editor_host_theme.dart';
 
 /// A minimalist resize handle for website blocks in edit mode.
 ///
@@ -128,7 +129,7 @@ class _BlockResizeHandleState extends State<BlockResizeHandle> {
               height: 20,
               decoration: BoxDecoration(
                 color: (_isHovered || _isDragging)
-                    ? const Color(0xFF00A09D).withValues(alpha: 0.15)
+                    ? websiteEditorAccent(context).withValues(alpha: 0.15)
                     : Colors.transparent,
               ),
               child: Stack(
@@ -141,8 +142,8 @@ class _BlockResizeHandleState extends State<BlockResizeHandle> {
                     height: 4,
                     decoration: BoxDecoration(
                       color: (_isHovered || _isDragging)
-                          ? const Color(0xFF00A09D)
-                          : const Color(0xFF00A09D).withValues(alpha: 0.4),
+                          ? websiteEditorAccent(context)
+                          : websiteEditorAccent(context).withValues(alpha: 0.4),
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
@@ -157,7 +158,7 @@ class _BlockResizeHandleState extends State<BlockResizeHandle> {
                           padding: const EdgeInsets.symmetric(
                               horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF00A09D),
+                            color: websiteEditorAccent(context),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
@@ -187,19 +188,20 @@ class _BlockResizeHandleState extends State<BlockResizeHandle> {
                               color: Colors.white.withValues(alpha: 0.9),
                               borderRadius: BorderRadius.circular(4),
                               border: Border.all(
-                                  color: const Color(0xFF00A09D)
+                                  color: websiteEditorAccent(context)
                                       .withValues(alpha: 0.3)),
                             ),
-                            child: const Row(
+                            child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 Icon(Icons.restart_alt,
-                                    size: 12, color: Color(0xFF00A09D)),
-                                SizedBox(width: 3),
+                                    size: 12,
+                                    color: websiteEditorAccent(context)),
+                                const SizedBox(width: 3),
                                 Text(
                                   'Auto',
                                   style: TextStyle(
-                                    color: Color(0xFF00A09D),
+                                    color: websiteEditorAccent(context),
                                     fontSize: 9,
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -540,12 +542,13 @@ class BlockHeightPresetSelector extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 decoration: BoxDecoration(
                   color: isSelected
-                      ? const Color(0xFF00A09D)
+                      ? websiteEditorAccent(context)
                       : const Color(0xFF2D2D2D),
                   borderRadius: BorderRadius.circular(4),
                   border: Border.all(
-                    color:
-                        isSelected ? const Color(0xFF00A09D) : Colors.white12,
+                    color: isSelected
+                        ? websiteEditorAccent(context)
+                        : Colors.white12,
                   ),
                 ),
                 child: Text(

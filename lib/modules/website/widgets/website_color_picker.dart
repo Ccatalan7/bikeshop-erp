@@ -276,7 +276,7 @@ const List<String> websiteEditorColorPalette = [
   '#202725',
   '#08100D',
   '#000000',
-  '#00A09D',
+  '#123F68',
   '#0F4C5C',
   '#2F6B4F',
   '#D96B3B',

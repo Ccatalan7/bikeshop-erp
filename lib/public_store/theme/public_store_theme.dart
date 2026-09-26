@@ -21,7 +21,7 @@ class PublicStoreTheme {
   static const Color logoBlue = Color(0xFF093357);
   static const Color primaryBlue = WebsiteResolvedTheme.defaultPrimaryColor;
   static const Color secondaryGray = Color(0xFF64748B); // Elegant gray
-  static const Color accentGreen = WebsiteResolvedTheme.defaultAccentColor;
+  static const Color accentGreen = Color(0xFF25D366); // WhatsApp
 
   // Background Colors (Light & Clean)
   static const Color background = WebsiteResolvedTheme.defaultBackgroundColor;

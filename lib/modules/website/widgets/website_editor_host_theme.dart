@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../shared/themes/app_theme.dart';
 import '../../../shared/themes/appearance_preset.dart';
 import '../../../shared/themes/vinabike_theme_roles.dart';
+import '../theme/website_resolved_theme.dart';
 
 /// The ERP's own appearance, carried across the storefront theme boundary.
 ///
@@ -54,6 +55,24 @@ class WebsiteEditorHostTheme extends InheritedWidget {
   @override
   bool updateShouldNotify(WebsiteEditorHostTheme oldWidget) =>
       theme != oldWidget.theme || roles != oldWidget.roles;
+}
+
+/// The editor's own accent: selection rings, handles, active switches, tabs.
+///
+/// It is the ERP preset's primary where the control sits. Below the
+/// storefront `Theme` (the one carrying [WebsiteResolvedTheme]) that is the
+/// published host theme, so a tool never wears the tenant's brand; anywhere
+/// else — the graphite inspector, dialogs, pickers — it is the ambient theme,
+/// which already resolved the preset for that surface's brightness.
+///
+/// Never a literal. The first editor hardcoded Odoo's teal (`0xFF00A09D`) in
+/// 159 places and it kept surfacing in every tool; the owner called it «color
+/// moco» (2026-09-26). `test/unit/banned_site_colors_test.dart` keeps it out.
+Color websiteEditorAccent(BuildContext context) {
+  final theme = Theme.of(context);
+  final belowStorefront = theme.extension<WebsiteResolvedTheme>() != null;
+  final host = belowStorefront ? WebsiteEditorHostTheme.maybeOf(context) : null;
+  return (host?.theme ?? theme).colorScheme.primary;
 }
 
 /// The Website Builder inspector's own dark appearance.

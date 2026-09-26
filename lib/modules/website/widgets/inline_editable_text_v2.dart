@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import '../../../shared/widgets/vb_segmented.dart';
 import 'text_formatting_toolbar.dart';
 import 'website_text_block_content.dart';
+import 'website_editor_host_theme.dart';
 
 /// The complete local draft produced by one inline text session.
 ///
@@ -481,9 +482,10 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
                     decoration: BoxDecoration(
                       border: Border.all(
                         color: _isEditing
-                            ? const Color(0xFF00A09D)
+                            ? websiteEditorAccent(context)
                             : _isHovered
-                                ? const Color(0xFF00A09D).withValues(alpha: 0.5)
+                                ? websiteEditorAccent(context)
+                                    .withValues(alpha: 0.5)
                                 : Colors.transparent,
                         width: _isEditing ? 2 : 1,
                       ),
@@ -637,7 +639,7 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
                 width: 14,
                 height: 32,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF00A09D),
+                  color: websiteEditorAccent(context),
                   borderRadius: BorderRadius.circular(3),
                   boxShadow: [
                     BoxShadow(
@@ -717,9 +719,9 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
         style: _effectiveStyle, // Keep original style including color!
         textAlign: _effectiveTextAlign,
         maxLines: widget.maxLines,
-        cursorColor: const Color(0xFF00A09D),
+        cursorColor: websiteEditorAccent(context),
         backgroundCursorColor: Colors.grey,
-        selectionColor: const Color(0xFF00A09D).withValues(alpha: 0.3),
+        selectionColor: websiteEditorAccent(context).withValues(alpha: 0.3),
         // DON'T call onTextChanged during editing - it causes rebuild and focus loss
         // Text will be saved when editing finishes
         onChanged: (_) {},
@@ -756,8 +758,8 @@ class _InlineEditableTextV2State extends State<InlineEditableTextV2> {
             top: -4,
             child: Container(
               padding: const EdgeInsets.all(4),
-              decoration: const BoxDecoration(
-                color: Color(0xFF00A09D),
+              decoration: BoxDecoration(
+                color: websiteEditorAccent(context),
                 shape: BoxShape.circle,
               ),
               child: const Icon(Icons.edit, size: 10, color: Colors.white),
@@ -885,7 +887,7 @@ class _SimpleInlineEditableTextState extends State<SimpleInlineEditableText> {
           decoration: BoxDecoration(
             border: Border.all(
               color: _isEditing || _isHovered
-                  ? const Color(0xFF00A09D)
+                  ? websiteEditorAccent(context)
                   : Colors.transparent,
               width: 1,
             ),

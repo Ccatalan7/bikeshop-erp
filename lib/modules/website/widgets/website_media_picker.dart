@@ -7,6 +7,7 @@ import '../services/website_background_removal_service.dart';
 import '../services/website_media_service.dart';
 import '../services/website_service.dart';
 import 'website_background_removal_dialog.dart';
+import 'website_editor_host_theme.dart';
 
 /// Opaque, typed authority captured before an asynchronous Website field
 /// yields control.
@@ -565,7 +566,7 @@ class _WebsiteMediaPickerDialogState extends State<WebsiteMediaPickerDialog> {
       padding: const EdgeInsets.fromLTRB(24, 20, 12, 12),
       child: Row(
         children: [
-          const Icon(Icons.perm_media_outlined, color: Color(0xFF00A09D)),
+          Icon(Icons.perm_media_outlined, color: websiteEditorAccent(context)),
           const SizedBox(width: 12),
           const Expanded(
             child: Column(
@@ -719,7 +720,7 @@ class _WebsiteMediaPickerDialogState extends State<WebsiteMediaPickerDialog> {
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(
                               color: selected
-                                  ? const Color(0xFF00A09D)
+                                  ? websiteEditorAccent(context)
                                   : Colors.black12,
                               width: selected ? 2 : 1,
                             ),
@@ -858,10 +859,10 @@ class _WebsiteMediaPickerDialogState extends State<WebsiteMediaPickerDialog> {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: const Color(0xFF00A09D).withValues(alpha: .045),
+        color: websiteEditorAccent(context).withValues(alpha: .045),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: const Color(0xFF00A09D).withValues(alpha: .2),
+          color: websiteEditorAccent(context).withValues(alpha: .2),
         ),
       ),
       child: Row(
@@ -912,7 +913,7 @@ class _WebsiteMediaPickerDialogState extends State<WebsiteMediaPickerDialog> {
                           borderRadius: BorderRadius.circular(7),
                           border: Border.all(
                             color: selected
-                                ? const Color(0xFF00A09D)
+                                ? websiteEditorAccent(context)
                                 : Colors.black12,
                             width: selected ? 2 : 1,
                           ),
@@ -957,7 +958,7 @@ class _WebsiteMediaPickerDialogState extends State<WebsiteMediaPickerDialog> {
             color: hasImage ? Colors.white : const Color(0xFFF6F6F6),
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: selected ? const Color(0xFF00A09D) : Colors.black12,
+              color: selected ? websiteEditorAccent(context) : Colors.black12,
               width: selected ? 2 : 1,
             ),
           ),
@@ -1068,7 +1069,7 @@ class _WebsiteMediaPickerDialogState extends State<WebsiteMediaPickerDialog> {
                               : Icons.public_off_outlined,
                           size: 12,
                           color: product.isPublished
-                              ? const Color(0xFF00A09D)
+                              ? websiteEditorAccent(context)
                               : Colors.black38,
                         ),
                       ],
@@ -1096,10 +1097,10 @@ class _WebsiteMediaPickerDialogState extends State<WebsiteMediaPickerDialog> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 32),
               decoration: BoxDecoration(
-                color: const Color(0xFF00A09D).withValues(alpha: .05),
+                color: websiteEditorAccent(context).withValues(alpha: .05),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: const Color(0xFF00A09D).withValues(alpha: .4),
+                  color: websiteEditorAccent(context).withValues(alpha: .4),
                 ),
               ),
               child: Column(
@@ -1108,8 +1109,8 @@ class _WebsiteMediaPickerDialogState extends State<WebsiteMediaPickerDialog> {
                   if (_uploading)
                     const CircularProgressIndicator()
                   else
-                    const Icon(Icons.cloud_upload_outlined,
-                        size: 48, color: Color(0xFF00A09D)),
+                    Icon(Icons.cloud_upload_outlined,
+                        size: 48, color: websiteEditorAccent(context)),
                   const SizedBox(height: 16),
                   Text(
                     _uploading ? 'Subiendo…' : 'Elegir imagen',
@@ -1535,15 +1536,16 @@ class _WebsiteImagePickerFieldState extends State<WebsiteImagePickerField> {
                       ),
                     ],
                   )
-                : const Column(
+                : Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(Icons.add_photo_alternate_outlined,
-                          color: Color(0xFF00A09D), size: 30),
-                      SizedBox(height: 8),
+                          color: websiteEditorAccent(context), size: 30),
+                      const SizedBox(height: 8),
                       Text('Biblioteca, productos o subir',
                           style: TextStyle(
-                              color: Color(0xFF00A09D), fontSize: 12)),
+                              color: websiteEditorAccent(context),
+                              fontSize: 12)),
                     ],
                   ),
           ),

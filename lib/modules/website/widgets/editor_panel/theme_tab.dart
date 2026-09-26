@@ -441,7 +441,7 @@ class _ThemeTabState extends State<_ThemeTab> {
         border: Border.all(color: Colors.white10),
       ),
       child: ListTile(
-        leading: Icon(icon, color: const Color(0xFF00A09D)),
+        leading: Icon(icon, color: websiteEditorAccent(context)),
         title: Text(title, style: const TextStyle(color: Colors.white)),
         subtitle: Text(subtitle,
             style: const TextStyle(color: Colors.white54, fontSize: 12)),
@@ -865,8 +865,8 @@ class _ThemeTabState extends State<_ThemeTab> {
             const Spacer(),
             Text(
               '${value.round()}px',
-              style: const TextStyle(
-                color: Color(0xFF00A09D),
+              style: TextStyle(
+                color: websiteEditorAccent(context),
                 fontSize: 11,
                 fontWeight: FontWeight.w500,
               ),
@@ -889,10 +889,10 @@ class _ThemeTabState extends State<_ThemeTab> {
         const SizedBox(height: 6),
         SliderTheme(
           data: SliderTheme.of(context).copyWith(
-            activeTrackColor: const Color(0xFF00A09D),
+            activeTrackColor: websiteEditorAccent(context),
             inactiveTrackColor: Colors.white12,
-            thumbColor: const Color(0xFF00A09D),
-            overlayColor: const Color(0xFF00A09D).withValues(alpha: 0.2),
+            thumbColor: websiteEditorAccent(context),
+            overlayColor: websiteEditorAccent(context).withValues(alpha: 0.2),
             thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
             trackHeight: 3,
           ),
@@ -927,12 +927,12 @@ class _ThemeTabState extends State<_ThemeTab> {
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
             color: isSelected
-                ? const Color(0xFF00A09D).withValues(alpha: 0.2)
+                ? websiteEditorAccent(context).withValues(alpha: 0.2)
                 : const Color(0xFF1E1E1E),
             borderRadius: BorderRadius.circular(
                 value == 'pill' ? 20 : (value == 'rounded' ? 8 : 0)),
             border: Border.all(
-              color: isSelected ? const Color(0xFF00A09D) : Colors.white12,
+              color: isSelected ? websiteEditorAccent(context) : Colors.white12,
               width: isSelected ? 2 : 1,
             ),
           ),
@@ -940,7 +940,8 @@ class _ThemeTabState extends State<_ThemeTab> {
             child: Text(
               label,
               style: TextStyle(
-                color: isSelected ? const Color(0xFF00A09D) : Colors.white70,
+                color:
+                    isSelected ? websiteEditorAccent(context) : Colors.white70,
                 fontSize: 12,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
               ),
@@ -1081,7 +1082,7 @@ class _LogoUploaderState extends State<_LogoUploader> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('✅ ${_capitalized(widget.noun)} actualizado'),
-          backgroundColor: const Color(0xFF00A09D),
+          backgroundColor: websiteEditorAccent(context),
           duration: const Duration(seconds: 2),
         ),
       );
@@ -1121,7 +1122,7 @@ class _LogoUploaderState extends State<_LogoUploader> {
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
                 color: _isUploading
-                    ? const Color(0xFF00A09D)
+                    ? websiteEditorAccent(context)
                     : Colors.white.withValues(alpha: 0.1),
                 width: _isUploading ? 2 : 1,
               ),
@@ -1136,13 +1137,13 @@ class _LogoUploaderState extends State<_LogoUploader> {
                 ? Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const SizedBox(
+                      SizedBox(
                         width: 32,
                         height: 32,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
                           valueColor: AlwaysStoppedAnimation<Color>(
-                            Color(0xFF00A09D),
+                            websiteEditorAccent(context),
                           ),
                         ),
                       ),
@@ -1183,21 +1184,21 @@ class _LogoUploaderState extends State<_LogoUploader> {
                           Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF00A09D)
+                              color: websiteEditorAccent(context)
                                   .withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(50),
                             ),
-                            child: const Icon(
+                            child: Icon(
                               Icons.cloud_upload_outlined,
-                              color: Color(0xFF00A09D),
+                              color: websiteEditorAccent(context),
                               size: 28,
                             ),
                           ),
                           const SizedBox(height: 12),
                           Text(
                             'Haz clic para subir ${widget.noun}',
-                            style: const TextStyle(
-                              color: Color(0xFF00A09D),
+                            style: TextStyle(
+                              color: websiteEditorAccent(context),
                               fontSize: 13,
                               fontWeight: FontWeight.w500,
                             ),

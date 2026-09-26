@@ -11,6 +11,7 @@ import '../../../shared/models/product.dart' as shared_product;
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/image_service.dart';
 import '../../../shared/services/inventory_service.dart' as shared_inventory;
+import '../../../shared/themes/vinabike_theme_roles.dart';
 import '../../sales/models/sales_models.dart';
 import '../../sales/services/sales_service.dart';
 import '../models/dashboard_metrics.dart';
@@ -1534,7 +1535,11 @@ class _HeaderPaymentMethodTotals extends StatelessWidget {
           for (var i = 0; i < sortedItems.length; i++) ...[
             _HeaderPaymentMethodTotal(
               item: sortedItems[i],
-              color: _paymentMethodColor(sortedItems[i], i),
+              color: _paymentMethodColor(
+                sortedItems[i],
+                i,
+                cash: VinabikeThemeRoles.of(context).success.accent,
+              ),
             ),
             if (i < sortedItems.length - 1) const SizedBox(width: 10),
           ],
@@ -2005,10 +2010,14 @@ class _PaymentMethodFilterChip extends StatelessWidget {
   }
 }
 
-Color _paymentMethodColor(PaymentMethodBreakdownItem item, int index) {
+Color _paymentMethodColor(
+  PaymentMethodBreakdownItem item,
+  int index, {
+  required Color cash,
+}) {
   final text = '${item.code} ${item.name}'.toLowerCase();
   if (text.contains('cash') || text.contains('efectivo')) {
-    return const Color(0xFF2E7D32);
+    return cash;
   }
   if (text.contains('card') ||
       text.contains('tarjeta') ||

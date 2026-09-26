@@ -15,6 +15,8 @@ import 'package:vinabike_erp/modules/accounting/services/financial_projection_re
 import 'package:vinabike_erp/modules/accounting/services/financial_reports_service.dart';
 import 'package:vinabike_erp/modules/accounting/widgets/accounting_dashboard_section.dart';
 import 'package:vinabike_erp/shared/services/database_service.dart';
+import 'package:vinabike_erp/shared/themes/app_theme.dart';
+import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 import 'package:vinabike_erp/shared/widgets/strategic_dashboard_deck.dart';
 
 void main() {
@@ -364,6 +366,10 @@ Future<void> _pumpDeck(
         ChangeNotifierProvider<FinancialReportsService>.value(value: reports),
       ],
       child: MaterialApp(
+        theme: AppTheme.resolve(
+          preset: AppearancePresets.vinabike,
+          brightness: Brightness.light,
+        ),
         home: Scaffold(
           body: SingleChildScrollView(child: child),
         ),

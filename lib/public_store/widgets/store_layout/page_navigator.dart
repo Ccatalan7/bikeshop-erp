@@ -213,7 +213,7 @@ class _PageNavigatorDialogState extends State<_PageNavigatorDialog> {
                                 ),
                               ),
                               color: current
-                                  ? const Color(0xFF00A09D)
+                                  ? websiteEditorAccent(context)
                                       .withValues(alpha: 0.15)
                                   : Colors.transparent,
                             ),
@@ -225,7 +225,7 @@ class _PageNavigatorDialogState extends State<_PageNavigatorDialog> {
                                       : Icons.circle_outlined,
                                   size: 18,
                                   color: current
-                                      ? const Color(0xFF00A09D)
+                                      ? websiteEditorAccent(context)
                                       : Colors.white38,
                                 ),
                                 const SizedBox(width: 12),
@@ -238,7 +238,7 @@ class _PageNavigatorDialogState extends State<_PageNavigatorDialog> {
                                         t.title,
                                         style: TextStyle(
                                           color: current
-                                              ? const Color(0xFF00A09D)
+                                              ? websiteEditorAccent(context)
                                               : Colors.white,
                                           fontWeight: current
                                               ? FontWeight.w600
@@ -253,7 +253,7 @@ class _PageNavigatorDialogState extends State<_PageNavigatorDialog> {
                                             t.subtitle!,
                                             style: TextStyle(
                                               color: current
-                                                  ? const Color(0xFF00A09D)
+                                                  ? websiteEditorAccent(context)
                                                       .withValues(alpha: 0.7)
                                                   : Colors.white38,
                                               fontSize: 12,

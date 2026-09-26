@@ -62,10 +62,10 @@ class _InspectorIntro extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFF00A09D).withValues(alpha: 0.08),
+        color: websiteEditorAccent(context).withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
-          color: const Color(0xFF00A09D).withValues(alpha: 0.2),
+          color: websiteEditorAccent(context).withValues(alpha: 0.2),
         ),
       ),
       child: Row(
@@ -407,7 +407,7 @@ class _EditorTextFieldState extends State<_EditorTextField> {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(6),
-                borderSide: const BorderSide(color: Color(0xFF00A09D)),
+                borderSide: BorderSide(color: websiteEditorAccent(context)),
               ),
             ),
             onChanged: _publish,
@@ -453,7 +453,7 @@ class _EditorToggle extends StatelessWidget {
           onChanged: onChanged,
           // ON state: bright teal color (highlighted)
           activeThumbColor: Colors.white,
-          activeTrackColor: const Color(0xFF00A09D),
+          activeTrackColor: websiteEditorAccent(context),
           // OFF state: dim/dark (muted)
           inactiveThumbColor: Colors.grey.shade400,
           inactiveTrackColor: Colors.grey.shade700,
@@ -519,18 +519,18 @@ class _EditorSlider extends StatelessWidget {
                 ),
                 child: Text(
                   valueLabel ?? draft.toInt().toString(),
-                  style:
-                      const TextStyle(color: Color(0xFF00A09D), fontSize: 12),
+                  style: TextStyle(
+                      color: websiteEditorAccent(context), fontSize: 12),
                 ),
               ),
             ],
           ),
           SliderTheme(
             data: SliderThemeData(
-              activeTrackColor: const Color(0xFF00A09D),
+              activeTrackColor: websiteEditorAccent(context),
               inactiveTrackColor: Colors.white.withValues(alpha: 0.1),
-              thumbColor: const Color(0xFF00A09D),
-              overlayColor: const Color(0xFF00A09D).withValues(alpha: 0.2),
+              thumbColor: websiteEditorAccent(context),
+              overlayColor: websiteEditorAccent(context).withValues(alpha: 0.2),
             ),
             child: slider,
           ),
@@ -826,10 +826,10 @@ class _VideoPickerState extends State<_VideoPicker> {
 
       if (mounted && accepted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Video subido correctamente'),
-            backgroundColor: Color(0xFF00A09D),
-            duration: Duration(seconds: 2),
+          SnackBar(
+            content: const Text('✅ Video subido correctamente'),
+            backgroundColor: websiteEditorAccent(context),
+            duration: const Duration(seconds: 2),
           ),
         );
       }
@@ -882,7 +882,7 @@ class _VideoPickerState extends State<_VideoPicker> {
             label:
                 Text(_isUploading ? 'Subiendo...' : 'Subir archivo de video'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00A09D),
+              backgroundColor: websiteEditorAccent(context),
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 12),
             ),
@@ -1228,20 +1228,21 @@ class _ImagePickerState extends State<_ImagePicker> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF00A09D).withValues(alpha: 0.1),
+                          color: websiteEditorAccent(context)
+                              .withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(50),
                         ),
-                        child: const Icon(
+                        child: Icon(
                           Icons.cloud_upload_outlined,
-                          color: Color(0xFF00A09D),
+                          color: websiteEditorAccent(context),
                           size: 28,
                         ),
                       ),
                       const SizedBox(height: 12),
-                      const Text(
+                      Text(
                         'Haz clic para elegir imagen',
                         style: TextStyle(
-                          color: Color(0xFF00A09D),
+                          color: websiteEditorAccent(context),
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
                         ),

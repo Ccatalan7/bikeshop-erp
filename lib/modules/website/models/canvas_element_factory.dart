@@ -28,7 +28,7 @@ Map<String, dynamic> createCanvasElement({
         'label': 'Botón',
         'style': 'filled',
         'inheritTheme': true,
-        'bgColor': '#00A09D',
+        'bgColor': '#123F68',
         'fgColor': '#FFFFFF',
         'radius': 12.0,
         'fontSize': 14.0,

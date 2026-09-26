@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'website_editor_host_theme.dart';
 
 /// Wrapper widget that handles the "first click selects, second click navigates" pattern.
 ///
@@ -105,9 +106,9 @@ class _EditModeClickHandlerState extends State<EditModeClickHandler> {
               decoration: BoxDecoration(
                 border: Border.all(
                   color: widget.isSelected
-                      ? const Color(0xFF00A09D)
+                      ? websiteEditorAccent(context)
                       : _isHovered
-                          ? const Color(0xFF00A09D).withValues(alpha: 0.5)
+                          ? websiteEditorAccent(context).withValues(alpha: 0.5)
                           : Colors.transparent,
                   width: widget.isSelected ? 2 : 1,
                 ),
@@ -125,7 +126,7 @@ class _EditModeClickHandlerState extends State<EditModeClickHandler> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF00A09D).withValues(alpha: 0.9),
+                    color: websiteEditorAccent(context).withValues(alpha: 0.9),
                     borderRadius: BorderRadius.circular(4),
                     boxShadow: [
                       BoxShadow(
@@ -260,14 +261,15 @@ class _EditModeButtonState extends State<EditModeButton> {
                   borderRadius: BorderRadius.circular(4),
                   border: Border.all(
                     color: widget.isSelected
-                        ? const Color(0xFF00A09D)
+                        ? websiteEditorAccent(context)
                         : _isHovered
-                            ? const Color(0xFF00A09D).withValues(alpha: 0.4)
+                            ? websiteEditorAccent(context)
+                                .withValues(alpha: 0.4)
                             : Colors.transparent,
                     width: widget.isSelected ? 2 : 1,
                   ),
                   color: _isHovered && !widget.isSelected
-                      ? const Color(0xFF00A09D).withValues(alpha: 0.1)
+                      ? websiteEditorAccent(context).withValues(alpha: 0.1)
                       : null,
                 )
               : null,
@@ -285,7 +287,7 @@ class _EditModeButtonState extends State<EditModeButton> {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF00A09D),
+                      color: websiteEditorAccent(context),
                       borderRadius: BorderRadius.circular(3),
                     ),
                     child: Text(
@@ -433,16 +435,17 @@ class _EditableMenuItemState extends State<EditableMenuItem> {
                   borderRadius: BorderRadius.circular(4),
                   border: Border.all(
                     color: widget.isSelected || _isEditing
-                        ? const Color(0xFF00A09D)
+                        ? websiteEditorAccent(context)
                         : _isHovered
-                            ? const Color(0xFF00A09D).withValues(alpha: 0.4)
+                            ? websiteEditorAccent(context)
+                                .withValues(alpha: 0.4)
                             : Colors.transparent,
                     width: widget.isSelected ? 2 : 1,
                   ),
                   color: _isEditing
                       ? Colors.white.withValues(alpha: 0.95)
                       : _isHovered
-                          ? const Color(0xFF00A09D).withValues(alpha: 0.1)
+                          ? websiteEditorAccent(context).withValues(alpha: 0.1)
                           : null,
                 )
               : null,

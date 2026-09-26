@@ -713,11 +713,12 @@ class _ProductsBlockControlsState extends State<_ProductsBlockControls> {
               semanticLabel: 'Agregar productos',
               minimumWidth: true,
               onTap: onOpenPicker,
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
                 child: Text(
                   'Agregar',
-                  style: TextStyle(color: Color(0xFF00A09D), fontSize: 12),
+                  style: TextStyle(
+                      color: websiteEditorAccent(context), fontSize: 12),
                 ),
               ),
             ),
@@ -1170,8 +1171,8 @@ class _InlineLeaseCommitSliderState extends State<_InlineLeaseCommitSlider> {
               ),
               child: Text(
                 _draft.toInt().toString(),
-                style: const TextStyle(
-                  color: Color(0xFF00A09D),
+                style: TextStyle(
+                  color: websiteEditorAccent(context),
                   fontSize: 12,
                 ),
               ),
@@ -1185,10 +1186,11 @@ class _InlineLeaseCommitSliderState extends State<_InlineLeaseCommitSlider> {
             onPointerCancel: (_) => _cancel(),
             child: SliderTheme(
               data: SliderThemeData(
-                activeTrackColor: const Color(0xFF00A09D),
+                activeTrackColor: websiteEditorAccent(context),
                 inactiveTrackColor: Colors.white.withValues(alpha: 0.1),
-                thumbColor: const Color(0xFF00A09D),
-                overlayColor: const Color(0xFF00A09D).withValues(alpha: 0.2),
+                thumbColor: websiteEditorAccent(context),
+                overlayColor:
+                    websiteEditorAccent(context).withValues(alpha: 0.2),
               ),
               child: Slider(
                 value: _draft,
@@ -1338,12 +1340,12 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
                           horizontal: 8, vertical: 6),
                       decoration: BoxDecoration(
                         color: _filterInStock
-                            ? const Color(0xFF00A09D)
+                            ? websiteEditorAccent(context)
                             : Colors.transparent,
                         borderRadius: BorderRadius.circular(4),
                         border: Border.all(
                           color: _filterInStock
-                              ? const Color(0xFF00A09D)
+                              ? websiteEditorAccent(context)
                               : Colors.white24,
                         ),
                       ),
@@ -1402,7 +1404,7 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
                                 horizontal: 8, vertical: 8),
                             decoration: BoxDecoration(
                               color: isSelected
-                                  ? const Color(0xFF00A09D)
+                                  ? websiteEditorAccent(context)
                                       .withValues(alpha: 0.2)
                                   : Colors.transparent,
                               border: Border(
@@ -1419,12 +1421,12 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
                                   height: 20,
                                   decoration: BoxDecoration(
                                     color: isSelected
-                                        ? const Color(0xFF00A09D)
+                                        ? websiteEditorAccent(context)
                                         : const Color(0xFF2D2D2D),
                                     borderRadius: BorderRadius.circular(4),
                                     border: Border.all(
                                       color: isSelected
-                                          ? const Color(0xFF00A09D)
+                                          ? websiteEditorAccent(context)
                                           : Colors.white24,
                                     ),
                                   ),
@@ -1535,7 +1537,7 @@ class _ProductPickerDialogState extends State<_ProductPickerDialog> {
                       Navigator.pop(context, selectedIds);
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00A09D),
+                      backgroundColor: websiteEditorAccent(context),
                       foregroundColor: Colors.white,
                     ),
                     child: const Text('Confirmar'),

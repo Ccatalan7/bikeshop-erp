@@ -11,6 +11,7 @@ import '../../modules/accounting/widgets/accounting_dashboard_section.dart';
 import '../models/strategic_dashboard_metrics.dart';
 import '../services/database_service.dart';
 import '../services/strategic_dashboard_service.dart';
+import '../themes/vinabike_theme_roles.dart';
 
 class StrategicDashboardDeck extends StatefulWidget {
   const StrategicDashboardDeck({
@@ -1337,7 +1338,7 @@ class _ServiceEconomicsCard extends StatelessWidget {
             style: theme.textTheme.headlineMedium?.copyWith(
               fontWeight: FontWeight.w800,
               color: contributionPositive
-                  ? const Color(0xFF2E7D32)
+                  ? VinabikeThemeRoles.of(context).success.accent
                   : theme.colorScheme.error,
             ),
           ),

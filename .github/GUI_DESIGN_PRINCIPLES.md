@@ -93,6 +93,21 @@ del portal lo usa en vez de inventar el suyo:
   con el dibujo de su tipo (`CustomerBikeDrawing`). No se proponen fotos de
   bici que el taller no saca.
 
+**Una marca guardada no es una marca elegida (2026-09-26).** El primer botón
+del portal salió en el verde Material del primer editor, junto al naranjo, y
+al dueño le pareció «color moco». Ninguno de los dos se eligió: el editor de
+octubre de 2025 partía con ese verde como primario y ese naranjo como acento,
+y alguien guardó la pestaña de tema el 2025-12-05 sin tocarlos. Desde ahí
+`theme_primary_color` quedó verde. Antes de construir sobre un color de marca
+se mira su `updated_at` y se compara con los valores de partida del editor
+(`git log -S`); si coinciden, es un valor por omisión y no una decisión del
+dueño. El primario de Viñabike pasó al azul de «Agregar al carrito»
+(`WebsiteResolvedTheme.defaultCommerceAccentColor`). Con eso el sitio actúa
+en un solo color en la ficha, el carrito y el portal. El turquesa de Odoo era
+el mismo caso en las herramientas del editor (159 literales), que ahora toman
+`websiteEditorAccent(context)`. `test/unit/banned_site_colors_test.dart`
+tiene los dos valores y los rechaza en todo `lib/`.
+
 ### Visual grammar and product composition are different owners
 
 The component guide answers **how a control looks and behaves**. Codex answers

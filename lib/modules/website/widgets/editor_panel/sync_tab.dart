@@ -166,7 +166,7 @@ class _SyncTabState extends State<_SyncTab> {
       scope.authority.ensureCurrent();
       _showMessage(
         'Datos sincronizados correctamente!',
-        backgroundColor: const Color(0xFF00A09D),
+        succeeded: true,
       );
     } on WebsiteEditorWriteSupersededException {
       _showMessage(
@@ -221,7 +221,7 @@ class _SyncTabState extends State<_SyncTab> {
       scope.authority.ensureCurrent();
       _showMessage(
         'Se descargaron ${reviews.length} reseñas correctamente!',
-        backgroundColor: const Color(0xFF00A09D),
+        succeeded: true,
       );
     } on WebsiteEditorWriteSupersededException {
       _showMessage(
@@ -234,10 +234,18 @@ class _SyncTabState extends State<_SyncTab> {
     }
   }
 
-  void _showMessage(String message, {Color? backgroundColor}) {
+  void _showMessage(
+    String message, {
+    Color? backgroundColor,
+    bool succeeded = false,
+  }) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: backgroundColor),
+      SnackBar(
+        content: Text(message),
+        backgroundColor:
+            succeeded ? websiteEditorAccent(context) : backgroundColor,
+      ),
     );
   }
 
@@ -383,17 +391,17 @@ class _SyncTabState extends State<_SyncTab> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: const Color(0xFF00A09D).withValues(alpha: 0.1),
+                color: websiteEditorAccent(context).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: const Color(0xFF00A09D).withValues(alpha: 0.3),
+                  color: websiteEditorAccent(context).withValues(alpha: 0.3),
                 ),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.check_circle,
-                      color: Color(0xFF00A09D), size: 20),
+                  Icon(Icons.check_circle,
+                      color: websiteEditorAccent(context), size: 20),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(

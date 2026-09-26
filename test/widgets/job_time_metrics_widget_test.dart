@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/modules/bikeshop/models/bikeshop_models.dart';
 import 'package:vinabike_erp/modules/bikeshop/widgets/job_time_metrics_widget.dart';
+import 'package:vinabike_erp/shared/themes/app_theme.dart';
+import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 
 void main() {
   final job = MechanicJob(
@@ -27,6 +29,10 @@ void main() {
 
   testWidgets('compact workshop flow fits the table column', (tester) async {
     await tester.pumpWidget(MaterialApp(
+      theme: AppTheme.resolve(
+        preset: AppearancePresets.vinabike,
+        brightness: Brightness.light,
+      ),
       home: Scaffold(
         body: Center(
           child: SizedBox(
@@ -45,6 +51,10 @@ void main() {
   testWidgets('detail timeline remains readable on a narrow host',
       (tester) async {
     await tester.pumpWidget(MaterialApp(
+      theme: AppTheme.resolve(
+        preset: AppearancePresets.vinabike,
+        brightness: Brightness.light,
+      ),
       home: Scaffold(
         body: SingleChildScrollView(
           child: SizedBox(

@@ -9,6 +9,7 @@ import 'website_editor_block_sheet.dart';
 import 'website_editor_chrome_geometry.dart';
 import 'website_link_value_editor.dart';
 import 'website_media_picker.dart';
+import 'website_editor_host_theme.dart';
 
 /// What the contextual sheet decided when it closed.
 ///
@@ -376,8 +377,9 @@ class _WebsiteInlineActionEditorState extends State<WebsiteInlineActionEditor> {
                       decoration: BoxDecoration(
                         border: Border.all(
                           color: _isSelected
-                              ? const Color(0xFF00A09D)
-                              : const Color(0x8000A09D),
+                              ? websiteEditorAccent(context)
+                              : websiteEditorAccent(context)
+                                  .withValues(alpha: 0.5),
                           width: _isSelected ? 2 : 1,
                         ),
                         borderRadius: BorderRadius.circular(8),
@@ -386,16 +388,16 @@ class _WebsiteInlineActionEditorState extends State<WebsiteInlineActionEditor> {
                   ),
                 ),
               if (_isSelected)
-                const Positioned(
+                Positioned(
                   right: -8,
                   top: -8,
                   child: IgnorePointer(
                     child: DecoratedBox(
                       decoration: BoxDecoration(
-                        color: Color(0xFF00A09D),
+                        color: websiteEditorAccent(context),
                         shape: BoxShape.circle,
                       ),
-                      child: Padding(
+                      child: const Padding(
                         padding: EdgeInsets.all(4),
                         child: Icon(
                           Icons.edit_outlined,
@@ -576,7 +578,7 @@ class _ActionEditorCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF1F2427),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF00A09D), width: 2),
+        border: Border.all(color: websiteEditorAccent(context), width: 2),
         boxShadow: const [
           BoxShadow(
             color: Color(0x52000000),

@@ -17,7 +17,6 @@ import '../../modules/website/theme/website_resolved_theme.dart';
 import '../../modules/website/widgets/website_editor_document_binding.dart';
 import '../../shared/utils/seo_helper.dart';
 import '../providers/public_store_tenant_provider.dart';
-import '../theme/public_store_theme.dart';
 import '../widgets/page_composition.dart';
 import '../widgets/public_store_layout.dart';
 
@@ -293,10 +292,10 @@ class _PolicyHero extends StatelessWidget {
           width: 48,
           height: 48,
           decoration: BoxDecoration(
-            color: meta.color.withValues(alpha: 0.1),
+            color: colorScheme.primary.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Icon(meta.icon, color: meta.color, size: 24),
+          child: Icon(meta.icon, color: colorScheme.primary, size: 24),
         ),
         const SizedBox(height: 24),
         Text(
@@ -933,13 +932,11 @@ class _PolicyMeta {
   final String title;
   final String navLabel;
   final IconData icon;
-  final Color color;
 
   const _PolicyMeta({
     required this.title,
     required this.navLabel,
     required this.icon,
-    required this.color,
   });
 
   static _PolicyMeta forSlug(String slug, String fallbackTitle) {
@@ -949,42 +946,36 @@ class _PolicyMeta {
           title: 'Sobre nosotros',
           navLabel: 'Nosotros',
           icon: Icons.storefront_outlined,
-          color: PublicStoreTheme.primaryBlue,
         );
       case 'envios':
         return const _PolicyMeta(
           title: 'Envíos',
           navLabel: 'Envíos',
           icon: Icons.local_shipping_outlined,
-          color: Color(0xFF2E7D32),
         );
       case 'devoluciones':
         return const _PolicyMeta(
           title: 'Devoluciones',
           navLabel: 'Devoluciones',
           icon: Icons.assignment_return_outlined,
-          color: PublicStoreTheme.primaryBlue,
         );
       case 'terminos':
         return const _PolicyMeta(
           title: 'Términos y condiciones',
           navLabel: 'Términos',
           icon: Icons.gavel_outlined,
-          color: Color(0xFFB45309),
         );
       case 'privacidad':
         return const _PolicyMeta(
           title: 'Privacidad',
           navLabel: 'Privacidad',
           icon: Icons.shield_outlined,
-          color: PublicStoreTheme.primaryBlue,
         );
       default:
         return _PolicyMeta(
           title: fallbackTitle,
           navLabel: fallbackTitle,
           icon: Icons.info_outline,
-          color: PublicStoreTheme.primaryBlue,
         );
     }
   }

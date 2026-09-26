@@ -376,7 +376,7 @@ class _BackupsDialogState extends State<_BackupsDialog> {
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00A09D),
+              backgroundColor: websiteEditorAccent(context),
             ),
             child: const Text('Restaurar'),
           ),
@@ -518,7 +518,7 @@ class _BackupsDialogState extends State<_BackupsDialog> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.backup, color: Color(0xFF00A09D)),
+                  Icon(Icons.backup, color: websiteEditorAccent(context)),
                   const SizedBox(width: 12),
                   const Expanded(
                     child: Text(
@@ -609,7 +609,7 @@ class _BackupsDialogState extends State<_BackupsDialog> {
                           ? 'Creando...'
                           : 'Crear copia de seguridad'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF00A09D),
+                        backgroundColor: websiteEditorAccent(context),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
@@ -721,11 +721,12 @@ class _BackupListItem extends StatelessWidget {
         leading: CircleAvatar(
           backgroundColor: backup.isAutoBackup
               ? Colors.orange.withValues(alpha: 0.2)
-              : const Color(0xFF00A09D).withValues(alpha: 0.2),
+              : websiteEditorAccent(context).withValues(alpha: 0.2),
           child: Icon(
             backup.isAutoBackup ? Icons.autorenew : Icons.backup,
-            color:
-                backup.isAutoBackup ? Colors.orange : const Color(0xFF00A09D),
+            color: backup.isAutoBackup
+                ? Colors.orange
+                : websiteEditorAccent(context),
             size: 20,
           ),
         ),
@@ -786,7 +787,7 @@ class _BackupListItem extends StatelessWidget {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.restore, size: 20),
-              color: const Color(0xFF00A09D),
+              color: websiteEditorAccent(context),
               tooltip: 'Restaurar',
               onPressed: isBusy ? null : onRestore,
             ),

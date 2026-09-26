@@ -3002,7 +3002,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     final barColor = shell?.canvas ?? const Color(0xFF1E1E1E);
     final onBar = shell?.foreground ?? Colors.white;
     final onBarMuted = shell?.mutedForeground ?? Colors.white70;
-    final barAccent = shell?.accent ?? const Color(0xFF00A09D);
+    final barAccent = shell?.accent ?? websiteEditorAccent(context);
     final onBarAccent = shell?.onAccent ?? Colors.white;
 
     final commands = WebsiteEditorCommandScope.maybeOf(context);

@@ -354,10 +354,10 @@ class _PageSettingsTabState extends State<_PageSettingsTab> {
     }
 
     if (_isLoading) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(32),
-          child: CircularProgressIndicator(color: Color(0xFF00A09D)),
+          padding: const EdgeInsets.all(32),
+          child: CircularProgressIndicator(color: websiteEditorAccent(context)),
         ),
       );
     }
@@ -375,11 +375,11 @@ class _PageSettingsTabState extends State<_PageSettingsTab> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF00A09D).withValues(alpha: 0.15),
+                  color: websiteEditorAccent(context).withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.article_outlined,
-                    color: Color(0xFF00A09D), size: 18),
+                child: Icon(Icons.article_outlined,
+                    color: websiteEditorAccent(context), size: 18),
               ),
               const SizedBox(width: 12),
               Expanded(

@@ -431,7 +431,7 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
                 icon: const Icon(Icons.upload_file, size: 18),
                 label: const Text('Subir archivo de video'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00A09D),
+                  backgroundColor: websiteEditorAccent(context),
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 12),
                 ),
@@ -681,7 +681,7 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
       margin: const EdgeInsets.only(bottom: 4),
       decoration: BoxDecoration(
         color: selected
-            ? const Color(0xFF00A09D).withValues(alpha: .14)
+            ? websiteEditorAccent(context).withValues(alpha: .14)
             : Colors.transparent,
         borderRadius: BorderRadius.circular(7),
       ),
@@ -698,7 +698,8 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
             children: [
               Icon(_canvasElementIcon(elementType),
                   size: 15,
-                  color: selected ? const Color(0xFF00A09D) : Colors.white54),
+                  color:
+                      selected ? websiteEditorAccent(context) : Colors.white54),
               const SizedBox(width: 7),
               Expanded(
                 child: Text(
@@ -1360,7 +1361,7 @@ class _SlideEditorState extends State<_SlideEditor> {
             label:
                 Text(_isUploading ? 'Subiendo...' : 'Subir archivo de video'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00A09D),
+              backgroundColor: websiteEditorAccent(context),
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 12),
             ),

@@ -42,10 +42,14 @@ class WebsiteResolvedTheme extends ThemeExtension<WebsiteResolvedTheme> {
   static const customerPortalWorkshopImageKey =
       'theme_customer_portal_workshop_image';
 
-  // Existing storefront/editor defaults, moved here so controls, shell and
-  // every renderer share one owner. These are not a new visual direction.
-  static const defaultPrimaryColor = Color(0xFF2563EB);
-  static const defaultAccentColor = Color(0xFF25D366);
+  // Storefront/editor defaults, in one owner so controls, shell and every
+  // renderer agree. A site without a saved brand acts in the same navy as the
+  // product page's «Agregar al carrito», and marks what needs the customer in
+  // orange. Never green: the first editor started every site in Material
+  // green `0xFF2E7D32`, one save on 2025-12-05 turned it into Viñabike's
+  // brand, and the owner hated it on the portal (2026-09-26).
+  static const defaultPrimaryColor = defaultCommerceAccentColor;
+  static const defaultAccentColor = Color(0xFFFF6F00);
   static const defaultBackgroundColor = Colors.white;
   static const defaultTextColor = Color(0xFF1E293B);
   static const defaultCommerceAccentColor = Color(0xFF123F68);

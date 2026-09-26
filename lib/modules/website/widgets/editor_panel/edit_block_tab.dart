@@ -229,12 +229,13 @@ class _EditBlockTabState extends State<_EditBlockTab> {
                     padding: const EdgeInsets.symmetric(vertical: 9),
                     decoration: BoxDecoration(
                       color: selected
-                          ? const Color(0xFF00A09D).withValues(alpha: 0.18)
+                          ? websiteEditorAccent(context).withValues(alpha: 0.18)
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(7),
                       border: Border.all(
                         color: selected
-                            ? const Color(0xFF00A09D).withValues(alpha: 0.55)
+                            ? websiteEditorAccent(context)
+                                .withValues(alpha: 0.55)
                             : Colors.transparent,
                       ),
                     ),
@@ -503,12 +504,12 @@ class _EditBlockTabState extends State<_EditBlockTab> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: const Color(0xFF00A09D).withValues(alpha: 0.2),
+                color: websiteEditorAccent(context).withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Icon(
                 effectiveIcon,
-                color: const Color(0xFF00A09D),
+                color: websiteEditorAccent(context),
                 size: 20,
               ),
             ),
@@ -528,8 +529,9 @@ class _EditBlockTabState extends State<_EditBlockTab> {
                   Text(
                     isVisible ? 'Visible' : 'Oculto',
                     style: TextStyle(
-                      color:
-                          isVisible ? const Color(0xFF00A09D) : Colors.orange,
+                      color: isVisible
+                          ? websiteEditorAccent(context)
+                          : Colors.orange,
                       fontSize: 11,
                     ),
                   ),
@@ -763,11 +765,12 @@ class _BlockResponsiveVisibilityControl extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.devices_outlined, color: Color(0xFF00A09D), size: 18),
-              SizedBox(width: 8),
-              Text(
+              Icon(Icons.devices_outlined,
+                  color: websiteEditorAccent(context), size: 18),
+              const SizedBox(width: 8),
+              const Text(
                 'Visibilidad responsive',
                 style: TextStyle(
                   color: Colors.white,
@@ -807,12 +810,13 @@ class _BlockResponsiveVisibilityControl extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(vertical: 10),
                           decoration: BoxDecoration(
                             color: visibility[option.$1]!
-                                ? const Color(0xFF00A09D).withValues(alpha: .18)
+                                ? websiteEditorAccent(context)
+                                    .withValues(alpha: .18)
                                 : Colors.white.withValues(alpha: .035),
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
                               color: visibility[option.$1]!
-                                  ? const Color(0xFF00A09D)
+                                  ? websiteEditorAccent(context)
                                   : Colors.white12,
                             ),
                           ),
@@ -947,8 +951,8 @@ class _BlockHeightControlState extends State<_BlockHeightControl> {
               alignment: Alignment.centerRight,
               child: Text(
                 '${currentHeight.toStringAsFixed(0)}px',
-                style: const TextStyle(
-                    color: Color(0xFF00A09D),
+                style: TextStyle(
+                    color: websiteEditorAccent(context),
                     fontSize: 11,
                     fontWeight: FontWeight.w500),
               ),
@@ -1071,7 +1075,7 @@ class _BlockHeightControlState extends State<_BlockHeightControl> {
                     height: 32,
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF00A09D),
+                      color: websiteEditorAccent(context),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: const Center(
@@ -1177,8 +1181,8 @@ class _BlockSpacingControlState extends State<_BlockSpacingControl> {
               const Spacer(),
               Text(
                 currentSpacing == 0 ? '0' : '${currentSpacing.toInt()}px',
-                style: const TextStyle(
-                    color: Color(0xFF00A09D),
+                style: TextStyle(
+                    color: websiteEditorAccent(context),
                     fontSize: 11,
                     fontWeight: FontWeight.w500),
               ),
@@ -1237,10 +1241,11 @@ class _BlockSpacingControlState extends State<_BlockSpacingControl> {
             onCommit: (value) => _setSpacing(binding, value.roundToDouble()),
             builder: (context, _, slider) => SliderTheme(
               data: SliderTheme.of(context).copyWith(
-                activeTrackColor: const Color(0xFF00A09D),
+                activeTrackColor: websiteEditorAccent(context),
                 inactiveTrackColor: Colors.white12,
-                thumbColor: const Color(0xFF00A09D),
-                overlayColor: const Color(0xFF00A09D).withValues(alpha: 0.2),
+                thumbColor: websiteEditorAccent(context),
+                overlayColor:
+                    websiteEditorAccent(context).withValues(alpha: 0.2),
                 thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
                 trackHeight: 3,
               ),
@@ -1281,11 +1286,12 @@ class _SpacingPresetButton extends StatelessWidget {
             height: 28,
             decoration: BoxDecoration(
               color: isSelected
-                  ? const Color(0xFF00A09D)
+                  ? websiteEditorAccent(context)
                   : Colors.white.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(4),
               border: Border.all(
-                color: isSelected ? const Color(0xFF00A09D) : Colors.white12,
+                color:
+                    isSelected ? websiteEditorAccent(context) : Colors.white12,
               ),
             ),
             alignment: Alignment.center,

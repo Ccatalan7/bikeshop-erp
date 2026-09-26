@@ -7,6 +7,7 @@ import '../models/website_block_definition.dart';
 import '../providers/website_edit_mode_provider.dart';
 import 'website_editor_chrome_geometry.dart';
 import 'website_editor_control_density.dart';
+import 'website_editor_host_theme.dart';
 
 /// A minimalist spacer handle between website blocks in edit mode.
 ///
@@ -129,7 +130,7 @@ class _BlockSpacerHandleState extends State<BlockSpacerHandle> {
               height: containerHeight,
               decoration: BoxDecoration(
                 color: showControls
-                    ? const Color(0xFF00A09D).withValues(alpha: 0.1)
+                    ? websiteEditorAccent(context).withValues(alpha: 0.1)
                     : Colors.transparent,
               ),
               child: Stack(
@@ -142,7 +143,8 @@ class _BlockSpacerHandleState extends State<BlockSpacerHandle> {
                       width: 50,
                       height: 2,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF00A09D).withValues(alpha: 0.3),
+                        color:
+                            websiteEditorAccent(context).withValues(alpha: 0.3),
                         borderRadius: BorderRadius.circular(1),
                       ),
                     ),
@@ -154,7 +156,8 @@ class _BlockSpacerHandleState extends State<BlockSpacerHandle> {
                         vertical: density.isTouch ? 0 : 2,
                       ),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF00A09D).withValues(alpha: 0.95),
+                        color: websiteEditorAccent(context)
+                            .withValues(alpha: 0.95),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Row(
@@ -433,20 +436,20 @@ class _QuickSpacingButton extends StatelessWidget {
           height: targetExtent < 20 ? 20 : targetExtent,
           decoration: BoxDecoration(
             color: isSelected
-                ? const Color(0xFF00A09D)
+                ? websiteEditorAccent(context)
                 : Colors.white.withValues(alpha: 0.9),
             borderRadius: BorderRadius.circular(4),
             border: Border.all(
               color: isSelected
-                  ? const Color(0xFF00A09D)
-                  : const Color(0xFF00A09D).withValues(alpha: 0.3),
+                  ? websiteEditorAccent(context)
+                  : websiteEditorAccent(context).withValues(alpha: 0.3),
             ),
           ),
           alignment: Alignment.center,
           child: Text(
             label,
             style: TextStyle(
-              color: isSelected ? Colors.white : const Color(0xFF00A09D),
+              color: isSelected ? Colors.white : websiteEditorAccent(context),
               fontSize: 9,
               fontWeight: FontWeight.w600,
             ),

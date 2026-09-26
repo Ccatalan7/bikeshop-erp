@@ -12,6 +12,7 @@ import '../../modules/website/widgets/deferred_editable_block_renderer.dart';
 import '../../modules/website/widgets/website_block_catalog_sheet.dart';
 import '../../modules/website/widgets/website_block_renderer.dart';
 import '../../modules/website/widgets/website_editor_chrome_geometry.dart';
+import '../../modules/website/widgets/website_editor_host_theme.dart';
 import '../../shared/models/product.dart';
 import 'website_header_overlay_boundary.dart';
 import 'website_insertion_host.dart';
@@ -955,16 +956,18 @@ class _InsertBlockDropZoneState extends State<_InsertBlockDropZone> {
                 child: IgnorePointer(
                   child: Container(
                     decoration: BoxDecoration(
-                      color: const Color(0xFF00A09D).withValues(alpha: 0.10),
+                      color:
+                          websiteEditorAccent(context).withValues(alpha: 0.10),
                       border: Border.all(
-                        color: const Color(0xFF00A09D).withValues(alpha: 0.6),
+                        color:
+                            websiteEditorAccent(context).withValues(alpha: 0.6),
                         width: 2,
                       ),
                     ),
-                    child: const Center(
+                    child: Center(
                       child: Icon(
                         Icons.add_circle,
-                        color: Color(0xFF00A09D),
+                        color: websiteEditorAccent(context),
                         size: 18,
                       ),
                     ),
@@ -980,8 +983,8 @@ class _InsertBlockDropZoneState extends State<_InsertBlockDropZone> {
                   width: 120,
                   decoration: BoxDecoration(
                     color: showHighlight
-                        ? const Color(0xFF00A09D)
-                        : const Color(0xFF00A09D).withValues(alpha: 0.25),
+                        ? websiteEditorAccent(context)
+                        : websiteEditorAccent(context).withValues(alpha: 0.25),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),

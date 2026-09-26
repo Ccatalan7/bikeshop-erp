@@ -541,7 +541,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
           onChanged: onChanged,
           // ON state: bright teal color (highlighted)
           activeThumbColor: Colors.white,
-          activeTrackColor: const Color(0xFF00A09D),
+          activeTrackColor: websiteEditorAccent(context),
           // OFF state: dim/dark (muted)
           inactiveThumbColor: Colors.grey.shade400,
           inactiveTrackColor: Colors.grey.shade700,
@@ -1221,11 +1221,11 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
 
                           if (mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text(
+                              SnackBar(
+                                content: const Text(
                                   'Cambio aplicado. Presiona Guardar para publicarlo.',
                                 ),
-                                backgroundColor: Color(0xFF00A09D),
+                                backgroundColor: websiteEditorAccent(context),
                               ),
                             );
                             setState(() {
@@ -1235,7 +1235,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                           }
                         },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00A09D),
+                    backgroundColor: websiteEditorAccent(context),
                     foregroundColor: Colors.white,
                   ),
                   child: _isSavingInlineNav
@@ -1446,13 +1446,13 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
             color: isDropTarget
                 ? Colors.white.withValues(alpha: 0.12)
                 : (isEditing
-                    ? const Color(0xFF00A09D).withValues(alpha: 0.10)
+                    ? websiteEditorAccent(context).withValues(alpha: 0.10)
                     : const Color(0xFF2D2D2D)),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
               color: isDropTarget
                   ? Colors.white24
-                  : (isEditing ? const Color(0xFF00A09D) : Colors.white10),
+                  : (isEditing ? websiteEditorAccent(context) : Colors.white10),
               width: isEditing ? 1.5 : 1,
             ),
           ),
@@ -1531,18 +1531,20 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
   }) {
     final isEditing = _isEditingNav(section);
     final bg = isSelected
-        ? const Color(0xFF00A09D).withValues(alpha: 0.18)
+        ? websiteEditorAccent(context).withValues(alpha: 0.18)
         : Colors.white.withValues(alpha: 0.06);
 
     final effectiveBg = isDropTarget
         ? Colors.white.withValues(alpha: 0.10)
-        : (isEditing ? const Color(0xFF00A09D).withValues(alpha: 0.12) : bg);
+        : (isEditing
+            ? websiteEditorAccent(context).withValues(alpha: 0.12)
+            : bg);
 
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: isEditing ? const Color(0xFF00A09D) : Colors.transparent,
+          color: isEditing ? websiteEditorAccent(context) : Colors.transparent,
           width: 1.5,
         ),
       ),
@@ -1975,7 +1977,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                                   }
                                 }),
                                 activeThumbColor: Colors.white,
-                                activeTrackColor: const Color(0xFF00A09D),
+                                activeTrackColor: websiteEditorAccent(context),
                                 inactiveThumbColor: Colors.grey.shade400,
                                 inactiveTrackColor: Colors.grey.shade700,
                                 materialTapTargetSize:
@@ -2145,7 +2147,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                     }
                   },
                   style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00A09D)),
+                      backgroundColor: websiteEditorAccent(context)),
                   child: Text(existing != null ? 'Aplicar' : 'Agregar'),
                 ),
               ],
@@ -2641,7 +2643,7 @@ class _AddItemButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
           border: Border.all(
-            color: const Color(0xFF00A09D).withValues(alpha: 0.5),
+            color: websiteEditorAccent(context).withValues(alpha: 0.5),
             style: BorderStyle.solid,
           ),
           borderRadius: BorderRadius.circular(6),
@@ -2649,14 +2651,15 @@ class _AddItemButton extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.add, color: Color(0xFF00A09D), size: 18),
+            Icon(Icons.add, color: websiteEditorAccent(context), size: 18),
             const SizedBox(width: 8),
             Flexible(
               child: Text(
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: Color(0xFF00A09D), fontSize: 13),
+                style: TextStyle(
+                    color: websiteEditorAccent(context), fontSize: 13),
               ),
             ),
           ],

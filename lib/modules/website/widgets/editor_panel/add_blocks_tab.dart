@@ -198,7 +198,7 @@ class _AddBlocksTabState extends State<_AddBlocksTab> {
                                 color: isDropTarget
                                     ? Colors.white.withValues(alpha: 0.08)
                                     : isSelected
-                                        ? const Color(0xFF00A09D)
+                                        ? websiteEditorAccent(context)
                                             .withValues(alpha: 0.12)
                                         : Colors.transparent,
                                 border: Border(
@@ -446,7 +446,7 @@ class _AddBlocksTabState extends State<_AddBlocksTab> {
             width: 90,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFF00A09D),
+              color: websiteEditorAccent(context),
               borderRadius: BorderRadius.circular(8),
               boxShadow: [
                 BoxShadow(
@@ -489,7 +489,8 @@ class _AddBlocksTabState extends State<_AddBlocksTab> {
                       ? 'Elemento "$elementType" agregado al Canvas'
                       : 'Selecciona un bloque Canvas para agregar elementos'),
                   duration: const Duration(seconds: 2),
-                  backgroundColor: ok ? const Color(0xFF00A09D) : Colors.orange,
+                  backgroundColor:
+                      ok ? websiteEditorAccent(context) : Colors.orange,
                 ),
               );
               return;
@@ -501,7 +502,7 @@ class _AddBlocksTabState extends State<_AddBlocksTab> {
               SnackBar(
                 content: Text('Bloque "${option.label}" agregado'),
                 duration: const Duration(seconds: 2),
-                backgroundColor: const Color(0xFF00A09D),
+                backgroundColor: websiteEditorAccent(context),
               ),
             );
           },
@@ -606,12 +607,12 @@ class _ActionCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: (isEnabled ? const Color(0xFF00A09D) : Colors.grey)
+                color: (isEnabled ? websiteEditorAccent(context) : Colors.grey)
                     .withValues(alpha: 0.2),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Icon(icon,
-                  color: isEnabled ? const Color(0xFF00A09D) : Colors.grey,
+                  color: isEnabled ? websiteEditorAccent(context) : Colors.grey,
                   size: 20),
             ),
             const SizedBox(width: 12),

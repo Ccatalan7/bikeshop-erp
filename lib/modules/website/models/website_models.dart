@@ -1,6 +1,7 @@
 /// Website and e-commerce data models
 library;
 
+import '../theme/website_resolved_theme.dart';
 import 'website_font_registry.dart';
 
 class WebsiteBanner {
@@ -252,8 +253,14 @@ class ThemePreset {
       tenantId: json['tenant_id']?.toString() ?? '',
       name: (json['name'] ?? 'Preset sin título').toString(),
       description: json['description'] as String?,
-      primaryColor: parseColor(json['primaryColor'], 0xFF2E7D32),
-      accentColor: parseColor(json['accentColor'], 0xFFFF6F00),
+      primaryColor: parseColor(
+        json['primaryColor'],
+        WebsiteResolvedTheme.defaultPrimaryColor.toARGB32(),
+      ),
+      accentColor: parseColor(
+        json['accentColor'],
+        WebsiteResolvedTheme.defaultAccentColor.toARGB32(),
+      ),
       backgroundColor: parseColor(json['backgroundColor'], 0xFFFFFFFF),
       textColor: parseColor(json['textColor'], 0xFF212121),
       headingFont: WebsiteFontRegistry.resolveHeadingFont(

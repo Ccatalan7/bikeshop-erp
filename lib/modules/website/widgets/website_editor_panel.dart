@@ -282,10 +282,10 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
                       }
                     : null,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00A09D),
+                  backgroundColor: websiteEditorAccent(context),
                   foregroundColor: Colors.white,
                   disabledBackgroundColor:
-                      const Color(0xFF00A09D).withValues(alpha: 0.5),
+                      websiteEditorAccent(context).withValues(alpha: 0.5),
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   minimumSize: Size.zero,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../../shared/themes/vinabike_theme_roles.dart';
 import '../models/bikeshop_models.dart';
 
 /// Compact, shared table representation of the canonical lifecycle metrics.
@@ -24,7 +25,8 @@ class CompactJobTimeMetrics extends StatelessWidget {
       );
     }
 
-    final stages = _coreStages(job, metrics);
+    final stages = _coreStages(job, metrics,
+        done: VinabikeThemeRoles.of(context).success.accent);
     return Semantics(
       label: stages.map((stage) => stage.tooltip).join('. '),
       child: Row(
@@ -83,7 +85,8 @@ class JobTimeMetricsPanel extends StatelessWidget {
     final stages = <_TimeStage>[
       if (job.requiresApproval || metrics.approvalDecisionAt != null)
         _approvalStage(job, metrics),
-      ..._coreStages(job, metrics),
+      ..._coreStages(job, metrics,
+          done: VinabikeThemeRoles.of(context).success.accent),
     ];
     final warnings = metrics.qualityFlags
         .map(_qualityFlagLabel)
@@ -316,8 +319,9 @@ class _TimeStage {
 
 List<_TimeStage> _coreStages(
   MechanicJob job,
-  MechanicJobTimeMetrics metrics,
-) {
+  MechanicJobTimeMetrics metrics, {
+  required Color done,
+}) {
   final now = DateTime.now();
   final terminal = metrics.currentIsCompleted || metrics.currentIsDelivered;
   final waitOrigin = metrics.approvalDecision == 'approved' &&
@@ -381,7 +385,7 @@ List<_TimeStage> _coreStages(
               '${_sourceDescription(metrics.completionSource)}',
       icon: executionLive ? Icons.build_rounded : Icons.task_alt_rounded,
       color: metrics.completedAt != null
-          ? const Color(0xFF2E7D32)
+          ? done
           : executionLive
               ? const Color(0xFF5E35B1)
               : terminal
