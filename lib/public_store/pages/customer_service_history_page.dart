@@ -53,11 +53,12 @@ class _CustomerServiceHistoryPageState extends State<CustomerServiceHistoryPage>
 
     return CustomerPortalLayout(
       title: 'Taller',
-      headerAction: OutlinedButton.icon(
+      subtitle: 'Tus bicis en el taller y lo que les hicimos.',
+      headerAction: PortalButton(
+        label: 'Hablar con el taller',
+        kind: PortalButtonKind.onPhoto,
+        arrow: true,
         onPressed: () => navigate('/cuenta/chats'),
-        icon: const Icon(Icons.chat_bubble_outline, size: 18),
-        label: const Text('Hablar con el taller'),
-        style: PortalStyle.of(context).secondaryButton,
       ),
       child: CustomerServiceHistoryBody(
         jobs: accountService.serviceHistory,
@@ -152,25 +153,38 @@ class CustomerServiceHistoryBody extends StatelessWidget {
         if (needsA != needsB) return needsA ? -1 : 1;
         return 0;
       });
-    final history = [
+    final historyJobs = [
       for (final job in visible)
         if (!CustomerWorkshopPresentation.of(job).isActive) job,
     ];
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final compact = constraints.maxWidth < 560;
-        Widget panel(List<Map<String, dynamic>> items) => PortalPanel(
-              children: [
-                for (final job in items)
-                  CustomerJobRow(
-                    job: job,
-                    compact: compact,
-                    showTotal: true,
-                    onTap: () => onOpenJob(job),
-                  ),
-              ],
-            );
+        final width = constraints.maxWidth;
+        final compact = width < PortalStyle.compactBreakpoint;
+        final history = PortalPanel(
+          header: width >= customerJobTableBreakpoint
+              ? const CustomerJobTableHeader()
+              : null,
+          children: [
+            for (final job in historyJobs)
+              CustomerJobRow(
+                job: job,
+                showTotal: true,
+                onTap: () => onOpenJob(job),
+              ),
+          ],
+        );
+        final tiles = [
+          for (final job in active)
+            (PortalTileLayout layout) => CustomerJobTile(
+                  job: job,
+                  compact: compact,
+                  layout: layout,
+                  onOpen: () => onOpenJob(job),
+                  onNavigate: onNavigate,
+                ),
+        ];
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -198,7 +212,7 @@ class CustomerServiceHistoryBody extends StatelessWidget {
                     ),
                 ],
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 40),
             ],
             if (visible.isEmpty)
               PortalEmptyState(
@@ -211,11 +225,18 @@ class CustomerServiceHistoryBody extends StatelessWidget {
                 ],
               ),
             if (active.isNotEmpty)
-              PortalSection(label: 'En el taller', child: panel(active)),
-            if (active.isNotEmpty && history.isNotEmpty)
-              const SizedBox(height: 32),
-            if (history.isNotEmpty)
-              PortalSection(label: 'Historial', child: panel(history)),
+              PortalSection(
+                label: 'En el taller',
+                count: active
+                    .where((job) =>
+                        CustomerWorkshopPresentation.of(job).needsCustomer)
+                    .length,
+                child: PortalTileGrid(width: width, tiles: tiles),
+              ),
+            if (active.isNotEmpty && historyJobs.isNotEmpty)
+              const SizedBox(height: 72),
+            if (historyJobs.isNotEmpty)
+              PortalSection(label: 'Historial', child: history),
           ],
         );
       },

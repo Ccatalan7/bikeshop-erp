@@ -61,6 +61,38 @@ En ese alcance:
   `.github/copilot-instructions.md`). Un cambio visual se demuestra igual: con
   capturas reales en teléfono y escritorio antes de darlo por listo.
 
+#### Portal de clientes: dirección «Sendero» (dueño, 2026-09-26)
+
+El dueño eligió la dirección D del lienzo de propuestas
+(https://claude.ai/artifact/H3KXCkhXQdLJnC2zzoK9VV, privado), que salió de
+revisar sitios de marcas de MTB (Commencal, Amflow, Saracen, Fox Racing,
+RockShox, YT). Las tres primeras propuestas —papel y tinta, vitrina blanca con
+tarjetas redondeadas, oscuro deportivo— «no se ven nada mal» pero no lo
+convencieron; lo que sí fue lo que esas marcas repiten. El lenguaje vive en
+`lib/public_store/widgets/customer_portal_style.dart` y cualquier página nueva
+del portal lo usa en vez de inventar el suyo:
+
+- Esquinas rectas en todo (paneles, fotos, botones, etiquetas, diálogos). Sin
+  sombras: se separa con una línea fina y con bandas de fondo de lado a lado.
+  Una lista es una línea fuerte arriba y finas entre filas, sin caja.
+- Títulos en la fuente de títulos del sitio y en mayúsculas; rótulos y botones
+  en mayúsculas chicas con espacio entre letras (`Text(label.toUpperCase(),
+  semanticsLabel: label)`, para que el lector de pantalla lea la palabra).
+- Un solo color para actuar: el primario del sitio. El acento del sitio marca
+  sólo lo que espera al cliente (etiqueta, contador, tramo del avance). El
+  color de una etiqueta dice quién tiene que moverse (`portalStatusTagKind`),
+  no el tono del estado: «Pago en proceso» es de la tienda y va oscuro.
+- Foto a sangre con el texto abajo a la izquierda (la franja de cada página),
+  y el producto sobre el gris claro con su blanco fundido (multiplicar), como
+  un catálogo. Las fotos del portal son del editor («Diseño del sitio ›
+  Portal de clientes»: `theme_customer_portal_image`,
+  `theme_customer_portal_workshop_image`); sin foto, la franja va en el color
+  de texto. Nunca una foto fija en el código: la tienda de otro tenant usa el
+  mismo portal.
+- Las bicis de clientes no tienen foto (0 de 472 el 2026-09-26): se muestran
+  con el dibujo de su tipo (`CustomerBikeDrawing`). No se proponen fotos de
+  bici que el taller no saca.
+
 ### Visual grammar and product composition are different owners
 
 The component guide answers **how a control looks and behaves**. Codex answers

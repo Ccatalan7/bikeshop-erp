@@ -32,7 +32,15 @@ class WebsiteResolvedTheme extends ThemeExtension<WebsiteResolvedTheme> {
     required this.commerceAccentColor,
     required this.commerceTextColor,
     required this.commerceLineColor,
+    this.customerPortalImage = '',
+    this.customerPortalWorkshopImage = '',
   });
+
+  /// Setting keys of the customer portal photos (`/cuenta`). Empty means the
+  /// portal paints its band in the text color instead of a photo.
+  static const customerPortalImageKey = 'theme_customer_portal_image';
+  static const customerPortalWorkshopImageKey =
+      'theme_customer_portal_workshop_image';
 
   // Existing storefront/editor defaults, moved here so controls, shell and
   // every renderer share one owner. These are not a new visual direction.
@@ -82,6 +90,12 @@ class WebsiteResolvedTheme extends ThemeExtension<WebsiteResolvedTheme> {
   final Color commerceAccentColor;
   final Color commerceTextColor;
   final Color commerceLineColor;
+
+  /// Photo behind the customer portal title band.
+  final String customerPortalImage;
+
+  /// Photo of the workshop tile that leads to the services page.
+  final String customerPortalWorkshopImage;
 
   static WebsiteResolvedTheme of(BuildContext context) {
     return Theme.of(context).extension<WebsiteResolvedTheme>() ?? fallback;
@@ -154,7 +168,23 @@ class WebsiteResolvedTheme extends ThemeExtension<WebsiteResolvedTheme> {
         read('theme_product_detail_line_color', ''),
         defaultCommerceLineColor,
       ),
+      customerPortalImage: _resolveImageUrl(
+        read(customerPortalImageKey, ''),
+      ),
+      customerPortalWorkshopImage: _resolveImageUrl(
+        read(customerPortalWorkshopImageKey, ''),
+      ),
     );
+  }
+
+  /// Only absolute http(s) URLs: a stray value must not become an asset path.
+  static String _resolveImageUrl(String raw) {
+    final value = raw.trim();
+    final uri = Uri.tryParse(value);
+    if (uri == null || !(uri.isScheme('https') || uri.isScheme('http'))) {
+      return '';
+    }
+    return value;
   }
 
   static Color _resolveColor(String raw, Color fallback) {
@@ -228,6 +258,8 @@ class WebsiteResolvedTheme extends ThemeExtension<WebsiteResolvedTheme> {
     Color? commerceAccentColor,
     Color? commerceTextColor,
     Color? commerceLineColor,
+    String? customerPortalImage,
+    String? customerPortalWorkshopImage,
   }) {
     return WebsiteResolvedTheme(
       primaryColor: primaryColor ?? this.primaryColor,
@@ -245,6 +277,9 @@ class WebsiteResolvedTheme extends ThemeExtension<WebsiteResolvedTheme> {
       commerceAccentColor: commerceAccentColor ?? this.commerceAccentColor,
       commerceTextColor: commerceTextColor ?? this.commerceTextColor,
       commerceLineColor: commerceLineColor ?? this.commerceLineColor,
+      customerPortalImage: customerPortalImage ?? this.customerPortalImage,
+      customerPortalWorkshopImage:
+          customerPortalWorkshopImage ?? this.customerPortalWorkshopImage,
     );
   }
 
@@ -279,6 +314,11 @@ class WebsiteResolvedTheme extends ThemeExtension<WebsiteResolvedTheme> {
       commerceLineColor:
           Color.lerp(commerceLineColor, other.commerceLineColor, t) ??
               commerceLineColor,
+      customerPortalImage:
+          t < 0.5 ? customerPortalImage : other.customerPortalImage,
+      customerPortalWorkshopImage: t < 0.5
+          ? customerPortalWorkshopImage
+          : other.customerPortalWorkshopImage,
     );
   }
 

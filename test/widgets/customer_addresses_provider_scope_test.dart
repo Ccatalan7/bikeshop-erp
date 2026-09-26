@@ -86,7 +86,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final addAddress = find.text('Agregar la primera dirección');
+      // Los botones del portal van en mayúsculas («Sendero»).
+      final addAddress = find.text('AGREGAR LA PRIMERA DIRECCIÓN');
       await tester.ensureVisible(addAddress);
       await tester.pumpAndSettle();
       await tester.tap(addAddress);

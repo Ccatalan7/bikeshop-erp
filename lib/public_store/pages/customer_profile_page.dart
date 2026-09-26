@@ -82,6 +82,7 @@ class _CustomerProfilePageState extends State<CustomerProfilePage>
 
     return CustomerPortalLayout(
       title: 'Perfil y seguridad',
+      subtitle: 'Los datos con que preparamos tus pedidos y boletas.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -92,7 +93,7 @@ class _CustomerProfilePageState extends State<CustomerProfilePage>
             child:
                 _isEditing ? _buildProfileForm() : _buildProfileFacts(profile),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 72),
           _buildSecuritySection(
             context,
             hasPendingOtherSessionsRevocation:
@@ -123,7 +124,11 @@ class _CustomerProfilePageState extends State<CustomerProfilePage>
         trailing: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 280),
           child: text.isEmpty
-              ? Text('Agregar', style: style.link)
+              ? Text(
+                  'AGREGAR',
+                  semanticsLabel: 'Agregar',
+                  style: style.link.copyWith(color: style.action),
+                )
               : Text(
                   text,
                   textAlign: TextAlign.right,
@@ -166,116 +171,112 @@ class _CustomerProfilePageState extends State<CustomerProfilePage>
 
   Widget _buildProfileForm() {
     final style = PortalStyle.of(context);
-    return Form(
-      key: _formKey,
-      child: PortalPanel(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final compact = constraints.maxWidth < 560;
-                final fields = [
-                  TextFormField(
-                    controller: _nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Nombre completo',
-                      border: OutlineInputBorder(),
+    return Theme(
+      data: style.formTheme(Theme.of(context)),
+      child: Form(
+        key: _formKey,
+        child: PortalPanel(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(0, 24, 0, 24),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final compact =
+                      constraints.maxWidth < PortalStyle.compactBreakpoint;
+                  final fields = [
+                    TextFormField(
+                      controller: _nameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Nombre completo',
+                      ),
+                      textCapitalization: TextCapitalization.words,
+                      autofillHints: const [AutofillHints.name],
+                      validator: (v) => v == null || v.trim().isEmpty
+                          ? 'Escribe tu nombre'
+                          : null,
                     ),
-                    textCapitalization: TextCapitalization.words,
-                    autofillHints: const [AutofillHints.name],
-                    validator: (v) => v == null || v.trim().isEmpty
-                        ? 'Escribe tu nombre'
-                        : null,
-                  ),
-                  TextFormField(
-                    controller: _rutController,
-                    decoration: const InputDecoration(
-                      labelText: 'RUT',
-                      hintText: '12.345.678-9',
-                      border: OutlineInputBorder(),
+                    TextFormField(
+                      controller: _rutController,
+                      decoration: const InputDecoration(
+                        labelText: 'RUT',
+                        hintText: '12.345.678-9',
+                      ),
                     ),
-                  ),
-                  TextFormField(
-                    controller: _phoneController,
-                    decoration: const InputDecoration(
-                      labelText: 'Teléfono',
-                      hintText: '+56 9 1234 5678',
-                      border: OutlineInputBorder(),
+                    TextFormField(
+                      controller: _phoneController,
+                      decoration: const InputDecoration(
+                        labelText: 'Teléfono',
+                        hintText: '+56 9 1234 5678',
+                      ),
+                      keyboardType: TextInputType.phone,
+                      autofillHints: const [AutofillHints.telephoneNumber],
                     ),
-                    keyboardType: TextInputType.phone,
-                    autofillHints: const [AutofillHints.telephoneNumber],
-                  ),
-                  TextFormField(
-                    controller: _emailController,
-                    decoration: const InputDecoration(
-                      labelText: 'Correo de acceso',
-                      border: OutlineInputBorder(),
+                    TextFormField(
+                      controller: _emailController,
+                      decoration: const InputDecoration(
+                        labelText: 'Correo de acceso',
+                      ),
+                      enabled: false,
+                      style: TextStyle(color: style.inkSecondary),
                     ),
-                    enabled: false,
-                    style: TextStyle(color: style.inkSecondary),
-                  ),
-                ];
+                  ];
 
-                final grid = compact
-                    ? Column(
-                        children: [
-                          for (final field in fields)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 14),
-                              child: field,
-                            ),
-                        ],
-                      )
-                    : Column(
-                        children: [
-                          Row(children: [
-                            Expanded(child: fields[0]),
-                            const SizedBox(width: 14),
-                            Expanded(child: fields[1]),
-                          ]),
-                          const SizedBox(height: 14),
-                          Row(children: [
-                            Expanded(child: fields[2]),
-                            const SizedBox(width: 14),
-                            Expanded(child: fields[3]),
-                          ]),
-                          const SizedBox(height: 14),
-                        ],
-                      );
+                  final grid = compact
+                      ? Column(
+                          children: [
+                            for (final field in fields)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 14),
+                                child: field,
+                              ),
+                          ],
+                        )
+                      : Column(
+                          children: [
+                            Row(children: [
+                              Expanded(child: fields[0]),
+                              const SizedBox(width: 14),
+                              Expanded(child: fields[1]),
+                            ]),
+                            const SizedBox(height: 14),
+                            Row(children: [
+                              Expanded(child: fields[2]),
+                              const SizedBox(width: 14),
+                              Expanded(child: fields[3]),
+                            ]),
+                            const SizedBox(height: 14),
+                          ],
+                        );
 
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    grid,
-                    Wrap(
-                      alignment: WrapAlignment.end,
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        TextButton(
-                          onPressed: _isLoading ? null : _cancelEditing,
-                          style: TextButton.styleFrom(
-                            foregroundColor: style.inkSecondary,
-                            minimumSize: const Size(0, 44),
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      grid,
+                      Wrap(
+                        alignment: WrapAlignment.end,
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: [
+                          PortalButton(
+                            label: 'Cancelar',
+                            kind: PortalButtonKind.secondary,
+                            onPressed: _isLoading ? null : _cancelEditing,
                           ),
-                          child: const Text('Cancelar'),
-                        ),
-                        FilledButton(
-                          onPressed: _isLoading ? null : _saveProfile,
-                          style: portalPrimaryButton(context),
-                          child: Text(
-                            _isLoading ? 'Guardando…' : 'Guardar cambios',
+                          PortalButton(
+                            label:
+                                _isLoading ? 'Guardando…' : 'Guardar cambios',
+                            busy: _isLoading,
+                            onPressed: _saveProfile,
                           ),
-                        ),
-                      ],
-                    ),
-                  ],
-                );
-              },
+                        ],
+                      ),
+                    ],
+                  );
+                },
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -335,9 +336,13 @@ class _CustomerProfilePageState extends State<CustomerProfilePage>
                         style: TextButton.styleFrom(
                           foregroundColor: warning.foreground,
                           minimumSize: const Size(48, 48),
+                          shape: PortalStyle.shape,
                           textStyle: style.link,
                         ),
-                        child: const Text('Completar cierre'),
+                        child: const Text(
+                          'COMPLETAR CIERRE',
+                          semanticsLabel: 'Completar cierre',
+                        ),
                       ),
                     ),
                   ],
@@ -673,26 +678,14 @@ class _CustomerPasswordChangeDialogState
     final style = PortalStyle.of(context);
     return PopScope(
       canPop: !_isBusy,
-      child: AlertDialog(
+      child: PortalDialog(
         scrollable: true,
-        backgroundColor: style.panel,
-        surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(PortalStyle.panelRadius),
-        ),
-        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-        title: Semantics(
-          header: true,
-          child: Text(
-            (isSessionRevocation
-                    ? 'Completar seguridad'
-                    : isVerification
-                        ? 'Verifica que eres tú'
-                        : 'Cambiar contraseña')
-                .toUpperCase(),
-            style: style.pageTitle(compact: true).copyWith(fontSize: 22),
-          ),
-        ),
+        width: 420,
+        title: isSessionRevocation
+            ? 'Completar seguridad'
+            : isVerification
+                ? 'Verifica que eres tú'
+                : 'Cambiar contraseña',
         content: SizedBox(
           width: 420,
           child: AnimatedSwitcher(
@@ -705,15 +698,10 @@ class _CustomerPasswordChangeDialogState
           ),
         ),
         actions: [
-          TextButton(
+          PortalButton(
+            label: isSessionRevocation ? 'Cerrar por ahora' : 'Cancelar',
+            kind: PortalButtonKind.secondary,
             onPressed: _isBusy ? null : () => Navigator.of(context).pop(),
-            style: TextButton.styleFrom(
-              foregroundColor: style.inkSecondary,
-              minimumSize: const Size(48, 48),
-            ),
-            child: Text(
-              isSessionRevocation ? 'Cerrar por ahora' : 'Cancelar',
-            ),
           ),
           if (isVerification)
             TextButton(
@@ -721,38 +709,28 @@ class _CustomerPasswordChangeDialogState
                   ? null
                   : () => _requestVerificationCode(isResend: true),
               style: TextButton.styleFrom(
-                foregroundColor: style.accent,
+                foregroundColor: style.ink,
                 minimumSize: const Size(48, 48),
+                shape: PortalStyle.shape,
+                textStyle: style.link,
               ),
-              child: const Text('Reenviar código'),
+              child: const Text(
+                'REENVIAR CÓDIGO',
+                semanticsLabel: 'Reenviar código',
+              ),
             ),
-          FilledButton(
-            onPressed: _isBusy
-                ? null
-                : isSessionRevocation
-                    ? _retryOtherSessionRevocation
-                    : isVerification
-                        ? _submitVerificationCode
-                        : _submitPassword,
-            style: portalPrimaryButton(context).copyWith(
-              minimumSize: const WidgetStatePropertyAll(Size(48, 48)),
-            ),
-            child: _isBusy
-                ? SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: style.onAccent,
-                    ),
-                  )
-                : Text(
-                    isSessionRevocation
-                        ? 'Reintentar cierre'
-                        : isVerification
-                            ? 'Verificar y cambiar'
-                            : 'Cambiar',
-                  ),
+          PortalButton(
+            label: isSessionRevocation
+                ? 'Reintentar cierre'
+                : isVerification
+                    ? 'Verificar y cambiar'
+                    : 'Cambiar',
+            busy: _isBusy,
+            onPressed: isSessionRevocation
+                ? _retryOtherSessionRevocation
+                : isVerification
+                    ? _submitVerificationCode
+                    : _submitPassword,
           ),
         ],
       ),
@@ -913,7 +891,7 @@ class _CustomerPasswordChangeDialogState
             Text(
               _verificationNotice!,
               key: const ValueKey('customer-password-verification-notice'),
-              style: TextStyle(color: PortalStyle.of(context).accent),
+              style: TextStyle(color: PortalStyle.of(context).ink),
             ),
           ],
         ],

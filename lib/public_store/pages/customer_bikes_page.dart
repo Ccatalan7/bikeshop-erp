@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../models/customer_portal_presentation.dart';
 import '../services/customer_account_service.dart';
+import '../widgets/customer_bike_card.dart';
 import '../widgets/customer_portal_layout.dart';
 import '../widgets/customer_portal_style.dart';
 import '../widgets/public_store_layout.dart';
@@ -38,71 +38,22 @@ class _CustomerBikesPageState extends State<CustomerBikesPage>
 
     return CustomerPortalLayout(
       title: 'Bicicletas',
+      subtitle: 'Las bicis que el taller registró a tu nombre.',
       child: CustomerBikesBody(
         bikes: accountService.bikes,
         isLoading: accountService.isLoading && accountService.bikes.isEmpty,
-        onOpenBike: (bike) => _showBike(context, bike, navigate),
+        onOpenBike: (bike) => showCustomerBikeDetail(
+          context,
+          bike: bike,
+          onNavigate: navigate,
+        ),
         onNavigate: navigate,
       ),
     );
   }
-
-  void _showBike(
-    BuildContext context,
-    Map<String, dynamic> bike,
-    ValueChanged<String> navigate,
-  ) {
-    final warranty = portalParseDate(bike['warranty_until']);
-    final purchased = portalParseDate(bike['purchase_date']);
-    final count = (bike['service_count'] as num?)?.toInt() ?? 0;
-    String? text(String key) {
-      final value = (bike[key] ?? '').toString().trim();
-      return value.isEmpty ? null : value;
-    }
-
-    final warrantyActive = warranty != null &&
-        !warranty.isBefore(DateUtils.dateOnly(DateTime.now()));
-
-    showPortalDetail(
-      context,
-      title: CustomerWorkshopPresentation.bikeTitle(bike),
-      subtitle:
-          customerBikeDetails(bike).isEmpty ? null : customerBikeDetails(bike),
-      status: warranty == null
-          ? null
-          : PortalStatusPill(
-              label: warrantyActive
-                  ? 'Garantía hasta el ${portalDate(warranty)}'
-                  : 'Garantía vencida el ${portalDate(warranty)}',
-              tone: warrantyActive ? PortalTone.success : PortalTone.neutral,
-            ),
-      body: PortalFacts(
-        facts: [
-          ('Taller', customerBikeServiceSummary(bike)),
-          ('Talla de cuadro', text('frame_size')),
-          ('Número de serie', text('serial_number')),
-          ('Comprada', purchased == null ? null : portalDate(purchased)),
-          ('Notas', text('notes')),
-        ],
-      ),
-      actions: [
-        if (count > 0)
-          Builder(
-            builder: (buttonContext) => FilledButton(
-              style: portalPrimaryButton(buttonContext),
-              onPressed: () {
-                Navigator.of(buttonContext).pop();
-                navigate('/cuenta/servicios?bike_id=${bike['id']}');
-              },
-              child: const Text('Ver sus trabajos de taller'),
-            ),
-          ),
-      ],
-    );
-  }
 }
 
-/// La lista de bicis, sin el marco ni el servicio.
+/// Las bicis en una grilla de tarjetas, sin el marco ni el servicio.
 class CustomerBikesBody extends StatelessWidget {
   const CustomerBikesBody({
     super.key,
@@ -141,61 +92,30 @@ class CustomerBikesBody extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final compact = constraints.maxWidth < 560;
-        final style = PortalStyle.of(context);
-        return PortalPanel(
+        final width = constraints.maxWidth;
+        final columns = width >= 860
+            ? 3
+            : width >= PortalStyle.compactBreakpoint
+                ? 2
+                : 1;
+        const gap = 32.0;
+        final cardWidth = (width - gap * (columns - 1)) / columns;
+        return Wrap(
+          spacing: gap,
+          runSpacing: 40,
           children: [
             for (final bike in bikes)
-              _BikeRow(
-                bike: bike,
-                compact: compact,
-                style: style,
-                onTap: () => onOpenBike(bike),
+              SizedBox(
+                width: cardWidth,
+                child: CustomerBikeCard(
+                  bike: bike,
+                  compact: columns == 1,
+                  onTap: () => onOpenBike(bike),
+                ),
               ),
           ],
         );
       },
-    );
-  }
-}
-
-class _BikeRow extends StatelessWidget {
-  const _BikeRow({
-    required this.bike,
-    required this.compact,
-    required this.style,
-    required this.onTap,
-  });
-
-  final Map<String, dynamic> bike;
-  final bool compact;
-  final PortalStyle style;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final details = customerBikeDetails(bike);
-    final services = customerBikeServiceSummary(bike);
-    return PortalRow(
-      leading: PortalThumb(
-        fallbackIcon: Icons.pedal_bike_outlined,
-        imageUrl: customerBikeImage(bike),
-      ),
-      title: CustomerWorkshopPresentation.bikeTitle(bike),
-      meta: compact
-          ? [if (details.isNotEmpty) details, services].join(' · ')
-          : (details.isEmpty ? null : details),
-      trailing: compact
-          ? null
-          : ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 240),
-              child: Text(
-                services,
-                textAlign: TextAlign.right,
-                style: style.rowMeta,
-              ),
-            ),
-      onTap: onTap,
     );
   }
 }

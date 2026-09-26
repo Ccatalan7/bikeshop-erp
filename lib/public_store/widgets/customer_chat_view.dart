@@ -12,7 +12,9 @@ import '../../modules/messaging/models/message.dart';
 import '../../modules/messaging/services/messaging_attachment_service.dart';
 import '../../modules/messaging/services/messaging_service.dart';
 import '../../modules/messaging/widgets/message_delivery_indicator.dart';
+import '../models/customer_portal_presentation.dart';
 import 'customer_chat_visibility.dart';
+import 'customer_portal_style.dart';
 
 class _AttachmentUrlCacheEntry {
   const _AttachmentUrlCacheEntry({
@@ -301,94 +303,51 @@ class _CustomerChatViewState extends State<CustomerChatView> {
         status == 'unavailable' ||
         status == 'loading';
 
+    final style = PortalStyle.of(context);
+
     return Column(
       children: [
-        // Optional Info Button Header (Only visible if handler provided, effectively Mobile)
+        // En teléfono, el resumen del trabajo o la factura se abre aparte.
         if (widget.onInfoPressed != null)
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              onPressed: widget.onInfoPressed,
-              icon: const Icon(Icons.info_outline, size: 16),
-              label: const Text('Ver Detalles'),
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.grey[700],
-              ),
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: style.line)),
+            ),
+            child: PortalLink(
+              label: 'Ver detalles',
+              onTap: widget.onInfoPressed!,
             ),
           ),
 
-        // Status banner
         if (isPending)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.orange.withValues(alpha: 0.1),
-              border: Border(
-                  bottom:
-                      BorderSide(color: Colors.orange.withValues(alpha: 0.3))),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.schedule, color: Colors.orange[700], size: 18),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Esperando respuesta del equipo...',
-                    style: TextStyle(color: Colors.orange[700], fontSize: 13),
-                  ),
-                ),
-              ],
-            ),
+          _statusBanner(
+            style,
+            marker: style.attention,
+            text: 'Esperando respuesta del equipo…',
           ),
         if (isRejected)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.red.withValues(alpha: 0.1),
-              border: Border(
-                  bottom: BorderSide(color: Colors.red.withValues(alpha: 0.3))),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.cancel_outlined, color: Colors.red[700], size: 18),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    _conversation?['reject_reason'] ??
-                        'Esta consulta fue cerrada.',
-                    style: TextStyle(color: Colors.red[700], fontSize: 13),
-                  ),
-                ),
-              ],
-            ),
+          _statusBanner(
+            style,
+            marker: style.danger,
+            text:
+                _conversation?['reject_reason'] ?? 'Esta consulta fue cerrada.',
           ),
-        if (!isRejected && isClosed)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            color: Theme.of(context)
-                .colorScheme
-                .surfaceContainerHighest
-                .withValues(alpha: 0.72),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.inventory_2_outlined,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  size: 18,
-                ),
-                const SizedBox(width: 8),
-                const Expanded(
-                  child: Text(
-                    'Esta conversación está archivada y se conserva como respaldo.',
-                    style: TextStyle(fontSize: 13),
-                  ),
-                ),
-              ],
-            ),
+        // Mientras carga no se dice nada: antes salía «archivada» un instante.
+        if (status == 'unavailable')
+          _statusBanner(
+            style,
+            marker: style.danger,
+            text: 'No pudimos abrir esta conversación. Vuelve a Soporte e '
+                'inténtalo de nuevo.',
+          )
+        else if (!isRejected && isClosed && status != 'loading')
+          _statusBanner(
+            style,
+            marker: style.inkMuted,
+            text: 'Esta conversación está archivada y se conserva como '
+                'respaldo.',
           ),
 
         if (streamError != null)
@@ -400,8 +359,8 @@ class _CustomerChatViewState extends State<CustomerChatView> {
 
         // Messages Area
         Expanded(
-          child: Container(
-            color: Colors.grey[50],
+          child: ColoredBox(
+            color: style.page,
             child: isLoading && messages.isEmpty
                 ? const Center(child: CircularProgressIndicator())
                 // Use NotificationListener to suppress OverscrollIndicatorNotification
@@ -444,74 +403,94 @@ class _CustomerChatViewState extends State<CustomerChatView> {
 
         // Input Area
         if (!isClosed)
-          Container(
-            padding: const EdgeInsets.all(16),
+          DecoratedBox(
             decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, -2),
-                ),
-              ],
+              color: style.page,
+              border: Border(top: BorderSide(color: style.line)),
             ),
-            child: SafeArea(
-              top: false,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: CallbackShortcuts(
-                      bindings: {
-                        const SingleActivator(LogicalKeyboardKey.enter): () =>
-                            unawaited(_sendMessage()),
-                        const SingleActivator(LogicalKeyboardKey.numpadEnter):
-                            () => unawaited(_sendMessage()),
-                      },
-                      child: TextField(
-                        controller: _messageController,
-                        minLines: 1,
-                        maxLines: 5,
-                        keyboardType: TextInputType.multiline,
-                        textInputAction: TextInputAction.newline,
-                        decoration: InputDecoration(
-                          hintText: isPending
-                              ? 'Agregar más información...'
-                              : 'Escribe un mensaje...',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(24),
-                            borderSide: BorderSide.none,
-                          ),
-                          filled: true,
-                          fillColor: Colors.grey[100],
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 10,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: SafeArea(
+                top: false,
+                child: Theme(
+                  data: style.formTheme(Theme.of(context)),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: CallbackShortcuts(
+                          bindings: {
+                            const SingleActivator(LogicalKeyboardKey.enter):
+                                () => unawaited(_sendMessage()),
+                            const SingleActivator(
+                                    LogicalKeyboardKey.numpadEnter):
+                                () => unawaited(_sendMessage()),
+                          },
+                          child: TextField(
+                            controller: _messageController,
+                            minLines: 1,
+                            maxLines: 5,
+                            keyboardType: TextInputType.multiline,
+                            textInputAction: TextInputAction.newline,
+                            decoration: InputDecoration(
+                              hintText: isPending
+                                  ? 'Agregar más información…'
+                                  : 'Escribe un mensaje…',
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 14,
+                              ),
+                            ),
+                            textCapitalization: TextCapitalization.sentences,
                           ),
                         ),
-                        textCapitalization: TextCapitalization.sentences,
                       ),
-                    ),
+                      const SizedBox(width: 8),
+                      SizedBox.square(
+                        dimension: 48,
+                        child: IconButton(
+                          tooltip: 'Enviar',
+                          onPressed: _sendMessage,
+                          style: IconButton.styleFrom(
+                            backgroundColor: style.action,
+                            foregroundColor: style.onAction,
+                            shape: PortalStyle.shape,
+                          ),
+                          icon: const Icon(Icons.arrow_upward, size: 22),
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary,
-                      shape: BoxShape.circle,
-                    ),
-                    child: IconButton(
-                      onPressed: _sendMessage,
-                      icon:
-                          const Icon(Icons.send, color: Colors.white, size: 20),
-                      padding: const EdgeInsets.all(10),
-                      constraints: const BoxConstraints(),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
       ],
+    );
+  }
+
+  /// Una línea sobre el gris con el estado de la conversación.
+  Widget _statusBanner(
+    PortalStyle style, {
+    required Color marker,
+    required String text,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: style.well,
+        border: Border(bottom: BorderSide(color: style.line)),
+      ),
+      child: Row(
+        children: [
+          Container(width: 8, height: 8, color: marker),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(text, style: style.rowMeta.copyWith(color: style.ink)),
+          ),
+        ],
+      ),
     );
   }
 
@@ -590,31 +569,31 @@ class _CustomerChatViewState extends State<CustomerChatView> {
     ChatProvider provider,
     String message,
   ) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final style = PortalStyle.of(context);
+    final colors = style.tone(PortalTone.danger);
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 7, 8, 7),
-      color: colorScheme.errorContainer,
+      padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
+      color: colors.background,
       child: Row(
         children: [
-          Icon(
-            Icons.cloud_off_outlined,
-            size: 17,
-            color: colorScheme.onErrorContainer,
-          ),
-          const SizedBox(width: 8),
+          Icon(Icons.cloud_off_outlined, size: 18, color: colors.foreground),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               message,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: colorScheme.onErrorContainer,
-                  ),
+              style: style.rowMeta.copyWith(color: colors.foreground),
             ),
           ),
           TextButton(
             onPressed: () =>
                 provider.retryConversationMessages(widget.conversationId),
-            child: const Text('Reintentar'),
+            style: TextButton.styleFrom(
+              foregroundColor: colors.foreground,
+              shape: PortalStyle.shape,
+              textStyle: style.label.copyWith(fontSize: 12),
+            ),
+            child: const Text('REINTENTAR', semanticsLabel: 'Reintentar'),
           ),
         ],
       ),
@@ -640,56 +619,48 @@ class _CustomerChatViewState extends State<CustomerChatView> {
       );
     }
 
-    final colorScheme = Theme.of(context).colorScheme;
+    // Lo del cliente, en el color de texto; lo de la tienda, sobre el gris.
+    // Rectos, como todo el portal.
+    final style = PortalStyle.of(context);
+    final foreground = isMe ? style.onBand : style.ink;
     final privateAttachment =
         MessagingAttachmentService.hasPrivateReference(msg);
 
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
+        margin: const EdgeInsets.only(bottom: 10),
         constraints: BoxConstraints(
           maxWidth: MediaQuery.of(context).size.width * 0.75,
         ),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: isMe
-              ? colorScheme.primaryContainer
-              : colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.only(
-            topLeft: const Radius.circular(16),
-            topRight: const Radius.circular(16),
-            bottomLeft: Radius.circular(isMe ? 16 : 4),
-            bottomRight: Radius.circular(isMe ? 4 : 16),
-          ),
-        ),
+        color: isMe ? style.band : style.well,
         child: Column(
           crossAxisAlignment:
               isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
             if (privateAttachment)
-              _buildPrivateAttachment(context, msg)
+              IconTheme.merge(
+                data: IconThemeData(color: foreground),
+                child: DefaultTextStyle.merge(
+                  style: TextStyle(color: foreground),
+                  child: _buildPrivateAttachment(context, msg),
+                ),
+              )
             else
               SelectableText(
                 msg.content,
-                style: TextStyle(
-                  color: isMe
-                      ? colorScheme.onPrimaryContainer
-                      : colorScheme.onSurface,
-                  fontSize: 15,
-                ),
+                style: style.body(15, color: foreground),
               ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 6),
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   DateFormat('HH:mm').format(msg.createdAt),
-                  style: TextStyle(
-                    color: isMe
-                        ? colorScheme.onPrimaryContainer.withValues(alpha: 0.7)
-                        : colorScheme.onSurfaceVariant,
+                  style: style.micro.copyWith(
+                    color: foreground.withValues(alpha: 0.7),
                     fontSize: 10,
                   ),
                 ),
@@ -734,23 +705,17 @@ class _CustomerChatViewState extends State<CustomerChatView> {
         : day == today.subtract(const Duration(days: 1))
             ? 'Ayer'
             : DateFormat('dd/MM/yyyy').format(day);
-    final colorScheme = Theme.of(context).colorScheme;
+    final style = PortalStyle.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
         children: [
-          Expanded(child: Divider(color: colorScheme.outlineVariant)),
+          Expanded(child: Divider(color: style.line)),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(label.toUpperCase(), style: style.micro),
           ),
-          Expanded(child: Divider(color: colorScheme.outlineVariant)),
+          Expanded(child: Divider(color: style.line)),
         ],
       ),
     );
@@ -905,8 +870,11 @@ class _CustomerChatViewState extends State<CustomerChatView> {
     await launchUrl(Uri.parse(freshUrl));
   }
 
-  /// Build action request card for customer with interactive buttons
+  /// La tarjeta de una solicitud de la tienda (aprobar un presupuesto,
+  /// confirmar una entrega, un pago): recta, con su estado en una etiqueta y
+  /// los botones del portal.
   Widget _buildActionRequestCard(BuildContext context, Message msg) {
+    final style = PortalStyle.of(context);
     final actionType = msg.metadata['action_type'] as String? ?? 'unknown';
     final status = msg.metadata['status'] as String? ?? 'pending';
     final amount = msg.metadata['amount'] as num?;
@@ -915,247 +883,123 @@ class _CustomerChatViewState extends State<CustomerChatView> {
     final isDecisionAction =
         actionType == 'approve_quote' || actionType == 'confirm_delivery';
 
-    // Determine card appearance based on action type
-    IconData icon;
-    String title;
-    String buttonLabel;
-    Color accentColor;
-
+    final String title;
+    final String buttonLabel;
     switch (actionType) {
       case 'approve_quote':
-        icon = Icons.description_outlined;
-        if (status == 'accepted') {
-          title = 'Presupuesto Aprobado';
-          accentColor = Colors.green;
-        } else if (status == 'declined') {
-          title = 'Presupuesto Rechazado';
-          accentColor = Colors.red;
-        } else {
-          title = 'Presupuesto Pendiente';
-          accentColor = Colors.orange;
-        }
+        title = 'Presupuesto';
         buttonLabel = 'Aprobar presupuesto';
-        break;
       case 'pay_now':
-        icon = Icons.payment;
         title = 'Pago solicitado';
         buttonLabel = amount != null
             ? 'Monto: \$${amount.toStringAsFixed(0)}'
             : 'Revisa tu pedido';
-        accentColor = Colors.teal;
-        break;
       case 'confirm_delivery':
-        icon = Icons.local_shipping;
-        title = 'Confirmar Entrega';
-        buttonLabel = 'Confirmar Recibido';
-        accentColor = Colors.blue;
-        break;
+        title = 'Confirmar entrega';
+        buttonLabel = 'Confirmar recibido';
       default:
-        icon = Icons.info_outline;
-        title = 'Acción Requerida';
-        buttonLabel = 'Ver Detalles';
-        accentColor = Colors.grey;
+        title = 'Acción requerida';
+        buttonLabel = 'Ver detalles';
     }
 
-    // Status badge
-    Widget statusBadge = const SizedBox.shrink();
-    if (status == 'accepted') {
-      statusBadge = Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.green.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(20),
+    final Widget? statusTag = switch (status) {
+      'accepted' => PortalTag(
+          label: actionType == 'approve_quote' ? 'Aprobado' : 'Listo',
+          kind: PortalTagKind.success,
         ),
-        child: const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.check_circle, size: 16, color: Colors.green),
-            SizedBox(width: 6),
-            Text('Aprobado',
-                style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.green,
-                    fontWeight: FontWeight.w600)),
-          ],
+      'declined' => PortalTag(
+          label:
+              actionType == 'approve_quote' ? 'Pediste cambios' : 'Rechazado',
+          kind: PortalTagKind.quiet,
         ),
-      );
-    } else if (status == 'declined') {
-      statusBadge = Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.red.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(20),
+      'pending' => const PortalTag(
+          label: 'Espera tu respuesta',
+          kind: PortalTagKind.attention,
         ),
-        child: const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.cancel, size: 16, color: Colors.red),
-            SizedBox(width: 6),
-            Text('Rechazado',
-                style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.red,
-                    fontWeight: FontWeight.w600)),
-          ],
-        ),
-      );
-    }
+      _ => null,
+    };
 
     return Align(
       alignment: Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
-        constraints: const BoxConstraints(
-          maxWidth: 400, // Fixed reasonable width, not percentage based
-        ),
+        constraints: const BoxConstraints(maxWidth: 420),
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade200),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          color: style.page,
+          border: Border(
+            top: BorderSide(color: style.ink, width: 3),
+            left: BorderSide(color: style.line),
+            right: BorderSide(color: style.line),
+            bottom: BorderSide(color: style.line),
+          ),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade50,
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(12)),
-                border: Border(bottom: BorderSide(color: Colors.grey.shade100)),
-              ),
-              child: Row(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Icon(icon, color: accentColor, size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                        color: Colors.black87,
-                      ),
-                    ),
-                  ),
-                  statusBadge,
+                  Text(title.toUpperCase(), style: style.heading(18)),
+                  if (statusTag != null) statusTag,
                 ],
               ),
-            ),
-            // Content
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Text(
-                msg.content,
-                style: const TextStyle(
-                    color: Colors.black87, fontSize: 13, height: 1.4),
-              ),
-            ),
-            if (responseNote != null && responseNote.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.notes_outlined, size: 16),
-                    const SizedBox(width: 7),
-                    Expanded(
-                      child: Text(
-                        responseNote,
-                        style: const TextStyle(fontSize: 12, height: 1.35),
-                      ),
-                    ),
-                  ],
+              const SizedBox(height: 10),
+              Text(msg.content, style: style.body(14)),
+              if (responseNote != null && responseNote.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  color: style.well,
+                  child: Text(
+                    responseNote,
+                    style: style.rowMeta.copyWith(color: style.ink),
+                  ),
                 ),
-              ),
-            if (status == 'pending' && actionType == 'pay_now')
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(
-                      Icons.info_outline_rounded,
-                      size: 17,
-                      color: Colors.teal.shade700,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        '$buttonLabel. El chat no abre cobros sin una sesión de pago autorizada; revisa el pedido o solicita un enlace vigente al equipo.',
-                        style: TextStyle(
-                          color: Colors.teal.shade900,
-                          fontSize: 12,
-                          height: 1.35,
-                        ),
-                      ),
-                    ),
-                  ],
+              ],
+              if (status == 'pending' && actionType == 'pay_now') ...[
+                const SizedBox(height: 10),
+                Text(
+                  '$buttonLabel. El chat no abre cobros sin una sesión de pago autorizada; revisa el pedido o solicita un enlace vigente al equipo.',
+                  style: style.rowMeta,
                 ),
-              ),
-            // Workshop decisions are persisted by the canonical audited
-            // server command. Unknown and payment actions remain read-only.
-            if (status == 'pending' && isDecisionAction)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                child: Row(
+              ],
+              // Workshop decisions are persisted by the canonical audited
+              // server command. Unknown and payment actions remain read-only.
+              if (status == 'pending' && isDecisionAction) ...[
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
-                    if (actionType == 'approve_quote') ...[
-                      Expanded(
-                        child: TextButton(
-                          onPressed: isResponding
-                              ? null
-                              : () => _requestQuotationChanges(msg),
-                          child: const Text('Solicitar cambios'),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                    ],
-                    Expanded(
-                      child: FilledButton.icon(
+                    PortalButton(
+                      label: buttonLabel,
+                      icon: Icons.check,
+                      busy: isResponding,
+                      onPressed: () => _handlePrimaryAction(msg),
+                    ),
+                    if (actionType == 'approve_quote')
+                      PortalButton(
+                        label: 'Solicitar cambios',
+                        kind: PortalButtonKind.secondary,
                         onPressed: isResponding
                             ? null
-                            : () => _handlePrimaryAction(msg),
-                        icon: isResponding
-                            ? const SizedBox.square(
-                                dimension: 16,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : Icon(
-                                actionType == 'pay_now'
-                                    ? Icons.payment_outlined
-                                    : Icons.check_rounded,
-                                size: 18,
-                              ),
-                        label: Text(buttonLabel),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: accentColor,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                        ),
+                            : () => _requestQuotationChanges(msg),
                       ),
-                    ),
                   ],
                 ),
-              ),
-            // Timestamp
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-              child: Text(
+              ],
+              const SizedBox(height: 8),
+              Text(
                 DateFormat('HH:mm').format(msg.createdAt),
-                style: TextStyle(color: Colors.grey[400], fontSize: 10),
+                style: style.micro.copyWith(fontSize: 10),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1177,8 +1021,8 @@ class _CustomerChatViewState extends State<CustomerChatView> {
     final controller = TextEditingController();
     final feedback = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Solicitar cambios'),
+      builder: (dialogContext) => PortalDialog(
+        title: 'Solicitar cambios',
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -1189,16 +1033,17 @@ class _CustomerChatViewState extends State<CustomerChatView> {
           ),
         ),
         actions: [
-          TextButton(
+          PortalButton(
+            label: 'Cancelar',
+            kind: PortalButtonKind.secondary,
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancelar'),
           ),
-          FilledButton(
+          PortalButton(
+            label: 'Enviar solicitud',
             onPressed: () {
               final value = controller.text.trim();
               if (value.isNotEmpty) Navigator.pop(dialogContext, value);
             },
-            child: const Text('Enviar solicitud'),
           ),
         ],
       ),
@@ -1245,9 +1090,10 @@ class _CustomerChatViewState extends State<CustomerChatView> {
         messenger.showSnackBar(
           SnackBar(
             content: Text(
-                response == 'accepted' ? '✅ Acción completada' : 'Rechazado'),
-            backgroundColor:
-                response == 'accepted' ? Colors.green : Colors.orange,
+              response == 'accepted'
+                  ? 'Listo, le avisamos al taller.'
+                  : 'Enviamos tu pedido de cambios.',
+            ),
           ),
         );
       }
@@ -1258,7 +1104,6 @@ class _CustomerChatViewState extends State<CustomerChatView> {
             content: Text(
               'No se pudo registrar la respuesta: ${error.message}',
             ),
-            backgroundColor: Colors.red,
           ),
         );
       }
@@ -1266,12 +1111,11 @@ class _CustomerChatViewState extends State<CustomerChatView> {
       debugPrint('Customer action outcome unknown for ${message.id}: $error');
       if (mounted) {
         messenger.showSnackBar(
-          SnackBar(
-            content: const Text(
+          const SnackBar(
+            content: Text(
               'No pudimos confirmar la respuesta. Puede haberse guardado; vuelve a pulsar la misma opción para verificarla sin duplicar.',
             ),
-            backgroundColor: Colors.orange.shade900,
-            duration: const Duration(seconds: 10),
+            duration: Duration(seconds: 10),
           ),
         );
       }

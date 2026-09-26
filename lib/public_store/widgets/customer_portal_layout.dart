@@ -4,21 +4,22 @@ import 'package:provider/provider.dart';
 
 import '../models/customer_portal_presentation.dart';
 import '../services/customer_account_service.dart';
+import 'customer_job_row.dart';
 import 'customer_portal_style.dart';
 import 'public_store_layout.dart';
 
-/// Marco del portal de clientes (`/cuenta/**`).
+/// Marco del portal de clientes (`/cuenta/**`), dirección «Sendero».
 ///
-/// En ancho: el menú de la cuenta a la izquierda, fijo, y el contenido en una
-/// columna que se desplaza sola. Las rutas del portal se montan sin el scroll
-/// de página de la tienda (`_buildPageNoScroll`), así el menú no se va con el
-/// contenido. En teléfono: una barra con la cuenta y las secciones en
-/// pestañas, fija, y el contenido debajo.
+/// De arriba abajo: el aviso de lo que espera al cliente (una banda oscura,
+/// fuera del resumen, que ya lo muestra en grande), la franja con la foto del
+/// portal y el título de la página, las pestañas de la cuenta y el contenido
+/// en una columna de hasta [PortalStyle.contentMaxWidth]. Todo se desplaza
+/// junto: las rutas del portal se montan sin el scroll de la tienda
+/// (`_buildPageNoScroll`) y el marco pone el suyo.
 ///
-/// El chat vive en «Soporte» y en el botón flotante de la tienda; el marco ya
-/// no lleva un segundo chat ni las cifras repetidas en una columna derecha.
-/// Una página que necesita esa columna (el detalle de una conversación) la
-/// pasa en [rightSidebarContent].
+/// Una página que maneja su propio alto (el chat abierto,
+/// [enableContentScrolling] en `false`) no lleva la franja: recibe el alto que
+/// queda bajo las pestañas, con el título en una línea.
 class CustomerPortalLayout extends StatelessWidget {
   final String title;
   final String? subtitle;
@@ -30,6 +31,15 @@ class CustomerPortalLayout extends StatelessWidget {
   final bool enableContentScrolling;
   final bool showHeader;
   final String? backPath;
+
+  /// La franja alta del resumen, con el saludo en grande.
+  final bool prominent;
+
+  /// A la derecha del saludo en la franja alta: «Cliente desde…».
+  final String? bandMeta;
+
+  /// Lo que va a todo el ancho bajo el contenido (la franja de servicio).
+  final Widget? footer;
 
   const CustomerPortalLayout({
     super.key,
@@ -43,6 +53,9 @@ class CustomerPortalLayout extends StatelessWidget {
     this.rightSidebarContent,
     this.enableContentScrolling = true,
     this.showHeader = true,
+    this.prominent = false,
+    this.bandMeta,
+    this.footer,
   });
 
   @override
@@ -56,161 +69,428 @@ class CustomerPortalLayout extends StatelessWidget {
       return child;
     }
 
-    final profile = accountService.customerProfile;
-    final identity = _PortalIdentity(
-      name: customerFirstName(profile) == null
-          ? 'Tu cuenta'
-          : (profile?['name'] ?? '').toString().trim(),
-      email: (profile?['email'] ?? '').toString().trim(),
-    );
     final style = PortalStyle.of(context);
+    final location = GoRouterState.of(context).uri.path;
+    final onDashboard = _matches(location, '/cuenta');
 
     return ColoredBox(
-      color: style.canvas,
+      color: style.page,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final wide = constraints.maxWidth >= PortalStyle.wideBreakpoint;
+          final width = constraints.maxWidth;
+          final wide = width >= PortalStyle.wideBreakpoint;
+          final gutter = PortalStyle.gutter(width);
           final bounded = constraints.hasBoundedHeight;
-          // Una página que maneja su propio alto (el chat abierto) recibe el
-          // espacio que queda bajo el título, sin el scroll del portal.
           final fitsViewport = bounded && !enableContentScrolling;
-          final content = _PortalContent(
+          final showBand = showHeader && !fitsViewport;
+          final sidebar = wide ? rightSidebarContent : null;
+          final pending = onDashboard
+              ? null
+              : CustomerPendingAction.first(
+                  orders: accountService.orders,
+                  jobs: accountService.serviceHistory,
+                );
+
+          Widget column(Widget child) => _PortalColumn(
+                gutter: gutter,
+                extraWidth: sidebar == null ? 0 : 336,
+                child: child,
+              );
+
+          final top = <Widget>[
+            if (pending != null && !fitsViewport)
+              _PendingActionStrip(action: pending, gutter: gutter),
+            if (showBand)
+              PortalBand(
+                title: title,
+                meta: prominent ? bandMeta : (bandMeta ?? subtitle),
+                action: headerAction,
+                prominent: prominent,
+                gutter: gutter,
+                compact: width < PortalStyle.compactBreakpoint,
+                onSignOut: wide ? null : () => _signOut(context),
+              ),
+            _PortalTabs(
+              gutter: gutter,
+              showSignOut: wide,
+              location: location,
+            ),
+          ];
+
+          Widget body = _PortalContent(
             title: title,
-            subtitle: subtitle,
-            showHeader: showHeader,
-            headerAction: headerAction,
+            showTitle: showHeader && !showBand,
+            headerAction: showBand ? null : headerAction,
             showBackButton: showBackButton,
             backPath: backPath,
-            compact: !wide,
             expandChild: fitsViewport,
             child: child,
           );
-
-          if (wide) {
-            final scrollingContent = fitsViewport
-                ? Padding(
-                    padding: const EdgeInsets.fromLTRB(0, 36, 0, 24),
-                    child: Align(
-                      alignment: Alignment.topLeft,
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(
-                          maxWidth: PortalStyle.contentMaxWidth,
-                        ),
-                        child: content,
-                      ),
-                    ),
-                  )
-                : SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(0, 36, 0, 72),
-                    child: Align(
-                      alignment: Alignment.topLeft,
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(
-                          maxWidth: PortalStyle.contentMaxWidth,
-                        ),
-                        child: content,
-                      ),
-                    ),
-                  );
-            final row = Row(
+          if (sidebar != null) {
+            body = Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SizedBox(
-                  width: PortalStyle.navWidth,
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 36),
-                    child: _PortalNavigation(identity: identity),
-                  ),
-                ),
-                const SizedBox(width: 48),
-                Expanded(
-                  child: bounded
-                      ? scrollingContent
-                      : Padding(
-                          padding: const EdgeInsets.fromLTRB(0, 36, 0, 72),
-                          child: content,
-                        ),
-                ),
-                if (rightSidebarContent != null) ...[
-                  const SizedBox(width: 32),
-                  SizedBox(
-                    width: 304,
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 36),
-                      child: rightSidebarContent,
-                    ),
-                  ),
-                ],
+                Expanded(child: body),
+                const SizedBox(width: 32),
+                SizedBox(width: 304, child: sidebar),
               ],
-            );
-            return Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth: rightSidebarContent == null ? 1120 : 1360,
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 32),
-                  child: row,
-                ),
-              ),
             );
           }
 
-          final bar = _CompactAccountBar(identity: identity);
           if (fitsViewport) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                bar,
+                ...top,
                 Expanded(
-                  child: Padding(
-                    padding:
-                        EdgeInsets.fromLTRB(16, showHeader ? 20 : 8, 16, 12),
-                    child: content,
+                  child: column(
+                    Padding(
+                      padding: EdgeInsets.only(
+                        top: showHeader ? (wide ? 28 : 16) : 8,
+                        bottom: 16,
+                      ),
+                      child: body,
+                    ),
                   ),
                 ),
               ],
             );
           }
-          final body = Padding(
-            padding: const EdgeInsets.fromLTRB(16, 20, 16, 48),
-            child: content,
-          );
-          if (!bounded) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [bar, body],
-            );
-          }
-          return Column(
+
+          final page = Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              bar,
-              Expanded(child: SingleChildScrollView(child: body)),
+              ...top,
+              column(
+                Padding(
+                  padding: EdgeInsets.only(
+                    top: wide ? 56 : 32,
+                    bottom: footer == null ? 80 : 72,
+                  ),
+                  child: body,
+                ),
+              ),
+              if (footer != null) footer!,
             ],
           );
+          if (!bounded) return page;
+          return SingleChildScrollView(child: page);
         },
       ),
     );
   }
 }
 
-class _PortalIdentity {
-  const _PortalIdentity({required this.name, required this.email});
+/// El contenido centrado, con sus márgenes.
+class _PortalColumn extends StatelessWidget {
+  const _PortalColumn({
+    required this.gutter,
+    required this.child,
+    this.extraWidth = 0,
+  });
 
-  final String name;
-  final String email;
+  final double gutter;
+  final double extraWidth;
+  final Widget child;
 
-  String get initial {
-    final source = name == 'Tu cuenta' && email.isNotEmpty ? email : name;
-    return source.isEmpty ? '·' : source.characters.first.toUpperCase();
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: PortalStyle.contentMaxWidth + extraWidth + gutter * 2,
+        ),
+        // Todo el ancho disponible: una columna de texto no se encoge y
+        // queda centrada, va pegada al margen.
+        child: SizedBox(
+          width: double.infinity,
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: gutter),
+            child: child,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// La franja de arriba de cada página: la foto del portal (la que el dueño
+/// elige en el editor, «Portal de clientes») con el texto abajo a la
+/// izquierda. Sin foto, la franja va en el color de texto.
+class PortalBand extends StatelessWidget {
+  const PortalBand({
+    super.key,
+    required this.title,
+    required this.gutter,
+    required this.compact,
+    this.eyebrow = 'Mi cuenta',
+    this.meta,
+    this.action,
+    this.prominent = false,
+    this.onSignOut,
+  });
+
+  final String eyebrow;
+  final String title;
+  final String? meta;
+  final Widget? action;
+  final bool prominent;
+  final double gutter;
+  final bool compact;
+
+  /// En teléfono «Salir» va arriba a la derecha de la franja.
+  final VoidCallback? onSignOut;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = PortalStyle.of(context);
+    final image = style.site.customerPortalImage;
+    final hasImage = image.isNotEmpty;
+    final foreground = hasImage ? Colors.white : style.onBand;
+    final background = ColoredBox(color: style.band);
+    final minHeight =
+        prominent ? (compact ? 240.0 : 300.0) : (compact ? 170.0 : 210.0);
+
+    final heading = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          eyebrow.toUpperCase(),
+          semanticsLabel: eyebrow,
+          style: style.eyebrow.copyWith(
+            color: foreground.withValues(alpha: 0.86),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Semantics(
+          header: true,
+          child: Text(
+            title.toUpperCase(),
+            semanticsLabel: title,
+            style: (prominent
+                    ? style.display(compact: compact)
+                    : style.pageTitle(compact: compact))
+                .copyWith(color: foreground),
+          ),
+        ),
+      ],
+    );
+    final metaText = meta == null || meta!.trim().isEmpty
+        ? null
+        : Text(
+            meta!,
+            textAlign: prominent && !compact ? TextAlign.right : TextAlign.left,
+            style: style.body(compact ? 14 : 15,
+                color: foreground.withValues(alpha: 0.88), height: 1.55),
+          );
+
+    final Widget content;
+    if (compact) {
+      content = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          heading,
+          if (metaText != null) ...[const SizedBox(height: 10), metaText],
+          if (action != null) ...[const SizedBox(height: 16), action!],
+        ],
+      );
+    } else if (prominent) {
+      content = Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(child: heading),
+          if (metaText != null) ...[
+            const SizedBox(width: 24),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 360),
+              child: metaText,
+            ),
+          ],
+          if (action != null) ...[const SizedBox(width: 24), action!],
+        ],
+      );
+    } else {
+      content = Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                heading,
+                if (metaText != null) ...[
+                  const SizedBox(height: 10),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 620),
+                    child: metaText,
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (action != null) ...[const SizedBox(width: 24), action!],
+        ],
+      );
+    }
+
+    return ConstrainedBox(
+      constraints: BoxConstraints(minHeight: minHeight),
+      child: Stack(
+        alignment: AlignmentDirectional.bottomStart,
+        children: [
+          Positioned.fill(
+            child: hasImage
+                ? Image.network(
+                    image,
+                    fit: BoxFit.cover,
+                    alignment: const Alignment(-0.4, 0.1),
+                    errorBuilder: (_, __, ___) => background,
+                  )
+                : background,
+          ),
+          if (hasImage)
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: compact
+                      ? const LinearGradient(
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
+                          colors: [Color(0xD90A0B0B), Color(0x4D0A0B0B)],
+                        )
+                      : const LinearGradient(
+                          colors: [
+                            Color(0xCC0A0B0B),
+                            Color(0x730A0B0B),
+                            Color(0x260A0B0B),
+                          ],
+                          stops: [0, 0.55, 1],
+                        ),
+                ),
+              ),
+            ),
+          _PortalColumn(
+            gutter: gutter,
+            child: Padding(
+              padding: EdgeInsets.only(
+                top: onSignOut == null ? 48 : 64,
+                bottom: compact ? 24 : 40,
+              ),
+              child: content,
+            ),
+          ),
+          if (onSignOut != null)
+            Positioned(
+              top: 6,
+              right: gutter - 8,
+              child: TextButton(
+                onPressed: onSignOut,
+                style: TextButton.styleFrom(
+                  foregroundColor: foreground,
+                  shape: PortalStyle.shape,
+                  minimumSize: const Size(44, 44),
+                  textStyle: style.label.copyWith(fontSize: 12),
+                ),
+                child: const Text('SALIR', semanticsLabel: 'Cerrar sesión'),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// La banda oscura con lo primero que espera al cliente, en cualquier página
+/// de la cuenta que no sea el resumen.
+class _PendingActionStrip extends StatelessWidget {
+  const _PendingActionStrip({required this.action, required this.gutter});
+
+  final CustomerPendingAction action;
+  final double gutter;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = PortalStyle.of(context);
+    final text = '${action.status} · ${action.subject}';
+    void open() {
+      final job = action.job;
+      if (job != null) {
+        showCustomerJobDetail(
+          context,
+          job: job,
+          onNavigate: (href) => PublicStoreLayout.navigateToHref(context, href),
+        );
+        return;
+      }
+      final order = action.order;
+      if (order != null) {
+        PublicStoreLayout.navigateToHref(context, '/pedido/${order.id}');
+      }
+    }
+
+    return Semantics(
+      button: true,
+      label: '$text. ${action.actionLabel}',
+      excludeSemantics: true,
+      child: Material(
+        color: style.band,
+        child: InkWell(
+          onTap: open,
+          child: _PortalColumn(
+            gutter: gutter,
+            child: SizedBox(
+              height: 44,
+              child: Row(
+                children: [
+                  Container(width: 8, height: 8, color: style.attention),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      text.toUpperCase(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: style.label.copyWith(
+                        color: style.onBand,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Container(
+                    padding: const EdgeInsets.only(bottom: 2),
+                    decoration: BoxDecoration(
+                      border: Border(bottom: BorderSide(color: style.onBand)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          action.actionLabel.toUpperCase(),
+                          style: style.label.copyWith(
+                            color: style.onBand,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Icon(Icons.arrow_forward,
+                            size: 16, color: style.onBand),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
 /// Lo que ve quien entra a `/cuenta/**` sin sesión, o con una sesión que no
-/// es cliente de esta tienda. Mismo lenguaje que el portal: el título en la
-/// fuente del sitio y el botón en el color de comercio, no el verde del sitio.
+/// es cliente de esta tienda: la franja del portal y una columna corta con
+/// qué hay adentro y el botón para entrar.
 class _CustomerPortalAuthBoundary extends StatelessWidget {
   const _CustomerPortalAuthBoundary({
     required this.accountService,
@@ -224,7 +504,7 @@ class _CustomerPortalAuthBoundary extends StatelessWidget {
     final isLoading = accountService.isCustomerMembershipLoading;
     final hasSession = accountService.hasAuthSession;
     final title = isLoading
-        ? 'Preparando tu cuenta…'
+        ? 'Preparando tu cuenta'
         : hasSession
             ? 'No pudimos abrir esta cuenta'
             : 'Entra a tu cuenta';
@@ -237,101 +517,87 @@ class _CustomerPortalAuthBoundary extends StatelessWidget {
                 'conversaciones con la tienda.';
 
     return ColoredBox(
-      color: style.canvas,
-      child: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 48),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 440),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: style.panel,
-                borderRadius: BorderRadius.circular(PortalStyle.panelRadius),
-                border: Border.all(color: style.line),
+      color: style.page,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final gutter = PortalStyle.gutter(constraints.maxWidth);
+          final page = Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              PortalBand(
+                title: title,
+                gutter: gutter,
+                compact: constraints.maxWidth < PortalStyle.compactBreakpoint,
               ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(28, 32, 28, 28),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (isLoading)
-                      SizedBox(
-                        width: 28,
-                        height: 28,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                          color: style.accent,
-                        ),
-                      )
-                    else
-                      PortalThumb(
-                        fallbackIcon: hasSession
-                            ? Icons.verified_user_outlined
-                            : Icons.person_outline,
-                        size: 44,
-                      ),
-                    const SizedBox(height: 20),
-                    Semantics(
-                      header: true,
-                      child: Text(
-                        title.toUpperCase(),
-                        style: style.pageTitle(compact: true),
+              _PortalColumn(
+                gutter: gutter,
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 480),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 40),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(message, style: style.body(17)),
+                          const SizedBox(height: 28),
+                          if (isLoading)
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: SizedBox.square(
+                                dimension: 28,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                  color: style.action,
+                                ),
+                              ),
+                            )
+                          else ...[
+                            PortalButton(
+                              label:
+                                  hasSession ? 'Reintentar' : 'Iniciar sesión',
+                              arrow: !hasSession,
+                              expand: true,
+                              onPressed: hasSession
+                                  ? () =>
+                                      accountService.reloadCustomerMembership()
+                                  : () => PublicStoreLayout.navigateToHref(
+                                        context,
+                                        '/cuenta/login',
+                                      ),
+                            ),
+                            const SizedBox(height: 12),
+                            if (hasSession)
+                              PortalButton(
+                                label: 'Cerrar esta sesión',
+                                kind: PortalButtonKind.secondary,
+                                expand: true,
+                                onPressed: () =>
+                                    PublicStoreLayout.signOutCustomer(
+                                  context,
+                                  accountService,
+                                  destination: '/cuenta/login',
+                                ),
+                              )
+                            else
+                              Text(
+                                '¿Primera vez? Puedes crear tu cuenta ahí '
+                                'mismo.',
+                                style: style.rowMeta,
+                              ),
+                          ],
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Text(message, style: style.pageSubtitle),
-                    if (!isLoading) ...[
-                      const SizedBox(height: 24),
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton(
-                          onPressed: hasSession
-                              ? () => accountService.reloadCustomerMembership()
-                              : () => PublicStoreLayout.navigateToHref(
-                                    context,
-                                    '/cuenta/login',
-                                  ),
-                          style: portalPrimaryButton(context),
-                          child: Text(
-                            hasSession ? 'Reintentar' : 'Iniciar sesión',
-                          ),
-                        ),
-                      ),
-                      if (hasSession) ...[
-                        const SizedBox(height: 8),
-                        SizedBox(
-                          width: double.infinity,
-                          child: TextButton(
-                            onPressed: () => PublicStoreLayout.signOutCustomer(
-                              context,
-                              accountService,
-                              destination: '/cuenta/login',
-                            ),
-                            style: TextButton.styleFrom(
-                              foregroundColor: style.inkSecondary,
-                              minimumSize: const Size(0, 44),
-                            ),
-                            child: const Text('Cerrar esta sesión'),
-                          ),
-                        ),
-                      ] else ...[
-                        const SizedBox(height: 12),
-                        Center(
-                          child: Text(
-                            '¿Primera vez? Puedes crear tu cuenta ahí mismo.',
-                            textAlign: TextAlign.center,
-                            style: style.rowMeta,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ),
-        ),
+            ],
+          );
+          if (!constraints.hasBoundedHeight) return page;
+          return SingleChildScrollView(child: page);
+        },
       ),
     );
   }
@@ -340,23 +606,19 @@ class _CustomerPortalAuthBoundary extends StatelessWidget {
 class _PortalContent extends StatelessWidget {
   const _PortalContent({
     required this.title,
-    required this.subtitle,
-    required this.showHeader,
+    required this.showTitle,
     required this.headerAction,
     required this.showBackButton,
     required this.backPath,
-    required this.compact,
     required this.expandChild,
     required this.child,
   });
 
   final String title;
-  final String? subtitle;
-  final bool showHeader;
+  final bool showTitle;
   final Widget? headerAction;
   final bool showBackButton;
   final String? backPath;
-  final bool compact;
   final bool expandChild;
   final Widget child;
 
@@ -364,13 +626,38 @@ class _PortalContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final style = PortalStyle.of(context);
     final uri = GoRouterState.of(context).uri;
-    // Una sección del menú no lleva «Volver»: el menú ya está a la vista. Sí
-    // lo lleva una vista filtrada o de detalle (`?bike_id=`, `backPath`).
+    // Una sección de las pestañas no lleva «Volver»: las pestañas ya están a
+    // la vista. Sí lo lleva una vista filtrada o de detalle (`?bike_id=`,
+    // `backPath`).
     final isTopLevel =
         _PortalDestination.items.any((item) => _matches(uri.path, item.path)) &&
             uri.queryParameters.isEmpty &&
             backPath == null;
     final showBack = showBackButton && !isTopLevel;
+
+    final heading = showTitle
+        ? Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Semantics(
+                  header: true,
+                  child: Text(
+                    title.toUpperCase(),
+                    semanticsLabel: title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: style.sectionTitle(compact: false),
+                  ),
+                ),
+              ),
+              if (headerAction != null) ...[
+                const SizedBox(width: 16),
+                headerAction!,
+              ],
+            ],
+          )
+        : null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -381,24 +668,19 @@ class _PortalContent extends StatelessWidget {
             child: TextButton.icon(
               onPressed: () => _goBack(context, backPath),
               icon: const Icon(Icons.arrow_back, size: 18),
-              label: const Text('Volver'),
+              label: const Text('VOLVER', semanticsLabel: 'Volver'),
               style: TextButton.styleFrom(
-                foregroundColor: style.inkSecondary,
+                foregroundColor: style.ink,
+                shape: PortalStyle.shape,
+                textStyle: style.label.copyWith(fontSize: 13),
+                minimumSize: const Size(44, 44),
                 padding: const EdgeInsets.symmetric(horizontal: 4),
               ),
             ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: heading == null ? 12 : 8),
         ],
-        if (showHeader) ...[
-          PortalPageHeader(
-            title: title,
-            subtitle: subtitle,
-            action: headerAction,
-            compact: compact,
-          ),
-          SizedBox(height: compact ? 20 : 28),
-        ],
+        if (heading != null) ...[heading, const SizedBox(height: 20)],
         if (expandChild) Expanded(child: child) else child,
       ],
     );
@@ -434,8 +716,8 @@ bool _matches(String location, String path) {
   return location == path || location == '/tienda$path';
 }
 
-/// La sección del menú que se marca: una conversación abierta
-/// (`/cuenta/chats/:id`) sigue en «Soporte».
+/// La pestaña que se marca: una conversación abierta (`/cuenta/chats/:id`)
+/// sigue en «Soporte».
 bool _inSection(String location, String path) {
   if (_matches(location, path)) return true;
   if (path == '/cuenta') return false;
@@ -449,173 +731,25 @@ Future<void> _signOut(BuildContext context) async {
   }
 }
 
-class _PortalAvatar extends StatelessWidget {
-  const _PortalAvatar({required this.initial, required this.size});
+/// Las secciones de la cuenta en una fila de pestañas en mayúsculas, con la
+/// abierta subrayada en el color de acción. Si no caben, se desplazan y la
+/// abierta se trae a la vista.
+class _PortalTabs extends StatefulWidget {
+  const _PortalTabs({
+    required this.gutter,
+    required this.showSignOut,
+    required this.location,
+  });
 
-  final String initial;
-  final double size;
-
-  @override
-  Widget build(BuildContext context) {
-    final style = PortalStyle.of(context);
-    return Container(
-      width: size,
-      height: size,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(color: style.accent, shape: BoxShape.circle),
-      child: Text(
-        initial,
-        style: style.rowTitle.copyWith(
-          color: style.onAccent,
-          fontSize: size * 0.4,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
-class _PortalNavigation extends StatelessWidget {
-  const _PortalNavigation({required this.identity});
-
-  final _PortalIdentity identity;
+  final double gutter;
+  final bool showSignOut;
+  final String location;
 
   @override
-  Widget build(BuildContext context) {
-    final style = PortalStyle.of(context);
-    final location = GoRouterState.of(context).uri.path;
-
-    Widget group(String label, List<_PortalDestination> items) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
-            child: Text(label.toUpperCase(), style: style.sectionLabel),
-          ),
-          for (final item in items)
-            _PortalNavItem(
-              item: item,
-              isSelected: _inSection(location, item.path),
-            ),
-        ],
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Row(
-            children: [
-              _PortalAvatar(initial: identity.initial, size: 40),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      identity.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: style.rowTitle,
-                    ),
-                    if (identity.email.isNotEmpty)
-                      Text(
-                        identity.email,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: style.rowMeta,
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 28),
-        group('Compras y taller', _PortalDestination.activity),
-        const SizedBox(height: 20),
-        group('Tu cuenta', _PortalDestination.account),
-        const SizedBox(height: 20),
-        Divider(height: 1, color: style.line),
-        const SizedBox(height: 8),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(
-            onPressed: () => _signOut(context),
-            icon: const Icon(Icons.logout, size: 18),
-            label: const Text('Cerrar sesión'),
-            style: TextButton.styleFrom(
-              foregroundColor: style.inkSecondary,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+  State<_PortalTabs> createState() => _PortalTabsState();
 }
 
-class _PortalNavItem extends StatelessWidget {
-  final _PortalDestination item;
-  final bool isSelected;
-
-  const _PortalNavItem({required this.item, required this.isSelected});
-
-  @override
-  Widget build(BuildContext context) {
-    final style = PortalStyle.of(context);
-    final color = isSelected ? style.accent : style.ink;
-    return Semantics(
-      selected: isSelected,
-      button: true,
-      child: Material(
-        color: isSelected ? style.accentSoft : Colors.transparent,
-        borderRadius: BorderRadius.circular(10),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(10),
-          onTap: () => _navigateWithinPortal(context, item.path),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Row(
-              children: [
-                Icon(
-                  isSelected ? item.selectedIcon : item.icon,
-                  size: 20,
-                  color: isSelected ? style.accent : style.inkSecondary,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    item.label,
-                    style: style.rowTitle.copyWith(
-                      color: color,
-                      fontWeight:
-                          isSelected ? FontWeight.w700 : FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CompactAccountBar extends StatefulWidget {
-  const _CompactAccountBar({required this.identity});
-
-  final _PortalIdentity identity;
-
-  @override
-  State<_CompactAccountBar> createState() => _CompactAccountBarState();
-}
-
-class _CompactAccountBarState extends State<_CompactAccountBar> {
+class _PortalTabsState extends State<_PortalTabs> {
   final _selectedKey = GlobalKey();
 
   @override
@@ -625,13 +759,11 @@ class _CompactAccountBarState extends State<_CompactAccountBar> {
   }
 
   @override
-  void didUpdateWidget(_CompactAccountBar oldWidget) {
+  void didUpdateWidget(_PortalTabs oldWidget) {
     super.didUpdateWidget(oldWidget);
-    _revealSelected();
+    if (oldWidget.location != widget.location) _revealSelected();
   }
 
-  /// «Soporte» y «Direcciones» quedan fuera del ancho de un teléfono: la
-  /// pestaña de la página abierta se trae a la vista.
   void _revealSelected() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final selected = _selectedKey.currentContext;
@@ -647,64 +779,63 @@ class _CompactAccountBarState extends State<_CompactAccountBar> {
   @override
   Widget build(BuildContext context) {
     final style = PortalStyle.of(context);
-    final identity = widget.identity;
-    final location = GoRouterState.of(context).uri.path;
+    final tabs = SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final item in _PortalDestination.items)
+            _PortalTab(
+              key: _inSection(widget.location, item.path) ? _selectedKey : null,
+              label: item.label,
+              selected: _inSection(widget.location, item.path),
+              onTap: () => _navigateWithinPortal(context, item.path),
+            ),
+        ],
+      ),
+    );
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: style.panel,
+        color: style.page,
         border: Border(bottom: BorderSide(color: style.line)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
+      child: SizedBox(
+        height: 60,
+        child: _PortalColumn(
+          gutter: widget.gutter < 32 ? 0 : widget.gutter,
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: widget.gutter < 32 ? 4 : 0,
+            ),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _PortalAvatar(initial: identity.initial, size: 32),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    identity.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: style.rowTitle,
+                Expanded(child: tabs),
+                if (widget.showSignOut) ...[
+                  const SizedBox(width: 24),
+                  TextButton(
+                    onPressed: () => _signOut(context),
+                    style: TextButton.styleFrom(
+                      foregroundColor: style.inkSecondary,
+                      shape: PortalStyle.shape,
+                      textStyle: style.label.copyWith(fontSize: 12),
+                    ),
+                    child: const Text(
+                      'CERRAR SESIÓN',
+                      semanticsLabel: 'Cerrar sesión',
+                    ),
                   ),
-                ),
-                TextButton(
-                  onPressed: () => _signOut(context),
-                  style: TextButton.styleFrom(
-                    foregroundColor: style.inkSecondary,
-                  ),
-                  child: const Text('Salir'),
-                ),
+                ],
               ],
             ),
           ),
-          SizedBox(
-            height: 44,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              children: [
-                for (final item in _PortalDestination.items)
-                  _CompactTab(
-                    key: _inSection(location, item.path) ? _selectedKey : null,
-                    label: item.shortLabel,
-                    selected: _inSection(location, item.path),
-                    onTap: () => _navigateWithinPortal(context, item.path),
-                  ),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 }
 
-class _CompactTab extends StatelessWidget {
-  const _CompactTab({
+class _PortalTab extends StatelessWidget {
+  const _PortalTab({
     super.key,
     required this.label,
     required this.selected,
@@ -721,24 +852,29 @@ class _CompactTab extends StatelessWidget {
     return Semantics(
       selected: selected,
       button: true,
+      label: label,
+      excludeSemantics: true,
       child: InkWell(
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 14),
           alignment: Alignment.center,
           decoration: BoxDecoration(
             border: Border(
               bottom: BorderSide(
-                color: selected ? style.accent : Colors.transparent,
-                width: 2.5,
+                color: selected ? style.action : Colors.transparent,
+                width: 3,
               ),
             ),
           ),
-          child: Text(
-            label,
-            style: style.rowTitle.copyWith(
-              color: selected ? style.accent : style.inkSecondary,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 3),
+            child: Text(
+              label.toUpperCase(),
+              style: style.label.copyWith(
+                color: selected ? style.ink : style.inkSecondary,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+              ),
             ),
           ),
         ),
@@ -749,73 +885,17 @@ class _CompactTab extends StatelessWidget {
 
 class _PortalDestination {
   final String label;
-  final String shortLabel;
   final String path;
-  final IconData icon;
-  final IconData selectedIcon;
 
-  const _PortalDestination({
-    required this.label,
-    required this.shortLabel,
-    required this.path,
-    required this.icon,
-    required this.selectedIcon,
-  });
+  const _PortalDestination({required this.label, required this.path});
 
-  static const activity = [
-    _PortalDestination(
-      label: 'Resumen',
-      shortLabel: 'Resumen',
-      path: '/cuenta',
-      icon: Icons.home_outlined,
-      selectedIcon: Icons.home,
-    ),
-    _PortalDestination(
-      label: 'Pedidos',
-      shortLabel: 'Pedidos',
-      path: '/cuenta/pedidos',
-      icon: Icons.receipt_long_outlined,
-      selectedIcon: Icons.receipt_long,
-    ),
-    _PortalDestination(
-      label: 'Taller',
-      shortLabel: 'Taller',
-      path: '/cuenta/servicios',
-      icon: Icons.build_outlined,
-      selectedIcon: Icons.build,
-    ),
-    _PortalDestination(
-      label: 'Bicicletas',
-      shortLabel: 'Bicicletas',
-      path: '/cuenta/bicicletas',
-      icon: Icons.pedal_bike_outlined,
-      selectedIcon: Icons.pedal_bike,
-    ),
-    _PortalDestination(
-      label: 'Soporte',
-      shortLabel: 'Soporte',
-      path: '/cuenta/chats',
-      icon: Icons.chat_bubble_outline,
-      selectedIcon: Icons.chat_bubble,
-    ),
+  static const items = [
+    _PortalDestination(label: 'Resumen', path: '/cuenta'),
+    _PortalDestination(label: 'Pedidos', path: '/cuenta/pedidos'),
+    _PortalDestination(label: 'Taller', path: '/cuenta/servicios'),
+    _PortalDestination(label: 'Bicicletas', path: '/cuenta/bicicletas'),
+    _PortalDestination(label: 'Soporte', path: '/cuenta/chats'),
+    _PortalDestination(label: 'Perfil', path: '/cuenta/perfil'),
+    _PortalDestination(label: 'Direcciones', path: '/cuenta/direcciones'),
   ];
-
-  static const account = [
-    _PortalDestination(
-      label: 'Perfil y seguridad',
-      shortLabel: 'Perfil',
-      path: '/cuenta/perfil',
-      icon: Icons.person_outline,
-      selectedIcon: Icons.person,
-    ),
-    _PortalDestination(
-      label: 'Direcciones',
-      shortLabel: 'Direcciones',
-      path: '/cuenta/direcciones',
-      icon: Icons.location_on_outlined,
-      selectedIcon: Icons.location_on,
-    ),
-  ];
-
-  static const items = [...activity, ...account];
 }

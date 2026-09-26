@@ -167,11 +167,11 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
               'necesites.'
           : null,
       headerAction: selected == null && _conversations.isNotEmpty
-          ? FilledButton.icon(
+          ? PortalButton(
+              label: 'Nueva consulta',
+              kind: PortalButtonKind.onPhoto,
+              icon: Icons.add,
               onPressed: _showNewChatDialog,
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('Nueva consulta'),
-              style: portalPrimaryButton(context),
             )
           : null,
       // En teléfono, el chat abierto usa todo el alto: sin título, con
@@ -205,19 +205,16 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
     }
     if (_conversations.isEmpty) {
       return SingleChildScrollView(
+        padding: const EdgeInsets.only(bottom: 48),
         child: PortalEmptyState(
           title: 'No tienes conversaciones.',
           message: 'Pregúntanos por un pedido, un repuesto o tu bici en el '
               'taller. Te respondemos aquí mismo.',
           actions: [
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: FilledButton.icon(
-                onPressed: _showNewChatDialog,
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('Nueva consulta'),
-                style: portalPrimaryButton(context),
-              ),
+            PortalButton(
+              label: 'Nueva consulta',
+              icon: Icons.add,
+              onPressed: _showNewChatDialog,
             ),
           ],
         ),
@@ -225,7 +222,7 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
     }
     return LayoutBuilder(
       builder: (context, constraints) {
-        final compact = constraints.maxWidth < 560;
+        final compact = constraints.maxWidth < PortalStyle.compactBreakpoint;
         return SingleChildScrollView(
           padding: const EdgeInsets.only(bottom: 48),
           child: PortalPanel(
@@ -259,7 +256,8 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      backgroundColor: PortalStyle.of(context).panel,
+      backgroundColor: PortalStyle.of(context).page,
+      shape: PortalStyle.shape,
       builder: (sheetContext) => SizedBox(
         height: MediaQuery.sizeOf(sheetContext).height * 0.88,
         child: DeferredCustomerChatContextPanel(
@@ -280,95 +278,96 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
-      backgroundColor: style.panel,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(PortalStyle.panelRadius),
-        ),
-      ),
+      backgroundColor: style.page,
+      shape: PortalStyle.shape,
       constraints: const BoxConstraints(maxWidth: 560),
-      builder: (modalContext) => Padding(
-        padding: EdgeInsets.only(
-          left: 24,
-          right: 24,
-          top: 24,
-          bottom: MediaQuery.of(modalContext).viewInsets.bottom + 24,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Semantics(
-              header: true,
-              child: Text(
-                'NUEVA CONSULTA',
-                style: style.pageTitle(compact: true).copyWith(fontSize: 22),
+      builder: (modalContext) => Theme(
+        data: style.formTheme(Theme.of(modalContext)),
+        child: Padding(
+          padding: EdgeInsets.only(
+            left: 24,
+            right: 24,
+            top: 24,
+            bottom: MediaQuery.of(modalContext).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Semantics(
+                header: true,
+                child: Text(
+                  'NUEVA CONSULTA',
+                  semanticsLabel: 'Nueva consulta',
+                  style: style.heading(24),
+                ),
               ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Cuéntanos qué necesitas. Si es por un pedido o tu bici, '
-              'indica cuál.',
-              style: style.pageSubtitle,
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: controller,
-              maxLines: 4,
-              minLines: 3,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                hintText: '¿En qué podemos ayudarte?',
-                border: OutlineInputBorder(),
+              const SizedBox(height: 6),
+              Text(
+                'Cuéntanos qué necesitas. Si es por un pedido o tu bici, '
+                'indica cuál.',
+                style: style.pageSubtitle,
               ),
-              autofocus: true,
-            ),
-            const SizedBox(height: 16),
-            FilledButton(
-              style: portalPrimaryButton(modalContext),
-              onPressed: () async {
-                final message = controller.text.trim();
-                if (message.isEmpty) return;
-                final tenantId = accountService.tenantId;
-                Navigator.pop(modalContext);
-                if (tenantId == null) {
-                  messenger.showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'No pudimos enviar tu consulta. Recarga la página e '
-                        'intenta de nuevo.',
+              const SizedBox(height: 16),
+              TextField(
+                controller: controller,
+                maxLines: 4,
+                minLines: 3,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: const InputDecoration(
+                  hintText: '¿En qué podemos ayudarte?',
+                ),
+                autofocus: true,
+              ),
+              const SizedBox(height: 16),
+              PortalButton(
+                label: 'Enviar',
+                arrow: true,
+                expand: true,
+                onPressed: () async {
+                  final message = controller.text.trim();
+                  if (message.isEmpty) return;
+                  final tenantId = accountService.tenantId;
+                  Navigator.pop(modalContext);
+                  if (tenantId == null) {
+                    messenger.showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'No pudimos enviar tu consulta. Recarga la página e '
+                          'intenta de nuevo.',
+                        ),
                       ),
-                    ),
-                  );
-                  return;
-                }
-                try {
-                  final id = await _messagingService.createChatRequest(
-                    initialMessage: message,
-                    tenantId: tenantId,
-                  );
-                  await _loadConversations(showLoading: false);
-                  if (mounted) _selectConversation(id);
-                } catch (_) {
-                  messenger.showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'No pudimos enviar tu consulta. Intenta de nuevo.',
+                    );
+                    return;
+                  }
+                  try {
+                    final id = await _messagingService.createChatRequest(
+                      initialMessage: message,
+                      tenantId: tenantId,
+                    );
+                    await _loadConversations(showLoading: false);
+                    if (mounted) _selectConversation(id);
+                  } catch (_) {
+                    messenger.showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'No pudimos enviar tu consulta. Intenta de nuevo.',
+                        ),
                       ),
-                    ),
-                  );
-                }
-              },
-              child: const Text('Enviar'),
-            ),
-          ],
+                    );
+                  }
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// El chat abierto, en un panel con borde como el resto del portal.
+/// El chat abierto, en un marco recto: la línea fuerte arriba como las
+/// listas del portal y una fina alrededor.
 class _ChatFrame extends StatelessWidget {
   const _ChatFrame({required this.child});
 
@@ -379,14 +378,15 @@ class _ChatFrame extends StatelessWidget {
     final style = PortalStyle.of(context);
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: style.panel,
-        borderRadius: BorderRadius.circular(PortalStyle.panelRadius),
-        border: Border.all(color: style.line),
+        color: style.page,
+        border: Border(
+          top: BorderSide(color: style.ink),
+          left: BorderSide(color: style.line),
+          right: BorderSide(color: style.line),
+          bottom: BorderSide(color: style.line),
+        ),
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(PortalStyle.panelRadius - 1),
-        child: child,
-      ),
+      child: ClipRect(child: child),
     );
   }
 }
@@ -421,9 +421,15 @@ class _ConversationRow extends StatelessWidget {
       'job' => Icons.build_outlined,
       _ => Icons.chat_bubble_outline,
     };
+    // Esperar al equipo es de la tienda (oscura); cerrada o archivada, apagada.
     final pill = p.statusLabel == null
         ? null
-        : PortalStatusPill(label: p.statusLabel!, tone: p.tone);
+        : PortalTag(
+            label: p.statusLabel!,
+            kind: p.tone == PortalTone.neutral
+                ? PortalTagKind.quiet
+                : PortalTagKind.ink,
+          );
     return PortalRow(
       leading: PortalThumb(fallbackIcon: icon),
       title: p.title,
@@ -440,7 +446,7 @@ class _ConversationRow extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (when != null) Text(when, style: style.rowMeta),
-                if (pill != null) ...[const SizedBox(height: 6), pill],
+                if (pill != null) ...[const SizedBox(height: 8), pill],
               ],
             ),
       onTap: onTap,

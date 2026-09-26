@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../services/address_autocomplete_service.dart';
 import '../services/customer_account_service.dart';
-import '../models/customer_portal_presentation.dart';
 import '../../shared/models/customer_address.dart';
 import '../widgets/customer_portal_layout.dart';
 import '../widgets/customer_portal_style.dart';
@@ -21,15 +20,15 @@ class CustomerAddressesPage extends StatelessWidget {
     return CustomerPortalLayout(
       title: 'Direcciones',
       subtitle: addresses.isEmpty
-          ? null
+          ? 'Dónde te enviamos tus pedidos.'
           : 'La principal aparece primero al pagar un pedido.',
       headerAction: addresses.isEmpty
           ? null
-          : OutlinedButton.icon(
+          : PortalButton(
+              label: 'Agregar dirección',
+              kind: PortalButtonKind.onPhoto,
+              icon: Icons.add,
               onPressed: () => _showAddressDialog(context, null),
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('Agregar dirección'),
-              style: PortalStyle.of(context).secondaryButton,
             ),
       child: addresses.isEmpty
           ? PortalEmptyState(
@@ -37,20 +36,17 @@ class CustomerAddressesPage extends StatelessWidget {
               message: 'Guarda la de tu casa o tu trabajo y no tendrás que '
                   'escribirla en cada compra.',
               actions: [
-                Padding(
-                  padding: const EdgeInsets.only(top: 4, bottom: 4),
-                  child: FilledButton.icon(
-                    onPressed: () => _showAddressDialog(context, null),
-                    icon: const Icon(Icons.add, size: 18),
-                    label: const Text('Agregar la primera dirección'),
-                    style: portalPrimaryButton(context),
-                  ),
+                PortalButton(
+                  label: 'Agregar la primera dirección',
+                  icon: Icons.add,
+                  onPressed: () => _showAddressDialog(context, null),
                 ),
               ],
             )
           : LayoutBuilder(
               builder: (context, constraints) {
-                final compact = constraints.maxWidth < 560;
+                final compact =
+                    constraints.maxWidth < PortalStyle.compactBreakpoint;
                 return PortalPanel(
                   children: [
                     for (final address in addresses)
@@ -99,24 +95,20 @@ class CustomerAddressesPage extends StatelessWidget {
 
   void _confirmDelete(BuildContext context, CustomerAddress address) {
     final style = PortalStyle.of(context);
-    final danger = Theme.of(context).colorScheme.error;
     showDialog(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: style.panel,
-        surfaceTintColor: Colors.transparent,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(PortalStyle.panelRadius),
-        ),
-        title: Text('¿Eliminar «${address.label}»?', style: style.rowTitle),
-        content: Text(address.fullAddress, style: style.rowMeta),
+      builder: (dialogContext) => PortalDialog(
+        title: '¿Eliminar «${address.label}»?',
+        content: Text(address.fullAddress, style: style.pageSubtitle),
         actions: [
-          TextButton(
+          PortalButton(
+            label: 'Cancelar',
+            kind: PortalButtonKind.secondary,
             onPressed: () => Navigator.pop(dialogContext),
-            style: TextButton.styleFrom(foregroundColor: style.inkSecondary),
-            child: const Text('Cancelar'),
           ),
-          FilledButton(
+          PortalButton(
+            label: 'Eliminar',
+            kind: PortalButtonKind.danger,
             onPressed: () async {
               final messenger = ScaffoldMessenger.of(context);
               try {
@@ -134,13 +126,6 @@ class CustomerAddressesPage extends StatelessWidget {
               }
               if (dialogContext.mounted) Navigator.pop(dialogContext);
             },
-            style: portalPrimaryButton(context).copyWith(
-              backgroundColor: WidgetStatePropertyAll(danger),
-              foregroundColor: WidgetStatePropertyAll(
-                Theme.of(context).colorScheme.onError,
-              ),
-            ),
-            child: const Text('Eliminar'),
           ),
         ],
       ),
@@ -172,10 +157,7 @@ class _AddressRow extends StatelessWidget {
       address.recipientName.trim(),
       address.phone.trim(),
     ].where((part) => part.isNotEmpty).join(' · ');
-    const principal = PortalStatusPill(
-      label: 'Principal',
-      tone: PortalTone.info,
-    );
+    const principal = PortalTag(label: 'Principal');
     return PortalRow(
       leading: const PortalThumb(fallbackIcon: Icons.location_on_outlined),
       title: address.label,
@@ -189,13 +171,14 @@ class _AddressRow extends StatelessWidget {
         children: [
           if (!compact && address.isDefault) ...[
             principal,
-            const SizedBox(width: 4),
+            const SizedBox(width: 8),
           ],
           PopupMenuButton<String>(
             tooltip: 'Opciones de ${address.label}',
-            icon: Icon(Icons.more_vert, color: style.inkSecondary),
-            color: style.panel,
+            icon: Icon(Icons.more_vert, color: style.ink),
+            color: style.page,
             surfaceTintColor: Colors.transparent,
+            shape: RoundedRectangleBorder(side: BorderSide(color: style.line)),
             onSelected: (value) {
               if (value == 'edit') onEdit();
               if (value == 'default') onSetDefault();
@@ -318,21 +301,9 @@ class _AddressFormDialogState extends State<_AddressFormDialog> {
     final profilePhone = _readProfileText(profile, 'phone');
 
     final style = PortalStyle.of(context);
-    return AlertDialog(
-      backgroundColor: style.panel,
-      surfaceTintColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(PortalStyle.panelRadius),
-      ),
-      title: Semantics(
-        header: true,
-        child: Text(
-          (widget.address == null ? 'Nueva dirección' : 'Editar dirección')
-              .toUpperCase(),
-          style: style.pageTitle(compact: true).copyWith(fontSize: 22),
-        ),
-      ),
+    return PortalDialog(
+      title: widget.address == null ? 'Nueva dirección' : 'Editar dirección',
+      width: 500,
       content: ConstrainedBox(
         constraints: BoxConstraints(maxHeight: dialogMaxHeight),
         child: SizedBox(
@@ -448,18 +419,15 @@ class _AddressFormDialogState extends State<_AddressFormDialog> {
         ),
       ),
       actions: [
-        TextButton(
+        PortalButton(
+          label: 'Cancelar',
+          kind: PortalButtonKind.secondary,
           onPressed: _isSaving ? null : () => Navigator.pop(context),
-          style: TextButton.styleFrom(
-            foregroundColor: style.inkSecondary,
-            minimumSize: const Size(0, 44),
-          ),
-          child: const Text('Cancelar'),
         ),
-        FilledButton(
-          onPressed: _isSaving ? null : _save,
-          style: portalPrimaryButton(context),
-          child: Text(_isSaving ? 'Guardando…' : 'Guardar dirección'),
+        PortalButton(
+          label: _isSaving ? 'Guardando…' : 'Guardar dirección',
+          busy: _isSaving,
+          onPressed: _save,
         ),
       ],
     );
@@ -481,14 +449,9 @@ class _AddressFormDialogState extends State<_AddressFormDialog> {
                 profilePhone: profilePhone,
               )
           : null,
-      borderRadius: BorderRadius.circular(8),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: style.canvas,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: style.line),
-        ),
+        decoration: BoxDecoration(color: style.well),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

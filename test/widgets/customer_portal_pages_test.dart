@@ -7,15 +7,16 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:vinabike_erp/modules/website/theme/website_resolved_theme.dart';
 import 'package:vinabike_erp/modules/website/theme/website_theme_builder.dart';
 import 'package:vinabike_erp/public_store/pages/customer_bikes_page.dart';
+import 'package:vinabike_erp/public_store/pages/customer_dashboard_page.dart';
 import 'package:vinabike_erp/public_store/pages/customer_profile_page.dart';
 import 'package:vinabike_erp/public_store/pages/customer_service_history_page.dart';
 import 'package:vinabike_erp/public_store/services/customer_account_service.dart';
 import 'package:vinabike_erp/public_store/theme/public_store_theme.dart';
 import 'package:vinabike_erp/public_store/widgets/customer_portal_layout.dart';
 
-/// Portal de clientes, etapa 2: Perfil, Taller, Bicicletas y la puerta de
-/// entrada sin sesión, montados con sus páginas reales en teléfono y
-/// escritorio, sin Supabase detrás.
+/// Portal de clientes («Sendero»): Resumen, Perfil, Taller, Bicicletas, el
+/// chat y la puerta de entrada sin sesión, montados con sus páginas reales en
+/// teléfono y escritorio, sin Supabase detrás.
 class _FakeAccount extends CustomerAccountService {
   _FakeAccount({this.authenticated = true});
 
@@ -113,12 +114,12 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.text('PERFIL Y SEGURIDAD'), findsOneWidget);
       expect(find.text('Usuario'), findsNothing);
-      expect(find.text('Agregar'), findsWidgets);
+      expect(find.text('AGREGAR'), findsWidgets);
       expect(find.text('Contraseña'), findsOneWidget);
 
-      await tester.tap(find.text('Editar'));
+      await tester.tap(find.text('EDITAR'));
       await tester.pumpAndSettle();
-      expect(find.text('Guardar cambios'), findsOneWidget);
+      expect(find.text('GUARDAR CAMBIOS'), findsOneWidget);
       final name = tester.widget<TextField>(
         find.descendant(
           of: find.widgetWithText(TextFormField, 'Nombre completo'),
@@ -136,17 +137,23 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(find.text('EN EL TALLER'), findsOneWidget);
       expect(find.text('HISTORIAL'), findsOneWidget);
-      expect(find.text('Todas'), findsOneWidget);
-      expect(find.text('Espera tu aprobación'), findsOneWidget);
-      expect(find.text('Entregada'), findsOneWidget);
+      expect(find.text('TODAS'), findsOneWidget);
+      expect(find.text('ESPERA TU APROBACIÓN'), findsOneWidget);
+      expect(find.text('ENTREGADA'), findsOneWidget);
       expect(find.textContaining('ESPERANDO_'), findsNothing);
+      // La ficha grande dice el presupuesto con lo que se pidió.
       expect(
-        find.textContaining('Cambio de maneta izquierda · Diagnóstico'),
+        find.textContaining(
+          RegExp(r'^Presupuesto de .*10\.000 por cambio de maneta izquierda · '
+              r'Diagnóstico\.$'),
+        ),
         findsOneWidget,
       );
+      expect(find.text('RESPONDER AL TALLER'), findsOneWidget);
 
-      // La primera coincidencia es el filtro por bici; la última, la fila.
-      await tester.tap(find.text('Oxford Cyclotour').last);
+      // El filtro por bici va en mayúsculas; la fila del historial, no.
+      await tester.ensureVisible(find.text('Oxford Cyclotour'));
+      await tester.tap(find.text('Oxford Cyclotour'));
       await tester.pumpAndSettle();
       expect(find.text('LO QUE PEDISTE'), findsOneWidget);
       expect(
@@ -162,15 +169,74 @@ void main() {
       await _pumpPage(
           tester, width, '/cuenta/bicicletas', const CustomerBikesPage());
       expect(tester.takeException(), isNull);
-      expect(find.text('Trek Marlin 7'), findsOneWidget);
-      expect(
-          find.textContaining('MTB hardtail · Negra · aro 29'), findsOneWidget);
+      expect(find.text('TREK MARLIN 7'), findsOneWidget);
+      // El tipo va en la etiqueta del dibujo; debajo, color y aro.
+      expect(find.text('MTB HARDTAIL'), findsOneWidget);
+      expect(find.text('Negra · aro 29'), findsOneWidget);
       expect(find.textContaining('mountain'), findsNothing);
 
-      await tester.tap(find.text('Trek Marlin 7'));
+      await tester.tap(find.text('TREK MARLIN 7'));
       await tester.pumpAndSettle();
-      expect(find.text('Ver sus trabajos de taller'), findsOneWidget);
+      expect(find.text('MTB hardtail · Negra · aro 29'), findsOneWidget);
+      expect(find.text('VER SUS TRABAJOS DE TALLER'), findsOneWidget);
       expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('resumen a $width px: lo que espera al cliente, en grande',
+        (tester) async {
+      final account = _FakeAccount();
+      await _pumpPage(
+        tester,
+        width,
+        '/cuenta',
+        CustomerPortalLayout(
+          title: 'Tu cuenta',
+          prominent: true,
+          bandMeta: '2 bicicletas',
+          footer: CustomerDashboardServiceBand(
+            profile: account.customerProfile,
+            addressesCount: 0,
+            onNavigate: (_) {},
+          ),
+          child: CustomerDashboardBody(
+            profile: account.customerProfile,
+            orders: const [],
+            orderImages: const {},
+            jobs: _jobs,
+            bikes: _bikes,
+            addressesCount: 0,
+            onNavigate: (_) {},
+          ),
+        ),
+        account: account,
+      );
+      expect(tester.takeException(), isNull);
+      expect(find.text('TU CUENTA'), findsOneWidget);
+      expect(find.text('PARA TI AHORA'), findsOneWidget);
+      // El trabajo que espera aprobación va en grande, con su avance.
+      expect(find.text('TREK MARLIN 7'), findsWidgets);
+      expect(find.text('ESPERA TU APROBACIÓN'), findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp('Paso 3 de 5')), findsOneWidget);
+      // En el resumen no se repite el aviso de arriba.
+      expect(find.text('VER FICHA'), findsOneWidget);
+      expect(find.textContaining('· TREK MARLIN 7'), findsNothing);
+      expect(find.text('TUS BICICLETAS'), findsOneWidget);
+      expect(find.text('HABLA CON EL TALLER'), findsOneWidget);
+      // Sin teléfono, la franja lo pide.
+      expect(
+          find.text('Agrega tu nombre para que el taller sepa quién eres '
+              'cuando escribas o traigas tu bici.'),
+          findsOneWidget);
+    });
+
+    testWidgets('fuera del resumen a $width px: el aviso de lo pendiente',
+        (tester) async {
+      await _pumpPage(
+          tester, width, '/cuenta/bicicletas', const CustomerBikesPage());
+      expect(
+        find.text('ESPERA TU APROBACIÓN · TREK MARLIN 7'),
+        findsOneWidget,
+      );
     });
 
     testWidgets('chat abierto a $width px: recibe un alto acotado',
@@ -197,7 +263,7 @@ void main() {
       expect(tester.takeException(), isNull);
       expect(received!.hasBoundedHeight, isTrue);
       expect(received!.maxHeight, greaterThan(600));
-      expect(find.text('Volver'), findsOneWidget);
+      expect(find.text('VOLVER'), findsOneWidget);
     });
 
     testWidgets('sin sesión a $width px: la puerta del portal', (tester) async {
@@ -210,7 +276,7 @@ void main() {
       );
       expect(tester.takeException(), isNull);
       expect(find.text('ENTRA A TU CUENTA'), findsOneWidget);
-      expect(find.text('Iniciar sesión'), findsOneWidget);
+      expect(find.text('INICIAR SESIÓN'), findsOneWidget);
     });
   }
 }

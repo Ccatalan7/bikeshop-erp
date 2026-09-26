@@ -23,6 +23,7 @@ class CustomerOrderPresentation {
     required this.group,
     required this.needsCustomer,
     this.nextStep,
+    this.awaitsTransfer = false,
   });
 
   factory CustomerOrderPresentation.of(OnlineOrder order) {
@@ -77,6 +78,7 @@ class CustomerOrderPresentation {
           group: CustomerOrderGroup.inProgress,
           needsCustomer: true,
           nextStep: 'Transfiere para que preparemos tu pedido',
+          awaitsTransfer: true,
         ),
       OrderConfirmationState.pending => const CustomerOrderPresentation._(
           label: 'Pago en proceso',
@@ -108,6 +110,45 @@ class CustomerOrderPresentation {
 
   /// Qué hacer, en una frase, cuando [needsCustomer].
   final String? nextStep;
+
+  /// Espera una transferencia: sus datos están en la página del pedido.
+  final bool awaitsTransfer;
+
+  /// El titular y la frase de un pedido cuando va en grande en el resumen:
+  /// lo que el cliente tiene que hacer, no el estado repetido.
+  static ({String headline, String? message}) feature(
+    OnlineOrder order, {
+    required String formattedTotal,
+  }) {
+    final items = itemsSummary(order);
+    if (CustomerOrderPresentation.of(order).group ==
+            CustomerOrderGroup.inProgress &&
+        order.status.trim().toLowerCase() == 'ready_for_pickup') {
+      return (
+        headline: 'Retira tu pedido',
+        message: '$items. Pasa a buscarlo a la tienda.',
+      );
+    }
+    final presentation = CustomerOrderPresentation.of(order);
+    if (presentation.group != CustomerOrderGroup.inProgress) {
+      return (headline: items, message: null);
+    }
+    return switch (OrderConfirmationPolicy.resolve(order)) {
+      OrderConfirmationState.transferPending => (
+          headline: 'Transfiere $formattedTotal',
+          message: '$items. Preparamos tu pedido apenas veamos el pago.',
+        ),
+      OrderConfirmationState.failed => (
+          headline: 'Reintenta el pago',
+          message: '$items. El pago no pasó; puedes intentarlo de nuevo.',
+        ),
+      _ => (headline: items, message: null),
+    };
+  }
+
+  /// Cuántos productos lleva el pedido, contando las unidades.
+  static int unitCount(OnlineOrder order) =>
+      order.items.fold(0, (sum, item) => sum + item.quantity);
 
   /// «Aceite mineral Shimano» o «Aceite mineral Shimano y 2 más».
   static String itemsSummary(OnlineOrder order) {
@@ -313,6 +354,116 @@ class CustomerWorkshopPresentation {
   static DateTime? receivedAt(Map<String, dynamic> job) =>
       portalParseDate(job['arrival_date']) ??
       portalParseDate(job['created_at']);
+}
+
+/// Los pasos que el cliente ve de un trabajo de taller, en orden.
+const customerWorkshopSteps = [
+  'Recibida',
+  'Diagnóstico',
+  'Presupuesto',
+  'Reparación',
+  'Lista',
+];
+
+/// En qué paso de [customerWorkshopSteps] va un trabajo: 0 al recibirla, 4
+/// cuando está lista y [customerWorkshopSteps.length] cuando ya se entregó.
+/// `null` cuando no recorrió los pasos (cancelado, retirada sin servicio) o
+/// el taller usó un código que el portal todavía no conoce: mejor no mostrar
+/// avance que mostrar uno falso.
+int? customerWorkshopStep(Map<String, dynamic> job) {
+  final code = (job['status'] ?? '').toString().trim().toUpperCase();
+  return switch (code) {
+    'PENDIENTE' => 0,
+    'DIAGNOSTICO' || 'CONTACTAR' => 1,
+    'PRESUPUESTO' || 'ESPERANDO_APROBACION' => 2,
+    'COMENZAR' ||
+    'EN_CURSO' ||
+    'DESGLOSAR' ||
+    'ESPERANDO_REPUESTOS' ||
+    'EN_PAUSA' ||
+    'GARANTA' ||
+    'GARANTIA' =>
+      3,
+    'FINALIZADO' || 'PROBADO' => 4,
+    'ENTREGADO' => customerWorkshopSteps.length,
+    _ => null,
+  };
+}
+
+/// El dibujo con que el portal muestra una bici: el taller no les saca foto
+/// (0 de 472 el 2026-09-26), así que cada tipo tiene su silueta.
+enum CustomerBikeSilhouette { hardtail, fullSuspension, road, city }
+
+/// Sin tipo, o «Otra», se dibuja rígida: es lo que más llega al taller.
+CustomerBikeSilhouette customerBikeSilhouette(Object? bikeType) {
+  final type = BikeType.fromDbValue((bikeType ?? '').toString().trim());
+  return switch (type) {
+    BikeType.mountain => CustomerBikeSilhouette.fullSuspension,
+    BikeType.road || BikeType.gravel => CustomerBikeSilhouette.road,
+    BikeType.hybrid ||
+    BikeType.folding ||
+    BikeType.cruiser ||
+    BikeType.paseo =>
+      CustomerBikeSilhouette.city,
+    _ => CustomerBikeSilhouette.hardtail,
+  };
+}
+
+/// La etiqueta del tipo de bici, o `null` si el taller no la anotó.
+String? customerBikeTypeLabel(Object? bikeType) {
+  final type = BikeType.fromDbValue((bikeType ?? '').toString().trim());
+  if (type == null || type == BikeType.other) return null;
+  return type.displayName;
+}
+
+/// Lo primero que el cliente tiene que hacer, para el aviso de arriba del
+/// portal: un trabajo que espera su aprobación o está listo, o un pedido que
+/// espera su pago o su retiro. Los trabajos van antes: la bici ocupa espacio
+/// en el taller.
+class CustomerPendingAction {
+  const CustomerPendingAction._({
+    required this.status,
+    required this.subject,
+    required this.actionLabel,
+    this.job,
+    this.order,
+  });
+
+  static CustomerPendingAction? first({
+    required List<OnlineOrder> orders,
+    required List<Map<String, dynamic>> jobs,
+  }) {
+    for (final job in jobs) {
+      final presentation = CustomerWorkshopPresentation.of(job);
+      if (!presentation.needsCustomer) continue;
+      return CustomerPendingAction._(
+        status: presentation.label,
+        subject: CustomerWorkshopPresentation.bikeTitle(job),
+        actionLabel: 'Ver ficha',
+        job: job,
+      );
+    }
+    for (final order in orders) {
+      final presentation = CustomerOrderPresentation.of(order);
+      if (!presentation.needsCustomer) continue;
+      return CustomerPendingAction._(
+        status: presentation.label,
+        subject: 'Pedido ${order.orderNumber}',
+        actionLabel: 'Ver pedido',
+        order: order,
+      );
+    }
+    return null;
+  }
+
+  /// «Espera tu aprobación».
+  final String status;
+
+  /// «Trek Marlin 7» o «Pedido WEB-26-00004».
+  final String subject;
+  final String actionLabel;
+  final Map<String, dynamic>? job;
+  final OnlineOrder? order;
 }
 
 /// Detalle de una bici en palabras del cliente: tipo, color y aro.

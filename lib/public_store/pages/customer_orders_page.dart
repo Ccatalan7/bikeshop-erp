@@ -30,12 +30,13 @@ class _CustomerOrdersPageState extends State<CustomerOrdersPage>
 
     return CustomerPortalLayout(
       title: 'Pedidos',
-      headerAction: OutlinedButton.icon(
+      subtitle: 'Todo lo que compraste en la tienda, con su estado.',
+      headerAction: PortalButton(
+        label: 'Ir a la tienda',
+        kind: PortalButtonKind.onPhoto,
+        arrow: true,
         onPressed: () =>
             PublicStoreLayout.navigateToHref(context, '/productos'),
-        icon: const Icon(Icons.storefront_outlined, size: 18),
-        label: const Text('Ir a la tienda'),
-        style: PortalStyle.of(context).secondaryButton,
       ),
       child: CustomerOrdersBody(
         orders: accountService.orders,
@@ -109,7 +110,7 @@ class CustomerOrdersBody extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final compact = constraints.maxWidth < 560;
+        final table = constraints.maxWidth >= customerOrderTableBreakpoint;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -133,14 +134,14 @@ class CustomerOrdersBody extends StatelessWidget {
                     ),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 40),
             PortalPanel(
+              header: table ? const CustomerOrderTableHeader() : null,
               children: [
                 for (final order in visible)
                   CustomerOrderRow(
                     order: order,
                     imageUrl: _firstImage(order),
-                    compact: compact,
                     onTap: () => onNavigate('/pedido/${order.id}'),
                   ),
               ],

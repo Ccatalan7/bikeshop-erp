@@ -314,14 +314,17 @@ void main() {
           ),
         );
         expect(tester.takeException(), isNull);
-        expect(find.text('TU CUENTA'), findsOneWidget);
-        expect(find.text('Completar perfil'), findsOneWidget);
-        expect(find.text('Cliente desde septiembre de 2025'), findsOneWidget);
-        expect(find.text('Esperando transferencia'), findsOneWidget);
-        expect(find.text('Esperando repuestos'), findsOneWidget);
-        expect(find.text('Cancelado'), findsOneWidget);
-        expect(find.text('Pago pendiente'), findsNothing);
-        expect(find.textContaining('Hola, Usuario'), findsNothing);
+        // El saludo y «Cliente desde…» van en la franja del marco
+        // (`customerDashboardBandMeta`); el cuerpo pide el nombre.
+        expect(find.text('COMPLETAR PERFIL'), findsOneWidget);
+        // Lo que espera al cliente, en grande; lo demás en curso, también.
+        expect(find.text('PARA TI AHORA'), findsOneWidget);
+        expect(find.text('ESPERANDO TRANSFERENCIA'), findsOneWidget);
+        expect(find.text('EN CURSO'), findsOneWidget);
+        expect(find.text('ESPERANDO REPUESTOS'), findsOneWidget);
+        expect(find.text('CANCELADO'), findsOneWidget);
+        expect(find.text('PAGO PENDIENTE'), findsNothing);
+        expect(find.textContaining('Usuario'), findsNothing);
       });
 
       testWidgets('pedidos a $width px', (tester) async {
@@ -338,12 +341,12 @@ void main() {
           ),
         );
         expect(tester.takeException(), isNull);
-        expect(find.text('Todos'), findsOneWidget);
-        expect(find.text('En curso'), findsOneWidget);
-        expect(find.text('Cancelados'), findsOneWidget);
-        expect(find.text('Entregados'), findsNothing,
+        expect(find.text('TODOS'), findsOneWidget);
+        expect(find.text('EN CURSO'), findsOneWidget);
+        expect(find.text('CANCELADOS'), findsOneWidget);
+        expect(find.text('ENTREGADOS'), findsNothing,
             reason: 'sin pedidos entregados no hay pestaña vacía');
-        await tester.tap(find.text('Cancelados'));
+        await tester.tap(find.text('CANCELADOS'));
         expect(selected, CustomerOrderGroup.cancelled);
       });
     }

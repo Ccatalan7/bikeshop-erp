@@ -154,6 +154,10 @@ class _ThemeTabState extends State<_ThemeTab> {
   // Page Background
   String _pageBackground = '#FFFFFF';
 
+  // Customer portal photos
+  String _portalImage = '';
+  String _portalWorkshopImage = '';
+
   bool _loaded = false;
   int _loadGeneration = 0;
 
@@ -327,6 +331,8 @@ class _ThemeTabState extends State<_ThemeTab> {
     _sectionSpacing = resolved.sectionSpacing;
     _containerPadding = resolved.containerPadding;
     _pageBackground = serializeWebsiteEditorColor(resolved.backgroundColor);
+    _portalImage = resolved.customerPortalImage;
+    _portalWorkshopImage = resolved.customerPortalWorkshopImage;
   }
 
   @override
@@ -412,6 +418,12 @@ class _ThemeTabState extends State<_ThemeTab> {
                 Icons.space_bar,
                 'spacing',
               ),
+              _buildMenuItem(
+                'Portal de clientes',
+                'Fotos de la cuenta del cliente',
+                Icons.account_circle_outlined,
+                'portal',
+              ),
             ],
           ),
         ),
@@ -458,6 +470,9 @@ class _ThemeTabState extends State<_ThemeTab> {
         break;
       case 'spacing':
         title = 'Espaciado';
+        break;
+      case 'portal':
+        title = 'Portal de clientes';
         break;
     }
 
@@ -763,6 +778,64 @@ class _ThemeTabState extends State<_ThemeTab> {
           ],
         );
 
+      case 'portal':
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const _SectionHeader('FOTO DEL ENCABEZADO'),
+            const SizedBox(height: 8),
+            const Text(
+              'Va detrás del saludo y del título de cada página de la '
+              'cuenta. Sin foto, la franja sale en el color de texto.',
+              style: TextStyle(color: Colors.white38, fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+            _LogoUploader(
+              currentUrl: _portalImage,
+              asyncBinding: _themeAsyncBinding(
+                WebsiteResolvedTheme.customerPortalImageKey,
+              ),
+              noun: 'foto',
+              operation: 'subir la foto del portal de clientes',
+              recommendation: 'JPG o WebP • Horizontal, 1800 px de ancho',
+              previewFit: BoxFit.cover,
+              onChanged: (url) {
+                setState(() => _portalImage = url);
+                widget.provider.updateThemeSetting(
+                  WebsiteResolvedTheme.customerPortalImageKey,
+                  url,
+                );
+              },
+            ),
+            const SizedBox(height: 24),
+            const _SectionHeader('FOTO DEL TALLER'),
+            const SizedBox(height: 8),
+            const Text(
+              'Acompaña el acceso a servicios y precios en el resumen de '
+              'la cuenta.',
+              style: TextStyle(color: Colors.white38, fontSize: 12),
+            ),
+            const SizedBox(height: 12),
+            _LogoUploader(
+              currentUrl: _portalWorkshopImage,
+              asyncBinding: _themeAsyncBinding(
+                WebsiteResolvedTheme.customerPortalWorkshopImageKey,
+              ),
+              noun: 'foto',
+              operation: 'subir la foto del taller del portal de clientes',
+              recommendation: 'JPG o WebP • 1200 px de ancho',
+              previewFit: BoxFit.cover,
+              onChanged: (url) {
+                setState(() => _portalWorkshopImage = url);
+                widget.provider.updateThemeSetting(
+                  WebsiteResolvedTheme.customerPortalWorkshopImageKey,
+                  url,
+                );
+              },
+            ),
+          ],
+        );
+
       default:
         return const SizedBox.shrink();
     }
@@ -928,16 +1001,25 @@ class _ThemeTabState extends State<_ThemeTab> {
   }
 }
 
-/// Logo uploader widget with image preview
+/// Image uploader with preview: the site logo and, with its own words, the
+/// customer portal photos.
 class _LogoUploader extends StatefulWidget {
   final String? currentUrl;
   final Function(String) onChanged;
   final WebsiteAsyncFieldBinding? asyncBinding;
+  final String noun;
+  final String operation;
+  final String recommendation;
+  final BoxFit previewFit;
 
   const _LogoUploader({
     this.currentUrl,
     required this.onChanged,
     this.asyncBinding,
+    this.noun = 'logo',
+    this.operation = 'subir el logo del sitio web',
+    this.recommendation = 'JPG, PNG, WebP • Recomendado 500x200',
+    this.previewFit = BoxFit.contain,
   });
 
   @override
@@ -960,7 +1042,7 @@ class _LogoUploaderState extends State<_LogoUploader> {
       remoteArm: remoteArm,
       liveBinding: () => widget.asyncBinding,
       isMounted: () => mounted,
-      operation: 'subir el logo del sitio web',
+      operation: widget.operation,
     );
     try {
       final asset = await showWebsiteMediaPicker(
@@ -997,10 +1079,10 @@ class _LogoUploaderState extends State<_LogoUploader> {
       if (!result.changed) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✅ Logo actualizado'),
-          backgroundColor: Color(0xFF00A09D),
-          duration: Duration(seconds: 2),
+        SnackBar(
+          content: Text('✅ ${_capitalized(widget.noun)} actualizado'),
+          backgroundColor: const Color(0xFF00A09D),
+          duration: const Duration(seconds: 2),
         ),
       );
     } catch (e) {
@@ -1009,7 +1091,7 @@ class _LogoUploaderState extends State<_LogoUploader> {
         setState(() => _isUploading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('❌ Error subiendo logo: $e'),
+            content: Text('❌ Error subiendo ${widget.noun}: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -1046,7 +1128,7 @@ class _LogoUploaderState extends State<_LogoUploader> {
               image: hasLogo && !_isUploading
                   ? DecorationImage(
                       image: NetworkImage(widget.currentUrl!),
-                      fit: BoxFit.contain,
+                      fit: widget.previewFit,
                     )
                   : null,
             ),
@@ -1066,7 +1148,7 @@ class _LogoUploaderState extends State<_LogoUploader> {
                       ),
                       const SizedBox(height: 12),
                       Text(
-                        'Subiendo logo...',
+                        'Subiendo ${widget.noun}...',
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.7),
                           fontSize: 12,
@@ -1082,7 +1164,7 @@ class _LogoUploaderState extends State<_LogoUploader> {
                           children: [
                             _buildActionButton(
                               icon: Icons.edit,
-                              tooltip: 'Cambiar logo',
+                              tooltip: 'Cambiar ${widget.noun}',
                               onTap: _pickAndUploadLogo,
                             ),
                             const SizedBox(width: 4),
@@ -1112,9 +1194,9 @@ class _LogoUploaderState extends State<_LogoUploader> {
                             ),
                           ),
                           const SizedBox(height: 12),
-                          const Text(
-                            'Haz clic para subir logo',
-                            style: TextStyle(
+                          Text(
+                            'Haz clic para subir ${widget.noun}',
+                            style: const TextStyle(
                               color: Color(0xFF00A09D),
                               fontSize: 13,
                               fontWeight: FontWeight.w500,
@@ -1122,7 +1204,7 @@ class _LogoUploaderState extends State<_LogoUploader> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'JPG, PNG, WebP • Recomendado 500x200',
+                            widget.recommendation,
                             style: TextStyle(
                               color: Colors.white.withValues(alpha: 0.4),
                               fontSize: 11,
@@ -1135,6 +1217,9 @@ class _LogoUploaderState extends State<_LogoUploader> {
       ],
     );
   }
+
+  static String _capitalized(String value) =>
+      value.isEmpty ? value : '${value[0].toUpperCase()}${value.substring(1)}';
 
   Widget _buildActionButton({
     required IconData icon,
