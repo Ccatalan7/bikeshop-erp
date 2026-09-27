@@ -256,9 +256,13 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
       if (!mounted) return;
       setState(() {
         _directory = directory;
+        // Por cuenta (creador, actor de un evento) y por trabajador
+        // (responsable sin cuenta): las dos claves son uuid y no chocan.
         _principalsByUser = {
-          for (final principal in directory)
+          for (final principal in directory) ...{
             if (principal.userId != null) principal.userId!: principal,
+            if (principal.employeeId != null) principal.employeeId!: principal,
+          },
         };
       });
     } catch (error, stackTrace) {
@@ -459,14 +463,8 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
     final today = DateTime(now.year, now.month, now.day);
     final tomorrow = today.add(const Duration(days: 1));
 
-    bool isOverdue(TaskModel task) =>
-        task.dueDate != null && task.dueDate!.isBefore(today) && !task.isDone;
-    bool isToday(TaskModel task) {
-      final due = task.dueDate;
-      if (due == null) return false;
-      final day = DateTime(due.year, due.month, due.day);
-      return day == today;
-    }
+    bool isOverdue(TaskModel task) => task.isOverdueAt(now);
+    bool isToday(TaskModel task) => task.dueDay == today;
 
     List<TaskModel> sorted(Iterable<TaskModel> source) {
       final list = source.toList();
@@ -532,14 +530,14 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
         final notes =
             teamAll.where((task) => task.kind == TaskKind.note).toList();
         final open = team.where((task) => !task.isDone).toList();
-        final unassigned =
-            sorted(open.where((task) => task.assignedTo == null));
+        final unassigned = sorted(open.where((task) => !task.hasAssignee));
         final byAssignee = <String, List<TaskModel>>{};
-        for (final task in open.where((task) => task.assignedTo != null)) {
-          byAssignee.putIfAbsent(task.assignedTo!, () => []).add(task);
+        for (final task in open.where((task) => task.hasAssignee)) {
+          byAssignee.putIfAbsent(task.assigneeKey!, () => []).add(task);
         }
         final assigneeSections = byAssignee.entries.map((entry) {
-          final name = _principalsByUser[entry.key]?.displayName ??
+          final principal = _principalsByUser[entry.key];
+          final name = principal?.displayName ??
               (entry.key == service.currentUserId ? 'Yo' : 'Sin nombre');
           return _TraySection(name, sorted(entry.value));
         }).toList()
@@ -617,9 +615,9 @@ class _QuickTaskPanelState extends State<QuickTaskPanel> {
             links: service.jobItemsOf(task.id ?? ''),
             jobHeader: service.jobHeaderOf(task),
             showAssignee: _scope == TaskTrayScope.team,
-            assigneeName: task.assignedTo == null
-                ? null
-                : _principalsByUser[task.assignedTo!]?.displayName,
+            assigneeName: task.hasAssignee
+                ? _principalsByUser[task.assigneeKey!]?.displayName
+                : null,
             unseen: _isUnseen(service, task),
             roles: roles,
             onTap: () {
@@ -730,6 +728,7 @@ class _TaskComposerSurfaceState extends State<TaskComposerSurface> {
     if (_draft.jobId != null) {
       _draft.contextKind = TaskContextKind.workshopJob;
     }
+    _dropIneligibleAssignee();
     if (_draft.contextKind == TaskContextKind.workshopJob) {
       if (_workshopJobs.isEmpty) unawaited(_loadWorkshopJobs());
       if (_draft.jobId != null) {
@@ -820,6 +819,7 @@ class _TaskComposerSurfaceState extends State<TaskComposerSurface> {
   void _selectContextKind(TaskContextKind kind) {
     _mutate(() {
       _draft.contextKind = kind;
+      _dropIneligibleAssignee();
       _draft.contextTarget = null;
       _draft.jobId = null;
       _draft.jobScope = TaskJobScope.wholeJob;
@@ -872,6 +872,31 @@ class _TaskComposerSurfaceState extends State<TaskComposerSurface> {
     }
   }
 
+  /// El responsable elegido, resuelto contra el directorio por su clave
+  /// (trabajador o cuenta).
+  TaskAssignmentPrincipal? get _draftAssignee {
+    final key = _draft.assigneeId;
+    if (key == null) return null;
+    return widget.directory
+        .where((principal) =>
+            principal.isAssignable && principal.assignmentKey == key)
+        .firstOrNull;
+  }
+
+  /// Una tarea sobre un trabajo del taller es para alguien con ficha de
+  /// trabajador: el servidor rechaza otra cuenta (`assignee_not_worker_linked`),
+  /// así que no se ofrece.
+  bool _canTakeDraft(TaskAssignmentPrincipal principal) =>
+      principal.isAssignable &&
+      (_draft.contextKind != TaskContextKind.workshopJob ||
+          principal.employeeId != null);
+
+  /// Suelta a un responsable que el vínculo nuevo ya no admite.
+  void _dropIneligibleAssignee() {
+    final assignee = _draftAssignee;
+    if (assignee != null && !_canTakeDraft(assignee)) _draft.assigneeId = null;
+  }
+
   bool get _workScopeIsValid {
     if (_draft.contextKind != TaskContextKind.workshopJob) return true;
     if (_draft.jobId == null) return false;
@@ -909,7 +934,14 @@ class _TaskComposerSurfaceState extends State<TaskComposerSurface> {
         visibility: _draft.visibility,
         priority: _draft.priority,
         dueDate: _draft.dueDate,
-        assignedTo: personal || isNote ? null : _draft.assigneeId,
+        // Un trabajador va sólo como trabajador: la cuenta la deriva el
+        // servidor. Mandar las dos falla si su cuenta cambió con el borrador
+        // abierto (`assignee_employee_mismatch`).
+        assignedTo: personal || isNote || _draftAssignee?.employeeId != null
+            ? null
+            : _draftAssignee?.userId,
+        assignedEmployeeId:
+            personal || isNote ? null : _draftAssignee?.employeeId,
         linkedJobId: _draft.contextKind == TaskContextKind.workshopJob
             ? _draft.jobId
             : null,
@@ -957,12 +989,8 @@ class _TaskComposerSurfaceState extends State<TaskComposerSurface> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final assignables = widget.directory
-        .where((principal) => principal.isAssignable)
-        .toList(growable: false);
-    final nonAssignables = widget.directory
-        .where((principal) => !principal.isAssignable)
-        .toList(growable: false);
+    final assignables =
+        widget.directory.where(_canTakeDraft).toList(growable: false);
     final personal = _draft.visibility == TaskVisibility.private;
     final isNote = _draft.kind == TaskKind.note;
 
@@ -1077,28 +1105,13 @@ class _TaskComposerSurfaceState extends State<TaskComposerSurface> {
               options: [
                 for (final principal in assignables)
                   VbSearchableSelectOption(
-                    value: principal.userId!,
+                    value: principal.assignmentKey,
                     label: principal.displayName,
                     context: principal.assignmentContextLabel,
                   ),
               ],
               onChanged: (value) => _mutate(() => _draft.assigneeId = value),
             ),
-            // Los sin cuenta no se esconden: existen, pero no pueden recibir
-            // trabajo hasta que se les invite.
-            if (nonAssignables.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  nonAssignables.length == 1
-                      ? '${nonAssignables.first.displayName} no tiene '
-                          'acceso — se invita desde Usuarios'
-                      : '${nonAssignables.length} trabajadores sin acceso '
-                          '— se invitan desde Usuarios',
-                  style: theme.textTheme.labelSmall
-                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                ),
-              ),
           ],
           const SizedBox(height: 10),
           VbShortSelect<TaskContextKind>(
@@ -1698,9 +1711,7 @@ class _TaskRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isOverdue = task.dueDate != null &&
-        task.dueDate!.isBefore(DateTime.now()) &&
-        !task.isDone;
+    final isOverdue = task.isOverdueAt(DateTime.now());
     final liveLinks = links.where((link) => !link.isInvalidated).toList();
     final jobNumber = liveLinks.isNotEmpty
         ? liveLinks.first.jobNumber
@@ -1901,9 +1912,9 @@ class _TaskDetailViewState extends State<_TaskDetailView> {
     final service = widget.taskService;
 
     final creatorName = widget.principalsByUser[task.createdBy]?.displayName;
-    final assigneeName = task.assignedTo == null
+    final assigneeName = !task.hasAssignee
         ? null
-        : widget.principalsByUser[task.assignedTo!]?.displayName ??
+        : widget.principalsByUser[task.assigneeKey!]?.displayName ??
             task.assigneeName;
 
     return Column(
@@ -2251,7 +2262,7 @@ class _TaskDetailViewState extends State<_TaskDetailView> {
         builder: (buttonContext) => OutlinedButton.icon(
           onPressed: () => _pickAssignee(buttonContext),
           icon: const Icon(Icons.person_outline, size: 16),
-          label: Text(task.assignedTo == null ? 'Asignar' : 'Reasignar'),
+          label: Text(task.hasAssignee ? 'Reasignar' : 'Asignar'),
         ),
       ));
     }
@@ -2264,23 +2275,33 @@ class _TaskDetailViewState extends State<_TaskDetailView> {
     final directory = await widget.taskService.fetchAssignmentDirectory();
     if (!mounted || !anchorContext.mounted) return;
     // El picker es el owner S-06 real (mismo menú O-02 / hoja O-05 del
-    // campo). Los sin cuenta no son opciones: su afordancia «Invitar» vive en
-    // el compositor y el directorio.
+    // campo). Un trabajador sin cuenta también es opción: la tarea le llega
+    // sola cuando tenga una.
+    // Sobre un trabajo del taller, sólo quien tiene ficha de trabajador: es lo
+    // que el servidor acepta (`assignee_not_worker_linked`).
+    final onJob = widget.task.linkedJobId != null;
+    final assignables = directory
+        .where((p) => p.isAssignable && (!onJob || p.employeeId != null))
+        .toList(growable: false);
     final selected = await showVbSearchableOptionPicker<String>(
       anchorContext: anchorContext,
       title: 'Asignar a',
       options: [
-        for (final principal in directory.where((p) => p.isAssignable))
+        for (final principal in assignables)
           VbSearchableSelectOption(
-            value: principal.userId!,
+            value: principal.assignmentKey,
             label: principal.displayName,
             context: principal.assignmentContextLabel,
           ),
       ],
     );
     if (selected == null || !mounted) return;
-    await widget.onCommand(() => widget.taskService.assignTask(
-        widget.task.id!, selected,
+    final assignee = assignables
+        .where((principal) => principal.assignmentKey == selected)
+        .firstOrNull;
+    if (assignee == null) return;
+    await widget.onCommand(() => widget.taskService.assignTaskToPrincipal(
+        widget.task.id!, assignee,
         expectedVersion: widget.task.version));
   }
 }

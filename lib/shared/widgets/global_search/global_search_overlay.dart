@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../../services/global_search/global_search_commands.dart';
 import '../../services/global_search/global_search_controller.dart';
 import '../../services/global_search/global_search_entry.dart';
 import '../../services/global_search/global_search_previews.dart';
@@ -18,6 +19,7 @@ import '../../themes/vinabike_theme_roles.dart';
 import '../../utils/responsive_breakpoints.dart';
 import '../main_layout.dart';
 import 'global_search_result_views.dart';
+import 'quick_task_flow.dart';
 
 /// Buscador global del ERP.
 ///
@@ -196,6 +198,25 @@ class _GlobalSearchPanelState extends State<_GlobalSearchPanel> {
   final ScrollController _scroll = ScrollController();
   late final GlobalSearchController _controller;
 
+  /// La acción rápida abierta (`/tarea`), que ocupa el panel entero.
+  GlobalSearchCommand? _activeCommand;
+
+  /// Lo escrito después del nombre de la acción: el comienzo de su flujo.
+  String _commandArgument = '';
+
+  /// Qué fila de acciones está elegida mientras se escribe `/…`.
+  int _commandHighlight = 0;
+
+  /// Lo escrito leído como acción rápida, o null si no empieza con «/».
+  GlobalSearchCommandInput? get _commandInput =>
+      GlobalSearchCommandInput.parse(_text.text);
+
+  List<GlobalSearchCommand> get _commandMatches {
+    final input = _commandInput;
+    if (input == null) return const [];
+    return matchGlobalSearchCommands(input.command);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -203,8 +224,9 @@ class _GlobalSearchPanelState extends State<_GlobalSearchPanel> {
     _text = widget.sharedText ?? TextEditingController();
     _controller = GlobalSearchController();
     _controller.addListener(_onControllerChanged);
-    if (_text.text.isNotEmpty) _controller.updateText(_text.text);
+    if (_text.text.isNotEmpty) _controller.updateText(_searchText);
     _text.addListener(_onTextChanged);
+    _paintedCommand = _commandInput?.command;
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
   }
 
@@ -255,7 +277,51 @@ class _GlobalSearchPanelState extends State<_GlobalSearchPanel> {
     if (mounted) setState(() {});
   }
 
-  void _onTextChanged() => _controller.updateText(_text.text);
+  /// Lo que busca el índice: nada mientras se escribe una acción rápida.
+  String get _searchText => _commandInput == null ? _text.text : '';
+
+  /// Lo último que se leyó como nombre de acción (null: modo búsqueda).
+  String? _paintedCommand;
+
+  void _onTextChanged() {
+    _controller.updateText(_searchText);
+    // Las acciones no pasan por el índice: entrar al modo «/», salir de él o
+    // cambiar la acción escrita no lo hace avisar —de «» a «/» el índice
+    // sigue recibiendo «»—, así que el panel se repinta desde acá. Sin esto,
+    // ⌘K y luego «/» seguía mostrando «Lo que más abres» (medido en la app,
+    // 2026-09-26).
+    final command = _commandInput?.command;
+    if (command != _paintedCommand || _commandHighlight != 0) {
+      _paintedCommand = command;
+      setState(() => _commandHighlight = 0);
+    }
+  }
+
+  void _openCommand(GlobalSearchCommand command, {String argument = ''}) {
+    setState(() {
+      _activeCommand = command;
+      _commandArgument = argument;
+    });
+  }
+
+  /// De vuelta a la lista de acciones, con «/» escrito.
+  void _exitCommand() {
+    setState(() => _activeCommand = null);
+    _text.value = const TextEditingValue(
+      text: '/',
+      selection: TextSelection.collapsed(offset: 1),
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _fieldFocus.requestFocus();
+    });
+  }
+
+  void _submitCommand() {
+    final matches = _commandMatches;
+    if (matches.isEmpty) return;
+    final command = matches[_commandHighlight.clamp(0, matches.length - 1)];
+    _openCommand(command, argument: _commandInput?.argument ?? '');
+  }
 
   @override
   void dispose() {
@@ -379,6 +445,29 @@ class _GlobalSearchPanelState extends State<_GlobalSearchPanel> {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
     }
+    if (_commandInput != null) {
+      final count = _commandMatches.length;
+      switch (event.logicalKey) {
+        case LogicalKeyboardKey.arrowDown:
+          if (count > 0) {
+            setState(() => _commandHighlight = (_commandHighlight + 1) % count);
+          }
+          return KeyEventResult.handled;
+        case LogicalKeyboardKey.arrowUp:
+          if (count > 0) {
+            setState(() => _commandHighlight = (_commandHighlight - 1) % count);
+          }
+          return KeyEventResult.handled;
+        case LogicalKeyboardKey.enter:
+        case LogicalKeyboardKey.numpadEnter:
+          _submitCommand();
+          return KeyEventResult.handled;
+        case LogicalKeyboardKey.escape:
+          _close();
+          return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored;
+    }
     switch (event.logicalKey) {
       case LogicalKeyboardKey.arrowDown:
         _controller.moveHighlight(1);
@@ -466,17 +555,29 @@ class _GlobalSearchPanelState extends State<_GlobalSearchPanel> {
           borderRadius: BorderRadius.circular(radius),
           border: isCompact ? null : Border.all(color: theme.dividerColor),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildField(context),
-            Divider(
-                height: 1,
-                thickness: 1,
-                color: roles?.hairline ?? theme.dividerColor),
-            Flexible(child: _buildBody(context)),
-            _buildFooter(context),
-          ],
+        child: AnimatedSize(
+          duration: const Duration(milliseconds: 200),
+          curve: const Cubic(0.22, 1, 0.36, 1),
+          alignment: Alignment.topCenter,
+          child: _activeCommand != null
+              ? QuickTaskFlow(
+                  key: ValueKey('global-search-flow-${_activeCommand!.id}'),
+                  initialQuery: _commandArgument,
+                  onExit: _exitCommand,
+                  onClose: _close,
+                )
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildField(context),
+                    Divider(
+                        height: 1,
+                        thickness: 1,
+                        color: roles?.hairline ?? theme.dividerColor),
+                    Flexible(child: _buildBody(context)),
+                    _buildFooter(context),
+                  ],
+                ),
         ),
       ),
     );
@@ -516,10 +617,16 @@ class _GlobalSearchPanelState extends State<_GlobalSearchPanel> {
       child: Row(
         children: [
           const SizedBox(width: 14),
-          Icon(
-            Icons.search_rounded,
-            size: 20,
-            color: theme.colorScheme.onSurfaceVariant,
+          AnimatedSwitcher(
+            duration: _fast,
+            child: Icon(
+              _commandInput == null ? Icons.search_rounded : Icons.bolt_rounded,
+              key: ValueKey(_commandInput == null),
+              size: 20,
+              color: _commandInput == null
+                  ? theme.colorScheme.onSurfaceVariant
+                  : theme.colorScheme.primary,
+            ),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -536,13 +643,17 @@ class _GlobalSearchPanelState extends State<_GlobalSearchPanel> {
                 focusedBorder: InputBorder.none,
                 isDense: true,
                 contentPadding: EdgeInsets.zero,
-                hintText: 'Buscar clientes, productos, pegas, facturas…',
+                hintText: 'Buscar, o «/» para acciones rápidas…',
                 hintStyle: theme.textTheme.titleMedium?.copyWith(
                   color: roles?.faintForeground ??
                       theme.colorScheme.onSurfaceVariant,
                 ),
               ),
               onSubmitted: (_) {
+                if (_commandInput != null) {
+                  _submitCommand();
+                  return;
+                }
                 final target = _controller.primaryTarget;
                 if (target != null) _openResult(target.entry);
               },
@@ -571,6 +682,7 @@ class _GlobalSearchPanelState extends State<_GlobalSearchPanel> {
   String _closeHintLabel() => 'esc';
 
   Widget _buildBody(BuildContext context) {
+    if (_commandInput != null) return _buildCommands(context);
     final index = context.watch<GlobalSearchIndex>();
     // Un error de carga no se muestra como «no hay nada»: eso afirmaría que el
     // taller no tiene clientes cuando lo que pasó es que no se pudieron leer.
@@ -600,6 +712,41 @@ class _GlobalSearchPanelState extends State<_GlobalSearchPanel> {
     );
   }
 
+  /// Las acciones rápidas que calzan con lo escrito después de «/».
+  Widget _buildCommands(BuildContext context) {
+    final matches = _commandMatches;
+    if (matches.isEmpty) {
+      return GlobalSearchMessage(
+        icon: Icons.bolt_rounded,
+        title: 'No hay una acción «${_text.text.trim()}»',
+        detail:
+            'Por ahora: ${kGlobalSearchCommands.map((c) => '/${c.name.toLowerCase()}').join(', ')}.',
+      );
+    }
+    final highlight = _commandHighlight.clamp(0, matches.length - 1);
+    return ListView(
+      shrinkWrap: true,
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      children: [
+        const GlobalSearchGroupHeader(title: 'Acciones rápidas'),
+        for (var i = 0; i < matches.length; i++)
+          GlobalSearchChoiceRow(
+            key: ValueKey('global-search-command-${matches[i].id}'),
+            title: matches[i].name,
+            subtitle: matches[i].description,
+            leading: GlobalSearchChoiceIcon(icon: matches[i].icon),
+            badges: [
+              GlobalSearchKeyCap(label: '/${matches[i].name.toLowerCase()}'),
+            ],
+            highlighted: i == highlight,
+            onHover: () => setState(() => _commandHighlight = i),
+            onTap: () => _openCommand(matches[i],
+                argument: _commandInput?.argument ?? ''),
+          ),
+      ],
+    );
+  }
+
   Widget _buildSuggestions(BuildContext context, GlobalSearchIndex index) {
     final suggestions = _controller.suggestions();
     if (suggestions.isEmpty) {
@@ -608,7 +755,8 @@ class _GlobalSearchPanelState extends State<_GlobalSearchPanel> {
         title: 'Escribe para buscar',
         detail: index.isLoading
             ? 'Terminando de cargar los registros…'
-            : 'Un nombre, un número de documento, un SKU o lo que quieras hacer.',
+            : 'Un nombre, un número de documento o un SKU. '
+                'Con «/» adelante, una acción: /tarea.',
       );
     }
 
@@ -715,13 +863,16 @@ class _GlobalSearchPanelState extends State<_GlobalSearchPanel> {
         children: [
           Text('↑ ↓ moverse', style: style),
           const SizedBox(width: 14),
-          Text('↵ abrir', style: style),
+          Text(_commandInput == null ? '↵ abrir' : '↵ abrir la acción',
+              style: style),
           const Spacer(),
-          if (_controller.outcome.query != null)
+          if (_commandInput == null && _controller.outcome.query != null)
             Text(
               '${_controller.outcome.flattened.length} resultados',
               style: style,
-            ),
+            )
+          else if (_commandInput == null)
+            Text('/ acciones rápidas', style: style),
         ],
       ),
     );

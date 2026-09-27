@@ -4,8 +4,9 @@
 /// Un principal canónico por persona, con acceso explícito:
 ///  * `erp`    — principal ERP; elegible y principal de mensajería.
 ///  * `portal` — trabajador con cuenta de portal; elegible, sin mensajería.
-///  * `none`   — empleado activo sin cuenta: NO elegible; la UI lo muestra
-///    honesto con «Sin acceso» / «Invitar», nunca lo esconde.
+///  * `none`   — trabajador activo sin cuenta. **También es elegible**
+///    (dueño, 2026-09-26): la tarea es de la persona y, cuando tenga una
+///    cuenta, le llega sola a su bandeja (`smart_task_sync_employee_account_v1`).
 enum TaskPrincipalAccess { erp, portal, none }
 
 class TaskAssignmentPrincipal {
@@ -44,7 +45,15 @@ class TaskAssignmentPrincipal {
     );
   }
 
-  bool get isAssignable => userId != null && access != TaskPrincipalAccess.none;
+  /// Se asigna a la persona: basta con que sea trabajador. Quien no es
+  /// trabajador (un dueño sin ficha) necesita una cuenta utilizable.
+  bool get isAssignable =>
+      employeeId != null ||
+      (userId != null && access != TaskPrincipalAccess.none);
+
+  /// Con qué se asigna: el trabajador si lo hay, si no la cuenta. Es también
+  /// la clave con la que la bandeja agrupa y nombra al responsable.
+  String get assignmentKey => employeeId ?? userId!;
 
   /// Contexto operativo para elegir un responsable. Los valores de seguridad
   /// (`portal`, `worker`, `admin`, etc.) pertenecen al contrato interno y no
@@ -59,7 +68,7 @@ class TaskAssignmentPrincipal {
             'cashier' => 'Caja',
             _ => 'Equipo ERP',
           },
-        TaskPrincipalAccess.none => 'Sin acceso',
+        TaskPrincipalAccess.none => 'Sin cuenta: la verá cuando tenga una',
       };
 
   String get initials {

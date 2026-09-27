@@ -65,7 +65,13 @@ class TaskModel {
   final DateTime? dueDate;
 
   // Assignment and Tracking
+  /// La cuenta por la que la tarea le llega a su responsable. Nula si el
+  /// trabajador todavía no tiene cuenta.
   final String? assignedTo;
+
+  /// El trabajador responsable, tenga o no cuenta. Es el dueño de la tarea:
+  /// cuando obtiene una cuenta, el servidor llena [assignedTo] solo.
+  final String? assignedEmployeeId;
   final String createdBy;
 
   // DB relationships (joined data if needed)
@@ -113,6 +119,7 @@ class TaskModel {
     this.priority = TaskPriority.normal,
     this.dueDate,
     this.assignedTo,
+    this.assignedEmployeeId,
     required this.createdBy,
     this.assigneeName,
     this.creatorName,
@@ -244,6 +251,7 @@ class TaskModel {
       dueDate:
           json['due_date'] != null ? DateTime.parse(json['due_date']) : null,
       assignedTo: json['assigned_to']?.toString(),
+      assignedEmployeeId: json['assigned_employee_id']?.toString(),
       createdBy: json['created_by']?.toString() ?? '',
       assigneeName: json['assignee_name'],
       creatorName: json['creator_name'],
@@ -291,6 +299,7 @@ class TaskModel {
       'priority': _priorityToString(priority),
       'due_date': dueDate?.toIso8601String(),
       'assigned_to': assignedTo,
+      'assigned_employee_id': assignedEmployeeId,
       'created_by': createdBy,
       'linked_job_id': linkedJobId,
       'linked_purchase_invoice_id': linkedPurchaseInvoiceId,
@@ -322,6 +331,7 @@ class TaskModel {
     TaskPriority? priority,
     DateTime? dueDate,
     String? assignedTo,
+    String? assignedEmployeeId,
     String? createdBy,
     String? assigneeName,
     String? creatorName,
@@ -358,6 +368,7 @@ class TaskModel {
       priority: priority ?? this.priority,
       dueDate: dueDate ?? this.dueDate,
       assignedTo: assignedTo ?? this.assignedTo,
+      assignedEmployeeId: assignedEmployeeId ?? this.assignedEmployeeId,
       createdBy: createdBy ?? this.createdBy,
       assigneeName: assigneeName ?? this.assigneeName,
       creatorName: creatorName ?? this.creatorName,
@@ -393,6 +404,23 @@ class TaskModel {
   bool get isDone =>
       status == TaskStatus.completed || status == TaskStatus.cancelled;
   bool get isBlocked => status == TaskStatus.blocked;
+
+  /// El día del plazo como fecha de calendario. El plazo se guarda como las
+  /// 00:00 UTC del día elegido —la app manda la medianoche sin zona y la base
+  /// corre en UTC—, así que se lee por sus campos y nunca como instante:
+  /// comparado con la medianoche de Chile, el mismo día ya parecía vencido.
+  DateTime? get dueDay {
+    final due = dueDate;
+    return due == null ? null : DateTime(due.year, due.month, due.day);
+  }
+
+  /// Vencida es cuando su día ya pasó; el día del plazo todavía no lo está.
+  bool isOverdueAt(DateTime now) {
+    final day = dueDay;
+    return !isDone &&
+        day != null &&
+        day.isBefore(DateTime(now.year, now.month, now.day));
+  }
 
   TaskContextKind get contextKind {
     if (linkedJobId != null) return TaskContextKind.workshopJob;
@@ -444,6 +472,13 @@ class TaskModel {
     }
     return null;
   }
+
+  /// Tiene responsable, aunque todavía no tenga cuenta.
+  bool get hasAssignee => assignedTo != null || assignedEmployeeId != null;
+
+  /// Clave del responsable para agrupar y nombrar: el trabajador si lo hay,
+  /// si no la cuenta. Coincide con `TaskAssignmentPrincipal.assignmentKey`.
+  String? get assigneeKey => assignedEmployeeId ?? assignedTo;
 
   /// «Por aceptar» para el asignado: asignada y sin acuse de recibo.
   bool get awaitsAcknowledgement =>

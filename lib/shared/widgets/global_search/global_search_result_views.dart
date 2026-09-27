@@ -414,3 +414,142 @@ class GlobalSearchThumbnail extends StatelessWidget {
     );
   }
 }
+
+/// Una opción elegible del buscador que no es un resultado del índice: una
+/// acción rápida, una persona, un trabajo. Es la anatomía de
+/// [GlobalSearchResultRow] (`S-05`) con alto mínimo 48 en vez de fijo, para
+/// que una fila pueda mostrar señales debajo sin cortarlas.
+class GlobalSearchChoiceRow extends StatelessWidget {
+  const GlobalSearchChoiceRow({
+    super.key,
+    required this.title,
+    required this.leading,
+    required this.highlighted,
+    required this.onTap,
+    this.subtitle,
+    this.badges = const [],
+    this.onHover,
+  });
+
+  final String title;
+  final String? subtitle;
+  final Widget leading;
+  final List<Widget> badges;
+  final bool highlighted;
+  final VoidCallback onTap;
+
+  /// El mouse encima mueve la selección, como el teclado.
+  final VoidCallback? onHover;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.maybeOf(context);
+    final selection =
+        roles?.selectionContainer ?? theme.colorScheme.primaryContainer;
+    final subtitle = this.subtitle;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => onHover?.call(),
+        child: GestureDetector(
+          onTap: onTap,
+          behavior: HitTestBehavior.opaque,
+          child: Semantics(
+            button: true,
+            selected: highlighted,
+            child: AnimatedContainer(
+              duration: kGlobalSearchFast,
+              curve: kGlobalSearchCurve,
+              constraints:
+                  const BoxConstraints(minHeight: kGlobalSearchRowHeight),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              decoration: BoxDecoration(
+                color: highlighted ? selection : Colors.transparent,
+                borderRadius: BorderRadius.circular(kGlobalSearchRowRadius),
+                border: Border.all(
+                  color: highlighted
+                      ? roles?.accentBorder ?? theme.colorScheme.primary
+                      : Colors.transparent,
+                ),
+              ),
+              child: Row(
+                children: [
+                  leading,
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight:
+                                highlighted ? FontWeight.w600 : FontWeight.w500,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
+                        if (subtitle != null && subtitle.isNotEmpty)
+                          Text(
+                            subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        if (badges.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Wrap(
+                              spacing: 4,
+                              runSpacing: 4,
+                              children: badges,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  AnimatedOpacity(
+                    duration: kGlobalSearchFast,
+                    opacity: highlighted ? 1 : 0,
+                    child: Icon(
+                      Icons.keyboard_return_rounded,
+                      size: 15,
+                      color: roles?.faintForeground ??
+                          theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// El icono de una [GlobalSearchChoiceRow], del tamaño de la miniatura.
+class GlobalSearchChoiceIcon extends StatelessWidget {
+  const GlobalSearchChoiceIcon({super.key, required this.icon});
+
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SizedBox(
+      width: 26,
+      height: 26,
+      child: Center(
+        child: Icon(icon, size: 18, color: theme.colorScheme.onSurfaceVariant),
+      ),
+    );
+  }
+}

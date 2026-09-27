@@ -101,6 +101,45 @@ void main() {
     });
   });
 
+  group('TaskModel · plazo como fecha de calendario', () {
+    // Así vuelve de la base: la app manda la medianoche sin zona y la base
+    // corre en UTC, así que el plazo «sábado 26» es 2026-09-26 00:00 UTC.
+    TaskModel due(String? stored, {String status = 'pending'}) =>
+        TaskModel.fromJson({
+          'id': '11111111-1111-4111-8111-111111111111',
+          'tenant_id': '22222222-2222-4222-8222-222222222222',
+          'title': 'Hacer el trabajo',
+          'status': status,
+          'created_by': '44444444-4444-4444-8444-444444444444',
+          'due_date': stored,
+          'created_at': '2026-09-25T10:00:00Z',
+          'updated_at': '2026-09-25T10:00:00Z',
+        });
+
+    test('el día del plazo no está vencida, ni a medianoche ni al cierre', () {
+      final task = due('2026-09-26T00:00:00+00:00');
+      expect(task.dueDay, DateTime(2026, 9, 26));
+      expect(task.isOverdueAt(DateTime(2026, 9, 26, 0, 5)), isFalse);
+      expect(task.isOverdueAt(DateTime(2026, 9, 26, 23, 59)), isFalse);
+    });
+
+    test('al día siguiente sí, salvo que esté cerrada', () {
+      expect(
+          due('2026-09-26T00:00:00+00:00')
+              .isOverdueAt(DateTime(2026, 9, 27, 8)),
+          isTrue);
+      expect(
+          due('2026-09-26T00:00:00+00:00', status: 'completed')
+              .isOverdueAt(DateTime(2026, 9, 27, 8)),
+          isFalse);
+    });
+
+    test('sin plazo nunca vence', () {
+      expect(due(null).dueDay, isNull);
+      expect(due(null).isOverdueAt(DateTime(2030)), isFalse);
+    });
+  });
+
   group('SmartTaskEvent · ledger', () {
     test('distingue la ruta directa auditada de un comando', () {
       final direct = SmartTaskEvent.fromJson({
@@ -118,7 +157,7 @@ void main() {
   });
 
   group('TaskAssignmentPrincipal · directorio honesto', () {
-    test('erp y portal son asignables; sin cuenta no lo es', () {
+    test('erp, portal y el trabajador sin cuenta son asignables', () {
       final erp = TaskAssignmentPrincipal.fromJson({
         'tenant_id': 't',
         'user_id': 'u1',
@@ -151,9 +190,14 @@ void main() {
       expect(erp.assignmentContextLabel, 'Taller');
       expect(portal.isAssignable, isTrue);
       expect(portal.assignmentContextLabel, 'Recibe tareas en su portal');
-      expect(none.isAssignable, isFalse);
+      // Dueño, 2026-09-26: la tarea es de la persona; le llega sola cuando
+      // tenga una cuenta.
+      expect(none.isAssignable, isTrue);
+      expect(none.assignmentKey, 'e3');
+      expect(erp.assignmentKey, 'e1');
       expect(none.access, TaskPrincipalAccess.none);
-      expect(none.assignmentContextLabel, 'Sin acceso');
+      expect(
+          none.assignmentContextLabel, 'Sin cuenta: la verá cuando tenga una');
     });
 
     test('traduce los roles ERP y nunca publica el código interno', () {

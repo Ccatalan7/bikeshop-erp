@@ -748,6 +748,23 @@ públicas (`service_role` seguía con EXECUTE): costó una corrida y una reaplic
   `results_eq` importa, `order by columna collate "C"` en ambos lados; la expectativa entonces
   vale en local, en CI y en producción.
 
+## Un trigger diferido se prueba nombrándolo, nunca con `set constraints all` (2026-09-26)
+
+Un pgTAP corre en una transacción que nunca hace commit, así que un `constraint trigger …
+deferrable initially deferred` no dispara solo: hay que forzarlo con `set constraints`.
+`set constraints all immediate` fuerza **todos** los diferidos pendientes de la base, también
+los de identidad de otros módulos. La sincronía de cuentas de `smart_tasks` lo usó y
+`link_erp_user_to_employee` cayó con `employee_erp_link_inconsistent` a mitad de la fixture,
+un falso rojo que costó una ronda de diagnóstico.
+
+- Se nombran sólo los triggers bajo prueba, y se devuelven a diferidos enseguida:
+  `set constraints trg_a, trg_b immediate; set constraints trg_a, trg_b deferred;`, dentro
+  de un ayudante `pg_temp` que simula el commit (patrón `pg_temp.commit_sync()` de
+  `supabase/tests/smart_task_employee_assignee.sql`).
+- La verificación `--verify` de un trigger así afirma `tgdeferrable`/`tginitdeferred` y
+  `tgenabled in ('O','A')`: un trigger en modo `R` (réplica) existe, pero no dispara en
+  una sesión normal.
+
 ## El archivo `--verify` no admite bloques ni constantes plegables (2026-08-19)
 
 Un read-back de `deploy_migration.sh` corre por la ruta de **lectura remota**, y

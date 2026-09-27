@@ -214,8 +214,7 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
             allTasks.where((t) => t.status == TaskStatus.completed).length;
         final overdueCount = allTasks
             .where((t) =>
-                t.dueDate != null &&
-                t.dueDate!.isBefore(DateTime.now()) &&
+                t.isOverdueAt(DateTime.now()) &&
                 t.status != TaskStatus.completed &&
                 t.status != TaskStatus.cancelled)
             .length;
@@ -945,10 +944,8 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
     final isCompleted = task.status == TaskStatus.completed;
     final isCancelled = task.status == TaskStatus.cancelled;
     final isDimmed = isCompleted || isCancelled;
-    final isOverdue = task.dueDate != null &&
-        task.dueDate!.isBefore(DateTime.now()) &&
-        !isCompleted &&
-        !isCancelled;
+    final isOverdue =
+        task.isOverdueAt(DateTime.now()) && !isCompleted && !isCancelled;
     final isEditingTitle = _editingTitleTaskId == task.id;
     final taskKey = task.id ?? task.title;
     final isExpanded = _session.expandedTaskKeys.contains(taskKey);
@@ -1555,10 +1552,8 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
         final isCompleted = task.status == TaskStatus.completed;
         final isCancelled = task.status == TaskStatus.cancelled;
         final isDimmed = isCompleted || isCancelled;
-        final isOverdue = task.dueDate != null &&
-            task.dueDate!.isBefore(DateTime.now()) &&
-            !isCompleted &&
-            !isCancelled;
+        final isOverdue =
+            task.isOverdueAt(DateTime.now()) && !isCompleted && !isCancelled;
         final theme = Theme.of(context);
         final isEditingTitle = _editingTitleTaskId == task.id;
 

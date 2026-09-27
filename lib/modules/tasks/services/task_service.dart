@@ -1034,6 +1034,7 @@ class TaskService extends ChangeNotifier {
     TaskPriority priority = TaskPriority.normal,
     DateTime? dueDate,
     String? assignedTo,
+    String? assignedEmployeeId,
     String? linkedJobId,
     List<String>? jobItemIds,
     String? overlapDecision,
@@ -1053,6 +1054,8 @@ class TaskService extends ChangeNotifier {
       'priority': taskPriorityWire(priority),
       if (dueDate != null) 'due_date': dueDate.toIso8601String(),
       if (assignedTo != null) 'assigned_to': assignedTo,
+      if (assignedEmployeeId != null)
+        'assigned_employee_id': assignedEmployeeId,
       if (linkedJobId != null) 'linked_job_id': linkedJobId,
       if (jobItemIds != null) 'job_item_ids': jobItemIds,
       if (overlapDecision != null) 'overlap_decision': overlapDecision,
@@ -1127,6 +1130,24 @@ class TaskService extends ChangeNotifier {
           command: 'assign',
           expectedVersion: expectedVersion,
           payload: {'assigned_to': assigneeUserId});
+
+  /// Reasigna a un responsable del directorio. Un trabajador se asigna como
+  /// trabajador (tenga o no cuenta); quien no es trabajador, por su cuenta.
+  /// Sin responsable, desasigna.
+  Future<TaskModel> assignTaskToPrincipal(
+    String taskId,
+    TaskAssignmentPrincipal? assignee, {
+    int? expectedVersion,
+  }) =>
+      sendCommand(taskId,
+          command: 'assign',
+          expectedVersion: expectedVersion,
+          payload: {
+            if (assignee?.employeeId != null)
+              'assigned_employee_id': assignee!.employeeId
+            else
+              'assigned_to': assignee?.userId,
+          });
   Future<TaskModel> updateTaskDetails(
     String taskId, {
     int? expectedVersion,
@@ -1396,6 +1417,42 @@ class TaskService extends ChangeNotifier {
     return activeJobs;
   }
 
+  /// Cuántos servicios (líneas `service`/`adhoc`) tiene cada trabajo. Un
+  /// trabajo sin servicios no aparece en el mapa.
+  ///
+  /// Se lee por páginas: el servidor corta cada respuesta en 1000 filas
+  /// (`max_rows`) sin avisar, y 120 trabajos activos con varios servicios
+  /// cada uno pasan ese techo; cortado, el conteo diría menos servicios que
+  /// la lista que se abre después.
+  Future<Map<String, int>> fetchJobServiceCounts(List<String> jobIds) async {
+    if (jobIds.isEmpty) return const {};
+    const pageSize = 1000;
+    final lease = await _requireAuthorityLease();
+    final counts = <String, int>{};
+    for (var from = 0;; from += pageSize) {
+      final rows = await _supabase
+          .from('mechanic_job_items')
+          .select('id, job_id, tenant_id')
+          .eq('tenant_id', lease.scope.tenantId)
+          .inFilter('job_id', jobIds)
+          .inFilter('item_type', ['service', 'adhoc'])
+          .order('id')
+          .range(from, from + pageSize - 1);
+      _assertOwnedLease(lease);
+      final page = rows as List<dynamic>;
+      for (final row in page) {
+        final map = Map<String, dynamic>.from(row as Map);
+        if (map['tenant_id']?.toString() != lease.scope.tenantId) {
+          throw StateError('Job item count crossed the authority tenant');
+        }
+        final jobId = map['job_id']?.toString();
+        if (jobId == null) continue;
+        counts[jobId] = (counts[jobId] ?? 0) + 1;
+      }
+      if (page.length < pageSize) return counts;
+    }
+  }
+
   /// Líneas de trabajo reales del trabajo (service/adhoc), con su bicicleta,
   /// para elegir todos o algunos servicios al crear/repartir.
   Future<List<TaskJobWorkItem>> fetchJobWorkItems(String jobId) async {
@@ -1623,6 +1680,11 @@ class TaskLinkableJob {
     required this.status,
     required this.customerName,
     required this.clientRequest,
+    this.statusLabel,
+    this.bikeLabel,
+    this.quotationStatus,
+    this.hasInvoice = false,
+    this.isPaid = false,
   });
 
   final String id;
@@ -1631,14 +1693,46 @@ class TaskLinkableJob {
   final String? customerName;
   final String? clientRequest;
 
+  /// El estado en las palabras del taller (el personalizado si lo hay).
+  final String? statusLabel;
+
+  /// Marca y modelo de la bici principal.
+  final String? bikeLabel;
+
+  /// `pending`, `approved` o `rejected`; null si el trabajo no tiene
+  /// presupuesto.
+  final String? quotationStatus;
+  final bool hasInvoice;
+  final bool isPaid;
+
   factory TaskLinkableJob.fromJson(Map<String, dynamic> json) {
     final customer = json['customers'];
+    final bike = json['bike'];
+    final bikeLabel = bike is Map
+        ? [bike['brand'], bike['model']]
+            .map((part) => part?.toString().trim() ?? '')
+            .where((part) => part.isNotEmpty)
+            .join(' ')
+        : '';
+    String? statusLabel;
+    try {
+      statusLabel = MechanicJob.fromJson(json).statusDisplayName;
+    } catch (_) {
+      statusLabel = null;
+    }
+    final quotation = json['quotation_status']?.toString().trim();
     return TaskLinkableJob(
       id: json['id'].toString(),
       jobNumber: json['job_number']?.toString() ?? '—',
       status: json['status']?.toString(),
       customerName: customer is Map ? customer['name']?.toString() : null,
       clientRequest: json['client_request']?.toString(),
+      statusLabel: statusLabel,
+      bikeLabel: bikeLabel.isEmpty ? null : bikeLabel,
+      quotationStatus:
+          quotation == null || quotation.isEmpty ? null : quotation,
+      hasInvoice: json['invoice_id'] != null || json['is_invoiced'] == true,
+      isPaid: json['is_paid'] == true,
     );
   }
 }
