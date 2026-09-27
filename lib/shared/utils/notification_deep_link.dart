@@ -67,6 +67,12 @@ String resolveErpNotificationRoute(Map<String, dynamic> row) {
     final taskId = _firstText([row['entity_id'], data['task_id']]);
     if (taskId != null) return buildTaskToolRoute(taskId);
   }
+  // Cada nota de servicio tiene su propio aviso (su entidad es la nota), y
+  // abre la tarea donde se escribió.
+  if (entityType == 'smart_task_service_note') {
+    final taskId = _firstText([data['task_id']]);
+    if (taskId != null) return buildTaskToolRoute(taskId);
+  }
 
   // Meta interaction URLs go through the dedicated trusted-host validator at
   // navigation time. Keep their exact stored destination intact here.

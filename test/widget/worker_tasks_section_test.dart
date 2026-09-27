@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:vinabike_erp/modules/tasks/models/smart_task_service_note.dart';
 import 'package:vinabike_erp/modules/worker_portal/services/worker_tasks_service.dart';
 import 'package:vinabike_erp/modules/worker_portal/widgets/worker_tasks_section.dart';
 import 'package:vinabike_erp/shared/themes/app_theme.dart';
@@ -12,6 +13,8 @@ class _FakeWorkerTasksService implements WorkerTasksService {
   int fetchCalls = 0;
   final List<String> commands = [];
   final List<Map<String, dynamic>> payloads = [];
+  List<ServiceTimelineEntry> timeline = const [];
+  final List<String> timelineRequests = [];
 
   @override
   Future<List<WorkerTaskView>> fetchMyTasks() async {
@@ -29,21 +32,38 @@ class _FakeWorkerTasksService implements WorkerTasksService {
     commands.add(command);
     payloads.add(payload);
     final task = _tasks.single;
-    final jobItems = command == 'set_job_item_done'
+    final jobItems = command == 'add_job_item_note'
         ? [
             for (final item in task.jobItems)
               item['job_item_id'] == payload['job_item_id']
                   ? {
                       ...item,
-                      'done_at': payload['done'] == true
-                          ? '2026-09-26T18:10:00Z'
-                          : null,
-                      'done_by_name':
-                          payload['done'] == true ? 'Braulio Muñoz' : null,
+                      'note': {
+                        'id': 'note-new',
+                        'body': payload['note'],
+                        'created_at': '2026-09-27T13:05:00Z',
+                        'author_name': 'Braulio Muñoz',
+                        'mine': true,
+                      },
+                      'note_count': ((item['note_count'] as int?) ?? 0) + 1,
                     }
                   : item,
           ]
-        : task.jobItems;
+        : command == 'set_job_item_done'
+            ? [
+                for (final item in task.jobItems)
+                  item['job_item_id'] == payload['job_item_id']
+                      ? {
+                          ...item,
+                          'done_at': payload['done'] == true
+                              ? '2026-09-26T18:10:00Z'
+                              : null,
+                          'done_by_name':
+                              payload['done'] == true ? 'Braulio Muñoz' : null,
+                        }
+                      : item,
+              ]
+            : task.jobItems;
     _tasks = [
       WorkerTaskView(
         id: task.id,
@@ -87,6 +107,29 @@ class _FakeWorkerTasksService implements WorkerTasksService {
   Future<WorkerTaskView> setHandoffNote(String taskId, String? note) =>
       sendCommand(taskId,
           command: 'set_handoff_note', payload: {'note': note?.trim() ?? ''});
+
+  @override
+  Future<WorkerTaskView> addJobItemNote(
+          String taskId, String jobItemId, String note) =>
+      sendCommand(taskId,
+          command: 'add_job_item_note',
+          payload: {'job_item_id': jobItemId, 'note': note.trim()});
+  @override
+  Future<WorkerTaskView> editJobItemNote(
+          String taskId, String noteId, String note) =>
+      sendCommand(taskId,
+          command: 'edit_job_item_note',
+          payload: {'note_id': noteId, 'note': note.trim()});
+  @override
+  Future<WorkerTaskView> withdrawJobItemNote(String taskId, String noteId) =>
+      sendCommand(taskId,
+          command: 'withdraw_job_item_note', payload: {'note_id': noteId});
+  @override
+  Future<List<ServiceTimelineEntry>> fetchServiceTimeline(
+      String taskId, String jobItemId) async {
+    timelineRequests.add(jobItemId);
+    return timeline;
+  }
 
   // `implements` no hereda los wrappers concretos: se delegan explícitos.
   @override
@@ -147,7 +190,9 @@ WorkerTaskView _task() => WorkerTaskView(
       ],
     );
 
-WorkerTaskView _acceptedWithServices({String? note}) => WorkerTaskView(
+WorkerTaskView _acceptedWithServices(
+        {String? note, Map<String, dynamic>? cadenaNote}) =>
+    WorkerTaskView(
       id: '22222222-2222-4222-8222-222222222222',
       title: 'Hacer el trabajo de la Trek',
       description: null,
@@ -165,13 +210,14 @@ WorkerTaskView _acceptedWithServices({String? note}) => WorkerTaskView(
       jobId: 'j',
       jobNumber: 'PG-000124',
       bikeLabels: const ['Trek Marlin 7'],
-      jobItems: const [
+      jobItems: [
         {
           'job_item_id': 'item-cadena',
           'item_name': 'Cambio de cadena',
           'item_type': 'service',
           'done_at': '2026-09-26T15:10:00Z',
           'done_by_name': 'Braulio Muñoz',
+          if (cadenaNote != null) ...{'note': cadenaNote, 'note_count': 1},
         },
         {
           'job_item_id': 'item-frenos',
@@ -228,6 +274,79 @@ void main() {
         find.ancestor(
             of: find.text('Completar'), matching: find.byType(FilledButton)),
         findsOneWidget);
+  });
+
+  testWidgets(
+      'cada servicio muestra su nota vigente; el trabajador la continúa y ve '
+      'el historial', (tester) async {
+    final fake = _FakeWorkerTasksService([
+      _acceptedWithServices(cadenaNote: const {
+        'id': 'note-origin',
+        'body': 'La cadena ya viene cambiada',
+        'created_at': '2026-09-27T12:30:00Z',
+        'author_name': 'La Manager',
+        'mine': false,
+      }),
+    ]);
+    await _pumpSection(tester, fake);
+
+    expect(find.text('La cadena ya viene cambiada'), findsOneWidget);
+    expect(find.textContaining('La Manager ·'), findsOneWidget);
+    // Lo que escribió otro se continúa, no se corrige.
+    expect(
+        find.byKey(const ValueKey('worker-task-service-note-edit-item-cadena')),
+        findsNothing);
+    expect(
+        find.byKey(const ValueKey('worker-task-service-note-add-item-frenos')),
+        findsOneWidget);
+
+    await tester.tap(find.byKey(
+        const ValueKey('worker-task-service-note-continue-item-cadena')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byType(TextField).last, 'Ojo: el cassette está gastado');
+    await tester.pump();
+    await tester.tap(find.text('Continuar nota'));
+    await tester.pumpAndSettle();
+
+    expect(fake.commands, ['add_job_item_note']);
+    expect(fake.payloads.single, {
+      'job_item_id': 'item-cadena',
+      'note': 'Ojo: el cassette está gastado',
+    });
+    expect(find.text('Ojo: el cassette está gastado'), findsOneWidget);
+    expect(find.textContaining('2 notas'), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('worker-task-service-note-edit-item-cadena')),
+        findsOneWidget);
+
+    fake.timeline = [
+      ServiceTimelineEntry(
+        occurredAt: DateTime(2026, 9, 27, 10, 5),
+        kind: ServiceTimelineKind.noteContinued,
+        actorName: 'Braulio Muñoz',
+        fromPortal: true,
+        note: 'Ojo: el cassette está gastado',
+        isCurrent: true,
+      ),
+      ServiceTimelineEntry(
+        occurredAt: DateTime(2026, 9, 27, 9, 30),
+        kind: ServiceTimelineKind.noteWritten,
+        actorName: 'La Manager',
+        fromPortal: false,
+        note: 'La cadena ya viene cambiada',
+        atCreate: true,
+      ),
+    ];
+    await tester.tap(find
+        .byKey(const ValueKey('worker-task-service-note-history-item-cadena')));
+    await tester.pumpAndSettle();
+
+    expect(fake.timelineRequests, ['item-cadena']);
+    expect(find.text('Braulio Muñoz continuó la nota'), findsOneWidget);
+    expect(find.text('27/09/2026 10:05 · desde su portal'), findsOneWidget);
+    expect(find.text('Vigente'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('la nota del turno se ve con quién la dejó', (tester) async {

@@ -111,6 +111,10 @@ class _QuickTaskFlowState extends State<QuickTaskFlow> {
   TaskContextTarget? _target;
   QuickTaskIntent? _intent;
   Set<String> _selectedItems = {};
+
+  /// La primera nota de cada servicio, por `job_item_id`: se abre con «Nota»
+  /// en su fila y viaja sólo si el servicio sigue elegido.
+  final Map<String, TextEditingController> _itemNotes = {};
   final TextEditingController _title = TextEditingController();
   final TextEditingController _note = TextEditingController();
   final FocusNode _titleFocus = FocusNode();
@@ -153,6 +157,9 @@ class _QuickTaskFlowState extends State<QuickTaskFlow> {
     _scroll.dispose();
     _title.dispose();
     _note.dispose();
+    for (final controller in _itemNotes.values) {
+      controller.dispose();
+    }
     _titleFocus.dispose();
     _panelFocus.dispose();
     super.dispose();
@@ -303,6 +310,7 @@ class _QuickTaskFlowState extends State<QuickTaskFlow> {
       _contextKind = TaskContextKind.none;
       _jobItems = null;
       _selectedItems = {};
+      _clearItemNotes();
       _intent = null;
     }
     _goTo(_Step.subject);
@@ -315,6 +323,7 @@ class _QuickTaskFlowState extends State<QuickTaskFlow> {
     _intent = null;
     _jobItems = null;
     _selectedItems = {};
+    _clearItemNotes();
     unawaited(_loadJobItems(job));
     _goTo(_Step.intent);
   }
@@ -324,8 +333,17 @@ class _QuickTaskFlowState extends State<QuickTaskFlow> {
     _job = null;
     _jobItems = null;
     _selectedItems = {};
+    _clearItemNotes();
     _intent = null;
     _goTo(_Step.contextKind);
+  }
+
+  /// Las notas son de los servicios de UN trabajo: se van con él.
+  void _clearItemNotes() {
+    for (final controller in _itemNotes.values) {
+      controller.dispose();
+    }
+    _itemNotes.clear();
   }
 
   void _chooseContextKind(TaskContextKind kind) {
@@ -464,6 +482,14 @@ class _QuickTaskFlowState extends State<QuickTaskFlow> {
         assignedEmployeeId: person.employeeId,
         linkedJobId: job?.id,
         jobItemIds: job == null ? null : _selectedItems.toList(),
+        jobItemNotes: job == null
+            ? null
+            : {
+                for (final id in _selectedItems)
+                  if (_itemNotes[id]?.text.trim() case final text?
+                      when text.isNotEmpty)
+                    id: text,
+              },
         linkedCustomerId:
             _contextKind == TaskContextKind.customer ? _target?.id : null,
         linkedSupplierId:
@@ -527,6 +553,7 @@ class _QuickTaskFlowState extends State<QuickTaskFlow> {
     _intent = null;
     _jobItems = null;
     _selectedItems = {};
+    _clearItemNotes();
     _title.clear();
     _note.clear();
     _due = QuickTaskDue.none;
@@ -1237,6 +1264,9 @@ class _QuickTaskFlowState extends State<QuickTaskFlow> {
               checked ? next.add(item.id) : next.remove(item.id);
               _selectedItems = next;
             }),
+            noteController: _itemNotes[item.id],
+            onAddNote: () =>
+                setState(() => _itemNotes[item.id] = TextEditingController()),
           ),
       ],
     );
@@ -1560,11 +1590,18 @@ class _CheckRow extends StatelessWidget {
     required this.item,
     required this.checked,
     required this.onChanged,
+    required this.noteController,
+    required this.onAddNote,
   });
 
   final TaskJobWorkItem item;
   final bool checked;
   final ValueChanged<bool> onChanged;
+
+  /// La nota de este servicio, si ya se abrió. Se ve y se edita mientras el
+  /// servicio está elegido.
+  final TextEditingController? noteController;
+  final VoidCallback onAddNote;
 
   @override
   Widget build(BuildContext context) {
@@ -1573,7 +1610,8 @@ class _CheckRow extends StatelessWidget {
         .whereType<String>()
         .where((part) => part.trim().isNotEmpty)
         .join(' · ');
-    return InkWell(
+    final noteController = this.noteController;
+    final row = InkWell(
       borderRadius: BorderRadius.circular(kGlobalSearchRowRadius),
       onTap: () => onChanged(!checked),
       child: ConstrainedBox(
@@ -1611,9 +1649,43 @@ class _CheckRow extends StatelessWidget {
                 ],
               ),
             ),
+            if (checked && noteController == null)
+              VbButton(
+                key: ValueKey('quick-task-item-note-add-${item.id}'),
+                label: 'Nota',
+                icon: Icons.sticky_note_2_outlined,
+                variant: VbButtonVariant.text,
+                density: VbDensity.compact,
+                onPressed: onAddNote,
+              ),
           ],
         ),
       ),
+    );
+    if (!checked || noteController == null) return row;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        row,
+        Padding(
+          // Alineada con el nombre del servicio, bajo la casilla.
+          padding: const EdgeInsets.only(left: 52, bottom: 6),
+          child: TextField(
+            key: ValueKey('quick-task-item-note-${item.id}'),
+            controller: noteController,
+            autofocus: true,
+            minLines: 1,
+            maxLines: 3,
+            maxLength: 2000,
+            decoration: const InputDecoration(
+              hintText:
+                  'Nota para este servicio (ej: la cadena ya viene cambiada)',
+              isDense: true,
+              counterText: '',
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

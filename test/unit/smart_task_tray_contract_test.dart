@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/modules/tasks/models/smart_task_event.dart';
 import 'package:vinabike_erp/modules/tasks/models/smart_task_job_item.dart';
+import 'package:vinabike_erp/modules/tasks/models/smart_task_service_note.dart';
 import 'package:vinabike_erp/modules/tasks/models/task_assignment_principal.dart';
 import 'package:vinabike_erp/modules/tasks/models/task_model.dart';
 import 'package:vinabike_erp/modules/tasks/services/task_service.dart';
@@ -434,6 +435,70 @@ void main() {
       });
       expect(view.assignerName, isNull);
       expect(view.displayAssignerName, 'La Jefa');
+    });
+  });
+
+  group('ServiceNote · la vigente de cada servicio', () {
+    test('en el ERP, «mía» se decide con la cuenta de quien mira', () {
+      final row = {
+        'job_item_id': 'item-1',
+        'note_id': 'note-1',
+        'body': 'La cadena ya viene cambiada',
+        'created_at': '2026-09-27T12:30:00Z',
+        'created_by': 'user-a',
+        'author_name': 'Lahsen Stowe',
+        'edited_at': '2026-09-27T12:40:00Z',
+        'note_count': 3,
+      };
+      final mine = ServiceNote.fromErpRow(row, currentUserId: 'user-a');
+      expect(mine.mine, isTrue);
+      expect(mine.isEdited, isTrue);
+      expect(mine.count, 3);
+      expect(
+          ServiceNote.fromErpRow(row, currentUserId: 'user-b').mine, isFalse);
+      expect(ServiceNote.fromErpRow(row, currentUserId: null).mine, isFalse);
+    });
+
+    test('en el portal, un servicio sin nota viva no trae nota', () {
+      expect(ServiceNote.fromPortalItem({'job_item_id': 'item-1'}), isNull);
+      final note = ServiceNote.fromPortalItem({
+        'job_item_id': 'item-1',
+        'note': {
+          'id': 'note-1',
+          'body': ' Rayos cortados ',
+          'created_at': '2026-09-27T12:30:00Z',
+          'author_name': 'Braulio Muñoz',
+          'mine': true,
+        },
+        'note_count': 2,
+      })!;
+      expect(note.body, 'Rayos cortados');
+      expect(note.mine, isTrue);
+      expect(note.count, 2);
+      expect(note.isEdited, isFalse);
+    });
+
+    test('la línea de tiempo lee cada tipo y lo que decía antes', () {
+      final entry = ServiceTimelineEntry.fromJson({
+        'occurred_at': '2026-09-27T13:05:00Z',
+        'kind': 'note_edited',
+        'actor_name': 'Braulio Muñoz',
+        'from_portal': true,
+        'note': 'Tres rayos',
+        'previous_note': 'Dos rayos',
+        'note_id': 'note-1',
+        'at_create': false,
+        'is_current': true,
+      });
+      expect(entry.kind, ServiceTimelineKind.noteEdited);
+      expect(entry.fromPortal, isTrue);
+      expect(entry.previousNote, 'Dos rayos');
+      expect(entry.isCurrent, isTrue);
+      expect(
+          ServiceTimelineEntry.fromJson({'kind': 'service_removed'}).fromPortal,
+          isNull);
+      expect(ServiceTimelineKind.fromWire('algo_nuevo'),
+          ServiceTimelineKind.unknown);
     });
   });
 

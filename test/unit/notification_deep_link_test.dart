@@ -213,5 +213,18 @@ void main() {
       expect(withNotificationOpenRequest(route), route);
       expect(taskIdFromToolRoute('/taller/pegas'), isNull);
     });
+
+    test('el aviso de una nota de servicio abre la tarea, no la nota', () {
+      final route = resolveErpNotificationRoute({
+        'type': 'smart_task_service_note',
+        'entity_type': 'smart_task_service_note',
+        'entity_id': 'bbbb2222-0000-4000-8000-000000000002',
+        'data': {'task_id': 'aaaa1111-0000-4000-8000-000000000001'},
+      });
+      expect(
+        taskIdFromToolRoute(route),
+        'aaaa1111-0000-4000-8000-000000000001',
+      );
+    });
   });
 }

@@ -127,6 +127,7 @@ class _FakeTaskService extends ChangeNotifier implements TaskService {
     String? assignedEmployeeId,
     String? linkedJobId,
     List<String>? jobItemIds,
+    Map<String, String>? jobItemNotes,
     String? overlapDecision,
     String? linkedCustomerId,
     String? linkedSupplierId,
@@ -143,6 +144,7 @@ class _FakeTaskService extends ChangeNotifier implements TaskService {
       'assignedEmployeeId': assignedEmployeeId,
       'linkedJobId': linkedJobId,
       'jobItemIds': jobItemIds,
+      'jobItemNotes': jobItemNotes,
       'linkedCustomerId': linkedCustomerId,
     });
     return TaskModel(
@@ -260,6 +262,52 @@ void main() {
     expect(created['title'], 'Hacer el trabajo de la Trek Marlin 7');
     expect(created['dueDate'], DateTime(2026, 9, 24));
     expect(find.text('Tarea creada para Vicente Díaz'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('cada servicio elegido lleva su propia nota al encargo',
+      (tester) async {
+    final harness = await _pump(tester);
+    await tester.enterText(
+        find.byKey(const ValueKey('quick-task-query')), 'vic');
+    await tester.pumpAndSettle();
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('#PG-00575 · Trek Marlin 7'));
+    await tester.pumpAndSettle();
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+
+    // Cada servicio marcado ofrece su «Nota»; al abrirla, el campo es suyo.
+    expect(find.byKey(const ValueKey('quick-task-item-note-add-i1')),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('quick-task-item-note-add-i2')),
+        findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('quick-task-item-note-add-i1')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('quick-task-item-note-add-i1')),
+        findsNothing);
+    await tester.enterText(
+        find.byKey(const ValueKey('quick-task-item-note-i1')),
+        '  La maneta nueva viene en la caja  ');
+    await tester.pump();
+
+    // Una nota abierta de un servicio que se desmarca no viaja.
+    await tester.tap(find.byKey(const ValueKey('quick-task-item-note-add-i2')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byKey(const ValueKey('quick-task-item-note-i2')), 'No va');
+    await tester.pump();
+    await tester.tap(find.text('Diagnóstico'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('quick-task-item-note-i2')), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('quick-task-create')));
+    await tester.pumpAndSettle();
+
+    final created = harness.service.created.single;
+    expect(created['jobItemIds'], ['i1']);
+    expect(created['jobItemNotes'], {'i1': 'La maneta nueva viene en la caja'});
     expect(tester.takeException(), isNull);
   });
 

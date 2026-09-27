@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:vinabike_erp/modules/tasks/models/smart_task_event.dart';
 import 'package:vinabike_erp/modules/tasks/models/smart_task_job_item.dart';
+import 'package:vinabike_erp/modules/tasks/models/smart_task_service_note.dart';
 import 'package:vinabike_erp/modules/tasks/models/task_assignment_principal.dart';
 import 'package:vinabike_erp/modules/tasks/models/task_model.dart';
 import 'package:vinabike_erp/modules/tasks/services/task_service.dart';
@@ -48,6 +49,12 @@ class _FakeTaskService extends ChangeNotifier implements TaskService {
   int fetchLinkableJobsCalls = 0;
   final List<(String, bool)> markedServices = [];
   final List<String?> handoffNotes = [];
+  final Map<String, Map<String, ServiceNote>> serviceNotesByTask = {};
+  final List<(String, String)> addedServiceNotes = [];
+  final List<(String, String)> editedServiceNotes = [];
+  final List<String> withdrawnServiceNotes = [];
+  List<ServiceTimelineEntry> timeline = const [];
+  final List<String> timelineRequests = [];
 
   @override
   List<TaskModel> get tasks => _tasks;
@@ -107,6 +114,7 @@ class _FakeTaskService extends ChangeNotifier implements TaskService {
     String? assignedEmployeeId,
     String? linkedJobId,
     List<String>? jobItemIds,
+    Map<String, String>? jobItemNotes,
     String? overlapDecision,
     String? linkedCustomerId,
     String? linkedSupplierId,
@@ -192,6 +200,70 @@ class _FakeTaskService extends ChangeNotifier implements TaskService {
     _tasks[_tasks.indexWhere((t) => t.id == task.id)] = updated;
     notifyListeners();
     return updated;
+  }
+
+  TaskModel _bump(TaskModel task) {
+    final updated = task.copyWith(version: task.version + 1);
+    _tasks[_tasks.indexWhere((t) => t.id == task.id)] = updated;
+    notifyListeners();
+    return updated;
+  }
+
+  @override
+  Future<Map<String, ServiceNote>> fetchServiceNotes(String taskId) async =>
+      Map.of(serviceNotesByTask[taskId] ?? const {});
+
+  @override
+  Future<List<ServiceTimelineEntry>> fetchServiceTimeline(
+      String taskId, String jobItemId) async {
+    timelineRequests.add(jobItemId);
+    return timeline;
+  }
+
+  @override
+  Future<TaskModel> addJobItemNote(
+      TaskModel task, String jobItemId, String note) async {
+    addedServiceNotes.add((jobItemId, note));
+    final notes = serviceNotesByTask.putIfAbsent(task.id!, () => {});
+    final previous = notes[jobItemId];
+    notes[jobItemId] = ServiceNote(
+      jobItemId: jobItemId,
+      noteId: 'note-${addedServiceNotes.length}',
+      body: note,
+      createdAt: DateTime(2026, 9, 27, 10, 5),
+      authorName: 'Claudio Catalán',
+      editedAt: null,
+      count: (previous?.count ?? 0) + 1,
+      mine: true,
+    );
+    return _bump(task);
+  }
+
+  @override
+  Future<TaskModel> editJobItemNote(
+      TaskModel task, String noteId, String note) async {
+    editedServiceNotes.add((noteId, note));
+    final notes = serviceNotesByTask[task.id!]!;
+    final entry = notes.entries.firstWhere((e) => e.value.noteId == noteId);
+    notes[entry.key] = ServiceNote(
+      jobItemId: entry.key,
+      noteId: noteId,
+      body: note,
+      createdAt: entry.value.createdAt,
+      authorName: entry.value.authorName,
+      editedAt: DateTime(2026, 9, 27, 10, 9),
+      count: entry.value.count,
+      mine: true,
+    );
+    return _bump(task);
+  }
+
+  @override
+  Future<TaskModel> withdrawJobItemNote(TaskModel task, String noteId) async {
+    withdrawnServiceNotes.add(noteId);
+    serviceNotesByTask[task.id!]!
+        .removeWhere((_, value) => value.noteId == noteId);
+    return _bump(task);
   }
 
   @override
@@ -941,6 +1013,144 @@ void main() {
     expect(tasks.handoffNotes, ['Falta probarla en ruta']);
     expect(find.text('NOTA PARA EL SIGUIENTE TURNO'), findsOneWidget);
     expect(find.text('Falta probarla en ruta'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'cada servicio tiene su nota: se continúa, se corrige la propia y se ve '
+      'su historial', (tester) async {
+    tester.view.physicalSize = const Size(420, 1400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    const taskId = '00000000-0000-4000-8000-000000000066';
+    SmartTaskJobItem link(String id, String name) => SmartTaskJobItem(
+          id: 'link-$id',
+          taskId: taskId,
+          jobItemId: id,
+          jobId: 'job-527',
+          jobBikeId: 'bike-1',
+          itemName: name,
+          itemType: 'service',
+          jobNumber: 'PG-00527',
+          bikeLabel: 'Totem 4423',
+          linkedAt: DateTime(2026, 8, 27),
+          invalidatedAt: null,
+          contextChangedAt: null,
+        );
+    final tasks = _FakeTaskService(
+      [_task(6, acknowledged: DateTime.now(), linkedJobId: 'job-527')],
+      jobLinksByTask: {
+        taskId: [
+          link('service-cadena', 'Cambio de cadena'),
+          link('service-frenos', 'Purga de frenos'),
+        ],
+      },
+    );
+    // La nota del encargo la escribió otra persona: se continúa, no se
+    // corrige.
+    tasks.serviceNotesByTask[taskId] = {
+      'service-cadena': ServiceNote(
+        jobItemId: 'service-cadena',
+        noteId: 'note-origin',
+        body: 'La cadena ya viene cambiada',
+        createdAt: DateTime(2026, 9, 27, 9, 30),
+        authorName: 'Lahsen Stowe',
+        editedAt: null,
+        count: 1,
+        mine: false,
+      ),
+    };
+    await tester.pumpWidget(_host(tasks, RightToolbarService()));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.tap(find.text('T6'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('La cadena ya viene cambiada'), findsOneWidget);
+    expect(find.text('Lahsen Stowe · 27/09 09:30'), findsOneWidget);
+    expect(find.byKey(const ValueKey('task-service-note-edit-service-cadena')),
+        findsNothing);
+    expect(find.byKey(const ValueKey('task-service-note-add-service-frenos')),
+        findsOneWidget);
+
+    // Continuar: la nueva pasa a ser la vigente y el hilo cuenta dos.
+    await tester.ensureVisible(find
+        .byKey(const ValueKey('task-service-note-continue-service-cadena')));
+    await tester.tap(find
+        .byKey(const ValueKey('task-service-note-continue-service-cadena')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byType(TextField).last, 'Ojo: el cassette está gastado');
+    await tester.pump();
+    await tester.tap(find.text('Continuar nota'));
+    await tester.pumpAndSettle();
+
+    expect(tasks.addedServiceNotes,
+        [('service-cadena', 'Ojo: el cassette está gastado')]);
+    expect(find.text('Ojo: el cassette está gastado'), findsOneWidget);
+    expect(find.text('La cadena ya viene cambiada'), findsNothing);
+    expect(
+        find.text('Claudio Catalán · 27/09 10:05 · 2 notas'), findsOneWidget);
+
+    // Corregir la propia: parte de lo que decía.
+    await tester.ensureVisible(
+        find.byKey(const ValueKey('task-service-note-edit-service-cadena')));
+    await tester.tap(
+        find.byKey(const ValueKey('task-service-note-edit-service-cadena')));
+    await tester.pumpAndSettle();
+    final field = tester.widget<TextField>(find.byType(TextField).last);
+    expect(field.controller!.text, 'Ojo: el cassette está gastado');
+    await tester.enterText(find.byType(TextField).last,
+        'Ojo: el cassette y los platos están gastados');
+    await tester.pump();
+    await tester.tap(find.text('Guardar'));
+    await tester.pumpAndSettle();
+
+    expect(tasks.editedServiceNotes,
+        [('note-1', 'Ojo: el cassette y los platos están gastados')]);
+    expect(find.text('Claudio Catalán · 27/09 10:05 · corregida · 2 notas'),
+        findsOneWidget);
+
+    // El historial: quién, cuándo, desde dónde y lo que decía.
+    tasks.timeline = [
+      ServiceTimelineEntry(
+        occurredAt: DateTime(2026, 9, 27, 10, 9),
+        kind: ServiceTimelineKind.noteEdited,
+        actorName: 'Claudio Catalán',
+        fromPortal: false,
+        note: 'Ojo: el cassette y los platos están gastados',
+        previousNote: 'Ojo: el cassette está gastado',
+        isCurrent: true,
+      ),
+      ServiceTimelineEntry(
+        occurredAt: DateTime(2026, 9, 27, 9, 50),
+        kind: ServiceTimelineKind.done,
+        actorName: 'Braulio Muñoz',
+        fromPortal: true,
+      ),
+      ServiceTimelineEntry(
+        occurredAt: DateTime(2026, 9, 27, 9, 30),
+        kind: ServiceTimelineKind.noteWritten,
+        actorName: 'Lahsen Stowe',
+        fromPortal: false,
+        note: 'La cadena ya viene cambiada',
+        atCreate: true,
+      ),
+    ];
+    await tester.ensureVisible(
+        find.byKey(const ValueKey('task-service-note-history-service-cadena')));
+    await tester.tap(
+        find.byKey(const ValueKey('task-service-note-history-service-cadena')));
+    await tester.pumpAndSettle();
+
+    expect(tasks.timelineRequests, ['service-cadena']);
+    expect(find.text('Historial de «Cambio de cadena»'), findsOneWidget);
+    expect(find.text('Claudio Catalán corrigió su nota'), findsOneWidget);
+    expect(find.text('Vigente'), findsOneWidget);
+    expect(find.text('Decía: Ojo: el cassette está gastado'), findsOneWidget);
+    expect(find.text('27/09/2026 09:50 · desde su portal'), findsOneWidget);
+    expect(find.text('Lahsen Stowe escribió una nota'), findsOneWidget);
+    expect(find.text('27/09/2026 09:30 · con el encargo'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

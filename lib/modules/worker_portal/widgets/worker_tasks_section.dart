@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../shared/widgets/vb_overlay_surfaces.dart';
+import '../../tasks/models/smart_task_service_note.dart';
+import '../../tasks/widgets/service_note_thread.dart';
 import '../services/worker_tasks_service.dart';
 
 /// «Mis tareas» del portal del trabajador.
@@ -12,7 +14,8 @@ import '../services/worker_tasks_service.dart';
 /// Proyección mínima y segura (`get_my_worker_tasks_v1`): trabajo, bicicletas y
 /// servicios e instrucciones sin precios, plazo y creador. Acciones acotadas al
 /// propio ciclo: Aceptar / Devolver / Iniciar / Bloquear / Desbloquear /
-/// Completar, marcar cada servicio hecho y dejar la nota para el siguiente
+/// Completar, marcar cada servicio hecho, escribir, continuar o corregir la
+/// nota de cada servicio (con su historial) y dejar la nota para el siguiente
 /// turno. Sin hilo: el principal de portal no es principal de mensajería.
 class WorkerTasksSection extends StatefulWidget {
   const WorkerTasksSection(
@@ -156,6 +159,40 @@ class _WorkerTasksSectionState extends State<WorkerTasksSection> {
     await _run(task, () => _service.setHandoffNote(task.id, note));
   }
 
+  Future<void> _writeServiceNote(BuildContext anchorContext,
+      WorkerTaskView task, String jobItemId, String serviceName,
+      {required bool continuing}) async {
+    final note = await promptServiceNote(
+      anchorContext: anchorContext,
+      serviceName: serviceName,
+      mode: continuing ? ServiceNoteMode.continuing : ServiceNoteMode.first,
+    );
+    if (note == null) return;
+    await _run(task, () => _service.addJobItemNote(task.id, jobItemId, note));
+  }
+
+  Future<void> _correctServiceNote(BuildContext anchorContext,
+      WorkerTaskView task, ServiceNote current) async {
+    final note = await promptServiceNote(
+      anchorContext: anchorContext,
+      serviceName: '',
+      mode: ServiceNoteMode.correcting,
+      initialText: current.body,
+    );
+    if (note == null || note == current.body) return;
+    await _run(
+        task, () => _service.editJobItemNote(task.id, current.noteId, note));
+  }
+
+  void _showServiceHistory(BuildContext anchorContext, WorkerTaskView task,
+      String jobItemId, String serviceName) {
+    showServiceNoteTimeline(
+      anchorContext: anchorContext,
+      serviceName: serviceName,
+      load: () => _service.fetchServiceTimeline(task.id, jobItemId),
+    );
+  }
+
   Future<void> _askReasonAnd(
     BuildContext anchorContext,
     WorkerTaskView task,
@@ -231,6 +268,15 @@ class _WorkerTasksSectionState extends State<WorkerTasksSection> {
                 onMarkService: (jobItemId, done) =>
                     _markService(task, jobItemId, done),
                 onEditNote: (anchor) => _editHandoffNote(anchor, task),
+                onWriteServiceNote: (anchor, jobItemId, name, continuing) =>
+                    _writeServiceNote(anchor, task, jobItemId, name,
+                        continuing: continuing),
+                onCorrectServiceNote: (anchor, note) =>
+                    _correctServiceNote(anchor, task, note),
+                onWithdrawServiceNote: (note) => _run(task,
+                    () => _service.withdrawJobItemNote(task.id, note.noteId)),
+                onServiceHistory: (anchor, jobItemId, name) =>
+                    _showServiceHistory(anchor, task, jobItemId, name),
                 onClearNote: () =>
                     _run(task, () => _service.setHandoffNote(task.id, null)),
                 onAcknowledge: () =>
@@ -297,6 +343,10 @@ class _WorkerTaskCard extends StatelessWidget {
     required this.onMarkService,
     required this.onEditNote,
     required this.onClearNote,
+    required this.onWriteServiceNote,
+    required this.onCorrectServiceNote,
+    required this.onWithdrawServiceNote,
+    required this.onServiceHistory,
     required this.onAcknowledge,
     required this.onReturn,
     required this.onStart,
@@ -311,12 +361,40 @@ class _WorkerTaskCard extends StatelessWidget {
   final void Function(String jobItemId, bool done) onMarkService;
   final void Function(BuildContext anchorContext) onEditNote;
   final VoidCallback onClearNote;
+  final void Function(BuildContext anchorContext, String jobItemId,
+      String serviceName, bool continuing) onWriteServiceNote;
+  final void Function(BuildContext anchorContext, ServiceNote note)
+      onCorrectServiceNote;
+  final void Function(ServiceNote note) onWithdrawServiceNote;
+  final void Function(
+          BuildContext anchorContext, String jobItemId, String serviceName)
+      onServiceHistory;
   final VoidCallback onAcknowledge;
   final void Function(BuildContext anchorContext) onReturn;
   final VoidCallback onStart;
   final void Function(BuildContext anchorContext) onBlock;
   final VoidCallback onUnblock;
   final VoidCallback onComplete;
+
+  /// La nota vigente del servicio y su hilo, igual que en el ERP. Escribe
+  /// quien tiene la tarea aceptada y abierta; el historial se ve siempre.
+  Widget _serviceNoteBlock(
+      Map<String, dynamic> item, String jobItemId, bool canWrite) {
+    final note = ServiceNote.fromPortalItem(item);
+    final name = item['item_name']?.toString() ?? 'Servicio';
+    return ServiceNoteBlock(
+      jobItemId: jobItemId,
+      keyPrefix: 'worker-task-service-note',
+      note: note,
+      onWrite: canWrite && item['invalidated'] != true
+          ? (anchor) =>
+              onWriteServiceNote(anchor, jobItemId, name, note != null)
+          : null,
+      onEdit: canWrite ? onCorrectServiceNote : null,
+      onWithdraw: canWrite ? onWithdrawServiceNote : null,
+      onHistory: (anchor) => onServiceHistory(anchor, jobItemId, name),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -553,6 +631,12 @@ class _WorkerTaskCard extends StatelessWidget {
                                   color: theme.colorScheme.tertiary,
                                 ),
                               ),
+                            ),
+                          if (itemId(item) case final jobItemId?)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 12),
+                              child: _serviceNoteBlock(
+                                  item, jobItemId, canMark && !busy),
                             ),
                         ],
                       ),

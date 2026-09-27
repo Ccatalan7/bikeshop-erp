@@ -6,9 +6,11 @@ import 'package:provider/provider.dart';
 
 import '../../modules/tasks/models/smart_task_event.dart';
 import '../../modules/tasks/models/smart_task_job_item.dart';
+import '../../modules/tasks/models/smart_task_service_note.dart';
 import '../../modules/tasks/models/task_assignment_principal.dart';
 import '../../modules/tasks/models/task_model.dart';
 import '../../modules/tasks/services/task_service.dart';
+import '../../modules/tasks/widgets/service_note_thread.dart';
 import '../services/current_user_profile_service.dart';
 import '../services/right_toolbar_service.dart';
 import '../services/workspace_manager.dart';
@@ -1890,10 +1892,16 @@ class _TaskDetailViewState extends State<_TaskDetailView> {
   /// responde al toque, no a la red.
   final Map<String, bool> _optimisticDone = {};
 
+  /// La nota vigente de cada servicio. Se guarda la última leída para que no
+  /// parpadee mientras llega la siguiente.
+  Map<String, ServiceNote> _serviceNotes = const {};
+  int _notesRequest = 0;
+
   @override
   void initState() {
     super.initState();
     _events = widget.taskService.fetchEvents(widget.task.id!);
+    _loadServiceNotes();
   }
 
   @override
@@ -1901,6 +1909,10 @@ class _TaskDetailViewState extends State<_TaskDetailView> {
     super.didUpdateWidget(old);
     if (old.task.version != widget.task.version) {
       _events = widget.taskService.fetchEvents(widget.task.id!);
+      _loadServiceNotes();
+    } else if (old.links.isEmpty && widget.links.isNotEmpty) {
+      // Los servicios llegaron después de abrir el detalle.
+      _loadServiceNotes();
     }
     // Lo confirmado por el servidor deja de ser optimista.
     _optimisticDone.removeWhere((jobItemId, done) => widget.links
@@ -1939,6 +1951,60 @@ class _TaskDetailViewState extends State<_TaskDetailView> {
     if (failed && mounted) {
       setState(() => _optimisticDone.remove(link.jobItemId));
     }
+  }
+
+  Future<void> _loadServiceNotes() async {
+    if (_isNote || widget.links.isEmpty) return;
+    final request = ++_notesRequest;
+    try {
+      final notes = await widget.taskService.fetchServiceNotes(widget.task.id!);
+      if (!mounted || request != _notesRequest) return;
+      setState(() => _serviceNotes = notes);
+    } catch (error) {
+      // Sin notas a la vista la tarea igual se trabaja; el historial las
+      // vuelve a pedir.
+      debugPrint('No se pudieron leer las notas de servicio: $error');
+    }
+  }
+
+  Future<void> _writeServiceNote(
+      BuildContext anchorContext, SmartTaskJobItem link) async {
+    final current = _serviceNotes[link.jobItemId];
+    final note = await promptServiceNote(
+      anchorContext: anchorContext,
+      serviceName: link.itemName,
+      mode:
+          current == null ? ServiceNoteMode.first : ServiceNoteMode.continuing,
+    );
+    if (note == null) return;
+    await widget.onCommand(() =>
+        widget.taskService.addJobItemNote(widget.task, link.jobItemId, note));
+  }
+
+  Future<void> _correctServiceNote(
+      BuildContext anchorContext, ServiceNote current) async {
+    final note = await promptServiceNote(
+      anchorContext: anchorContext,
+      serviceName: '',
+      mode: ServiceNoteMode.correcting,
+      initialText: current.body,
+    );
+    if (note == null || note == current.body) return;
+    await widget.onCommand(() =>
+        widget.taskService.editJobItemNote(widget.task, current.noteId, note));
+  }
+
+  Future<void> _withdrawServiceNote(ServiceNote current) =>
+      widget.onCommand(() =>
+          widget.taskService.withdrawJobItemNote(widget.task, current.noteId));
+
+  void _showServiceHistory(BuildContext anchorContext, SmartTaskJobItem link) {
+    showServiceNoteTimeline(
+      anchorContext: anchorContext,
+      serviceName: link.itemName,
+      load: () => widget.taskService
+          .fetchServiceTimeline(widget.task.id!, link.jobItemId),
+    );
   }
 
   Future<void> _editHandoffNote(BuildContext anchorContext) async {
@@ -2113,6 +2179,11 @@ class _TaskDetailViewState extends State<_TaskDetailView> {
                   isDone: _isDone,
                   nameOf: _nameOf,
                   onToggle: _toggleService,
+                  notes: _isNote ? null : _serviceNotes,
+                  onWriteNote: _canWorkOn ? _writeServiceNote : null,
+                  onCorrectNote: _canWorkOn ? _correctServiceNote : null,
+                  onWithdrawNote: _canWorkOn ? _withdrawServiceNote : null,
+                  onShowHistory: _showServiceHistory,
                   // Contrato de retorno del routed detail: push, y el
                   // detalle cierra con ReturnNavigation.close.
                   onOpenJob: () => openWorkshopJobFromTray(
@@ -2245,6 +2316,11 @@ class _TaskDetailViewState extends State<_TaskDetailView> {
       'job_item_reopened' => 'Servicio pendiente otra vez',
       'handoff_note_set' => 'Nota para el siguiente turno',
       'handoff_note_cleared' => 'Nota del turno borrada',
+      'job_item_note_added' => 'Nota en un servicio',
+      'job_item_note_edited' => 'Nota de servicio corregida',
+      'job_item_note_withdrawn' => 'Nota de servicio retirada',
+      'job_item_context_changed' => 'El taller había cambiado un servicio',
+      'job_item_invalidated' => 'El taller había sacado un servicio',
       _ => event.eventType,
     };
     final detail = event.payload['reason']?.toString() ??
@@ -2411,6 +2487,11 @@ class _JobContextCard extends StatelessWidget {
     this.isDone,
     this.nameOf,
     this.onToggle,
+    this.notes,
+    this.onWriteNote,
+    this.onCorrectNote,
+    this.onWithdrawNote,
+    this.onShowHistory,
   });
 
   final List<SmartTaskJobItem> links;
@@ -2422,6 +2503,17 @@ class _JobContextCard extends StatelessWidget {
   final bool Function(SmartTaskJobItem link)? isDone;
   final String? Function(String? userId)? nameOf;
   final void Function(SmartTaskJobItem link, bool done)? onToggle;
+
+  /// La nota vigente de cada servicio y su hilo. Null: sin notas (una nota
+  /// suelta no tiene servicios).
+  final Map<String, ServiceNote>? notes;
+  final void Function(BuildContext anchorContext, SmartTaskJobItem link)?
+      onWriteNote;
+  final void Function(BuildContext anchorContext, ServiceNote note)?
+      onCorrectNote;
+  final void Function(ServiceNote note)? onWithdrawNote;
+  final void Function(BuildContext anchorContext, SmartTaskJobItem link)?
+      onShowHistory;
 
   @override
   Widget build(BuildContext context) {
@@ -2588,6 +2680,21 @@ class _JobContextCard extends StatelessWidget {
                             ),
                           ),
                         ],
+                        if (notes != null && onShowHistory != null)
+                          ServiceNoteBlock(
+                            jobItemId: link.jobItemId,
+                            keyPrefix: 'task-service-note',
+                            note: notes![link.jobItemId],
+                            density: VbDensity.compact,
+                            // Un servicio que el taller sacó ya no recibe
+                            // notas; lo escrito sí se corrige o se retira.
+                            onWrite: onWriteNote == null || link.isInvalidated
+                                ? null
+                                : (anchor) => onWriteNote!(anchor, link),
+                            onEdit: onCorrectNote,
+                            onWithdraw: onWithdrawNote,
+                            onHistory: (anchor) => onShowHistory!(anchor, link),
+                          ),
                       ],
                     ),
                   ),

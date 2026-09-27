@@ -9,6 +9,7 @@ import 'package:vinabike_erp/modules/bikeshop/services/mechanic_job_visibility_p
 import 'package:vinabike_erp/modules/sales/models/sales_models.dart';
 import 'package:vinabike_erp/modules/tasks/models/smart_task_event.dart';
 import 'package:vinabike_erp/modules/tasks/models/smart_task_job_item.dart';
+import 'package:vinabike_erp/modules/tasks/models/smart_task_service_note.dart';
 import 'package:vinabike_erp/modules/tasks/models/task_assignment_principal.dart';
 import 'package:vinabike_erp/modules/tasks/models/task_model.dart';
 import 'package:vinabike_erp/shared/services/authority_scoped_cache.dart';
@@ -1037,6 +1038,9 @@ class TaskService extends ChangeNotifier {
     String? assignedEmployeeId,
     String? linkedJobId,
     List<String>? jobItemIds,
+
+    /// La primera nota de cada servicio elegido, por `job_item_id`.
+    Map<String, String>? jobItemNotes,
     String? overlapDecision,
     String? linkedCustomerId,
     String? linkedSupplierId,
@@ -1044,6 +1048,10 @@ class TaskService extends ChangeNotifier {
     String? linkedSalesInvoiceId,
     String? idempotencyKey,
   }) async {
+    final notes = {
+      for (final entry in (jobItemNotes ?? const <String, String>{}).entries)
+        if (entry.value.trim().isNotEmpty) entry.key: entry.value.trim(),
+    };
     final lease = await _requireAuthorityLease();
     final payload = <String, dynamic>{
       'title': title,
@@ -1058,6 +1066,7 @@ class TaskService extends ChangeNotifier {
         'assigned_employee_id': assignedEmployeeId,
       if (linkedJobId != null) 'linked_job_id': linkedJobId,
       if (jobItemIds != null) 'job_item_ids': jobItemIds,
+      if (notes.isNotEmpty) 'job_item_notes': notes,
       if (overlapDecision != null) 'overlap_decision': overlapDecision,
       if (linkedCustomerId != null) 'linked_customer_id': linkedCustomerId,
       if (linkedSupplierId != null) 'linked_supplier_id': linkedSupplierId,
@@ -1153,6 +1162,67 @@ class TaskService extends ChangeNotifier {
         command: 'set_handoff_note', payload: {'note': note?.trim() ?? ''});
     unawaited(markSeen(updated).catchError((_) {}));
     return updated;
+  }
+
+  /// Nota nueva en el hilo de un servicio: la primera, o «continuar». La
+  /// anterior queda en la historia y ésta pasa a ser la vigente.
+  Future<TaskModel> addJobItemNote(
+      TaskModel task, String jobItemId, String note) async {
+    final updated = await sendCommand(task.id!,
+        command: 'add_job_item_note',
+        payload: {'job_item_id': jobItemId, 'note': note.trim()});
+    unawaited(markSeen(updated).catchError((_) {}));
+    return updated;
+  }
+
+  /// Corrige una nota propia; lo que decía queda en la historia.
+  Future<TaskModel> editJobItemNote(
+      TaskModel task, String noteId, String note) async {
+    final updated = await sendCommand(task.id!,
+        command: 'edit_job_item_note',
+        payload: {'note_id': noteId, 'note': note.trim()});
+    unawaited(markSeen(updated).catchError((_) {}));
+    return updated;
+  }
+
+  /// Retira una nota propia; queda en la historia como retirada.
+  Future<TaskModel> withdrawJobItemNote(TaskModel task, String noteId) async {
+    final updated = await sendCommand(task.id!,
+        command: 'withdraw_job_item_note', payload: {'note_id': noteId});
+    unawaited(markSeen(updated).catchError((_) {}));
+    return updated;
+  }
+
+  /// La nota vigente de cada servicio de la tarea, por `job_item_id`.
+  Future<Map<String, ServiceNote>> fetchServiceNotes(String taskId) async {
+    final lease = await _requireAuthorityLease();
+    final rows = await _supabase
+        .rpc('get_smart_task_service_notes_v1', params: {'p_task_id': taskId});
+    _assertOwnedLease(lease);
+    if (rows is! List) return const {};
+    final userId = currentUserId;
+    return {
+      for (final row in rows.whereType<Map>())
+        row['job_item_id'].toString(): ServiceNote.fromErpRow(
+            Map<String, dynamic>.from(row),
+            currentUserId: userId),
+    };
+  }
+
+  /// La línea de tiempo de un servicio: encargo, notas (con lo que decían),
+  /// hecho / pendiente y lo que cambió el taller. Lo más reciente primero.
+  Future<List<ServiceTimelineEntry>> fetchServiceTimeline(
+      String taskId, String jobItemId) async {
+    final lease = await _requireAuthorityLease();
+    final rows = await _supabase.rpc('get_smart_task_service_timeline_v1',
+        params: {'p_task_id': taskId, 'p_job_item_id': jobItemId});
+    _assertOwnedLease(lease);
+    if (rows is! List) return const [];
+    return rows
+        .whereType<Map>()
+        .map((row) =>
+            ServiceTimelineEntry.fromJson(Map<String, dynamic>.from(row)))
+        .toList();
   }
 
   /// Reasigna a un responsable del directorio. Un trabajador se asigna como

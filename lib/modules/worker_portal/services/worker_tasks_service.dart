@@ -1,6 +1,8 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../tasks/models/smart_task_service_note.dart';
+
 /// Proyección mínima de una tarea para el portal del trabajador
 /// (`get_my_worker_tasks_v1`): trabajo, bicicletas y servicios sin precios ni
 /// PII, y sin hilo — el principal de portal no es principal de mensajería.
@@ -26,7 +28,9 @@ class WorkerTaskView {
   final List<String> bikeLabels;
 
   /// [{job_item_id, item_name, item_instructions, item_type, bike_label,
-  /// invalidated?, context_changed?, done_at?, done_by_name?}]
+  /// invalidated?, context_changed?, done_at?, done_by_name?, note?,
+  /// note_count?}] — `note` es la vigente {id, body, created_at, author_name,
+  /// edited_at?, mine}; ver [ServiceNote.fromPortalItem].
   final List<Map<String, dynamic>> jobItems;
 
   /// «Dónde quedó»: la nota vigente para quien siga, con quién y cuándo.
@@ -179,4 +183,36 @@ class WorkerTasksService {
   Future<WorkerTaskView> setHandoffNote(String taskId, String? note) =>
       sendCommand(taskId,
           command: 'set_handoff_note', payload: {'note': note?.trim() ?? ''});
+
+  /// Nota nueva en el hilo de un servicio: la primera, o «continuar».
+  Future<WorkerTaskView> addJobItemNote(
+          String taskId, String jobItemId, String note) =>
+      sendCommand(taskId,
+          command: 'add_job_item_note',
+          payload: {'job_item_id': jobItemId, 'note': note.trim()});
+
+  /// Corrige una nota propia; lo que decía queda en la historia.
+  Future<WorkerTaskView> editJobItemNote(
+          String taskId, String noteId, String note) =>
+      sendCommand(taskId,
+          command: 'edit_job_item_note',
+          payload: {'note_id': noteId, 'note': note.trim()});
+
+  /// Retira una nota propia; queda en la historia como retirada.
+  Future<WorkerTaskView> withdrawJobItemNote(String taskId, String noteId) =>
+      sendCommand(taskId,
+          command: 'withdraw_job_item_note', payload: {'note_id': noteId});
+
+  /// La línea de tiempo de un servicio de una tarea propia.
+  Future<List<ServiceTimelineEntry>> fetchServiceTimeline(
+      String taskId, String jobItemId) async {
+    final rows = await _client.rpc('get_smart_task_service_timeline_v1',
+        params: {'p_task_id': taskId, 'p_job_item_id': jobItemId});
+    if (rows is! List) return const [];
+    return rows
+        .whereType<Map>()
+        .map((row) =>
+            ServiceTimelineEntry.fromJson(Map<String, dynamic>.from(row)))
+        .toList();
+  }
 }

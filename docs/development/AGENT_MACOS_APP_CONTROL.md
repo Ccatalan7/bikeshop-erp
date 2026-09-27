@@ -898,6 +898,17 @@ defecto del buscador. Para texto con espacios se usa
 campo por identidad. (Complementa la nota anterior de que `type` no escribe en
 un campo enfocado por identidad.)
 
+**3.b Un campo sin `ValueKey` (2026-09-27): se pega, con UTF-8.** El prompt de
+`showVbReasonPrompt` (notas, motivos) no tiene llave, así que ni `enter-text`
+ni `type` sirven para texto con espacios. Se pega: guardar el portapapeles del
+dueño, `printf '%s' "texto" | LC_ALL=en_US.UTF-8 pbcopy`, `type ""` para traer
+la app al frente, `keystroke "v" using command down`, y devolver el
+portapapeles (`LC_ALL=en_US.UTF-8 pbpaste` antes y `pbcopy` después, también
+con UTF-8). **Sin `LC_ALL`** la shell de agente no trae locale y `pbcopy`
+guarda los bytes UTF-8 como MacRoman: «está» llegó a la app como «est√°». Costó
+dos notas de prueba con el texto roto en producción (retiradas, pero el ledger
+las conserva).
+
 ## Un cambio de entitlements no entra por reload ni por restart (2026-09-17)
 
 **Costo real: una ronda entera creyendo que el código nuevo no se había
