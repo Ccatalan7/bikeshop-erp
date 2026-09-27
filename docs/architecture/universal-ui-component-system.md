@@ -2,7 +2,16 @@
 
 Status: canonical architecture and adoption contract.
 
-**The visual catalog lives in Design, and is read — not looked at.** It is the
+**Corrección del dueño, 2026-09-27: el diseño del ERP es abierto.** Lo que
+sigue sobre un catálogo en Design leído con `DesignSync` era la regla hasta
+ese día. Ahora el aspecto de cada control lo decide el agente que lo trabaja;
+lo que este documento sigue fijando es la ingeniería: **un dueño por familia de
+control** (se mejora ahí y lo hereda todo el ERP, no se copia suelto en un
+módulo) y **colores por roles del tema** para que claro, oscuro y los presets
+funcionen. Ver `.github/GUI_DESIGN_PRINCIPLES.md` «El diseño del ERP es
+abierto».
+
+**Hasta el 2026-09-27: the visual catalog lived in Design, and was read — not looked at.** It is the
 page `GUÍA GENERAL Viñabike - Componentes` in project `ERP Bikeshop UI Mockups`
 (`a0fa3196-6315-4b96-bde7-7cc801e7a74e`), renamed from
 `Sistema Visual Viñabike - Componentes`. Every shared control is defined there

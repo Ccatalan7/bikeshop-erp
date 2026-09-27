@@ -20,12 +20,11 @@
   `context.go('<list route>')`. See the return contract in
   `.github/GUI_DESIGN_PRINCIPLES.md` section 6; the guard is
   `test/unit/navigation_return_contract_test.dart`.
-- **Para probar la app y compararla con los diseños de Design, sigue
-  `docs/development/AGENT_VISUAL_WORKFLOW.md`.** Es el procedimiento
-  completo y sin ambigüedad: sesión de debug, tocar por identidad (una
+- **Para probar la app, sigue `docs/development/AGENT_VISUAL_WORKFLOW.md`.**
+  Es el procedimiento completo: sesión de debug, tocar por identidad (una
   coordenada sólo sirve para un objetivo sin identidad, desde el frame actual
   y sin reutilizarla: la app corre contra producción), leer la pantalla por
-  semántica, traer un frame y compararlo visual y estructuralmente.
+  semántica y capturar el frame real.
 - To see a UI change in a real browser, use `scripts/dev/web_preview.sh` — the
   single owner of preview lifecycle (debug and `--release` modes) — and
   read `docs/development/WEB_PREVIEW.md` first. Open only the URL that script
@@ -54,63 +53,39 @@
   its key commands, `screen` needs `-p 0`, an installed old build steals the
   clicks, and the two Accessibility entries macOS requires). Phone layouts are
   verified in the iOS Simulator through the same runbook.
-- Historical prompts, screenshots, feature plans, existing widgets, and
-  aesthetic snapshot tests do not override the two canonical GUI guides. Do
-  not copy their literal colors, dimensions, containers, or modal/layout
-  choices as visual precedent.
-- **DesignSync se abre con el id explícito.** `projectId =
-  a0fa3196-6315-4b96-bde7-7cc801e7a74e` (`ERP Bikeshop UI Mockups`), pasado a
-  `get_file`/`list_files`. **`list_projects` devuelve `[]` por diseño** —sólo
-  lista proyectos de tipo *design-system*, y éste no lo es—, así que un `[]`
-  **no** es falta de permiso y no hay nada que pedirle al dueño. Verifícalo con
-  `get_project` sobre ese id: `canEdit: true`.
-- **El sitio público queda a criterio del agente (dueño, 2026-09-24).** Tienda,
-  portal de clientes, checkout y el HTML que genera el build no pasan por
-  `DesignSync` ni por `GUÍA GENERAL`; el agente que los trabaja decide sus
-  valores y su composición, y la marca sigue saliendo del editor web. Las
-  reglas de abajo rigen el ERP, incluido el editor del sitio. Alcance
-  completo: `.github/GUI_DESIGN_PRINCIPLES.md` «El sitio público no pasa por Design».
-- **Every visual value is read from a Design file with the `DesignSync` tool** —
-  colour, radius, shadow, border, spacing, font, height. Estimating a value, or
-  reproducing it from a screenshot of the Design window, is prohibited for both
-  agents. A value that cannot be read is reported as unreadable, not replaced
-  with a plausible one. See
-  `docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md`, which also documents how
-  to grep a 260 KB canvas without loading it into context.
-- **Shared components come from `GUÍA GENERAL Viñabike - Componentes`** in
-  project `ERP Bikeshop UI Mockups`. Look the control up before writing one,
-  implement it under its id (`S-05`, `O-02`, `I-01`…), and bind its values to
-  theme roles — the guide's own first rule bans literal hex in widgets. A
-  module composes that vocabulary from its real workflow; a module-specific
-  Design canvas is optional input, not a prerequisite or layout authority.
-- **Un frame de Design es una propuesta sobre el aspecto, no una orden sobre
-  el producto.** Antes de implementarlo se evalúa contra seis dimensiones —si
-  existe en este negocio, si la palabra es la correcta, si el backend lo
-  permite, si la navegación calza con el ERP, si aguanta claro/oscuro/compacto
-  y si no reinventa un control canónico— y se registra qué se copia, qué se
-  descarta y qué se agrega, con su razón. Ver
-  `docs/development/AGENT_VISUAL_WORKFLOW.md` §5.b.
-  **Precisión 2026-08-17:** «el aspecto» incluye la **contención** —que un
-  bloque sea un panel con superficie, borde, radio y padding, y no elementos
-  sueltos apoyados en el fondo—, el **ancho y centrado de la columna**, la
-  **escala tipográfica** y el **espaciado entre bloques**. Eso se copia exacto
-  aunque el contenido, los CTAs y las palabras de adentro sean nuestros y se
-  descarten los del frame. Y una superficie **no se declara implementada porque
-  sus constantes coincidan con el `spec.json`**: se demuestra con el frame real
-  de la app al lado del de Design, en la misma celda de tema y host. El
-  Asistente de compras tenía todas las medidas correctas en el código y no se
-  parecía en nada; hubo que rehacerlo.
-- **Codex owns module product design by default:** information architecture,
-  workflow, navigation, hierarchy, layout and responsive composition are
-  derived from the operator's next decision, real domain behavior and the
-  canonical GUI guides. Here `layout` means **which blocks exist and in what
-  order**, never how they look: containment, column width and centering, type
-  scale and inter-block spacing stay with the visual language (precisión
-  2026-08-17). `GUÍA GENERAL` owns the visual language and component
-  anatomy, not a module's screen arrangement. Claude/Design collaboration is
-  used only when the owner explicitly asks for it; a Design frame never
-  overrides product reasoning or becomes required before Codex can redesign a
-  module.
+- **El diseño del ERP es abierto (dueño, 2026-09-27):** «necesito que dejes
+  abierto el diseño del ERP, no más guías que aseguran resultados outdated y
+  horribles; los que estás creando con Design son mucho más modernos y
+  bonitos». Corrige la regla anterior (valores sólo desde `GUÍA GENERAL
+  Viñabike - Componentes` vía `DesignSync`, compuerta de seis dimensiones por
+  frame, Codex como único líder de diseño). Ahora, igual que el sitio público
+  desde el 2026-09-24:
+  - El aspecto —color, radio, sombra, borde, espaciado, tipografía, alto,
+    contenedores, anatomía de cada control— y la dirección visual y la
+    composición los decide el agente que hace el trabajo, Claude o Codex. No
+    se leen de la guía ni con `DesignSync`, no se reportan como «ilegibles» y
+    nadie espera un `/design-login`. La vara: moderno, serio y con
+    personalidad; nunca anticuado ni «AI'ish».
+  - Proponer en un lienzo de Claude Design antes de un cambio grande es
+    bienvenido; se arma con datos reales y se construye en la app. Un frame o
+    lienzo es entrada, nunca requisito.
+  - El flujo, la jerarquía, las palabras y qué bloques existen salen de la
+    siguiente decisión del operador y del dominio real, lo trabaje quien lo
+    trabaje.
+  - Sigue valiendo el funcionamiento: retorno de navegación, registro de
+    superficies canónicas, estados, accesibilidad, teléfono y tableta, claro
+    y oscuro. Los colores pasan por los roles del tema para que el oscuro
+    funcione (cambiar el tema para modernizarlo está permitido) y un control
+    compartido se mejora en su dueño, no se copia suelto.
+  - Se demuestra con capturas reales de la app (escritorio y teléfono, claro y
+    oscuro) antes de darlo por listo.
+  - Las dos guías del repo quedan como contrato de funcionamiento; lo que
+    prescriben del aspecto es historia. Tampoco son precedente los prompts
+    antiguos, capturas, planes, widgets existentes ni tests de aspecto.
+  - El proyecto de Design `ERP Bikeshop UI Mockups`
+    (`projectId = a0fa3196-6315-4b96-bde7-7cc801e7a74e`) queda como consulta
+    opcional; `list_projects` devuelve `[]` por diseño, así que el id va
+    explícito (`docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md`).
 - **Cada ronda limpia lo que generó, antes de cerrar.** El Mac del dueño se
   llena una y otra vez con basura de agentes (2026-09-18: 28 GB libres de 460).
   Capturas, PDFs, renders, descargas y archivos de prueba fuera del repo van a

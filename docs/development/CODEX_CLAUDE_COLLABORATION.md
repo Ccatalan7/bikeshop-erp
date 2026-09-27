@@ -88,20 +88,23 @@ discarded. Claude collaboration is opt-in and starts only when the owner asks
 for it; it supplies an independent proposal or visual review, not mandatory
 layout authority.
 
-The Claude Design project **ERP Bikeshop UI Mockups**
-(`a0fa3196-6315-4b96-bde7-7cc801e7a74e`) remains a source of optional module
-concepts. The shared `GUÍA GENERAL Viñabike - Componentes` remains the standing
-source of visual grammar and component anatomy through `DesignSync`. Using the
-grammar does not require asking Claude to design the module or creating a new
-module canvas.
+**El diseño del ERP es abierto (dueño, 2026-09-27).** «necesito que dejes
+abierto el diseño del ERP, no más guías que aseguran resultados outdated y
+horribles; los que estás creando con Design son mucho más modernos y bonitos».
+Desde ese día el aspecto de una pantalla —valores, contenedores, anatomía de
+los controles, dirección visual y composición— lo decide el agente que la
+trabaja, Claude o Codex, sin `DesignSync` ni `GUÍA GENERAL` como autoridad.
+Proponer en un lienzo de Claude Design antes de un cambio grande es
+bienvenido. Lo que sigue: colores por roles del tema, controles compartidos
+mejorados en su dueño, funcionamiento según las guías del repo y capturas
+reales como prueba. Detalle en `.github/GUI_DESIGN_PRINCIPLES.md` «El diseño
+del ERP es abierto». Hasta ese día regía aquí que los valores se leían de
+Design y los controles salían de la guía bajo su id.
 
-**Binding on both agents.** Visual values are read from Design files, never
-reproduced from a capture of the Design window and never estimated. Shared
-controls come from **`GUÍA GENERAL Viñabike - Componentes`** under their
-component id, with values bound to theme roles. A dedicated module canvas is
-optional reference material, never a prerequisite or layout authority. The full
-rule, including how to grep a 260 KB canvas cheaply, is in
-[`DESIGN_HANDOFF_SYNC_CONTRACT.md`](DESIGN_HANDOFF_SYNC_CONTRACT.md).
+The Claude Design project **ERP Bikeshop UI Mockups**
+(`a0fa3196-6315-4b96-bde7-7cc801e7a74e`) remains optional reference material;
+[`DESIGN_HANDOFF_SYNC_CONTRACT.md`](DESIGN_HANDOFF_SYNC_CONTRACT.md) explains
+how to read it.
 
 A reviewer who cannot trace a visual value to a Design file rejects it as
 unsourced — that is a defect of the same class as a missing `tenant_id` filter,
@@ -222,9 +225,9 @@ the broad invariants above, promote it to this gate.
 3. **Reconcile design/contract:** Codex compares available diagnoses and proposals,
    names the mandatory invariants, proven behavioral primitives, optional
    suggestions, discardable legacy composition, and global-shell owners, then
-   records any material disagreement. For UI, Codex owns from-scratch product
-   composition and the final reading of the real app; Claude participates only
-   when the owner explicitly requested that collaboration.
+   records any material disagreement. For UI, the agent working the screen
+   owns its composition and look (owner, 2026-09-27); in an explicitly
+   requested collaboration Codex keeps the final reading of the real app.
 4. **Partition:** assign exact files. Do not run simultaneous writers on the
    same file or migration.
 5. **Implement:** the lead makes the smallest coherent change that fully
@@ -353,9 +356,9 @@ Use this prompt for a new Claude session in this checkout:
 > lee `CLAUDE.md`, `AGENTS.md` y
 > `docs/development/CODEX_CLAUDE_COLLABORATION.md`; registra branch, HEAD y
 > archivos sucios sin limpiar nada. Si el trabajo incluye rediseño visual,
-> actúa como revisor independiente de la composición que Codex posee; usa la
-> `GUÍA GENERAL Viñabike - Componentes` como lenguaje visual y abre un concepto
-> específico de Design sólo si el owner lo pidió. Inspecciona la app,
+> actúa como revisor independiente de la composición que Codex posee; desde
+> el 2026-09-27 el aspecto del ERP es abierto (no hay guía visual obligatoria)
+> y un lienzo de Claude Design es una propuesta bienvenida. Inspecciona la app,
 > el repo y los datos reales para conocer flujo, acciones, estados, navegación,
 > extremos de datos y ownership del shell, no para conservar o maquillar la
 > composición visual heredada. Propón una alternativa from scratch cuando

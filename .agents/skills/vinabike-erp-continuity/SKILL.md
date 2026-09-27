@@ -28,7 +28,7 @@ Recover the live technical state first, then continue the product work. This ski
 
 - Use shell and repository wrappers for code, tests, Git state, logs, and deterministic app control.
 - Use Browser or Chrome for browser-only verification; use Computer Use for Claude Desktop, Design windows, and native macOS UI.
-- Codex owns product workflow, information architecture, layout and responsive composition. Shared visual values and component anatomy come from the canonical DesignSync source; screenshots are for comparison and evidence, never for estimating values. Claude is used only when the owner explicitly requests an independent proposal or review.
+- Since 2026-09-27 the ERP's look is open (owner: «no más guías que aseguran resultados outdated y horribles»): the agent doing the work, Claude or Codex, decides values, component anatomy, visual direction and composition, aiming modern and serious; DesignSync and GUÍA GENERAL are no longer authorities. Functional contracts (navigation return, canonical surfaces, accessibility, phone/tablet, light/dark via theme roles) still hold, and real app screenshots are the proof. See `.github/GUI_DESIGN_PRINCIPLES.md` «El diseño del ERP es abierto».
 - Test the real running application with real production-backed data in read-only paths. Capture exact rendered frames, not placeholder mockups.
 - An implementation, fix, ship, deploy, or "get it done" request includes the
   reviewed, non-destructive production changes required to make that result

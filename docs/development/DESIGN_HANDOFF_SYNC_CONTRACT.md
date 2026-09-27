@@ -5,13 +5,14 @@ project **ERP Bikeshop UI Mockups**
 (`a0fa3196-6315-4b96-bde7-7cc801e7a74e`) without asking the owner for
 screenshots, and how it proves it is not implementing against a stale turn.
 
-This is a standing rule. It is requested from Design **once**; every later turn
-follows it automatically.
-
-**Scope (owner, 2026-09-24):** the ERP, including the website editor. The
-public website — store, customer portal, checkout and the HTML the build
-generates — is left to the working agent's criteria and does not go through
-this contract; see `.github/GUI_DESIGN_PRINCIPLES.md` «El sitio público no pasa por Design».
+**Ya no es una regla (dueño, 2026-09-27).** «necesito que dejes abierto el
+diseño del ERP, no más guías que aseguran resultados outdated y horribles».
+Desde ese día ningún valor del ERP tiene que salir de Design: el aspecto lo
+decide el agente que hace el trabajo (`.github/GUI_DESIGN_PRINCIPLES.md` «El
+diseño del ERP es abierto»). Este documento queda sólo como manual para
+**leer** un archivo de Design cuando alguien decide consultarlo; nada de lo que
+dice abajo obliga, ni la compuerta por frame ni el «ilegible». Hasta el
+2026-09-24 regía todo; ese día el sitio público salió de su alcance.
 
 ## Why it exists
 

@@ -67,7 +67,8 @@ pruebas afectadas; después, se mira que el deploy termine y se verifica en vivo
 | Proceso general, autonomía, definición de terminado | **este archivo** |
 | Lenguaje de la UI, estados, jerarquía, composición | `.github/GUI_DESIGN_PRINCIPLES.md` |
 | Móvil, tablet, adaptativo | `.github/GUI_MOBILE_DESIGN_PRINCIPLES.md` |
-| Cómo leer Design, handoffs, componentes | `docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md` |
+| Cómo se ve el ERP (decisiones de diseño que valen para todos los módulos) | `.github/GUI_DESIGN_PRINCIPLES.md` «El diseño del ERP es abierto» |
+| Leer un archivo de Design, si alguien decide consultarlo | `docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md` |
 | Correr la app, clics, capturas, sesión nativa | `docs/development/AGENT_MACOS_APP_CONTROL.md` |
 | SQL, lecturas, escrituras, verificación de datos | `docs/development/AGENT_DATABASE_CONTRACT.md` |
 | Paletas, claro/oscuro, roles semánticos | `docs/architecture/appearance-palette-contract.md` |
@@ -89,6 +90,11 @@ el checkpoint está en `docs/development/product-specs-research-2026-09-05/globa
 
 ### Lenguaje visual no significa layout impuesto (corrección 2026-08-09)
 
+**Superado el 2026-09-27:** el diseño del ERP es abierto (sección «El diseño
+del ERP es abierto», más abajo). Lo que sigue valiendo de esta nota es que el
+flujo y la composición de un módulo salen de la siguiente decisión real del
+operador, no de un frame.
+
 `GUÍA GENERAL Viñabike - Componentes` es la fuente del **lenguaje visual**:
 roles, tipografía, densidad, geometría y anatomía de controles. No decide la
 arquitectura de información, el orden de trabajo ni la composición de un
@@ -101,6 +107,10 @@ una superficie visualmente moderna sustituyó un batch comprensible por un
 panel/accordion que ocultaba la visión conjunta y empeoraba la tarea.
 
 ### «Composición» son dos cosas y sólo una es nuestra (precisión 2026-08-17)
+
+**Superado el 2026-09-27:** la «composición visual» ya no viene de Design; la
+decide quien trabaja la pantalla. Queda como lección que una pantalla se
+demuestra con su captura real, no con constantes que calzan con un `spec.json`.
 
 La corrección anterior dice que la guía no decide «la composición de un
 módulo». Esa palabra tapa dos cosas distintas, y por ese hueco se perdió un
@@ -830,9 +840,10 @@ workflow may also inspect the separate Claude **Design** window:
   leaving Flutter's controller empty; use `enter-text` for deterministic debug
   input and prove the rendered/controller result before submitting.
 - `scripts/dev/design_window.sh` — capture the Design window (`shot`, `scroll`,
-  `pages`). **Not a source of values**: visual values come from `DesignSync`
-  (see below). Use this only for what the 256 KiB file cap truncates, or to
-  confirm a built result. Read-only: typing into Design or sending a message
+  `pages`). **Not a source of values**; since 2026-09-27 no ERP value has to
+  come from Design at all (see «El diseño del ERP es abierto»). Use it only to
+  look at a Design file someone chose to consult, or to confirm a built
+  result. Read-only: typing into Design or sending a message
   there needs explicit permission, and it never captures the full screen
   because the desktop holds unrelated private windows.
 
@@ -845,15 +856,10 @@ Accessibility entries (`Claude` and the lowercase `claude` helper that actually
 runs the agent shell). Phone layouts are verified in the iOS Simulator through
 the same runbook.
 
-`GUÍA GENERAL Viñabike - Componentes` is the authority for shared visual
-grammar and component anatomy. Codex owns module workflow, information
-architecture, hierarchy, wording, layout, responsive composition and UX from
-the operator's next decision and the real domain. Module mockups and Design
-turns are optional input used only when the owner explicitly requests them;
-they never become a prerequisite or screen-layout authority. How to read the
-shared guide—and any explicitly requested module reference—without estimating
-values is specified in `docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md`;
-palette and light/dark resolution is specified in
+How the ERP looks is decided by the agent doing the work since 2026-09-27
+(«El diseño del ERP es abierto», below); workflow, hierarchy, wording and
+which blocks exist come from the operator's next decision and the real domain.
+Palette and light/dark resolution is specified in
 `docs/architecture/appearance-palette-contract.md`.
 
 The browser contract below still applies when the browser itself is the thing
@@ -1152,33 +1158,38 @@ reuse the same business rules, commands, permissions, and persistent effects.
 The two GUI guides own the detailed visual, touch, breakpoint, navigation,
 accessibility, and verification recipes; do not duplicate them here.
 
-The authoritative source for shared visual grammar is `GUÍA GENERAL Viñabike -
-Componentes`, read through
-`docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md`; every palette, brightness
-and semantic role resolves through the cascade in
-`docs/architecture/appearance-palette-contract.md`. Codex owns the module's
-workflow, information architecture, hierarchy, layout and responsive
-composition. A module-specific Claude/Design proposal is optional and is used
-only when the owner explicitly requests it.
+### El diseño del ERP es abierto (dueño, 2026-09-27)
 
-**Excepción, el sitio público (dueño, 2026-09-24):** tienda, portal de
-clientes, checkout y el HTML que genera el build quedan a criterio del agente
-que los trabaja; lo de abajo rige el ERP, incluido el editor del sitio. Ver
-`.github/GUI_DESIGN_PRINCIPLES.md` «El sitio público no pasa por Design».
+«necesito que dejes abierto el diseño del ERP, no más guías que aseguran
+resultados outdated y horribles; los que estás creando con Design son mucho
+más modernos y bonitos» — el dueño, al ver una propuesta de la ficha del
+trabajo hecha en un lienzo de Claude Design.
 
-**How that source is read is not optional.** Every visual value — colour,
-radius, shadow, border, spacing, font, height — is obtained from a Design file
-with the **`DesignSync`** tool, which returns literal values. Reproducing a
-value from a screenshot of the Design window, or estimating one, is prohibited;
-an unreadable value is reported as such, never replaced with a plausible
-number, and anything that must ship unsourced is marked at its line in the
-code.
+**Corrige** lo que esta sección decía: que `GUÍA GENERAL Viñabike -
+Componentes`, leída con `DesignSync`, era la fuente de todo valor visual y de
+la anatomía de cada control (bajo ids `S-05`, `O-02`, `I-01`…), que estimar
+un valor era un defecto y que un frame de Design pasaba por una compuerta de
+seis dimensiones. La excepción que el sitio público tenía desde el
+2026-09-24 pasa a ser la regla de todo el ERP:
 
-Shared controls come from the page **`GUÍA GENERAL Viñabike - Componentes`**,
-implemented under their component id (`S-05`, `O-02`, `I-01`…) with values bound
-to theme roles — that guide's own first rule is that a widget may not contain a
-literal hex. A dedicated module canvas is optional reference material, not a
-prerequisite and not the owner of the module layout.
+- El aspecto —valores, contenedores, anatomía de controles, dirección visual y
+  composición— lo decide el agente que hace el trabajo, Claude o Codex. Nadie
+  espera un `/design-login` ni reporta un valor como «ilegible». La vara:
+  moderno, serio y con personalidad; nunca anticuado ni «AI'ish».
+- Proponer en un lienzo de Claude Design antes de un cambio grande es
+  bienvenido, con datos reales; es entrada, no requisito.
+- Siguen valiendo el funcionamiento y la ingeniería: retorno de navegación,
+  registro de superficies canónicas, estados, accesibilidad, teléfono y
+  tableta, claro y oscuro; colores a través de los roles del tema (se puede
+  cambiar el tema para modernizarlo) y controles compartidos mejorados en su
+  dueño, no copiados sueltos.
+- Se demuestra con capturas reales de la app (escritorio y teléfono, claro y
+  oscuro).
+
+Detalle en `.github/GUI_DESIGN_PRINCIPLES.md` «El diseño del ERP es abierto».
+Las guías del repo quedan como contrato de funcionamiento; lo que dicen del
+aspecto es historia. `docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md` sólo
+explica cómo leer un archivo de Design si alguien decide consultarlo.
 
 ## UI-led refinement is full product refinement
 

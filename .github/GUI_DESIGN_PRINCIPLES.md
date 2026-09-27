@@ -1,29 +1,44 @@
 # GUI Design Principles — Viñabike ERP
 
-## Where visual values come from (read this before writing any)
+## El diseño del ERP es abierto (dueño, 2026-09-27)
 
-This guide owns the **reasoning**: hierarchy, density, composition, when a
-control is the right one. It does not own the **numbers**.
+«necesito que dejes abierto el diseño del ERP, no más guías que aseguran
+resultados outdated y horribles; los que estás creando con Design son mucho
+más modernos y bonitos» — el dueño, al ver una propuesta de la ficha del
+trabajo hecha en un lienzo de Claude Design.
 
-Every visual value shipped in this repository — colour, radius, shadow, border,
-spacing, font, height — is read from a Claude Design file with the **`DesignSync`**
-tool, which returns literal values. Two consequences, both binding:
+**Corrige** lo que esta sección decía hasta ese día: que todo valor visual
+(color, radio, sombra, borde, espaciado, fuente, alto) se leía de un archivo
+de Design con `DesignSync`, que estimarlo era un defecto y que cada control
+compartido salía de `GUÍA GENERAL Viñabike - Componentes` bajo su id
+(`S-05`, `O-02`, `I-01`…). El resultado, según el dueño, era anticuado y feo.
 
-- **Estimating is prohibited.** Reproducing a value from a screenshot of the
-  Design window, or picking one that looks right, is a defect regardless of how
-  good the result looks. A value that cannot be read is reported as unreadable;
-  anything that must ship unsourced is marked at its line in the code.
-- **Shared controls already exist.** Selects, popovers, menus, inputs, sheets,
-  dialogs, date pickers, tables and chips are defined in
-  `GUÍA GENERAL Viñabike - Componentes` under component ids (`S-05`, `O-02`,
-  `I-01`…), each with its limits and anti-patterns. Look the control up before
-  writing one, and bind its values to theme roles — that guide bans literal hex
-  in widgets. A module-specific canvas is optional reference material, not a
-  prerequisite for product design.
+Desde ese día, en todo el ERP (y en el sitio público, que ya lo tenía):
 
-The mechanics, including how to grep a 260 KB canvas without loading it into
-context, are in
-[`../docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md`](../docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md).
+- **El aspecto lo decide el agente que hace el trabajo, Claude o Codex:**
+  valores, contenedores, anatomía de los controles, dirección visual y
+  composición. No se leen con `DesignSync`, no se reportan como «ilegibles»,
+  nadie espera un `/design-login` y no hay compuerta por frame de Design.
+  La vara: moderno, serio y con personalidad; nunca anticuado ni «AI'ish».
+- **Un lienzo de Claude Design es la forma bienvenida de proponer** un cambio
+  grande antes de construirlo, con datos reales del negocio. Es entrada, no
+  requisito.
+- **Esta guía queda como contrato de funcionamiento:** jerarquía, palabras,
+  estados, densidad según la tarea, accesibilidad, retorno de navegación
+  (sección 6) y adaptación a teléfono y tableta junto con la guía móvil. Lo
+  que en ella fija un color, una medida o un contenedor es historia, no
+  regla.
+- **Lo que no cambia de la ingeniería:** los colores pasan por los roles del
+  tema (`lib/shared/themes/`, `docs/architecture/appearance-palette-contract.md`)
+  para que claro y oscuro funcionen; cambiar el tema mismo para modernizarlo
+  está permitido. Un control compartido (`VbButton`, `VbStatusBadge`,
+  `showVbSurface`…) se mejora en su dueño y lo hereda todo el ERP, en vez de
+  copiarlo suelto en un módulo.
+- **Se demuestra igual:** capturas reales de la app en escritorio y teléfono,
+  claro y oscuro, antes de darlo por listo.
+
+`docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md` sigue explicando cómo
+leer un archivo de Design si alguna vez se quiere consultar uno.
 
 ### El sitio público no pasa por Design (dueño, 2026-09-24)
 
@@ -36,8 +51,9 @@ childish», y encontrarse con que la regla de arriba lo dejaba esperando un
 (`lib/public_store/`), el portal de clientes (`/cuenta/**`), el checkout, la
 página instantánea y los snapshots HTML de
 `scripts/generate_product_seo_snapshots.dart`, y el render público de los
-bloques del sitio. **No** entra el ERP, tampoco el editor del sitio (sus
-paneles, inspector y cromo): ahí la regla de arriba sigue igual.
+bloques del sitio. Hasta el 2026-09-27 el ERP y el editor del sitio quedaban
+fuera; desde ese día también son abiertos (sección de arriba). Lo que sigue
+siendo propio del sitio público es la marca, que sale del editor.
 
 En ese alcance:
 
@@ -176,8 +192,8 @@ como la mide el mecánico, con los valores usuales de ejemplo («entre los
 apoyos: 100 delante, 135 atrás con cierre rápido»), y cuando el dato es una
 cota, el formulario la muestra en un dibujo técnico que se enciende al tocar
 el campo (`HubMeasureGuide`). El contrato de
-`docs/development/AGENT_VISUAL_WORKFLOW.md` también rige ese componente: la
-guía general y DesignSync siguen siendo dueños de sus valores visuales. El
+`docs/development/AGENT_VISUAL_WORKFLOW.md` también rige ese componente; sus
+valores visuales, desde el 2026-09-27, los decide quien lo trabaja. El
 dibujo técnico es una proyección de la configuración ya declarada, no una
 maza genérica que inventa disco, núcleo o rodamientos. Si falta el prerrequisito
 se omite esa pieza; si la posición la hace imposible se bloquea el dato antes

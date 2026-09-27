@@ -1,16 +1,24 @@
 # Cómo un agente prueba la UI real y, cuando se pidió, la compara con Design
 
 Este documento es **el procedimiento**, no una lista de herramientas. Si algo
-acá contradice a otro documento, gana éste para el ciclo de trabajo, y
-`DESIGN_HANDOFF_SYNC_CONTRACT.md` gana para *de dónde sale un valor visual*.
+acá contradice a otro documento, gana éste para el ciclo de trabajo.
+
+**Desde el 2026-09-27 el diseño del ERP es abierto** (dueño: «no más guías
+que aseguran resultados outdated y horribles»): el aspecto lo decide el agente
+que hace el trabajo, y ningún valor tiene que salir de Design
+(`.github/GUI_DESIGN_PRINCIPLES.md` «El diseño del ERP es abierto»). De este
+documento sigue valiendo todo lo de probar la app real (sesión, tocar por
+identidad, leer y capturar). Las partes sobre frames de Design (§5, §5.b) sólo
+aplican si alguien decide usar un frame como referencia, y la compuerta de
+seis dimensiones ya no es obligatoria.
 
 Existe porque el mismo trabajo se improvisó cinco veces con cinco resultados
 distintos, y porque cada improvisación costó una ronda: clics que caían donde
 no debían, un frame que nadie bajó, un compilador trabado leído como otra cosa.
 
-Hay dos tracks. **Toda UI** usa la app real, sus seis celdas responsive y la
-`GUÍA GENERAL Viñabike - Componentes`; Codex posee flujo, jerarquía, layout y
-responsive. La comparación con un frame o canvas de módulo se agrega sólo si el
+Hay dos tracks. **Toda UI** usa la app real y sus seis celdas responsive; el
+aspecto lo decide quien trabaja la pantalla (hasta el 2026-09-27: la
+`GUÍA GENERAL Viñabike - Componentes`, con Codex dueño del flujo y el layout). La comparación con un frame o canvas de módulo se agrega sólo si el
 owner pidió explícitamente una propuesta/revisión Claude/Design. No tener ese
 canvas opcional nunca bloquea el primer track.
 
@@ -18,15 +26,12 @@ canvas opcional nunca bloquea el primer track.
 
 ## 0. Las cuatro reglas que no se negocian
 
-1. **Un valor visual se lee del archivo de Design con `DesignSync`** (en el
-   ERP; el sitio público queda a criterio del agente desde el 2026-09-24, ver
-   `.github/GUI_DESIGN_PRINCIPLES.md` «El sitio público no pasa por Design»). Color,
-   radio, sombra, borde, espaciado, tipografía, altura. Nunca de una captura,
-   nunca estimado. Un valor que no se puede leer **se reporta como ilegible**,
-   no se reemplaza por uno plausible.
-2. **Medir sobre el pixel sólo vale en un frame publicado por Design.** Esos
-   PNG son recortes sin reescalar. Sobre una captura de la ventana de Design, o
-   sobre un compuesto, medir está prohibido.
+1. **Retirada el 2026-09-27.** Decía que todo valor visual se leía de Design
+   con `DesignSync` y que uno ilegible se reportaba. Ahora el aspecto lo decide
+   el agente que hace el trabajo.
+2. **Si se usa un frame de Design como referencia, se mide sobre el PNG
+   publicado**, no sobre una captura de la ventana de Design ni sobre un
+   compuesto.
 3. **Se toca por identidad.** La app corre contra **producción**: un clic que
    cae donde no debe escribe de verdad. Una coordenada se admite sólo para un
    objetivo sin identidad, tomada del `shot` actual y usada de inmediato;
@@ -722,8 +727,10 @@ borrarlo. Dejarlo es lo que hace creer que un frame ya está implementado.
    usar una coordenada del `shot` actual una sola vez; nunca reutilizarla.
 5. `read` para el estado, `shot` para la apariencia.
 6. `visual_compare.py side` → listar las diferencias, una por una.
-7. **Pasar la compuerta de criterio (§5.b).** No es opcional y no es un
-   trámite: un frame se implementa después de evaluarlo, nunca antes.
+7. **Evaluar el frame contra el negocio real** (§5.b sirve de lista de
+   preguntas; desde el 2026-09-27 ya no es una compuerta obligatoria): que lo
+   que dibuja exista acá, que las palabras sean las de un taller chileno y que
+   navegue como el resto del ERP.
 8. Implementar. Analyzer + formato + la batería del módulo en verde.
 9. Verificar en las **tres vistas**: claro, oscuro y compacto. Una superficie
    sólo en claro-escritorio **no está entregada**.
@@ -737,6 +744,10 @@ real; no inventa valores visuales.
 ---
 
 ## 5.b La compuerta de criterio: un frame NO se acepta a ciegas
+
+**Desde el 2026-09-27 es una lista de preguntas útil, no una compuerta
+obligatoria**, y la columna «de la guía canónica» ya no manda: el aspecto lo
+decide quien trabaja la pantalla.
 
 Design es experto **en diseño**, no en este negocio. No conoce el dominio, ni
 los servicios, ni cómo navega el resto del ERP, ni cómo se habla en Chile. Un

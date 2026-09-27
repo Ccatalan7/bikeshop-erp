@@ -17,76 +17,56 @@ before the first command of a task, not to restate it.
 | Any UI or frontend | `.github/GUI_DESIGN_PRINCIPLES.md` |
 | Mobile, tablet, compact, adaptive, responsive UI | the GUI guide **and** `.github/GUI_MOBILE_DESIGN_PRINCIPLES.md` |
 | Business-workflow UI | `docs/architecture/canonical-ui-surfaces.md`, and update its registry when a surface changes |
-| **Probar la app y compararla con Design** (sesión de debug, clics, lectura de pantalla, frames) | `docs/development/AGENT_VISUAL_WORKFLOW.md` — es el procedimiento; el runbook macOS es la referencia de cada herramienta |
-| Running, clicking and screenshotting the app; reading the Design window | `docs/development/AGENT_MACOS_APP_CONTROL.md` |
+| **Probar la app** (sesión de debug, clics, lectura de pantalla, capturas) | `docs/development/AGENT_VISUAL_WORKFLOW.md` — es el procedimiento; el runbook macOS es la referencia de cada herramienta |
+| Running, clicking and screenshotting the app | `docs/development/AGENT_MACOS_APP_CONTROL.md` |
 | Palettes, light/dark, semantic roles | `docs/architecture/appearance-palette-contract.md` |
-| **Any visual value, or any shared component** (ERP) | `docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md` — read it through `DesignSync`, never off a screenshot. The public website is the exception: `.github/GUI_DESIGN_PRINCIPLES.md` «El sitio público no pasa por Design» |
+| **Cómo se ve el ERP** (colores, medidas, componentes) | la sección «El diseño del ERP es abierto» de abajo |
 | Duplicados, matching de catálogo, «¿ya existe este producto?» | `docs/architecture/product-identity-matching-contract.md` |
 | Bike workshop architecture | `BIKE_WORKSHOP_MASTER_SCHEMA.md`, updated in the same task when behavior/schema/data-flow changes |
 
-**Un frame de Design no se acepta a ciegas.** La guía manda la gramática
-visual; Codex posee flujo, jerarquía, layout, responsive, funcionamiento,
-navegación y palabras. La compuerta de
-seis dimensiones y cómo se registra están en
-`docs/development/AGENT_VISUAL_WORKFLOW.md` §5.b, y es obligatoria por frame.
+## El diseño del ERP es abierto (dueño, 2026-09-27)
 
-Historical prompts, screenshots, feature plans, existing widgets, and aesthetic
-snapshot tests do not override the two canonical GUI guides. Do not treat their
-literal colors, dimensions, containers, or modal/layout choices as precedent.
+«necesito que dejes abierto el diseño del ERP, no más guías que aseguran
+resultados outdated y horribles; los que estás creando con Design son mucho
+más modernos y bonitos» — el dueño, al ver una propuesta para la ficha del
+trabajo hecha en un lienzo de Claude Design.
 
-For every visual or interaction redesign, Codex is the product-design lead.
-Shared visual truth comes from `GUÍA GENERAL Viñabike - Componentes` in Design
-project `ERP Bikeshop UI Mockups` through `DesignSync`. Claude participates
-only when the owner explicitly requests an independent proposal or review.
+Corrige la regla anterior (valores sólo desde `GUÍA GENERAL Viñabike -
+Componentes` vía `DesignSync`, Codex como único líder de diseño, compuerta de
+seis dimensiones por frame). Desde ese día el ERP sigue lo que el sitio
+público ya tenía desde el 2026-09-24:
 
-**Excepción: el sitio público (dueño, 2026-09-24).** Tienda, portal de
-clientes, checkout y el HTML que genera el build quedan a criterio del agente
-que los trabaja, Claude o Codex: no pasan por `DesignSync` ni por
-`GUÍA GENERAL`, y nadie espera un `/design-login` para ellos. El ERP, incluido
-el editor del sitio, sigue con la regla de siempre. Alcance y lo que no cambia
-(la marca sale del editor): `.github/GUI_DESIGN_PRINCIPLES.md` «El sitio público no pasa por Design».
+- **El aspecto lo decide el agente que hace el trabajo, Claude o Codex:**
+  color, radio, sombra, borde, espaciado, tipografía, alto, contenedores y la
+  anatomía de cada control, y también la dirección visual y la composición.
+  No se leen de la guía ni con `DesignSync`, no se reportan como «ilegibles»,
+  nadie espera un `/design-login` y no hay compuerta por frame. La vara:
+  moderno, serio y con personalidad; nunca anticuado ni «AI'ish».
+- **Proponer en un lienzo de Claude Design es bienvenido** (Artifact de tipo
+  Design) antes de un cambio grande: es lo que el dueño elogió. Se arma con
+  datos reales del negocio y después se construye en la app.
+- **Sigue valiendo el funcionamiento, no el aspecto:** retorno de navegación
+  (`ReturnNavigation.close`), el registro de superficies canónicas, estados,
+  palabras de taller, accesibilidad (contraste, foco, tamaño de toque),
+  teléfono y tableta, claro y oscuro. Los colores pasan por los roles del
+  tema (`lib/shared/themes/`, `docs/architecture/appearance-palette-contract.md`)
+  para que el oscuro funcione; cambiar el tema mismo para modernizarlo está
+  permitido. Un control compartido (`VbButton`, `VbStatusBadge`…) se mejora en
+  su dueño, no se copia suelto en un módulo.
+- **Se demuestra igual:** capturas reales de la app (escritorio y teléfono,
+  claro y oscuro) antes de darlo por listo.
 
-### Abrir DesignSync: el id va explícito, `list_projects` NO sirve
+Las dos guías del repo (`.github/GUI_DESIGN_PRINCIPLES.md` y
+`.github/GUI_MOBILE_DESIGN_PRINCIPLES.md`) quedan como contrato de
+funcionamiento; lo que prescriben del aspecto es historia, no regla. Tampoco
+son precedente los prompts antiguos, las capturas, los planes, los widgets
+existentes ni los tests de aspecto.
 
-**`projectId = a0fa3196-6315-4b96-bde7-7cc801e7a74e`** (`ERP Bikeshop UI
-Mockups`). Pásalo a `get_file` / `list_files` **siempre**.
-
-`DesignSync list_projects` devuelve `[]` **por diseño**: lista sólo proyectos de
-tipo *design-system*, y éste es `PROJECT_TYPE_PROJECT`. **Un `[]` no significa
-que falte autorización.** Ya costó dos sesiones bloqueadas concluyendo que el
-dueño tenía que aprobar algo; no hay nada que aprobar. Si dudas, compruébalo con
-`get_project` sobre ese id: devuelve `canEdit: true`.
-
-Las tres rutas que se usan casi siempre:
-
-- `GUÍA GENERAL Viñabike - Componentes.dc.html` — componentes compartidos.
-- `Arquitectura de Paletas - Viñabike.dc.html` — roles y modo oscuro.
-- `<módulo>.dc.html` (p. ej. `Compras · Asistente inteligente navegable.dc.html`)
-  — la composición, que el `spec.json` **no** trae.
-
-`get_file` sobre >50 KB guarda a disco y sólo te entra un preview: se greppea,
-no se carga. La guía **ya pasó el cap de 256 KiB** y se corta en 262 144 bytes
-**sin avisar** — si un rol no aparece, puede estar fuera del corte, no ausente.
-Procedimiento completo en `docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md`.
-
-- **Every visual value comes from a Design file, read with `DesignSync`**
-  (ERP; not the public website, see the exception above).
-  Colour, radius, shadow, border, spacing, font, height. Reading them off a
-  screenshot of the Design window, or estimating them, is prohibited. A value
-  that cannot be read is reported as unreadable — never replaced with a
-  plausible one.
-- **Shared components come from `GUÍA GENERAL Viñabike - Componentes`.** Look
-  up the control before writing one, implement it under its id (`S-05`, `O-02`,
-  `I-01`…), and bind its values to theme roles — the guide bans literal hex in
-  widgets.
-- **A module canvas is optional.** The guide holds the shared vocabulary;
-  Codex composes it from the operator workflow and the real application.
-- Reconcile any optional proposal with the real domain and canonical GUI
-  guides. Name a page/turn only when that optional source was actually used;
-  always name the shared component ids.
-
-The Design **window** is for two things only: reading what falls past the
-256 KiB file cap, and confirming the built result. Not for reading values.
+El proyecto de Design `ERP Bikeshop UI Mockups`
+(`projectId = a0fa3196-6315-4b96-bde7-7cc801e7a74e`) queda como consulta
+opcional. Si se lee: `list_projects` devuelve `[]` por diseño y el id va
+explícito; el procedimiento está en
+`docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md`.
 
 ## Database work in one line
 
