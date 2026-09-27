@@ -69,17 +69,21 @@ enum QuickTaskIntent {
   final bool coversServices;
 
   /// El título que propone, editable. Nombra la bici antes que el número:
-  /// en el taller se dice «la Trek del Juan», no «la PG-00575».
+  /// en el taller se dice «la Trek del Juan», no «la PG-00575». Un componente
+  /// va con el número y su nombre entre paréntesis: su género no se sabe
+  /// («la rueda», «el amortiguador»), y el artículo de la bici no le sirve.
   String titleFor(TaskLinkableJob job) {
     final bike = job.bikeLabel;
+    final component = job.componentLabel;
+    final object = component == null ? '' : ' ($component)';
+    final work = 'el trabajo ${job.jobNumber}$object';
+    final ofWork = 'del trabajo ${job.jobNumber}$object';
     // «la Trek Marlin 7» / «el trabajo PG-00575», con su artículo.
-    final subject = bike == null ? 'el trabajo ${job.jobNumber}' : 'la $bike';
-    final ofSubject =
-        bike == null ? 'del trabajo ${job.jobNumber}' : 'de la $bike';
+    final subject = bike == null ? work : 'la $bike';
+    final ofSubject = bike == null ? ofWork : 'de la $bike';
     return switch (this) {
-      QuickTaskIntent.work => bike == null
-          ? 'Hacer el trabajo ${job.jobNumber}'
-          : 'Hacer el trabajo $ofSubject',
+      QuickTaskIntent.work =>
+        bike == null ? 'Hacer $work' : 'Hacer el trabajo $ofSubject',
       QuickTaskIntent.diagnosis => 'Diagnosticar $subject',
       QuickTaskIntent.quote => 'Armar el presupuesto $ofSubject',
       QuickTaskIntent.callCustomer => job.customerName == null
@@ -159,6 +163,8 @@ List<TaskLinkableJob> filterQuickTaskJobs(
       job.jobNumber,
       job.customerName,
       job.bikeLabel,
+      job.componentLabel,
+      job.componentDetail,
       job.clientRequest,
       job.statusLabel,
     ].whereType<String>().join(' '));

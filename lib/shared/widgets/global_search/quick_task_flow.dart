@@ -713,9 +713,9 @@ class _QuickTaskFlowState extends State<QuickTaskFlow> {
     final job = _job;
     if (job != null) {
       crumb(
-          job.bikeLabel == null
+          job.objectLabel == null
               ? '#${job.jobNumber}'
-              : '#${job.jobNumber} · ${job.bikeLabel}',
+              : '#${job.jobNumber} · ${job.objectLabel}',
           _Step.subject,
           icon: Icons.build_outlined);
     } else if (_step.index > _Step.contextKind.index &&
@@ -805,9 +805,9 @@ class _QuickTaskFlowState extends State<QuickTaskFlow> {
           for (final job in filtered)
             _Choice(
               key: 'job-${job.id}',
-              title: job.bikeLabel == null
+              title: job.objectDisplay == null
                   ? '#${job.jobNumber}'
-                  : '#${job.jobNumber} · ${job.bikeLabel}',
+                  : '#${job.jobNumber} · ${job.objectDisplay}',
               subtitle: [
                 job.customerName,
                 job.statusLabel,
@@ -818,8 +818,11 @@ class _QuickTaskFlowState extends State<QuickTaskFlow> {
                   .whereType<String>()
                   .where((part) => part.trim().isNotEmpty)
                   .join(' · '),
-              leading:
-                  const GlobalSearchChoiceIcon(icon: Icons.pedal_bike_rounded),
+              // El mismo ícono que la tabla de trabajos para un componente.
+              leading: GlobalSearchChoiceIcon(
+                  icon: job.isComponent
+                      ? Icons.build_circle_outlined
+                      : Icons.pedal_bike_rounded),
               badges: _jobBadges(job),
               onChoose: () => _chooseJob(job),
             ),

@@ -1387,6 +1387,9 @@ class TaskService extends ChangeNotifier {
             bike:bikes!mechanic_jobs_bike_id_fkey(
               brand, model, serial_number
             ),
+            subject:job_subjects!mechanic_jobs_subject_id_fkey(
+              id, tenant_id, name
+            ),
             invoice:sales_invoices!mechanic_jobs_invoice_id_fkey(
               id, tenant_id, status, total, paid_amount
             )
@@ -1415,6 +1418,12 @@ class TaskService extends ChangeNotifier {
             );
           }
           invoice = Invoice.fromJson(ownedInvoice);
+        }
+
+        final subjectJson = map['subject'];
+        if (subjectJson is Map &&
+            subjectJson['tenant_id']?.toString() != lease.scope.tenantId) {
+          throw StateError('Linkable job subject crossed the authority tenant');
         }
 
         final customer = map['customers'];
@@ -1711,6 +1720,8 @@ class TaskLinkableJob {
     this.isPaid = false,
     this.receivedAt,
     this.workFinished = false,
+    this.componentLabel,
+    this.componentDetail,
   });
 
   final String id;
@@ -1724,6 +1735,27 @@ class TaskLinkableJob {
 
   /// Marca y modelo de la bici principal.
   final String? bikeLabel;
+
+  /// Qué se recibió cuando el trabajo es sobre un componente y no una bici
+  /// («Rueda trasera»): el mismo nombre que muestra la tabla de trabajos.
+  final String? componentLabel;
+
+  /// Lo que se anotó al recibirlo, cuando dice más que el nombre del
+  /// catálogo («RUEDA TRASERA BMX»); la tabla lo muestra debajo del nombre.
+  final String? componentDetail;
+
+  /// Lo que se recibió, bici o componente.
+  String? get objectLabel => bikeLabel ?? componentLabel;
+
+  /// Lo que se recibió con su detalle, para la fila: la bici con su modelo,
+  /// el componente con lo que se anotó.
+  String? get objectDisplay =>
+      bikeLabel ??
+      (componentDetail == null
+          ? componentLabel
+          : '$componentLabel · $componentDetail');
+
+  bool get isComponent => componentLabel != null;
 
   /// `pending`, `approved` o `rejected`; null si el trabajo no tiene
   /// presupuesto.
@@ -1763,6 +1795,28 @@ class TaskLinkableJob {
     } catch (_) {
       statusLabel = null;
     }
+    // Un trabajo de componente se nombra como en la tabla de trabajos: el
+    // sujeto del catálogo, si no la nota de lo recibido.
+    String? componentLabel;
+    String? componentDetail;
+    if (json['intake_kind']?.toString() == 'component') {
+      final subject = json['subject'];
+      final subjectName =
+          subject is Map ? subject['name']?.toString().trim() : null;
+      final notes = json['subject_notes']?.toString().trim();
+      final hasName = subjectName?.isNotEmpty ?? false;
+      final hasNotes = notes?.isNotEmpty ?? false;
+      componentLabel = hasName
+          ? subjectName
+          : hasNotes
+              ? notes
+              : 'Componente recibido';
+      if (hasName &&
+          hasNotes &&
+          notes!.toLowerCase() != subjectName!.toLowerCase()) {
+        componentDetail = notes;
+      }
+    }
     final quotation = json['quotation_status']?.toString().trim();
     return TaskLinkableJob(
       id: json['id'].toString(),
@@ -1779,6 +1833,8 @@ class TaskLinkableJob {
       receivedAt: DateTime.tryParse(json['arrival_date']?.toString() ?? '') ??
           DateTime.tryParse(json['created_at']?.toString() ?? ''),
       workFinished: workFinished,
+      componentLabel: componentLabel,
+      componentDetail: componentDetail,
     );
   }
 }

@@ -124,6 +124,27 @@ void main() {
           'Llamar al cliente del trabajo PG-00001');
     });
 
+    test('un componente se nombra por lo que es, con el número', () {
+      const wheel = TaskLinkableJob(
+        id: 'j3',
+        jobNumber: 'PG-00579',
+        status: null,
+        customerName: 'Francisco Muñoz',
+        clientRequest: null,
+        componentLabel: 'Rueda trasera',
+      );
+      expect(wheel.objectLabel, 'Rueda trasera');
+      expect(QuickTaskIntent.work.titleFor(wheel),
+          'Hacer el trabajo PG-00579 (Rueda trasera)');
+      expect(QuickTaskIntent.diagnosis.titleFor(wheel),
+          'Diagnosticar el trabajo PG-00579 (Rueda trasera)');
+      expect(QuickTaskIntent.quote.titleFor(wheel),
+          'Armar el presupuesto del trabajo PG-00579 (Rueda trasera)');
+      expect(QuickTaskIntent.callCustomer.titleFor(wheel),
+          'Llamar a Francisco Muñoz por el trabajo PG-00579 (Rueda trasera)');
+      expect(filterQuickTaskJobs([wheel], 'rueda'), [wheel]);
+    });
+
     test('sólo «Hacer el trabajo» parte cubriendo los servicios', () {
       expect(
         QuickTaskIntent.values.where((intent) => intent.coversServices),

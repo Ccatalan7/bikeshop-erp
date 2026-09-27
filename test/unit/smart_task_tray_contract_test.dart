@@ -161,6 +161,62 @@ void main() {
     });
   });
 
+  group('TaskLinkableJob · lo recibido cuando no es una bici', () {
+    Map<String, dynamic> component(
+            {Map<String, dynamic>? subject, String? notes}) =>
+        {
+          'id': 'j1',
+          'tenant_id': 't',
+          'job_number': 'PG-00579',
+          'status': 'CONTACTAR',
+          'intake_kind': 'component',
+          if (subject != null) 'subject': subject,
+          if (notes != null) 'subject_notes': notes,
+          'created_at': '2026-09-25T12:00:00Z',
+          'updated_at': '2026-09-25T12:00:00Z',
+        };
+
+    test('se nombra por el sujeto del catálogo, como en la tabla', () {
+      final job = TaskLinkableJob.fromJson(component(
+          subject: {'id': 's', 'tenant_id': 't', 'name': 'Rueda trasera'},
+          notes: 'RUEDA TRASERA BMX'));
+      expect(job.bikeLabel, isNull);
+      expect(job.componentLabel, 'Rueda trasera');
+      expect(job.objectLabel, 'Rueda trasera');
+      expect(job.isComponent, isTrue);
+      // La nota dice más que el nombre: va junto a él en la fila.
+      expect(job.objectDisplay, 'Rueda trasera · RUEDA TRASERA BMX');
+    });
+
+    test('una nota que repite el nombre no se muestra dos veces', () {
+      final job = TaskLinkableJob.fromJson(component(
+          subject: {'id': 's', 'tenant_id': 't', 'name': 'Rueda trasera'},
+          notes: 'rueda trasera'));
+      expect(job.objectDisplay, 'Rueda trasera');
+    });
+
+    test('sin sujeto, por la nota; sin nota, «Componente recibido»', () {
+      expect(
+          TaskLinkableJob.fromJson(component(notes: 'Horquilla RockShox'))
+              .componentLabel,
+          'Horquilla RockShox');
+      expect(TaskLinkableJob.fromJson(component()).componentLabel,
+          'Componente recibido');
+    });
+
+    test('un trabajo de bici no tiene etiqueta de componente', () {
+      final bike = TaskLinkableJob.fromJson({
+        'id': 'j2',
+        'tenant_id': 't',
+        'job_number': 'PG-00565',
+        'intake_kind': 'bike',
+        'bike': {'brand': 'Bianchi', 'model': 'Stone Mountain'},
+      });
+      expect(bike.componentLabel, isNull);
+      expect(bike.objectLabel, 'Bianchi Stone Mountain');
+    });
+  });
+
   group('TaskModel · nota para el siguiente turno', () {
     test('lee la nota con autor y hora, y no la exporta', () {
       final task = TaskModel.fromJson({
