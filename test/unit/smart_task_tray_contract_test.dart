@@ -98,6 +98,45 @@ void main() {
       expect(link.isInvalidated, isTrue);
       expect(link.contextChanged, isFalse);
       expect(link.jobNumber, 'PG-001234');
+      expect(link.isDone, isFalse, reason: 'sin done_at, pendiente');
+    });
+
+    test('lee hecho, cuándo y quién', () {
+      final link = SmartTaskJobItem.fromJson({
+        'id': 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        'task_id': '11111111-1111-4111-8111-111111111111',
+        'job_item_id': 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+        'job_id': 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+        'item_name': 'Purga de frenos',
+        'linked_at': '2026-09-26T10:00:00Z',
+        'done_at': '2026-09-26T15:10:00Z',
+        'done_by': '33333333-3333-4333-8333-333333333333',
+      });
+      expect(link.isDone, isTrue);
+      expect(link.doneAt, DateTime.utc(2026, 9, 26, 15, 10));
+      expect(link.doneBy, '33333333-3333-4333-8333-333333333333');
+    });
+  });
+
+  group('TaskModel · nota para el siguiente turno', () {
+    test('lee la nota con autor y hora, y no la exporta', () {
+      final task = TaskModel.fromJson({
+        'id': '11111111-1111-4111-8111-111111111111',
+        'tenant_id': '22222222-2222-4222-8222-222222222222',
+        'title': 'Hacer el trabajo',
+        'status': 'in_progress',
+        'created_by': '44444444-4444-4444-8444-444444444444',
+        'handoff_note': '  Falta la piola  ',
+        'handoff_note_at': '2026-09-26T21:40:00Z',
+        'handoff_note_by': '33333333-3333-4333-8333-333333333333',
+        'created_at': '2026-09-26T10:00:00Z',
+        'updated_at': '2026-09-26T21:40:00Z',
+      });
+      expect(task.handoffNote, 'Falta la piola');
+      expect(task.handoffNoteAt, DateTime.utc(2026, 9, 26, 21, 40));
+      expect(task.handoffNoteBy, '33333333-3333-4333-8333-333333333333');
+      expect(task.toJson().containsKey('handoff_note'), isFalse,
+          reason: 'la nota la escribe sólo su comando');
     });
   });
 
@@ -216,6 +255,34 @@ void main() {
       expect(labelFor('accountant'), 'Contabilidad');
       expect(labelFor('cashier'), 'Caja');
       expect(labelFor('unknown_backend_role'), 'Equipo ERP');
+    });
+  });
+
+  group('WorkerTaskView · servicios marcables y nota del turno', () {
+    test('lee la nota, quién la dejó y el plazo como fecha', () {
+      final view = WorkerTaskView.fromJson({
+        'id': '11111111-1111-4111-8111-111111111111',
+        'title': 'Hacer el trabajo',
+        'status': 'in_progress',
+        'due_date': '2026-09-26T00:00:00+00:00',
+        'job_items': [
+          {
+            'job_item_id': 'item-1',
+            'item_name': 'Purga de frenos',
+            'done_at': '2026-09-26T15:10:00Z',
+            'done_by_name': 'Braulio Muñoz',
+          },
+        ],
+        'handoff_note': 'Falta revisar el salto',
+        'handoff_note_at': '2026-09-26T21:40:00Z',
+        'handoff_note_by_name': 'Braulio Muñoz',
+      });
+      expect(view.handoffNote, 'Falta revisar el salto');
+      expect(view.handoffNoteByName, 'Braulio Muñoz');
+      expect(view.jobItems.single['job_item_id'], 'item-1');
+      expect(view.isOverdueAt(DateTime(2026, 9, 26, 23, 30)), isFalse,
+          reason: 'el día del plazo no está vencida');
+      expect(view.isOverdueAt(DateTime(2026, 9, 27, 8)), isTrue);
     });
   });
 

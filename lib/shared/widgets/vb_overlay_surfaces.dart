@@ -184,6 +184,7 @@ Future<String?> showVbReasonPrompt({
   required String title,
   required String hint,
   required String confirmLabel,
+  String? initialText,
 }) {
   return showVbSurface<String>(
     anchorContext: anchorContext,
@@ -191,6 +192,7 @@ Future<String?> showVbReasonPrompt({
     builder: (_) => _VbReasonPromptBody(
       hint: hint,
       confirmLabel: confirmLabel,
+      initialText: initialText,
     ),
   );
 }
@@ -205,17 +207,28 @@ class _VbReasonPromptBody extends StatefulWidget {
   const _VbReasonPromptBody({
     required this.hint,
     required this.confirmLabel,
+    this.initialText,
   });
 
   final String hint;
   final String confirmLabel;
+
+  /// Lo que ya estaba escrito, para editarlo en vez de reescribirlo.
+  final String? initialText;
 
   @override
   State<_VbReasonPromptBody> createState() => _VbReasonPromptBodyState();
 }
 
 class _VbReasonPromptBodyState extends State<_VbReasonPromptBody> {
-  final TextEditingController _controller = TextEditingController();
+  late final TextEditingController _controller =
+      TextEditingController.fromValue(
+    TextEditingValue(
+      text: widget.initialText ?? '',
+      selection:
+          TextSelection.collapsed(offset: (widget.initialText ?? '').length),
+    ),
+  );
 
   @override
   void dispose() {

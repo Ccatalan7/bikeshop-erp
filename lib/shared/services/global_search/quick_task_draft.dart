@@ -166,6 +166,68 @@ List<TaskLinkableJob> filterQuickTaskJobs(
   }).toList(growable: false);
 }
 
+/// El orden de «¿Sobre qué trabajo?»: qué tan listo está el trabajo para
+/// ponerle manos (dueño, 2026-09-26: «muestra primero los que sí están
+/// facturados y luego los que están en presupuestos»; «un presupuesto
+/// aprobado obviamente es la segunda prioridad»).
+///
+///  1. Facturado o pagado: ya se vendió, hay que hacerlo.
+///  2. Presupuesto aprobado: el cliente dijo que sí, se puede partir.
+///  3. Presupuesto por aprobar: se espera al cliente.
+///  4. Sin presupuesto: falta diagnosticar o cotizar.
+///  5. Presupuesto rechazado o vencido: no hay trabajo que hacer.
+///
+/// Dentro de cada grupo, lo que entró más recientemente arriba.
+List<TaskLinkableJob> sortQuickTaskJobs(List<TaskLinkableJob> jobs) {
+  int group(TaskLinkableJob job) {
+    if (job.hasInvoice || job.isPaid) return 0;
+    return switch (job.quotationStatus) {
+      'approved' => 1,
+      'pending' => 2,
+      'rejected' || 'expired' => 4,
+      _ => 3,
+    };
+  }
+
+  final sorted = [...jobs];
+  sorted.sort((a, b) {
+    final byGroup = group(a).compareTo(group(b));
+    if (byGroup != 0) return byGroup;
+    final aDate = a.receivedAt;
+    final bDate = b.receivedAt;
+    if (aDate != null && bDate != null && aDate != bDate) {
+      return bDate.compareTo(aDate);
+    }
+    if (aDate != null && bDate == null) return -1;
+    if (aDate == null && bDate != null) return 1;
+    return b.jobNumber.compareTo(a.jobNumber);
+  });
+  return sorted;
+}
+
+const _quickTaskMonths = [
+  'ene',
+  'feb',
+  'mar',
+  'abr',
+  'may',
+  'jun',
+  'jul',
+  'ago',
+  'sept',
+  'oct',
+  'nov',
+  'dic',
+];
+
+/// «24 sept», y con el año si no es el de hoy: «3 dic 2025». Sin depender de
+/// que el idioma de fechas esté cargado.
+String quickTaskJobDateLabel(DateTime date, {required DateTime now}) {
+  final local = date.isUtc ? date.toLocal() : date;
+  final label = '${local.day} ${_quickTaskMonths[local.month - 1]}';
+  return local.year == now.year ? label : '$label ${local.year}';
+}
+
 /// Filtra los destinos de «otra cosa» (clientes, proveedores, documentos).
 List<TaskContextTarget> filterQuickTaskTargets(
   List<TaskContextTarget> targets,

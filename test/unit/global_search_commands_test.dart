@@ -214,6 +214,50 @@ void main() {
       );
     });
 
+    test('facturado, aprobado, por aprobar, sin presupuesto, rechazado', () {
+      TaskLinkableJob job(String number,
+              {bool invoiced = false,
+              bool paid = false,
+              String? quotation,
+              DateTime? received}) =>
+          TaskLinkableJob(
+            id: number,
+            jobNumber: number,
+            status: null,
+            customerName: null,
+            clientRequest: null,
+            hasInvoice: invoiced,
+            isPaid: paid,
+            quotationStatus: quotation,
+            receivedAt: received,
+          );
+      final sorted = sortQuickTaskJobs([
+        job('PG-1', received: DateTime(2026, 9, 25)),
+        job('PG-2', quotation: 'pending', received: DateTime(2026, 9, 20)),
+        job('PG-3', invoiced: true, received: DateTime(2026, 9, 10)),
+        job('PG-4', quotation: 'approved', received: DateTime(2026, 9, 2)),
+        job('PG-5', paid: true, received: DateTime(2026, 9, 22)),
+        job('PG-6',
+            invoiced: true,
+            quotation: 'approved',
+            received: DateTime(2026, 9, 1)),
+        job('PG-7', quotation: 'rejected', received: DateTime(2026, 9, 26)),
+        job('PG-8', quotation: 'pending', received: DateTime(2026, 9, 23)),
+      ]);
+      // El aprobado va segundo aunque sea más viejo que los por aprobar; el
+      // rechazado va al final aunque sea el más nuevo.
+      expect(sorted.map((j) => j.jobNumber),
+          ['PG-5', 'PG-3', 'PG-6', 'PG-4', 'PG-8', 'PG-2', 'PG-1', 'PG-7']);
+    });
+
+    test('la fecha del trabajo se dice corta, con el año sólo si no es éste',
+        () {
+      final now = DateTime(2026, 9, 26);
+      expect(quickTaskJobDateLabel(DateTime(2026, 9, 24), now: now), '24 sept');
+      expect(
+          quickTaskJobDateLabel(DateTime(2025, 12, 3), now: now), '3 dic 2025');
+    });
+
     test('las señales del trabajo dicen presupuesto, factura y servicios', () {
       expect(quickTaskQuotationSignal(_job)!.label, 'Presupuesto por aprobar');
       expect(quickTaskInvoiceSignal(_job)!.label, 'Facturado');

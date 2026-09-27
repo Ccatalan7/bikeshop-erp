@@ -60,8 +60,7 @@ class _FakeTaskService extends ChangeNotifier implements TaskService {
       ];
 
   @override
-  Future<List<TaskLinkableJob>> fetchLinkableJobs({int limit = 120}) async =>
-      const [
+  Future<List<TaskLinkableJob>> fetchLinkableJobs({int limit = 120}) async => [
         TaskLinkableJob(
           id: 'j1',
           jobNumber: 'PG-00575',
@@ -71,6 +70,7 @@ class _FakeTaskService extends ChangeNotifier implements TaskService {
           statusLabel: 'Esperando aprobación',
           bikeLabel: 'Trek Marlin 7',
           quotationStatus: 'pending',
+          receivedAt: DateTime(2026, 9, 23),
         ),
         TaskLinkableJob(
           id: 'j2',
@@ -81,6 +81,7 @@ class _FakeTaskService extends ChangeNotifier implements TaskService {
           statusLabel: 'En curso',
           bikeLabel: 'Giant Talon',
           hasInvoice: true,
+          receivedAt: DateTime(2026, 9, 12),
         ),
       ];
 
@@ -217,7 +218,11 @@ void main() {
     // 2 · ¿Sobre qué trabajo? — con sus señales.
     expect(find.text('Vicente Díaz'), findsOneWidget); // la miga
     expect(find.text('#PG-00575 · Trek Marlin 7'), findsOneWidget);
-    expect(find.text('Juan Pérez · Esperando aprobación'), findsOneWidget);
+    expect(find.text('Juan Pérez · Esperando aprobación · 23 sept'),
+        findsOneWidget);
+    // Lo facturado va primero aunque haya entrado antes.
+    expect(tester.getTopLeft(find.text('#PG-00574 · Giant Talon')).dy,
+        lessThan(tester.getTopLeft(find.text('#PG-00575 · Trek Marlin 7')).dy));
     expect(find.text('Presupuesto por aprobar'), findsOneWidget);
     expect(find.text('2 servicios'), findsOneWidget);
     expect(find.text('Facturado'), findsOneWidget);

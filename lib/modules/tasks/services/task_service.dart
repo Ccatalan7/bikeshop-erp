@@ -1131,6 +1131,30 @@ class TaskService extends ChangeNotifier {
           expectedVersion: expectedVersion,
           payload: {'assigned_to': assigneeUserId});
 
+  /// Marca un servicio de la tarea como hecho o pendiente. Sin versión
+  /// esperada: cada marca dice su estado final y repetirla no cambia nada, así
+  /// que dos toques seguidos no chocan por versión. La acción propia no
+  /// enciende el contador de «no vista».
+  Future<TaskModel> setJobItemDone(
+    TaskModel task,
+    String jobItemId, {
+    required bool done,
+  }) async {
+    final updated = await sendCommand(task.id!,
+        command: 'set_job_item_done',
+        payload: {'job_item_id': jobItemId, 'done': done});
+    unawaited(markSeen(updated).catchError((_) {}));
+    return updated;
+  }
+
+  /// Deja (o borra, con texto vacío) la nota para el siguiente turno.
+  Future<TaskModel> setHandoffNote(TaskModel task, String? note) async {
+    final updated = await sendCommand(task.id!,
+        command: 'set_handoff_note', payload: {'note': note?.trim() ?? ''});
+    unawaited(markSeen(updated).catchError((_) {}));
+    return updated;
+  }
+
   /// Reasigna a un responsable del directorio. Un trabajador se asigna como
   /// trabajador (tenga o no cuenta); quien no es trabajador, por su cuenta.
   /// Sin responsable, desasigna.
@@ -1685,6 +1709,7 @@ class TaskLinkableJob {
     this.quotationStatus,
     this.hasInvoice = false,
     this.isPaid = false,
+    this.receivedAt,
   });
 
   final String id;
@@ -1704,6 +1729,9 @@ class TaskLinkableJob {
   final String? quotationStatus;
   final bool hasInvoice;
   final bool isPaid;
+
+  /// Cuándo entró al taller (`arrival_date`; si falta, cuándo se creó).
+  final DateTime? receivedAt;
 
   factory TaskLinkableJob.fromJson(Map<String, dynamic> json) {
     final customer = json['customers'];
@@ -1733,6 +1761,8 @@ class TaskLinkableJob {
           quotation == null || quotation.isEmpty ? null : quotation,
       hasInvoice: json['invoice_id'] != null || json['is_invoiced'] == true,
       isPaid: json['is_paid'] == true,
+      receivedAt: DateTime.tryParse(json['arrival_date']?.toString() ?? '') ??
+          DateTime.tryParse(json['created_at']?.toString() ?? ''),
     );
   }
 }

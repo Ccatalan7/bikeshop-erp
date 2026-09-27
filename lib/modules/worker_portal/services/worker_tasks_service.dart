@@ -25,9 +25,14 @@ class WorkerTaskView {
   final String? jobNumber;
   final List<String> bikeLabels;
 
-  /// [{item_name, item_instructions, item_type, bike_label, invalidated?,
-  /// context_changed?}]
+  /// [{job_item_id, item_name, item_instructions, item_type, bike_label,
+  /// invalidated?, context_changed?, done_at?, done_by_name?}]
   final List<Map<String, dynamic>> jobItems;
+
+  /// «Dónde quedó»: la nota vigente para quien siga, con quién y cuándo.
+  final String? handoffNote;
+  final DateTime? handoffNoteAt;
+  final String? handoffNoteByName;
 
   const WorkerTaskView({
     required this.id,
@@ -48,6 +53,9 @@ class WorkerTaskView {
     required this.jobNumber,
     required this.bikeLabels,
     required this.jobItems,
+    this.handoffNote,
+    this.handoffNoteAt,
+    this.handoffNoteByName,
   });
 
   factory WorkerTaskView.fromJson(Map<String, dynamic> json) {
@@ -77,6 +85,11 @@ class WorkerTaskView {
           .whereType<Map>()
           .map((item) => Map<String, dynamic>.from(item))
           .toList(),
+      handoffNote: (json['handoff_note']?.toString().trim().isEmpty ?? true)
+          ? null
+          : json['handoff_note'].toString().trim(),
+      handoffNoteAt: parseDate(json['handoff_note_at']),
+      handoffNoteByName: json['handoff_note_by_name']?.toString(),
     );
   }
 
@@ -88,6 +101,15 @@ class WorkerTaskView {
       acknowledgedAt == null && status != 'completed' && status != 'cancelled';
   bool get isBlocked => status == 'blocked';
   bool get isDone => status == 'completed' || status == 'cancelled';
+
+  /// Vencida es cuando su día ya pasó: el plazo es una fecha de calendario
+  /// guardada como las 00:00 UTC de ese día, y se lee por sus campos.
+  bool isOverdueAt(DateTime now) {
+    final due = dueDate;
+    if (due == null || isDone) return false;
+    return DateTime(due.year, due.month, due.day)
+        .isBefore(DateTime(now.year, now.month, now.day));
+  }
 }
 
 /// Acceso del portal a su bandeja: proyección + comandos acotados
@@ -144,4 +166,17 @@ class WorkerTasksService {
           command: 'complete', expectedVersion: expectedVersion);
   Future<WorkerTaskView> returnTask(String taskId, String reason) =>
       sendCommand(taskId, command: 'return', payload: {'reason': reason});
+
+  /// Marca un servicio hecho o pendiente. Sin versión esperada: cada marca
+  /// dice su estado final, así que dos toques seguidos no chocan.
+  Future<WorkerTaskView> setJobItemDone(String taskId, String jobItemId,
+          {required bool done}) =>
+      sendCommand(taskId,
+          command: 'set_job_item_done',
+          payload: {'job_item_id': jobItemId, 'done': done});
+
+  /// Deja (o borra, con texto vacío) la nota para el siguiente turno.
+  Future<WorkerTaskView> setHandoffNote(String taskId, String? note) =>
+      sendCommand(taskId,
+          command: 'set_handoff_note', payload: {'note': note?.trim() ?? ''});
 }

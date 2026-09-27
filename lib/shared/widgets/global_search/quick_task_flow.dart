@@ -181,7 +181,7 @@ class _QuickTaskFlowState extends State<QuickTaskFlow> {
           .fetchJobServiceCounts(jobs.map((job) => job.id).toList());
       if (!mounted) return;
       setState(() {
-        _jobs = jobs;
+        _jobs = sortQuickTaskJobs(jobs);
         _serviceCounts = counts;
         _jobsError = null;
       });
@@ -808,7 +808,13 @@ class _QuickTaskFlowState extends State<QuickTaskFlow> {
               title: job.bikeLabel == null
                   ? '#${job.jobNumber}'
                   : '#${job.jobNumber} · ${job.bikeLabel}',
-              subtitle: [job.customerName, job.statusLabel]
+              subtitle: [
+                job.customerName,
+                job.statusLabel,
+                if (job.receivedAt case final received?)
+                  quickTaskJobDateLabel(received,
+                      now: (widget.now ?? DateTime.now)()),
+              ]
                   .whereType<String>()
                   .where((part) => part.trim().isNotEmpty)
                   .join(' · '),

@@ -14,6 +14,7 @@ import '../services/right_toolbar_service.dart';
 import '../services/workspace_manager.dart';
 import '../themes/vinabike_theme_roles.dart';
 import 'vb_marked_date_picker.dart';
+import 'vb_notice.dart';
 import 'vb_overlay_surfaces.dart';
 import 'vb_searchable_select.dart';
 import 'vb_segmented.dart';
@@ -1885,6 +1886,10 @@ class _TaskDetailView extends StatefulWidget {
 class _TaskDetailViewState extends State<_TaskDetailView> {
   late Future<List<SmartTaskEvent>> _events;
 
+  /// Lo que se acaba de marcar, mientras el servidor confirma: la casilla
+  /// responde al toque, no a la red.
+  final Map<String, bool> _optimisticDone = {};
+
   @override
   void initState() {
     super.initState();
@@ -1897,6 +1902,9 @@ class _TaskDetailViewState extends State<_TaskDetailView> {
     if (old.task.version != widget.task.version) {
       _events = widget.taskService.fetchEvents(widget.task.id!);
     }
+    // Lo confirmado por el servidor deja de ser optimista.
+    _optimisticDone.removeWhere((jobItemId, done) => widget.links
+        .any((link) => link.jobItemId == jobItemId && link.isDone == done));
   }
 
   bool get _isAssignee => widget.task.assignedTo == widget.currentUserId;
@@ -1904,12 +1912,57 @@ class _TaskDetailViewState extends State<_TaskDetailView> {
   bool get _canSupervise => _isCreator || widget.isManager;
   bool get _isNote => widget.task.kind == TaskKind.note;
 
+  /// Marcar servicios y dejar la nota del turno: quien la trabaja, quien la
+  /// encargó o un manager, mientras la tarea esté abierta (el servidor dice lo
+  /// mismo en `set_job_item_done` / `set_handoff_note`).
+  bool get _canWorkOn =>
+      !_isNote && !widget.task.isDone && (_isAssignee || _canSupervise);
+
+  bool _isDone(SmartTaskJobItem link) =>
+      _optimisticDone[link.jobItemId] ?? link.isDone;
+
+  String? _nameOf(String? userId) =>
+      userId == null ? null : widget.principalsByUser[userId]?.displayName;
+
+  Future<void> _toggleService(SmartTaskJobItem link, bool done) async {
+    setState(() => _optimisticDone[link.jobItemId] = done);
+    var failed = false;
+    await widget.onCommand(() async {
+      try {
+        return await widget.taskService
+            .setJobItemDone(widget.task, link.jobItemId, done: done);
+      } catch (_) {
+        failed = true;
+        rethrow;
+      }
+    });
+    if (failed && mounted) {
+      setState(() => _optimisticDone.remove(link.jobItemId));
+    }
+  }
+
+  Future<void> _editHandoffNote(BuildContext anchorContext) async {
+    final note = await showVbReasonPrompt(
+      anchorContext: anchorContext,
+      title: 'Nota para el siguiente turno',
+      hint: 'Dónde quedó y qué falta (ej: falta la piola, llega mañana)',
+      confirmLabel: 'Guardar nota',
+      initialText: widget.task.handoffNote,
+    );
+    if (note == null) return;
+    await widget
+        .onCommand(() => widget.taskService.setHandoffNote(widget.task, note));
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final roles = VinabikeThemeRoles.maybeOf(context);
     final task = widget.task;
     final service = widget.taskService;
+    final liveLinks =
+        widget.links.where((link) => !link.isInvalidated).toList();
+    final allServicesDone = liveLinks.isNotEmpty && liveLinks.every(_isDone);
 
     final creatorName = widget.principalsByUser[task.createdBy]?.displayName;
     final assigneeName = !task.hasAssignee
@@ -2037,6 +2090,18 @@ class _TaskDetailViewState extends State<_TaskDetailView> {
                 style: theme.textTheme.labelSmall
                     ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
               ),
+              if (task.handoffNote != null || _canWorkOn) ...[
+                const SizedBox(height: 14),
+                _HandoffNoteCard(
+                  note: task.handoffNote,
+                  authorName: _nameOf(task.handoffNoteBy),
+                  writtenAt: task.handoffNoteAt,
+                  canEdit: _canWorkOn,
+                  onEdit: _editHandoffNote,
+                  onClear: () => widget
+                      .onCommand(() => service.setHandoffNote(task, null)),
+                ),
+              ],
               if (widget.links.isNotEmpty ||
                   (widget.jobHeader != null &&
                       widget.task.linkedJobId != null)) ...[
@@ -2044,6 +2109,10 @@ class _TaskDetailViewState extends State<_TaskDetailView> {
                 _JobContextCard(
                   links: widget.links,
                   jobHeader: widget.jobHeader,
+                  canMark: _canWorkOn,
+                  isDone: _isDone,
+                  nameOf: _nameOf,
+                  onToggle: _toggleService,
                   // Contrato de retorno del routed detail: push, y el
                   // detalle cierra con ReturnNavigation.close.
                   onOpenJob: () => openWorkshopJobFromTray(
@@ -2051,6 +2120,27 @@ class _TaskDetailViewState extends State<_TaskDetailView> {
                       widget.links.isNotEmpty
                           ? widget.links.first.jobId
                           : widget.task.linkedJobId!),
+                ),
+              ],
+              // Todo hecho: completar sigue siendo una decisión, pero se ofrece
+              // justo donde se terminó de marcar.
+              if (allServicesDone && _canWorkOn) ...[
+                const SizedBox(height: 10),
+                const VbNotice(
+                  tone: VbNoticeTone.success,
+                  title: 'Todos los servicios están hechos',
+                  body: 'Si no queda nada más, completa la tarea.',
+                ),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: FilledButton.icon(
+                    key: const ValueKey('task-detail-complete-all-done'),
+                    onPressed: () => widget.onCommand(() => service
+                        .completeTask(task.id!, expectedVersion: task.version)),
+                    icon: const Icon(Icons.task_alt, size: 16),
+                    label: const Text('Completar tarea'),
+                  ),
                 ),
               ],
               if (task.linkedContextTarget case final linkedContext?) ...[
@@ -2151,10 +2241,16 @@ class _TaskDetailViewState extends State<_TaskDetailView> {
       'job_items_linked' => 'Servicios vinculados',
       'job_items_unlinked' => 'Servicios desvinculados',
       'conversation_linked' => 'Hilo abierto',
+      'job_item_done' => 'Servicio hecho',
+      'job_item_reopened' => 'Servicio pendiente otra vez',
+      'handoff_note_set' => 'Nota para el siguiente turno',
+      'handoff_note_cleared' => 'Nota del turno borrada',
       _ => event.eventType,
     };
-    final reason = event.payload['reason']?.toString();
-    return reason == null ? base : '$base · $reason';
+    final detail = event.payload['reason']?.toString() ??
+        event.payload['item_name']?.toString() ??
+        event.payload['note']?.toString();
+    return detail == null ? base : '$base · $detail';
   }
 
   Widget _buildActions(ThemeData theme) {
@@ -2311,11 +2407,21 @@ class _JobContextCard extends StatelessWidget {
     required this.links,
     required this.jobHeader,
     required this.onOpenJob,
+    this.canMark = false,
+    this.isDone,
+    this.nameOf,
+    this.onToggle,
   });
 
   final List<SmartTaskJobItem> links;
   final TaskLinkableJob? jobHeader;
   final VoidCallback onOpenJob;
+
+  /// Quien la trabaja (o la encargó) va marcando cada servicio.
+  final bool canMark;
+  final bool Function(SmartTaskJobItem link)? isDone;
+  final String? Function(String? userId)? nameOf;
+  final void Function(SmartTaskJobItem link, bool done)? onToggle;
 
   @override
   Widget build(BuildContext context) {
@@ -2323,6 +2429,10 @@ class _JobContextCard extends StatelessWidget {
     final roles = VinabikeThemeRoles.maybeOf(context);
     final jobNumber =
         links.isNotEmpty ? links.first.jobNumber : jobHeader?.jobNumber;
+    bool done(SmartTaskJobItem link) => isDone?.call(link) ?? link.isDone;
+    final live = links.where((link) => !link.isInvalidated).toList();
+    final doneCount = live.where(done).length;
+    final success = roles?.success.accent ?? theme.colorScheme.primary;
 
     return Container(
       padding: const EdgeInsets.all(10),
@@ -2351,7 +2461,22 @@ class _JobContextCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 4),
+          if (live.isNotEmpty) ...[
+            Text(
+              doneCount == live.length
+                  ? 'Todos los servicios hechos'
+                  : '$doneCount de ${live.length} servicios hechos',
+              key: const ValueKey('task-detail-services-progress'),
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: doneCount == live.length
+                    ? success
+                    : theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 6),
+          ] else
+            const SizedBox(height: 4),
           if (links.isEmpty && jobHeader != null)
             Text(
               [
@@ -2371,13 +2496,39 @@ class _JobContextCard extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    link.isInvalidated ? Icons.link_off : Icons.build_outlined,
-                    size: 13,
-                    color: link.isInvalidated
-                        ? (roles?.danger.accent ?? theme.colorScheme.error)
-                        : theme.colorScheme.onSurfaceVariant,
-                  ),
+                  // Un servicio que el taller borró ya no se marca hecho;
+                  // si estaba hecho, todavía se puede volver a pendiente.
+                  if (canMark &&
+                      onToggle != null &&
+                      (!link.isInvalidated || done(link)))
+                    SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: Checkbox(
+                        key: ValueKey('task-service-${link.jobItemId}'),
+                        value: done(link),
+                        visualDensity: VisualDensity.compact,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        onChanged: (value) => onToggle!(link, value ?? false),
+                      ),
+                    )
+                  else
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Icon(
+                        link.isInvalidated
+                            ? Icons.link_off
+                            : done(link)
+                                ? Icons.check_circle
+                                : Icons.build_outlined,
+                        size: 13,
+                        color: link.isInvalidated
+                            ? (roles?.danger.accent ?? theme.colorScheme.error)
+                            : done(link)
+                                ? success
+                                : theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Column(
@@ -2393,6 +2544,20 @@ class _JobContextCard extends StatelessWidget {
                                 : null,
                           ),
                         ),
+                        if (done(link)) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            [
+                              'Hecho',
+                              if (nameOf?.call(link.doneBy) case final name?)
+                                name,
+                              if (link.doneAt case final at?)
+                                DateFormat('dd/MM HH:mm').format(at.toLocal()),
+                            ].join(' · '),
+                            style: theme.textTheme.labelSmall
+                                ?.copyWith(color: success),
+                          ),
+                        ],
                         if (link.itemInstructions != null) ...[
                           const SizedBox(height: 2),
                           Text(
@@ -2428,6 +2593,95 @@ class _JobContextCard extends StatelessWidget {
                   ),
                 ],
               ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// «Dónde quedó»: la nota que deja quien trabaja para quien sigue. Una sola
+/// vigente; las anteriores quedan en la actividad.
+class _HandoffNoteCard extends StatelessWidget {
+  const _HandoffNoteCard({
+    required this.note,
+    required this.authorName,
+    required this.writtenAt,
+    required this.canEdit,
+    required this.onEdit,
+    required this.onClear,
+  });
+
+  final String? note;
+  final String? authorName;
+  final DateTime? writtenAt;
+  final bool canEdit;
+  final Future<void> Function(BuildContext anchorContext) onEdit;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final note = this.note;
+    if (note == null) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: Builder(
+          builder: (buttonContext) => TextButton.icon(
+            key: const ValueKey('task-detail-handoff-add'),
+            onPressed: () => onEdit(buttonContext),
+            icon: const Icon(Icons.edit_note, size: 18),
+            label: const Text('Dejar nota para el siguiente turno'),
+          ),
+        ),
+      );
+    }
+    return Container(
+      key: const ValueKey('task-detail-handoff-note'),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('NOTA PARA EL SIGUIENTE TURNO',
+              style: theme.textTheme.labelSmall?.copyWith(
+                letterSpacing: 0.8,
+                fontWeight: FontWeight.w700,
+                color: theme.colorScheme.onSurfaceVariant,
+              )),
+          const SizedBox(height: 6),
+          Text(note, style: theme.textTheme.bodyMedium),
+          const SizedBox(height: 4),
+          Text(
+            [
+              if (authorName != null) authorName!,
+              if (writtenAt case final at?)
+                DateFormat('dd/MM HH:mm').format(at.toLocal()),
+            ].join(' · '),
+            style: theme.textTheme.labelSmall
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+          ),
+          if (canEdit)
+            Wrap(
+              spacing: 4,
+              children: [
+                Builder(
+                  builder: (buttonContext) => TextButton(
+                    key: const ValueKey('task-detail-handoff-edit'),
+                    onPressed: () => onEdit(buttonContext),
+                    child: const Text('Cambiar'),
+                  ),
+                ),
+                TextButton(
+                  key: const ValueKey('task-detail-handoff-clear'),
+                  onPressed: onClear,
+                  child: const Text('Borrar'),
+                ),
+              ],
             ),
         ],
       ),

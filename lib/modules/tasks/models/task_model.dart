@@ -107,6 +107,12 @@ class TaskModel {
   final DateTime? blockedAt;
   final String? blockedReason;
 
+  /// «Dónde quedó»: la nota vigente para quien siga con la tarea, con quién la
+  /// escribió y cuándo. Server-owned: sólo la escribe `set_handoff_note`.
+  final String? handoffNote;
+  final DateTime? handoffNoteAt;
+  final String? handoffNoteBy;
+
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -144,6 +150,9 @@ class TaskModel {
     this.completedBy,
     this.blockedAt,
     this.blockedReason,
+    this.handoffNote,
+    this.handoffNoteAt,
+    this.handoffNoteBy,
     DateTime? createdAt,
     DateTime? updatedAt,
   })  : createdAt = createdAt ?? DateTime.now(),
@@ -279,6 +288,11 @@ class TaskModel {
       completedBy: json['completed_by']?.toString(),
       blockedAt: _parseDate(json['blocked_at']),
       blockedReason: json['blocked_reason']?.toString(),
+      handoffNote: (json['handoff_note']?.toString().trim().isEmpty ?? true)
+          ? null
+          : json['handoff_note'].toString().trim(),
+      handoffNoteAt: _parseDate(json['handoff_note_at']),
+      handoffNoteBy: json['handoff_note_by']?.toString(),
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'])
           : DateTime.now(),
@@ -356,6 +370,9 @@ class TaskModel {
     String? completedBy,
     DateTime? blockedAt,
     String? blockedReason,
+    String? handoffNote,
+    DateTime? handoffNoteAt,
+    String? handoffNoteBy,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -396,6 +413,9 @@ class TaskModel {
       completedBy: completedBy ?? this.completedBy,
       blockedAt: blockedAt ?? this.blockedAt,
       blockedReason: blockedReason ?? this.blockedReason,
+      handoffNote: handoffNote ?? this.handoffNote,
+      handoffNoteAt: handoffNoteAt ?? this.handoffNoteAt,
+      handoffNoteBy: handoffNoteBy ?? this.handoffNoteBy,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

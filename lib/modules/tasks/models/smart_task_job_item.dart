@@ -19,6 +19,11 @@ class SmartTaskJobItem {
   final DateTime? invalidatedAt;
   final DateTime? contextChangedAt;
 
+  /// Cuándo lo marcó hecho quien lo trabaja, y quién (cuenta). Null =
+  /// pendiente. Sólo lo escribe `set_job_item_done`.
+  final DateTime? doneAt;
+  final String? doneBy;
+
   const SmartTaskJobItem({
     required this.id,
     required this.taskId,
@@ -33,6 +38,8 @@ class SmartTaskJobItem {
     required this.linkedAt,
     required this.invalidatedAt,
     required this.contextChangedAt,
+    this.doneAt,
+    this.doneBy,
   });
 
   factory SmartTaskJobItem.fromJson(Map<String, dynamic> json) {
@@ -56,9 +63,12 @@ class SmartTaskJobItem {
           DateTime.now(),
       invalidatedAt: parseDate(json['invalidated_at']),
       contextChangedAt: parseDate(json['context_changed_at']),
+      doneAt: parseDate(json['done_at']),
+      doneBy: json['done_by']?.toString(),
     );
   }
 
   bool get isInvalidated => invalidatedAt != null;
   bool get contextChanged => contextChangedAt != null;
+  bool get isDone => doneAt != null;
 }

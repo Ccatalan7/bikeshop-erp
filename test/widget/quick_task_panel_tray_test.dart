@@ -46,6 +46,8 @@ class _FakeTaskService extends ChangeNotifier implements TaskService {
   String? createdLinkedPurchaseInvoiceId;
   String? createdLinkedSalesInvoiceId;
   int fetchLinkableJobsCalls = 0;
+  final List<(String, bool)> markedServices = [];
+  final List<String?> handoffNotes = [];
 
   @override
   List<TaskModel> get tasks => _tasks;
@@ -156,6 +158,52 @@ class _FakeTaskService extends ChangeNotifier implements TaskService {
       version: _tasks[index].version + 1,
     );
     _tasks[index] = updated;
+    notifyListeners();
+    return updated;
+  }
+
+  @override
+  Future<TaskModel> setJobItemDone(TaskModel task, String jobItemId,
+      {required bool done}) async {
+    markedServices.add((jobItemId, done));
+    final links = _jobLinksByTask[task.id!] ?? const [];
+    _jobLinksByTask[task.id!] = [
+      for (final link in links)
+        link.jobItemId == jobItemId
+            ? SmartTaskJobItem(
+                id: link.id,
+                taskId: link.taskId,
+                jobItemId: link.jobItemId,
+                jobId: link.jobId,
+                jobBikeId: link.jobBikeId,
+                itemName: link.itemName,
+                itemType: link.itemType,
+                jobNumber: link.jobNumber,
+                bikeLabel: link.bikeLabel,
+                linkedAt: link.linkedAt,
+                invalidatedAt: link.invalidatedAt,
+                contextChangedAt: link.contextChangedAt,
+                doneAt: done ? DateTime(2026, 9, 26, 15, 10) : null,
+                doneBy: done ? _me : null,
+              )
+            : link,
+    ];
+    final updated = task.copyWith(version: task.version + 1);
+    _tasks[_tasks.indexWhere((t) => t.id == task.id)] = updated;
+    notifyListeners();
+    return updated;
+  }
+
+  @override
+  Future<TaskModel> setHandoffNote(TaskModel task, String? note) async {
+    handoffNotes.add(note);
+    final updated = task.copyWith(
+      version: task.version + 1,
+      handoffNote: note,
+      handoffNoteAt: DateTime(2026, 9, 26, 18, 40),
+      handoffNoteBy: _me,
+    );
+    _tasks[_tasks.indexWhere((t) => t.id == task.id)] = updated;
     notifyListeners();
     return updated;
   }
@@ -824,6 +872,76 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Abrir trabajo'), findsOneWidget);
+  });
+
+  testWidgets(
+      'el responsable marca cada servicio, ve el avance y deja la nota del turno',
+      (tester) async {
+    tester.view.physicalSize = const Size(420, 1300);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    const taskId = '00000000-0000-4000-8000-000000000066';
+    SmartTaskJobItem link(String id, String name, {DateTime? doneAt}) =>
+        SmartTaskJobItem(
+          id: 'link-$id',
+          taskId: taskId,
+          jobItemId: id,
+          jobId: 'job-527',
+          jobBikeId: 'bike-1',
+          itemName: name,
+          itemType: 'service',
+          jobNumber: 'PG-00527',
+          bikeLabel: 'Totem 4423',
+          linkedAt: DateTime(2026, 8, 27),
+          invalidatedAt: null,
+          contextChangedAt: null,
+          doneAt: doneAt,
+          doneBy: doneAt == null ? null : _me,
+        );
+    final tasks = _FakeTaskService(
+      [_task(6, acknowledged: DateTime.now(), linkedJobId: 'job-527')],
+      jobLinksByTask: {
+        taskId: [
+          link('service-cadena', 'Cambio de cadena',
+              doneAt: DateTime(2026, 9, 26, 12)),
+          link('service-frenos', 'Purga de frenos'),
+        ],
+      },
+    );
+    await tester.pumpWidget(_host(tasks, RightToolbarService()));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.tap(find.text('T6'));
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(find.text('1 de 2 servicios hechos'), findsOneWidget);
+    expect(find.textContaining('Hecho · 26/09'), findsOneWidget);
+    expect(find.text('Todos los servicios están hechos'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('task-service-service-frenos')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(tasks.markedServices, [('service-frenos', true)]);
+    expect(find.text('Todos los servicios hechos'), findsOneWidget);
+    expect(find.text('Todos los servicios están hechos'), findsOneWidget);
+    expect(find.byKey(const ValueKey('task-detail-complete-all-done')),
+        findsOneWidget);
+
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('task-detail-handoff-add')));
+    await tester.tap(find.byKey(const ValueKey('task-detail-handoff-add')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byType(TextField).last, 'Falta probarla en ruta');
+    await tester.pump();
+    await tester.tap(find.text('Guardar nota'));
+    await tester.pumpAndSettle();
+
+    expect(tasks.handoffNotes, ['Falta probarla en ruta']);
+    expect(find.text('NOTA PARA EL SIGUIENTE TURNO'), findsOneWidget);
+    expect(find.text('Falta probarla en ruta'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('un cliente vinculado queda visible en fila y detalle',
