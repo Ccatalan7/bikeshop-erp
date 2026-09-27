@@ -219,7 +219,8 @@ void main() {
               {bool invoiced = false,
               bool paid = false,
               String? quotation,
-              DateTime? received}) =>
+              DateTime? received,
+              bool finished = false}) =>
           TaskLinkableJob(
             id: number,
             jobNumber: number,
@@ -230,6 +231,7 @@ void main() {
             isPaid: paid,
             quotationStatus: quotation,
             receivedAt: received,
+            workFinished: finished,
           );
       final sorted = sortQuickTaskJobs([
         job('PG-1', received: DateTime(2026, 9, 25)),
@@ -243,11 +245,17 @@ void main() {
             received: DateTime(2026, 9, 1)),
         job('PG-7', quotation: 'rejected', received: DateTime(2026, 9, 26)),
         job('PG-8', quotation: 'pending', received: DateTime(2026, 9, 23)),
+        job('PG-9',
+            invoiced: true, finished: true, received: DateTime(2026, 9, 25)),
       ]);
       // El aprobado va segundo aunque sea más viejo que los por aprobar; el
       // rechazado va al final aunque sea el más nuevo.
-      expect(sorted.map((j) => j.jobNumber),
-          ['PG-5', 'PG-3', 'PG-6', 'PG-4', 'PG-8', 'PG-2', 'PG-1', 'PG-7']);
+      // El facturado ya terminado va al final de su grupo aunque sea el más
+      // nuevo: sólo espera que lo retiren.
+      expect(sorted.map((j) => j.jobNumber), [
+        'PG-5', 'PG-3', 'PG-6', 'PG-9', //
+        'PG-4', 'PG-8', 'PG-2', 'PG-1', 'PG-7',
+      ]);
     });
 
     test('la fecha del trabajo se dice corta, con el año sólo si no es éste',

@@ -118,6 +118,49 @@ void main() {
     });
   });
 
+  group('TaskLinkableJob · trabajo ya terminado', () {
+    Map<String, dynamic> row(String status, {Map<String, dynamic>? custom}) => {
+          'id': 'j1',
+          'tenant_id': 't',
+          'job_number': 'PG-00565',
+          'status': status,
+          'arrival_date': '2026-09-16T12:00:00Z',
+          'created_at': '2026-09-16T12:00:00Z',
+          'updated_at': '2026-09-20T12:00:00Z',
+          if (custom != null) 'job_status': custom,
+        };
+
+    test('el estado propio de fase complete («Terminado») lo termina', () {
+      final job = TaskLinkableJob.fromJson(row('FINALIZADO', custom: {
+        'id': 's1',
+        'tenant_id': 't',
+        'name': 'Terminado',
+        'code': 'FINALIZADO',
+        'color': '#10B981',
+        'phase': 'complete',
+      }));
+      expect(job.workFinished, isTrue);
+      expect(job.statusLabel, 'Terminado');
+    });
+
+    test('un estado propio en curso no lo termina', () {
+      final job = TaskLinkableJob.fromJson(row('EN_PAUSA', custom: {
+        'id': 's2',
+        'tenant_id': 't',
+        'name': 'En Pausa',
+        'code': 'EN_PAUSA',
+        'color': '#F59E0B',
+        'phase': 'in_progress',
+      }));
+      expect(job.workFinished, isFalse);
+    });
+
+    test('sin estado propio, manda el estado base', () {
+      expect(TaskLinkableJob.fromJson(row('FINALIZADO')).workFinished, isTrue);
+      expect(TaskLinkableJob.fromJson(row('EN_CURSO')).workFinished, isFalse);
+    });
+  });
+
   group('TaskModel · nota para el siguiente turno', () {
     test('lee la nota con autor y hora, y no la exporta', () {
       final task = TaskModel.fromJson({

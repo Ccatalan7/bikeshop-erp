@@ -177,7 +177,9 @@ List<TaskLinkableJob> filterQuickTaskJobs(
 ///  4. Sin presupuesto: falta diagnosticar o cotizar.
 ///  5. Presupuesto rechazado o vencido: no hay trabajo que hacer.
 ///
-/// Dentro de cada grupo, lo que entró más recientemente arriba.
+/// Dentro de cada grupo, lo ya terminado va al final (dueño, 2026-09-26: un
+/// facturado en «Terminado» sólo espera que lo retiren) y, entre iguales, lo
+/// que entró más recientemente arriba.
 List<TaskLinkableJob> sortQuickTaskJobs(List<TaskLinkableJob> jobs) {
   int group(TaskLinkableJob job) {
     if (job.hasInvoice || job.isPaid) return 0;
@@ -193,6 +195,7 @@ List<TaskLinkableJob> sortQuickTaskJobs(List<TaskLinkableJob> jobs) {
   sorted.sort((a, b) {
     final byGroup = group(a).compareTo(group(b));
     if (byGroup != 0) return byGroup;
+    if (a.workFinished != b.workFinished) return a.workFinished ? 1 : -1;
     final aDate = a.receivedAt;
     final bDate = b.receivedAt;
     if (aDate != null && bDate != null && aDate != bDate) {

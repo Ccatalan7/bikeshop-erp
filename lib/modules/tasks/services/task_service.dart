@@ -1710,6 +1710,7 @@ class TaskLinkableJob {
     this.hasInvoice = false,
     this.isPaid = false,
     this.receivedAt,
+    this.workFinished = false,
   });
 
   final String id;
@@ -1733,6 +1734,10 @@ class TaskLinkableJob {
   /// Cuándo entró al taller (`arrival_date`; si falta, cuándo se creó).
   final DateTime? receivedAt;
 
+  /// El trabajo ya está terminado (estado de fase `complete`, como
+  /// «Terminado»): puede quedar por cobrar o retirar, pero no por hacer.
+  final bool workFinished;
+
   factory TaskLinkableJob.fromJson(Map<String, dynamic> json) {
     final customer = json['customers'];
     final bike = json['bike'];
@@ -1743,8 +1748,18 @@ class TaskLinkableJob {
             .join(' ')
         : '';
     String? statusLabel;
+    var workFinished = false;
     try {
-      statusLabel = MechanicJob.fromJson(json).statusDisplayName;
+      final job = MechanicJob.fromJson(json);
+      statusLabel = job.statusDisplayName;
+      // El estado propio del taller manda; sin él, el estado base.
+      workFinished = job.customStatus != null
+          ? job.customStatus!.phase == StatusPhase.complete
+          : const {
+              JobStatus.finalizado,
+              JobStatus.entregado,
+              JobStatus.cancelado,
+            }.contains(job.status);
     } catch (_) {
       statusLabel = null;
     }
@@ -1763,6 +1778,7 @@ class TaskLinkableJob {
       isPaid: json['is_paid'] == true,
       receivedAt: DateTime.tryParse(json['arrival_date']?.toString() ?? '') ??
           DateTime.tryParse(json['created_at']?.toString() ?? ''),
+      workFinished: workFinished,
     );
   }
 }
