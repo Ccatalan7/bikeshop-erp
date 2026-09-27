@@ -351,6 +351,16 @@ falta la `ValueKey`; si la llave lleva un id interno
 (`bank-reconciliation-ai-answer-<sha12>:<fila>`), se calcula con la misma
 sonda que usa el servicio sobre el PDF, en vez de probar coordenadas.
 
+**Una tecla con Mayúscula no abre el buscador; escríbela dentro de él
+(2026-09-26).** Las acciones rápidas se abren con «/», que en el teclado
+español es Mayúscula+7. `keystroke "/"` enviado sin un campo enfocado se
+pierde a ratos —1 de cada 5 en una medición; cero veces con una letra—, y
+se parece exactamente a «el atajo no captura»: costó tres rondas buscando
+el defecto en `GlobalSearchShortcut`. Abre el buscador con una letra (`a`),
+bórrala (`key 51`) y escribe `/tarea` ya dentro del campo enfocado. Antes de
+cada tecla, pon la app al frente por su PID; y lee el resultado con `read`
+(«ACCIONES RÁPIDAS»), no lo supongas.
+
 **`read` ve más que `find`.** `read` recorre la semántica, que incluye las
 filas que un `ListView` mantiene en caché fuera de pantalla; `find`, `tap` y
 `enter-text` sólo aceptan lo que el hit test alcanza. Si `read` muestra la
