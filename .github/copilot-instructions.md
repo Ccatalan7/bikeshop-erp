@@ -60,6 +60,14 @@ corre `erp-integrity-gate.yml` antes de publicar, así que un commit roto no
 llega a producción. Antes de empujar se corren localmente el analyzer y las
 pruebas afectadas; después, se mira que el deploy termine y se verifica en vivo.
 
+**2026-09-27 — contrato textual de UI en el gate:**
+`test/unit/ui_guidance_contract_test.dart` verifica frases de `AGENTS.md`.
+La apertura del diseño cambió el contrato en español, pero quedó una aserción
+con el texto inglés anterior; el gate bloqueó la publicación de `0961c23c`.
+Al cambiar instrucciones de UI, actualizar esa aserción según el contrato
+vigente y correr sólo ese test antes del push. No restaurar una regla superada
+para satisfacer una coincidencia de texto.
+
 ## Dónde va cada aprendizaje
 
 | Lo que aprendiste | Documento |

@@ -116,7 +116,7 @@ void main() {
       '.github/copilot-instructions.md',
       '.github/GUI_DESIGN_PRINCIPLES.md',
       '.github/GUI_MOBILE_DESIGN_PRINCIPLES.md',
-      'Historical prompts, screenshots, feature plans',
+      'antiguos, capturas, planes, widgets existentes ni tests de aspecto',
       'never turn it into a universal',
     ]);
 
