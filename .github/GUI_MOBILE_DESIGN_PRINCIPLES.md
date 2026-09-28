@@ -307,6 +307,14 @@ Every touch target must be at least `48px` in both dimensions, including icon
 buttons, row actions, disclosure triggers, drag/reorder alternatives, and
 compact navigation.
 
+**Chips apilados: el chip crece hacia su área de toque (2026-09-27).** En la
+tarjeta de una línea de servicio, «Sin fijar lado» y «Falta: …» medían 26 px
+dentro de una caja de 48 y un `Wrap` con `runSpacing: 6`: entre los dos
+quedaban 28 px de aire y parecían de tarjetas distintas. En teléfono el chip
+se dibuja de 40 px dentro de la misma caja de 48 y el `Wrap` va con
+`runSpacing: 0`: el toque sigue en 48 y la separación visible queda en 8
+(`JobLineChip.minHeight`).
+
 No important action may depend only on:
 
 - hover;

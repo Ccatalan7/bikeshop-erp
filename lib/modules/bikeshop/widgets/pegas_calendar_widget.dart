@@ -15,6 +15,7 @@ import '../../../shared/widgets/branded_loading.dart';
 import '../../sales/widgets/sales_invoice_editor.dart'; // Import Invoice Editor
 import '../widgets/tasks_tab_view.dart'; // Import Tasks Tab
 import 'smart_job_details_editor.dart'; // Import Smart Editor
+import 'bike_fact_problems_snackbar.dart';
 
 /// Parent-owned calendar browsing context.
 ///
@@ -2599,6 +2600,8 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
                 job.id!,
                 newStatus.id!,
                 operationKey: const Uuid().v4(),
+                onBikeFactProblems: (problems) =>
+                    showBikeFactProblems(context, problems),
                 targetStatus: newStatus,
               );
       if (_useExternalData) {

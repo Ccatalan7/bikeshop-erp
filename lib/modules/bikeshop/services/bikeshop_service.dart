@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -6,6 +7,8 @@ import '../../../shared/services/authority_scoped_cache.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../models/bikeshop_models.dart';
+import 'bike_technical_fact_patch.dart';
+import 'wheel_service_facts.dart';
 import 'mechanic_job_form_persistence_policy.dart';
 import 'mechanic_job_cache_reconciler.dart';
 import 'mechanic_job_intake_classification_coordinator.dart';
@@ -466,6 +469,65 @@ class BikeshopService extends ChangeNotifier {
     }
   }
 
+  /// Escribe en la ficha sólo los datos que un servicio del trabajo confirmó,
+  /// cambió o borró. Cada dato lleva el valor que la app vio; si la ficha ya
+  /// no dice eso, el servidor no aplica nada y se lanza
+  /// [BikeTechnicalFactConflict]. La [operationKey] se reutiliza tras una
+  /// respuesta perdida: el servidor devuelve lo que ya confirmó.
+  Future<BikeAggregateSaveResult> patchBikeTechnicalFacts({
+    required String operationKey,
+    required String bikeId,
+    required String? jobId,
+    required List<BikeTechnicalFact> facts,
+    String source = 'service_wizard',
+  }) async {
+    if (facts.isEmpty) {
+      throw ArgumentError.value(facts, 'facts', 'Must not be empty');
+    }
+    try {
+      final data = await Supabase.instance.client.rpc(
+        'patch_bike_technical_facts_v1',
+        params: {
+          'p_operation_key': operationKey,
+          'p_bike_id': bikeId,
+          'p_job_id': jobId,
+          'p_source': source,
+          'p_facts': facts.map((fact) => fact.toJson()).toList(),
+        },
+      );
+      if (data is! Map) {
+        throw const FormatException('Invalid bicycle fact patch response');
+      }
+      final result = BikeAggregateSaveResult.fromJson(
+        Map<String, dynamic>.from(data),
+      );
+      invalidateBikesCache();
+      notifyListeners();
+      return result;
+    } on PostgrestException catch (error) {
+      if (error.code == '40001') {
+        throw BikeTechnicalFactConflict(_conflictKeys(error.details));
+      }
+      rethrow;
+    }
+  }
+
+  static List<String> _conflictKeys(Object? details) {
+    try {
+      final decoded = details is String ? jsonDecode(details) : details;
+      if (decoded is List) {
+        return [
+          for (final entry in decoded)
+            if (entry is Map && entry['key'] != null) entry['key'].toString(),
+        ];
+      }
+    } catch (_) {
+      // El detalle es sólo para nombrar las claves; sin él, el conflicto
+      // igual se informa.
+    }
+    return const <String>[];
+  }
+
   Future<BikeAggregateSaveResult?> getBikeAggregateSaveOperation(
     String operationKey,
   ) async {
@@ -544,84 +606,6 @@ class BikeshopService extends ChangeNotifier {
       return data != null ? BikeProfile.fromJson(data) : null;
     } catch (e) {
       if (kDebugMode) print('Error fetching bike profile: $e');
-      rethrow;
-    }
-  }
-
-  Future<BikeProfile> upsertBikeProfile(BikeProfile profile) async {
-    try {
-      BikeProfile? existing;
-
-      if (profile.id != null && profile.id!.isNotEmpty) {
-        final existingData = await _db.selectById('bike_profiles', profile.id!);
-        existing =
-            existingData != null ? BikeProfile.fromJson(existingData) : null;
-      }
-
-      existing ??= await getBikeProfile(profile.bikeId);
-
-      if (existing != null && existing.id != null) {
-        // An id-less profile means the caller did not load an authoritative
-        // existing snapshot (for example, a service-wizard promotion after a
-        // transient read failure). Merge that narrow promotion into current
-        // upstream truth instead of replacing the complete ficha with a
-        // partial/default map. Authoritative editors carry the persisted id and
-        // may still intentionally replace/remove rendered keys.
-        final profileToSave = profile.id == null
-            ? BikeProfile(
-                id: existing.id,
-                tenantId: existing.tenantId,
-                bikeId: existing.bikeId,
-                catalogBikeId: profile.catalogBikeId ?? existing.catalogBikeId,
-                intakeProfile: {
-                  ...existing.intakeProfile,
-                  ...profile.intakeProfile,
-                },
-                technicalProfile: {
-                  ...existing.technicalProfile,
-                  ...profile.technicalProfile,
-                  'values': {
-                    ...existing.technicalValues,
-                    ...profile.technicalValues,
-                  },
-                  'sources': {
-                    ...existing.technicalSources,
-                    ...profile.technicalSources,
-                  },
-                  'confirmed': {
-                    ...existing.technicalConfirmed,
-                    ...profile.technicalConfirmed,
-                  },
-                },
-                summarySnapshot: {
-                  ...existing.summarySnapshot,
-                  ...profile.summarySnapshot,
-                },
-                lastConfirmedAt:
-                    profile.lastConfirmedAt ?? existing.lastConfirmedAt,
-                createdAt: existing.createdAt,
-                updatedAt: profile.updatedAt,
-              )
-            : profile.copyWith(
-                id: existing.id,
-                createdAt: existing.createdAt,
-              );
-        final data = await _db.update(
-          'bike_profiles',
-          existing.id!,
-          profileToSave.toJson(),
-        );
-        final savedProfile = BikeProfile.fromJson(data);
-        await _logBikeProfileEvent(savedProfile, isCreate: false);
-        return savedProfile;
-      }
-
-      final data = await _db.insert('bike_profiles', profile.toJson());
-      final savedProfile = BikeProfile.fromJson(data);
-      await _logBikeProfileEvent(savedProfile, isCreate: true);
-      return savedProfile;
-    } catch (e) {
-      if (kDebugMode) print('Error upserting bike profile: $e');
       rethrow;
     }
   }
@@ -853,22 +837,28 @@ class BikeshopService extends ChangeNotifier {
     }
   }
 
-  Future<void> syncBikeMemoryFromJob(
+  /// Devuelve, en palabras de taller, lo instalado que la ficha no tomó; la
+  /// próxima sincronización del trabajo lo reintenta. Vacío si no hubo nada.
+  Future<List<String>> syncBikeMemoryFromJob(
     String jobId, {
     bool swallowErrors = true,
   }) async {
+    final installedProblems = <String>[];
+    var completedJob = false;
     try {
-      if (jobId.isEmpty) return;
+      if (jobId.isEmpty) return installedProblems;
 
       final job = await getJobById(jobId);
-      if (job == null || job.id == null) return;
+      if (job == null || job.id == null) return installedProblems;
+      completedJob =
+          {JobStatus.finalizado, JobStatus.entregado}.contains(job.status);
 
       final jobBikes = await getJobBikes(jobId);
       final staleTargets = await _clearDerivedBikeMemoryForJob(jobId);
 
       if (jobBikes.isEmpty) {
         await _refreshDerivedSystemStates(staleTargets.values);
-        return;
+        return installedProblems;
       }
 
       final jobItems = await getJobItems(jobId);
@@ -893,6 +883,11 @@ class BikeshopService extends ChangeNotifier {
             jobBike: jobBike,
             items: bikeItems,
           );
+          installedProblems.addAll(await _applyInstalledFactsFromCompletedJob(
+            job: job,
+            jobBike: jobBike,
+            items: bikeItems,
+          ));
         }
       }
 
@@ -905,6 +900,14 @@ class BikeshopService extends ChangeNotifier {
             items: orphanItems,
             sourceOverride: 'job_general_item_sync',
           );
+          // Una línea de General en un trabajo de una sola bici también
+          // instala en esa bici (revisión de Codex, 2026-09-27): antes sólo
+          // quedaba en la memoria y sus perforaciones nunca llegaban.
+          installedProblems.addAll(await _applyInstalledFactsFromCompletedJob(
+            job: job,
+            jobBike: jobBikes.first,
+            items: orphanItems,
+          ));
         }
       }
 
@@ -915,18 +918,107 @@ class BikeshopService extends ChangeNotifier {
             '⚠️ [BikeshopService] Could not sync bike memory from job $jobId: $e');
       }
       if (!swallowErrors) rethrow;
+      // Un fallo antes del parche (leer las líneas, la memoria) tampoco
+      // aplicó lo instalado: se dice, en vez de devolver «sin problemas».
+      if (completedJob) {
+        installedProblems.add(
+          'La ficha de la bici no se revisó contra lo instalado en este '
+          'trabajo; se reintenta al guardarlo o volver a cambiar su estado.',
+        );
+      }
     }
+    return installedProblems;
   }
 
-  Future<void> _safeSyncBikeMemoryForJob(String? jobId) async {
-    if (jobId == null || jobId.isEmpty) return;
+  /// Lo que un servicio terminado dejó instalado cambia la ficha (hoy, las
+  /// perforaciones de la rueda que armó el Enrayado). Una vez por cada cosa
+  /// que la línea instala (`nextJobCompletionOperationKey`): si alguien
+  /// corrige la ficha después, no se le pisa. Configurar o presupuestar no
+  /// llega aquí: sólo un trabajo FINALIZADO o ENTREGADO, que el servidor
+  /// exige. Devuelve lo que no se pudo escribir; antes sólo se imprimía en
+  /// debug, y el 2026-09-27 la consulta del recibo falló en producción
+  /// (42501) sin que nadie lo viera.
+  Future<List<String>> _applyInstalledFactsFromCompletedJob({
+    required MechanicJob job,
+    required MechanicJobBike jobBike,
+    required List<MechanicJobItem> items,
+  }) async {
+    final problems = <String>[];
+    for (final item in items) {
+      final answers = item.serviceConfigurationData;
+      final itemId = item.id;
+      if (answers == null || answers.isEmpty || itemId == null) continue;
+      final installed = wheelInstalledFacts(
+        positions: serviceWheelPositions(item.location, answers),
+        answers: answers,
+      );
+      if (installed.isEmpty) continue;
+
+      final factKeys = installed.keys.toList()..sort();
+      try {
+        final receipts = await Supabase.instance.client
+            .from('bike_technical_fact_patches')
+            .select('operation_key')
+            .eq('tenant_id', job.tenantId)
+            .like('operation_key', 'job_completion:$itemId:%');
+        final operationKey = nextJobCompletionOperationKey(
+          itemId: itemId,
+          installed: installed,
+          existingKeys: [
+            for (final row in receipts) row['operation_key'].toString(),
+          ],
+        );
+        if (operationKey == null) continue;
+
+        final profile = (await getBikeAggregate(jobBike.bikeId)).profile;
+        final values = profile?.technicalValues ?? const <String, dynamic>{};
+        final confirmed =
+            profile?.technicalConfirmed ?? const <String, dynamic>{};
+        await patchBikeTechnicalFacts(
+          operationKey: operationKey,
+          bikeId: jobBike.bikeId,
+          jobId: job.id,
+          source: 'job_completion',
+          facts: [
+            for (final key in factKeys)
+              BikeTechnicalFact.set(
+                key: key,
+                value: installed[key]!,
+                expected: values[key],
+                expectedConfirmed: confirmed[key] == true,
+              ),
+          ],
+        );
+      } catch (e) {
+        // Sin recibo, la próxima sincronización del trabajo lo reintenta.
+        if (kDebugMode) {
+          print('⚠️ [BikeshopService] Installed facts of $itemId pending: $e');
+        }
+        final what = factKeys
+            .map((key) => wheelInstalledFactLabel(key, installed[key]))
+            .join(', ');
+        problems.add(
+          'La ficha no tomó $what de ${job.jobNumber ?? 'este trabajo'}; '
+          'se reintenta al guardar el trabajo o volver a cambiar su estado.',
+        );
+      }
+    }
+    return problems;
+  }
+
+  Future<List<String>> _safeSyncBikeMemoryForJob(String? jobId) async {
+    if (jobId == null || jobId.isEmpty) return const [];
 
     try {
-      await syncBikeMemoryFromJob(jobId);
+      return await syncBikeMemoryFromJob(jobId);
     } catch (e) {
       if (kDebugMode) {
         print('⚠️ [BikeshopService] Could not sync bike memory for $jobId: $e');
       }
+      return const [
+        'La ficha de la bici no se revisó contra lo instalado en este '
+            'trabajo; se reintenta al guardarlo o volver a cambiar su estado.',
+      ];
     }
   }
 
@@ -2375,6 +2467,18 @@ class BikeshopService extends ChangeNotifier {
     return null;
   }
 
+  static const Map<String, Map<BikeMemoryLocation, String>>
+      _kPerWheelSystemKeys = {
+    'wheels': {
+      BikeMemoryLocation.front: 'front_wheel',
+      BikeMemoryLocation.rear: 'rear_wheel',
+    },
+    'brakes': {
+      BikeMemoryLocation.front: 'front_brake',
+      BikeMemoryLocation.rear: 'rear_brake',
+    },
+  };
+
   List<_BikeMemoryTarget> _inferTargetsFromItem(
     MechanicJobItem item, {
     bool preferStoredMetadata = true,
@@ -2382,6 +2486,32 @@ class BikeshopService extends ChangeNotifier {
     if (preferStoredMetadata &&
         item.systemKey != null &&
         item.systemKey!.isNotEmpty) {
+      // Una línea de «ambas ruedas» no se divide: queda en el sistema de la
+      // bici completa (`wheels`, `brakes`) con `none`, y la memoria la lleva a
+      // cada rueda con el mismo resolvedor que la ficha y el diagnóstico.
+      final perPosition = _kPerWheelSystemKeys[item.systemKey];
+      final positions =
+          perPosition != null && item.location == BikeMemoryLocation.none
+              ? serviceWheelPositions(
+                  BikeMemoryLocation.none,
+                  item.serviceConfigurationData ?? const <String, dynamic>{},
+                )
+              : const <BikeMemoryLocation>{};
+      if (perPosition != null && positions.length == 2) {
+        return [
+          for (final position in const [
+            BikeMemoryLocation.front,
+            BikeMemoryLocation.rear,
+          ])
+            _BikeMemoryTarget(
+              systemKey: perPosition[position]!,
+              componentSlotKey: item.componentSlotKey,
+              location: position,
+              interventionType: _defaultInterventionTypeForStoredTarget(item),
+              createsLifecycle: _defaultCreatesLifecycleForStoredTarget(item),
+            ),
+        ];
+      }
       return [
         _BikeMemoryTarget(
           systemKey: item.systemKey!,
@@ -3397,40 +3527,6 @@ class BikeshopService extends ChangeNotifier {
     );
   }
 
-  Future<void> _logBikeProfileEvent(
-    BikeProfile profile, {
-    required bool isCreate,
-  }) async {
-    if (profile.bikeId.isEmpty) return;
-
-    final technicalValues = profile.technicalValues;
-    final intakeProfile = profile.intakeProfile;
-
-    await _safeCreateBikeEvent(
-      BikeEvent(
-        tenantId: profile.tenantId,
-        bikeId: profile.bikeId,
-        eventType: isCreate
-            ? BikeEventType.profileCreated
-            : BikeEventType.profileUpdated,
-        eventCategory: BikeEventCategory.state,
-        eventDate: profile.updatedAt,
-        title: isCreate ? 'Ficha creada' : 'Ficha actualizada',
-        summary: _buildProfileEventSummary(
-          intakeProfile: intakeProfile,
-          technicalValues: technicalValues,
-          isCreate: isCreate,
-        ),
-        source: 'profile_save',
-        payload: {
-          'hasIntakeProfile': intakeProfile.isNotEmpty,
-          'hasTechnicalProfile': technicalValues.isNotEmpty,
-          'lastConfirmedAt': profile.lastConfirmedAt?.toIso8601String(),
-        },
-      ),
-    );
-  }
-
   Future<void> _logJobCreatedBikeEvent(MechanicJob job) async {
     final bikeId = job.bikeId;
     if (bikeId == null || bikeId.isEmpty) return;
@@ -3498,27 +3594,6 @@ class BikeshopService extends ChangeNotifier {
     );
   }
 
-  String _buildProfileEventSummary({
-    required Map<String, dynamic> intakeProfile,
-    required Map<String, dynamic> technicalValues,
-    required bool isCreate,
-  }) {
-    final sections = <String>[];
-    if (intakeProfile.isNotEmpty) sections.add('ingreso');
-    if (technicalValues.isNotEmpty) sections.add('ficha técnica');
-
-    if (sections.isEmpty) {
-      return isCreate
-          ? 'Se creó la ficha inicial de la bicicleta.'
-          : 'Se actualizó la ficha de la bicicleta.';
-    }
-
-    final sectionsText = sections.join(' y ');
-    return isCreate
-        ? 'Se creó la ficha con $sectionsText.'
-        : 'Se actualizó $sectionsText.';
-  }
-
   Future<void> _safeCreateBikeEvent(BikeEvent event) async {
     if (event.bikeId.isEmpty || event.tenantId.isEmpty) return;
 
@@ -3542,6 +3617,8 @@ class BikeshopService extends ChangeNotifier {
     String statusId, {
     required String operationKey,
     JobStatusCustom? targetStatus,
+    bool syncBikeMemoryOnCompletion = true,
+    void Function(List<String> problems)? onBikeFactProblems,
   }) async {
     final request = MechanicJobStatusTransitionRequest(
       jobId: jobId,
@@ -3601,6 +3678,16 @@ class BikeshopService extends ChangeNotifier {
           updatedJob: updatedJob,
         );
       }
+      // Terminar un trabajo desde cualquier pantalla deja en la bici las
+      // piezas y lo instalado; antes sólo pasaba al guardar el formulario.
+      // También al repetir el mismo estado: es el reintento de lo instalado
+      // que no llegó, y lo que no llega se le dice a quien cambió el estado.
+      if (syncBikeMemoryOnCompletion &&
+          {JobStatus.finalizado, JobStatus.entregado}
+              .contains(updatedJob.status)) {
+        final problems = await _safeSyncBikeMemoryForJob(updatedJob.id);
+        if (problems.isNotEmpty) onBikeFactProblems?.call(problems);
+      }
       return updatedJob;
     } catch (_) {
       // The server may have committed even when the acknowledgement was lost.
@@ -3619,6 +3706,8 @@ class BikeshopService extends ChangeNotifier {
     String jobId,
     JobStatus status, {
     required String operationKey,
+    bool syncBikeMemoryOnCompletion = true,
+    void Function(List<String> problems)? onBikeFactProblems,
   }) async {
     final tenantId = await _tenantService.getTenantId();
     if (tenantId == null || tenantId.isEmpty) {
@@ -3643,6 +3732,8 @@ class BikeshopService extends ChangeNotifier {
       statusId,
       operationKey: operationKey,
       targetStatus: targetStatus,
+      syncBikeMemoryOnCompletion: syncBikeMemoryOnCompletion,
+      onBikeFactProblems: onBikeFactProblems,
     );
   }
 

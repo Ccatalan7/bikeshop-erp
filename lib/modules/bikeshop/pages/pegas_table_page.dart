@@ -63,6 +63,7 @@ import '../../purchases/models/intelligent_purchasing_models.dart';
 import '../../purchases/services/intelligent_purchasing_service.dart';
 import 'bike_form_dialog.dart';
 import 'mechanic_job_form_page.dart';
+import '../widgets/bike_fact_problems_snackbar.dart';
 
 /// Modern, professional Trabajos management with advanced data table
 class PegasTablePage extends StatefulWidget {
@@ -3310,6 +3311,8 @@ class _PegasTablePageState extends State<PegasTablePage>
         job!.id!,
         newStatus,
         operationKey: const Uuid().v4(),
+        onBikeFactProblems: (problems) =>
+            showBikeFactProblems(context, problems),
       );
       await _loadData();
       if (mounted) {
@@ -10888,6 +10891,8 @@ class _PegasTablePageState extends State<PegasTablePage>
           job.id!,
           JobStatus.finalizado,
           operationKey: const Uuid().v4(),
+          onBikeFactProblems: (problems) =>
+              showBikeFactProblems(context, problems),
         );
         await _loadData();
         if (mounted) {
@@ -11737,6 +11742,8 @@ class _PegasTablePageState extends State<PegasTablePage>
         job.id!,
         newStatus.id!,
         operationKey: const Uuid().v4(),
+        onBikeFactProblems: (problems) =>
+            showBikeFactProblems(context, problems),
         targetStatus: newStatus,
       );
       _applyAuthoritativeJobUpdate(updatedJob);
@@ -12517,6 +12524,8 @@ class _PegasTablePageState extends State<PegasTablePage>
             job.id!,
             newCustomStatus.id!,
             operationKey: const Uuid().v4(),
+            onBikeFactProblems: (problems) =>
+                showBikeFactProblems(context, problems),
             targetStatus: newCustomStatus,
           );
           _applyAuthoritativeJobUpdate(updatedJob);

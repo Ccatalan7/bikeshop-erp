@@ -1065,6 +1065,187 @@ void main() {
       expect(assessment.detail, contains('eje'));
     });
 
+    group('paso F.2: eje y fluido de la ficha contra la pieza', () {
+      const pasante15 = 'catalog_d2128659275dc69ee5e50dc9500992fa';
+
+      test('la maza con el mismo eje ya no pide revisar el eje', () async {
+        final assessment = await _assessProduct(
+          technicalFamily: 'front_hub',
+          bikeTechnicalValues: const {
+            'frontSpokeHoles': 32,
+            'frontAxleInterface': pasante15,
+          },
+          productSpecs: const {
+            'wheel_position': 'front',
+            'spoke_holes': 32,
+            // Los repuestos guardan la etiqueta del registro, no el código.
+            'axle_type': 'Eje pasante 15 mm',
+          },
+        );
+        expect(assessment.level, ProductCompatibilityLevel.caution);
+        expect(assessment.detail, contains('eje eje pasante 15 mm'));
+        expect(assessment.detail, contains('faltan retención y montaje'));
+      });
+
+      test('otro eje es condición de armado, no descarte', () async {
+        final assessment = await _assessProduct(
+          technicalFamily: 'front_hub',
+          bikeTechnicalValues: const {'frontAxleInterface': pasante15},
+          productSpecs: const {
+            'wheel_position': 'front',
+            'axle_type': 'Cierre rápido 9 mm (delantero)',
+          },
+        );
+        expect(assessment.level, ProductCompatibilityLevel.caution);
+        expect(
+          assessment.detail,
+          contains('eje cierre rápido 9 mm (delantero) frente a eje pasante '
+              '15 mm en la bici'),
+        );
+      });
+
+      test('el tipo de montaje de la plantilla sucesora compara el tipo',
+          () async {
+        final assessment = await _assessProduct(
+          technicalFamily: 'rear_hub',
+          bikeTechnicalValues: const {
+            'rearAxleInterface': 'catalog_8a246b8f84c98b2fda1d402e902355a4',
+          },
+          productSpecs: const {
+            'wheel_position': 'rear',
+            'hub_axle_mount_kind': 'Cierre rápido',
+          },
+        );
+        expect(assessment.detail, contains('tipo de eje (cierre rápido)'));
+        expect(assessment.detail, contains('confirmar el diámetro'));
+      });
+
+      // Delantero mineral y trasero DOT: cada freno es su propio sistema.
+      const mixed = {
+        'brakeType': 'hydraulic_disc',
+        'frontBrakeFluidType': 'aceite_mineral',
+        'rearBrakeFluidType': 'dot_5_1',
+      };
+      const bothConfirmed = {
+        'frontBrakeFluidType': true,
+        'rearBrakeFluidType': true,
+      };
+
+      test(
+          'una pieza DOT para el freno trasero DOT sirve aunque el delantero '
+          'sea mineral', () async {
+        final assessment = await _assessProduct(
+          technicalFamily: 'brake_caliper',
+          bikeTechnicalValues: mixed,
+          bikeConfirmed: bothConfirmed,
+          productSpecs: const {
+            'brake_position': 'Trasero',
+            'fluid_type': 'DOT 5.1',
+          },
+        );
+        expect(assessment.level, isNot(ProductCompatibilityLevel.incompatible));
+        expect(assessment.detail, contains('el freno trasero usa DOT 5.1'));
+      });
+
+      test('un líquido sin rueda sirve si calza con uno de los frenos',
+          () async {
+        final assessment = await _assessProduct(
+          technicalFamily: 'brake_fluid',
+          bikeTechnicalValues: mixed,
+          bikeConfirmed: bothConfirmed,
+          productSpecs: const {'fluid_type': 'Aceite Mineral'},
+        );
+        expect(assessment.level, ProductCompatibilityLevel.caution);
+        expect(assessment.detail, contains('Coincide el fluido'));
+      });
+
+      test('un líquido se lee de sus declaraciones, como lo manda el lector',
+          () async {
+        // `fluid_type` está retirado de la plantilla del líquido: el lector
+        // sólo manda `brake_fluid_declarations`.
+        final assessment = await _assessProduct(
+          technicalFamily: 'brake_fluid',
+          bikeTechnicalValues: const {
+            'brakeType': 'hydraulic_disc',
+            'frontBrakeFluidType': 'dot_5_1',
+            'rearBrakeFluidType': 'dot_5_1',
+          },
+          bikeConfirmed: bothConfirmed,
+          productSpecs: {
+            'brake_fluid_declarations': jsonEncode({
+              'rows': [
+                {
+                  'id': 'bottle',
+                  'values': {
+                    'container': 'Botella 100 ml',
+                    'oem_brand': 'Shimano',
+                    'oem_designation': 'Mineral Oil',
+                    'fluid_class': 'Aceite Mineral',
+                  },
+                },
+              ],
+            }),
+          },
+        );
+        expect(assessment.level, ProductCompatibilityLevel.incompatible);
+      });
+
+      test('un cáliper con manguera y sin manilla no reemplaza el freno',
+          () async {
+        Future<ProductCompatibilityAssessment> assess(String? lever) =>
+            _assessProduct(
+              technicalFamily: 'hydraulic_disc_brake',
+              bikeTechnicalValues: const {
+                'brakeType': 'hydraulic_disc',
+                'frontBrakeFluidType': 'dot_5_1',
+                'rearBrakeFluidType': 'dot_5_1',
+              },
+              bikeConfirmed: bothConfirmed,
+              productSpecs: {
+                'brake_circuits': jsonEncode([
+                  {
+                    'circuit_id': 'front',
+                    'position': 'Delantero',
+                    'actuation': 'Hidráulico',
+                    if (lever != null) 'lever_row_id': lever,
+                    'caliper_row_id': 'caliper',
+                    'fluid_as_shipped': 'Aceite Mineral',
+                  },
+                ]),
+              },
+            );
+        expect(
+            (await assess(null)).level, ProductCompatibilityLevel.incompatible,
+            reason: 'la manilla DOT instalada se mezclaría con el mineral');
+        final whole = await assess('lever');
+        expect(whole.level, isNot(ProductCompatibilityLevel.incompatible));
+        expect(whole.detail, contains('Reemplaza el sistema entero'));
+      });
+
+      test('sólo un fluido confirmado descarta; uno sugerido avisa', () async {
+        const mineralBike = {
+          'brakeType': 'hydraulic_disc',
+          'frontBrakeFluidType': 'aceite_mineral',
+          'rearBrakeFluidType': 'aceite_mineral',
+        };
+        final confirmed = await _assessProduct(
+          technicalFamily: 'brake_fluid',
+          bikeTechnicalValues: mineralBike,
+          bikeConfirmed: bothConfirmed,
+          productSpecs: const {'fluid_type': 'DOT 5.1'},
+        );
+        expect(confirmed.level, ProductCompatibilityLevel.incompatible);
+
+        final suggested = await _assessProduct(
+          technicalFamily: 'brake_fluid',
+          bikeTechnicalValues: mineralBike,
+          productSpecs: const {'fluid_type': 'DOT 5.1'},
+        );
+        expect(suggested.level, ProductCompatibilityLevel.caution);
+        expect(suggested.detail, contains('sin confirmar'));
+      });
+    });
+
     test('hub hole mismatch describes the unselected assembly counterpart',
         () async {
       final assessment = await _assessProduct(
@@ -2334,6 +2515,7 @@ Future<ProductCompatibilityAssessment> _assessProduct({
   double? bikeFrontHubSpacingMm,
   double? bikeRearHubSpacingMm,
   int? bikeSpokeCount,
+  Map<String, dynamic> bikeConfirmed = const {},
 }) async {
   final product = _buildProduct();
   final service = BikeProductCompatibilityService();
@@ -2349,7 +2531,7 @@ Future<ProductCompatibilityAssessment> _assessProduct({
       rearHubSpacingMm: bikeRearHubSpacingMm,
       spokeCount: bikeSpokeCount,
     ),
-    profile: _buildProfile(bikeTechnicalValues),
+    profile: _buildProfile(bikeTechnicalValues, bikeConfirmed),
     products: <Product>[product],
   );
 
@@ -2379,7 +2561,10 @@ Bike _buildBike({
   );
 }
 
-BikeProfile _buildProfile(Map<String, dynamic> technicalValues) {
+BikeProfile _buildProfile(
+  Map<String, dynamic> technicalValues, [
+  Map<String, dynamic> confirmed = const {},
+]) {
   final now = DateTime(2026, 4, 26);
   return BikeProfile(
     id: 'profile-1',
@@ -2387,6 +2572,7 @@ BikeProfile _buildProfile(Map<String, dynamic> technicalValues) {
     bikeId: 'bike-1',
     technicalProfile: <String, dynamic>{
       'values': technicalValues,
+      'confirmed': confirmed,
     },
     createdAt: now,
     updatedAt: now,

@@ -4,6 +4,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 
 import '../config/bottom_bracket_canonical_data.dart';
+import '../config/brake_canonical_data.dart';
+import '../config/wheel_canonical_data.dart';
 import '../models/bikeshop_models.dart';
 import '../services/bikeshop_service.dart';
 import 'bike_diagram_illustration.dart';
@@ -1202,6 +1204,9 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
             systemKey == 'front_brake' ? 'frontRotorSizeMm' : 'rearRotorSizeMm';
         final rotorLabel =
             systemKey == 'front_brake' ? 'Rotor delantero' : 'Rotor trasero';
+        final fluidKey = systemKey == 'front_brake'
+            ? 'frontBrakeFluidType'
+            : 'rearBrakeFluidType';
         final facts = [
           profileFact(
               'brakeType', 'Plataforma de freno', brakeTypeLabel(brakeType)),
@@ -1211,24 +1216,37 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
           if (brakeType == 'mechanical_disc' || brakeType == 'hydraulic_disc')
             profileFact(
                 rotorKey, rotorLabel, formatRotor(technicalValues[rotorKey])),
+          // El fluido es de cada freno (paso F.2); con freno de llanta se
+          // muestra sólo si la ficha lo tiene (los hay hidráulicos).
+          if (brakeType == 'hydraulic_disc' ||
+              technicalValues[fluidKey] != null)
+            profileFact(
+              fluidKey,
+              'Fluido',
+              technicalValues[fluidKey] == null
+                  ? null
+                  : brakeFluidLabel(technicalValues[fluidKey]),
+            ),
         ].whereType<_BikeRecordTechnicalFact>().toList();
-        final expectedCount = brakeType == 'rim' ||
-                brakeType == 'mechanical_disc' ||
-                brakeType == 'hydraulic_disc'
-            ? 2
-            : 1;
+        final expectedCount = switch (brakeType) {
+          'hydraulic_disc' => 3,
+          'rim' || 'mechanical_disc' => 2,
+          _ => 1,
+        };
         final knownCount = facts.length;
         return _BikeRecordTechnicalPanelData(
           spec: bikeSystemControllerSpecFor(systemKey)!,
           description:
-              'La plataforma de freno vive upstream y este panel muestra el refinamiento confirmado que downstream no debería re-preguntar.',
+              'Lo que la ficha ya sabe de este freno. Un servicio no vuelve a '
+              'preguntar lo confirmado.',
           facts: facts,
           expectedCount: expectedCount,
           knownCount: knownCount,
           missingText: knownCount == 0
-              ? 'Todavía no hay verdad upstream para este sistema de freno.'
+              ? 'La ficha todavía no dice qué freno tiene.'
               : knownCount < expectedCount
-                  ? 'Todavía falta completar el refinamiento upstream de este freno para evitar nuevas preguntas en el wizard.'
+                  ? 'Falta completar este freno en la ficha; mientras tanto, '
+                      'el próximo servicio lo pregunta.'
                   : null,
         );
       case 'drivetrain':
@@ -1257,6 +1275,8 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
       case 'front_wheel':
         final facts = [
           baseFact('Aro compartido', bike.wheelSize),
+          profileFact('frontAxleInterface', 'Eje delantero',
+              axleInterfaceLabel(technicalValues['frontAxleInterface'])),
           baseFact('Maza delantera', formatSpacing(bike.frontHubSpacingMm)),
           profileFact('frontSpokeHoles', 'Rayos delanteros',
               technicalValues['frontSpokeHoles']?.toString()),
@@ -1267,14 +1287,16 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
         return _BikeRecordTechnicalPanelData(
           spec: bikeSystemControllerSpecFor(systemKey)!,
           description:
-              'La unidad delantera separa maza y rayado de la rueda trasera, aunque siga reutilizando el aro y la válvula como baseline upstream compartido.',
+              'Eje, maza y rayos son de esta rueda; el aro y la válvula, de '
+              'las dos.',
           facts: facts,
-          expectedCount: 4,
+          expectedCount: 5,
           knownCount: knownCount,
           missingText: knownCount == 0
-              ? 'Todavía no hay un kernel upstream confirmado para la rueda delantera.'
-              : knownCount < 4
-                  ? 'Faltan datos de la rueda delantera para que la lectura histórica no vuelva a caer en un wheelset genérico.'
+              ? 'La ficha todavía no dice nada de la rueda delantera.'
+              : knownCount < 5
+                  ? 'Faltan datos de la rueda delantera; el próximo servicio '
+                      'los pregunta.'
                   : null,
         );
       case 'bottom_bracket':
@@ -1331,6 +1353,8 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
       case 'rear_wheel':
         final facts = [
           baseFact('Aro compartido', bike.wheelSize),
+          profileFact('rearAxleInterface', 'Eje trasero',
+              axleInterfaceLabel(technicalValues['rearAxleInterface'])),
           baseFact('Maza trasera', formatSpacing(bike.rearHubSpacingMm)),
           profileFact('rearSpokeHoles', 'Rayos traseros',
               technicalValues['rearSpokeHoles']?.toString()),
@@ -1341,19 +1365,25 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
         return _BikeRecordTechnicalPanelData(
           spec: bikeSystemControllerSpecFor(systemKey)!,
           description:
-              'La unidad trasera separa maza y rayado de la rueda delantera, aunque siga reutilizando el aro y la válvula como baseline upstream compartido.',
+              'Eje, maza y rayos son de esta rueda; el aro y la válvula, de '
+              'las dos.',
           facts: facts,
-          expectedCount: 4,
+          expectedCount: 5,
           knownCount: knownCount,
           missingText: knownCount == 0
-              ? 'Todavía no hay un kernel upstream confirmado para la rueda trasera.'
-              : knownCount < 4
-                  ? 'Faltan datos de la rueda trasera para que la lectura histórica no vuelva a caer en un wheelset genérico.'
+              ? 'La ficha todavía no dice nada de la rueda trasera.'
+              : knownCount < 5
+                  ? 'Faltan datos de la rueda trasera; el próximo servicio '
+                      'los pregunta.'
                   : null,
         );
       case 'wheels':
         final facts = [
           baseFact('Aro', bike.wheelSize),
+          profileFact('frontAxleInterface', 'Eje delantero',
+              axleInterfaceLabel(technicalValues['frontAxleInterface'])),
+          profileFact('rearAxleInterface', 'Eje trasero',
+              axleInterfaceLabel(technicalValues['rearAxleInterface'])),
           baseFact('Maza delantera', formatSpacing(bike.frontHubSpacingMm)),
           baseFact('Maza trasera', formatSpacing(bike.rearHubSpacingMm)),
           profileFact('frontSpokeHoles', 'Rayos delanteros',
@@ -1367,14 +1397,16 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
         return _BikeRecordTechnicalPanelData(
           spec: bikeSystemControllerSpecFor(systemKey)!,
           description:
-              'Rodado, mazas, rayado y válvula viven aquí como base de compatibilidad de ruedas.',
+              'Aro, ejes, mazas, rayos y válvula: con esto se eligen los '
+              'repuestos de rueda que calzan.',
           facts: facts,
-          expectedCount: 6,
+          expectedCount: 8,
           knownCount: knownCount,
           missingText: knownCount == 0
-              ? 'Todavía no hay un kernel upstream confirmado para ruedas.'
-              : knownCount < 6
-                  ? 'Faltan datos de ruedas y mazas para que el historial sea una lectura completa del kernel.'
+              ? 'La ficha todavía no dice nada de las ruedas.'
+              : knownCount < 8
+                  ? 'Faltan datos de ruedas y mazas; el próximo servicio los '
+                      'pregunta.'
                   : null,
         );
       case 'cockpit':

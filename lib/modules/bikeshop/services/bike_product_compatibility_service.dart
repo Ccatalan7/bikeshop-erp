@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/models/product.dart';
 import '../../../shared/models/product_compatibility.dart';
 import '../config/brake_canonical_data.dart';
+import '../config/wheel_canonical_data.dart';
 import '../models/bikeshop_models.dart';
 import '../utils/drivetrain_compatibility_projection.dart';
 
@@ -67,6 +68,7 @@ class BikeProductCompatibilityService {
     'tool_size_mm',
     'brake_circuits',
     'brake_conversion_location',
+    'brake_fluid_declarations',
     'brake_external_hose_connection',
     'brake_model_fluid_approvals',
     'brake_presentation',
@@ -100,6 +102,8 @@ class BikeProductCompatibilityService {
     'tire_tubeless_ready',
     'tire_width_mm',
     'tube_fit_rows',
+    'axle_type',
+    'hub_axle_mount_kind',
     'bearing_application',
     'bearing_size_code',
     'bearing_system',
@@ -508,6 +512,7 @@ class BikeProductCompatibilityService {
     final compatibilityContext = _buildCompatibilityContext(
       bike: bike,
       technicalValues: profile.technicalValues,
+      technicalConfirmed: profile.technicalConfirmed,
     );
     if (compatibilityContext == null) {
       return const {};
@@ -2569,11 +2574,18 @@ class BikeProductCompatibilityService {
         _firstSpecValue(specValues, const ['spoke_hole_count', 'spoke_holes']));
     final freehubType = _canonicalFreehubType(_firstSpecValue(
         specValues, const ['freehub_type', 'hub_drive_receiver_kind']));
+    // El eje de la maza con los códigos de la ficha (paso F.2): el tipo y
+    // diámetro exactos, o sólo el tipo de montaje de la plantilla sucesora.
+    final axleCode = _axleCode(specValues['axle_type']);
+    final axleKind = axleCode != null
+        ? _axleKindForCode(axleCode)
+        : _axleKindFromMountLabel(specValues['hub_axle_mount_kind']);
 
     if (wheelPosition == null &&
         hubSpacingMm == null &&
         spokeHoles == null &&
-        freehubType == null) {
+        freehubType == null &&
+        axleKind == null) {
       return null;
     }
 
@@ -2604,6 +2616,9 @@ class BikeProductCompatibilityService {
     final expectedFreehubType = isFront
         ? null
         : _canonicalFreehubType(compatibilityContext.freehubType);
+    final expectedAxle = isFront
+        ? compatibilityContext.frontAxleInterface
+        : compatibilityContext.rearAxleInterface;
 
     if (hubSpacingMm != null &&
         expectedSpacing != null &&
@@ -2680,13 +2695,39 @@ class BikeProductCompatibilityService {
       }
     }
 
+    // Un eje distinto no descarta la maza: muchas cambian de cierre rápido a
+    // pasante con las tapas del fabricante. Se dice como condición.
+    var axleMatched = false;
+    if (axleKind != null) {
+      final expectedKind =
+          expectedAxle == null ? null : _axleKindForCode(expectedAxle);
+      if (expectedAxle == null) {
+        unresolvedParts
+            .add('eje de la rueda ${_wheelPositionLabel(wheelPosition)}');
+      } else if (axleCode != null && axleCode == expectedAxle) {
+        matchedParts.add('eje ${axleInterfaceLabel(axleCode)!.toLowerCase()}');
+        axleMatched = true;
+      } else if (axleCode == null && axleKind == expectedKind) {
+        matchedParts.add('tipo de eje (${_axleKindLabel(axleKind)})');
+        assemblyConditions.add(
+          'confirmar el diámetro: la bici tiene ${axleInterfaceLabel(expectedAxle)!.toLowerCase()}',
+        );
+      } else {
+        assemblyConditions.add(
+          'eje ${axleCode == null ? _axleKindLabel(axleKind) : axleInterfaceLabel(axleCode)!.toLowerCase()} '
+          'frente a ${axleInterfaceLabel(expectedAxle)!.toLowerCase()} en la bici: '
+          'sólo calza con las tapas o el eje de conversión de esa maza',
+        );
+      }
+    }
+
     if (!isFront &&
         matchedParts.isNotEmpty &&
         unresolvedParts.isEmpty &&
         assemblyConditions.isEmpty) {
       return ProductCompatibilityAssessment.caution(
         detail:
-            'Maza ${_wheelPositionLabel(wheelPosition)} coincide ${matchedParts.join(' · ')}; revisar generacion/largo real del cuerpo, eje y estandar del conjunto',
+            'Maza ${_wheelPositionLabel(wheelPosition)} coincide ${matchedParts.join(' · ')}; revisar generacion/largo real del cuerpo${axleMatched ? '' : ', eje'} y estandar del conjunto',
         sortPriority: 16,
       );
     }
@@ -2696,7 +2737,8 @@ class BikeProductCompatibilityService {
         assemblyConditions.isEmpty) {
       return ProductCompatibilityAssessment.caution(
         detail:
-            'Maza ${_wheelPositionLabel(wheelPosition)} coincide en ${matchedParts.join(' · ')}; faltan eje, retención y montaje de freno.',
+            'Maza ${_wheelPositionLabel(wheelPosition)} coincide en ${matchedParts.join(' · ')}; '
+            '${axleMatched ? 'faltan retención y montaje de freno.' : 'faltan eje, retención y montaje de freno.'}',
       );
     }
 
@@ -2706,7 +2748,9 @@ class BikeProductCompatibilityService {
       ...assemblyConditions,
       if (unresolvedParts.isNotEmpty)
         'falta confirmar ${unresolvedParts.join(', ')}',
-      'revisar eje, retención y montaje de freno',
+      axleMatched
+          ? 'revisar retención y montaje de freno'
+          : 'revisar eje, retención y montaje de freno',
     ];
 
     return ProductCompatibilityAssessment.caution(
@@ -3449,6 +3493,18 @@ class BikeProductCompatibilityService {
     final rotorRecipe = _affirmativeRows(specValues, 'rotor_size_recipe')
         .toList(growable: false);
     final piece = _brakePieceDescription(specValues);
+    // Un fluido que no se mezcla con el de la ficha descarta la pieza antes
+    // que cualquier medida; uno que coincide se dice después de ellas.
+    final fluidAssessment = _assessBrakeFluidAgainstBike(
+      compatibilityContext: compatibilityContext,
+      productFluids: productFluids,
+      productWheel: productWheel,
+      piece: piece,
+      replacesSystem: _replacesWholeBrake(specValues),
+    );
+    if (fluidAssessment?.level == ProductCompatibilityLevel.incompatible) {
+      return fluidAssessment;
+    }
     // BikeProfile has no confirmed per-wheel type or replacement/conversion
     // scope. Its aggregate brakeType cannot refute a front brake on a bike
     // with a rear coaster brake, or identify the installed lever/caliper.
@@ -3467,6 +3523,7 @@ class BikeProductCompatibilityService {
         piece: piece,
       );
     }
+    if (fluidAssessment != null) return fluidAssessment;
     if (productFluids.isNotEmpty) {
       return ProductCompatibilityAssessment.caution(
         detail: '${piece == null ? '' : '$piece. '}'
@@ -3484,6 +3541,179 @@ class BikeProductCompatibilityService {
     );
   }
 
+  /// El fluido de la pieza contra el del freno donde va (paso F.2). Cada
+  /// freno es su propio sistema: Park Tool y SRAM prohíben mezclar fluidos
+  /// dentro de él, no usar otro en el otro freno. Una pieza de un solo freno
+  /// se compara con ese freno; una sin rueda (un líquido, una pieza
+  /// universal), con los dos, y basta que calce con uno. Sólo un fluido
+  /// confirmado en todos los frenos posibles descarta la pieza: uno sugerido
+  /// o desconocido la deja con aviso. Un freno completo (con sus circuitos)
+  /// reemplaza el sistema. DOT 4 y DOT 5.1 son del mismo tipo (glicol) y se
+  /// mezclan entre sí; manda lo que pide el fabricante.
+  ProductCompatibilityAssessment? _assessBrakeFluidAgainstBike({
+    required _BikeCompatibilityContext compatibilityContext,
+    required List<String> productFluids,
+    required String? productWheel,
+    required String? piece,
+    required bool replacesSystem,
+  }) {
+    if (productFluids.isEmpty) return null;
+    final codes =
+        productFluids.map(_brakeFluidCode).whereType<String>().toSet();
+    if (codes.isEmpty) return null;
+    final targets = [
+      if (productWheel != 'rear')
+        (
+          label: 'delantero',
+          fluid: compatibilityContext.frontBrakeFluidType,
+          confirmed: compatibilityContext.frontBrakeFluidConfirmed,
+        ),
+      if (productWheel != 'front')
+        (
+          label: 'trasero',
+          fluid: compatibilityContext.rearBrakeFluidType,
+          confirmed: compatibilityContext.rearBrakeFluidConfirmed,
+        ),
+    ];
+    final known = targets.where((target) => target.fluid != null).toList();
+    if (known.isEmpty) return null;
+    final prefix = piece == null ? '' : '$piece. ';
+    final productLabel = productFluids.join('/');
+    String said(({String label, String? fluid, bool confirmed}) target) =>
+        'el freno ${target.label} usa ${brakeFluidLabel(target.fluid)}'
+        '${target.confirmed ? '' : ' (sugerido, sin confirmar)'}';
+
+    for (final target in known) {
+      if (codes.contains(target.fluid)) {
+        return ProductCompatibilityAssessment.caution(
+          detail: '${prefix}Coincide el fluido: ${said(target)}. Confirma '
+              'los componentes admitidos por el modelo instalado.',
+          sortPriority: 20,
+        );
+      }
+    }
+    for (final target in known) {
+      if (codes.any((code) =>
+          _brakeFluidFamily(code) == _brakeFluidFamily(target.fluid!))) {
+        return ProductCompatibilityAssessment.caution(
+          detail: '$prefix${_capitalized(said(target))} y la pieza '
+              '$productLabel: son del mismo tipo, pero manda el fluido que '
+              'pide el fabricante.',
+          sortPriority: 26,
+        );
+      }
+    }
+    final described = known.map(said).join('; ');
+    if (replacesSystem) {
+      return ProductCompatibilityAssessment.caution(
+        detail: '${prefix}Freno completo con $productLabel; '
+            '$described. Reemplaza el sistema entero: no se mezcla con lo '
+            'instalado.',
+        sortPriority: 30,
+      );
+    }
+    final refuted =
+        targets.every((target) => target.fluid != null && target.confirmed);
+    if (!refuted) {
+      return ProductCompatibilityAssessment.caution(
+        detail: '$prefix${_capitalized(described)}, y la pieza es '
+            '$productLabel. Confírmalo antes: dentro de un freno, DOT y '
+            'aceite mineral no se mezclan.',
+        sortPriority: 30,
+      );
+    }
+    return ProductCompatibilityAssessment.incompatible(
+      detail: '$prefix${_capitalized(described)}, y la pieza es '
+          '$productLabel: dentro de un freno, DOT y aceite mineral no se '
+          'mezclan (los sellos son de uno solo). Sólo sirve cambiando ese '
+          'freno completo.',
+    );
+  }
+
+  /// Un freno completo trae manilla y cáliper en cada circuito: sólo así el
+  /// fluido que trae reemplaza el del freno instalado. «Cáliper con
+  /// manguera, sin maneta» deja la manilla puesta, y su fluido se mezcla con
+  /// el de ella (Codex, revisión del paso F.2).
+  bool _replacesWholeBrake(Map<String, dynamic> specValues) {
+    final circuits = _specRows(specValues, 'brake_circuits');
+    return circuits.isNotEmpty &&
+        circuits.every((circuit) =>
+            _confirmedText(circuit['lever_row_id']) != null &&
+            _confirmedText(circuit['caliper_row_id']) != null);
+  }
+
+  static String _capitalized(String text) =>
+      text.isEmpty ? text : '${text[0].toUpperCase()}${text.substring(1)}';
+
+  /// Un fluido escrito como código o como etiqueta del registro → su código:
+  /// `aceite_mineral`, `dot_3`, `dot_4`, `dot_5` o `dot_5_1`.
+  static String? _brakeFluidCode(dynamic raw) {
+    if (raw == null) return null;
+    final text = raw
+        .toString()
+        .trim()
+        .toLowerCase()
+        .replaceAll('_', ' ')
+        .replaceAll(RegExp(r'\s+'), ' ');
+    if (text.isEmpty) return null;
+    if (text.contains('mineral')) return 'aceite_mineral';
+    final dot = RegExp(r'^dot ?(3|4|5(?:[ .]?1)?)$').firstMatch(text);
+    if (dot == null) return null;
+    return switch (dot.group(1)!.replaceAll(RegExp(r'[ .]'), '')) {
+      '3' => 'dot_3',
+      '4' => 'dot_4',
+      '5' => 'dot_5',
+      '51' => 'dot_5_1',
+      _ => null,
+    };
+  }
+
+  /// DOT 3, 4 y 5.1 son glicol; DOT 5 es silicona; el mineral, aceite.
+  static String _brakeFluidFamily(String code) => switch (code) {
+        'aceite_mineral' => 'mineral',
+        'dot_5' => 'silicona',
+        _ => 'glicol',
+      };
+
+  /// Un eje escrito como código o como etiqueta del registro `axle_type` →
+  /// su código; «Desconocido» y lo que no está en el registro, `null`.
+  static String? _axleCode(dynamic raw) {
+    if (raw == null) return null;
+    final text = raw.toString().trim();
+    if (kAxleInterfaceLabels.containsKey(text)) return text;
+    for (final entry in kAxleInterfaceLabels.entries) {
+      if (entry.value.toLowerCase() == text.toLowerCase()) return entry.key;
+    }
+    return null;
+  }
+
+  /// El tipo de montaje de un eje: lo que dice `hub_axle_mount_kind`.
+  static String? _axleKindForCode(String code) {
+    final label = kAxleInterfaceLabels[code]?.toLowerCase();
+    if (label == null) return null;
+    if (label.startsWith('cierre rápido')) return 'quick_release';
+    if (label.startsWith('eje pasante')) return 'thru_axle';
+    if (label.startsWith('eje macizo')) return 'nutted';
+    return null;
+  }
+
+  static String? _axleKindFromMountLabel(dynamic raw) {
+    final text = raw?.toString().trim().toLowerCase();
+    return switch (text) {
+      'cierre rápido' => 'quick_release',
+      'eje pasante' => 'thru_axle',
+      'eje con tuercas' => 'nutted',
+      _ => null,
+    };
+  }
+
+  static String _axleKindLabel(String kind) => switch (kind) {
+        'quick_release' => 'cierre rápido',
+        'thru_axle' => 'eje pasante',
+        'nutted' => 'eje con tuercas',
+        _ => kind,
+      };
+
   /// The wheel a brake piece or a recipe row names, whatever the spelling:
   /// `front`, `Delantero`, `trasero`, `Universal`.
   String? _brakeWheel(dynamic raw) {
@@ -3495,7 +3725,10 @@ class BikeProductCompatibilityService {
   }
 
   /// Fluids a piece names: the retired `fluid_type`, the approvals table of
-  /// a caliper or lever, and the fluid a complete brake ships with.
+  /// a caliper or lever, the fluid a complete brake ships with, and what a
+  /// bottle declares. `fluid_type` is retired from the `brake_fluid`
+  /// template, so the reader never sends it for a bottle: its fluid lives in
+  /// `brake_fluid_declarations` (Codex, revisión del paso F.2).
   List<String> _brakeFluidsFromSpecs(Map<String, dynamic> specValues) {
     final fluids = <String>{};
     void add(dynamic raw) {
@@ -3509,6 +3742,9 @@ class BikeProductCompatibilityService {
     }
     for (final row in _specRows(specValues, 'brake_circuits')) {
       add(row['fluid_as_shipped']);
+    }
+    for (final row in _specRows(specValues, 'brake_fluid_declarations')) {
+      add(row['fluid_class']);
     }
     return fluids.toList()..sort();
   }
@@ -3689,6 +3925,7 @@ class BikeProductCompatibilityService {
   _BikeCompatibilityContext? _buildCompatibilityContext({
     required Bike bike,
     required Map<String, dynamic> technicalValues,
+    Map<String, dynamic> technicalConfirmed = const {},
   }) {
     final compatibilityContext = _BikeCompatibilityContext(
       bikeType: bike.bikeType?.dbValue,
@@ -3743,6 +3980,15 @@ class BikeProductCompatibilityService {
         technicalValues['spindleInterface'] ??
             technicalValues['spindle_interface'],
       ),
+      frontBrakeFluidType:
+          _brakeFluidCode(technicalValues['frontBrakeFluidType']),
+      rearBrakeFluidType:
+          _brakeFluidCode(technicalValues['rearBrakeFluidType']),
+      frontBrakeFluidConfirmed:
+          technicalConfirmed['frontBrakeFluidType'] == true,
+      rearBrakeFluidConfirmed: technicalConfirmed['rearBrakeFluidType'] == true,
+      frontAxleInterface: _axleCode(technicalValues['frontAxleInterface']),
+      rearAxleInterface: _axleCode(technicalValues['rearAxleInterface']),
     );
 
     if (!compatibilityContext.hasKernelFacts) {
@@ -5055,6 +5301,13 @@ class _BikeCompatibilityContext {
   final double? bbShellWidthMm;
   final double? bbShellDiameterMm;
   final String? spindleInterface;
+  // Paso F.2: códigos del registro (`fluid_type`, `axle_type`).
+  final String? frontBrakeFluidType;
+  final String? rearBrakeFluidType;
+  final bool frontBrakeFluidConfirmed;
+  final bool rearBrakeFluidConfirmed;
+  final String? frontAxleInterface;
+  final String? rearAxleInterface;
 
   const _BikeCompatibilityContext({
     required this.bikeType,
@@ -5080,10 +5333,20 @@ class _BikeCompatibilityContext {
     required this.bbShellWidthMm,
     required this.bbShellDiameterMm,
     required this.spindleInterface,
+    this.frontBrakeFluidType,
+    this.rearBrakeFluidType,
+    this.frontBrakeFluidConfirmed = false,
+    this.rearBrakeFluidConfirmed = false,
+    this.frontAxleInterface,
+    this.rearAxleInterface,
   });
 
   bool get hasKernelFacts {
-    return bikeType != null ||
+    return frontBrakeFluidType != null ||
+        rearBrakeFluidType != null ||
+        frontAxleInterface != null ||
+        rearAxleInterface != null ||
+        bikeType != null ||
         wheelSize != null ||
         frontHubSpacingMm != null ||
         rearHubSpacingMm != null ||

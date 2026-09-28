@@ -591,6 +591,14 @@ coordinador de apply → assertions → stamp → read-back, y
 `migration_status.sh` consulta la autoridad remota. El receipt local ayuda a la
 auditoría, pero no sustituye el stamp.
 
+**2026-09-27 — una migración desplegada queda congelada byte a byte.** El
+receipt guarda el SHA-256 de la migración y de cada `--verify`. Cambiar después
+aunque sea el comentario `-- Deployment status` de la primera línea deja el
+archivo distinto del que se aplicó, y el receipt ya no lo prueba: pasó con
+`20260927030000` y lo detectó la revisión de Codex. El estado vive en
+`schema_migrations` y en el receipt; una migración nueva no lleva comentario de
+estado, y la de un archivo desplegado no se corrige.
+
 **2026-09-10 — una migración que otra migración «salta» sigue pendiente, y el
 cliente ya la llama.** `20260723023000_add_audited_sales_payment_corrections`
 nunca se estampó; `20260819180000` redefinía `correct_sales_payment` dentro de
@@ -1095,6 +1103,27 @@ doble en ninguno de los dos casos**; lo que se pierde sin el bloqueo es la
 protección propia de la revisión, y por eso la sonda afirma el error exacto y
 no «que falle».
 
+**Esperar no es volver a leer (2026-09-27).** `patch_bike_technical_facts_v1`
+leía el estado FINALIZADO del trabajo sin bloqueo y después escribía lo
+instalado. En la sonda (`scripts/db/bike_fact_completion_lock_probe.sh`) la
+escritura **sí esperó** a la cancelación: el `insert` de su recibo y de su
+evento chequea la llave foránea a `mechanic_jobs`, y ese chequeo toma
+`for key share`, que choca con el `for update` de la transición. Cuando la
+cancelación confirmó, el chequeo pasó (la fila seguía ahí) y la función siguió
+con la decisión que ya había tomado: trabajo CANCELADO, ficha en 28H y un
+recibo. Una espera que aparece en los tiempos no prueba nada; lo que protege
+es leer la condición bajo el bloqueo (`select … where status in (…) for
+share`), que en READ COMMITTED se reevalúa sobre la versión confirmada. Desde
+20260928010000 la escritura ve el trabajo cancelado y se rechaza.
+
+Dos detalles de la sonda que costaron una corrida: `query.sh` tarda varios
+segundos en arrancar, así que con `pg_sleep(4)` la segunda conexión llegó
+después del commit y «pasó» sin competir (la sesión que retiene duerme 15 s);
+y el hook de Bash rechaza un comando cuyo texto trae SQL («Raw SQL and
+Supabase database commands bypass…»), también en un heredoc que sólo escribe
+un archivo. El SQL de una sonda se escribe como archivo en
+`supabase/manual_checks/probes/` y el script sólo nombra rutas.
+
 ## Una reversa se fecha el día del movimiento que anula (2026-09-19)
 
 `reverse_payroll_settlement_v1` escribía el contra-pago con
@@ -1352,3 +1381,20 @@ is_published`: esa condición daba 128 cámaras y la tienda muestra 22. Así se
 eligió la grilla de la portada del 2026-09-25 (Ruedas 152, Transmisión 63,
 Accesorios 61, Frenos 61, Cambios 58, Dirección 33 visibles). Una categoría
 sólo es destino público con `show_on_website`; el 2026-09-25 había 7 de 137.
+
+## Un vocabulario del registro dentro de una RPC se prueba en local y se iguala en producción (2026-09-27)
+
+La base local no trae el registro de especificaciones que usan las fichas:
+el 2026-09-27 no tenía `spec_definition_values` ni las definiciones
+`axle_type` y `fluid_type`, así que una RPC que validara contra el registro
+en tiempo de ejecución no se podía probar con pgTAP. En
+`20260928030000_bike_technical_fact_fluid_and_axle.sql` los códigos van
+escritos en la función, como los demás vocabularios del comando, y el
+read-back comprueba en producción las dos direcciones: cada código activo y
+global del registro, sin «Desconocido / sin confirmar», está en el cuerpo, y
+el registro tiene exactamente tantos como el cuerpo nombra. Si alguien agrega
+un eje al registro, el siguiente read-back falla y el comando lo rechaza con
+«unknown value» hasta su migración: el desfase se ve, no se come.
+«Desconocido / sin confirmar» del registro es un código `catalog_…`, no el
+texto `unknown`: la guardia que rechaza confirmar lo desconocido tiene que
+nombrar ese código aparte.

@@ -10,6 +10,7 @@ import 'package:uuid/uuid.dart';
 import '../config/brake_canonical_data.dart';
 import '../config/bottom_bracket_canonical_data.dart';
 import '../config/drivetrain_canonical_data.dart';
+import '../config/wheel_canonical_data.dart';
 import '../models/bikeshop_models.dart';
 import '../services/bikeshop_service.dart';
 import '../widgets/bike_system_controller.dart';
@@ -40,6 +41,16 @@ const Map<String, String> _suspensionLayoutOptions = {
   'full_suspension': 'Doble suspension',
   'unknown': 'Desconocido',
 };
+
+/// El eje de cada rueda con «Desconocido / sin confirmar» del registro, que
+/// se guarda como revisado y nunca como confirmado.
+const Map<String, String> _axleInterfaceOptions = {
+  ...kAxleInterfaceLabels,
+  kRegistryUnknownCode: 'Desconocido / sin confirmar',
+};
+
+bool _isKnownAxleInterface(String? value) =>
+    value != null && kAxleInterfaceLabels.containsKey(value);
 
 const Map<String, String> _valveTypeOptions = {
   'presta': 'Presta',
@@ -323,6 +334,11 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   String? _spindleInterface;
   int? _frontRotorSizeMm;
   int? _rearRotorSizeMm;
+  // Paso F.2: códigos del registro (`fluid_type`, `axle_type`).
+  String? _frontBrakeFluidType;
+  String? _rearBrakeFluidType;
+  String? _frontAxleInterface;
+  String? _rearAxleInterface;
   int? _frontChainringCount;
   int? _rearCogCount;
   String? _legacyDrivetrainConfig;
@@ -463,6 +479,14 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
             ) ??
             technicalValues['spindleInterface']?.toString() ??
             technicalValues['spindle_interface']?.toString();
+        _frontBrakeFluidType = canonicalBrakeFluidTypeValue(
+          technicalValues['frontBrakeFluidType']?.toString(),
+        );
+        _rearBrakeFluidType = canonicalBrakeFluidTypeValue(
+          technicalValues['rearBrakeFluidType']?.toString(),
+        );
+        _frontAxleInterface = technicalValues['frontAxleInterface']?.toString();
+        _rearAxleInterface = technicalValues['rearAxleInterface']?.toString();
         _frontRotorSizeMm = !_isDiscBrakeType(_brakeType)
             ? null
             : _parseNullableIntValue(technicalValues['frontRotorSizeMm']);
@@ -893,6 +917,9 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         _clearRotorSizeTechnicalValues();
         _clearRimBrakeFamilyTechnicalValue();
       }
+      // El fluido de cada freno no se borra al cambiar el tipo de la bici
+      // entera: queda a la vista mientras tenga valor, y lo quita el mecánico
+      // (Codex, revisión del paso F.2: se perdía el del otro freno).
     });
   }
 
@@ -1127,6 +1154,13 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
 
   bool get _showRotorSizeFields => _isDiscBrakeType(_brakeType);
 
+  /// El fluido de cada freno se pregunta con disco hidráulico; con otro freno
+  /// se muestra sólo si la ficha ya lo tiene (un freno de llanta hidráulico),
+  /// para no esconder un dato guardado.
+  bool _showBrakeFluidField({required bool isFront}) =>
+      _brakeType == 'hydraulic_disc' ||
+      (isFront ? _frontBrakeFluidType : _rearBrakeFluidType) != null;
+
   bool get _hasExplicitFreehubSelection =>
       _freehubType != null && _freehubType!.trim().isNotEmpty;
 
@@ -1293,7 +1327,11 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       return 'La ficha técnica marca esta bicicleta como $brakeLabel. Por eso no se piden rotores ni familia de freno de llanta.';
     }
 
-    return 'Los diámetros se eligen desde medidas estándar para poder enlazarlos con compatibilidad de rotor upstream.';
+    return _brakeType == 'hydraulic_disc'
+        ? 'Rotor y fluido deciden qué pastillas, rotores y líquido de purga '
+            'calzan. Cada freno es su propio sistema: dentro de él, DOT y '
+            'mineral no se mezclan.'
+        : 'El diámetro del rotor decide qué rotores y adaptadores calzan.';
   }
 
   String _drivetrainKernelFooterText() {
@@ -1768,6 +1806,10 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         _rearSpokeHolesController.text.trim().isNotEmpty ||
         _frontRotorSizeMm != null ||
         _rearRotorSizeMm != null ||
+        _frontBrakeFluidType != null ||
+        _rearBrakeFluidType != null ||
+        _frontAxleInterface != null ||
+        _rearAxleInterface != null ||
         _effectiveDrivetrainSpeeds != null ||
         (_effectiveDrivetrainConfig?.isNotEmpty ?? false) ||
         _acquisitionCondition != null ||
@@ -1832,6 +1874,10 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       'rearSpokeHoles',
       'frontRotorSizeMm',
       'rearRotorSizeMm',
+      'frontBrakeFluidType',
+      'rearBrakeFluidType',
+      'frontAxleInterface',
+      'rearAxleInterface',
       'drivetrainSpeeds',
       'drivetrainConfig',
     };
@@ -1863,6 +1909,13 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         'frontRotorSizeMm': _frontRotorSizeMm,
       if (_showRotorSizeFields && _rearRotorSizeMm != null)
         'rearRotorSizeMm': _rearRotorSizeMm,
+      if (_frontBrakeFluidType != null)
+        'frontBrakeFluidType': _frontBrakeFluidType,
+      if (_rearBrakeFluidType != null)
+        'rearBrakeFluidType': _rearBrakeFluidType,
+      if (_frontAxleInterface != null)
+        'frontAxleInterface': _frontAxleInterface,
+      if (_rearAxleInterface != null) 'rearAxleInterface': _rearAxleInterface,
       if (_effectiveDrivetrainSpeeds != null)
         'drivetrainSpeeds': _effectiveDrivetrainSpeeds,
       if (_effectiveDrivetrainConfig != null &&
@@ -1874,10 +1927,15 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       ..removeWhere((key, _) =>
           managedTechnicalKeys.contains(key) &&
           !technicalValues.containsKey(key));
+    // «Desconocido» queda guardado como revisado por el mecánico, pero nunca
+    // confirmado: no es un dato de la bici y el próximo servicio lo vuelve a
+    // preguntar (2026-09-27; `patch_bike_technical_facts_v1` no lo escribe).
     final technicalConfirmed = Map<String, dynamic>.from(_technicalConfirmed)
       ..removeWhere((key, _) =>
           managedTechnicalKeys.contains(key) &&
-          !technicalValues.containsKey(key));
+          (!technicalValues.containsKey(key) ||
+              technicalValues[key] == 'unknown' ||
+              technicalValues[key] == kRegistryUnknownCode));
 
     final summarySnapshot = <String, dynamic>{
       ...?_existingProfile?.summarySnapshot,
@@ -3077,12 +3135,17 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
             _rimBrakeFamily != 'unknown');
     final rotorResolved = !_isDiscBrakeType(_brakeType) ||
         (isFront ? _frontRotorSizeMm != null : _rearRotorSizeMm != null);
+    final fluidResolved = _brakeType != 'hydraulic_disc' ||
+        (isFront ? _frontBrakeFluidType : _rearBrakeFluidType) != null;
 
-    final knownCount = [brakeTypeKnown, rimFamilyResolved, rotorResolved]
-        .where((value) => value)
-        .length;
+    final knownCount = [
+      brakeTypeKnown,
+      rimFamilyResolved,
+      rotorResolved,
+      fluidResolved,
+    ].where((value) => value).length;
 
-    return _statusFromCompleteness(knownCount: knownCount, totalCount: 3);
+    return _statusFromCompleteness(knownCount: knownCount, totalCount: 4);
   }
 
   BikeSystemOverallStatus _technicalSystemStatus(String systemKey) {
@@ -3104,12 +3167,13 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       case 'front_wheel':
         final knownCount = [
           _wheelSizeController.text.trim().isNotEmpty,
+          _isKnownAxleInterface(_frontAxleInterface),
           _parseNullableWholeNumberText(_frontHubSpacingController.text) !=
               null,
           _parseNullableIntText(_frontSpokeHolesController.text) != null,
           _valveType != null && _valveType!.isNotEmpty,
         ].where((value) => value).length;
-        return _statusFromCompleteness(knownCount: knownCount, totalCount: 4);
+        return _statusFromCompleteness(knownCount: knownCount, totalCount: 5);
       case 'drivetrain':
         final knownCount = [
           _effectiveDrivetrainConfig != null &&
@@ -3140,11 +3204,12 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       case 'rear_wheel':
         final knownCount = [
           _wheelSizeController.text.trim().isNotEmpty,
+          _isKnownAxleInterface(_rearAxleInterface),
           _parseNullableWholeNumberText(_rearHubSpacingController.text) != null,
           _parseNullableIntText(_rearSpokeHolesController.text) != null,
           _valveType != null && _valveType!.isNotEmpty,
         ].where((value) => value).length;
-        return _statusFromCompleteness(knownCount: knownCount, totalCount: 4);
+        return _statusFromCompleteness(knownCount: knownCount, totalCount: 5);
       case 'wheels':
         final knownCount = [
           _wheelSizeController.text.trim().isNotEmpty,
@@ -4351,6 +4416,53 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       },
     );
 
+    // Paso F.2: fluido de cada freno y eje de cada rueda, con los códigos del
+    // registro que usan los servicios y las fichas del inventario.
+    Widget brakeFluidField({required bool isFront}) {
+      final value = isFront ? _frontBrakeFluidType : _rearBrakeFluidType;
+      return _buildCodeDropdown(
+        value: value,
+        label: 'Fluido de freno',
+        options: _resolvedLabeledOptions(kBrakeFluidTypeOptions, value),
+        selectedLabels: kBrakeFluidTypeLabels,
+        icon: Icons.water_drop_outlined,
+        onChanged: (selected) {
+          setState(() {
+            if (isFront) {
+              _frontBrakeFluidType = selected;
+            } else {
+              _rearBrakeFluidType = selected;
+            }
+            _markTechnicalFieldManual(
+              isFront ? 'frontBrakeFluidType' : 'rearBrakeFluidType',
+            );
+          });
+        },
+      );
+    }
+
+    Widget axleField({required bool isFront}) {
+      final value = isFront ? _frontAxleInterface : _rearAxleInterface;
+      return _buildCodeDropdown(
+        value: value,
+        label: isFront ? 'Eje delantero' : 'Eje trasero',
+        options: _resolvedLabeledOptions(_axleInterfaceOptions, value),
+        icon: Icons.settings_ethernet_outlined,
+        onChanged: (selected) {
+          setState(() {
+            if (isFront) {
+              _frontAxleInterface = selected;
+            } else {
+              _rearAxleInterface = selected;
+            }
+            _markTechnicalFieldManual(
+              isFront ? 'frontAxleInterface' : 'rearAxleInterface',
+            );
+          });
+        },
+      );
+    }
+
     final activeSystemKey = _activeTechnicalSystemKey();
     final isCompact = ResponsiveViewport.usesCompactShell(context);
 
@@ -4367,12 +4479,14 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       'front_brake' => _buildTechnicalKernelGroup(
           title: 'Freno delantero',
           description:
-              'Confirma la plataforma del freno y el rotor delantero cuando corresponda.',
+              'Confirma la plataforma del freno, el rotor delantero y el fluido cuando corresponda.',
           icon: Icons.radio_button_checked,
           fields: [
             brakeTypeField,
             if (_showRimBrakeFamilyField) rimBrakeFamilyField,
             if (_showRotorSizeFields) frontRotorField,
+            if (_showBrakeFluidField(isFront: true))
+              brakeFluidField(isFront: true),
           ],
           minItemWidth: 220,
           footerText: _brakeKernelFooterText(),
@@ -4380,12 +4494,14 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       'rear_brake' => _buildTechnicalKernelGroup(
           title: 'Freno trasero',
           description:
-              'Confirma la plataforma del freno y el rotor trasero cuando corresponda.',
+              'Confirma la plataforma del freno, el rotor trasero y el fluido cuando corresponda.',
           icon: Icons.adjust,
           fields: [
             brakeTypeField,
             if (_showRimBrakeFamilyField) rimBrakeFamilyField,
             if (_showRotorSizeFields) rearRotorField,
+            if (_showBrakeFluidField(isFront: false))
+              brakeFluidField(isFront: false),
           ],
           minItemWidth: 220,
           footerText: _brakeKernelFooterText(),
@@ -4409,17 +4525,18 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       'front_wheel' => _buildTechnicalKernelGroup(
           title: 'Rueda delantera',
           description:
-              'Aro, ancho de maza, cantidad de rayos y tipo de válvula de la rueda delantera.',
+              'Aro, eje, ancho de maza, cantidad de rayos y tipo de válvula de la rueda delantera.',
           icon: Icons.tire_repair_outlined,
           fields: [
             _buildWheelSizeField(),
+            axleField(isFront: true),
             frontHubSpacingField,
             frontSpokeHolesField,
             valveTypeField,
           ],
           minItemWidth: 220,
           footerText:
-              'Aro y válvula describen el conjunto; ancho de maza y rayos corresponden a esta rueda.',
+              'Aro y válvula describen el conjunto; eje, ancho de maza y rayos corresponden a esta rueda.',
         ),
       'bottom_bracket' => _buildTechnicalKernelGroup(
           title: 'Pedalier / BB',
@@ -4439,17 +4556,18 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       'rear_wheel' => _buildTechnicalKernelGroup(
           title: 'Rueda trasera',
           description:
-              'Aro, ancho de maza, cantidad de rayos y tipo de válvula de la rueda trasera.',
+              'Aro, eje, ancho de maza, cantidad de rayos y tipo de válvula de la rueda trasera.',
           icon: Icons.tire_repair_outlined,
           fields: [
             _buildWheelSizeField(),
+            axleField(isFront: false),
             rearHubSpacingField,
             rearSpokeHolesField,
             valveTypeField,
           ],
           minItemWidth: 220,
           footerText:
-              'Aro y válvula describen el conjunto; ancho de maza y rayos corresponden a esta rueda.',
+              'Aro y válvula describen el conjunto; eje, ancho de maza y rayos corresponden a esta rueda.',
         ),
       'wheels' => _buildTechnicalKernelGroup(
           title: 'Wheelset agregado',
@@ -4458,6 +4576,8 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
           icon: Icons.tire_repair_outlined,
           fields: [
             _buildWheelSizeField(),
+            axleField(isFront: true),
+            axleField(isFront: false),
             frontHubSpacingField,
             rearHubSpacingField,
             frontSpokeHolesField,
@@ -4844,6 +4964,9 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     required Map<String, String> options,
     required IconData icon,
     required ValueChanged<String?> onChanged,
+    // Lo que se lee en el campo ya elegido, cuando la opción de la lista
+    // lleva una ayuda que no cabe (el fluido con sus marcas).
+    Map<String, String>? selectedLabels,
   }) {
     return DropdownButtonFormField<String>(
       key: ValueKey<String>(
@@ -4851,6 +4974,16 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       ),
       isExpanded: true,
       initialValue: value,
+      selectedItemBuilder: selectedLabels == null
+          ? null
+          : (context) => [
+                for (final entry in options.entries)
+                  Text(
+                    selectedLabels[entry.key] ?? entry.value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+              ],
       decoration: InputDecoration(
         labelText: label,
         border: const OutlineInputBorder(),

@@ -411,6 +411,36 @@ scripts/dev/app_control.sh tap --label "Nóminas" --index 0
    `read` de un segundo después la muestre como `[botón]`. Comprueba con `read`
    antes de concluir que no está.
 
+### Abrir «Configurar» de una línea de servicio sin aplicar nada (2026-09-27, rehecho con G3)
+
+Para capturar la configuración de un servicio sobre un trabajo real (la app
+corre contra producción):
+
+```bash
+scripts/dev/app_control.sh tap --label "Buscar trabajos..."   # falla, pero enfoca
+scripts/dev/app_control.sh type "PG-00414"
+scripts/dev/app_control.sh tap --label "<cliente> · <bici> · <estado>"  # la fila
+scripts/dev/app_control.sh tap --label "Productos y Servicios"
+scripts/dev/app_control.sh tap --label "Acciones de Línea N, <servicio>"  # el «⋯»
+scripts/dev/app_control.sh tap --label "Configurar servicio"
+scripts/dev/app_control.sh tap --key service_configuration_cancel      # cerrar
+```
+
+- En escritorio se abre **bajo la línea**; en 430 px, en una hoja inferior.
+  El chip «Falta: …» de la línea también lo abre.
+- **Se cierra por clave, no por rótulo:** `tap --label "Cancelar"` puede
+  resolver el «Cancelar» del trabajo, que sale del formulario. Las acciones
+  del panel son `service_configuration_cancel` y `service_configuration_apply`.
+  Escape también cierra con el foco dentro. «Aplicar» cambia la línea (sin
+  guardar) y obliga a descartar al salir: no se toca para una captura.
+- **En teléfono (430)** el «⋯» de abajo no es tocable hasta entrar al
+  viewport: `drag 430 1500 430 600` en bucle hasta que `find` lo vea.
+- `click` y `scroll` piden píxeles del `shot`, y `find` imprime lógicos; con
+  `scroll`, las líneas negativas bajan (`scroll X Y -12`).
+- Al salir: «Cancelar» del trabajo no pregunta si no hubo cambios; en la lista
+  de trabajos, `tap --label "Inicio"` coincide con 11 textos de los hitos:
+  `--index 0` es el del menú.
+
 ### Capturar un estado que sólo existe MIENTRAS carga
 
 El esqueleto de carga (5k) se dibuja sólo en el **primer** montaje de la

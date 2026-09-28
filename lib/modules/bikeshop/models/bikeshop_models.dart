@@ -3,6 +3,8 @@
 import 'dart:ui' show Color;
 
 import '../config/bottom_bracket_canonical_data.dart';
+import '../config/brake_canonical_data.dart';
+import '../config/wheel_canonical_data.dart';
 import '../../../shared/models/tax_treatment.dart';
 
 /// Sentinel object used in copyWith to distinguish between "not provided" and "explicitly null"
@@ -781,15 +783,38 @@ class BikeProfileSummaryBuilder {
             : 'Transmision: ${drivetrainSpeeds}v',
       );
     }
+    // El ancho entre punteras es de la maza; «eje» es el tipo de eje de cada
+    // rueda (paso F.2). Antes el ancho se mostraba como «Eje delantero».
     if (bike.frontHubSpacingMm != null) {
       highlights.add(
-        'Eje delantero: ${_formatBikeSpacing(bike.frontHubSpacingMm!)} mm',
+        'Maza delantera: ${_formatBikeSpacing(bike.frontHubSpacingMm!)} mm',
       );
     }
     if (bike.rearHubSpacingMm != null) {
       highlights.add(
-        'Eje trasero: ${_formatBikeSpacing(bike.rearHubSpacingMm!)} mm',
+        'Maza trasera: ${_formatBikeSpacing(bike.rearHubSpacingMm!)} mm',
       );
+    }
+    final frontAxle = axleInterfaceLabel(technicalValues['frontAxleInterface']);
+    if (frontAxle != null) {
+      highlights.add('Eje delantero: $frontAxle');
+    }
+    final rearAxle = axleInterfaceLabel(technicalValues['rearAxleInterface']);
+    if (rearAxle != null) {
+      highlights.add('Eje trasero: $rearAxle');
+    }
+    // Cada freno es su propio sistema: si los dos dicen lo mismo, una línea.
+    final frontFluid = technicalValues['frontBrakeFluidType'];
+    final rearFluid = technicalValues['rearBrakeFluidType'];
+    if (frontFluid != null && frontFluid == rearFluid) {
+      highlights.add('Fluido de freno: ${brakeFluidLabel(frontFluid)}');
+    } else {
+      if (frontFluid != null) {
+        highlights.add('Fluido delantero: ${brakeFluidLabel(frontFluid)}');
+      }
+      if (rearFluid != null) {
+        highlights.add('Fluido trasero: ${brakeFluidLabel(rearFluid)}');
+      }
     }
     if (freehub != null) {
       highlights.add('Freehub: $freehub');
@@ -846,8 +871,8 @@ class BikeProfileSummaryBuilder {
     required Map<String, dynamic> technicalValues,
     DateTime? lastConfirmedAt,
   }) {
-    final confirmedAt = lastConfirmedAt ?? DateTime.now();
-
+    // Sin fecha no se inventa una: una ficha nacida sólo de sugerencias no
+    // tiene confirmación de un mecánico (2026-09-27).
     return {
       'identityLine': buildIdentityLine(bike),
       'intakeHighlights': buildIntakeHighlights(intakeProfile),
@@ -859,7 +884,8 @@ class BikeProfileSummaryBuilder {
         bike: bike,
         technicalValues: technicalValues,
       ),
-      'lastConfirmedAt': confirmedAt.toIso8601String(),
+      if (lastConfirmedAt != null)
+        'lastConfirmedAt': lastConfirmedAt.toIso8601String(),
     };
   }
 }
@@ -952,8 +978,11 @@ class BikeRecordSnapshot {
       technicalLines: technicalLines,
       notesLines: notesLines,
       warnings: warnings,
-      lastConfirmedAt: profile?.lastConfirmedAt ??
-          _parseDateNullable(summarySnapshot['lastConfirmedAt']),
+      // Con ficha, manda su columna, también cuando es null; el resumen sólo
+      // es una copia.
+      lastConfirmedAt: profile != null
+          ? profile.lastConfirmedAt
+          : _parseDateNullable(summarySnapshot['lastConfirmedAt']),
       hasStructuredProfile: profile != null,
       isProfileComplete: intakeLines.isNotEmpty &&
           technicalLines.isNotEmpty &&

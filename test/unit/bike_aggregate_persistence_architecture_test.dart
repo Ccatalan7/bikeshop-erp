@@ -209,6 +209,25 @@ void main() {
     expect(registry, contains('saveBikeAggregate'));
   });
 
+  test('el trabajo escribe en la ficha dato por dato, nunca la fila completa',
+      () {
+    final jobForm = File(
+      'lib/modules/bikeshop/pages/mechanic_job_form_page.dart',
+    ).readAsStringSync();
+    final service = File(
+      'lib/modules/bikeshop/services/bikeshop_service.dart',
+    ).readAsStringSync();
+
+    expect(jobForm, contains('patchBikeTechnicalFacts('));
+    // La diferencia dato por dato vive en `writePendingBikeFactPromotions`
+    // (bike_technical_fact_patch.dart), con su prueba propia.
+    expect(jobForm, contains('writePendingBikeFactPromotions('));
+    expect(service, contains("'patch_bike_technical_facts_v1'"));
+    // La reescritura de la fila completa pisaba cambios hechos en la ficha
+    // mientras el trabajo estaba abierto (2026-09-27).
+    expect(service, isNot(contains('upsertBikeProfile(')));
+  });
+
   test('debug fixture cannot recreate the paired bike and profile write', () {
     final source = File(
       'lib/modules/bikeshop/pages/pegas_table_page.dart',

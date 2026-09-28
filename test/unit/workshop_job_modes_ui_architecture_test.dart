@@ -96,8 +96,10 @@ void main() {
     final exactWarrantyGuard = form.indexOf(
       'if (!_warrantySourceObjectMatchesForm(warrantySource))',
     );
+    // Desde 2026-09-27 la ficha se escribe al final del guardado, después del
+    // trabajo y sus líneas; la guardia de garantía sigue antes de todo eso.
     final firstPersistence = form.indexOf(
-      'await _persistPendingBikeProfileOverrides(bikeshopService);',
+      'await _persistPendingBikeProfileOverrides(bikeshopService, jobId);',
     );
     expect(exactWarrantyGuard, greaterThanOrEqualTo(0));
     expect(firstPersistence, greaterThan(exactWarrantyGuard));

@@ -78,9 +78,21 @@ const Map<String, String> kBrakeWheelOptions = {
   'both': 'Ambas ruedas',
 };
 
+/// Los códigos del registro `fluid_type`, los mismos que guarda la ficha
+/// (`brakeFluidType`) y que acepta `patch_bike_technical_facts_v1`. Antes del
+/// paso F.2 el asistente los juntaba en `mineral` y `dot`, que la ficha no
+/// puede guardar: DOT 4 y DOT 5.1 son fluidos distintos para el fabricante.
 const Map<String, String> kBrakeFluidTypeOptions = {
-  'mineral': 'Aceite Mineral (Shimano / Magura / Tektro)',
-  'dot': 'DOT 4 / 5.1 (SRAM / Hayes / Hope)',
+  'aceite_mineral': 'Mineral (Shimano, Tektro, Magura)',
+  'dot_4': 'DOT 4',
+  'dot_5_1': 'DOT 5.1 (SRAM, Hayes, Hope)',
+};
+
+/// El nombre corto de cada fluido, para resúmenes y avisos.
+const Map<String, String> kBrakeFluidTypeLabels = {
+  'aceite_mineral': 'Aceite mineral',
+  'dot_4': 'DOT 4',
+  'dot_5_1': 'DOT 5.1',
 };
 
 const Map<String, String> kBrakeDamageLevelOptions = {
@@ -221,15 +233,22 @@ String? canonicalBrakeTypeValue(String? rawValue) {
   }
 }
 
+/// El fluido en palabras de taller: «DOT 4», no `dot_4`.
+String brakeFluidLabel(Object? code) =>
+    kBrakeFluidTypeLabels['$code'] ?? '$code';
+
+/// Un fluido escrito de cualquier forma → su código del registro. `dot` a
+/// secas no dice cuál y queda como vino.
 String? canonicalBrakeFluidTypeValue(String? rawValue) {
   switch (rawValue) {
     case 'mineral':
-      return 'mineral';
-    case 'dot':
-    case 'dot3':
+    case 'mineral_oil':
+      return 'aceite_mineral';
     case 'dot4':
+      return 'dot_4';
     case 'dot51':
-      return 'dot';
+    case 'dot_51':
+      return 'dot_5_1';
     default:
       return _normalizeBrakeText(rawValue);
   }

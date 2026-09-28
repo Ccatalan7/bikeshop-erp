@@ -39,6 +39,18 @@ reiniciar, se vuelve a disparar el trabajo desde la propia pantalla —«Buscar
 pendientes», el reintento de una fila, o abrir el overlay de parecidos, que
 consulta de nuevo al matcher— en vez de rehacer el flujo desde el navegador.
 
+**Un `final` global ya leído tampoco se recalcula (2026-09-27).** Un índice
+top-level o `static final` armado desde una lista `const` —
+`_contractsByFamilyAndKey` sobre `kServiceQuestionContracts`— se inicializa la
+primera vez que se lee y el reload no lo vuelve a correr: la lista nueva
+compila, las pruebas pasan, y la app sigue usando el índice viejo. En F.2
+«Tipo de eje» siguió saliendo en «De este servicio» después de pasar a
+destino ficha, y casi se reportó como defecto del código. Si el cambio toca
+una lista de configuración que alimenta un índice así, el `restart` es el
+camino corto; después del reinicio las coordenadas de antes ya no sirven
+(`shot` nuevo antes de cualquier `click`): reutilizar una del frame anterior
+abrió la ficha de un producto en vez del buscador del trabajo.
+
 ## The three surfaces, and when to use each
 
 **2026-09-06 — model and draft transitions during hot reload.** The product ficha

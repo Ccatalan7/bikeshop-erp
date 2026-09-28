@@ -1,6 +1,6 @@
 # Bike Workshop Master Schema
 
-Last updated: 2026-09-06
+Last updated: 2026-09-27
 Status: Living architecture document
 Scope: Bike encyclopedia, bike profile, diagnosis, workshop items, service wizard, supply needs and commitments, bike memory kernel, sync pipeline, and visible bike history
 
@@ -993,6 +993,13 @@ Canonical command/read contract:
 - full-profile editors must preserve technical/intake keys they do not render.
   Narrow downstream promotion without an authoritative profile id must merge
   into current truth instead of replacing the whole ficha.
+- **Corrección 2026-09-27.** La promoción desde un servicio ya no pasa por el
+  cliente. Antes llamaba a `BikeshopService.upsertBikeProfile`, que reescribía
+  la fila completa sin comparar versiones cuando traía id. Ahora la escribe
+  `patch_bike_technical_facts_v1`, dato por dato. Cada dato lleva el valor que
+  la app vio al cargar la ficha, y si la ficha ya no dice eso se rechaza todo.
+  `upsertBikeProfile` fue eliminado y
+  `bike_aggregate_persistence_architecture_test.dart` impide que vuelva.
 
 Load-state contract for every existing-bike editor:
 
@@ -2236,6 +2243,7 @@ Examples of what still needs to happen:
 - drivetrain flows still need broader reuse of upstream compatibility truth beyond the currently safe `2x/3x` derailleur prefill case
 - if profile says `rim`, every remaining downstream service flow should keep suppressing rotor-only assumptions
 - the first semantic field-definition layer now exists for the current brake/drivetrain diagnosis-linked questions, but the broader diagnosis/editor system is still not fully schema-driven and some live mapped questions outside that normalized subset remain too vague or encode service-history semantics instead of present diagnosis truth
+- verified 2026-09-27 on the live `Enrayado y Centrado` profile (`service_family = wheels`): `wheel_size`, `hole_count` and `brake_type` restate upstream truth that `bike_profiles` already carries (wheel size, front/rear spoke holes, `brakeType`), yet `_buildServiceWizardDialogConfig` has no `wheels` branch, `_buildPromotedBikeProfileFromServiceWizard` promotes nothing for wheels and `_applyWizardAnswersToDiagnosis` ignores the family. For wheel services the wizard is today a parallel truth store, which the Prohibited Drift Patterns forbid. The job-row redesign must close this: known facts are shown and not asked, missing ones are promoted, rim and spoke state is edited on the `rear_wheel`/`front_wheel` diagnosis target, and only `hub_selected`, `rim_selected`, `spoke_model` and `build_pattern` stay in `service_configuration_data`. Brakes promote only `rimBrakeFamily`, so a disc `brake_type` chosen in a brake service is not yet written back to the ficha either
 
 ### Live service catalog audit verified on 2026-04-14
 
@@ -3689,14 +3697,402 @@ item; the remaining priorities retain their existing order.
 
 Validation rule for every queued item below: use the debug-only `Prueba rápida` harness in `lib/modules/bikeshop/pages/pegas_table_page.dart` and record which scenario/stage proved the change before widening scope or calling the slice done.
 
+**Redirección del dueño, 2026-09-27: el contrato servicio ↔ ficha ↔ diagnóstico va antes que todo lo de abajo.** «tenemos que terminar con BIKE_WORKSHOP_MASTER_SCHEMA primero»: lo dijo al saber que el Enrayado guarda aro, perforaciones y freno como configuración paralela. Además estaba pendiente el rediseño de las filas de Productos y Servicios, cuya propuesta vive en el lienzo «Filas del trabajo y notas de servicio». Ese rediseño no se construye hasta cerrar estos pasos, en este orden:
+
+- A. **Contrato de preguntas.** Cada pregunta de los 15 perfiles con mapeo vivo se clasifica en un solo destino: destino de la línea (`location_key`), ficha (`bike_profile_semantic`, con su clave), diagnóstico (`diagnosis_semantic`, con su campo) o propia del servicio (`service_execution`). La clasificación queda en una tabla única de código, con un test que falla ante una pregunta viva sin clasificar, y se refleja en este archivo.
+- B. **Escritura a la ficha por comando del servidor.** Es el ítem 4 de abajo, adelantado: un parche por clave técnica, con semántica explícita de borrado y control de concurrencia, en vez del upsert de la fila completa desde el cliente. **Desplegado el 2026-09-27:** `20260927030000_bike_technical_fact_patch.sql`, con pgTAP y read-back, más la app (local hasta el cierre del bloque), que manda sólo lo que cambió y lo hace después de guardar el trabajo. Corregido tras la revisión de Codex:
+  - exige taller activo;
+  - compara también la confirmación esperada;
+  - valida rangos y vocabularios por clave;
+  - vacía el resumen derivado en vez de recibir el del cliente;
+  - llena `bike_events.job_id`.
+
+  Quedan abiertos, con su dueño en la cola: consultar el recibo tras un cierre de la app y guardar local lo pendiente (ítem 3); la frontera única trabajo + ficha (ítem 4); y la fuente `job_completion` para los cambios de partes, que llega con ese diseño.
+- C. **Ruedas**, 5 perfiles y 121 líneas vivas. Se leen de la ficha y se ocultan cuando ya están confirmados: aro, perforaciones por rueda, válvula y freno. Lo que falta se promueve. Los estados de aro, rayos, neumático, maza y tubeless se proyectan a `front_wheel`/`rear_wheel` del diagnóstico. **Hecho en local el 2026-09-27** (abajo, «Paso C: ruedas y ficha»), también la proyección al diagnóstico (abajo, «Diagnóstico por rueda»).
+- D. **Frenos.** Se promueven `brakeType` (también disco) y el tamaño de rotor por rueda cuando faltan; hoy sólo sube `rimBrakeFamily`. **Hecho en local el 2026-09-27** con las reglas de C (`brakeServiceFacts`). El tipo de freno es de la bici completa: una rueda sugiere y ambas confirman. Antes, la familia de llanta de un solo freno subía confirmada. El tamaño de rotor es el del disco que ya está puesto (el Centrado de Rotor lo ajusta): se confirma con esa rueda, y uno solo para «ambas» no se escribe (8 de 27 bicis tienen rotores distintos). El tipo de freno se oculta en el asistente sólo si está confirmado. `contamination_level` vuelve a la contaminación de pastillas del diagnóstico: ninguna → ok, leve → sucia, moderada → contaminada, severa → reemplazar (el inverso exacto de la precarga).
+- E. **Dirección y pedalier.** Los síntomas y estados se proyectan a su diagnóstico. **Hecho en local el 2026-09-27** (`bearing_symptom_findings.dart`). El único síntoma se separa: juego → rodamiento «con juego», aspereza → «áspero», apretado → «requiere servicio», y ruido → estado de ruido «requiere revisión», porque no dice si es crujido, click o golpe. Preventivo no escribe nada. El diagnóstico existente se precarga como síntoma. Con C, D y E el contrato queda en 55 de 56 pares; el que falta es `wheels/wheel_size`, que se deja a propósito sólo leído.
+- F. **Preguntas que la ficha aún no representa** (eje, sistema de rodamientos, tubeless, fluido, pistones). Se decide con Park Tool y Sheldon Brown si son verdad de la bici o de la visita. Mientras tanto quedan como `service_execution` y no se inventan claves. **Decidido el 2026-09-27** (`UpstreamDecision` en el contrato, obligatorio para todo candidato):
+  - **Dato de la bici** (paso F.2, **hecho el 2026-09-27**; abajo, «Paso F.2: fluido y ejes»):
+    - `fluid_type` → `frontBrakeFluidType` / `rearBrakeFluidType`, de cada freno (corregido el mismo día: primero se decidió «de la bici completa»; abajo, en «Paso F.2»). Park Tool y SRAM: no se mezclan fluidos dentro de un sistema, y cada freno es su propio sistema.
+    - `axle_type` → `frontAxleInterface` / `rearAxleInterface`. Tipo y diámetro de eje, que fija la puntera. Su vocabulario son las opciones `catalog_…` del registro de especificaciones, que ya existen (cierre rápido 9/10 mm, pasante 12/15/20 mm, macizo); no se inventa otro.
+  - **Propiedad de la pieza instalada**, que va a la matriz por el producto y no por la ficha:
+    - pistones del caliper;
+    - tubeless ready (Park Tool: es del neumático y la llanta);
+    - ancho de cinta (Sheldon Brown: sale del fondo del aro; el dato es el ancho interno del aro);
+    - rodamientos de la maza (Park Tool: conos ajustables o cartucho que se reemplaza).
+  - **Hallazgo de la visita:** estado de la pista de corona (Park Tool: una dirección picada se reemplaza) y estado de la cinta de fondo.
+  - F.2 llevó, en un solo cambio, la clave en el comando y en `bike_technical_fact_patch.dart`, el campo en la ficha de la bici y la relación concepto + posición con la ficha técnica del producto (maza ↔ eje de la rueda, fluido ↔ fluido de la pieza).
+- G. **Recién entonces, las filas nuevas** del lienzo, construidas sobre este contrato.
+  - **G2, la línea (local, 2026-09-27):** `JobLineRow`, una sola anatomía para escritorio y teléfono: miniatura, nombre, un dato, chips de rueda y de configuración, cantidad/precio/total alineados y un menú «⋯» nombrado por línea.
+  - **G3, «Configurar» bajo la línea (local, 2026-09-27):** el asistente dejó de ser un diálogo en el trabajo. En escritorio se abre bajo la línea y en teléfono en una hoja inferior, con el mismo `ServiceConfigurationEditor` (el diálogo queda para el formulario de producto). Las preguntas se agrupan por el destino de su contrato: «Aplica a» (elegir, no una lista), la ficha de la bici con lo confirmado a la vista y sin preguntarlo, el diagnóstico (el mismo de su pestaña) y lo que es sólo de este servicio, con las notas del técnico. Lo que se aplica pasa por el mismo camino que el diálogo (`_applyServiceConfiguration`): la línea, su diagnóstico y lo que sube a la ficha al guardar. Con el panel abierto, la línea esconde sus chips porque el panel ya los dice. Lo cambiado y no aplicado sobrevive a cambiar de pestaña, y «Guardar» o abrir otra línea preguntan antes de perderlo (en un diálogo nada de eso podía pasar). Si mientras se espera el perfil se cambia de bici, no se abre: la configuración se arma con la ficha visible y podría subirle datos de otra bici. La carga tardía de la ficha completa cada línea por id (perfil y rueda por defecto) en vez de reemplazar la lista y borrar lo configurado mientras tanto.
+  - **G4, el taller en la línea (local, 2026-09-27):** un servicio con tarea muestra quién lo tiene y cómo va, con las palabras del panel de tareas, y su nota vigente con cuántas lleva el hilo (`smart_task_job_items` y `get_smart_task_service_notes_v1`). Tocarla abre la tarea en el rail. Sin tarea no se muestra nada: el 2026-09-27 sólo 2 trabajos tenían tareas por servicio.
+  - **G1, agrupar por sistema (local, 2026-09-27; corrige la espera a F.2 decidida el mismo día).** Las líneas se agrupan por sistema con su subtotal («Rueda trasera · 2 · $45.000»; `job_line_systems.dart` y `JobLineGroupHeader`). Primero se había dejado para después de F.2 porque «las categorías son hojas y agrupar por su raíz sería inventar»: se miraron las hojas y la raíz, no el segundo nivel. El árbol de la tienda ya nombra el sistema ahí («Componentes / Transmisión», «/ Ruedas», «/ Frenos», «/ Cambios», «/ Dirección»): en los últimos 120 días da sistema a 221 de 253 repuestos, y la familia del perfil a 168 de 260 servicios. El mapa es explícito, no por nombre de la línea: Cambios, Groupset y Pedales van con Transmisión, igual que el pedalier (como en la tienda); Líquido Frenos con Frenos; Puños con Dirección; Shock con Suspensión; el resto de Accesorios aparte. Rueda y freno se separan por el lado de la línea. Lo que no nombra un sistema —«Mecánica Básica», «Limpieza General», fundas y piolas (de freno o de cambio), lubricantes— es de la bici entera y va en «General», primero. Con un solo grupo no hay encabezados. Queda para el catálogo: 85 servicios sin perfil, entre ellos «Ajuste de dirección» (11) y «Ajuste Maza» (7), que con su perfil caerían en su sistema y además tendrían «Configurar».
+  - **G6, la línea protegida (local, 2026-09-27):** con pagos en la factura (o una propuesta final) la pestaña ya no se atenúa entera. Cada línea se lee completa, con el precio tras un candado y sin menú, sin «Falta» (una línea protegida no se configura) y sin la fila de agregar.
+
+Dato de producción que ordena la prioridad: de ~450 líneas de servicios con perfil, **sólo 1** tiene `service_configuration_data`. En la práctica «Configurar» no se usa. El contrato tiene que hacerlo útil, no más largo.
+
+**Paso A cerrado (2026-09-27).** El contrato vive en
+`lib/modules/bikeshop/config/service_question_contract.dart` y lo vigila
+`test/unit/service_question_contract_test.dart`. El test lee las preguntas
+vivas de `test/fixtures/bike_workshop/live_service_questions_2026-09-27.json`
+y falla ante una pregunta sin destino, ante un contrato de una pregunta que ya
+no existe y ante un destino incompleto (ficha sin clave, diagnóstico sin campo,
+brecha sin descripción). Es una foto fechada: una pregunta nueva en producción
+no la hace fallar hasta refrescarla con
+`supabase/manual_checks/service_question_contract_live.sql`, y en la app una
+pregunta sin contrato se trata como propia del servicio. Los 15 perfiles suman
+76 preguntas y 56 pares familia/clave: al cerrar A, **42 cumplían su destino y
+14 no**. Tras la ficha del paso C cumplen 45 y faltan 11. Las 14 originales:
+
+| par | destino | qué falta |
+|---|---|---|
+| `brake/which_wheel` | rueda de la línea | `both` va al diagnóstico de los dos frenos, pero la línea queda `none` |
+| `brake/brake_type` | ficha `brakeType` | se lee; sólo sube `rimBrakeFamily` |
+| `brake/rotor_size` | ficha `front/rearRotorSizeMm` | se lee con rueda; no se promueve |
+| `brake/contamination_level` | diagnóstico freno | se precarga; no vuelve al diagnóstico |
+| `wheels/which_wheel` | rueda de la línea | `both` deja la línea `none` y no llega a ningún diagnóstico |
+| `wheels/wheel_size` | `bikes.wheel_size` | desde C se precarga a la vista como dato registrado; no se escribe (sin marca de confirmación) |
+| ~~`wheels/hole_count`~~ | ficha `front/rearSpokeHoles` | cumplido en C |
+| ~~`wheels/brake_type`~~ | ficha `brakeType` | cumplido en C |
+| ~~`wheels/valve_type`~~ | ficha `valveType` | cumplido en C |
+| `wheels/tire_condition` | diagnóstico rueda `tireCondition` | no se proyecta |
+| `wheels/rim_damage` | diagnóstico rueda `rimCondition` | no se proyecta; vocabulario distinto |
+| `wheels/symptom` | diagnóstico rueda `hubBearingCondition` | no se proyecta; mezcla juego, ruido y aspereza |
+| `bottom_bracket/symptom` | diagnóstico pedalier | no se proyecta; mezcla rodamiento y ruido |
+| `cockpit/symptom` | diagnóstico dirección | no se proyecta; mezcla rodamiento y ruido |
+
+**Decisión sobre «ambas ruedas» (2026-09-27).** Una línea que cobra las dos
+ruedas (`which_wheel = both`) no se divide: la línea es la unidad que se
+cobra. Se proyecta a dos destinos, rueda delantera y rueda trasera, con un solo
+resolvedor que usan el diagnóstico, la ficha y la memoria de la bici.
+`location_key` guarda un solo valor y `BikeMemoryLocation` no tiene «ambas»;
+agregarlo rompería la unicidad `(system_key, location_key)` del kernel. Frenos
+ya resuelve así el diagnóstico. Desde el paso C el resolvedor es uno solo,
+`serviceWheelPositions` (`wheel_service_facts.dart`), y lo usan el diagnóstico
+de freno y la ficha de ruedas. El diagnóstico de ruedas y la memoria todavía no.
+
+**Paso C: ruedas y ficha (2026-09-27; la app en local, y la migración
+`20260927040000_bike_technical_fact_suggest.sql` desplegada y registrada el
+mismo día, con los read-back de `20260927030000` y el suyo).** Con datos de
+producción: de 104 líneas de rueda, ninguna trae configuración y 76 van a
+`none`, muchas descritas «ambas ruedas». 8 de 27 bicis tienen rotores distintos
+adelante y atrás, y 3 de 44 tienen perforaciones distintas. Una bici tiene el
+aro escrito «27.5" - 26"». La ficha guarda dos clases de dato de rueda y la
+respuesta vale distinto para cada una (Codex pidió decidirlo antes de
+promover):
+
+- **Por posición** (`front/rearSpokeHoles`): sólo las pregunta el Enrayado, y
+  describen la rueda **que se arma**, no la que llegó. Son estado instalado
+  (`appliesOnCompletion` en el contrato): configurar o presupuestar no toca la
+  ficha; el mecánico ve «Al terminar el trabajo, la ficha pasa a 28H en la
+  rueda trasera (hoy 32H)», y la pregunta se precarga con lo actual, siempre a
+  la vista. Al terminar el trabajo, la sincronización de la memoria lo aplica
+  (abajo). Una sola respuesta para «ambas» no se escribe, porque no dice
+  cuántas tiene cada rueda (3 de 44 bicis las tienen distintas); se le avisa al
+  mecánico. Ningún perfil vivo lo pregunta así: el Enrayado ofrece sólo
+  delantera o trasera. Si alguno lo necesita, lleva una pregunta por rueda.
+- **De la bici completa** (`valveType`, `brakeType` + `rimBrakeFamily`): la
+  confirma sólo una respuesta de ambas ruedas. Una sola rueda **sugiere**: llena
+  lo que la ficha no sabía (vacío o «desconocido») con fuente `service_wizard` y
+  sin confirmar, por el `op = 'suggest'` de `patch_bike_technical_facts_v1`, que
+  nunca pisa un dato. Una rueda que difiere de lo sugerido no lo reemplaza.
+- **Lo observado** nunca pisa un dato confirmado distinto: es cambiar la bici,
+  no confirmarla. Se le muestra al mecánico («la ficha dice schrader y el
+  servicio presta. No se cambia desde aquí»). Cambiar sólo lo hace lo instalado,
+  al terminar.
+- De las 20 preguntas vivas que van a la ficha, 19 describen la bici como
+  llegó (ajustes, mantenciones, cambio de cámara, centrado de rotor) y una lo
+  que el servicio deja instalado: las perforaciones del Enrayado.
+- **Aro** (`bikes.wheel_size`): sólo se lee, como dato **registrado**, no como
+  prueba física para la matriz. Si `canonicalBikeWheelSizeLabel` lo entiende,
+  se precarga a la vista («Aro registrado 29"»); nunca se oculta. Si es ambiguo
+  o falta, se pregunta sin precarga y la respuesta queda en la línea. No se
+  escribe ni se sugiere: la columna no tiene marca de confirmación y el comando
+  rechaza `suggest` para el aro.
+- **«Última confirmación»** (`last_confirmed_at`) es la de un mecánico: una
+  sugerencia sola no la renueva, ni en el servidor ni en la ficha optimista del
+  formulario (revisión de Codex). Una ficha nacida sólo de sugerencias queda
+  sin fecha de punta a punta: `buildSummarySnapshot` ya no pone la de hoy
+  cuando falta, y `BikeRecordSnapshot` toma la columna de la ficha, también
+  cuando es null. En producción las 187 fichas tenían fecha el 2026-09-27.
+- **Lectura**: se oculta sólo lo confirmado que la pregunta puede expresar; lo
+  sugerido se precarga a la vista. Arriba del asistente se ve «Ficha: …».
+- La respuesta tipada del Enrayado toca dos datos: `v_brake` es
+  `brakeType = rim` y `rimBrakeFamily = v_brake`.
+
+**Lo instalado, al terminar el trabajo** (migración
+`20260927050000_bike_technical_fact_job_completion.sql`, desplegada el
+2026-09-27). `patch_bike_technical_facts_v1` acepta `p_source =
+'job_completion'` sólo con el trabajo en FINALIZADO o ENTREGADO (el mismo corte
+con que la memoria registra piezas), sólo con `set`, y deja esa fuente en la
+ficha, el recibo y la historia. La app lo aplica en `syncBikeMemoryFromJob`
+(`_applyInstalledFactsFromCompletedJob`). `transitionJobStatus` sincroniza la
+memoria al pasar a terminado desde cualquier pantalla: antes, un trabajo
+entregado desde la tabla no registraba piezas hasta volver a guardar el
+formulario.
+
+**Revisión de Codex del paso C–F** (migración
+`20260928010000_bike_technical_fact_completion_guard.sql`, desplegada el
+2026-09-27, más el permiso de columnas `20260928002200` que escribió Codex):
+
+- **Llave `job_completion:<línea>:<n>:<datos>`**
+  (`nextJobCompletionOperationKey`). `n` crece cada vez que la línea instala
+  otra cosa; si el último recibo de la línea ya dice lo mismo, no se escribe,
+  y así una corrección posterior de la ficha no se pisa. Con la llave anterior,
+  `<línea>:<datos>`, corregir 28H → 32H → 28H encontraba el primer recibo y la
+  ficha quedaba en 32H. Producción tenía 0 recibos, así que no hubo formato
+  viejo que migrar.
+- **El servidor exige la línea.** La llave nombra una línea de ese trabajo y
+  de esa bici (`mechanic_job_items`, con `job_bike_id` de la misma bici o
+  nulo); `job_completion` sólo escribe lo que se instala (hoy
+  `front/rearSpokeHoles`) y `service_wizard` ya no puede escribir
+  perforaciones. Un repuesto que cambie otra clave al terminar (velocidades de
+  un cassette) la agrega a esa lista en su migración. No es una frontera de
+  privilegio —el mismo empleado edita la ficha desde su editor—: es que la
+  historia diga la verdad sobre qué cambió la bici.
+- **Cancelar compite con escribir.** El trabajo terminado se toma `for share`
+  antes que la bici; la transición lo toma `for update` y nunca bloquea bicis.
+  `scripts/db/bike_fact_completion_lock_probe.sh` lo prueba con dos
+  conexiones: con el cuerpo anterior, un trabajo cancelado dejó la ficha en
+  28H.
+- **Lo que no llega se ve.** La consulta del recibo necesita el permiso por
+  columnas de `20260928002200`: sin él PostgREST respondía 42501 antes de
+  evaluar la política, lo instalado nunca se aplicaba, y el fallo sólo se
+  imprimía en debug. Ahora `syncBikeMemoryFromJob` devuelve esos problemas:
+  el guardado del formulario los suma a su aviso, y la tabla, la lista y el
+  calendario los muestran (`showBikeFactProblems`) al cambiar el estado.
+  Repetir el mismo estado terminado vuelve a sincronizar, y ése es el
+  reintento.
+
+**Segunda revisión de Codex** (migración
+`20260928020000_bike_technical_fact_completion_line_proof.sql`, desplegada
+el 2026-09-27):
+
+- **La línea prueba lo instalado.** `<datos>` de la llave es exactamente lo
+  que el comando escribe; la línea tiene que decir esas perforaciones
+  (`hole_count`) en esa rueda (su ubicación o, en `none`, `which_wheel`); y
+  una línea de General sólo instala en un trabajo de una sola bici. Antes un
+  llamador podía dejar un recibo que atribuía 28H a una línea que no la armó.
+- **General también instala.** En un trabajo de una sola bici, una línea de
+  General con perforaciones se escribe en esa bici; antes sólo quedaba en la
+  memoria.
+- **Un error antes del parche también se dice.** Si la sincronización falla
+  al leer las líneas o la memoria de un trabajo terminado, devuelve el aviso
+  en vez de «sin problemas».
+- **Una línea nueva adopta su id.** Tras insertarla, el formulario usa el id
+  de la base: con el temporal, un reintento tras un fallo posterior la
+  insertaba otra vez y borraba la primera, con sus tareas y recibos.
+
+**Diagnóstico por rueda.** Neumático, daño de aro y síntoma de maza se proyectan
+a `front_wheel`/`rear_wheel` (a las dos con «ambas»), y lo que el diagnóstico de
+esa rueda ya dice se precarga en el asistente. Sólo se traduce lo que la
+respuesta dice (`wheelDiagnosisFindings`): «mayor» es aro golpeado, no fisurado;
+«ruido» de maza va a la nota; «preventivo» no es un hallazgo. A diferencia de
+freno, las respuestas de ejecución no se copian a la nota del diagnóstico: la
+configuración del servicio queda en la línea.
+
+**Una precarga devuelta igual no es un hallazgo** (`answersChangedFromPrefill`,
+revisión C–F). Rueda, freno, pedalier y dirección escriben al diagnóstico sólo
+las respuestas que difieren de lo que ese diagnóstico ya decía. Antes, abrir y
+guardar sin tocar nada cambiaba el diagnóstico: un rotor contaminado se
+precargaba como contaminación «moderada» (se lee lo peor de pastillas y rotor)
+y volvía como pastillas contaminadas; un aro fisurado volvía golpeado; un
+crujido de pedalier volvía «requiere revisión». «Ninguna» contaminación limpia
+pastillas y rotor, el inverso exacto de esa lectura.
+
+**El rotor, sólo en freno de disco.** El asistente deja de preguntar el tamaño
+del rotor sólo cuando la ficha confirma un freno que no es de disco, o cuando
+el tipo de freno respondido en el mismo asistente es de llanta (y entonces
+descarta el tamaño). Antes se ocultaba con la ficha sin tipo de freno, incluso
+en «Centrado de Rotor», y un tamaño sugerido se ocultaba y se confirmaba al
+guardar sin que el mecánico lo viera; ahora se oculta sólo confirmado para esa
+rueda.
+
+**Memoria para «ambas».** Una línea `wheels` o `brakes` en `none` con
+`which_wheel = both` se registra en `front_*` y `rear_*`
+(`_inferTargetsFromItem`), sin dividir la línea.
+
+Con esto el contrato queda en 50 de 56 pares cumplidos. Faltan
+`brake/brake_type`, `brake/rotor_size` y `brake/contamination_level` (paso D),
+`bottom_bracket/symptom` y `cockpit/symptom` (paso E), y `wheels/wheel_size`,
+que sólo se lee a propósito. Fuera de C siguen abiertas la frontera única
+trabajo + ficha (ítem 4) y la bandeja local de pendientes (ítem 3).
+
+Otros 8 pares quedaban como `service_execution` con `upstreamCandidate`: son
+hechos que parecían de la bici (fluido, pistones, pista de corona, cinta de
+fondo, tubeless ready, ancho interno de aro, eje, rodamientos de maza). El paso
+F los clasificó (arriba): dos son datos de la bici, cuatro de la pieza
+instalada y dos de la visita. F.2 pasó los dos datos de la bici a la ficha
+(abajo); quedan 6 con candidato. Cuando un paso cierre una brecha, se cambia
+`honored` en el contrato y esta tabla en la misma tarea.
+
+**Paso F.2: fluido y ejes (2026-09-27; migraciones
+`20260928030000_bike_technical_fact_fluid_and_axle.sql` y
+`20260928040000_bike_technical_fact_brake_fluid_by_wheel.sql` desplegadas y
+verificadas, la app en local).**
+
+- **El fluido es de cada freno (corrección del mismo día, revisión del
+  dueño).** La primera versión guardó `brakeFluidType` como dato de la bici
+  completa: ambos frenos confirmaban y uno sugería. Pero manilla, manguera y
+  caliper son un sistema cerrado, y Park Tool y SRAM prohíben mezclar dentro
+  de él, no usar otro en el otro freno: una bici con el delantero mineral y el
+  trasero DOT existe. Con la clave de bici completa, un sangrado delantero
+  dejaba sugerido «mineral» para toda la bici y la matriz rechazaba una pieza
+  DOT válida para el trasero. Ahora son `frontBrakeFluidType` /
+  `rearBrakeFluidType`: sangrar un freno confirma el suyo, y sangrar los dos
+  con un fluido lo deja en cada uno (a diferencia del rotor, donde un tamaño
+  para «ambas» no dice cuál tiene cada rueda). La clave de bici completa ya no
+  se acepta; en producción no había ninguna ficha ni recibo con ella.
+- **Claves y vocabulario.** `front/rearBrakeFluidType` (`aceite_mineral`,
+  `dot_4`, `dot_5_1`) y `frontAxleInterface` / `rearAxleInterface` (los 8 códigos
+  `catalog_…` de `axle_type`). Son los del registro: las preguntas del
+  Sangrado y del Servicio de Maza ya los usaban, y el inventario guarda las
+  mismas etiquetas. El read-back prueba en producción que el comando nombra
+  exactamente los activos del registro, y que `front_axle_type` /
+  `rear_axle_type` (bici completa y cuadro) comparten los códigos de
+  `axle_type` (horquilla, maza, rueda). «Desconocido / sin confirmar» del
+  registro es un código aparte: se puede guardar como revisado desde el editor
+  de la ficha, nunca se confirma, y una sugerencia lo llena.
+- **El asistente juntaba DOT 4 y DOT 5.1.** Desde abril las preguntas de
+  freno reemplazaban las opciones del perfil por `mineral` / `dot`, que la
+  ficha no puede guardar. Ahora ofrece las tres del registro; `mineral`,
+  `dot4` y `dot51` se leen con su código y `dot` a secas queda sin promover.
+  En producción no había ninguna respuesta de fluido ni de eje guardada, así
+  que no hubo nada que migrar.
+- **Reglas (las de C).** El fluido es de cada freno, y no dice el tipo de
+  freno, porque también hay frenos de llanta hidráulicos. El eje es de cada rueda y es el que ya
+  tiene la puntera: el servicio de maza lo confirma con esa rueda y no lo
+  cambia. Sólo `service_wizard` los escribe; una horquilla o una maza
+  instalada que los cambie los agrega a lo que instala `job_completion` en su
+  propia migración. Lo confirmado no se pregunta y el chip «Fluido: DOT 4»
+  queda a la vista; un aviso que no coincide se dice con palabras de taller
+  («la ficha dice Eje pasante 15 mm y el servicio Cierre rápido 9 mm»).
+- **La matriz (`bike_product_compatibility_service.dart`).** Una maza compara
+  su eje con el de su rueda en la ficha: el mismo código coincide y deja de
+  pedir «revisar eje»; otro eje es condición de armado, no descarte (muchas
+  mazas cambian de cierre rápido a pasante con sus tapas); una maza que sólo
+  dice el tipo de montaje (`hub_axle_mount_kind`, 7 productos) compara el
+  tipo y pide el diámetro. El fluido de una pieza se compara con el del freno
+  donde va (su `brake_position`); una pieza sin rueda —un líquido, una pieza
+  universal— con los dos, y basta que calce con uno. Sólo un fluido
+  confirmado en todos los frenos posibles de otra familia (mineral contra
+  glicol) la descarta, antes que cualquier medida; uno sugerido o desconocido
+  la deja con aviso. Un freno completo con sus circuitos reemplaza el sistema
+  y queda como aviso; DOT 4 contra DOT 5.1 es del mismo tipo y manda el
+  fabricante.
+- **Dónde se ve.** El editor de la ficha pregunta el fluido de cada freno con
+  disco hidráulico (y lo muestra con otro freno si ya lo tiene) y el eje en cada
+  rueda; el panel de la ficha y el resumen lo muestran. El resumen llamaba
+  «Eje delantero: 100 mm» al ancho de la maza; ahora dice «Maza delantera» y
+  «Eje delantero» es el eje.
+- **Revisión del bloque F.2 + G1 (2026-09-27), confirmada leyendo el código y
+  en la app:**
+  - *La capa del diagnóstico se abre con el diagnóstico de hoy.* Rueda,
+    pedalier y dirección precargaban la respuesta guardada en la línea
+    (`putIfAbsent`) y comparaban contra el diagnóstico actual: un aro que pasó
+    a fisurado después de configurar volvía «menor» al guardar sin tocar nada.
+    Ahora lo que el diagnóstico dice manda en sus preguntas
+    (`answersWithDiagnosisPrefill`), como ya hacía freno.
+  - *Cerrar «Configurar» de la misma línea con cambios sin aplicar pregunta*
+    («Descartar y cerrar»); antes sólo preguntaba al abrir otra línea.
+  - *Una línea protegida no edita su descripción*: el texto abría el editor
+    aunque la línea estuviera tras el candado.
+  - *La nota de un servicio se relee cuando cambia la versión de su tarea*, no
+    sólo cuando cambian las tareas: una nota corregida en el rail seguía vieja
+    en la línea.
+  - *Subir y Bajar mueven dentro del grupo que se ve* (G1): movían contra la
+    vecina de la lista, que puede ser de otro sistema, y no se veía nada.
+  - *Codex, en paralelo:* el líquido embotellado se lee de
+    `brake_fluid_declarations` (`fluid_class`), porque `fluid_type` está
+    retirado de su plantilla y el lector no lo manda; «reemplaza el freno» sólo
+    vale si cada circuito trae manilla y cáliper («cáliper con manguera, sin
+    maneta» deja la manilla instalada y mezclaría fluidos); cambiar el tipo de
+    freno de la bici entera ya no borra el fluido de cada freno (se perdía el
+    del otro); la línea elegida para el panel lateral sigue a su línea al
+    subirla o bajarla; una respuesta vieja `dot` se pregunta de nuevo en vez de
+    tumbar el desplegable. Descartado con evidencia: el desfase cliente/SQL que
+    vio a mitad del cambio (20260928040000 ya estaba desplegada y verificada).
+  - *Queda escrito, no cambiado:* las dos reglas de repuestos del Sangrado
+    (`service_profile_part_rules`) todavía condicionan en `fluid_type = mineral`
+    y `= dot`. Ya no coincidían con las opciones del propio perfil antes de F.2,
+    y nada en la app ni en funciones las lee; se corrigen cuando alguien las
+    use, con el vocabulario del registro.
+
 1. Continue the user-directed responsive workshop pass from the 2026-07-25 Jobs slice: prove the native Galaxy S23 Ultra landscape canary, add canonical multi-bike phone access, then audit the remaining job-form tabs without weakening desktop density, progressive disclosure, or shared actions. The portrait Jobs list now shares canonical scopes/views/filters, its wide-tablet Lista uses two columns, its Calendar/Gantt/Tasks variants recompose for compact constraints, Trabajo/Ítems/Factura/PDF complete an inline round trip through the canonical form, invoice editor, and document generator without replacing the Jobs route, and the global workspace tab/right-toolbar chrome already has its dedicated compact shell plus full-workspace tool mode.
 2. Finish the client boundary of the isolated workshop-mode release: the five database migrations are deployed/registered/read back and the only backfill normalized exactly `PG-00468` with zero unintended payment/stock/journal effects. Run the normal employee quotation and `Revisar modo` browser paths against that live contract, publish exactly the gated client commit, and repeat the routed table/form/invoice smoke plus production health readback. Staging remains suspended/non-authoritative.
 3. Add a durable local pending-command outbox plus structured attempt/outcome telemetry and orphaned-bike-image cleanup so recovery survives browser/process termination and support can distinguish offline, rejected, stale, committed, and reconciled attempts.
-4. Move remaining profile-only service-wizard promotion from generic full-row upsert to a dedicated server-side technical-key patch command with explicit removal semantics and its own concurrency/retry receipt. Then decide whether job + promotions/photos need a wider job command boundary.
+4. ~~Move remaining profile-only service-wizard promotion from generic full-row upsert to a dedicated server-side technical-key patch command with explicit removal semantics and its own concurrency/retry receipt.~~ Hecho en el paso B (2026-09-27, `patch_bike_technical_facts_v1`). Desde la revisión de Codex la ficha se escribe **después** del trabajo, sus líneas y su estado, y el comando exige el trabajo (`p_job_id`). Sigue abierta una frontera de servidor que cierre trabajo y ficha juntos. Mientras no exista, un fallo de la ficha después de guardar el trabajo se dice como guardado parcial y no se pierde. Si es un conflicto, se descarta esa promoción, porque la ficha que vio ya cambió, y el mecánico vuelve a confirmar en «Configurar». Si es otro error, queda pendiente con su llave en `unsentBikeFactPromotionsByJob`, y el formulario de ese trabajo la reintenta cada vez que se abre, hasta que se escriba o se descarte (la primera versión la sacaba antes de reintentar y un segundo fallo la perdía; Codex, 2026-09-27). El formulario lee la ficha antes de reintentar, para que una lectura tardía no pise la recién escrita, y la vuelve a leer tras un descarte. El aviso queda a la vista hasta que el mecánico lo cierra. La memoria de la bici se sincroniza igual.
 5. Improve upstream drivetrain bike truth coverage (`drivetrainConfig`, `drivetrainSpeeds`, `freehubType`) only through real service/profile flows, without over-inferring from weak `derailleurs` answers. Historical backfill remains intentionally skipped until live structured `service_configuration_data` rows actually exist.
 6. Finish the next bottom-bracket / crankset seam after the richer service-flow carry-through: the bike form/read model/debug harness and bottom-bracket service wizards now round-trip `bottomBracketFamily`, `bbShellWidthMm`, `bbShellDiameterMm`, and `spindleInterface`, but the broader chainline, mounting, crank-length, and exact shell/adapter seams remain open before compatibility population.
 7. Do not start broad compatibility population yet. Only after the bottom-bracket/crankset seams are tighter should the catalog move into cautious packaging-backed population of explicit compatibility fields.
 8. When validating bike reassignment from a work row, prove both paths: direct bike-profile opening from the table and the guarded title dropdown reassignment that keeps `mechanic_jobs.bike_id` and any single `mechanic_job_bikes` row aligned.
+
+## La ficha es el estado real de la bici (dueño, 2026-09-27)
+
+«la idea a futuro también es llegar a una matriz de compatibilidad parecido a
+lo que hace la empresa de Bike Matrix; en nuestro caso estará todo unificado
+como lo describe master schema, tanto las bicicletas, como los servicios, el
+inventario (ficha técnica)… si hay cambios de partes de una bicicleta, su
+estado cambiará en la bicicleta que fue creada para ese cliente (por ejemplo si
+cambio de transmisión de 7 a 8, o si cambio llanta y ahora usa 28h en vez de
+32h)» — el dueño. Agregó que este documento no es intocable: se mejora donde
+haga falta, junto con Codex.
+
+Lo que eso fija como doctrina:
+
+- **Una sola matriz de conceptos, no de nombres de campo.** La ficha de la
+  bici (`bike_profiles` + columnas de `bikes`), las preguntas de servicio
+  (`service_question_contract.dart`) y la ficha técnica de los productos
+  (`spec_facts` / registro de especificaciones) comparten **conceptos** y
+  **relaciones por posición**, cada uno con su vocabulario canónico. No exigen
+  el mismo nombre literal. Ejemplo: el concepto «perforaciones de rueda» es
+  `spoke_hole_count` en la ficha de una llanta o una maza, y en la bici es
+  `frontSpokeHoles` o `rearSpokeHoles` según la posición donde se instala. La
+  relación concepto + posición ↔ campo es explícita y vive en un solo lugar;
+  ningún módulo inventa la suya. (Corrección de Codex, 2026-09-27: la primera
+  versión de este párrafo pedía «las mismas claves», y eso no calza con los
+  nombres reales.)
+- **Proyectar exige compatibilidad.** Una parte instalada cambia la ficha sólo
+  si calza con lo que ya está en la bici. Una llanta de 28H en la rueda trasera
+  proyecta `rearSpokeHoles = 28` recién después de comprobar que la maza
+  trasera instalada es de 28H, o que la maza también cambia en el mismo
+  trabajo. Si no calza, es una incompatibilidad que el mecánico ve y resuelve,
+  no un dato que se escribe.
+- **Confirmar no es cambiar.** Son dos operaciones distintas:
+  - **Confirmar** un dato que la bici ya tiene (el mecánico mira y dice 32H)
+    se escribe en la ficha al guardar el trabajo. Es lo que hace hoy
+    `patch_bike_technical_facts_v1` con `source = 'service_wizard'`.
+  - **Cambiar** un dato porque el trabajo instala una parte distinta (llanta de
+    28H, transmisión de 8) queda como cambio pendiente en la línea que lo causa
+    (`mechanic_job_items`, ejecución) y se aplica a la ficha **al terminar el
+    trabajo**, por el mismo comando con otra fuente. Así un presupuesto
+    rechazado o una línea borrada nunca cambian la bici. En la UI se ve como
+    «Cambia la ficha: 32H → 28H».
+- **Los repuestos también cambian la ficha.** Una línea de producto cuya ficha
+  técnica trae una clave canónica (velocidades de un cassette, perforaciones de
+  una llanta) propone su cambio con esa misma clave. El mecánico lo confirma y
+  se aplica al terminar el trabajo, igual que el de un servicio.
+- **«Desconocido» es revisado, no confirmado (2026-09-27).** La ficha lo
+  guarda cuando el mecánico lo elige, para distinguir «lo miré y no se sabe»
+  de «nunca se revisó» (el pie del driver lo pide explícito). Nunca queda
+  confirmado: no es un dato de la bici, los lectores de compatibilidad ya lo
+  leen como desconocido, y el próximo servicio lo vuelve a preguntar.
+  `patch_bike_technical_facts_v1` no escribe `unknown` para ninguna clave:
+  un servicio sólo escribe lo que confirma. La migración le quitó la
+  confirmación a los 6 que la tenían en producción (driver, pedalier y eje, 2 de cada uno).
+- **Una sola puerta.** Todo cambio a la ficha desde el taller pasa por
+  `patch_bike_technical_facts_v1`: compara el valor esperado, deja un recibo
+  con el trabajo que lo originó y un evento en la historia de la bici. La
+  memoria de la bici (`bike_component_lifecycles`, `bike_interventions`) sigue
+  siendo la salida derivada, no una segunda ficha.
+
+**Decidido el 2026-09-27 (paso C).** El disparador es el estado FINALIZADO o
+ENTREGADO del trabajo, el mismo que ya usaba la memoria de piezas. El cambio
+pendiente vive en la respuesta de la línea (`service_configuration_data`) y el
+contrato de la pregunta dice si es estado instalado (`appliesOnCompletion`).
+Falta lo mismo para los repuestos con ficha técnica: una línea de producto
+propondrá su cambio con la relación concepto + posición y se aplicará por la
+misma ruta.
 
 ## The Most Important Direction From Here
 

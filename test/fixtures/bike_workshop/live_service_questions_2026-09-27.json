@@ -1,0 +1,980 @@
+[
+ {
+  "profile": "Ajuste de Cambios",
+  "family": "drivetrain",
+  "key": "front_chainring_count",
+  "type": "single_select",
+  "required": false,
+  "options": [
+   "v_1",
+   "v_2",
+   "v_3"
+  ]
+ },
+ {
+  "profile": "Ajuste de Cambios",
+  "family": "drivetrain",
+  "key": "rear_cog_count",
+  "type": "single_select",
+  "required": false,
+  "options": [
+   "1",
+   "3",
+   "5",
+   "6",
+   "7",
+   "8",
+   "9",
+   "10",
+   "11",
+   "12",
+   "13",
+   "14"
+  ]
+ },
+ {
+  "profile": "Ajuste de Cambios",
+  "family": "drivetrain",
+  "key": "freehub_type",
+  "type": "single_select",
+  "required": false,
+  "options": [
+   "shimano_hg",
+   "shimano_hg_road_11",
+   "microspline",
+   "sram_xd",
+   "sram_xdr",
+   "campagnolo",
+   "campagnolo_n3w",
+   "threaded_freewheel",
+   "bmx_driver",
+   "fixed_threaded",
+   "coaster_hub",
+   "unknown"
+  ]
+ },
+ {
+  "profile": "Ajuste de Cambios",
+  "family": "drivetrain",
+  "key": "derailleurs",
+  "type": "multi_select",
+  "required": true,
+  "options": [
+   "rear",
+   "front"
+  ]
+ },
+ {
+  "profile": "Ajuste de Cambios",
+  "family": "drivetrain",
+  "key": "cable_condition",
+  "type": "single_select",
+  "required": false,
+  "options": [
+   "ok",
+   "high_friction",
+   "frayed",
+   "corroded",
+   "housing_damaged",
+   "replace"
+  ]
+ },
+ {
+  "profile": "Ajuste de Cambios",
+  "family": "drivetrain",
+  "key": "include_housing",
+  "type": "boolean",
+  "required": false,
+  "options": []
+ },
+ {
+  "profile": "Ajuste de Motor",
+  "family": "bottom_bracket",
+  "key": "bottom_bracket_family",
+  "type": "single_select",
+  "required": true,
+  "options": [
+   "bsa_threaded",
+   "pressfit",
+   "bb30_pf30",
+   "mid",
+   "americano_one_piece",
+   "cuadrado_cartucho",
+   "hollowtech_24mm_externo",
+   "other",
+   "desconocido_sin_confirmar"
+  ]
+ },
+ {
+  "profile": "Ajuste de Motor",
+  "family": "bottom_bracket",
+  "key": "bb_shell_width_mm",
+  "type": "single_select",
+  "required": false,
+  "options": [
+   "v_68",
+   "v_70",
+   "v_73",
+   "v_83",
+   "v_86_5",
+   "v_89_5",
+   "v_92",
+   "v_100",
+   "v_107",
+   "v_121"
+  ]
+ },
+ {
+  "profile": "Ajuste de Motor",
+  "family": "bottom_bracket",
+  "key": "bb_shell_diameter_mm",
+  "type": "single_select",
+  "required": false,
+  "options": [
+   "v_37",
+   "v_41",
+   "v_41_2",
+   "v_42",
+   "v_46",
+   "v_51_5"
+  ]
+ },
+ {
+  "profile": "Ajuste de Motor",
+  "family": "bottom_bracket",
+  "key": "spindle_interface",
+  "type": "single_select",
+  "required": false,
+  "options": [
+   "square_jis",
+   "square_iso",
+   "hollowtech_24",
+   "sram_gxp",
+   "sram_dub",
+   "bb30_30",
+   "isis",
+   "octalink",
+   "cottered",
+   "bmx_19",
+   "bmx_22",
+   "bmx_24",
+   "one_piece",
+   "powerspline"
+  ]
+ },
+ {
+  "profile": "Ajuste de Motor",
+  "family": "bottom_bracket",
+  "key": "symptom",
+  "type": "single_select",
+  "required": true,
+  "options": [
+   "play",
+   "noise",
+   "roughness",
+   "tightness",
+   "preventive"
+  ]
+ },
+ {
+  "profile": "Cambio de Cámara",
+  "family": "wheels",
+  "key": "which_wheel",
+  "type": "single_select",
+  "required": true,
+  "options": [
+   "front",
+   "rear"
+  ]
+ },
+ {
+  "profile": "Cambio de Cámara",
+  "family": "wheels",
+  "key": "wheel_size",
+  "type": "single_select",
+  "required": true,
+  "options": [
+   "v_12",
+   "v_16",
+   "v_20",
+   "v_24",
+   "v_26",
+   "v_27_5",
+   "v_29",
+   "v_700c",
+   "v_650b",
+   "otra"
+  ]
+ },
+ {
+  "profile": "Cambio de Cámara",
+  "family": "wheels",
+  "key": "valve_type",
+  "type": "single_select",
+  "required": true,
+  "options": [
+   "presta",
+   "schrader",
+   "dunlop",
+   "other",
+   "desconocido"
+  ]
+ },
+ {
+  "profile": "Cambio de Cámara",
+  "family": "wheels",
+  "key": "tire_condition",
+  "type": "single_select",
+  "required": false,
+  "options": [
+   "ok",
+   "worn",
+   "damaged"
+  ]
+ },
+ {
+  "profile": "Cambio de Cámara",
+  "family": "wheels",
+  "key": "rim_tape_condition",
+  "type": "single_select",
+  "required": false,
+  "options": [
+   "ok",
+   "worn",
+   "missing"
+  ]
+ },
+ {
+  "profile": "Cambio de Cámara",
+  "family": "wheels",
+  "key": "puncture_cause",
+  "type": "text",
+  "required": false,
+  "options": []
+ },
+ {
+  "profile": "Centrado de Rotor",
+  "family": "brake",
+  "key": "which_wheel",
+  "type": "single_select",
+  "required": true,
+  "options": [
+   "front",
+   "rear",
+   "both"
+  ]
+ },
+ {
+  "profile": "Centrado de Rotor",
+  "family": "brake",
+  "key": "rotor_size",
+  "type": "single_select",
+  "required": false,
+  "options": [
+   "140",
+   "160",
+   "180",
+   "203"
+  ]
+ },
+ {
+  "profile": "Centrado de Rotor",
+  "family": "brake",
+  "key": "damage_level",
+  "type": "single_select",
+  "required": false,
+  "options": [
+   "minor",
+   "moderate",
+   "severe"
+  ]
+ },
+ {
+  "profile": "Centrado de Rueda",
+  "family": "wheels",
+  "key": "which_wheel",
+  "type": "single_select",
+  "required": true,
+  "options": [
+   "front",
+   "rear",
+   "both"
+  ]
+ },
+ {
+  "profile": "Centrado de Rueda",
+  "family": "wheels",
+  "key": "rim_damage",
+  "type": "single_select",
+  "required": false,
+  "options": [
+   "none",
+   "minor",
+   "major"
+  ]
+ },
+ {
+  "profile": "Conversión Tubeless",
+  "family": "wheels",
+  "key": "which_wheel",
+  "type": "single_select",
+  "required": true,
+  "options": [
+   "front",
+   "rear",
+   "both"
+  ]
+ },
+ {
+  "profile": "Conversión Tubeless",
+  "family": "wheels",
+  "key": "wheel_size",
+  "type": "single_select",
+  "required": true,
+  "options": [
+   "v_12",
+   "v_16",
+   "v_20",
+   "v_24",
+   "v_26",
+   "v_27_5",
+   "v_29",
+   "v_700c",
+   "v_650b",
+   "otra"
+  ]
+ },
+ {
+  "profile": "Conversión Tubeless",
+  "family": "wheels",
+  "key": "tire_tubeless_ready",
+  "type": "boolean",
+  "required": true,
+  "options": []
+ },
+ {
+  "profile": "Conversión Tubeless",
+  "family": "wheels",
+  "key": "valve_length_mm",
+  "type": "single_select",
+  "required": false,
+  "options": [
+   "v_35",
+   "v_40",
+   "v_44",
+   "v_48",
+   "v_60",
+   "v_33",
+   "v_80",
+   "v_52"
+  ]
+ },
+ {
+  "profile": "Conversión Tubeless",
+  "family": "wheels",
+  "key": "sealant_volume_ml",
+  "type": "single_select",
+  "required": false,
+  "options": [
+   "60",
+   "80",
+   "100",
+   "120"
+  ]
+ },
+ {
+  "profile": "Conversión Tubeless",
+  "family": "wheels",
+  "key": "rim_tape_width_mm",
+  "type": "single_select",
+  "required": false,
+  "options": [
+   "21",
+   "23",
+   "25",
+   "27",
+   "30",
+   "32",
+   "35"
+  ]
+ },
+ {
+  "profile": "Enrayado y Centrado",
+  "family": "wheels",
+  "key": "which_wheel",
+  "type": "single_select",
+  "required": true,
+  "options": [
+   "front",
+   "rear"
+  ]
+ },
+ {
+  "profile": "Enrayado y Centrado",
+  "family": "wheels",
+  "key": "wheel_size",
+  "type": "single_select",
+  "required": true,
+  "options": [
+   "v_12",
+   "v_16",
+   "v_20",
+   "v_24",
+   "v_26",
+   "v_27_5",
+   "v_29",
+   "v_700c",
+   "v_650b",
+   "otra"
+  ]
+ },
+ {
+  "profile": "Enrayado y Centrado",
+  "family": "wheels",
+  "key": "hole_count",
+  "type": "single_select",
+  "required": true,
+  "options": [
+   "20",
+   "24",
+   "28",
+   "32",
+   "36",
+   "40"
+  ]
+ },
+ {
+  "profile": "Enrayado y Centrado",
+  "family": "wheels",
+  "key": "brake_type",
+  "type": "single_select",
+  "required": true,
+  "options": [
+   "hydraulic_disc",
+   "mechanical_disc",
+   "v_brake",
+   "cantilever"
+  ]
+ },
+ {
+  "profile": "Enrayado y Centrado",
+  "family": "wheels",
+  "key": "hub_selected",
+  "type": "text",
+  "required": false,
+  "options": []
+ },
+ {
+  "profile": "Enrayado y Centrado",
+  "family": "wheels",
+  "key": "rim_selected",
+  "type": "text",
+  "required": false,
+  "options": []
+ },
+ {
+  "profile": "Enrayado y Centrado",
+  "family": "wheels",
+  "key": "spoke_model",
+  "type": "text",
+  "required": false,
+  "options": []
+ },
+ {
+  "profile": "Enrayado y Centrado",
+  "family": "wheels",
+  "key": "build_pattern",
+  "type": "single_select",
+  "required": false,
+  "options": [
+   "radial",
+   "two_cross",
+   "three_cross",
+   "other"
+  ]
+ },
+ {
+  "profile": "Limpieza y Elongación de Pistones",
+  "family": "brake",
+  "key": "which_wheel",
+  "type": "single_select",
+  "required": true,
+  "options": [
+   "front",
+   "rear",
+   "both"
+  ]
+ },
+ {
+  "profile": "Limpieza y Elongación de Pistones",
+  "family": "brake",
+  "key": "piston_count",
+  "type": "single_select",
+  "required": false,
+  "options": [
+   "v_2",
+   "v_4",
+   "v_6"
+  ]
+ },
+ {
+  "profile": "Limpieza y Elongación de Pistones",
+  "family": "brake",
+  "key": "contamination_level",
+  "type": "single_select",
+  "required": false,
+  "options": [
+   "none",
+   "light",
+   "moderate",
+   "severe"
+  ]
+ },
+ {
+  "profile": "Limpieza y Elongación de Pistones",
+  "family": "brake",
+  "key": "replace_seals",
+  "type": "boolean",
+  "required": false,
+  "options": []
+ },
+ {
+  "profile": "Limpieza y Lubricación de Cadena",
+  "family": "drivetrain",
+  "key": "lube_type",
+  "type": "single_select",
+  "required": true,
+  "options": [
+   "dry",
+   "wet",
+   "ceramic",
+   "wax"
+  ]
+ },
+ {
+  "profile": "Limpieza y Lubricación de Cadena",
+  "family": "drivetrain",
+  "key": "chain_wear",
+  "type": "single_select",
+  "required": false,
+  "options": [
+   "ok",
+   "worn",
+   "replace"
+  ]
+ },
+ {
+  "profile": "Limpieza y Lubricación de Cadena",
+  "family": "drivetrain",
+  "key": "derailleur_check",
+  "type": "boolean",
+  "required": false,
+  "options": []
+ },
+ {
+  "profile": "Mantención de Dirección",
+  "family": "cockpit",
+  "key": "symptom",
+  "type": "single_select",
+  "required": true,
+  "options": [
+   "play",
+   "roughness",
+   "noise",
+   "preventive"
+  ]
+ },
+ {
+  "profile": "Mantención de Dirección",
+  "family": "cockpit",
+  "key": "bearing_replacement_needed",
+  "type": "boolean",
+  "required": false,
+  "options": []
+ },
+ {
+  "profile": "Mantención de Dirección",
+  "family": "cockpit",
+  "key": "crown_race_condition",
+  "type": "single_select",
+  "required": false,
+  "options": [
+   "ok",
+   "worn",
+   "replace"
+  ]
+ },
+ {
+  "profile": "Mantención de Freno",
+  "family": "brake",
+  "key": "which_wheel",
+  "type": "single_select",
+  "required": true,
+  "options": [
+   "front",
+   "rear",
+   "both"
+  ]
+ },
+ {
+  "profile": "Mantención de Freno",
+  "family": "brake",
+  "key": "brake_type",
+  "type": "single_select",
+  "required": true,
+  "options": [
+   "hydraulic_disc",
+   "mechanical_disc",
+   "v_brake",
+   "cantilever"
+  ]
+ },
+ {
+  "profile": "Mantención de Freno",
+  "family": "brake",
+  "key": "pad_condition",
+  "type": "single_select",
+  "required": false,
+  "options": [
+   "ok",
+   "worn",
+   "critical"
+  ]
+ },
+ {
+  "profile": "Mantención de Freno",
+  "family": "brake",
+  "key": "include_pads",
+  "type": "boolean",
+  "required": false,
+  "options": []
+ },
+ {
+  "profile": "Mantención de Freno",
+  "family": "brake",
+  "key": "fluid_check",
+  "type": "boolean",
+  "required": false,
+  "options": []
+ },
+ {
+  "profile": "Mantención de Freno",
+  "family": "brake",
+  "key": "symptom",
+  "type": "multi_select",
+  "required": false,
+  "options": [
+   "noise",
+   "vibration",
+   "rubbing",
+   "low_power",
+   "spongy_lever",
+   "intermittent"
+  ]
+ },
+ {
+  "profile": "Mantención de Motor",
+  "family": "bottom_bracket",
+  "key": "bottom_bracket_family",
+  "type": "single_select",
+  "required": true,
+  "options": [
+   "bsa_threaded",
+   "pressfit",
+   "bb30_pf30",
+   "mid",
+   "americano_one_piece",
+   "cuadrado_cartucho",
+   "hollowtech_24mm_externo",
+   "other",
+   "desconocido_sin_confirmar"
+  ]
+ },
+ {
+  "profile": "Mantención de Motor",
+  "family": "bottom_bracket",
+  "key": "bb_shell_width_mm",
+  "type": "single_select",
+  "required": false,
+  "options": [
+   "v_68",
+   "v_70",
+   "v_73",
+   "v_83",
+   "v_86_5",
+   "v_89_5",
+   "v_92",
+   "v_100",
+   "v_107",
+   "v_121"
+  ]
+ },
+ {
+  "profile": "Mantención de Motor",
+  "family": "bottom_bracket",
+  "key": "bb_shell_diameter_mm",
+  "type": "single_select",
+  "required": false,
+  "options": [
+   "v_37",
+   "v_41",
+   "v_41_2",
+   "v_42",
+   "v_46",
+   "v_51_5"
+  ]
+ },
+ {
+  "profile": "Mantención de Motor",
+  "family": "bottom_bracket",
+  "key": "spindle_interface",
+  "type": "single_select",
+  "required": false,
+  "options": [
+   "square_jis",
+   "square_iso",
+   "hollowtech_24",
+   "sram_gxp",
+   "sram_dub",
+   "bb30_30",
+   "isis",
+   "octalink",
+   "cottered",
+   "bmx_19",
+   "bmx_22",
+   "bmx_24",
+   "one_piece",
+   "powerspline"
+  ]
+ },
+ {
+  "profile": "Mantención de Motor",
+  "family": "bottom_bracket",
+  "key": "symptom",
+  "type": "single_select",
+  "required": false,
+  "options": [
+   "play",
+   "noise",
+   "roughness",
+   "tightness",
+   "preventive"
+  ]
+ },
+ {
+  "profile": "Mantención de Motor",
+  "family": "bottom_bracket",
+  "key": "replace_unit",
+  "type": "boolean",
+  "required": false,
+  "options": []
+ },
+ {
+  "profile": "Regulación de Freno",
+  "family": "brake",
+  "key": "which_wheel",
+  "type": "single_select",
+  "required": true,
+  "options": [
+   "front",
+   "rear",
+   "both"
+  ]
+ },
+ {
+  "profile": "Regulación de Freno",
+  "family": "brake",
+  "key": "brake_type",
+  "type": "single_select",
+  "required": true,
+  "options": [
+   "hydraulic_disc",
+   "mechanical_disc",
+   "v_brake",
+   "cantilever"
+  ]
+ },
+ {
+  "profile": "Regulación de Freno",
+  "family": "brake",
+  "key": "symptom",
+  "type": "multi_select",
+  "required": false,
+  "options": [
+   "noise",
+   "vibration",
+   "rubbing",
+   "low_power",
+   "spongy_lever",
+   "intermittent"
+  ]
+ },
+ {
+  "profile": "Regulación de Freno",
+  "family": "brake",
+  "key": "pad_condition",
+  "type": "single_select",
+  "required": false,
+  "options": [
+   "ok",
+   "worn",
+   "critical"
+  ]
+ },
+ {
+  "profile": "Regulación de Freno",
+  "family": "brake",
+  "key": "rotor_condition",
+  "type": "single_select",
+  "required": false,
+  "options": [
+   "ok",
+   "glazed",
+   "warped",
+   "replace"
+  ]
+ },
+ {
+  "profile": "Regulación de Freno",
+  "family": "brake",
+  "key": "replace_parts",
+  "type": "boolean",
+  "required": false,
+  "options": []
+ },
+ {
+  "profile": "Sangrado de Freno Hidráulico",
+  "family": "brake",
+  "key": "which_wheel",
+  "type": "single_select",
+  "required": true,
+  "options": [
+   "front",
+   "rear",
+   "both"
+  ]
+ },
+ {
+  "profile": "Sangrado de Freno Hidráulico",
+  "family": "brake",
+  "key": "fluid_type",
+  "type": "single_select",
+  "required": true,
+  "options": [
+   "aceite_mineral",
+   "dot_4",
+   "dot_5_1"
+  ]
+ },
+ {
+  "profile": "Sangrado de Freno Hidráulico",
+  "family": "brake",
+  "key": "pad_condition",
+  "type": "single_select",
+  "required": false,
+  "options": [
+   "ok",
+   "worn",
+   "critical"
+  ]
+ },
+ {
+  "profile": "Sangrado de Freno Hidráulico",
+  "family": "brake",
+  "key": "replace_pads",
+  "type": "boolean",
+  "required": false,
+  "options": []
+ },
+ {
+  "profile": "Sangrado de Freno Hidráulico",
+  "family": "brake",
+  "key": "pad_contaminated",
+  "type": "boolean",
+  "required": false,
+  "options": []
+ },
+ {
+  "profile": "Sangrado de Freno Hidráulico",
+  "family": "brake",
+  "key": "rotor_condition",
+  "type": "single_select",
+  "required": false,
+  "options": [
+   "ok",
+   "glazed",
+   "warped",
+   "replace"
+  ]
+ },
+ {
+  "profile": "Servicio de Maza",
+  "family": "wheels",
+  "key": "which_wheel",
+  "type": "single_select",
+  "required": true,
+  "options": [
+   "front",
+   "rear"
+  ]
+ },
+ {
+  "profile": "Servicio de Maza",
+  "family": "wheels",
+  "key": "axle_type",
+  "type": "single_select",
+  "required": true,
+  "options": [
+   "catalog_70d7fea9eaec337320d0814e6a8e7836",
+   "catalog_8a246b8f84c98b2fda1d402e902355a4",
+   "catalog_04c89a1828095f03f3c390c821f8bccd",
+   "catalog_d2128659275dc69ee5e50dc9500992fa",
+   "catalog_855ee050fed24e28691a34b52fb4105e",
+   "catalog_4e5d230b5cd1c062e5addf17bb19909a",
+   "catalog_e574e4ca8fa443b057c9d2595063c918",
+   "catalog_cd4327044ca6b8f574153f9ba85d39fc",
+   "catalog_de6e897b1c6ced32e6762f3ceaebffd6"
+  ]
+ },
+ {
+  "profile": "Servicio de Maza",
+  "family": "wheels",
+  "key": "symptom",
+  "type": "single_select",
+  "required": true,
+  "options": [
+   "play",
+   "noise",
+   "roughness",
+   "preventive"
+  ]
+ },
+ {
+  "profile": "Servicio de Maza",
+  "family": "wheels",
+  "key": "bearing_system",
+  "type": "single_select",
+  "required": false,
+  "options": [
+   "rodamientos_sellados",
+   "bolas_sueltas",
+   "mixto"
+  ]
+ },
+ {
+  "profile": "Servicio de Maza",
+  "family": "wheels",
+  "key": "freehub_service_needed",
+  "type": "boolean",
+  "required": false,
+  "options": []
+ },
+ {
+  "profile": "Servicio de Maza",
+  "family": "wheels",
+  "key": "bearing_replacement_needed",
+  "type": "boolean",
+  "required": false,
+  "options": []
+ }
+]

@@ -71,17 +71,20 @@ void main() {
           'Desktop and mobile must share the same product/configuration editor.',
     );
     expect(adaptiveLine, contains('_handleProductChanged(item, selection)'));
+    // Paso G (2026-09-27): las dos anatomías son la misma JobLineRow, con el
+    // mismo menú de acciones; el área de toque de 48 del menú y de sus
+    // opciones la prueba job_line_row_test.dart.
+    expect('JobLineRow('.allMatches(adaptiveLine), hasLength(2));
+    expect(
+      RegExp(r'_lineActions\(item, mobileLayout: (?:true|false)\)')
+          .allMatches(adaptiveLine),
+      hasLength(2),
+    );
     expect(
       adaptiveLine,
-      contains('minimumSize: const Size(0, 48)'),
-      reason: 'Mobile line actions must keep a 48 px touch target.',
+      contains('final chipMinHeight = mobileLayout ? 48.0 : 0.0;'),
+      reason: 'The side chip and the configuration chip are touch targets.',
     );
-    final locationSelector = _section(
-      source,
-      'class _ServiceLocationDropdown',
-      'class _JobServiceItem',
-    );
-    expect(locationSelector, contains('height: 48'));
 
     final narrowForm = _section(
       source,
@@ -138,18 +141,25 @@ void main() {
     );
     expect(compactSectionCards, contains('isCompactInline ? 12 : 20'));
 
+    // Las claves de la tarjeta se arman con el prefijo del diseño: la misma
+    // línea en escritorio lleva `desktop_part_`.
     for (final stableKey in [
-      'mobile_part_card_',
-      'mobile_part_configure_',
-      'mobile_part_quantity_',
-      'mobile_part_price_',
-      'mobile_part_total_',
-      'mobile_part_move_up_',
-      'mobile_part_move_down_',
-      'mobile_part_delete_',
+      "'mobile_part_card_",
+      "'mobile_part_quantity_",
+      "'mobile_part_price_",
+      "'mobile_part_total_",
+      "_part_configure_",
+      "_part_location_",
+      "'\${prefix}_move_up_",
+      "'\${prefix}_move_down_",
+      "'\${prefix}_delete_",
     ]) {
       expect(adaptiveLine, contains(stableKey));
     }
+    expect(
+      adaptiveLine,
+      contains("final prefix = mobileLayout ? 'mobile_part' : 'desktop_part';"),
+    );
 
     final legacyService = _section(
       source,

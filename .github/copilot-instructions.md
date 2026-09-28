@@ -2005,6 +2005,15 @@ This includes changes to:
 - bike memory sync or derived kernel tables
 - bike record / technical history UI
 
+**Contrato de «Configurar» (2026-09-27).** Cada pregunta de servicio tiene un
+solo destino en `lib/modules/bikeshop/config/service_question_contract.dart`:
+la rueda de la línea, la ficha, el diagnóstico o la propia ejecución del
+servicio. El test `service_question_contract_test.dart` falla ante una pregunta
+viva sin destino. Si un perfil nuevo o cambiado aparece en producción, se
+relee el fixture y se clasifica antes de tocar el wizard. El dueño adelantó
+este contrato a todo el resto de la cola: el rediseño de las filas del trabajo
+espera a que se cierre.
+
 ## The Backbone Starts Upstream
 
 The bike workshop architecture does **NOT** start at diagnosis or service wizard questions.

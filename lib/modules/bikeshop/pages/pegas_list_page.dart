@@ -17,6 +17,7 @@ import '../services/bikeshop_service.dart';
 import '../models/bikeshop_models.dart';
 import '../widgets/pega_detail_view.dart';
 import '../widgets/split_new_job_button.dart';
+import '../widgets/bike_fact_problems_snackbar.dart';
 
 class PegasListPage extends StatefulWidget {
   const PegasListPage({super.key});
@@ -324,6 +325,8 @@ class _PegasListPageState extends State<PegasListPage> {
         job.id!,
         newStatus,
         operationKey: const Uuid().v4(),
+        onBikeFactProblems: (problems) =>
+            showBikeFactProblems(context, problems),
       );
       await _loadData();
       if (mounted) {

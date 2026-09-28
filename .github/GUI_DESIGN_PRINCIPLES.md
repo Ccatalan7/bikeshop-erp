@@ -1281,6 +1281,18 @@ Accessibility is part of the component contract:
 Pointer and keyboard efficiency must not reduce touch usability, and touch
 composition must not remove keyboard-accessible commands from desktop.
 
+**Un tooltip no nombra un `PopupMenuButton` (2026-09-27).** El menú «⋯» de
+cada línea de Productos y Servicios tenía `tooltip`, y el lector de pantalla
+(y `app_control.sh read`) lo anunciaba igual como «botón» a secas: cuatro
+líneas, cuatro botones sin nombre y ninguno tocable por identidad. Un
+`Semantics(label:)` sin `container` se fusiona con el nodo de la fila, no con
+el botón. Lo que funciona es el patrón de `VbShellIconButton` con la acción
+propia del menú: `Semantics(container: true, button: true, label: 'Acciones
+de <línea>', onTap: abrir el menú, excludeSemantics: true)`, con el menú
+abierto por `GlobalKey<PopupMenuButtonState>().showButtonMenu()`
+(`JobLineRow`, prueba en `test/widget/job_line_row_test.dart`). El nombre
+lleva la línea: «Acciones» a secas repetido no distingue una fila de otra.
+
 ## 13. Validation and living learning
 
 Validate behavior through the real host, not an isolated screenshot:
