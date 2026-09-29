@@ -1,5 +1,4 @@
-import 'dart:typed_data';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 /// Un archivo del ERP listo para entregarlo al menú «Compartir» del sistema.
@@ -27,3 +26,9 @@ Rect? shareOriginOf(BuildContext context) {
   if (box is! RenderBox || !box.hasSize) return null;
   return box.localToGlobal(Offset.zero) & box.size;
 }
+
+/// Fija si hay menú Compartir, sólo para pruebas. El gate corre en Linux, que no
+/// tiene menú del sistema: una prueba que dependa del sistema anfitrión pasa en
+/// el Mac y falla en CI (le pasó al visor de adjuntos, 2026-09-29). La leen
+/// `file_share_io.dart` y `file_share_web.dart`; el código de la app no la toca.
+bool? debugCanShareFilesOverride;

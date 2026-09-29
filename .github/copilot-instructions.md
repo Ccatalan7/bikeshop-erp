@@ -4533,11 +4533,17 @@ Direct transport sends are only appropriate inside the messaging workflow itself
 
 El dueño: «when I select a file/image on my phone, it gives me the option to
 share that file/image on the integrated whatsapp» y «input and output… as
-normal app do».
+normal app do»; después, que la entrada diga WhatsApp, que exista además una
+general «Viñabike ERP» con más opciones dentro de la app, y que se compriman
+los archivos que pasan el límite.
 
-- **Entrada (Android).** «vb-ERP» aparece en el menú Compartir del teléfono
-  para imagen, video, audio, PDF, Word y Excel (no texto suelto).
-  `IncomingShareReceiverActivity` copia lo compartido y trae al frente la
+- **Entrada (Android).** Dos entradas en el menú Compartir para imagen, video,
+  audio, PDF, Word y Excel (no texto suelto): «WhatsApp ERP» (directo a los
+  chats) y «Viñabike ERP» (menú: WhatsApp, Archivos, gasto, factura de compra;
+  los dos últimos por `OcrFileHandoffService`, igual que Archivos). Android las
+  agrupa bajo el nombre de la app, «vb-ERP ▾»; la última usada queda sola en
+  la fila de arriba. Son `IncomingShareReceiverActivity` y su
+  `activity-alias`; el receptor copia lo compartido y trae al frente la
   `MainActivity` que ya existe; recibirlo en `MainActivity` abría un segundo
   motor de Flutter dentro de la tarea de Fotos. `IncomingShareStore.kt` deja
   las copias en `noBackupFilesDir`, **no en `cacheDir`**: Android purgó la
@@ -4591,6 +4597,14 @@ Operational helper:
 
 - `supabase/functions/whatsapp-profile-admin/index.ts` can inspect and update the WhatsApp Business Profile using the server-side `WHATSAPP_ACCESS_TOKEN`; it avoids exposing the Meta token locally.
 - Deploy with: `scripts/supabase_cli.sh functions deploy whatsapp-profile-admin --project-ref xzdvtzdqjeyqxnkqprtf --no-verify-jwt`.
+- **Compresión, no rechazo.** Lo que pasa el tope de WhatsApp se achica en vez
+  de rechazarse, tanto al compartir como al adjuntar en el chat: fotos en Dart
+  (`MediaCompressor.compressImage`, cualquier equipo) y videos en Android
+  (`VideoCompressor.kt`, Media3 1.5.1: H.264 con la tasa que cabe según la
+  duración, lado corto 720 o 480, `.mov`/`.webm` salen `.mp4`; si ni con la
+  tasa mínima cabe, dice cuánto puede durar). Media3 entrega a los efectos el
+  cuadro ya girado; 1.5.1 no tiene `Presentation.createForShortSide`. Un PDF
+  no se comprime. Archivos guarda siempre el original.
 - Protect invocations with `WHATSAPP_PROFILE_ADMIN_TOKEN` in Supabase secrets, or the service-role bearer when used by trusted agents only. Never expose either token in chat or checked-in files.
 - Use `inspect` before changing profile data, and only update public business facts that are already verified from `website_settings`, Google Business data, or explicit user instruction.
 - Profile text fields and website can be updated with Graph API. Avatar/profile image updates use the same helper's `upload_profile_picture` multipart action, which performs Meta's resumable upload flow to get a `profile_picture_handle` before updating the WhatsApp Business Profile. Catalog/commerce setup may still need WhatsApp Manager/Commerce Manager configuration; do not claim catalog setup is done after updating profile fields only.

@@ -14,6 +14,8 @@ class MainActivity : FlutterActivity() {
     private val updateChannelName = "com.vinabike.erp/android_update"
     private val htmlPdfChannelName = "com.vinabike.erp/html_pdf_renderer"
     private val incomingShareChannelName = "com.vinabike.erp/incoming_share"
+    private val mediaCompressorChannelName = "com.vinabike.erp/media_compressor"
+    private var videoCompressor: VideoCompressor? = null
     private var pendingInstallerPath: String? = null
     private var incomingShareChannel: MethodChannel? = null
     private var htmlPdfRenderer: HtmlPdfRenderer? = null
@@ -23,6 +25,7 @@ class MainActivity : FlutterActivity() {
 
         configureHtmlPdfRenderer(flutterEngine)
         configureIncomingShare(flutterEngine)
+        configureMediaCompressor(flutterEngine)
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -152,6 +155,67 @@ class MainActivity : FlutterActivity() {
             }
         }
     }
+
+    /**
+     * Comprime un video que ya está dentro del ERP (lote compartido o archivo
+     * elegido en el chat) para que quepa en WhatsApp. Sólo archivos de las
+     * carpetas propias de la app: el canal no lee rutas ajenas.
+     */
+    private fun configureMediaCompressor(flutterEngine: FlutterEngine) {
+        val channel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            mediaCompressorChannelName,
+        )
+        val compressor = videoCompressor ?: VideoCompressor(applicationContext).also {
+            videoCompressor = it
+        }
+        channel.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "compressVideo" -> {
+                    val id = call.argument<String>("id")
+                    val path = call.argument<String>("path")
+                    val maxBytes = call.argument<Number>("maxBytes")?.toLong()
+                    val input = path?.let { File(it).canonicalFile }
+                    if (id.isNullOrBlank() || input == null || maxBytes == null ||
+                        !input.isFile || !isInsideAppStorage(input)
+                    ) {
+                        result.error("invalid_input", "Video no disponible.", null)
+                        return@setMethodCallHandler
+                    }
+                    compressor.compress(id, input, maxBytes, object : VideoCompressor.Callback {
+                        override fun onProgress(percent: Int) {
+                            channel.invokeMethod(
+                                "compressProgress",
+                                mapOf("id" to id, "percent" to percent),
+                            )
+                        }
+
+                        override fun onDone(output: File) {
+                            result.success(
+                                mapOf("path" to output.path, "sizeBytes" to output.length()),
+                            )
+                        }
+
+                        override fun onError(code: String, message: String) {
+                            result.error(code, message, null)
+                        }
+                    })
+                }
+
+                "cancel" -> {
+                    call.argument<String>("id")?.let(compressor::cancel)
+                    result.success(null)
+                }
+
+                else -> result.notImplemented()
+            }
+        }
+    }
+
+    private fun isInsideAppStorage(file: File): Boolean =
+        listOf(cacheDir, filesDir, noBackupFilesDir).any { root ->
+            file.path.startsWith("${root.canonicalPath}${File.separator}")
+        }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)

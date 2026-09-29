@@ -57,6 +57,7 @@ import '../../../shared/services/inventory_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/utils/file_download.dart';
 import '../../../shared/utils/file_share.dart';
+import '../../../shared/services/media_compressor.dart';
 import '../../../shared/utils/purchase_document_pdf_generator.dart';
 import '../models/conversation_context_hint.dart';
 import '../../../shared/utils/supplier_whatsapp_phone.dart';
@@ -2598,30 +2599,22 @@ class _ChatWindowState extends State<ChatWindow> {
             'ogg',
             'm4a',
             'aac',
+            // Otros formatos de video salen como MP4 al comprimirlos.
+            if (MediaCompressor.instance.canCompressVideo) ...[
+              'mov',
+              'm4v',
+              'webm',
+              'mkv',
+            ],
           ],
-          withData: true,
+          // Fuera de la web se lee desde la ruta: un video de 80 MB no se carga
+          // entero en memoria sólo para descubrir que hay que comprimirlo.
+          withData: kIsWeb,
         );
         if (result == null ||
             result.files.isEmpty ||
             !_isCurrentComposer(conversationId, session)) return;
-        final attachments = <PendingChatAttachment>[];
-        for (final file in result.files.take(
-          MessagingAttachmentService.maxAttachmentsPerBatch,
-        )) {
-          MessagingAttachmentService.validateBeforeRead(
-            fileName: file.name,
-            sizeBytes: file.size,
-          );
-          final pickedBytes = file.bytes;
-          if (pickedBytes == null || pickedBytes.isEmpty) continue;
-          attachments.add(
-            _buildPendingAttachment(
-              fileName: file.name,
-              bytes: pickedBytes,
-            ),
-          );
-        }
-        _addPendingAttachments(attachments);
+        await _queueXFiles([for (final file in result.files) file.xFile]);
       }
     } catch (e) {
       if (!_isCurrentComposer(conversationId, session)) return;
@@ -2650,23 +2643,19 @@ class _ChatWindowState extends State<ChatWindow> {
     final conversationId = widget.conversation.id;
     final session = _composerSession;
     final attachments = <PendingChatAttachment>[];
+    var compressedCount = 0;
     for (final file in files.take(
       MessagingAttachmentService.maxAttachmentsPerBatch,
     )) {
       try {
-        final fileName = _droppedFileName(file);
-        final sizeBytes = await file.length();
-        MessagingAttachmentService.validateBeforeRead(
-          fileName: fileName,
-          sizeBytes: sizeBytes,
-        );
-        final bytes = await file.readAsBytes();
+        final prepared = await _readForComposer(file);
         if (!_isCurrentComposer(conversationId, session)) return;
-        if (bytes.isEmpty) continue;
+        if (prepared == null || prepared.bytes.isEmpty) continue;
+        if (prepared.compressed) compressedCount++;
         attachments.add(
           _buildPendingAttachment(
-            fileName: fileName,
-            bytes: bytes,
+            fileName: prepared.fileName,
+            bytes: prepared.bytes,
           ),
         );
       } catch (e) {
@@ -2681,6 +2670,126 @@ class _ChatWindowState extends State<ChatWindow> {
     }
 
     _addPendingAttachments(attachments);
+    if (compressedCount > 0 && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            compressedCount == 1
+                ? 'Se comprimió 1 archivo para que quepa en WhatsApp.'
+                : 'Se comprimieron $compressedCount archivos para que quepan en WhatsApp.',
+          ),
+        ),
+      );
+    }
+  }
+
+  /// Lee un archivo para el compositor. Si pasa el tope —o es un video en otro
+  /// formato— se comprime en vez de rechazarse: una foto en cualquier equipo,
+  /// un video en Android ([MediaCompressor]). Lo que no tiene arreglo lanza el
+  /// mismo mensaje de siempre. `null` = el operador canceló.
+  Future<({String fileName, Uint8List bytes, bool compressed})?>
+      _readForComposer(XFile file) async {
+    final fileName = _droppedFileName(file);
+    final sizeBytes = await file.length();
+    try {
+      MessagingAttachmentService.validateBeforeRead(
+        fileName: fileName,
+        sizeBytes: sizeBytes,
+      );
+      return (
+        fileName: fileName,
+        bytes: await file.readAsBytes(),
+        compressed: false,
+      );
+    } on FormatException {
+      final extension =
+          MessagingAttachmentService.extensionForFileName(fileName);
+      if (const {'jpg', 'jpeg', 'png', 'webp'}.contains(extension)) {
+        final bytes = await MediaCompressor.compressImage(
+          await file.readAsBytes(),
+          maxBytes: MessagingAttachmentService.maxImageBytes,
+        );
+        if (bytes == null) rethrow;
+        return (
+          fileName: compressedFileName(fileName, 'jpg'),
+          bytes: bytes,
+          compressed: true,
+        );
+      }
+      final compressor = MediaCompressor.instance;
+      if (compressor.canCompressVideo &&
+          file.path.isNotEmpty &&
+          const {'mp4', '3gp', 'mov', 'm4v', 'webm', 'mkv'}
+              .contains(extension)) {
+        final path = await _compressVideoWithProgress(file.path, fileName);
+        if (path == null) return null;
+        return (
+          fileName: compressedFileName(fileName, 'mp4'),
+          bytes: await XFile(path).readAsBytes(),
+          compressed: true,
+        );
+      }
+      rethrow;
+    }
+  }
+
+  /// Comprime un video mostrando el avance; `null` si el operador cancela.
+  Future<String?> _compressVideoWithProgress(String path, String name) async {
+    final compressor = MediaCompressor.instance;
+    final id = 'chat-${DateTime.now().microsecondsSinceEpoch}';
+    final progress = ValueNotifier<int>(0);
+    var cancelled = false;
+    final navigator = Navigator.of(context, rootNavigator: true);
+    unawaited(showDialog<void>(
+      context: context,
+      useRootNavigator: true,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Comprimiendo video'),
+        content: ValueListenableBuilder<int>(
+          valueListenable: progress,
+          builder: (_, percent, __) => Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                '$name pasa los 16 MB de WhatsApp. Se achica antes de '
+                'adjuntarlo.',
+              ),
+              const SizedBox(height: 16),
+              LinearProgressIndicator(
+                  value: percent > 0 ? percent / 100 : null),
+              const SizedBox(height: 8),
+              Text('$percent %', textAlign: TextAlign.end),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              cancelled = true;
+              unawaited(compressor.cancel(id));
+            },
+            child: const Text('Cancelar'),
+          ),
+        ],
+      ),
+    ));
+    try {
+      final video = await compressor.compressVideo(
+        id: id,
+        path: path,
+        maxBytes: MessagingAttachmentService.maxAudioVideoBytes,
+        onProgress: (percent) => progress.value = percent,
+      );
+      return video.path;
+    } on MediaCompressionException catch (error) {
+      if (cancelled || error.code == 'cancelled') return null;
+      throw FormatException(error.message);
+    } finally {
+      if (navigator.mounted) navigator.pop();
+      progress.dispose();
+    }
   }
 
   bool _offeredAttachmentIntakeScheduled = false;

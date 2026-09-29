@@ -35,9 +35,15 @@ class IncomingShareReceiverActivity : Activity() {
 
         val declaredType = intent.type
         val appContext = applicationContext
+        // El alias «Viñabike ERP» llega con su propio nombre de componente.
+        val target = if (intent.component?.className?.endsWith(".IncomingShareHubAlias") == true) {
+            IncomingShareStore.TARGET_HUB
+        } else {
+            IncomingShareStore.TARGET_WHATSAPP
+        }
         thread(name = "incoming-share-copy") {
             IncomingShareStore.sweepStale(appContext)
-            val batch = IncomingShareStore.copyBatch(appContext, uris, declaredType)
+            val batch = IncomingShareStore.copyBatch(appContext, uris, declaredType, target)
             runOnUiThread {
                 // Volver atrás mientras copiaba es cancelar: no se abre el ERP
                 // ni queda un lote esperando para aparecer después.

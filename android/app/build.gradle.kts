@@ -115,4 +115,10 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    // Comprimir videos de más de 16 MB antes de mandarlos por WhatsApp
+    // (VideoCompressor.kt). Misma versión de Media3 que ya traen los plugins de
+    // reproducción, para no subir dos copias de la librería.
+    implementation("androidx.media3:media3-transformer:1.5.1")
+    implementation("androidx.media3:media3-effect:1.5.1")
+    implementation("androidx.media3:media3-common:1.5.1")
 }

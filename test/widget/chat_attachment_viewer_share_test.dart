@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/modules/messaging/widgets/chat_attachment_viewer.dart';
+import 'package:vinabike_erp/shared/utils/file_share.dart';
 import 'package:vinabike_erp/shared/themes/app_theme.dart';
 import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 
@@ -11,6 +12,10 @@ void main() {
   // PNG transparente de 1×1.
   const pngDataUrl = 'data:image/png;base64,'
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg==';
+
+  // El gate corre en Linux, sin menú Compartir: se fija como en un teléfono.
+  setUp(() => debugCanShareFilesOverride = true);
+  tearDown(() => debugCanShareFilesOverride = null);
 
   Future<void> open(WidgetTester tester, double width) async {
     await tester.binding.setSurfaceSize(Size(width, 844));
@@ -58,5 +63,13 @@ void main() {
     expect(find.byTooltip('Guardar en Archivos y descargar'), findsOneWidget);
     expect(find.byTooltip('Abrir externo'), findsOneWidget);
     expect(find.byTooltip('Más acciones'), findsNothing);
+  });
+
+  testWidgets('sin menú Compartir en el sistema no se ofrece el botón',
+      (tester) async {
+    debugCanShareFilesOverride = false;
+    await open(tester, 390);
+    expect(find.byTooltip('Compartir'), findsNothing);
+    expect(find.byTooltip('Más acciones'), findsOneWidget);
   });
 }

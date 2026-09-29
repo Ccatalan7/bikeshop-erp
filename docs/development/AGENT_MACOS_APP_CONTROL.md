@@ -868,6 +868,20 @@ Trampas que costaron una vuelta cada una:
 
 The mechanism is cheap; **looking** is what costs. A screenshot is ~2 k
 tokens of context, a hot reload is a few hundred bytes of log.
+- **Dos entradas de la misma app se agrupan** bajo el nombre de la app
+  («vb-ERP ▾»); `uiautomator` no ve «WhatsApp ERP» hasta tocar el grupo, que
+  abre un diálogo con las dos. Con una sola entrada se ve su propio `label`.
+- **Un video de prueba grabado con `screenrecord` pesa nada** si la pantalla
+  está quieta (12 s a 20 Mbps dieron 168 KB). Para probar compresión se arma
+  uno de verdad en el Mac con `avconvert --preset Preset1920x1080 --source
+  "/System/Library/Wallpapers/.default/Golden Gate.mov" --output x.mov` (hay
+  uno vertical en `/System/Library/Desktop Pictures/.wallpapers/Sonoma/`), y
+  se mide la salida con AVFoundation (`naturalSize` + `preferredTransform`) en
+  un `swift` de una página. El codificador del emulador queda bajo la tasa
+  pedida (1,3–1,5 Mbps por 4); un teléfono real la respeta mejor.
+- **El gate corre en Linux**: `Platform.isMacOS` en una prueba pasa en el Mac y
+  falla en CI. Lo que dependa del sistema anfitrión se fija en la prueba
+  (`debugCanShareFilesOverride`).
 
 - Verify by text first: `flutter analyze`, the focused suites, and
   `native_session.sh errors`. Hundreds of these fit in one screenshot's budget.

@@ -64,16 +64,27 @@ class IncomingShareSkip {
   }
 }
 
+/// Qué entrada del menú Compartir eligió el operador.
+enum IncomingShareTarget {
+  /// «WhatsApp ERP»: directo a los chats.
+  whatsApp,
+
+  /// «Viñabike ERP»: el menú con todos los destinos del ERP.
+  hub,
+}
+
 class IncomingShareBatch {
   const IncomingShareBatch({
     required this.id,
     required this.files,
     required this.skipped,
+    this.target = IncomingShareTarget.whatsApp,
   });
 
   final String id;
   final List<IncomingSharedFile> files;
   final List<IncomingShareSkip> skipped;
+  final IncomingShareTarget target;
 
   bool get isEmpty => files.isEmpty && skipped.isEmpty;
 
@@ -89,7 +100,14 @@ class IncomingShareBatch {
       for (final item in (raw['skipped'] as List?) ?? const [])
         if (IncomingShareSkip.fromChannel(item) case final skip?) skip,
     ];
-    final batch = IncomingShareBatch(id: id, files: files, skipped: skipped);
+    final batch = IncomingShareBatch(
+      id: id,
+      files: files,
+      skipped: skipped,
+      target: raw['target'] == 'hub'
+          ? IncomingShareTarget.hub
+          : IncomingShareTarget.whatsApp,
+    );
     return batch.isEmpty ? null : batch;
   }
 }

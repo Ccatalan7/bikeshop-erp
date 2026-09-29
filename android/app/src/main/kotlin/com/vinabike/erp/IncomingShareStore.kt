@@ -32,9 +32,12 @@ data class IncomingShareBatch(
     val id: String,
     val files: List<IncomingShareFile>,
     val skipped: List<IncomingShareSkip>,
+    /** Qué entrada del menú Compartir eligió el operador. */
+    val target: String,
 ) {
     fun toChannelMap(): Map<String, Any> = mapOf(
         "id" to id,
+        "target" to target,
         "files" to files.map {
             mapOf(
                 "path" to it.path,
@@ -72,6 +75,12 @@ data class IncomingShareBatch(
 object IncomingShareStore {
     const val ACTION_INCOMING_SHARE = "com.vinabike.erp.action.INCOMING_SHARE"
 
+    /** «WhatsApp ERP»: directo a los chats. */
+    const val TARGET_WHATSAPP = "whatsapp"
+
+    /** «Viñabike ERP»: el menú con todos los destinos. */
+    const val TARGET_HUB = "hub"
+
     /** Lo mismo que acepta un envío del chat (`maxAttachmentsPerBatch`). */
     const val MAX_FILES = 8
 
@@ -79,6 +88,9 @@ object IncomingShareStore {
     // chat en Dart; esto sólo evita copiar lo que nunca se aceptará.
     private const val MAX_DOCUMENT_BYTES = 20L * 1024 * 1024
     private const val MAX_IMAGE_SOURCE_BYTES = 48L * 1024 * 1024
+    // Un video de teléfono pasa fácil los 16 MB de WhatsApp; se copia entero
+    // para comprimirlo (VideoCompressor.kt). La copia se borra con el lote.
+    private const val MAX_VIDEO_SOURCE_BYTES = 400L * 1024 * 1024
 
     // WhatsApp Cloud API acepta imágenes de hasta 5 MB y sólo JPEG/PNG/WEBP.
     // Una foto de teléfono suele pasarlo o venir en HEIC.
@@ -140,7 +152,12 @@ object IncomingShareStore {
      * Copia cada archivo compartido a `no_backup/incoming_share/<lote>/<n>/<nombre>`.
      * Corre fuera del hilo principal: una foto grande puede tardar en decodificarse.
      */
-    fun copyBatch(context: Context, uris: List<Uri>, declaredType: String?): IncomingShareBatch {
+    fun copyBatch(
+        context: Context,
+        uris: List<Uri>,
+        declaredType: String?,
+        target: String,
+    ): IncomingShareBatch {
         val batchId = UUID.randomUUID().toString()
         val batchDirectory = File(root(context), batchId)
         val files = mutableListOf<IncomingShareFile>()
@@ -157,7 +174,11 @@ object IncomingShareStore {
             }
             try {
                 val isImage = mimeType.startsWith("image/")
-                val cap = if (isImage) MAX_IMAGE_SOURCE_BYTES else MAX_DOCUMENT_BYTES
+                val cap = when {
+                    isImage -> MAX_IMAGE_SOURCE_BYTES
+                    mimeType.startsWith("video/") -> MAX_VIDEO_SOURCE_BYTES
+                    else -> MAX_DOCUMENT_BYTES
+                }
                 val knownSize = metadata.sizeBytes
                 if (knownSize != null && knownSize > cap) {
                     skipped += IncomingShareSkip(name, "too_large")
@@ -185,7 +206,7 @@ object IncomingShareStore {
             }
         }
 
-        return IncomingShareBatch(batchId, files, skipped)
+        return IncomingShareBatch(batchId, files, skipped, target)
     }
 
     private fun root(context: Context): File = File(context.noBackupFilesDir, ROOT_DIRECTORY)

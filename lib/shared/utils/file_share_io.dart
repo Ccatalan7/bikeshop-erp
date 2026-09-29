@@ -11,7 +11,8 @@ import 'file_share_types.dart';
 /// ERP le entrega el archivo, como cualquier app. Windows se queda con
 /// «Descargar»: su panel de compartir no es lo que un operador espera ahí.
 bool get canShareFiles =>
-    Platform.isAndroid || Platform.isIOS || Platform.isMacOS;
+    debugCanShareFilesOverride ??
+    (Platform.isAndroid || Platform.isIOS || Platform.isMacOS);
 
 /// Entrega [files] al menú Compartir del sistema.
 ///

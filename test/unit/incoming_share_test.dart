@@ -4,6 +4,7 @@ import 'package:vinabike_erp/modules/messaging/models/conversation.dart';
 import 'package:vinabike_erp/modules/messaging/models/conversation_context_hint.dart';
 import 'package:vinabike_erp/modules/messaging/utils/incoming_share_intake.dart';
 import 'package:vinabike_erp/shared/services/incoming_share_service.dart';
+import 'package:vinabike_erp/shared/services/media_compressor.dart';
 
 /// Lo que llega desde el menú «Compartir» del teléfono: el canal con el
 /// receptor nativo (`IncomingShareStore.kt`) y las reglas de la pantalla.
@@ -196,6 +197,57 @@ void main() {
       expect(ids('jose'), ['reciente']);
       expect(ids('41884520'), ['reciente']);
       expect(ids('nadie'), isEmpty);
+    });
+  });
+
+  group('MediaCompressor', () {
+    const channel = MethodChannel('test/media_compressor_unit');
+    tearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null);
+    });
+
+    test('un video demasiado largo llega con el mensaje nativo', () async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+        throw PlatformException(
+          code: 'too_long',
+          message: 'El video dura demasiado para WhatsApp.',
+        );
+      });
+      final compressor =
+          MediaCompressor(channel: channel, videoSupported: true);
+      await expectLater(
+        compressor.compressVideo(path: '/x.mp4', maxBytes: 16),
+        throwsA(isA<MediaCompressionException>()
+            .having((e) => e.code, 'code', 'too_long')
+            .having((e) => e.message, 'message', contains('demasiado'))),
+      );
+    });
+
+    test('sin soporte de video no llama al canal', () async {
+      var called = false;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+        called = true;
+        return null;
+      });
+      final compressor =
+          MediaCompressor(channel: channel, videoSupported: false);
+      expect(compressor.canCompressVideo, isFalse);
+      await expectLater(
+        compressor.compressVideo(path: '/x.mp4', maxBytes: 16),
+        throwsA(isA<MediaCompressionException>()),
+      );
+      await compressor.cancel('x');
+      expect(called, isFalse);
+    });
+
+    test('nombre comprimido conserva la base', () {
+      expect(compressedFileName('IMG_2041.HEIC', 'jpg'), 'IMG_2041.jpg');
+      expect(compressedFileName('revision final.mov', 'mp4'),
+          'revision final.mp4');
+      expect(compressedFileName('.mov', 'mp4'), 'archivo.mp4');
     });
   });
 }
