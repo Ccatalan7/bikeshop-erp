@@ -863,11 +863,6 @@ Trampas que costaron una vuelta cada una:
 - **Recién instalada, la app no sale en la primera fila del menú Compartir**:
   Android la ordena por uso. Está en la lista completa (deslizar la hoja hacia
   arriba); después del primer uso sube sola.
-
-## 5. Cost discipline
-
-The mechanism is cheap; **looking** is what costs. A screenshot is ~2 k
-tokens of context, a hot reload is a few hundred bytes of log.
 - **Dos entradas de la misma app se agrupan** bajo el nombre de la app
   («vb-ERP ▾»); `uiautomator` no ve «WhatsApp ERP» hasta tocar el grupo, que
   abre un diálogo con las dos. Con una sola entrada se ve su propio `label`.
@@ -882,6 +877,11 @@ tokens of context, a hot reload is a few hundred bytes of log.
 - **El gate corre en Linux**: `Platform.isMacOS` en una prueba pasa en el Mac y
   falla en CI. Lo que dependa del sistema anfitrión se fija en la prueba
   (`debugCanShareFilesOverride`).
+
+## 5. Cost discipline
+
+The mechanism is cheap; **looking** is what costs. A screenshot is ~2 k
+tokens of context, a hot reload is a few hundred bytes of log.
 
 - Verify by text first: `flutter analyze`, the focused suites, and
   `native_session.sh errors`. Hundreds of these fit in one screenshot's budget.
