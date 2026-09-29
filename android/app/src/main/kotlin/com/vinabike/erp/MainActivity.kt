@@ -13,13 +13,16 @@ import java.io.File
 class MainActivity : FlutterActivity() {
     private val updateChannelName = "com.vinabike.erp/android_update"
     private val htmlPdfChannelName = "com.vinabike.erp/html_pdf_renderer"
+    private val incomingShareChannelName = "com.vinabike.erp/incoming_share"
     private var pendingInstallerPath: String? = null
+    private var incomingShareChannel: MethodChannel? = null
     private var htmlPdfRenderer: HtmlPdfRenderer? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
         configureHtmlPdfRenderer(flutterEngine)
+        configureIncomingShare(flutterEngine)
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -116,6 +119,48 @@ class MainActivity : FlutterActivity() {
                     }
                 },
             )
+        }
+    }
+
+    /**
+     * Lo que otra app compartió llega por [IncomingShareReceiverActivity], que
+     * ya dejó el lote en [IncomingShareStore]. Dart lo pide al arrancar y cada
+     * vez que este canal le avisa; el intent nunca trae rutas.
+     */
+    private fun configureIncomingShare(flutterEngine: FlutterEngine) {
+        val channel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            incomingShareChannelName,
+        )
+        incomingShareChannel = channel
+        IncomingShareStore.sweepStale(applicationContext)
+        channel.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "takePendingShare" -> {
+                    result.success(IncomingShareStore.take()?.toChannelMap())
+                }
+
+                "releaseShare" -> {
+                    val batchId = call.argument<String>("id")
+                    if (!batchId.isNullOrBlank()) {
+                        IncomingShareStore.release(applicationContext, batchId)
+                    }
+                    result.success(null)
+                }
+
+                else -> result.notImplemented()
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (
+            intent.action == IncomingShareStore.ACTION_INCOMING_SHARE &&
+            IncomingShareStore.hasPending()
+        ) {
+            incomingShareChannel?.invokeMethod("shareReceived", null)
         }
     }
 

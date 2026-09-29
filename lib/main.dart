@@ -101,6 +101,7 @@ import 'shared/widgets/window_zoom_scope.dart';
 import 'shared/widgets/branded_loading.dart';
 import 'shared/widgets/desktop_update_prompt.dart';
 import 'shared/widgets/android_update_prompt.dart';
+import 'shared/widgets/incoming_share_prompt.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'shared/services/remote_scanner_service.dart';
 import 'shared/services/barcode_scanner_service.dart';
@@ -968,6 +969,7 @@ class VinabikeApp extends StatelessWidget {
                         const QueryPerformanceGauge(),
                         const DesktopUpdatePrompt(),
                         const AndroidUpdatePrompt(),
+                        const IncomingSharePrompt(),
                       ],
                       ),
                     ),

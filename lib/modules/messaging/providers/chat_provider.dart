@@ -117,6 +117,8 @@ class ChatProvider extends ChangeNotifier {
   final Map<String, ConversationDraft> _conversationDrafts = {};
   final Map<String, ChatComposerDraft> _composerDrafts = {};
   final Map<String, List<PendingChatAttachment>> _composerAttachments = {};
+  final Map<String, List<PendingChatAttachment>> _offeredComposerAttachments =
+      {};
   final Map<String, MetaConversationTransport> _metaConversationTransports = {};
   final Set<String> _metaOutboundReceiptSnapshots = {};
   final Set<String> _metaConversationTransportSnapshots = {};
@@ -507,6 +509,7 @@ class ChatProvider extends ChangeNotifier {
   void _invalidateSessionState({required String? nextUserId}) {
     _composerDrafts.clear();
     _composerAttachments.clear();
+    _offeredComposerAttachments.clear();
     _sessionEpoch += 1;
     _sessionReady = false;
     _sessionUserId = nextUserId;
@@ -1255,6 +1258,35 @@ class ChatProvider extends ChangeNotifier {
       _composerAttachments[conversationId] = List.of(attachments);
     }
   }
+
+  /// Archivos que llegan desde fuera del chat —hoy, el menú «Compartir» del
+  /// teléfono— para el compositor de [conversationId].
+  ///
+  /// **Por qué no van por [saveComposerAttachments].** Si ese chat ya está
+  /// abierto, su `ChatWindow` no vuelve a leer el borrador guardado y al
+  /// cerrarse lo sobrescribe con lo que tenía. Una oferta la toma el
+  /// compositor visible, una sola vez, y la suma a lo que ya había. Elegir el
+  /// chat nunca envía: el operador revisa, escribe y aprieta enviar.
+  void offerComposerAttachments(
+    String conversationId,
+    List<PendingChatAttachment> attachments,
+  ) {
+    if (_disposed || attachments.isEmpty) return;
+    _offeredComposerAttachments[conversationId] = [
+      ...?_offeredComposerAttachments[conversationId],
+      ...attachments,
+    ];
+    notifyListeners();
+  }
+
+  bool hasOfferedComposerAttachments(String conversationId) =>
+      _offeredComposerAttachments.containsKey(conversationId);
+
+  /// Lo entrega UNA vez.
+  List<PendingChatAttachment> takeOfferedComposerAttachments(
+    String conversationId,
+  ) =>
+      _offeredComposerAttachments.remove(conversationId) ?? const [];
 
   ChatComposerDraft? getComposerDraft(String conversationId) =>
       _composerDrafts[conversationId];

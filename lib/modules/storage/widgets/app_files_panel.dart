@@ -19,6 +19,7 @@ import '../../../shared/services/ocr_file_handoff_service.dart';
 import '../../../shared/services/right_toolbar_service.dart';
 import '../../../shared/services/spreadsheet_file_handoff_service.dart';
 import '../../../shared/utils/file_download.dart';
+import '../../../shared/utils/file_share.dart';
 import '../../spreadsheets/services/spreadsheet_service.dart';
 import '../../spreadsheets/widgets/stored_spreadsheet_runner.dart';
 import '../models/app_stored_file.dart';
@@ -52,6 +53,44 @@ void _logStorageUiFailure(String operation, Object error) {
   // incluir rutas, ids internos o texto del negocio. El tipo basta para el
   // diagnóstico local sin filtrar esos datos al operador.
   debugPrint('Storage UI $operation failed: ${error.runtimeType}');
+}
+
+/// Entrega un archivo de la biblioteca al menú «Compartir» del sistema
+/// (Android, iPhone, Mac). En Android es la salida real hacia otra app:
+/// «Descargar» lo deja dentro de la carpeta privada del ERP.
+Future<void> _shareStoredFile(
+  BuildContext context,
+  AppStoredFile file, {
+  Uint8List? bytes,
+  Rect? origin,
+}) async {
+  final messenger = ScaffoldMessenger.of(context);
+  try {
+    final payload =
+        bytes ?? await AppFileStorageService.instance.downloadFile(file);
+    final outcome = await shareFiles(
+      files: [
+        ShareableFile(
+          bytes: payload,
+          fileName: file.fileName,
+          mimeType: file.mimeType,
+        ),
+      ],
+      origin: origin,
+    );
+    if (outcome == FileShareOutcome.unavailable) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Este equipo no tiene menú Compartir.')),
+      );
+    }
+  } catch (error) {
+    _logStorageUiFailure('share', error);
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('No se pudo compartir el archivo. Intenta nuevamente.'),
+      ),
+    );
+  }
 }
 
 class AppFilesPanel extends StatefulWidget {
@@ -1228,6 +1267,9 @@ class _AppFilesPanelState extends State<AppFilesPanel> {
               ? () => setState(() => _runnerFile = file)
               : () => StorageFilePreviewDialog.show(context, file),
           onDownload: () => _downloadFile(file),
+          onShare: canShareFiles
+              ? (origin) => _shareStoredFile(context, file, origin: origin)
+              : null,
           onDelete: () => _deleteFile(file),
           onOpenOrigin:
               file.sourceRoute == null ? null : () => _openOrigin(file),
@@ -1667,6 +1709,7 @@ class _FileListTile extends StatelessWidget {
   final String dateLabel;
   final VoidCallback onPreview;
   final VoidCallback onDownload;
+  final void Function(Rect? origin)? onShare;
   final VoidCallback onDelete;
   final VoidCallback? onOpenOrigin;
   final VoidCallback? onQuickExpenseOcr;
@@ -1679,6 +1722,7 @@ class _FileListTile extends StatelessWidget {
     required this.dateLabel,
     required this.onPreview,
     required this.onDownload,
+    this.onShare,
     required this.onDelete,
     required this.onOpenOrigin,
     required this.onQuickExpenseOcr,
@@ -1786,90 +1830,106 @@ class _FileListTile extends StatelessWidget {
                   onPressed: onDownload,
                   icon: const Icon(Icons.download_outlined, size: 18),
                 ),
-              PopupMenuButton<String>(
-                key: ValueKey('storage-more-${file.id}'),
-                tooltip: 'Más acciones',
-                onSelected: (value) {
-                  if (value == 'quick_expense_ocr') onQuickExpenseOcr?.call();
-                  if (value == 'purchase_invoice_ocr') {
-                    onPurchaseInvoiceOcr?.call();
-                  }
-                  if (value == 'open_in_spreadsheets') {
-                    onOpenInSpreadsheets?.call();
-                  }
-                  if (value == 'download') onDownload();
-                  if (value == 'origin') onOpenOrigin?.call();
-                  if (value == 'delete') onDelete();
-                },
-                itemBuilder: (context) => [
-                  if (onOpenInSpreadsheets != null)
+              Builder(
+                builder: (menuContext) => PopupMenuButton<String>(
+                  key: ValueKey('storage-more-${file.id}'),
+                  tooltip: 'Más acciones',
+                  onSelected: (value) {
+                    if (value == 'share') {
+                      onShare?.call(shareOriginOf(menuContext));
+                    }
+                    if (value == 'quick_expense_ocr') onQuickExpenseOcr?.call();
+                    if (value == 'purchase_invoice_ocr') {
+                      onPurchaseInvoiceOcr?.call();
+                    }
+                    if (value == 'open_in_spreadsheets') {
+                      onOpenInSpreadsheets?.call();
+                    }
+                    if (value == 'download') onDownload();
+                    if (value == 'origin') onOpenOrigin?.call();
+                    if (value == 'delete') onDelete();
+                  },
+                  itemBuilder: (context) => [
+                    if (onOpenInSpreadsheets != null)
+                      const PopupMenuItem(
+                        value: 'open_in_spreadsheets',
+                        child: _FileActionMenuItem(
+                          icon: Icons.table_view_outlined,
+                          label: 'Abrir en Planillas',
+                        ),
+                      ),
+                    if (onOpenInSpreadsheets != null) const PopupMenuDivider(),
+                    if (file.extension == 'xls')
+                      const PopupMenuItem(
+                        enabled: false,
+                        child: _FileActionMenuItem(
+                          icon: Icons.info_outline,
+                          label: 'XLS: convierte a XLSX',
+                        ),
+                      ),
+                    if (file.extension == 'xls') const PopupMenuDivider(),
+                    if (onQuickExpenseOcr != null)
+                      const PopupMenuItem(
+                        value: 'quick_expense_ocr',
+                        child: _FileActionMenuItem(
+                          icon: Icons.receipt_long_outlined,
+                          label: 'OCR como gasto',
+                        ),
+                      ),
+                    if (onPurchaseInvoiceOcr != null)
+                      const PopupMenuItem(
+                        value: 'purchase_invoice_ocr',
+                        child: _FileActionMenuItem(
+                          icon: Icons.document_scanner_outlined,
+                          label: 'OCR factura compra',
+                        ),
+                      ),
+                    if (onQuickExpenseOcr != null ||
+                        onPurchaseInvoiceOcr != null)
+                      const PopupMenuDivider(),
+                    if (onShare != null)
+                      PopupMenuItem(
+                        key: ValueKey('storage-share-${file.id}'),
+                        value: 'share',
+                        child: _FileActionMenuItem(
+                          icon: Icons.adaptive.share,
+                          label: 'Compartir',
+                        ),
+                      ),
                     const PopupMenuItem(
-                      value: 'open_in_spreadsheets',
+                      value: 'download',
                       child: _FileActionMenuItem(
-                        icon: Icons.table_view_outlined,
-                        label: 'Abrir en Planillas',
+                        icon: Icons.download_outlined,
+                        label: 'Descargar',
                       ),
                     ),
-                  if (onOpenInSpreadsheets != null) const PopupMenuDivider(),
-                  if (file.extension == 'xls')
-                    const PopupMenuItem(
-                      enabled: false,
-                      child: _FileActionMenuItem(
-                        icon: Icons.info_outline,
-                        label: 'XLS: convierte a XLSX',
+                    if (onOpenOrigin != null)
+                      const PopupMenuItem(
+                        value: 'origin',
+                        child: _FileActionMenuItem(
+                          icon: Icons.open_in_new_outlined,
+                          label: 'Abrir origen',
+                        ),
                       ),
-                    ),
-                  if (file.extension == 'xls') const PopupMenuDivider(),
-                  if (onQuickExpenseOcr != null)
-                    const PopupMenuItem(
-                      value: 'quick_expense_ocr',
-                      child: _FileActionMenuItem(
-                        icon: Icons.receipt_long_outlined,
-                        label: 'OCR como gasto',
+                    // Una evidencia inmutable de anticipo NO se puede borrar:
+                    // el servicio la rechaza siempre. Ofrecer el botón es
+                    // prometer algo que no va a pasar y educar a ignorar el
+                    // error. Se retira la acción, no se deshabilita a medias.
+                    if (!AppFileStorageService
+                        .isImmutablePayrollAdvanceEvidence(
+                            file)) ...<PopupMenuEntry<String>>[
+                      const PopupMenuDivider(),
+                      const PopupMenuItem(
+                        value: 'delete',
+                        child: _FileActionMenuItem(
+                          icon: Icons.delete_outline,
+                          label: 'Eliminar',
+                        ),
                       ),
-                    ),
-                  if (onPurchaseInvoiceOcr != null)
-                    const PopupMenuItem(
-                      value: 'purchase_invoice_ocr',
-                      child: _FileActionMenuItem(
-                        icon: Icons.document_scanner_outlined,
-                        label: 'OCR factura compra',
-                      ),
-                    ),
-                  if (onQuickExpenseOcr != null || onPurchaseInvoiceOcr != null)
-                    const PopupMenuDivider(),
-                  const PopupMenuItem(
-                    value: 'download',
-                    child: _FileActionMenuItem(
-                      icon: Icons.download_outlined,
-                      label: 'Descargar',
-                    ),
-                  ),
-                  if (onOpenOrigin != null)
-                    const PopupMenuItem(
-                      value: 'origin',
-                      child: _FileActionMenuItem(
-                        icon: Icons.open_in_new_outlined,
-                        label: 'Abrir origen',
-                      ),
-                    ),
-                  // Una evidencia inmutable de anticipo NO se puede borrar:
-                  // el servicio la rechaza siempre. Ofrecer el botón es
-                  // prometer algo que no va a pasar y educar a ignorar el
-                  // error. Se retira la acción, no se deshabilita a medias.
-                  if (!AppFileStorageService.isImmutablePayrollAdvanceEvidence(
-                      file)) ...<PopupMenuEntry<String>>[
-                    const PopupMenuDivider(),
-                    const PopupMenuItem(
-                      value: 'delete',
-                      child: _FileActionMenuItem(
-                        icon: Icons.delete_outline,
-                        label: 'Eliminar',
-                      ),
-                    ),
+                    ],
                   ],
-                ],
-                icon: const Icon(Icons.more_vert, size: 18),
+                  icon: const Icon(Icons.more_vert, size: 18),
+                ),
               ),
             ],
           ),
@@ -2249,41 +2309,60 @@ class _InlineStorageFileRunnerState extends State<_InlineStorageFileRunner> {
                       onPressed: bytes == null ? null : () => _editImage(bytes),
                       icon: const Icon(Icons.crop_outlined, size: 19),
                     ),
-                  PopupMenuButton<String>(
-                    tooltip: 'Acciones del archivo',
-                    onSelected: (value) {
-                      if (value == 'retry') _reload();
-                      if (value == 'download' && bytes != null) {
-                        _download(bytes);
-                      }
-                      if (value == 'origin') widget.onOpenOrigin?.call();
-                    },
-                    itemBuilder: (_) => [
-                      const PopupMenuItem(
-                        value: 'retry',
-                        child: _FileActionMenuItem(
-                          icon: Icons.refresh,
-                          label: 'Volver a cargar',
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: 'download',
-                        enabled: bytes != null,
-                        child: const _FileActionMenuItem(
-                          icon: Icons.download_outlined,
-                          label: 'Descargar',
-                        ),
-                      ),
-                      if (widget.onOpenOrigin != null)
+                  Builder(
+                    builder: (menuContext) => PopupMenuButton<String>(
+                      tooltip: 'Acciones del archivo',
+                      onSelected: (value) {
+                        if (value == 'retry') _reload();
+                        if (value == 'share' && bytes != null) {
+                          _shareStoredFile(
+                            context,
+                            _file,
+                            bytes: bytes,
+                            origin: shareOriginOf(menuContext),
+                          );
+                        }
+                        if (value == 'download' && bytes != null) {
+                          _download(bytes);
+                        }
+                        if (value == 'origin') widget.onOpenOrigin?.call();
+                      },
+                      itemBuilder: (_) => [
                         const PopupMenuItem(
-                          value: 'origin',
+                          value: 'retry',
                           child: _FileActionMenuItem(
-                            icon: Icons.open_in_new_outlined,
-                            label: 'Abrir origen',
+                            icon: Icons.refresh,
+                            label: 'Volver a cargar',
                           ),
                         ),
-                    ],
-                    icon: const Icon(Icons.more_vert, size: 19),
+                        if (canShareFiles)
+                          PopupMenuItem(
+                            value: 'share',
+                            enabled: bytes != null,
+                            child: _FileActionMenuItem(
+                              icon: Icons.adaptive.share,
+                              label: 'Compartir',
+                            ),
+                          ),
+                        PopupMenuItem(
+                          value: 'download',
+                          enabled: bytes != null,
+                          child: const _FileActionMenuItem(
+                            icon: Icons.download_outlined,
+                            label: 'Descargar',
+                          ),
+                        ),
+                        if (widget.onOpenOrigin != null)
+                          const PopupMenuItem(
+                            value: 'origin',
+                            child: _FileActionMenuItem(
+                              icon: Icons.open_in_new_outlined,
+                              label: 'Abrir origen',
+                            ),
+                          ),
+                      ],
+                      icon: const Icon(Icons.more_vert, size: 19),
+                    ),
                   ),
                 ],
               ),
@@ -2637,6 +2716,14 @@ class _StorageFilePreviewDialogState extends State<StorageFilePreviewDialog> {
                           ? null
                           : () => _editImage(bytes),
                       onDownload: bytes == null ? null : () => _download(bytes),
+                      onShare: bytes == null || !canShareFiles
+                          ? null
+                          : (origin) => _shareStoredFile(
+                                context,
+                                _file,
+                                bytes: bytes,
+                                origin: origin,
+                              ),
                       onClose: () => Navigator.of(context).maybePop(),
                     ),
                     const Divider(height: 1),
@@ -2745,6 +2832,7 @@ class _StoragePreviewHeader extends StatelessWidget {
   final VoidCallback onRetry;
   final VoidCallback? onEditImage;
   final VoidCallback? onDownload;
+  final void Function(Rect? origin)? onShare;
   final VoidCallback onClose;
 
   const _StoragePreviewHeader({
@@ -2753,6 +2841,7 @@ class _StoragePreviewHeader extends StatelessWidget {
     required this.onRetry,
     required this.onEditImage,
     required this.onDownload,
+    required this.onShare,
     required this.onClose,
   });
 
@@ -2797,7 +2886,9 @@ class _StoragePreviewHeader extends StatelessWidget {
               height: 22,
               child: CircularProgressIndicator(strokeWidth: 2),
             )
-          else
+          // En teléfono el nombre del archivo se quedaba sin espacio; si la
+          // carga falla, el cuerpo ya ofrece «Reintentar».
+          else if (MediaQuery.sizeOf(context).width >= 480)
             IconButton(
               tooltip: 'Reintentar',
               onPressed: onRetry,
@@ -2808,6 +2899,15 @@ class _StoragePreviewHeader extends StatelessWidget {
               tooltip: 'Recortar',
               onPressed: onEditImage,
               icon: const Icon(Icons.crop_outlined),
+            ),
+          if (onShare != null)
+            Builder(
+              builder: (buttonContext) => IconButton(
+                key: const ValueKey('storage-preview-share'),
+                tooltip: 'Compartir',
+                onPressed: () => onShare!(shareOriginOf(buttonContext)),
+                icon: Icon(Icons.adaptive.share),
+              ),
             ),
           IconButton(
             tooltip: 'Descargar',

@@ -56,6 +56,7 @@ import '../../../shared/services/workspace_manager.dart';
 import '../../../shared/services/inventory_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/utils/file_download.dart';
+import '../../../shared/utils/file_share.dart';
 import '../../../shared/utils/purchase_document_pdf_generator.dart';
 import '../models/conversation_context_hint.dart';
 import '../../../shared/utils/supplier_whatsapp_phone.dart';
@@ -2682,6 +2683,25 @@ class _ChatWindowState extends State<ChatWindow> {
     _addPendingAttachments(attachments);
   }
 
+  bool _offeredAttachmentIntakeScheduled = false;
+
+  /// Toma lo que llegó para este chat desde fuera —el menú «Compartir» del
+  /// teléfono— y lo deja en el compositor como cualquier adjunto elegido acá.
+  /// Sólo el host visible lo toma: un `ChatWindow` retenido fuera de pantalla
+  /// se lo quedaría sin que nadie lo viera.
+  void _scheduleOfferedAttachmentIntake() {
+    if (_offeredAttachmentIntakeScheduled) return;
+    _offeredAttachmentIntakeScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _offeredAttachmentIntakeScheduled = false;
+      if (!mounted || !_supportsOutgoingAttachments) return;
+      final offered = context
+          .read<ChatProvider>()
+          .takeOfferedComposerAttachments(widget.conversation.id);
+      _addPendingAttachments(offered);
+    });
+  }
+
   void _addPendingAttachments(List<PendingChatAttachment> attachments) {
     if (attachments.isEmpty || !mounted) return;
     if (_guardPendingAttachmentMutation()) return;
@@ -3831,6 +3851,10 @@ class _ChatWindowState extends State<ChatWindow> {
     final chatProvider = context.watch<ChatProvider>();
     final hostVisible = _isConversationHostVisible(context);
     _reportConversationHostVisibility(chatProvider, hostVisible);
+    if (hostVisible &&
+        chatProvider.hasOfferedComposerAttachments(widget.conversation.id)) {
+      _scheduleOfferedAttachmentIntake();
+    }
     final messages =
         chatProvider.messagesForConversation(widget.conversation.id);
     _schedulePendingAttachmentReconciliation(messages);
@@ -10974,6 +10998,18 @@ class _ChatWindowState extends State<ChatWindow> {
               onPressed: _copySelectedMessages,
               icon: const Icon(Icons.copy_outlined),
             ),
+            if (canShareFiles)
+              Builder(
+                builder: (anchor) => IconButton(
+                  key: const ValueKey('chat-selection-share'),
+                  tooltip: 'Compartir',
+                  onPressed: messages.isNotEmpty &&
+                          messages.every(_canShareMessageFile)
+                      ? () => _shareMessageFiles(messages, anchor)
+                      : null,
+                  icon: Icon(Icons.adaptive.share),
+                ),
+              ),
             Builder(
                 builder: (anchor) => IconButton(
                       key: const ValueKey('chat-selection-forward'),
@@ -11040,6 +11076,81 @@ class _ChatWindowState extends State<ChatWindow> {
     );
   }
 
+  /// Los bytes de un adjunto del chat. La fuente se autoriza de nuevo aunque
+  /// este equipo ya tenga los bytes en caché.
+  Future<({Uint8List bytes, String fileName, String contentType})>
+      _readMessageAttachment(Message message, bool Function() isCurrent) async {
+    final url = MessagingAttachmentService.hasPrivateReference(message)
+        ? await _messagingAttachmentService.createRuntimeSignedUrl(message)
+        : await _resolveWhatsAppMediaUrl(message);
+    if (url == null || !isCurrent()) {
+      throw StateError('El adjunto ya no está disponible.');
+    }
+    final contentType = _messageAttachmentContentType(message);
+    final extension = _messageAttachmentExtension(message, url, contentType);
+    final bytes = await ChatMediaCache.instance.fetch(
+      ChatMediaCache.keyFor(message) ?? 'forward-source-${message.id}',
+      resolveUrl: () async => url,
+      fileExtension: extension,
+    );
+    if (bytes == null || !isCurrent()) {
+      throw StateError('No se pudo leer el adjunto.');
+    }
+    return (
+      bytes: bytes,
+      fileName: _messageAttachmentName(message, extension),
+      contentType: contentType,
+    );
+  }
+
+  bool _canShareMessageFile(Message message) =>
+      canShareFiles &&
+      _canForwardMessage(message) &&
+      const {'image', 'file', 'audio'}.contains(message.type);
+
+  /// Fotos y documentos del chat al menú «Compartir» del teléfono o del Mac,
+  /// como en WhatsApp: seleccionar y compartir.
+  Future<void> _shareMessageFiles(
+    List<Message> messages,
+    BuildContext anchor,
+  ) async {
+    final conversationId = widget.conversation.id;
+    final session = _composerSession;
+    bool isCurrent() => _isCurrentComposer(conversationId, session);
+    final origin = shareOriginOf(anchor);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final files = <ShareableFile>[];
+      for (final message in messages) {
+        final attachment = await _readMessageAttachment(message, isCurrent);
+        files.add(
+          ShareableFile(
+            bytes: attachment.bytes,
+            fileName: attachment.fileName,
+            mimeType: attachment.contentType.isEmpty
+                ? null
+                : attachment.contentType.split(';').first.trim(),
+          ),
+        );
+      }
+      if (!isCurrent()) return;
+      final outcome = await shareFiles(files: files, origin: origin);
+      if (!mounted) return;
+      if (outcome == FileShareOutcome.shared && isCurrent()) {
+        setState(_selectedMessages.clear);
+      }
+    } catch (error) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(error is StateError
+              ? error.message.toString()
+              : 'No se pudo compartir el archivo.'),
+        ),
+      );
+    }
+  }
+
   Future<void> _forwardMessage(Message message, Conversation destination,
       {required bool Function() isCurrent}) async {
     final provider = context.read<ChatProvider>();
@@ -11085,29 +11196,13 @@ class _ChatWindowState extends State<ChatWindow> {
       }
       return;
     }
-    // Authorize the source afresh, even when this device has cached its bytes.
     // The destination always gets a NEW private reservation, never a copied URL.
-    final url = MessagingAttachmentService.hasPrivateReference(message)
-        ? await _messagingAttachmentService.createRuntimeSignedUrl(message)
-        : await _resolveWhatsAppMediaUrl(message);
-    if (url == null || !isCurrent()) {
-      throw StateError('El adjunto ya no está disponible.');
-    }
-    final extension = _messageAttachmentExtension(
-        message, url, _messageAttachmentContentType(message));
-    final bytes = await ChatMediaCache.instance.fetch(
-      ChatMediaCache.keyFor(message) ?? 'forward-source-${message.id}',
-      resolveUrl: () async => url,
-      fileExtension: extension,
-    );
-    if (bytes == null || !isCurrent()) {
-      throw StateError('No se pudo leer el adjunto.');
-    }
+    final attachment = await _readMessageAttachment(message, isCurrent);
     final result = await _sendAttachmentBytes(
       destination: destination,
       forwardLease: isCurrent,
-      fileName: _messageAttachmentName(message, extension),
-      bytes: bytes,
+      fileName: attachment.fileName,
+      bytes: attachment.bytes,
       caption: message.type == 'image'
           ? _messageImageCaption(message)
           : message.type == 'file'
@@ -11837,6 +11932,8 @@ class _ChatWindowState extends State<ChatWindow> {
         if (contextActions && _canForwardMessage(msg))
           const PopupMenuItem<String>(
               value: 'forward', child: Text('Reenviar mensaje')),
+        if (contextActions && _canShareMessageFile(msg))
+          const PopupMenuItem<String>(value: 'share', child: Text('Compartir')),
         if (contextActions && msg.content.isNotEmpty)
           const PopupMenuItem<String>(
               value: 'copy', child: Text('Copiar mensaje')),
@@ -11906,6 +12003,10 @@ class _ChatWindowState extends State<ChatWindow> {
     }
     if (selected == 'forward') {
       if (context.mounted) await _forwardMessages([msg], context);
+      return;
+    }
+    if (selected == 'share') {
+      if (context.mounted) await _shareMessageFiles([msg], context);
       return;
     }
     if (selected == 'reply') {

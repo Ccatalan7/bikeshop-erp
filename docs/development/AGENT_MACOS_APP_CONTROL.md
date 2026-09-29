@@ -825,6 +825,45 @@ Regla: **para contrastar con un spec, divide la captura por 0,8, o mide con
 `read`, que ya viene en lógicos.** Y nunca elijas el breakpoint mirando el
 ancho de la captura.
 
+## 4.c Emulador Android: lo nativo sin sesión, la pantalla con una vista previa (2026-09-29)
+
+El Mac tiene el AVD `Medium_Phone_API_36.1`; se arranca sin ventana
+(`emulator -avd Medium_Phone_API_36.1 -no-window -no-audio -no-boot-anim`
+en segundo plano) y se maneja con `adb`. La app corre contra producción y un
+agente no escribe contraseñas reales, así que en el emulador **no hay sesión**.
+Se prueba en dos capas:
+
+- **Lo nativo, de verdad.** Intents, copias, permisos y el ciclo de las
+  actividades no necesitan sesión: `run-as com.vinabike.erp ls -lR <carpeta>`
+  (build debug) muestra lo que quedó, y
+  `dumpsys activity activities | grep "Hist.*vinabike"` cuenta las
+  `MainActivity` (tiene que haber una).
+- **La pantalla, con una entrada desechable.** Un `main` de vista previa en
+  `build/preview/*.dart` (ignorado por git) monta el widget real con datos de
+  ejemplo: `flutter build apk --debug --target-platform android-arm64 -t
+  build/preview/x.dart`. Es un render real en Android, con fuentes reales;
+  se borra al cerrar la ronda.
+
+Trampas que costaron una vuelta cada una:
+
+- **`adb shell am start --grant-read-uri-permission` no sirve para fotos de la
+  galería:** el shell no tiene permiso sobre MediaStore y la concesión se
+  rechaza en silencio (el receptor recibe el intent y no puede leer nada). Un
+  envío real se hace desde la app Archivos (`com.google.android.documentsui`):
+  mantener pulsado, tocar los demás, Compartir. Manejarla por identidad con
+  `uiautomator dump` (texto/`content-desc` → centro del `bounds`), nunca por
+  píxeles.
+- **El shell remoto expande `*/*`.** `adb shell cmd package query-activities -t
+  '*/*'` pregunta por otra cosa; hay que citar dentro de la línea remota:
+  `adb shell "cmd … -t '*/*'"`.
+- **El emulador se llena**: con ~450 MB libres `installd` purga la caché de las
+  apps al minuto y `adb install -r` falla con `INSTALL_FAILED_INSUFFICIENT_STORAGE`
+  (necesita espacio para dos APK de ~190 MB). `pm trim-caches 2G` y, si no
+  alcanza, `adb uninstall com.vinabike.erp` antes de instalar.
+- **Recién instalada, la app no sale en la primera fila del menú Compartir**:
+  Android la ordena por uso. Está en la lista completa (deslizar la hoja hacia
+  arriba); después del primer uso sube sola.
+
 ## 5. Cost discipline
 
 The mechanism is cheap; **looking** is what costs. A screenshot is ~2 k

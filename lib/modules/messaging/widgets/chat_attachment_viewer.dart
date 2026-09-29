@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../storage/models/app_stored_file.dart';
 import '../../storage/services/app_file_storage_service.dart';
 import '../../../shared/utils/file_download.dart';
+import '../../../shared/utils/file_share.dart';
 
 class ChatAttachmentViewer extends StatefulWidget {
   final String url;
@@ -344,6 +345,33 @@ class _ChatAttachmentViewerState extends State<ChatAttachmentViewer> {
     return document.save();
   }
 
+  /// El menú «Compartir» del sistema: WhatsApp, correo, Drive, AirDrop… lo que
+  /// el teléfono o el Mac tenga. En Android es la única salida que llega a
+  /// otra app: «Descargar» deja el archivo dentro de la carpeta de la app.
+  Future<void> _share(_AttachmentPayload payload, Rect? origin) async {
+    try {
+      final outcome = await shareFiles(
+        files: [
+          ShareableFile(
+            bytes: payload.bytes,
+            fileName: _safeFileName(widget.fileName),
+            mimeType: payload.contentType.split(';').first.trim(),
+          ),
+        ],
+        origin: origin,
+      );
+      if (!mounted || outcome != FileShareOutcome.unavailable) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Este equipo no tiene menú Compartir.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('No se pudo compartir: $error')),
+      );
+    }
+  }
+
   Future<void> _printAttachment(_AttachmentPayload payload) async {
     if (_isPrinting) return;
 
@@ -429,6 +457,9 @@ class _ChatAttachmentViewerState extends State<ChatAttachmentViewer> {
                       onOpenExternal: _openExternal,
                       onDownload:
                           payload == null ? null : () => _download(payload),
+                      onShare: payload == null || !canShareFiles
+                          ? null
+                          : (origin) => _share(payload, origin),
                     ),
                     const Divider(height: 1),
                     Expanded(
@@ -675,6 +706,7 @@ class _AttachmentHeader extends StatelessWidget {
   final VoidCallback onClose;
   final VoidCallback onOpenExternal;
   final VoidCallback? onDownload;
+  final void Function(Rect? origin)? onShare;
 
   const _AttachmentHeader({
     required this.fileName,
@@ -692,15 +724,38 @@ class _AttachmentHeader extends StatelessWidget {
     required this.onClose,
     required this.onOpenExternal,
     required this.onDownload,
+    required this.onShare,
   });
+
+  /// Bajo este ancho (teléfono) la barra no cabe: zoom, imprimir, descargar,
+  /// abrir y cerrar sumaban unos 400 px en un diálogo de 366. Queda
+  /// Compartir a la vista, el resto en «Más acciones», y el zoom es el gesto de
+  /// pellizcar.
+  static const double _compactWidth = 560;
+
+  Widget _shareButton() => Builder(
+        builder: (buttonContext) => IconButton(
+          key: const ValueKey('chat-attachment-share'),
+          tooltip: 'Compartir',
+          onPressed: () => onShare!(shareOriginOf(buttonContext)),
+          icon: Icon(Icons.adaptive.share),
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) =>
+          _buildBar(context, compact: constraints.maxWidth < _compactWidth),
+    );
+  }
+
+  Widget _buildBar(BuildContext context, {required bool compact}) {
     final theme = Theme.of(context);
 
     return Container(
       height: 58,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 16),
       color: const Color(0xFFF8FAFC),
       child: Row(
         children: [
@@ -745,43 +800,97 @@ class _AttachmentHeader extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          if (canZoom) ...[
-            _ZoomToolbar(
-              zoom: zoom,
-              onZoomOut: onZoomOut,
-              onZoomIn: onZoomIn,
-              onReset: onZoomReset,
+          if (compact) ...[
+            if (onShare != null) _shareButton(),
+            PopupMenuButton<String>(
+              key: const ValueKey('chat-attachment-more'),
+              tooltip: 'Más acciones',
+              icon: const Icon(Icons.more_vert),
+              onSelected: (value) {
+                switch (value) {
+                  case 'print':
+                    onPrint?.call();
+                  case 'download':
+                    onDownload?.call();
+                  case 'external':
+                    onOpenExternal();
+                }
+              },
+              itemBuilder: (_) => [
+                if (canPrint)
+                  PopupMenuItem(
+                    value: 'print',
+                    enabled: !isPrinting && onPrint != null,
+                    child: const ListTile(
+                      leading: Icon(Icons.print_outlined),
+                      title: Text('Imprimir'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                PopupMenuItem(
+                  value: 'download',
+                  enabled: onDownload != null,
+                  child: const ListTile(
+                    leading: Icon(Icons.download_outlined),
+                    title: Text('Guardar en Archivos'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'external',
+                  child: ListTile(
+                    leading: Icon(Icons.open_in_new_outlined),
+                    title: Text('Abrir externo'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-          ],
-          if (canPrint) ...[
             IconButton(
-              tooltip: 'Imprimir',
-              onPressed: isPrinting ? null : onPrint,
-              icon: isPrinting
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.print_outlined),
+              tooltip: 'Cerrar',
+              onPressed: onClose,
+              icon: const Icon(Icons.close),
+            ),
+          ] else ...[
+            if (canZoom) ...[
+              _ZoomToolbar(
+                zoom: zoom,
+                onZoomOut: onZoomOut,
+                onZoomIn: onZoomIn,
+                onReset: onZoomReset,
+              ),
+              const SizedBox(width: 8),
+            ],
+            if (canPrint) ...[
+              IconButton(
+                tooltip: 'Imprimir',
+                onPressed: isPrinting ? null : onPrint,
+                icon: isPrinting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.print_outlined),
+              ),
+            ],
+            if (onShare != null) _shareButton(),
+            IconButton(
+              tooltip: 'Guardar en Archivos y descargar',
+              onPressed: onDownload,
+              icon: const Icon(Icons.download_outlined),
+            ),
+            IconButton(
+              tooltip: 'Abrir externo',
+              onPressed: onOpenExternal,
+              icon: const Icon(Icons.open_in_new_outlined),
+            ),
+            IconButton(
+              tooltip: 'Cerrar',
+              onPressed: onClose,
+              icon: const Icon(Icons.close),
             ),
           ],
-          IconButton(
-            tooltip: 'Guardar en Archivos y descargar',
-            onPressed: onDownload,
-            icon: const Icon(Icons.download_outlined),
-          ),
-          IconButton(
-            tooltip: 'Abrir externo',
-            onPressed: onOpenExternal,
-            icon: const Icon(Icons.open_in_new_outlined),
-          ),
-          IconButton(
-            tooltip: 'Cerrar',
-            onPressed: onClose,
-            icon: const Icon(Icons.close),
-          ),
         ],
       ),
     );

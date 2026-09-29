@@ -4529,6 +4529,40 @@ Architecture rule:
 
 Direct transport sends are only appropriate inside the messaging workflow itself or for explicitly approved automated notifications where no staff review is expected.
 
+### Compartir con el ERP y desde el ERP (2026-09-29)
+
+El dueño: «when I select a file/image on my phone, it gives me the option to
+share that file/image on the integrated whatsapp» y «input and output… as
+normal app do».
+
+- **Entrada (Android).** «vb-ERP» aparece en el menú Compartir del teléfono
+  para imagen, video, audio, PDF, Word y Excel (no texto suelto).
+  `IncomingShareReceiverActivity` copia lo compartido y trae al frente la
+  `MainActivity` que ya existe; recibirlo en `MainActivity` abría un segundo
+  motor de Flutter dentro de la tarea de Fotos. `IncomingShareStore.kt` deja
+  las copias en `noBackupFilesDir`, **no en `cacheDir`**: Android purgó la
+  caché al minuto en el emulador y las fotos desaparecían mientras el operador
+  elegía el chat. El lote vive en memoria del proceso; el intent a
+  `MainActivity` (exportada) no lleva rutas, para que otra app no pueda hacer
+  que el ERP «comparta» sus propios archivos internos. HEIC y fotos de más de
+  5 MB se pasan a JPEG ≤ 5 MB antes de llegar a Dart.
+- **Elegir el chat no envía.** `IncomingSharePage` (host global
+  `IncomingSharePrompt`, junto a `AndroidUpdatePrompt`) ofrece «Guardar en
+  Archivos» o un chat de WhatsApp activo; los archivos entran al compositor de
+  ese chat con `ChatProvider.offerComposerAttachments` —una oferta que toma el
+  `ChatWindow` visible, una vez— y el operador escribe y envía. No se usa
+  `saveComposerAttachments`: un chat ya abierto no relee ese borrador y al
+  cerrarse lo pisa. La validación es la misma del adjunto
+  (`MessagingAttachmentService.validateBeforeRead`).
+- **Salida.** `lib/shared/utils/file_share.dart` entrega archivos al menú
+  Compartir del sistema (Android, iOS, macOS; Windows y web siguen con
+  Descargar): visor de adjuntos del chat, selección de mensajes del chat, y
+  Archivos (fila, vista previa y ejecutor). En Android es la única salida real
+  hacia otra app: «Descargar» deja el archivo en la carpeta privada del ERP.
+- **iPhone:** la entrada exige una Share Extension (target nuevo, App Group y
+  firma de equipo pagado) y hoy no hay distribución iOS; la salida ya funciona
+  en cuanto exista una build de iOS.
+
 ## WhatsApp Cloud API Business Profile
 
 The ERP currently uses a real WhatsApp Cloud API business number as the app-wired messaging face for Viñabike:
