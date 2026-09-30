@@ -76,10 +76,13 @@ export function resolveDirectSendUtility(
 
   const templateName = cleanText(request.templateName);
   const templateLanguage = cleanText(request.templateLanguage) ?? "es";
+  // Una plantilla con encabezado de archivo no tiene equivalente en Direct
+  // Send: se mandaría el texto sin el documento.
   const definition = defaultWhatsAppTemplates.find((template) =>
     template.name === templateName &&
     template.language === templateLanguage &&
-    template.category === "UTILITY"
+    template.category === "UTILITY" &&
+    template.header == null
   );
   if (!definition) {
     return explicitlyRequested

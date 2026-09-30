@@ -276,6 +276,20 @@ class WhatsAppService {
       'whatsapp_first_contact_template_name';
   static const String firstContactTemplateLanguageSettingKey =
       'whatsapp_first_contact_template_language';
+
+  /// La plantilla con el PDF en el encabezado: la única forma de mandarle un
+  /// archivo a quien no escribió en las últimas 24 h. Nombre, idioma y texto
+  /// son los de `supabase/functions/_shared/whatsapp_templates.ts`; el
+  /// servidor arma el encabezado con el archivo ya validado. Meta sólo acepta
+  /// PDF en un encabezado de documento.
+  static const String documentTemplateName = 'documento_adjunto_v1';
+  static const String documentTemplateLanguage = 'es_CL';
+
+  /// El texto literal que recibe [contactName] junto al PDF.
+  static String documentTemplatePreview(String contactName) =>
+      'Hola ${resolveWhatsAppTemplateGreetingName(contactName)}, te enviamos '
+      'el documento adjunto desde Viñabike. Si tienes dudas, responde este '
+      'mensaje.';
   static const List<WhatsAppTemplateOption> customerTemplateOptions = [
     WhatsAppTemplateOption(
       purpose: WhatsAppTemplatePurpose.firstContact,
@@ -468,6 +482,51 @@ class WhatsAppService {
     );
   }
 
+  /// Crea en Meta la plantilla de documento. El servidor sube un PDF de
+  /// ejemplo —Meta lo exige para revisar un encabezado con archivo— y
+  /// devuelve el estado con que quedó, normalmente `PENDING`. Sólo dueño,
+  /// administrador o encargado; si ya existe, devuelve su estado actual.
+  Future<WhatsAppTemplateReviewStatus> createDocumentTemplateInMeta() async {
+    final FunctionResponse response;
+    try {
+      response = await _client.functions.invoke(
+        'whatsapp-template-manager',
+        headers: kSupabaseFunctionsRegionHeaders,
+        body: const {
+          'action': 'deploy_defaults',
+          'templateNames': [documentTemplateName],
+        },
+      );
+    } on FunctionException catch (error) {
+      if (error.status == 403) {
+        throw StateError(
+          'Sólo el dueño, un administrador o un encargado puede crearla.',
+        );
+      }
+      debugPrint('[WhatsAppTemplates] crear plantilla de documento: '
+          '${error.status} ${error.details}');
+      throw StateError('Meta no aceptó la plantilla. Vuelve a intentarlo.');
+    }
+    final data = response.data;
+    if (data is Map) {
+      for (final key in const ['created', 'skipped']) {
+        for (final item in data[key] as List? ?? const []) {
+          if (item is! Map) continue;
+          final state = key == 'created' ? item['result'] : item['existing'];
+          if (state is Map) {
+            return WhatsAppTemplateReviewStatus.fromMap({
+              'status': 'PENDING',
+              ...state,
+            });
+          }
+        }
+      }
+      debugPrint('[WhatsAppTemplates] crear plantilla de documento: '
+          '${data['failed']}');
+    }
+    throw StateError('Meta no aceptó la plantilla. Vuelve a intentarlo.');
+  }
+
   Future<Map<String, WhatsAppTemplateReviewStatus>>
       getSupplierTemplateReviewStatuses() async {
     final response = await _client.functions.invoke(
@@ -495,6 +554,7 @@ class WhatsAppService {
     final expectedNames = <String>{
       ...supplierTemplateOptions.map((option) => option.defaultTemplateName),
       ...customerTemplateOptions.map((option) => option.defaultTemplateName),
+      documentTemplateName,
     };
     final statuses = <String, WhatsAppTemplateReviewStatus>{};
     for (final item in data['templates'] as List) {
@@ -1431,7 +1491,23 @@ Viña Bike
     String? contextId,
     String? clientMessageId,
     Map<String, dynamic>? metadata,
+    String? documentTemplateGreetingName,
   }) async {
+    if (documentTemplateGreetingName != null) {
+      return _sendDocumentTemplate(
+        customerPhone: customerPhone,
+        attachmentId: attachmentId,
+        filename: filename,
+        greetingName: documentTemplateGreetingName,
+        contactName: contactName,
+        conversationId: conversationId,
+        customerId: customerId,
+        contextType: contextType,
+        contextId: contextId,
+        clientMessageId: clientMessageId,
+        metadata: metadata,
+      );
+    }
     final isImage = messageType == 'image';
     final isAudio = messageType == 'audio';
     final resolvedCaption = caption?.trim();
@@ -1476,6 +1552,100 @@ Viña Bike
         },
       },
     );
+  }
+
+  /// El PDF de [attachmentId] con la plantilla [documentTemplateName], para
+  /// quien no escribió en 24 h. Nunca va por Direct Send: ahí no hay
+  /// encabezado con archivo.
+  Future<WhatsAppSendReceipt> _sendDocumentTemplate({
+    required String customerPhone,
+    required String attachmentId,
+    required String filename,
+    required String greetingName,
+    String? contactName,
+    String? conversationId,
+    String? customerId,
+    String? contextType,
+    String? contextId,
+    String? clientMessageId,
+    Map<String, dynamic>? metadata,
+  }) {
+    final request = documentTemplateRequest(
+      phoneNumber: _formatPhoneNumber(customerPhone),
+      attachmentId: attachmentId,
+      filename: filename,
+      greetingName: greetingName,
+      contactName: contactName,
+      conversationId: conversationId,
+      customerId: customerId,
+      contextType: contextType,
+      contextId: contextId,
+      clientMessageId: clientMessageId,
+      metadata: metadata,
+    );
+    return _sendViaCloud(request,
+        resolvedMessageText: request['caption'] as String);
+  }
+
+  /// El pedido de un PDF con la plantilla de documento. [greetingName] es el
+  /// nombre de la persona (el vendedor, en un proveedor); se saluda por su
+  /// nombre de pila. El encabezado no va acá: lo arma el servidor con el
+  /// archivo ya validado, desde su catálogo.
+  @visibleForTesting
+  static Map<String, dynamic> documentTemplateRequest({
+    required String phoneNumber,
+    required String attachmentId,
+    required String filename,
+    required String greetingName,
+    String? contactName,
+    String? conversationId,
+    String? customerId,
+    String? contextType,
+    String? contextId,
+    String? clientMessageId,
+    Map<String, dynamic>? metadata,
+  }) {
+    final greeting = resolveWhatsAppTemplateGreetingName(greetingName);
+    if (greeting.isEmpty) {
+      throw ArgumentError.value(
+        greetingName,
+        'greetingName',
+        'La plantilla saluda por el nombre: falta el del contacto',
+      );
+    }
+    final rendered = documentTemplatePreview(greetingName);
+    return {
+      'conversationId': conversationId,
+      'customerId': customerId,
+      'phoneNumber': phoneNumber,
+      'contactName': contactName ?? greetingName,
+      'contextType': contextType,
+      'contextId': contextId,
+      'type': 'template',
+      'templateName': documentTemplateName,
+      'templateLanguage': documentTemplateLanguage,
+      'attachmentId': attachmentId,
+      'documentFilename': filename,
+      'caption': rendered,
+      'templateComponents': [
+        {
+          'type': 'body',
+          'parameters': [
+            {'type': 'text', 'text': greeting},
+          ],
+        },
+      ],
+      'metadata': {
+        'source': 'flutter_erp',
+        'filename': filename,
+        ...?metadata,
+        if (clientMessageId != null) 'client_message_id': clientMessageId,
+        'template_purpose': 'document_attached',
+        'template_name': documentTemplateName,
+        'template_language': documentTemplateLanguage,
+        'message_category': WhatsAppMessageCategory.utility.name,
+      },
+    };
   }
 
   Future<WhatsAppSendReceipt> sendInteractiveAction({

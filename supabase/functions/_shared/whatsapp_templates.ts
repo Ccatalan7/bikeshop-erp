@@ -3,6 +3,18 @@
 // previsualizar EXACTAMENTE lo que le llegará al cliente antes de enviar.
 // Duplicarlas sería garantizar que un día digan cosas distintas.
 
+/// Un encabezado con archivo: el documento viaja dentro de la plantilla. Es la
+/// única forma de mandarle un archivo a quien no escribió en las últimas 24 h
+/// (fuera de esa ventana Meta rechaza un documento suelto).
+export interface TemplateHeaderDefinition {
+  format: "DOCUMENT";
+  /// Lo que Meta acepta en un encabezado DOCUMENT: sólo PDF.
+  acceptedContentTypes: readonly string[];
+  /// El PDF de ejemplo que se sube con la plantilla para la revisión de Meta.
+  sampleFilename: string;
+  sampleLines: readonly string[];
+}
+
 export interface TemplateDefinition {
   name: string;
   language: string;
@@ -10,7 +22,11 @@ export interface TemplateDefinition {
   body: string;
   examples: string[];
   allowCategoryChange?: boolean;
+  header?: TemplateHeaderDefinition;
 }
+
+/// La plantilla con PDF adjunto: cliente o proveedor que no ha escrito en 24 h.
+export const documentAttachedTemplateName = "documento_adjunto_v1";
 
 export const defaultWhatsAppTemplates: TemplateDefinition[] = [
   {
@@ -88,7 +104,77 @@ export const defaultWhatsAppTemplates: TemplateDefinition[] = [
     examples: ["Felipe"],
     allowCategoryChange: false,
   },
+  {
+    // Sirve igual para un cliente y para un proveedor: el texto no promete
+    // nada ni vende, sólo acompaña el archivo que el taller manda. `{{1}}` es
+    // el nombre de pila, como en todas las demás (`template_purpose`
+    // `document_attached` en whatsapp_template_greeting.ts).
+    name: documentAttachedTemplateName,
+    language: "es_CL",
+    category: "UTILITY",
+    body:
+      "Hola {{1}}, te enviamos el documento adjunto desde Viñabike. Si tienes dudas, responde este mensaje.",
+    examples: ["Claudio"],
+    allowCategoryChange: false,
+    header: {
+      format: "DOCUMENT",
+      acceptedContentTypes: ["application/pdf"],
+      sampleFilename: "presupuesto_vinabike.pdf",
+      sampleLines: [
+        "Vinabike - Taller de bicicletas",
+        "Presupuesto de ejemplo",
+        "Cambio de cassette 11-46 y cadena: $59.990",
+      ],
+    },
+  },
 ];
+
+/// La definición de una plantilla por nombre e idioma (sin idioma, la primera
+/// con ese nombre).
+export function findWhatsAppTemplate(
+  name: string | undefined | null,
+  language?: string | null,
+): TemplateDefinition | undefined {
+  if (!name) return undefined;
+  return defaultWhatsAppTemplates.find((template) =>
+    template.name === name && (!language || template.language === language)
+  ) ?? defaultWhatsAppTemplates.find((template) => template.name === name);
+}
+
+/// Un PDF de una página con [lines], para el ejemplo que Meta revisa junto a
+/// una plantilla con encabezado de documento. Texto ASCII: Helvetica estándar
+/// sin incrustar fuentes.
+export function buildSamplePdf(lines: readonly string[]): Uint8Array {
+  const escape = (value: string) =>
+    value.replace(/[^\x20-\x7e]/g, "?").replace(/([\\()])/g, "\\$1");
+  const text = lines
+    .map((line, index) =>
+      `BT /F1 ${index === 0 ? 20 : 14} Tf 72 ${760 - index * 32} Td (${escape(line)}) Tj ET`
+    )
+    .join("\n");
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R " +
+    "/Resources << /Font << /F1 5 0 R >> >> >>",
+    `<< /Length ${text.length} >>\nstream\n${text}\nendstream`,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+  ];
+  let pdf = "%PDF-1.4\n";
+  const offsets: number[] = [];
+  objects.forEach((body, index) => {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${body}\nendobj\n`;
+  });
+  const xref = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (const offset of offsets) {
+    pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
+  }
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\n` +
+    `startxref\n${xref}\n%%EOF\n`;
+  return new TextEncoder().encode(pdf);
+}
 
 /// Reemplaza los parámetros posicionales `{{1}}`, `{{2}}`… por valores reales.
 /// Lo que queda sin valor se deja visible como marcador, nunca en blanco: el

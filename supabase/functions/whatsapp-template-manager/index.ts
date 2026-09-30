@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import {
+  buildSamplePdf,
   defaultWhatsAppTemplates as defaultTemplates,
   type TemplateDefinition,
 } from "../_shared/whatsapp_templates.ts";
@@ -26,6 +27,9 @@ interface TemplateRequest {
   businessAccountId?: string;
   templateName?: string;
   templates?: TemplateDefinition[];
+  /// Despliega sólo estas plantillas del catálogo compartido. Así se manda a
+  /// revisión una plantilla nueva sin tocar las demás.
+  templateNames?: string[];
 }
 
 interface TenantAccess {
@@ -66,23 +70,81 @@ function isTemplateDefinition(value: unknown): value is TemplateDefinition {
   );
 }
 
-function buildTemplatePayload(template: TemplateDefinition) {
+function buildTemplatePayload(
+  template: TemplateDefinition,
+  headerHandle?: string,
+) {
+  const components: JsonRecord[] = [];
+  if (template.header) {
+    if (!headerHandle) throw new Error("header_handle_required");
+    components.push({
+      type: "HEADER",
+      format: template.header.format,
+      example: { header_handle: [headerHandle] },
+    });
+  }
+  components.push({
+    type: "BODY",
+    text: template.body,
+    example: {
+      body_text: [template.examples],
+    },
+  });
   return {
     name: template.name,
     language: template.language,
     category: template.category,
     allow_category_change: template.allowCategoryChange ?? false,
     parameter_format: "POSITIONAL",
-    components: [
-      {
-        type: "BODY",
-        text: template.body,
-        example: {
-          body_text: [template.examples],
-        },
-      },
-    ],
+    components,
   };
+}
+
+/// Sube el PDF de ejemplo de una plantilla con encabezado por la subida
+/// reanudable de Meta (la misma que usa whatsapp-profile-admin para la foto
+/// de perfil) y devuelve el `header_handle` que exige la creación.
+async function uploadTemplateHeaderSample(template: TemplateDefinition) {
+  if (!template.header) throw new Error("template_without_header");
+  const app = await graphRequest("app?fields=id");
+  const appId = cleanText((app.body as JsonRecord).id);
+  if (!app.response.ok || !appId) {
+    throw { error: "Could not resolve Meta app ID", details: app.body };
+  }
+  const bytes = buildSamplePdf(template.header.sampleLines);
+  const session = new URL(
+    `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${appId}/uploads`,
+  );
+  session.searchParams.set("file_name", template.header.sampleFilename);
+  session.searchParams.set("file_length", String(bytes.byteLength));
+  session.searchParams.set("file_type", "application/pdf");
+  const sessionResponse = await fetch(session, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${WHATSAPP_ACCESS_TOKEN}` },
+  });
+  const sessionBody = await sessionResponse.json().catch(() => ({})) as JsonRecord;
+  const sessionId = cleanText(sessionBody.id);
+  if (!sessionResponse.ok || !sessionId) {
+    throw { error: "Meta did not open an upload session", details: sessionBody };
+  }
+  const uploadResponse = await fetch(
+    `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${sessionId}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `OAuth ${WHATSAPP_ACCESS_TOKEN}`,
+        file_offset: "0",
+      },
+      body: new Blob([bytes.slice().buffer as ArrayBuffer], {
+        type: "application/pdf",
+      }),
+    },
+  );
+  const uploadBody = await uploadResponse.json().catch(() => ({})) as JsonRecord;
+  const handle = cleanText(uploadBody.h);
+  if (!uploadResponse.ok || !handle) {
+    throw { error: "Meta did not return a file handle", details: uploadBody };
+  }
+  return handle;
 }
 
 function decodeJwtPayload(authHeader: string) {
@@ -293,9 +355,21 @@ serve(async (req) => {
       });
     }
 
-    const templates = Array.isArray(body.templates) && body.templates.every(isTemplateDefinition)
+    const requestedNames = Array.isArray(body.templateNames)
+      ? body.templateNames.filter((name): name is string => typeof name === "string")
+      : null;
+    const templates = requestedNames
+      ? defaultTemplates.filter((template) => requestedNames.includes(template.name))
+      : Array.isArray(body.templates) && body.templates.every(isTemplateDefinition)
       ? body.templates
       : defaultTemplates;
+    if (requestedNames && templates.length !== requestedNames.length) {
+      return jsonResponse({
+        error: "Unknown template name",
+        requested: requestedNames,
+        known: templates.map((template) => template.name),
+      }, 400);
+    }
 
     // `deploy_defaults` sólo crea lo que falta: una plantilla ya aprobada se
     // salta, así que un cuerpo mal escrito se queda para siempre. `sync_bodies`
@@ -316,6 +390,12 @@ serve(async (req) => {
         );
         if (!existing) {
           missing.push({ name: template.name, language: template.language });
+          continue;
+        }
+        if (template.header) {
+          // Editar una plantilla con encabezado exige subir otra vez el
+          // ejemplo; se corrige creando una versión nueva (_v2), no aquí.
+          unchanged.push({ name: template.name, skipped: "header_template" });
           continue;
         }
         const currentBody = Array.isArray(existing.components)
@@ -369,7 +449,21 @@ serve(async (req) => {
         continue;
       }
 
-      const payload = buildTemplatePayload(template);
+      let payload;
+      try {
+        payload = buildTemplatePayload(
+          template,
+          template.header ? await uploadTemplateHeaderSample(template) : undefined,
+        );
+      } catch (error) {
+        // Un Error se serializa como `{}`: sin el mensaje, el taller sólo
+        // sabría que falló la subida del ejemplo, no por qué.
+        failed.push({
+          template,
+          error: error instanceof Error ? error.message : error,
+        });
+        continue;
+      }
       const result = await graphRequest(`${businessAccountId}/message_templates`, {
         method: "POST",
         body: JSON.stringify(payload),

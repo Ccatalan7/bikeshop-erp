@@ -28,6 +28,12 @@ class PendingChatAttachment {
   /// varias—. Sin ella, el texto del compositor va sólo en el primer archivo.
   final String? caption;
 
+  /// El nombre con que saluda la plantilla de documento, cuando este PDF va
+  /// a quien no escribió en 24 h. Viaja con el archivo para que un reintento
+  /// mande exactamente el mismo pedido; un archivo que vuelve rechazado lo
+  /// pierde y la ventana se revisa de nuevo.
+  final String? documentTemplateGreetingName;
+
   const PendingChatAttachment({
     required this.id,
     required this.fileName,
@@ -44,7 +50,10 @@ class PendingChatAttachment {
     this.purchaseInvoiceNumber,
     this.durationSeconds,
     this.caption,
+    this.documentTemplateGreetingName,
   });
+
+  bool get isPdf => extension.toLowerCase() == 'pdf';
 
   PendingChatAttachment withReply(MessageReply? value) => PendingChatAttachment(
         id: id,
@@ -62,6 +71,7 @@ class PendingChatAttachment {
         purchaseInvoiceNumber: purchaseInvoiceNumber,
         durationSeconds: durationSeconds,
         caption: caption,
+        documentTemplateGreetingName: documentTemplateGreetingName,
       );
 
   PendingChatAttachment markOutcomeUnknown(
@@ -83,6 +93,7 @@ class PendingChatAttachment {
         purchaseInvoiceNumber: purchaseInvoiceNumber,
         durationSeconds: durationSeconds,
         caption: caption,
+        documentTemplateGreetingName: documentTemplateGreetingName,
       );
 
   /// Replace the file with the freshly saved document, keeping the row's place
@@ -121,6 +132,27 @@ class PendingChatAttachment {
         purchaseInvoiceNumber: purchaseInvoiceNumber,
         durationSeconds: durationSeconds,
         caption: value,
+        documentTemplateGreetingName: documentTemplateGreetingName,
+      );
+
+  PendingChatAttachment withDocumentTemplate(String greetingName) =>
+      PendingChatAttachment(
+        id: id,
+        fileName: fileName,
+        bytes: bytes,
+        extension: extension,
+        isImage: isImage,
+        outcomeUnknown: outcomeUnknown,
+        reservation: reservation,
+        retryUpload: retryUpload,
+        canRetrySafely: canRetrySafely,
+        replayCaption: replayCaption,
+        reply: reply,
+        purchaseInvoiceId: purchaseInvoiceId,
+        purchaseInvoiceNumber: purchaseInvoiceNumber,
+        durationSeconds: durationSeconds,
+        caption: caption,
+        documentTemplateGreetingName: greetingName,
       );
 
   PendingChatAttachment resetForNewAttempt() => PendingChatAttachment(

@@ -23,6 +23,11 @@ import {
   whatsappProviderFailureHttpStatus,
 } from "../_shared/whatsapp_send_receipts.ts";
 import { normalizeWhatsAppTemplateGreeting } from "../_shared/whatsapp_template_greeting.ts";
+import {
+  templateMediaHeader,
+  withTemplateDocumentHeader,
+} from "../_shared/whatsapp_template_media.ts";
+import type { TemplateHeaderDefinition } from "../_shared/whatsapp_templates.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -335,11 +340,13 @@ async function prepareMessagingAttachment(params: {
   tenantId: string;
   userId: string;
   queuedMessageId?: string;
+  templateHeader?: TemplateHeaderDefinition;
 }) {
   if (
     params.request.type !== "image" &&
     params.request.type !== "document" &&
-    params.request.type !== "audio"
+    params.request.type !== "audio" &&
+    !(params.request.type === "template" && params.templateHeader)
   ) {
     return { attachment: undefined as PreparedMessagingAttachment | undefined };
   }
@@ -411,6 +418,17 @@ async function prepareMessagingAttachment(params: {
   if (params.request.type === "document" && contract.contentType.startsWith("image/")) {
     return { error: jsonResponse({ error: "Document attachment cannot be an image" }, 415) };
   }
+  if (
+    params.templateHeader &&
+    !params.templateHeader.acceptedContentTypes.includes(contract.contentType)
+  ) {
+    return {
+      error: jsonResponse({
+        error: "This template only accepts a PDF",
+        accepted: params.templateHeader.acceptedContentTypes,
+      }, 415),
+    };
+  }
 
   // Size/type are validated from the immutable reservation before reading the
   // object bytes. The private bucket itself enforces the same hard ceiling.
@@ -441,7 +459,10 @@ async function uploadMediaToWhatsApp(
   phoneNumberId: string,
   attachment?: PreparedMessagingAttachment,
 ) {
-  if (request.type !== "image" && request.type !== "document" && request.type !== "audio") {
+  if (
+    request.type !== "image" && request.type !== "document" &&
+    request.type !== "audio" && !(request.type === "template" && attachment)
+  ) {
     return { metadata: {} as JsonRecord };
   }
 
@@ -653,7 +674,14 @@ function buildGraphPayload(
       language: {
         code: request.templateLanguage ?? "es",
       },
-      components: request.templateComponents ?? [],
+      // Con archivo, el encabezado lo arma el servidor con el medio validado.
+      components: mediaId
+        ? withTemplateDocumentHeader(
+          request.templateComponents,
+          mediaId,
+          request.documentFilename ?? "documento.pdf",
+        )
+        : request.templateComponents ?? [],
     };
     return payload;
   }
@@ -801,6 +829,16 @@ export async function handleWhatsAppSend(req: Request, outbox?: TrustedWhatsAppO
     return jsonResponse({ error: "templateName is required for template messages" }, 400);
   }
 
+  // El catálogo decide si la plantilla lleva archivo; el llamador sólo lo
+  // aporta.
+  const templateHeader = templateMediaHeader(requestBody);
+  if (templateHeader && !requestBody.attachmentId) {
+    return jsonResponse({ error: "attachmentId is required for this template" }, 400);
+  }
+  if (requestBody.type === "template" && !templateHeader && requestBody.attachmentId) {
+    return jsonResponse({ error: "This template does not take a file" }, 400);
+  }
+
   if (
     requestBody.type === "reaction" &&
     (!requestBody.reactionToExternalMessageId ||
@@ -873,6 +911,7 @@ export async function handleWhatsAppSend(req: Request, outbox?: TrustedWhatsAppO
     tenantId,
     userId,
     queuedMessageId: outbox?.messageId,
+    templateHeader,
   });
   const [conversationLookup, channel, prepared] = await Promise.all([
     conversationPromise,
@@ -896,12 +935,17 @@ export async function handleWhatsAppSend(req: Request, outbox?: TrustedWhatsAppO
     requestBody.type === "document" ||
     requestBody.type === "audio" ||
     requestBody.type === "interactive" ||
+    templateHeader != null ||
     requestBody.markQuoteSent
   ) {
     return jsonResponse({ error: "conversationId is required for this message" }, 400);
   }
 
   if (prepared.error) return prepared.error;
+  if (templateHeader && prepared.attachment) {
+    // El nombre que ve quien lo recibe es el de la reserva, no uno del cliente.
+    requestBody.documentFilename = prepared.attachment.record.original_filename;
+  }
 
   if (!channel) {
     return jsonResponse({ error: "No active WhatsApp channel found for tenant" }, 400);
@@ -1091,6 +1135,8 @@ export async function handleWhatsAppSend(req: Request, outbox?: TrustedWhatsAppO
     : requestBody.type === "document"
     ? "file"
     : requestBody.type === "audio"
+    ? "file"
+    : templateHeader
     ? "file"
     : requestBody.actionType
     ? "action_request"

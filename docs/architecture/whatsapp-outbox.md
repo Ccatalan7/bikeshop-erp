@@ -27,6 +27,13 @@ A late known provider identifier can reconcile the same row without another
 POST. Webhook delivery/read evidence remains authoritative. Recovery is kept
 off the fast acceptance path to avoid locking old conversation rows there.
 
+A `template` request that names an `attachmentId` (the PDF of
+`documento_adjunto_v1`) reserves and binds that private file exactly like a
+document and is stored as a `file` row with the template text as its caption;
+`whatsapp-send` then accepts only a PDF, uploads it to Meta and builds the
+header itself from its catalog, discarding any header the caller sent
+(`20260929230000_whatsapp_outbox_document_template.sql`, 2026-09-29).
+
 The worker updates the accepted message rather than inserting another one.
 Audio remains the database-supported `file` type with audio metadata; its
 validated private bytes must pass the media upload before the message POST.
@@ -36,6 +43,9 @@ the new acceptance route requires the updated Flutter client.
 
 ## Validation and operations
 
+- `just db-test whatsapp_outbox_document_template`: the template with its PDF
+  is a `file` row bound to its reservation; without a file it stays `text`; a
+  PDF reserved for another chat is refused.
 - `just db-test whatsapp_durable_outbox`: staff/tenant/recipient authority,
   idempotency, unforgeable receipts, single claim/send, stale leases and late
   provider reconciliation, with synthetic rollback-only fixtures.

@@ -39,7 +39,12 @@ void main() {
     expect(chatWindowSource, contains('canRetrySafely: true'));
     expect(chatWindowSource, contains('retryUpload: result.retryUpload'));
     expect(chatWindowSource, contains('replayCaption: result.replayCaption'));
-    expect(chatWindowSource, contains('? attachment.replayCaption'));
+    // Un reintento de resultado incierto manda la leyenda que ya envió, antes
+    // de mirar el compositor o la plantilla de documento.
+    expect(
+        chatWindowSource,
+        contains(
+            'if (attachment.outcomeUnknown) return attachment.replayCaption;'));
     expect(
       chatWindowSource,
       isNot(contains("code: 'flutter_upload_or_publish_failed'")),

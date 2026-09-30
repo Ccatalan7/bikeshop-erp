@@ -21,6 +21,10 @@ WABA.
   never falls back and never retries blindly.
 - Existing ERP clients inherit this behavior server-side when they send a known
   Utility template, even if they do not yet include `deliveryStrategy`.
+- A catalog definition with a media `header` (today `documento_adjunto_v1`,
+  the PDF sent outside the window) never takes Direct Send, whatever the
+  caller asks: Direct Send has no file header, so it would deliver the text
+  and silently drop the document (2026-09-29).
 
 ## Evidence and pricing
 

@@ -110,6 +110,68 @@ void main() {
     }
   });
 
+  group('la plantilla de documento', () {
+    test('el texto del ERP es literalmente el que va a Meta', () {
+      final aprobado =
+          _cuerposAprobados()[WhatsAppService.documentTemplateName];
+      expect(aprobado, isNotNull,
+          reason: 'El nombre del ERP tiene que existir en el catálogo.');
+      expect(
+        WhatsAppService.documentTemplatePreview('Marcelo Silva'),
+        aprobado!.replaceAll('{{1}}', 'Marcelo'),
+      );
+    });
+
+    test('el pedido lleva el PDF reservado y ningún encabezado propio', () {
+      final request = WhatsAppService.documentTemplateRequest(
+        phoneNumber: '56911113333',
+        attachmentId: 'reserva-1',
+        filename: 'presupuesto.pdf',
+        greetingName: 'José Luis Campodónico',
+        conversationId: 'chat-1',
+        clientMessageId: 'temp-1',
+        metadata: const {
+          'template_purpose': 'otra_cosa',
+          'caption': 'x',
+        },
+      );
+      expect(request['type'], 'template');
+      expect(request['templateName'], 'documento_adjunto_v1');
+      expect(request['templateLanguage'], 'es_CL');
+      expect(request['attachmentId'], 'reserva-1');
+      expect(request['documentFilename'], 'presupuesto.pdf');
+      expect(request['caption'],
+          WhatsAppService.documentTemplatePreview('José Luis Campodónico'));
+      expect(request['templateComponents'], [
+        {
+          'type': 'body',
+          'parameters': [
+            {'type': 'text', 'text': 'José Luis'},
+          ],
+        },
+      ]);
+      expect(request.containsKey('deliveryStrategy'), isFalse,
+          reason: 'Direct Send no tiene encabezado con archivo.');
+      final metadata = request['metadata'] as Map<String, dynamic>;
+      expect(metadata['template_purpose'], 'document_attached',
+          reason: 'El propósito lo fija el envío, no quien llama.');
+      expect(metadata['client_message_id'], 'temp-1');
+      expect(metadata['message_category'], 'utility');
+    });
+
+    test('sin nombre no se arma el pedido', () {
+      expect(
+        () => WhatsAppService.documentTemplateRequest(
+          phoneNumber: '56911113333',
+          attachmentId: 'reserva-1',
+          filename: 'presupuesto.pdf',
+          greetingName: '   ',
+        ),
+        throwsArgumentError,
+      );
+    });
+  });
+
   test('sólo los casos utilitarios del catálogo habilitan Direct Send', () {
     expect(
       WhatsAppService.customerTemplateOptions.every(
@@ -187,13 +249,21 @@ Map<String, String> _cuerposAprobados() {
     fail('No se encontró el módulo compartido de plantillas: ${file.path}');
   }
   final source = file.readAsStringSync();
+  // Un nombre puede venir de una constante exportada (la plantilla de
+  // documento la usa también el envío): se resuelve con su valor.
+  final constants = {
+    for (final match
+        in RegExp(r'export const (\w+) = "([a-z_0-9]+)";').allMatches(source))
+      match.group(1)!: match.group(2)!,
+  };
   final pattern = RegExp(
-    r'name:\s*"([a-z_0-9]+)",[\s\S]{0,200}?body:\s*\n?\s*"((?:[^"\\]|\\.)*)"',
+    r'name:\s*(?:"([a-z_0-9]+)"|(\w+)),[\s\S]{0,200}?body:\s*\n?\s*"((?:[^"\\]|\\.)*)"',
   );
   final bodies = <String, String>{};
   for (final match in pattern.allMatches(source)) {
-    final name = match.group(1)!;
-    bodies[name] = match.group(2)!.replaceAll(r'\n', '\n');
+    final name = match.group(1) ?? constants[match.group(2)];
+    if (name == null) continue;
+    bodies[name] = match.group(3)!.replaceAll(r'\n', '\n');
   }
   return bodies;
 }

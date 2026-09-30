@@ -180,6 +180,17 @@ class ChatWindow extends StatefulWidget {
   final Future<String?> Function(WhatsAppTemplateOption option)?
       whatsAppTemplatePreviewLoader;
 
+  /// Test seam for the document template offer: the name it greets and its
+  /// review status in Meta. Production reads the contact and Meta.
+  @visibleForTesting
+  final Future<WhatsAppDocumentTemplateOffer> Function()?
+      whatsAppDocumentTemplateLoader;
+
+  /// Test seam for «Crear en Meta». Production calls the template manager.
+  @visibleForTesting
+  final Future<WhatsAppTemplateReviewStatus> Function()?
+      whatsAppDocumentTemplateCreator;
+
   const ChatWindow({
     super.key,
     required this.conversation,
@@ -192,10 +203,135 @@ class ChatWindow extends StatefulWidget {
     this.attachmentService,
     this.initialThreadRootMessageId,
     this.whatsAppTemplatePreviewLoader,
+    this.whatsAppDocumentTemplateLoader,
+    this.whatsAppDocumentTemplateCreator,
   });
 
   @override
   State<ChatWindow> createState() => _ChatWindowState();
+}
+
+/// Lo que hace falta para ofrecer la plantilla de documento: a quién saluda
+/// y si Meta ya la aprobó. [statusError] cuando Meta no respondió.
+@immutable
+class WhatsAppDocumentTemplateOffer {
+  final String? greetingName;
+  final WhatsAppTemplateReviewStatus? status;
+  final String? statusError;
+
+  const WhatsAppDocumentTemplateOffer({
+    this.greetingName,
+    this.status,
+    this.statusError,
+  });
+
+  WhatsAppDocumentTemplateOffer withStatus(
+          WhatsAppTemplateReviewStatus value) =>
+      WhatsAppDocumentTemplateOffer(greetingName: greetingName, status: value);
+}
+
+enum _DocumentTemplateChoice { send, greeting }
+
+/// La plantilla de documento en el panel de mensajes: su estado en Meta y,
+/// si no existe, el botón para crearla.
+class _DocumentTemplateStatusTile extends StatefulWidget {
+  final WhatsAppTemplateReviewStatus? initialStatus;
+  final Future<WhatsAppTemplateReviewStatus> Function() create;
+
+  const _DocumentTemplateStatusTile({
+    super.key,
+    required this.initialStatus,
+    required this.create,
+  });
+
+  @override
+  State<_DocumentTemplateStatusTile> createState() =>
+      _DocumentTemplateStatusTileState();
+}
+
+class _DocumentTemplateStatusTileState
+    extends State<_DocumentTemplateStatusTile> {
+  late WhatsAppTemplateReviewStatus? _status = widget.initialStatus;
+  bool _creating = false;
+  String? _error;
+
+  Future<void> _create() async {
+    setState(() {
+      _creating = true;
+      _error = null;
+    });
+    try {
+      final status = await widget.create();
+      if (!mounted) return;
+      setState(() => _status = status);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error is StateError
+          ? error.message
+          : 'Meta no aceptó la plantilla. Vuelve a intentarlo.');
+    } finally {
+      if (mounted) setState(() => _creating = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final status = _status;
+    final (VinabikeSemanticTone tone, String detail) = status == null
+        ? (roles.warning, 'No está creada en Meta.')
+        : status.isApproved
+            ? (
+                roles.success,
+                'Aprobada: un PDF puede ir a quien no escribió en 24 h.'
+              )
+            : status.status == 'REJECTED'
+                ? (roles.danger, 'Meta la rechazó.')
+                : (roles.warning, 'Meta la está revisando.');
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 12, 12),
+      child: Row(
+        children: [
+          Icon(Icons.picture_as_pdf_outlined, color: roles.danger.accent),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Plantilla de documento (PDF)',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  _error ?? detail,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: _error != null
+                        ? roles.danger.onContainer
+                        : tone.onContainer,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (status == null) ...[
+            const SizedBox(width: 8),
+            FilledButton.tonal(
+              key: const ValueKey('whatsapp-document-template-create'),
+              onPressed: _creating ? null : _create,
+              child: _creating
+                  ? const SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Crear en Meta'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
 class _ChatWindowState extends State<ChatWindow> {
@@ -2908,6 +3044,7 @@ class _ChatWindowState extends State<ChatWindow> {
   /// Un envío de archivos espera saber si la ventana de 24 h está abierta: un
   /// segundo toque no lanza otra consulta ni otro envío.
   bool _awaitingWindowCheck = false;
+  bool _offeringDocumentTemplate = false;
 
   void _addPendingAttachments(List<PendingChatAttachment> attachments) {
     if (attachments.isEmpty || !mounted) return;
@@ -3028,36 +3165,104 @@ class _ChatWindowState extends State<ChatWindow> {
           return;
         }
       }
-      if (!_isWhatsAppServiceWindowOpen(
-          _resolveLastInboundAt(contact, loaded()))) {
-        // Meta rechaza archivos fuera de la ventana de 24 h: subirlos sólo para
-        // que volvieran al compositor con un error era el camino de siempre al
-        // compartir o reenviar a un cliente que no ha escrito. Igual que el
-        // texto, se ofrece el saludo autorizado y los archivos esperan acá.
-        _showWhatsAppTemplatePicker();
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(
-            SnackBar(
-              content: Text(
-                'WhatsApp no deja mandar archivos a quien no te ha escrito en '
-                'las últimas 24 h. Mándale el saludo: los archivos quedan acá '
-                'para enviarlos cuando ${widget.conversation.isSupplierConversation ? 'el proveedor' : 'el cliente'} responda.',
+      final unflagged = [
+        for (final attachment in _pendingAttachments)
+          if (attachment.documentTemplateGreetingName == null) attachment,
+      ];
+      if (unflagged.isNotEmpty &&
+          !_isWhatsAppServiceWindowOpen(
+              _resolveLastInboundAt(contact, loaded()))) {
+        // Meta rechaza archivos fuera de la ventana de 24 h. Un PDF sí puede
+        // ir en el encabezado de la plantilla de documento; cualquier otro
+        // archivo espera acá mientras se manda el saludo autorizado.
+        if (unflagged.every((attachment) => attachment.isPdf)) {
+          if (_offeringDocumentTemplate) return;
+          final tapped = [for (final a in _pendingAttachments) a.id];
+          _offeringDocumentTemplate = true;
+          final _DocumentTemplateChoice? choice;
+          final String? greetingName;
+          try {
+            (choice, greetingName) = await _offerDocumentTemplate(
+              fileCount: unflagged.length,
+              contact: contact,
+            );
+          } finally {
+            _offeringDocumentTemplate = false;
+          }
+          if (!mounted ||
+              widget.conversation.id != windowConversationId ||
+              _isSendingPendingAttachments) {
+            return;
+          }
+          if (choice == _DocumentTemplateChoice.greeting) {
+            _showWhatsAppTemplatePicker();
+            return;
+          }
+          // Lo que se envía es lo que el aviso mostró.
+          if (choice != _DocumentTemplateChoice.send ||
+              greetingName == null ||
+              !listEquals(
+                  tapped, [for (final a in _pendingAttachments) a.id])) {
+            return;
+          }
+          setState(() {
+            for (var i = 0; i < _pendingAttachments.length; i += 1) {
+              final attachment = _pendingAttachments[i];
+              if (attachment.documentTemplateGreetingName == null) {
+                _pendingAttachments[i] =
+                    attachment.withDocumentTemplate(greetingName!);
+              }
+            }
+          });
+        } else {
+          _showWhatsAppTemplatePicker();
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(
+              SnackBar(
+                content: Text(
+                  'WhatsApp no deja mandar archivos a quien no te ha escrito '
+                  'en las últimas 24 h. Mándale el saludo: los archivos '
+                  'quedan acá para enviarlos cuando ${widget.conversation.isSupplierConversation ? 'el proveedor' : 'el cliente'} '
+                  'responda. Un PDF solo sí puede ir ahora, con la plantilla '
+                  'de documento.',
+                ),
+                duration: const Duration(seconds: 8),
               ),
-              duration: const Duration(seconds: 8),
-            ),
-          );
-        return;
+            );
+          return;
+        }
       }
     }
 
-    final caption = _messageController.text.trim();
     final conversationId = widget.conversation.id;
-    final reply = _replyToMessage;
     final attachments = List<PendingChatAttachment>.from(_pendingAttachments);
-    if (reply != null && !attachments.first.outcomeUnknown) {
-      attachments[0] = attachments.first.withReply(reply);
+    // Un PDF con la plantilla de documento lleva el texto fijo que aprobó
+    // Meta: el texto y la cita del compositor van con el primer archivo que
+    // no usa la plantilla y, si todos la usan, se quedan en el compositor.
+    final firstFreeIndex = attachments.indexWhere(
+        (attachment) => attachment.documentTemplateGreetingName == null);
+    final keepsComposer = firstFreeIndex < 0;
+    final caption = keepsComposer ? '' : _messageController.text.trim();
+    final reply = keepsComposer ? null : _replyToMessage;
+    if (reply != null && !attachments[firstFreeIndex].outcomeUnknown) {
+      attachments[firstFreeIndex] =
+          attachments[firstFreeIndex].withReply(reply);
     }
+    String? captionFor(int index) {
+      final attachment = attachments[index];
+      if (attachment.outcomeUnknown) return attachment.replayCaption;
+      final greetingName = attachment.documentTemplateGreetingName;
+      if (greetingName != null) {
+        return WhatsAppService.documentTemplatePreview(greetingName);
+      }
+      return pendingAttachmentCaption(
+        index: index - firstFreeIndex,
+        attachment: attachment,
+        composerText: caption,
+      );
+    }
+
     final chatProvider = context.read<ChatProvider>();
     final composerSession = chatProvider.composerSession;
     final purchaseService = attachments.any((a) => a.purchaseInvoiceId != null)
@@ -3071,8 +3276,10 @@ class _ChatWindowState extends State<ChatWindow> {
     setState(() {
       _isSendingPendingAttachments = true;
       _pendingAttachments.clear();
-      _replyToMessage = null;
-      _messageController.clear();
+      if (!keepsComposer) {
+        _replyToMessage = null;
+        _messageController.clear();
+      }
     });
     _restoreComposerFocus();
 
@@ -3083,13 +3290,7 @@ class _ChatWindowState extends State<ChatWindow> {
       final optimisticId = _seedOptimisticAttachment(
         chatProvider,
         attachment,
-        caption: attachment.outcomeUnknown
-            ? attachment.replayCaption
-            : pendingAttachmentCaption(
-                index: i,
-                attachment: attachment,
-                composerText: caption,
-              ),
+        caption: captionFor(i),
       );
       if (optimisticId != null) optimisticIds[attachment.id] = optimisticId;
     }
@@ -3117,19 +3318,14 @@ class _ChatWindowState extends State<ChatWindow> {
         fileName: attachment.fileName,
         bytes: attachment.bytes,
         showUploadingSnackBar: false,
-        caption: attachment.outcomeUnknown
-            ? attachment.replayCaption
-            : pendingAttachmentCaption(
-                index: i,
-                attachment: attachment,
-                composerText: caption,
-              ),
+        caption: captionFor(i),
         existingReservation: attachment.reservation,
         retryUpload: attachment.retryUpload,
         optimisticMessageId: optimisticId,
         localMediaKey: attachment.id,
         durationSeconds: attachment.durationSeconds,
         reply: attachment.reply,
+        documentTemplateGreetingName: attachment.documentTemplateGreetingName,
       );
       switch (result.outcome) {
         case AttachmentDispatchOutcome.confirmed:
@@ -3183,7 +3379,7 @@ class _ChatWindowState extends State<ChatWindow> {
               ...unresolved
             ],
             session: composerSession);
-        if (confirmedCount == 0)
+        if (confirmedCount == 0 && !keepsComposer)
           _restoreFailedDraft(
               chatProvider, conversationId, caption, reply, composerSession);
       }
@@ -3319,6 +3515,7 @@ class _ChatWindowState extends State<ChatWindow> {
     MessageReply? reply,
     Conversation? destination,
     bool Function()? forwardLease,
+    String? documentTemplateGreetingName,
   }) async {
     if (!mounted || bytes.isEmpty) {
       return const AttachmentDispatchResult.rejected();
@@ -3510,6 +3707,7 @@ class _ChatWindowState extends State<ChatWindow> {
         contextType: contextType,
         contextId: contextId,
         contactFuture: contactFuture!,
+        documentTemplateGreetingName: documentTemplateGreetingName,
       );
       switch (outcome) {
         case AttachmentDispatchOutcome.confirmed:
@@ -3590,6 +3788,7 @@ class _ChatWindowState extends State<ChatWindow> {
     required String? contextId,
     required Future<Map<String, dynamic>?> contactFuture,
     String? existingOptimisticMessageId,
+    String? documentTemplateGreetingName,
   }) {
     final optimisticMessageId = existingOptimisticMessageId ??
         'temp-wa-file-${DateTime.now().microsecondsSinceEpoch}';
@@ -3636,6 +3835,7 @@ class _ChatWindowState extends State<ChatWindow> {
       contextType: contextType,
       contextId: contextId,
       contactFuture: contactFuture,
+      documentTemplateGreetingName: documentTemplateGreetingName,
     );
   }
 
@@ -3652,6 +3852,7 @@ class _ChatWindowState extends State<ChatWindow> {
     required String? contextType,
     required String? contextId,
     required Future<Map<String, dynamic>?> contactFuture,
+    String? documentTemplateGreetingName,
   }) async {
     final whatsappService = WhatsAppService();
     try {
@@ -3687,6 +3888,7 @@ class _ChatWindowState extends State<ChatWindow> {
         contextId: contextId,
         clientMessageId: optimisticMessageId,
         metadata: metadata,
+        documentTemplateGreetingName: documentTemplateGreetingName,
       );
 
       if (!receipt.isSuccess) {
@@ -3722,9 +3924,11 @@ class _ChatWindowState extends State<ChatWindow> {
         if (mounted) {
           final errorMessage = receipt.errorRequiresServerFix
               ? 'Meta rechazó el envío porque el token de WhatsApp Cloud API expiró. Hay que actualizar WHATSAPP_ACCESS_TOKEN en Supabase.'
-              : receipt.errorRequiresCustomerReply
-                  ? 'Meta no permite enviar archivos fuera de la ventana de 24 horas. Envía primero un mensaje autorizado y espera la respuesta antes de compartir la imagen.'
-                  : 'No se pudo enviar el archivo por WhatsApp';
+              : documentTemplateGreetingName != null
+                  ? 'Meta no aceptó el PDF con la plantilla de documento.'
+                  : receipt.errorRequiresCustomerReply
+                      ? 'Meta no permite enviar archivos fuera de la ventana de 24 horas. Envía primero un mensaje autorizado y espera la respuesta antes de compartir la imagen.'
+                      : 'No se pudo enviar el archivo por WhatsApp';
           _showErrorSnackBar(context, errorMessage);
         }
         return AttachmentDispatchOutcome.rejected;
@@ -8756,6 +8960,320 @@ class _ChatWindowState extends State<ChatWindow> {
     return '${duration.inMinutes.clamp(0, 59)}m';
   }
 
+  /// El nombre con que saluda la plantilla de documento y su estado en Meta.
+  /// Un nombre sin letras —el número de un chat nuevo— no sirve de saludo.
+  Future<WhatsAppDocumentTemplateOffer> _loadDocumentTemplateOffer(
+    Map<String, dynamic>? contact,
+  ) async {
+    final loader = widget.whatsAppDocumentTemplateLoader;
+    if (loader != null) return loader();
+    var resolved = contact;
+    if (resolved == null) {
+      try {
+        resolved = await _getWhatsAppContactFuture()
+            .timeout(const Duration(seconds: 4));
+      } catch (_) {
+        resolved = null;
+      }
+    }
+    final contactKey = widget.conversation.isSupplierConversation
+        ? 'template_contact_name'
+        : 'name';
+    final name = resolved?[contactKey]?.toString().trim();
+    WhatsAppTemplateReviewStatus? status;
+    String? statusError;
+    try {
+      final statuses = await WhatsAppService()
+          .getSupplierTemplateReviewStatuses()
+          .timeout(const Duration(seconds: 10));
+      status = statuses[WhatsAppService.documentTemplateName];
+    } catch (error) {
+      debugPrint('[WhatsAppTemplates] estado de la plantilla de documento: '
+          '$error');
+      statusError = 'No se pudo confirmar con Meta si está aprobada.';
+    }
+    return WhatsAppDocumentTemplateOffer(
+      greetingName:
+          name != null && RegExp(r'\p{L}', unicode: true).hasMatch(name)
+              ? name
+              : null,
+      status: status,
+      statusError: statusError,
+    );
+  }
+
+  /// Ofrece mandar los PDF con la plantilla de documento, la única forma de
+  /// mandarle un archivo a quien no escribió en 24 h. Muestra el texto exacto
+  /// que le llega y si Meta ya la aprobó: sin aprobación, Meta la rechazaría
+  /// después de aceptada en la bandeja.
+  Future<(_DocumentTemplateChoice?, String?)> _offerDocumentTemplate({
+    required int fileCount,
+    required Map<String, dynamic>? contact,
+  }) async {
+    var offerFuture = _loadDocumentTemplateOffer(contact);
+    var creating = false;
+    String? createError;
+    final fileNames = [
+      for (final attachment in _pendingAttachments)
+        if (attachment.documentTemplateGreetingName == null)
+          attachment.fileName,
+    ];
+    final keepsText = _messageController.text.trim().isNotEmpty;
+    final counterparty = widget.conversation.isSupplierConversation
+        ? 'El proveedor'
+        : 'El cliente';
+    WhatsAppDocumentTemplateOffer? loaded;
+    final choice = await showDialog<_DocumentTemplateChoice>(
+      context: context,
+      useRootNavigator: true,
+      builder: (dialogContext) =>
+          StatefulBuilder(builder: (dialogContext, setDialogState) {
+        final theme = Theme.of(dialogContext);
+        final roles = VinabikeThemeRoles.of(dialogContext);
+        Future<void> create(WhatsAppDocumentTemplateOffer offer) async {
+          setDialogState(() {
+            creating = true;
+            createError = null;
+          });
+          try {
+            final creator = widget.whatsAppDocumentTemplateCreator ??
+                WhatsAppService().createDocumentTemplateInMeta;
+            final status = await creator();
+            offerFuture = Future.value(offer.withStatus(status));
+          } catch (error) {
+            createError = error is StateError
+                ? error.message
+                : 'Meta no aceptó la plantilla. Vuelve a intentarlo.';
+          }
+          if (!dialogContext.mounted) return;
+          setDialogState(() => creating = false);
+        }
+
+        return AlertDialog(
+          key: const ValueKey('chat-document-template-offer'),
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          title: const Text('Enviar con la plantilla de documento'),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: FutureBuilder<WhatsAppDocumentTemplateOffer>(
+              future: offerFuture,
+              builder: (context, snapshot) {
+                final offer = snapshot.data;
+                loaded = offer;
+                final greetingName = offer?.greetingName;
+                final status = offer?.status;
+                final (IconData, VinabikeSemanticTone, String) statusLine =
+                    offer == null
+                        ? (
+                            Icons.hourglass_top_rounded,
+                            roles.neutral,
+                            'Revisando el estado en Meta…'
+                          )
+                        : offer.statusError != null
+                            ? (
+                                Icons.cloud_off_rounded,
+                                roles.warning,
+                                offer.statusError!
+                              )
+                            : status == null
+                                ? (
+                                    Icons.error_outline_rounded,
+                                    roles.warning,
+                                    'Todavía no está creada en Meta.'
+                                  )
+                                : status.isApproved
+                                    ? (
+                                        Icons.verified_rounded,
+                                        roles.success,
+                                        'Aprobada por Meta.'
+                                      )
+                                    : status.status == 'REJECTED'
+                                        ? (
+                                            Icons.block_rounded,
+                                            roles.danger,
+                                            'Meta la rechazó'
+                                                '${status.rejectedReason == null ? '' : ' (${status.rejectedReason})'}.'
+                                          )
+                                        : (
+                                            Icons.schedule_rounded,
+                                            roles.warning,
+                                            'Meta la está revisando. Se '
+                                                'podrá usar cuando la apruebe.'
+                                          );
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      '$counterparty no te ha escrito en las últimas 24 h. '
+                      'WhatsApp deja mandarle un PDF sólo dentro de este '
+                      'mensaje${fileCount > 1 ? ', uno por archivo' : ''}:',
+                      style: theme.textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 14),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surfaceContainerHigh,
+                        borderRadius: BorderRadius.circular(14),
+                        border:
+                            Border.all(color: theme.colorScheme.outlineVariant),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            for (final name in fileNames)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.picture_as_pdf_rounded,
+                                        size: 20, color: roles.danger.accent),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        name,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: theme.textTheme.labelLarge,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            Text(
+                              greetingName == null
+                                  ? offer == null
+                                      ? '…'
+                                      : WhatsAppService.documentTemplatePreview(
+                                              '{{nombre}}')
+                                          .replaceFirst('{{nombre}}', '…')
+                                  : WhatsAppService.documentTemplatePreview(
+                                      greetingName),
+                              style: theme.textTheme.bodyMedium,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(statusLine.$1,
+                            size: 18, color: statusLine.$2.accent),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            statusLine.$3,
+                            style: theme.textTheme.bodySmall
+                                ?.copyWith(color: statusLine.$2.onContainer),
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (offer != null &&
+                        offer.statusError == null &&
+                        status == null) ...[
+                      const SizedBox(height: 10),
+                      Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: FilledButton.tonalIcon(
+                          key: const ValueKey('chat-document-template-create'),
+                          onPressed: creating ? null : () => create(offer),
+                          icon: creating
+                              ? const SizedBox.square(
+                                  dimension: 16,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.cloud_upload_outlined,
+                                  size: 18),
+                          label: Text(
+                              creating ? 'Enviando a Meta…' : 'Crear en Meta'),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Meta la revisa antes de dejar usarla; suele tardar '
+                        'minutos, a veces horas.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant),
+                      ),
+                      if (createError != null) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          createError!,
+                          style: theme.textTheme.bodySmall
+                              ?.copyWith(color: roles.danger.onContainer),
+                        ),
+                      ],
+                    ],
+                    if (offer != null && greetingName == null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        widget.conversation.isSupplierConversation
+                            ? 'Falta el nombre del vendedor en el perfil del '
+                                'proveedor: la plantilla saluda por el nombre.'
+                            : 'Este chat no tiene el nombre del cliente: la '
+                                'plantilla saluda por el nombre.',
+                        style: theme.textTheme.bodySmall
+                            ?.copyWith(color: roles.danger.onContainer),
+                      ),
+                    ],
+                    if (keepsText) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Tu texto se queda en el compositor: el mensaje de la '
+                        'plantilla es fijo.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant),
+                      ),
+                    ],
+                  ],
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              key: const ValueKey('chat-document-template-greeting'),
+              onPressed: () => Navigator.of(dialogContext)
+                  .pop(_DocumentTemplateChoice.greeting),
+              child: const Text('Mandar el saludo'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancelar'),
+            ),
+            FutureBuilder<WhatsAppDocumentTemplateOffer>(
+              future: offerFuture,
+              builder: (context, snapshot) {
+                final offer = snapshot.data;
+                final ready = offer != null &&
+                    offer.greetingName != null &&
+                    offer.status?.isApproved == true;
+                return FilledButton.icon(
+                  key: const ValueKey('chat-document-template-send'),
+                  onPressed: ready
+                      ? () => Navigator.of(dialogContext)
+                          .pop(_DocumentTemplateChoice.send)
+                      : null,
+                  icon: const Icon(Icons.send_rounded, size: 18),
+                  label: Text(
+                      fileCount > 1 ? 'Enviar $fileCount PDF' : 'Enviar PDF'),
+                );
+              },
+            ),
+          ],
+        );
+      }),
+    );
+    return (choice, loaded?.greetingName);
+  }
+
   void _showWhatsAppTemplatePicker({
     String? pendingText,
     GlobalKey? anchorKey,
@@ -9082,6 +9600,18 @@ class _ChatWindowState extends State<ChatWindow> {
                           reviewCheckFailed: snapshot.hasError,
                         ),
                       ),
+                      // La plantilla de documento no se elige acá —va sola
+                      // al enviar un PDF fuera de las 24 h—, pero éste es el
+                      // lugar donde se ven los estados en Meta y donde se
+                      // crea sin tener un PDF a mano.
+                      if (!isLoading && !snapshot.hasError)
+                        _DocumentTemplateStatusTile(
+                          key: const ValueKey('whatsapp-document-template-row'),
+                          initialStatus:
+                              statuses[WhatsAppService.documentTemplateName],
+                          create: widget.whatsAppDocumentTemplateCreator ??
+                              WhatsAppService().createDocumentTemplateInMeta,
+                        ),
                     ],
                   );
                 },
