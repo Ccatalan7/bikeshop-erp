@@ -31,7 +31,10 @@ import type { TemplateHeaderDefinition } from "../_shared/whatsapp_templates.ts"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  // `x-region` fija la función junto a la base (`kSupabaseFunctionsRegionHeaders`);
+  // sin él en la lista, el navegador bloquea la llamada después del OPTIONS.
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-region",
 };
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";

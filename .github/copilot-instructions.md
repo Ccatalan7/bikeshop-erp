@@ -2553,6 +2553,16 @@ Use `--no-verify-jwt` only when the reviewed function intentionally implements
 its own authentication, such as a verified webhook. Verify the deployed
 function after every change.
 
+**A function the app calls with `kSupabaseFunctionsRegionHeaders` must list
+`x-region` in `Access-Control-Allow-Headers` (2026-09-29).** Without it the web
+build's preflight answers 200 and the browser then never sends the POST; the
+native apps ignore CORS, so only the web breaks, silently. The header was added
+to the client on 2026-09-03 and from then the web could not read the Meta
+review state of any template: the function log showed `OPTIONS | 200` and no
+`POST`. Fixed in `whatsapp-send` and `whatsapp-template-manager`;
+`whatsapp-media` and `meta-send` still lack it. To diagnose a web-only failure
+of an Edge Function, look for that OPTIONS-without-POST pair first.
+
 ## Stable production metadata
 
 | Field | Value |

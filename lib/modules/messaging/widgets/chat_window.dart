@@ -9129,7 +9129,7 @@ class _ChatWindowState extends State<ChatWindow> {
                                 padding: const EdgeInsets.only(bottom: 8),
                                 child: Row(
                                   children: [
-                                    Icon(Icons.picture_as_pdf_rounded,
+                                    Icon(Icons.picture_as_pdf_outlined,
                                         size: 20, color: roles.danger.accent),
                                     const SizedBox(width: 8),
                                     Expanded(
