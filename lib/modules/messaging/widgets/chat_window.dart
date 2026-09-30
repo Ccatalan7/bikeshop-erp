@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
+import 'package:flutter/foundation.dart'
+    show kIsWeb, listEquals, visibleForTesting;
 import 'package:flutter/material.dart';
 
 import 'counterparty_avatar_image.dart';
@@ -31,7 +32,8 @@ import '../services/chat_media_cache.dart';
 import 'chat_media_thumbnail.dart';
 import 'chat_message_interactions.dart';
 import 'chat_message_quote.dart';
-import 'chat_forward_picker.dart';
+import 'chat_forward_page.dart';
+import 'share_destination_sliver.dart';
 import 'chat_audio_message.dart';
 import 'chat_voice_recorder.dart';
 import '../services/meta_messaging_service.dart';
@@ -62,7 +64,6 @@ import '../../../shared/utils/purchase_document_pdf_generator.dart';
 import '../models/conversation_context_hint.dart';
 import '../../../shared/utils/supplier_whatsapp_phone.dart';
 import '../../../shared/widgets/vb_status_badge.dart';
-import '../../../shared/widgets/vb_overlay_surfaces.dart';
 import '../../../shared/widgets/vb_surface_icon_button.dart';
 import '../../../shared/services/supabase_functions_region.dart';
 
@@ -742,6 +743,8 @@ class _ChatWindowState extends State<ChatWindow> {
   void _clearWhatsAppContactCache() {
     _whatsAppContactFuture = null;
     _whatsAppContactFutureConversationId = null;
+    _whatsAppContactSnapshot = null;
+    _whatsAppContactSnapshotConversationId = null;
     _conversationContactFuture = null;
     _conversationContactFutureConversationId = null;
     _supplierPhoneMismatchFuture = null;
@@ -851,11 +854,39 @@ class _ChatWindowState extends State<ChatWindow> {
   Future<Map<String, dynamic>?> _getWhatsAppContactFuture() {
     if (_whatsAppContactFutureConversationId != widget.conversation.id) {
       _whatsAppContactFutureConversationId = widget.conversation.id;
-      _whatsAppContactFuture = _resolveConversationWhatsAppContact();
+      _whatsAppContactFuture =
+          _trackWhatsAppContact(_resolveConversationWhatsAppContact());
     }
 
-    return _whatsAppContactFuture ??= _resolveConversationWhatsAppContact();
+    return _whatsAppContactFuture ??=
+        _trackWhatsAppContact(_resolveConversationWhatsAppContact());
   }
+
+  /// El último contacto resuelto, para decidir la ventana de 24 h sin esperar
+  /// una consulta al apretar enviar: su `last_inbound_at` viene del vínculo de
+  /// WhatsApp y no depende de qué página de mensajes está en memoria.
+  Map<String, dynamic>? _whatsAppContactSnapshot;
+  String? _whatsAppContactSnapshotConversationId;
+
+  Future<Map<String, dynamic>?> _trackWhatsAppContact(
+    Future<Map<String, dynamic>?> future,
+  ) {
+    final conversationId = widget.conversation.id;
+    unawaited(future.then(
+      (contact) {
+        if (_whatsAppContactFutureConversationId != conversationId) return;
+        _whatsAppContactSnapshot = contact;
+        _whatsAppContactSnapshotConversationId = conversationId;
+      },
+      onError: (Object _) {},
+    ));
+    return future;
+  }
+
+  Map<String, dynamic>? _whatsAppContactSnapshotFor(String conversationId) =>
+      _whatsAppContactSnapshotConversationId == conversationId
+          ? _whatsAppContactSnapshot
+          : null;
 
   Future<Map<String, dynamic>?> _getConversationContactFuture() {
     if (_isWhatsAppConversation) {
@@ -1900,7 +1931,7 @@ class _ChatWindowState extends State<ChatWindow> {
       // gauge / dispatch); if the cached window check is wrong we'll get the
       // re-engagement code from Graph and fall back to a template anyway.
       final lastInboundAt = _resolveLastInboundAt(
-        null,
+        _whatsAppContactSnapshotFor(widget.conversation.id),
         chatProvider.messagesForConversation(widget.conversation.id),
       );
       if (!_isWhatsAppServiceWindowOpen(lastInboundAt)) {
@@ -2795,21 +2826,88 @@ class _ChatWindowState extends State<ChatWindow> {
   bool _offeredAttachmentIntakeScheduled = false;
 
   /// Toma lo que llegó para este chat desde fuera —el menú «Compartir» del
-  /// teléfono— y lo deja en el compositor como cualquier adjunto elegido acá.
-  /// Sólo el host visible lo toma: un `ChatWindow` retenido fuera de pantalla
-  /// se lo quedaría sin que nadie lo viera.
+  /// teléfono o «Reenviar» desde otro chat— y lo deja en el compositor como
+  /// cualquier adjunto elegido acá; el texto reenviado va a la caja. Sólo el
+  /// host visible lo toma: un `ChatWindow` retenido fuera de pantalla se lo
+  /// quedaría sin que nadie lo viera.
   void _scheduleOfferedAttachmentIntake() {
     if (_offeredAttachmentIntakeScheduled) return;
     _offeredAttachmentIntakeScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _offeredAttachmentIntakeScheduled = false;
-      if (!mounted || !_supportsOutgoingAttachments) return;
-      final offered = context
-          .read<ChatProvider>()
-          .takeOfferedComposerAttachments(widget.conversation.id);
-      _addPendingAttachments(offered);
+      // Durante un envío el compositor está vacío pero no libre: si el lote
+      // falla, sus archivos vuelven y no deben pasar de 8 con lo ofrecido.
+      if (!mounted || _isSendingPendingAttachments) return;
+      final chat = context.read<ChatProvider>();
+      final conversationId = widget.conversation.id;
+      final offeredFiles = _supportsOutgoingAttachments
+          ? chat.offeredComposerAttachmentCount(conversationId)
+          : 0;
+      final free = MessagingAttachmentService.maxAttachmentsPerBatch -
+          _pendingAttachments.length;
+      final room = free < 0 ? 0 : free;
+      // Lo que no entra ahora espera en la oferta —sin consumirse— y entra
+      // solo cuando se libera espacio: un archivo de resultado incierto
+      // bloquea el compositor, y caben 8 por envío.
+      final blocked = offeredFiles > 0 && _hasBlockingOutcomeUnknownAttachment;
+      final full = offeredFiles > 0 && room == 0;
+      if (blocked || full) {
+        if (_waitingOfferNoticeConversationId != conversationId) {
+          _waitingOfferNoticeConversationId = conversationId;
+          if (blocked) {
+            _showPendingAttachmentMutationBlocked();
+          } else {
+            _showWaitingOfferNotice(offeredFiles);
+          }
+        }
+        return;
+      }
+      _waitingOfferNoticeConversationId = null;
+      // El texto reenviado entra con sus archivos, no antes: si esperaran,
+      // la leyenda saldría con el primer archivo de lo que ya estaba.
+      if (offeredFiles <= room) {
+        final text = chat.takeOfferedComposerText(conversationId);
+        if (text != null && text.isNotEmpty) {
+          final current = _messageController.text.trimRight();
+          final next = current.isEmpty ? text : '$current\n\n$text';
+          _messageController.value = TextEditingValue(
+            text: next,
+            selection: TextSelection.collapsed(offset: next.length),
+          );
+          _saveComposerDraft(conversationId);
+          _restoreComposerFocus();
+        }
+      }
+      if (offeredFiles == 0) return;
+      final offered = chat.takeOfferedComposerAttachments(conversationId);
+      _addPendingAttachments(offered.take(room).toList());
+      final left = offered.skip(room).toList();
+      if (left.isNotEmpty) {
+        chat.offerComposerAttachments(conversationId, left);
+      }
     });
   }
+
+  void _showWaitingOfferNotice(int waiting) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 8),
+        content: Text(
+          'Caben ${MessagingAttachmentService.maxAttachmentsPerBatch} '
+          'archivos por envío. ${waiting == 1 ? 'Uno espera' : '$waiting esperan'} '
+          'y ${waiting == 1 ? 'entra' : 'entran'} cuando envíes estos.',
+        ),
+      ),
+    );
+  }
+
+  /// El chat cuya oferta en espera ya se avisó, para no repetirlo en cada
+  /// reconstrucción.
+  String? _waitingOfferNoticeConversationId;
+
+  /// Un envío de archivos espera saber si la ventana de 24 h está abierta: un
+  /// segundo toque no lanza otra consulta ni otro envío.
+  bool _awaitingWindowCheck = false;
 
   void _addPendingAttachments(List<PendingChatAttachment> attachments) {
     if (attachments.isEmpty || !mounted) return;
@@ -2899,6 +2997,59 @@ class _ChatWindowState extends State<ChatWindow> {
       return;
     }
     if (_guardPendingAttachmentMutation()) return;
+    if (_isWhatsAppConversation) {
+      final windowConversationId = widget.conversation.id;
+      List<Message> loaded() => context
+          .read<ChatProvider>()
+          .messagesForConversation(windowConversationId);
+      var contact = _whatsAppContactSnapshotFor(windowConversationId);
+      if (contact == null &&
+          !_isWhatsAppServiceWindowOpen(
+              _resolveLastInboundAt(null, loaded()))) {
+        // El vínculo (con su `last_inbound_at`) todavía no llega: se espera
+        // esa consulta antes de afirmar que la ventana está cerrada.
+        if (_awaitingWindowCheck) return;
+        _awaitingWindowCheck = true;
+        final tapped = [for (final a in _pendingAttachments) a.id];
+        try {
+          contact = await _getWhatsAppContactFuture()
+              .timeout(const Duration(seconds: 4));
+        } catch (_) {
+          contact = null;
+        } finally {
+          _awaitingWindowCheck = false;
+        }
+        // Lo que se envía es lo que había al tocar: si mientras se esperaba
+        // cambió, hace falta tocar de nuevo.
+        if (!mounted ||
+            widget.conversation.id != windowConversationId ||
+            _isSendingPendingAttachments ||
+            !listEquals(tapped, [for (final a in _pendingAttachments) a.id])) {
+          return;
+        }
+      }
+      if (!_isWhatsAppServiceWindowOpen(
+          _resolveLastInboundAt(contact, loaded()))) {
+        // Meta rechaza archivos fuera de la ventana de 24 h: subirlos sólo para
+        // que volvieran al compositor con un error era el camino de siempre al
+        // compartir o reenviar a un cliente que no ha escrito. Igual que el
+        // texto, se ofrece el saludo autorizado y los archivos esperan acá.
+        _showWhatsAppTemplatePicker();
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(
+                'WhatsApp no deja mandar archivos a quien no te ha escrito en '
+                'las últimas 24 h. Mándale el saludo: los archivos quedan acá '
+                'para enviarlos cuando ${widget.conversation.isSupplierConversation ? 'el proveedor' : 'el cliente'} responda.',
+              ),
+              duration: const Duration(seconds: 8),
+            ),
+          );
+        return;
+      }
+    }
 
     final caption = _messageController.text.trim();
     final conversationId = widget.conversation.id;
@@ -2934,9 +3085,11 @@ class _ChatWindowState extends State<ChatWindow> {
         attachment,
         caption: attachment.outcomeUnknown
             ? attachment.replayCaption
-            : i == 0 && caption.isNotEmpty
-                ? caption
-                : null,
+            : pendingAttachmentCaption(
+                index: i,
+                attachment: attachment,
+                composerText: caption,
+              ),
       );
       if (optimisticId != null) optimisticIds[attachment.id] = optimisticId;
     }
@@ -2966,9 +3119,11 @@ class _ChatWindowState extends State<ChatWindow> {
         showUploadingSnackBar: false,
         caption: attachment.outcomeUnknown
             ? attachment.replayCaption
-            : i == 0 && caption.isNotEmpty
-                ? caption
-                : null,
+            : pendingAttachmentCaption(
+                index: i,
+                attachment: attachment,
+                composerText: caption,
+              ),
         existingReservation: attachment.reservation,
         retryUpload: attachment.retryUpload,
         optimisticMessageId: optimisticId,
@@ -10197,7 +10352,9 @@ class _ChatWindowState extends State<ChatWindow> {
         clipBehavior: Clip.none,
         children: [
           Tooltip(
-            message: isPurchaseDocument ? 'Ver o editar el documento' : '',
+            message: isPurchaseDocument
+                ? 'Ver o editar el documento'
+                : attachment.caption ?? '',
             child: InkWell(
               onTap: isPurchaseDocument
                   ? () => _openPurchaseDocumentPreview(attachment)
@@ -10237,7 +10394,8 @@ class _ChatWindowState extends State<ChatWindow> {
                                 ),
                               ),
                               child: Text(
-                                attachment.fileName,
+                                // Una foto reenviada muestra su leyenda.
+                                attachment.caption ?? attachment.fileName,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
@@ -11134,54 +11292,77 @@ class _ChatWindowState extends State<ChatWindow> {
     );
   }
 
+  /// «Reenviar»: la misma lista de destinos que el menú Compartir del
+  /// teléfono. Los mensajes quedan en el compositor del chat elegido —los
+  /// archivos como adjuntos, el texto en la caja— y ese chat se abre; se
+  /// envían desde ahí, donde WhatsApp pide el saludo si hace falta.
   Future<void> _forwardMessages(
       List<Message> messages, BuildContext anchor) async {
     final sourceConversation = widget.conversation.id;
     final session = _composerSession;
-    final provider = context.read<ChatProvider>();
+    final chat = context.read<ChatProvider>();
+    final toolbar = context.read<RightToolbarService>();
     final frozen = List<Message>.unmodifiable(messages);
-    final destinations = provider.conversations
-        .where((conversation) =>
-            conversation.status == 'active' &&
-            (conversation.isInternal || conversation.isWhatsApp))
-        .toList();
-    if (!destinations.any((c) => c.id == sourceConversation) &&
-        widget.conversation.status == 'active' &&
-        (widget.conversation.isInternal || widget.conversation.isWhatsApp)) {
-      destinations.add(widget.conversation);
-    }
-    await showVbSurface<void>(
-      anchorContext: anchor,
-      title:
-          'Reenviar ${frozen.length == 1 ? 'mensaje' : '${frozen.length} mensajes'}',
-      builder: (surfaceContext) => ConstrainedBox(
-        constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(surfaceContext).height * 0.45),
-        child: ChatForwardPicker(
-          messages: frozen,
-          destinations: destinations,
-          titleFor: provider.getChatTitle,
-          onSend: (destination) async {
-            for (final message in frozen) {
-              if (!_isCurrentComposer(sourceConversation, session)) {
-                throw StateError(
-                    'El chat cambió. Los mensajes restantes no se enviaron.');
-              }
-              await _forwardMessage(message, destination,
-                  isCurrent: () =>
-                      _isCurrentComposer(sourceConversation, session));
-              if (_isCurrentComposer(sourceConversation, session)) {
-                setState(() => _selectedMessages.remove(message.id));
-              }
-            }
-            if (mounted && _isCurrentComposer(sourceConversation, session)) {
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                  content: Text(
-                      'Reenviado a ${provider.getChatTitle(destination)}')));
-            }
-          },
-        ),
-      ),
+    bool isCurrent() => _isCurrentComposer(sourceConversation, session);
+    await showChatForwardPage(
+      context,
+      messages: frozen,
+      sourceConversationId: sourceConversation,
+      onChoose: (destination) async {
+        final entries =
+            <({String? text, PendingChatAttachment? file, String? caption})>[];
+        for (final message in frozen) {
+          if (!isCurrent()) {
+            throw StateError('El chat cambió. No se reenvió nada.');
+          }
+          if (message.type == 'text') {
+            entries
+                .add((text: message.content.trim(), file: null, caption: null));
+            continue;
+          }
+          final file = await _readMessageAttachment(message, isCurrent);
+          final PendingChatAttachment attachment;
+          try {
+            attachment = _buildPendingAttachment(
+                fileName: file.fileName, bytes: file.bytes);
+          } on FormatException catch (error) {
+            throw StateError('${file.fileName}: ${error.message}');
+          }
+          final caption = (message.type == 'image'
+                  ? _messageImageCaption(message)
+                  : message.type == 'file'
+                      ? _messageFileCaption(message)
+                      : null)
+              ?.trim();
+          entries.add((
+            text: null,
+            file: attachment,
+            caption: caption == null || caption.isEmpty ? null : caption,
+          ));
+        }
+        // Con un solo archivo, su leyenda va a la caja, donde se ve y se
+        // edita. Con varios, cada uno lleva la suya: juntas en la caja,
+        // saldrían todas en el primero.
+        final fileCount = entries.where((entry) => entry.file != null).length;
+        final texts = [
+          for (final entry in entries)
+            if (entry.text case final text? when text.isNotEmpty)
+              text
+            else if (fileCount == 1 && entry.caption != null)
+              entry.caption!,
+        ];
+        final attachments = [
+          for (final entry in entries)
+            if (entry.file case final file?)
+              fileCount > 1 ? file.withCaption(entry.caption) : file,
+        ];
+        final conversationId =
+            await resolveShareConversation(chat, destination);
+        chat.offerComposerAttachments(conversationId, attachments,
+            text: texts.join('\n\n'));
+        if (mounted && isCurrent()) setState(_selectedMessages.clear);
+        openShareConversation(toolbar, destination, conversationId);
+      },
     );
   }
 
@@ -11257,73 +11438,6 @@ class _ChatWindowState extends State<ChatWindow> {
               : 'No se pudo compartir el archivo.'),
         ),
       );
-    }
-  }
-
-  Future<void> _forwardMessage(Message message, Conversation destination,
-      {required bool Function() isCurrent}) async {
-    final provider = context.read<ChatProvider>();
-    final contact = destination.isWhatsApp
-        ? await _messagingService.getSupportConversationContact(destination.id,
-            rethrowOnError: true)
-        : null;
-    if (!isCurrent()) throw StateError('El chat cambió antes del envío.');
-    final inbound =
-        DateTime.tryParse(contact?['last_inbound_at']?.toString() ?? '');
-    if (destination.isWhatsApp &&
-        (inbound == null ||
-            DateTime.now().toUtc().difference(inbound.toUtc()) >=
-                const Duration(hours: 24))) {
-      throw StateError(
-          'Este contacto debe responder primero para abrir la ventana de WhatsApp.');
-    }
-    if (message.type == 'text') {
-      if (destination.isWhatsApp) {
-        final phone = contact?['phone']?.toString();
-        if (phone == null || phone.isEmpty) {
-          throw StateError('El chat no tiene teléfono.');
-        }
-        final receipt = await WhatsAppService().sendMessage(
-          customerPhone: phone,
-          message: message.content,
-          conversationId: destination.id,
-          contactName: contact?['name']?.toString(),
-          contextType: destination.effectiveContextType,
-          contextId: destination.effectiveContextId,
-          lastInboundAt: inbound,
-          allowTemplateFallback: false,
-          clientMessageId: 'forward-${DateTime.now().microsecondsSinceEpoch}',
-        );
-        if (!receipt.isDurable) {
-          throw StateError(receipt.unsafeToFallback
-              ? 'No llegó confirmación. Revisa el chat destino antes de volver a enviar.'
-              : 'WhatsApp no aceptó el reenvío. Los mensajes restantes no se enviaron.');
-        }
-      } else {
-        await provider.sendMessage(message.content,
-            conversationId: destination.id);
-      }
-      return;
-    }
-    // The destination always gets a NEW private reservation, never a copied URL.
-    final attachment = await _readMessageAttachment(message, isCurrent);
-    final result = await _sendAttachmentBytes(
-      destination: destination,
-      forwardLease: isCurrent,
-      fileName: attachment.fileName,
-      bytes: attachment.bytes,
-      caption: message.type == 'image'
-          ? _messageImageCaption(message)
-          : message.type == 'file'
-              ? _messageFileCaption(message)
-              : null,
-      showUploadingSnackBar: false,
-    );
-    if (result.outcome != AttachmentDispatchOutcome.confirmed) {
-      throw StateError(result.outcome ==
-              AttachmentDispatchOutcome.outcomeUnknown
-          ? 'No llegó confirmación. Revisa el chat destino antes de volver a enviar.'
-          : 'No se pudo reenviar el adjunto. Los mensajes restantes no se enviaron.');
     }
   }
 

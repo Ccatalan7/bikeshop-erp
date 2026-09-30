@@ -15,7 +15,7 @@ import 'package:vinabike_erp/modules/messaging/providers/chat_provider.dart';
 import 'package:vinabike_erp/modules/messaging/widgets/chat_window.dart';
 import 'package:vinabike_erp/modules/messaging/widgets/chat_message_interactions.dart';
 import 'package:vinabike_erp/shared/themes/app_theme.dart';
-import 'package:vinabike_erp/shared/widgets/vb_searchable_select.dart';
+import 'package:vinabike_erp/shared/services/right_toolbar_service.dart';
 import 'package:vinabike_erp/shared/services/whatsapp_service.dart';
 import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 
@@ -76,11 +76,16 @@ void main() {
       WidgetTester tester, _Chats chats, ValueNotifier<String> selected,
       {double width = 420,
       Brightness brightness = Brightness.light,
-      MessagingAttachmentService? attachments}) async {
+      MessagingAttachmentService? attachments,
+      RightToolbarService? toolbar}) async {
     await tester.binding.setSurfaceSize(Size(width, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(ChangeNotifierProvider<ChatProvider>.value(
-        value: chats,
+    await tester.pumpWidget(MultiProvider(
+        providers: [
+          ChangeNotifierProvider<ChatProvider>.value(value: chats),
+          ChangeNotifierProvider<RightToolbarService>.value(
+              value: toolbar ?? RightToolbarService()),
+        ],
         child: MaterialApp(
             theme: AppTheme.resolve(
                 preset: AppearancePresets.vinabike, brightness: brightness),
@@ -150,29 +155,44 @@ void main() {
   });
 
   testWidgets(
-      'forward chooses recipient separately and sends only after confirmation',
+      'reenviar deja el mensaje en el chat elegido y lo abre, sin enviarlo',
       (tester) async {
     final chats = _Chats();
     final selected = ValueNotifier('chat-a');
-    await pump(tester, chats, selected);
+    final toolbar = RightToolbarService();
+    await pump(tester, chats, selected, toolbar: toolbar);
     await tester.longPressAt(
         Offset(400, tester.getCenter(find.text(_original.content)).dy));
     await tester.pump();
     await tester.tap(find.byTooltip('Reenviar mensajes'));
     await tester.pumpAndSettle();
-    expect(chats.sentConversation, isNull);
-    final selector = tester.widget<VbSearchableSelect<Conversation>>(
-        find.byType(VbSearchableSelect<Conversation>));
-    selector.onChanged!(
-        selector.options.singleWhere((o) => o.value.id == 'chat-b').value);
-    await tester.pump();
-    expect(chats.sentConversation, isNull);
-    await tester.tap(find.byKey(const ValueKey('chat-forward-confirm')));
+    // El chat de origen no es destino.
+    expect(
+        find.byKey(const ValueKey('chat-forward-chat-chat-a')), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('chat-forward-chat-chat-b')));
     await tester.pumpAndSettle();
-    expect(chats.sentConversation, 'chat-b');
-    expect(chats.sentMetadata, isNull);
+    expect(chats.sentConversation, isNull, reason: 'Elegir no envía.');
+    expect(chats.takeOfferedComposerText('chat-b'), _original.content);
+    expect(
+        toolbar.takePendingConversation(ToolbarTool.messages)?.conversationId,
+        'chat-b');
+    expect(find.byKey(const ValueKey('chat-forward-close')), findsNothing);
     expect(find.text('1 seleccionado'), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('un texto reenviado entra a la caja del chat destino',
+      (tester) async {
+    final chats = _Chats();
+    final selected = ValueNotifier('chat-a');
+    await pump(tester, chats, selected);
+    chats.offerComposerAttachments('chat-a', const [],
+        text: 'Precio del cassette');
+    await tester.pump();
+    await tester.pump();
+    expect(tester.widget<TextField>(composer).controller!.text,
+        'Precio del cassette');
+    expect(chats.hasOfferedComposerAttachments('chat-a'), isFalse);
   });
 
   test('forwarding never substitutes a template outside the WhatsApp window',

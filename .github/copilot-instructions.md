@@ -4562,12 +4562,44 @@ los archivos que pasan el límite.
   no se comprime. Archivos guarda siempre el original.
 - **Elegir el chat no envía.** `IncomingSharePage` (host global
   `IncomingSharePrompt`, junto a `AndroidUpdatePrompt`) ofrece «Guardar en
-  Archivos» o un chat de WhatsApp activo; los archivos entran al compositor de
-  ese chat con `ChatProvider.offerComposerAttachments` —una oferta que toma el
-  `ChatWindow` visible, una vez— y el operador escribe y envía. No se usa
+  Archivos» o un destino; los archivos entran al compositor de ese chat con
+  `ChatProvider.offerComposerAttachments` —una oferta que toma el `ChatWindow`
+  visible, una vez— y el operador escribe y envía. No se usa
   `saveComposerAttachments`: un chat ya abierto no relee ese borrador y al
   cerrarse lo pisa. La validación es la misma del adjunto
   (`MessagingAttachmentService.validateBeforeRead`).
+- **Destinos: todos los cruces (2026-09-29).** La primera versión ofrecía sólo
+  los chats que ya existían —8 de clientes y 9 de proveedores, frente a 486
+  clientes con teléfono— y el dueño lo leyó como «sólo proveedores».
+  `ShareDestinationSliver` (`ShareDestinations`) es la lista única de
+  «Compartir» y de «Reenviar» (`ChatForwardPage`): chats de WhatsApp y del
+  equipo, cualquier cliente o proveedor con teléfono aunque no tenga chat
+  (clientes al buscar, también por RUT; proveedores listados en «Proveedores»,
+  también por vendedor) y un número que no es de nadie. Un destino sin chat lo
+  abre `ChatProvider.openWhatsAppConversationForHandoff` sin escribirle ni
+  cambiar el chat activo, y devuelve el id sólo cuando la bandeja ya lo
+  cargó. Lo que ya tiene chat no se repite como ficha, comparando con el
+  número **del vínculo** (`external_phone_number`, al que escribe el hilo): el
+  teléfono de la bandeja es el de la ficha, y con él una ficha cuyo número
+  cambió quedaba escondida tras el hilo del número viejo. Un número nuevo sólo
+  si es celular chileno: `_normalizeWhatsAppPhone` le antepone 569 a
+  cualquier otro y lo vuelve otro número. El directorio filtra por taller
+  porque la caché de `CustomerService` sobrevive a un cambio de cuenta.
+  Reenviar dejó de enviar directo: deja archivos y texto en el compositor del
+  destino, igual que compartir; con varias fotos, cada una conserva su
+  leyenda (`PendingChatAttachment.caption`), y lo que no cabe en los 8 del
+  compositor espera en la oferta hasta que se envíe lo anterior.
+- **La ventana de 24 h manda.** Meta rechaza archivos a quien no escribió en
+  las últimas 24 h, y casi todos los chats de clientes están así. La lista lo
+  marca con un punto (`whatsapp_conversation_bindings.last_inbound_at`, una
+  lectura por lote con `tenant_id`) y `ChatWindow._sendPendingAttachments` ya
+  no sube archivos con la ventana cerrada: abre el saludo autorizado, igual que
+  el texto, y los archivos esperan en el compositor. La decisión usa el
+  vínculo (espera su consulta si aún no llega), no sólo los mensajes en
+  memoria. Mandar un archivo sin que
+  respondan exige una plantilla con encabezado de documento o imagen, que hoy
+  no existe (`whatsapp-send` sólo arma encabezado de documento para acciones
+  interactivas de confianza).
 - **Salida.** `lib/shared/utils/file_share.dart` entrega archivos al menú
   Compartir del sistema (Android, iOS, macOS; Windows y web siguen con
   Descargar): visor de adjuntos del chat, selección de mensajes del chat, y

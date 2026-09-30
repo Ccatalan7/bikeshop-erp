@@ -1,7 +1,5 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:vinabike_erp/modules/messaging/models/conversation.dart';
-import 'package:vinabike_erp/modules/messaging/models/conversation_context_hint.dart';
 import 'package:vinabike_erp/modules/messaging/utils/incoming_share_intake.dart';
 import 'package:vinabike_erp/shared/services/incoming_share_service.dart';
 import 'package:vinabike_erp/shared/services/media_compressor.dart';
@@ -145,58 +143,6 @@ void main() {
       expect(items[1].whatsAppProblem, contains('Formato no permitido'));
       expect(items[2].whatsAppProblem, contains('5 MB'));
       expect(items[3].validation?.contentType, 'application/pdf');
-    });
-  });
-
-  group('IncomingShareIntake.destinations', () {
-    Conversation chat(
-      String id, {
-      String channel = 'whatsapp',
-      String status = 'active',
-      String? title,
-      String? phone,
-      DateTime? last,
-    }) =>
-        Conversation(
-          id: id,
-          type: 'support',
-          channel: channel,
-          status: status,
-          title: title ?? id,
-          updatedAt: DateTime(2026, 9, 1),
-          lastMessageAt: last,
-          participantIds: const [],
-          contextHint:
-              phone == null ? null : ConversationContextHint(phone: phone),
-        );
-
-    final all = [
-      chat('antiguo', title: 'Ana Muñoz', last: DateTime(2026, 9, 20)),
-      chat('reciente',
-          title: 'José Pérez',
-          phone: '+56 9 4188 4520',
-          last: DateTime(2026, 9, 29)),
-      chat('instagram', channel: 'instagram', last: DateTime(2026, 9, 29)),
-      chat('interno', channel: 'internal', last: DateTime(2026, 9, 29)),
-      chat('rechazado', status: 'rejected', last: DateTime(2026, 9, 29)),
-      chat('pendiente', status: 'pending', last: DateTime(2026, 9, 25)),
-    ];
-
-    List<String> ids(String query) => IncomingShareIntake.destinations(
-          all,
-          query: query,
-          titleFor: (c) => c.title ?? '',
-        ).map((c) => c.id).toList();
-
-    test('sólo WhatsApp con compositor, el más reciente primero', () {
-      expect(ids(''), ['reciente', 'pendiente', 'antiguo']);
-    });
-
-    test('busca sin tildes y por dígitos del teléfono', () {
-      expect(ids('munoz'), ['antiguo']);
-      expect(ids('jose'), ['reciente']);
-      expect(ids('41884520'), ['reciente']);
-      expect(ids('nadie'), isEmpty);
     });
   });
 

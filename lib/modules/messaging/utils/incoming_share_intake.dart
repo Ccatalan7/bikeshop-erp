@@ -1,7 +1,5 @@
 import '../../../shared/services/incoming_share_service.dart';
-import '../models/conversation.dart';
 import '../services/messaging_attachment_service.dart';
-import 'conversation_search.dart';
 
 /// Un archivo compartido desde el teléfono y si puede salir por WhatsApp.
 class IncomingShareItem {
@@ -93,38 +91,4 @@ abstract final class IncomingShareIntake {
         : IncomingShareItem(
             file: item.file, whatsAppProblem: item.whatsAppProblem);
   }
-
-  /// Chats de WhatsApp a los que se puede escribir, el más reciente primero.
-  ///
-  /// Sólo WhatsApp: Instagram y Messenger no aceptan adjuntos desde el ERP, y
-  /// un chat cerrado o rechazado no tiene compositor.
-  static List<Conversation> destinations(
-    List<Conversation> conversations, {
-    required String query,
-    required String Function(Conversation) titleFor,
-  }) {
-    final normalizedQuery = ConversationSearch.normalize(query);
-    final matches = conversations.where((conversation) {
-      if (!conversation.isWhatsApp) return false;
-      if (conversation.status != 'active' && conversation.status != 'pending') {
-        return false;
-      }
-      final hint = conversation.contextHint;
-      return ConversationSearch.matches(normalizedQuery, [
-        titleFor(conversation),
-        conversation.title,
-        conversation.creatorName,
-        hint?.phone,
-        hint?.supplierPhone,
-        hint?.customerLabel,
-        hint?.supplierLabel,
-        hint?.contactPersonName,
-      ]);
-    }).toList();
-    matches.sort((a, b) => _recency(b).compareTo(_recency(a)));
-    return matches;
-  }
-
-  static DateTime _recency(Conversation conversation) =>
-      conversation.lastMessageAt ?? conversation.updatedAt;
 }

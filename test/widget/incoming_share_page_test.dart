@@ -14,6 +14,7 @@ import 'package:vinabike_erp/modules/messaging/models/chat_attachment_draft.dart
 import 'package:vinabike_erp/modules/messaging/models/conversation.dart';
 import 'package:vinabike_erp/modules/messaging/models/message.dart';
 import 'package:vinabike_erp/modules/messaging/providers/chat_provider.dart';
+import 'package:vinabike_erp/modules/messaging/utils/share_destinations.dart';
 import 'package:vinabike_erp/modules/messaging/widgets/chat_window.dart';
 import 'package:vinabike_erp/modules/messaging/widgets/incoming_share_page.dart';
 import 'package:vinabike_erp/shared/services/incoming_share_service.dart';
@@ -73,7 +74,58 @@ class _Chats extends ChatProvider {
     required String conversationId,
     required bool visible,
   }) {}
+
+  /// Última vez que escribió cada contacto (la ventana de 24 h).
+  final Map<String, DateTime> inbound = {};
+
+  @override
+  Future<Map<String, ({String? phone, DateTime? lastInboundAt})>>
+      whatsAppBindingSummaries(Iterable<String> conversationIds) async => {
+            for (final id in conversationIds)
+              if (inbound[id] case final at?)
+                id: (phone: null, lastInboundAt: at),
+          };
+
+  /// Chats abiertos para un cliente, proveedor o número sin chat.
+  final List<Map<String, String?>> opened = [];
+  Object? openError;
+
+  @override
+  Future<String> openWhatsAppConversationForHandoff({
+    required String phoneNumber,
+    required String contactName,
+    String? customerId,
+    String? contextType,
+    String? contextId,
+  }) async {
+    if (openError case final error?) throw error;
+    opened.add({
+      'phone': phoneNumber,
+      'name': contactName,
+      'customerId': customerId,
+      'contextType': contextType,
+      'contextId': contextId,
+    });
+    return 'nuevo-${opened.length}';
+  }
 }
+
+const _directory = [
+  ShareDirectoryContact(
+    isSupplier: false,
+    id: 'c-ana',
+    name: 'Ana Muñoz',
+    phone: '+56 9 1111 2222',
+    searchTerms: ['12.345.678-5'],
+  ),
+  ShareDirectoryContact(
+    isSupplier: true,
+    id: 's-tekno',
+    name: 'TeknoBike',
+    phone: '+56 9 3333 4444',
+    detail: 'Diego Muñoz',
+  ),
+];
 
 void main() {
   const channel = MethodChannel('test/incoming_share_page');
@@ -148,11 +200,13 @@ void main() {
     Brightness brightness = Brightness.light,
     bool empty = false,
     MediaCompressor? compressor,
+    void Function(_Chats chats)? prepare,
   }) async {
     await tester.binding.setSurfaceSize(Size(width, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final chats = _Chats();
     if (empty) chats.chats.clear();
+    prepare?.call(chats);
     final toolbar = RightToolbarService();
     ocr = OcrFileHandoffService();
     final service = IncomingShareService(channel: channel, enabled: true);
@@ -185,6 +239,7 @@ void main() {
                               channel: compressorChannel,
                               videoSupported: false,
                             ),
+                        directoryLoader: (_) async => _directory,
                       ),
                     ),
                   ),
@@ -274,15 +329,166 @@ void main() {
   });
 
   testWidgets(
+      'cualquier cliente con teléfono aparece al buscar y se le abre un chat '
+      'sin escribirle', (tester) async {
+    final batch = await writeBatch(tester);
+    final (:chats, :toolbar) = await open(tester, batch);
+    // Sin buscar, los cientos de clientes sin chat no llenan la lista.
+    expect(find.text('Ana Muñoz'), findsNothing);
+    expect(find.text('Busca a tu cliente'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('incoming-share-search')),
+      'munoz',
+    );
+    await tester.pump();
+    expect(find.text('Clientes sin chat'), findsOneWidget);
+    await tester.runAsync(() async {
+      await tester
+          .tap(find.byKey(const ValueKey('incoming-share-customer-c-ana')));
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    });
+    await tester.pumpAndSettle();
+
+    expect(chats.opened.single, {
+      'phone': '+56 9 1111 2222',
+      'name': 'Ana Muñoz',
+      'customerId': 'c-ana',
+      'contextType': null,
+      'contextId': null,
+    });
+    expect(
+      chats.takeOfferedComposerAttachments('nuevo-1').map((a) => a.fileName),
+      ['foto.png', 'presupuesto.pdf'],
+    );
+    expect(
+      toolbar.takePendingConversation(ToolbarTool.messages)?.conversationId,
+      'nuevo-1',
+    );
+    chats.dispose();
+  });
+
+  testWidgets('«Proveedores» muestra también los que no tienen chat',
+      (tester) async {
+    final batch = await writeBatch(tester);
+    final (:chats, :toolbar) = await open(tester, batch);
+    await tester.tap(
+      find.byKey(const ValueKey('incoming-share-audience-suppliers')),
+    );
+    await tester.pump();
+    expect(find.text('José Pérez'), findsNothing);
+    expect(find.text('Derman'), findsOneWidget);
+    expect(find.text('Proveedores sin chat'), findsOneWidget);
+    expect(find.text('Diego Muñoz · +56 9 3333 4444'), findsOneWidget);
+
+    await tester.runAsync(() async {
+      await tester.tap(find.text('TeknoBike'));
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    });
+    await tester.pumpAndSettle();
+    expect(chats.opened.single['contextType'], 'supplier');
+    expect(chats.opened.single['contextId'], 's-tekno');
+    expect(toolbar.activeTool, ToolbarTool.supplierMessages);
+    chats.dispose();
+  });
+
+  testWidgets('un número que no es de nadie se ofrece como chat nuevo',
+      (tester) async {
+    final batch = await writeBatch(tester);
+    final (:chats, :toolbar) = await open(tester, batch);
+    await tester.enterText(
+      find.byKey(const ValueKey('incoming-share-search')),
+      '+56 9 5555 6666',
+    );
+    await tester.pump();
+    expect(find.text('Escribir a +56 9 5555 6666'), findsOneWidget);
+
+    // Un número que ya es de una ficha no se ofrece dos veces.
+    await tester.enterText(
+      find.byKey(const ValueKey('incoming-share-search')),
+      '11112222',
+    );
+    await tester.pump();
+    expect(find.byKey(const ValueKey('incoming-share-phone')), findsNothing);
+    expect(find.text('Ana Muñoz'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('incoming-share-search')),
+      '+56 9 5555 6666',
+    );
+    await tester.pump();
+    await tester.runAsync(() async {
+      await tester.tap(find.byKey(const ValueKey('incoming-share-phone')));
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    });
+    await tester.pumpAndSettle();
+    expect(chats.opened.single['phone'], '+56 9 5555 6666');
+    expect(chats.opened.single['customerId'], isNull);
+    expect(toolbar.activeTool, ToolbarTool.messages);
+    chats.dispose();
+  });
+
+  testWidgets('si no se puede abrir el chat nuevo, lo dice y deja elegir otro',
+      (tester) async {
+    final batch = await writeBatch(tester);
+    final (:chats, :toolbar) = await open(
+      tester,
+      batch,
+      prepare: (chats) => chats.openError = Exception('sin red'),
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('incoming-share-search')),
+      'ana',
+    );
+    await tester.pump();
+    await tester.runAsync(() async {
+      await tester.tap(find.text('Ana Muñoz'));
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    });
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('No se pudo abrir el chat con Ana Muñoz'),
+      findsOneWidget,
+    );
+    expect(toolbar.activeTool, isNull);
+    expect(find.text('Enviar por WhatsApp'), findsOneWidget);
+    chats.dispose();
+  });
+
+  testWidgets('el chat que escribió en las últimas 24 h lleva el punto',
+      (tester) async {
+    final semantics = tester.ensureSemantics();
+    final batch = await writeBatch(tester);
+    final (:chats, toolbar: _) = await open(
+      tester,
+      batch,
+      prepare: (chats) => chats.inbound
+        ..['cliente'] = DateTime.now().subtract(const Duration(hours: 2))
+        ..['proveedor'] = DateTime.now().subtract(const Duration(days: 3)),
+    );
+    await tester.pump();
+    // ListTile funde el rótulo del punto con el de la fila.
+    final dot = find.bySemanticsLabel(RegExp('Recibe archivos ahora'));
+    expect(dot, findsOneWidget);
+    expect(
+      tester.getSemantics(dot).label,
+      allOf(contains('José Pérez'), isNot(contains('Derman'))),
+    );
+    semantics.dispose();
+    chats.dispose();
+  });
+
+  testWidgets(
       'con la bandeja aún cargando espera antes de decir que no hay chats',
       (tester) async {
     final batch = await writeBatch(tester);
     final (:chats, toolbar: _) = await open(tester, batch, empty: true);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
-    expect(find.text('No hay chats de WhatsApp abiertos.'), findsNothing);
+    expect(find.text('No hay chats abiertos.'), findsNothing);
 
     await tester.pump(const Duration(seconds: 9));
-    expect(find.text('No hay chats de WhatsApp abiertos.'), findsOneWidget);
+    // Sin chats igual se puede buscar a cualquier cliente.
+    expect(find.text('Busca a tu cliente'), findsOneWidget);
     // Guardar en Archivos sigue disponible sin chats, en el menú ⋮.
     await tester.tap(find.byKey(const ValueKey('incoming-share-more')));
     await tester.pump(const Duration(milliseconds: 400));
@@ -555,6 +761,106 @@ void main() {
     // Nada se envió: el operador todavía tiene que apretar enviar.
     expect(find.byKey(const ValueKey('chat-message-send')), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
+    chats.dispose();
+  });
+
+  testWidgets(
+      'lo que no cabe en el compositor espera en la oferta, no se pierde',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(420, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final chats = _Chats();
+    final conversation = chats.chats.first;
+    await tester.pumpWidget(
+      ChangeNotifierProvider<ChatProvider>.value(
+        value: chats,
+        child: MaterialApp(
+          theme: AppTheme.resolve(
+            preset: AppearancePresets.vinabike,
+            brightness: Brightness.light,
+          ),
+          home: Scaffold(body: ChatWindow(conversation: conversation)),
+        ),
+      ),
+    );
+    await tester.pump();
+    PendingChatAttachment file(String name) => PendingChatAttachment(
+          id: name,
+          fileName: name,
+          bytes: Uint8List.fromList(base64Png),
+          extension: 'png',
+          isImage: true,
+        );
+    chats.offerComposerAttachments(
+        conversation.id, [for (var i = 1; i <= 7; i++) file('foto$i.png')]);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    chats.offerComposerAttachments(
+        conversation.id, [file('ocho.png'), file('nueve.png')]);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+    // Lo que no entró vuelve a la oferta y se revisa en el cuadro siguiente.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+
+    // El noveno no se pierde: espera en la oferta y entra al liberarse
+    // espacio.
+    expect(find.textContaining('Uno espera y entra cuando envíes estos'),
+        findsOneWidget);
+    expect(chats.offeredComposerAttachmentCount(conversation.id), 1);
+    expect(
+        chats.takeOfferedComposerAttachments(conversation.id).single.fileName,
+        'nueve.png');
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 11));
+    chats.dispose();
+  });
+
+  testWidgets(
+      'sin respuesta en 24 h, enviar archivos ofrece el saludo y los deja en '
+      'el compositor', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(420, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final chats = _Chats();
+    final conversation = chats.chats.first;
+    await tester.pumpWidget(
+      ChangeNotifierProvider<ChatProvider>.value(
+        value: chats,
+        child: MaterialApp(
+          theme: AppTheme.resolve(
+            preset: AppearancePresets.vinabike,
+            brightness: Brightness.light,
+          ),
+          home: Scaffold(body: ChatWindow(conversation: conversation)),
+        ),
+      ),
+    );
+    await tester.pump();
+    chats.offerComposerAttachments(conversation.id, [
+      PendingChatAttachment(
+        id: 'shared-1',
+        fileName: 'foto.png',
+        bytes: Uint8List.fromList(base64Png),
+        extension: 'png',
+        isImage: true,
+      ),
+    ]);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+
+    // Nadie escribió en este chat: Meta rechazaría el archivo.
+    await tester.tap(find.byKey(const ValueKey('chat-message-send')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 350));
+
+    expect(
+      find.textContaining('WhatsApp no deja mandar archivos'),
+      findsOneWidget,
+    );
+    expect(find.text('foto.png'), findsOneWidget,
+        reason: 'El archivo espera en el compositor; no se subió.');
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(seconds: 9));
     chats.dispose();
   });
 }

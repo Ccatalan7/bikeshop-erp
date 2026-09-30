@@ -15,20 +15,22 @@ import '../../../shared/widgets/vb_notice.dart';
 import '../../storage/models/app_stored_file.dart';
 import '../../storage/services/app_file_storage_service.dart';
 import '../models/chat_attachment_draft.dart';
-import '../models/conversation.dart';
 import '../providers/chat_provider.dart';
 import '../services/messaging_attachment_service.dart';
 import '../utils/conversation_channel_presentation.dart';
 import '../utils/incoming_share_intake.dart';
-import 'counterparty_avatar_image.dart';
+import '../utils/share_destinations.dart';
+import 'share_destination_sliver.dart';
 
 /// Lo que se abre al elegir «WhatsApp ERP» o «Viñabike ERP» en el menú
 /// Compartir del teléfono.
 ///
-/// «WhatsApp ERP» va directo a los chats, con «Guardar en Archivos» en el menú
-/// ⋮. «Viñabike ERP» abre primero el menú de destinos: WhatsApp, Archivos, un
-/// gasto o una factura de compra (los dos últimos por el mismo OCR que usa
-/// Archivos, [OcrFileHandoffService]). **Elegir el chat no envía.** Los archivos quedan en
+/// «WhatsApp ERP» va directo a los destinos —cualquier chat, cliente,
+/// proveedor, compañero o número ([ShareDestinationSliver])—, con «Guardar en
+/// Archivos» en el menú ⋮. «Viñabike ERP» abre primero el menú de destinos:
+/// WhatsApp, Archivos, un gasto o una factura de compra (los dos últimos por
+/// el mismo OCR que usa Archivos, [OcrFileHandoffService]). **Elegir el chat
+/// no envía.** Los archivos quedan en
 /// el compositor de ese chat, donde el operador los revisa, les escribe un
 /// texto y aprieta enviar; es la misma regla del reenvío y de todo borrador
 /// preparado fuera del chat.
@@ -41,11 +43,13 @@ class IncomingSharePage extends StatefulWidget {
     required this.batch,
     required this.service,
     this.compressor,
+    this.directoryLoader,
   });
 
   final IncomingShareBatch batch;
   final IncomingShareService service;
   final MediaCompressor? compressor;
+  final ShareDirectoryLoader? directoryLoader;
 
   @override
   State<IncomingSharePage> createState() => _IncomingSharePageState();
@@ -66,13 +70,10 @@ class _IncomingSharePageState extends State<IncomingSharePage> {
   /// Índice → avance 0–100 mientras se comprime.
   final Map<int, int> _progress = {};
   final Set<int> _compressed = {};
-  final TextEditingController _search = TextEditingController();
   final Set<int> _savedToFiles = {};
   String? _activeVideoId;
   late bool _choosingChat = widget.batch.target == IncomingShareTarget.whatsApp;
   bool _compressionStarted = false;
-  Timer? _warmup;
-  bool _warming = false;
   bool _busy = false;
   bool _handedOff = false;
   String? _error;
@@ -87,18 +88,6 @@ class _IncomingSharePageState extends State<IncomingSharePage> {
   @override
   void initState() {
     super.initState();
-    _search.addListener(() => setState(() {}));
-    final chat = context.read<ChatProvider>();
-    // Si la app se abrió desde el menú Compartir, la bandeja puede no haber
-    // cargado —ni tener la sesión lista— todavía. La lista aparece apenas
-    // llega; mientras tanto se espera un rato antes de afirmar que no hay chats.
-    if (chat.conversations.isEmpty) {
-      _warming = true;
-      _warmup = Timer(const Duration(seconds: 8), () {
-        if (mounted) setState(() => _warming = false);
-      });
-      unawaited(chat.loadConversations());
-    }
     if (_choosingChat) _startCompression();
   }
 
@@ -176,10 +165,8 @@ class _IncomingSharePageState extends State<IncomingSharePage> {
 
   @override
   void dispose() {
-    _warmup?.cancel();
     final video = _activeVideoId;
     if (video != null) unawaited(_compressor.cancel(video));
-    _search.dispose();
     // Cerrar sin elegir descarta la copia del teléfono; un envío o un guardado
     // ya leyeron los bytes que necesitaban.
     unawaited(widget.service.release(widget.batch));
@@ -252,7 +239,7 @@ class _IncomingSharePageState extends State<IncomingSharePage> {
     }
   }
 
-  Future<void> _sendTo(Conversation conversation) async {
+  Future<void> _sendTo(ShareDestination destination) async {
     if (_busy || _handedOff || _compressing) return;
     final sendable = _sendableIndexes;
     if (sendable.isEmpty) return;
@@ -260,9 +247,11 @@ class _IncomingSharePageState extends State<IncomingSharePage> {
       _busy = true;
       _error = null;
     });
+    final chat = context.read<ChatProvider>();
+    final toolbar = context.read<RightToolbarService>();
+    final attachments = <PendingChatAttachment>[];
     try {
       final stamp = DateTime.now().microsecondsSinceEpoch;
-      final attachments = <PendingChatAttachment>[];
       for (final index in sendable) {
         final item = _items[index];
         final bytes = _compressedBytes[index] ??
@@ -277,27 +266,35 @@ class _IncomingSharePageState extends State<IncomingSharePage> {
           ),
         );
       }
-      if (!mounted) return;
-      final chat = context.read<ChatProvider>();
-      final toolbar = context.read<RightToolbarService>();
-      chat.offerComposerAttachments(conversation.id, attachments);
-      _handedOff = true;
-      Navigator.of(context).pop();
-      // La misma bandeja que abre una notificación del teléfono: el rail
-      // derecho en escritorio, pantalla completa en compacto.
-      toolbar.openConversation(
-        tool: conversation.isSupplierConversation
-            ? ToolbarTool.supplierMessages
-            : ToolbarTool.messages,
-        conversationId: conversation.id,
-      );
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _busy = false;
         _error = 'No se pudieron leer los archivos. Vuelve a compartirlos.';
       });
+      return;
     }
+    final String conversationId;
+    try {
+      // Un cliente o proveedor sin chat lo abre acá, sin escribirle nada.
+      conversationId = await resolveShareConversation(chat, destination);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = error is StateError
+            ? error.message.toString()
+            : 'No se pudo abrir el chat con '
+                '${shareDestinationLabel(destination)}. Revisa la conexión e '
+                'intenta de nuevo.';
+      });
+      return;
+    }
+    if (!mounted) return;
+    chat.offerComposerAttachments(conversationId, attachments);
+    _handedOff = true;
+    Navigator.of(context).pop();
+    openShareConversation(toolbar, destination, conversationId);
   }
 
   /// Guarda los originales, sin comprimir: la biblioteca no tiene el tope de
@@ -368,12 +365,6 @@ class _IncomingSharePageState extends State<IncomingSharePage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
-    final chat = context.watch<ChatProvider>();
-    final destinations = IncomingShareIntake.destinations(
-      chat.conversations,
-      query: _search.text,
-      titleFor: chat.getChatTitle,
-    );
     final rejected = [
       for (var index = 0; index < _items.length; index++)
         if (!_items[index].canSendByWhatsApp && !_progress.containsKey(index))
@@ -512,30 +503,14 @@ class _IncomingSharePageState extends State<IncomingSharePage> {
                         ),
                       ),
                     if (canSend || _compressing) ...[
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                          child: TextField(
-                            key: const ValueKey('incoming-share-search'),
-                            controller: _search,
-                            enabled: !_busy,
-                            textInputAction: TextInputAction.search,
-                            decoration: InputDecoration(
-                              hintText: 'Buscar cliente, proveedor o teléfono',
-                              prefixIcon: const Icon(Icons.search),
-                              isDense: true,
-                              filled: true,
-                              fillColor: scheme.surfaceContainerHighest
-                                  .withValues(alpha: 0.6),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: BorderSide.none,
-                              ),
-                            ),
-                          ),
-                        ),
+                      // Mientras se comprime no se puede elegir: el chat
+                      // recibiría el original que WhatsApp rechaza.
+                      ShareDestinationSliver(
+                        keyPrefix: 'incoming-share',
+                        enabled: !_busy && !_compressing,
+                        directoryLoader: widget.directoryLoader,
+                        onChoose: _sendTo,
                       ),
-                      _conversationSliver(context, chat, destinations),
                     ] else
                       SliverToBoxAdapter(
                         child: Padding(
@@ -621,7 +596,7 @@ class _IncomingSharePageState extends State<IncomingSharePage> {
                 'whatsapp',
               ),
               title: 'Enviar por WhatsApp',
-              subtitle: 'A un chat de cliente o proveedor',
+              subtitle: 'A cualquier cliente, proveedor o a tu equipo',
               enabled: !_busy,
               onTap: _chooseWhatsApp,
             ),
@@ -672,53 +647,6 @@ class _IncomingSharePageState extends State<IncomingSharePage> {
     }
     return '$name: ${formatShareSize(_originals[index].file.sizeBytes)} → '
         '${formatShareSize(_items[index].file.sizeBytes)}';
-  }
-
-  Widget _conversationSliver(
-    BuildContext context,
-    ChatProvider chat,
-    List<Conversation> destinations,
-  ) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    if (destinations.isEmpty) {
-      final loading = _warming && chat.conversations.isEmpty;
-      return SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-          child: loading
-              ? const Center(
-                  child: SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                )
-              : Text(
-                  _search.text.trim().isEmpty
-                      ? 'No hay chats de WhatsApp abiertos.'
-                      : 'Ningún chat coincide con «${_search.text.trim()}».',
-                  style: theme.textTheme.bodyMedium
-                      ?.copyWith(color: scheme.onSurfaceVariant),
-                ),
-        ),
-      );
-    }
-    // Mientras se comprime no se puede elegir: el chat recibiría el original
-    // que WhatsApp rechaza.
-    final enabled = !_busy && !_compressing;
-    return SliverList.builder(
-      itemCount: destinations.length,
-      itemBuilder: (context, index) {
-        final conversation = destinations[index];
-        return _ConversationDestinationTile(
-          conversation: conversation,
-          title: chat.getChatTitle(conversation),
-          enabled: enabled,
-          onTap: () => _sendTo(conversation),
-        );
-      },
-    );
   }
 }
 
@@ -1018,145 +946,5 @@ class _DocumentGlyph extends StatelessWidget {
         ),
       ],
     );
-  }
-}
-
-class _ConversationDestinationTile extends StatelessWidget {
-  const _ConversationDestinationTile({
-    required this.conversation,
-    required this.title,
-    required this.enabled,
-    required this.onTap,
-  });
-
-  final Conversation conversation;
-  final String title;
-  final bool enabled;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final hint = conversation.contextHint;
-    final phone = (conversation.isSupplierConversation
-            ? hint?.supplierPhone ?? hint?.phone
-            : hint?.phone)
-        ?.trim();
-    final counterparty =
-        conversation.isSupplierConversation ? 'Proveedor' : 'Cliente';
-    final subtitle = [
-      counterparty,
-      if (phone != null && phone.isNotEmpty && phone != title) phone,
-    ].join(' · ');
-    final when = _formatWhen(conversation.lastMessageAt);
-
-    return ListTile(
-      key: ValueKey('incoming-share-chat-${conversation.id}'),
-      enabled: enabled,
-      onTap: onTap,
-      minTileHeight: 64,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-      leading: _Avatar(conversation: conversation, title: title),
-      title: Text(
-        title,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
-      ),
-      subtitle: Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
-      trailing: when == null
-          ? null
-          : Text(
-              when,
-              style: theme.textTheme.labelSmall
-                  ?.copyWith(color: scheme.onSurfaceVariant),
-            ),
-    );
-  }
-
-  static String? _formatWhen(DateTime? value) {
-    if (value == null) return null;
-    final local = value.toLocal();
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final day = DateTime(local.year, local.month, local.day);
-    final days = today.difference(day).inDays;
-    if (days == 0) {
-      return '${local.hour.toString().padLeft(2, '0')}:'
-          '${local.minute.toString().padLeft(2, '0')}';
-    }
-    if (days == 1) return 'ayer';
-    const months = [
-      'ene',
-      'feb',
-      'mar',
-      'abr',
-      'may',
-      'jun',
-      'jul',
-      'ago',
-      'sep',
-      'oct',
-      'nov',
-      'dic',
-    ];
-    return '${local.day} ${months[local.month - 1]}';
-  }
-}
-
-class _Avatar extends StatelessWidget {
-  const _Avatar({required this.conversation, required this.title});
-
-  final Conversation conversation;
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    final accent = ConversationChannelPresentation.accent(conversation);
-    final initials = _initials(title.split(' · ').first);
-    // El verde de WhatsApp es oscuro: sobre el fondo oscuro las iniciales no
-    // se leían. En oscuro se aclara la tinta, no el color del canal.
-    final ink = Theme.of(context).brightness == Brightness.dark
-        ? HSLColor.fromColor(accent).withLightness(0.72).toColor()
-        : accent;
-    final fallback = CircleAvatar(
-      radius: 22,
-      backgroundColor: accent.withValues(alpha: 0.12),
-      child: Text(
-        initials,
-        style: TextStyle(
-          color: ink,
-          fontWeight: FontWeight.w700,
-          fontSize: 14,
-        ),
-      ),
-    );
-    final url = conversation.contextHint?.counterpartyImageUrl;
-    return SizedBox(
-      width: 44,
-      height: 44,
-      child: url == null || url.isEmpty
-          ? fallback
-          : CounterpartyAvatarImage(
-              url: url,
-              size: 44,
-              isMark: conversation.isSupplierConversation,
-              backdrop: accent.withValues(alpha: 0.10),
-              fallback: fallback,
-            ),
-    );
-  }
-
-  static String _initials(String value) {
-    final trimmed = value.trim();
-    if (trimmed.isEmpty) return '?';
-    if (RegExp(r'^\+?[0-9 ]+$').hasMatch(trimmed)) return '#';
-    final words = trimmed.split(RegExp(r'\s+'));
-    if (words.length == 1) {
-      return words.first.characters.take(2).toString().toUpperCase();
-    }
-    return '${words.first.characters.first}${words.last.characters.first}'
-        .toUpperCase();
   }
 }

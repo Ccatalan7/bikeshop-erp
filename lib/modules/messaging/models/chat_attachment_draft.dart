@@ -24,6 +24,10 @@ class PendingChatAttachment {
   /// Length of a voice note, shown on its bubble before the player knows it.
   final int? durationSeconds;
 
+  /// La leyenda propia de este archivo —la de una foto reenviada entre
+  /// varias—. Sin ella, el texto del compositor va sólo en el primer archivo.
+  final String? caption;
+
   const PendingChatAttachment({
     required this.id,
     required this.fileName,
@@ -39,6 +43,7 @@ class PendingChatAttachment {
     this.purchaseInvoiceId,
     this.purchaseInvoiceNumber,
     this.durationSeconds,
+    this.caption,
   });
 
   PendingChatAttachment withReply(MessageReply? value) => PendingChatAttachment(
@@ -56,6 +61,7 @@ class PendingChatAttachment {
         purchaseInvoiceId: purchaseInvoiceId,
         purchaseInvoiceNumber: purchaseInvoiceNumber,
         durationSeconds: durationSeconds,
+        caption: caption,
       );
 
   PendingChatAttachment markOutcomeUnknown(
@@ -76,6 +82,7 @@ class PendingChatAttachment {
         purchaseInvoiceId: purchaseInvoiceId,
         purchaseInvoiceNumber: purchaseInvoiceNumber,
         durationSeconds: durationSeconds,
+        caption: caption,
       );
 
   /// Replace the file with the freshly saved document, keeping the row's place
@@ -95,6 +102,25 @@ class PendingChatAttachment {
         isImage: isImage,
         purchaseInvoiceId: purchaseInvoiceId,
         purchaseInvoiceNumber: invoiceNumber,
+        caption: caption,
+      );
+
+  PendingChatAttachment withCaption(String? value) => PendingChatAttachment(
+        id: id,
+        fileName: fileName,
+        bytes: bytes,
+        extension: extension,
+        isImage: isImage,
+        outcomeUnknown: outcomeUnknown,
+        reservation: reservation,
+        retryUpload: retryUpload,
+        canRetrySafely: canRetrySafely,
+        replayCaption: replayCaption,
+        reply: reply,
+        purchaseInvoiceId: purchaseInvoiceId,
+        purchaseInvoiceNumber: purchaseInvoiceNumber,
+        durationSeconds: durationSeconds,
+        caption: value,
       );
 
   PendingChatAttachment resetForNewAttempt() => PendingChatAttachment(
@@ -107,6 +133,7 @@ class PendingChatAttachment {
         purchaseInvoiceId: purchaseInvoiceId,
         purchaseInvoiceNumber: purchaseInvoiceNumber,
         durationSeconds: durationSeconds,
+        caption: caption,
       );
 }
 
@@ -145,4 +172,17 @@ class AttachmentDispatchResult {
   final bool retryUpload;
   final bool canRetrySafely;
   final String? replayCaption;
+}
+
+/// La leyenda con que sale el archivo [index] de un envío: la suya, si la
+/// trae (una foto reenviada), y en el primero además el texto del compositor.
+String? pendingAttachmentCaption({
+  required int index,
+  required PendingChatAttachment attachment,
+  required String composerText,
+}) {
+  final own = attachment.caption?.trim() ?? '';
+  final composer = index == 0 ? composerText.trim() : '';
+  if (own.isEmpty) return composer.isEmpty ? null : composer;
+  return composer.isEmpty ? own : '$own\n\n$composer';
 }

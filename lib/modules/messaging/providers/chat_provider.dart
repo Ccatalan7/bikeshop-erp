@@ -119,6 +119,7 @@ class ChatProvider extends ChangeNotifier {
   final Map<String, List<PendingChatAttachment>> _composerAttachments = {};
   final Map<String, List<PendingChatAttachment>> _offeredComposerAttachments =
       {};
+  final Map<String, String> _offeredComposerText = {};
   final Map<String, MetaConversationTransport> _metaConversationTransports = {};
   final Set<String> _metaOutboundReceiptSnapshots = {};
   final Set<String> _metaConversationTransportSnapshots = {};
@@ -510,6 +511,7 @@ class ChatProvider extends ChangeNotifier {
     _composerDrafts.clear();
     _composerAttachments.clear();
     _offeredComposerAttachments.clear();
+    _offeredComposerText.clear();
     _sessionEpoch += 1;
     _sessionReady = false;
     _sessionUserId = nextUserId;
@@ -1259,8 +1261,9 @@ class ChatProvider extends ChangeNotifier {
     }
   }
 
-  /// Archivos que llegan desde fuera del chat —hoy, el menú «Compartir» del
-  /// teléfono— para el compositor de [conversationId].
+  /// Archivos —y, al reenviar, el texto de los mensajes— que llegan desde
+  /// fuera del chat para el compositor de [conversationId]: el menú
+  /// «Compartir» del teléfono o «Reenviar» desde otro chat.
   ///
   /// **Por qué no van por [saveComposerAttachments].** Si ese chat ya está
   /// abierto, su `ChatWindow` no vuelve a leer el borrador guardado y al
@@ -1269,24 +1272,91 @@ class ChatProvider extends ChangeNotifier {
   /// chat nunca envía: el operador revisa, escribe y aprieta enviar.
   void offerComposerAttachments(
     String conversationId,
-    List<PendingChatAttachment> attachments,
-  ) {
-    if (_disposed || attachments.isEmpty) return;
-    _offeredComposerAttachments[conversationId] = [
-      ...?_offeredComposerAttachments[conversationId],
-      ...attachments,
-    ];
+    List<PendingChatAttachment> attachments, {
+    String? text,
+  }) {
+    final offeredText = text?.trim() ?? '';
+    if (_disposed || (attachments.isEmpty && offeredText.isEmpty)) return;
+    if (attachments.isNotEmpty) {
+      _offeredComposerAttachments[conversationId] = [
+        ...?_offeredComposerAttachments[conversationId],
+        ...attachments,
+      ];
+    }
+    if (offeredText.isNotEmpty) {
+      final previous = _offeredComposerText[conversationId];
+      _offeredComposerText[conversationId] =
+          previous == null ? offeredText : '$previous\n\n$offeredText';
+    }
     notifyListeners();
   }
 
   bool hasOfferedComposerAttachments(String conversationId) =>
-      _offeredComposerAttachments.containsKey(conversationId);
+      _offeredComposerAttachments.containsKey(conversationId) ||
+      _offeredComposerText.containsKey(conversationId);
 
   /// Lo entrega UNA vez.
   List<PendingChatAttachment> takeOfferedComposerAttachments(
     String conversationId,
   ) =>
       _offeredComposerAttachments.remove(conversationId) ?? const [];
+
+  /// Lo entrega UNA vez.
+  String? takeOfferedComposerText(String conversationId) =>
+      _offeredComposerText.remove(conversationId);
+
+  /// Abre —o encuentra— el chat de WhatsApp con un teléfono sin escribir nada
+  /// ni cambiar el chat activo: el destino de «Compartir» o «Reenviar» a un
+  /// cliente o proveedor que todavía no tiene chat. Devuelve el id **sólo si
+  /// ya está en [conversations]**: la bandeja dibuja únicamente lo que tiene
+  /// ahí, y `loadConversations` se traga sus errores. Un chat creado que no
+  /// llegó a la lista es un error para quien llama, que conserva los archivos.
+  Future<String> openWhatsAppConversationForHandoff({
+    required String phoneNumber,
+    required String contactName,
+    String? customerId,
+    String? contextType,
+    String? contextId,
+  }) async {
+    final operationEpoch = _sessionEpoch;
+    final conversationId = await _service.openWhatsAppSupportConversation(
+      phoneNumber: phoneNumber,
+      contactName: contactName,
+      customerId: customerId,
+      contextType: contextType,
+      contextId: contextId,
+    );
+    for (var attempt = 0; attempt < 2; attempt++) {
+      if (!_isCurrentSession(operationEpoch)) {
+        throw StateError('La sesión cambió. No se abrió el chat.');
+      }
+      if (_conversations.any((c) => c.id == conversationId)) {
+        return conversationId;
+      }
+      await loadConversations(refreshContextHints: true);
+    }
+    if (!_isCurrentSession(operationEpoch)) {
+      throw StateError('La sesión cambió. No se abrió el chat.');
+    }
+    if (_conversations.any((c) => c.id == conversationId)) {
+      return conversationId;
+    }
+    throw StateError(
+      'El chat quedó creado, pero la bandeja no lo cargó. Revisa la conexión '
+      'e intenta de nuevo.',
+    );
+  }
+
+  /// Por chat de WhatsApp: el número del hilo y cuándo escribió por última
+  /// vez ese contacto (la ventana de 24 h en la que Meta deja mandar archivos
+  /// sin plantilla).
+  Future<Map<String, ({String? phone, DateTime? lastInboundAt})>>
+      whatsAppBindingSummaries(Iterable<String> conversationIds) =>
+          _service.getWhatsAppBindingSummaries(conversationIds);
+
+  /// Cuántos archivos esperan en la oferta de [conversationId].
+  int offeredComposerAttachmentCount(String conversationId) =>
+      _offeredComposerAttachments[conversationId]?.length ?? 0;
 
   ChatComposerDraft? getComposerDraft(String conversationId) =>
       _composerDrafts[conversationId];

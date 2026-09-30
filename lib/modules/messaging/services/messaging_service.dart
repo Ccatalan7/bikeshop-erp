@@ -1950,6 +1950,45 @@ class MessagingService {
     // Trigger updates conversation timestamp automatically via DB trigger
   }
 
+  /// Por conversación de WhatsApp: el número al que escribe el hilo (el del
+  /// vínculo, que puede no ser el de la ficha si el contacto cambió de
+  /// teléfono) y la última vez que ese contacto escribió, que abre la ventana
+  /// de 24 h en la que Meta acepta archivos y texto libre. Una conversación
+  /// sin vínculo no aparece.
+  Future<Map<String, ({String? phone, DateTime? lastInboundAt})>>
+      getWhatsAppBindingSummaries(Iterable<String> conversationIds) async {
+    final ids = conversationIds.toSet().toList();
+    if (ids.isEmpty) return const {};
+    final tenantId = await TenantService().getTenantId();
+    if (tenantId == null || tenantId.isEmpty) {
+      // Sesión todavía sin taller: un error, para que quien pregunta
+      // reintente en vez de creer que ningún chat tiene vínculo.
+      throw StateError('Sin taller en la sesión.');
+    }
+    final rows = await _client
+        .from('whatsapp_conversation_bindings')
+        .select('conversation_id, external_phone_number, last_inbound_at')
+        .eq('tenant_id', tenantId)
+        .inFilter('conversation_id', ids) as List<dynamic>;
+    final result = <String, ({String? phone, DateTime? lastInboundAt})>{};
+    for (final row in rows) {
+      final id = row['conversation_id']?.toString();
+      if (id == null) continue;
+      final at = DateTime.tryParse(row['last_inbound_at']?.toString() ?? '');
+      final phone = _text(row['external_phone_number']);
+      final previous = result[id];
+      final previousAt = previous?.lastInboundAt;
+      result[id] = (
+        phone: phone ?? previous?.phone,
+        lastInboundAt:
+            previousAt != null && (at == null || previousAt.isAfter(at))
+                ? previousAt
+                : at,
+      );
+    }
+    return result;
+  }
+
   /// Create or resolve a WhatsApp-backed support conversation without sending.
   ///
   /// This is the handoff point for ERP actions that need to contact a customer
