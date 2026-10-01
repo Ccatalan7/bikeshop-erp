@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "workshop",
+  "id": "workshop-row-hover",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "web"
+  ],
+  "title": "Filas del trabajo sin destellos grises",
+  "summary": "Al mover el mouse entre las líneas de un trabajo, el fondo y los campos se desvanecen sin pasar por gris.",
+  "items": [
+    "Las filas de productos y servicios del trabajo dejan de pasar por gris al mover el mouse entre ellas."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/bikeshop/widgets/job_line_row.dart",
+      "sha256": "731b818415d8740a29a81b93230ed505c6222ae82ab22658d7d2f80caa00d8ec"
+    }
+  ]
+}

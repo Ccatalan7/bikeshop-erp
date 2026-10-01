@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "general",
+  "id": "debug-synthetic-hover",
+  "scope": "debug",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web",
+    "ios"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "lib/dev/agent_input.dart",
+      "sha256": "46fab30d5d9ca2baebd185db0675eb1b575ff1ec1192895ce7da870aa110d752"
+    },
+    {
+      "path": "scripts/dev/app_control.sh",
+      "sha256": "21d02c17f478bb2362259af8a9e237d2fcbc472372b167d5decdad0eb5d6bcec"
+    }
+  ]
+}
