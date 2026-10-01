@@ -1,6 +1,6 @@
 # Bike Workshop Master Schema
 
-Last updated: 2026-09-30
+Last updated: 2026-10-01
 Status: Living architecture document
 Scope: Bike encyclopedia, bike profile, diagnosis, workshop items, service wizard, supply needs and commitments, bike memory kernel, sync pipeline, and visible bike history
 
@@ -12,7 +12,7 @@ condiciones de cierre y siguiente acción. Desde la corrección del dueño del
 decidir un criterio pendiente o un defecto concreto. Este Master conserva el
 alcance y la evidencia; los prototipos no cierran sus objetivos.
 
-**Estado vigente, 2026-09-30:** recorridos completos C1/C4 de escritorio y
+**Antecedente, 2026-09-30:** recorridos completos C1/C4 de escritorio y
 Android aceptados con readback/retirada=1. El backend completo de recuperación
 170000/171000/172000 y archivos180000/181000 está APPLIED con readbacks y
 recibos exactos: captura71 tablas y conserva datos vivos. Seis fotos heredadas
@@ -26,8 +26,33 @@ heredados de `vinabike-assets` (8 fotos de trabajos, 8 PDF de presupuestos)
 dejaron de ser públicos. Las 6 fotos atribuidas se leen de su copia privada;
 las 2 HEIC y los 8 PDF sin dueño quedaron en la cuarentena privada de bytes
 heredados con recibo. Readback 0 públicos/6 copias/10 cuarentenas, URL
-pública 16/16 «no existe». El cliente se publica desde este corte (C5).
+pública 16/16 «no existe». Cliente publicado el 2026-10-01 (`e0474159`,
+`2706b1f8`): web ERP comprobada en vivo leyendo la copia privada, macOS y
+Android 1.0.3+76 y tienda/portal publicados en el mismo `2706b1f8`.
 Los checkpoints anteriores conservan su fecha; `PLANS.md` manda para la acción.
+
+**Revisión independiente de Codex, 2026-10-01 05:00 UTC:** catálogo público 0,
+6 copias/10 recibos de cuarentena y URL pública 16/16 ausente. Los 16 destinos
+privados se descargaron de nuevo para comparar tamaño/hash con los recibos:
+16/16 conformes, 13.953.499 bytes. `main` local/remoto, ERP web, manifiesto
+macOS 1.0.3/258 (firma válida) y evidencia Android 1.0.3+76 coinciden en
+`2706b1f8`, con CI completo verde. A05:00 UTC tienda/portal aún servía `0cd98f00`;
+la publicación excepcional de Codex terminó a05:35:06 UTC y cerró C5.
+
+**Cierre C1–C5, 2026-10-01 05:35 UTC:** `vinabike.cl` y
+`vinabike-store.web.app` sirven `2706b1f83cb5f8dcefbd9d4fe7a62ca03cdda436`,
+versión Firebase `87a5e692862548fc`. Export limpio de6503 fuentes/modos
+verificados contra Git, calificación exacta36813275195 ya verde, build de
+`main_store.dart`, presupuesto y guardas de revisión SEO/catálogo conformes.
+Evidencia `manual-shell`, `dirty:false`; release/manifest y41 hashes por
+origen iguales al bundle82/82. Chrome comprobó portada, acceso del portal y
+ficha pública real. Los recorridos privados, teléfono y claro/oscuro conservan
+la aceptación del mismo código descrita abajo. Recibo y logs en
+`.tmp/e2e/store-publication-2706b1f8-20261001/`. No se inventó un `request_id`
+ni se instaló el conducto durable ausente para entregar este corte; se usó
+la ruta excepcional de sólo tienda documentada en el runbook de releases.
+ERP permanece en el mismo commit. Los defectos de UI registrados y el nuevo
+encargo de reparación del buscador son tareas separadas de este cierre.
 
 **Production checkpoint, 2026-09-29:** 16 forward migrations from
 `20260928050000` through `20260929040000` (including `20260928052000`) are
@@ -8038,7 +8063,9 @@ Until then, this document must continue to record both the intended direction an
 ### Aceptación del corte local, 2026-09-30
 
 Los siete criterios anteriores están acreditados para las fuentes actuales.
-Esto no acredita C5 ni cierra la exposición de originales públicos de C3.
+Por sí sola esta aceptación local no acredita C5 ni cierra la exposición de C3;
+ambas condiciones se cerraron el 2026-10-01 con el retiro y la publicación
+independientemente verificados en el encabezado vigente de este documento.
 El recorrido completo web105836 y Android095345 pasó con Auth/Storage reales,
 readback1 y retirada1, 30/32 frames claros/oscuros. El modelo Trek del recorrido
 es una fixture; la lectura productiva independiente encontró cuatro modelos

@@ -1818,7 +1818,9 @@ class TaskService extends ChangeNotifier {
   }
 
   /// Trabajos vinculables para el compositor: exactamente el alcance Activos
-  /// de la tabla de Trabajos, ordenado por recencia.
+  /// de la tabla de Trabajos, ordenado por recencia. En la app de depuración
+  /// se suman los trabajos de prueba activos, marcados como tales
+  /// ([kWorkshopTestJobsSelectable]).
   Future<List<TaskLinkableJob>> fetchLinkableJobs({int limit = 120}) async {
     if (limit <= 0) return const [];
     final lease = await _requireAuthorityLease();
@@ -1884,18 +1886,32 @@ class TaskService extends ChangeNotifier {
         final customerMap = customer is Map ? customer : null;
         final bikeMap = bike is Map ? bike : null;
         final job = MechanicJob.fromJson(map);
+        final customerName = customerMap?['name']?.toString();
+        final bikeBrand = bikeMap?['brand']?.toString();
+        final bikeModel = bikeMap?['model']?.toString();
+        final bikeSerialNumber = bikeMap?['serial_number']?.toString();
         if (!isMechanicJobOperationallyActive(
           job,
           invoice: invoice,
-          customerName: customerMap?['name']?.toString(),
-          bikeBrand: bikeMap?['brand']?.toString(),
-          bikeModel: bikeMap?['model']?.toString(),
-          bikeSerialNumber: bikeMap?['serial_number']?.toString(),
+          customerName: customerName,
+          bikeBrand: bikeBrand,
+          bikeModel: bikeModel,
+          bikeSerialNumber: bikeSerialNumber,
+          includeTestFixtures: kWorkshopTestJobsSelectable,
         )) {
           continue;
         }
 
-        activeJobs.add(TaskLinkableJob.fromJson(map));
+        activeJobs.add(TaskLinkableJob.fromJson(
+          map,
+          isTestJob: mechanicJobMatchesTestFixture(
+            job,
+            customerName: customerName,
+            bikeBrand: bikeBrand,
+            bikeModel: bikeModel,
+            bikeSerialNumber: bikeSerialNumber,
+          ),
+        ));
         if (activeJobs.length == limit) break;
       }
       if (page.length < pageSize) break;
@@ -2175,10 +2191,16 @@ class TaskLinkableJob {
     this.workFinished = false,
     this.componentLabel,
     this.componentDetail,
+    this.isTestJob = false,
   });
 
   final String id;
   final String jobNumber;
+
+  /// Un trabajo de prueba (cliente «Test…», «[test fixture…]»). Sólo llega
+  /// en la app de depuración; la fila lo marca para no confundirlo con uno
+  /// real.
+  final bool isTestJob;
   final String? status;
   final String? customerName;
   final String? clientRequest;
@@ -2223,7 +2245,8 @@ class TaskLinkableJob {
   /// «Terminado»): puede quedar por cobrar o retirar, pero no por hacer.
   final bool workFinished;
 
-  factory TaskLinkableJob.fromJson(Map<String, dynamic> json) {
+  factory TaskLinkableJob.fromJson(Map<String, dynamic> json,
+      {bool isTestJob = false}) {
     final customer = json['customers'];
     final bike = json['bike'];
     final bikeLabel = bike is Map
@@ -2288,6 +2311,7 @@ class TaskLinkableJob {
       workFinished: workFinished,
       componentLabel: componentLabel,
       componentDetail: componentDetail,
+      isTestJob: isTestJob,
     );
   }
 }

@@ -148,6 +148,34 @@ void main() {
     );
   });
 
+  test('con includeTestFixtures una prueba activa se ofrece y la cancelada no',
+      () {
+    expect(
+      isMechanicJobOperationallyActive(
+        bikeJob(),
+        customerName: 'Test Taller',
+        includeTestFixtures: true,
+      ),
+      isTrue,
+    );
+    expect(
+      isMechanicJobOperationallyActive(
+        bikeJob(status: JobStatus.cancelado),
+        customerName: 'Test Taller',
+        includeTestFixtures: true,
+      ),
+      isFalse,
+    );
+    expect(
+      isMechanicJobOperationallyActive(
+        bikeJob(deletedAt: DateTime.utc(2026, 8, 27)),
+        customerName: 'Test Taller',
+        includeTestFixtures: true,
+      ),
+      isFalse,
+    );
+  });
+
   test('selector activo excluye entregados pagados pero conserva impagos', () {
     final delivered = bikeJob(
       status: JobStatus.entregado,

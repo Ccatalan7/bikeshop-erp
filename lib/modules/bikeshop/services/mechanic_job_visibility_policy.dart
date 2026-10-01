@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
+
 import '../models/bikeshop_models.dart';
 import '../../sales/models/sales_models.dart';
 import 'mechanic_job_sale_ui_policy.dart';
@@ -8,12 +10,19 @@ bool isMechanicJobCurrentlyDelivered(MechanicJob job) {
       job.customStatus?.code.trim().toLowerCase() == 'entregado';
 }
 
+/// Los trabajos de prueba se ofrecen como activos al elegir un trabajo sólo
+/// en la app de depuración, para probar contra ellos sin tocar trabajos
+/// reales; la app publicada nunca los ofrece (dueño, 2026-10-01).
+const bool kWorkshopTestJobsSelectable = kDebugMode;
+
 /// Canonical eligibility for every UI that promises "Trabajos activos".
 ///
 /// This deliberately matches the default Activos scope of the Jobs table:
 /// completed work remains operational until delivery, and a delivered job
 /// remains active while its invoice is still unpaid. Historical, cancelled,
 /// closed quotation, paid sale and completed warranty records do not qualify.
+/// A test fixture never qualifies unless [includeTestFixtures]; then it is
+/// judged by the same rules as real work.
 bool isMechanicJobOperationallyActive(
   MechanicJob job, {
   Invoice? invoice,
@@ -22,16 +31,18 @@ bool isMechanicJobOperationallyActive(
   String? bikeBrand,
   String? bikeModel,
   String? bikeSerialNumber,
+  bool includeTestFixtures = false,
 }) {
   if (job.deletedAt != null) return false;
-  if (mechanicJobMatchesTestFixture(
-    job,
-    customerName: customerName,
-    bikeName: bikeName,
-    bikeBrand: bikeBrand,
-    bikeModel: bikeModel,
-    bikeSerialNumber: bikeSerialNumber,
-  )) {
+  if (!includeTestFixtures &&
+      mechanicJobMatchesTestFixture(
+        job,
+        customerName: customerName,
+        bikeName: bikeName,
+        bikeBrand: bikeBrand,
+        bikeModel: bikeModel,
+        bikeSerialNumber: bikeSerialNumber,
+      )) {
     return false;
   }
 

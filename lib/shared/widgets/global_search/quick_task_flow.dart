@@ -964,7 +964,12 @@ class _QuickTaskFlowState extends State<QuickTaskFlow> {
   }
 
   List<Widget> _jobBadges(TaskLinkableJob job) {
-    final badges = <Widget>[];
+    final badges = <Widget>[
+      // Sólo en la app de depuración llega un trabajo de prueba.
+      if (job.isTestJob)
+        const VbStatusBadge(
+            label: 'Prueba', tone: VbStatusTone.warning, dense: true),
+    ];
     final quotation = quickTaskQuotationSignal(job);
     if (quotation != null) {
       badges.add(VbStatusBadge(

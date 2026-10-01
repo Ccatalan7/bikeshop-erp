@@ -13,7 +13,10 @@ import 'package:vinabike_erp/shared/widgets/global_search/quick_task_flow.dart';
 const _me = 'u-me';
 
 class _FakeTaskService extends ChangeNotifier implements TaskService {
+  _FakeTaskService({this.extraJobs = const []});
+
   final List<Map<String, Object?>> created = [];
+  final List<TaskLinkableJob> extraJobs;
 
   @override
   String? get currentUserId => _me;
@@ -83,6 +86,7 @@ class _FakeTaskService extends ChangeNotifier implements TaskService {
           hasInvoice: true,
           receivedAt: DateTime(2026, 9, 12),
         ),
+        ...extraJobs,
       ];
 
   @override
@@ -165,11 +169,12 @@ class _FakeTaskService extends ChangeNotifier implements TaskService {
 Future<({_FakeTaskService service, List<String> calls})> _pump(
   WidgetTester tester, {
   String initialQuery = '',
+  List<TaskLinkableJob> extraJobs = const [],
 }) async {
   tester.view.physicalSize = const Size(900, 900);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
-  final service = _FakeTaskService();
+  final service = _FakeTaskService(extraJobs: extraJobs);
   addTearDown(service.dispose);
   final calls = <String>[];
   await tester.pumpWidget(
@@ -342,6 +347,38 @@ void main() {
     expect(created['linkedJobId'], isNull);
     expect(created['title'], 'Ordenar el banco');
     expect(find.text('Tarea creada para Braulio Muñoz'), findsOneWidget);
+  });
+
+  testWidgets('un trabajo de prueba se ofrece marcado «Prueba» y se elige',
+      (tester) async {
+    await _pump(tester, extraJobs: [
+      TaskLinkableJob(
+        id: 'jt',
+        jobNumber: 'PG-00600',
+        status: 'EN_CURSO',
+        customerName: 'Test Taller',
+        clientRequest: '[TEST] Revisión',
+        statusLabel: 'En curso',
+        bikeLabel: 'Test MTB',
+        receivedAt: DateTime(2026, 9, 30),
+        isTestJob: true,
+      ),
+    ]);
+    await tester.tap(find.text('Vicente Díaz'));
+    await tester.pumpAndSettle();
+
+    // Un solo «Prueba», el del trabajo de prueba; los reales no lo llevan.
+    expect(find.text('#PG-00600 · Test MTB'), findsOneWidget);
+    expect(find.text('Prueba'), findsOneWidget);
+    await tester.enterText(
+        find.byKey(const ValueKey('quick-task-query')), 'test');
+    await tester.pumpAndSettle();
+    expect(find.text('#PG-00575 · Trek Marlin 7'), findsNothing);
+    await tester.tap(find.text('#PG-00600 · Test MTB'));
+    await tester.pumpAndSettle();
+    // Quedó elegido: su miga aparece y la pregunta pasa a qué hacer.
+    expect(
+        find.byKey(const ValueKey('quick-task-crumb-subject')), findsOneWidget);
   });
 
   testWidgets('a una cuenta sin ficha de trabajador no se le ofrecen trabajos',

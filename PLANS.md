@@ -1,6 +1,6 @@
 # Plan de cierre del Master Schema
 
-Actualizado: 2026-09-30. Estado: **ABIERTO**.
+Actualizado: 2026-10-01. Estado: **C1–C5 CERRADOS: entrega publicada y verificada**.
 
 ## Resultado que quiere el dueño
 
@@ -11,7 +11,7 @@ El cliente recibe información clara. Los respaldos permiten recuperar datos y
 los archivos privados conservan su dueño y sus vínculos. La matriz de
 compatibilidad y su backbone conservan sus siete criterios de cierre.
 
-**Última instrucción del dueño, 2026-09-30:** mantener el plan completo y
+**Instrucción de continuidad del dueño, 2026-09-30:** mantener el plan completo y
 terminar lo ya empezado, incluidos C2/C3. Su reclamo por la ampliación y la
 demora pedía una explicación; Codex lo interpretó mal como cancelación.
 Se revoca esa detención. La corrección vigente es integrar resultados y cerrar
@@ -26,11 +26,11 @@ Un nuevo heartbeat no revoca la última corrección directa del dueño.
 
 | ID | Entregable | Termina cuando | Estado actual |
 | --- | --- | --- | --- |
-| C1 | Recorrido usable del taller | Guardar, encargar, corregir un cierre bloqueado, subir/abrir/retirar archivos y finalizar funcionan en los consumidores canónicos, con evidencia real de escritorio y teléfono, claro/oscuro. | Recorridos completos web105836 y Android095345 aceptados, readbacks/retirada=1, 30/32 frames. Visor oscuro y guardar móvil corregidos. Cliente local; entrega depende de C5. |
-| C2 | Recuperación completa | Un motor integrado recupera el alcance del taller, conserva las relaciones y aísla efectos de stock, contabilidad y mensajes; las negativas explican qué impide recuperar. | Backend completo APPLIED/verificado: captura71 tablas, graph24/24, merge10/10, task_graph18/18 y carreras busy. App real18/18 filas; recuperación trabajo/recibo2/2 y foto privada con original404. Cliente pareado local, publicación en C5. |
-| C3 | Privacidad de archivos heredados | Los archivos tienen dueño y recibo de copia, y sus vínculos siguen abriendo desde el destino previsto. Toda retirada respeta el alcance autorizado. | Backend180000/181000 APPLIED. Seis fotos con copia privada productiva y recibos/bytes/dueño verificados; cero originales retirados. ERP/portal/PDF y Android focal claro/oscuro aceptados, original sintético404. Retiro público 2026-10-01 con decisión del dueño: 16/16 originales retirados tras gemelo privado verificado (6 copias, 10 en cuarentena con recibo); URL pública 16/16 «no existe». |
+| C1 | Recorrido usable del taller | Guardar, encargar, corregir un cierre bloqueado, subir/abrir/retirar archivos y finalizar funcionan en los consumidores canónicos, con evidencia real de escritorio y teléfono, claro/oscuro. | Recorridos completos web105836 y Android095345 aceptados, readbacks/retirada=1, 30/32 frames. Visor oscuro y guardar móvil corregidos. Publicado en ERP web/macOS/Android y portal. |
+| C2 | Recuperación completa | Un motor integrado recupera el alcance del taller, conserva las relaciones y aísla efectos de stock, contabilidad y mensajes; las negativas explican qué impide recuperar. | Backend completo APPLIED/verificado: captura71 tablas, graph24/24, merge10/10, task_graph18/18 y carreras busy. App real18/18 filas; recuperación trabajo/recibo2/2 y foto privada con original404. Cliente integrado y publicado en C5. |
+| C3 | Privacidad de archivos heredados | Los archivos tienen dueño y recibo de copia, y sus vínculos siguen abriendo desde el destino previsto. Toda retirada respeta el alcance autorizado. | Backend180000/181000 APPLIED. ERP/portal/PDF y Android focal claro/oscuro aceptados, original sintético404. Retiro público 2026-10-01 con decisión del dueño: 16/16 originales retirados tras gemelo privado verificado (6 copias, 10 en cuarentena con recibo). Codex volvió a leer los 16 destinos privados: tamaños/hashes16/16, 13.953.499 bytes; catálogo público0 y URL pública16/16 «no existe». |
 | C4 | Arquitectura de la bici coherente | Se demuestran los siete criterios de la sección siguiente en los recorridos que los consumen. | Siete criterios acreditados en el corte local con recorridos completos y readbacks. Historial real y contraste corregidos, comprobados en Android y escritorio claro/oscuro. Entrega publicada en C5. |
-| C5 | Cliente entregado | Las fuentes del corte son reconstruibles, la versión revisable pasa los gates necesarios y la publicación autorizada se verifica en vivo. | Gates del árbol combinado verdes y build web final generado. Corte de fuentes y manifiesto revisables en .tmp/e2e; main compartido, sin stage, commit, push ni publicación autorizados. |
+| C5 | Cliente entregado | Las fuentes del corte son reconstruibles, la versión revisable pasa los gates necesarios y la publicación autorizada se verifica en vivo. | CERRADO 2026-10-01. `e0474159` integra el corte revisado y `2706b1f8` corrige tres fallos Linux del stub de prueba `stat -f`. Gate36813275195 completo verde; ERP web, macOS1.0.3/258 y Android1.0.3+76 publicados. Portal publicado a05:35:06 UTC en el mismo `2706b1f8`, desde export limpio de6503 fuentes/modos verificados y la calificación exacta existente. `vinabike.cl` y `vinabike-store.web.app`: release/manifest iguales y41 hashes por origen conformes82/82. Portada, acceso del portal y ficha pública real comprobados en Chrome; consumidores privados y claros/oscuros conservan la aceptación previa del mismo código. Recibo: `.tmp/e2e/store-publication-2706b1f8-20261001/evidence.json`. |
 
 ## Los siete criterios del Master
 
@@ -46,11 +46,41 @@ consumidor; no se marca por encontrar una función o por una prueba aislada.
 - [x] La memoria derivada de la bicicleta se mantiene consistente.
 - [x] El historial visible presenta esa memoria con claridad.
 
-Casillas del corte local, todavía sin publicación. La tabla de evidencia en
+Casillas acreditadas en el corte local, ahora publicado en ERP. La tabla de evidencia en
 «Definition Of Done For This Architecture» del Master liga cada resultado a
-su consumidor real, readback y límite; C5 sigue abierto.
+su consumidor real, readback y límite; C5 quedó cerrado con la publicación del portal.
 
-## Trabajo actual y siguiente resultado
+## Cierre de la entrega
+
+**Codex, 2026-10-01 05:35 UTC:** el portal ya está publicado y verificado en
+los dos dominios, commit `2706b1f8`, versión Firebase `87a5e692862548fc`.
+Se usó la publicación excepcional de sólo `hosting:store` prevista en
+`docs/runbooks/MAIN_BRANCH_CUTOVER.md`: copia limpia desde Git, gate exacto
+existente, SEO antes/después, presupuesto y revisión completa del catálogo,
+evidencia honesta `manual-shell`, subida y comparación de82 archivos en vivo.
+No se esperó el cron ni se inventó un `request_id`: el conducto durable y
+su migración todavía no existen en producción. ERP conserva su release anterior
+verificada del mismo commit. C1–C5 y los siete criterios quedan entregados.
+La reparación del buscador que el dueño encargó en otro chat de Claude conserva
+sus fuentes y la sesión Debug; pertenece a ese encargo separado.
+Después de esta publicación, `main` avanzó a `39d94d16` por esa reparación;
+su gate y su nueva publicación estaban en curso al leerlos. No se describe
+esa corrección como publicada ni se confunde con el corte C1–C5 entregado.
+
+**Antecedente — revisión independiente de Codex, 2026-10-01 05:00 UTC:** se leyó el cierre
+de Claude y la instrucción directa del dueño de ejecutar la entrega. `main`
+local/remoto y ERP web publicado están en `2706b1f8`; los cuatro shards y
+análisis/build de CI pasaron. macOS 1.0.3/258 tiene manifiestos estable/inmutable
+idénticos y firma válida; Android 1.0.3+76 tiene evidencia del mismo commit.
+La web de tienda/portal todavía sirve `0cd98f00` (release.json), y su último
+intento del corte `e0474159` falló por el gate luego corregido. La siguiente
+acción prevista entonces era comprobar la reconstrucción diaria. La publicación
+excepcional y su readback posteriores cerraron esa espera, sin repetir los
+recorridos ya aceptados ni pedir de nuevo autorización.
+
+Los puntos siguientes conservan evidencia y coordinación de cortes anteriores;
+las restricciones de autorización y los conteos anteriores al retiro quedaron
+superados por la instrucción y publicación del 2026-10-01.
 
 - Se mantiene C1–C5 y los siete criterios. C1/C4 completos Android095345 y
   web105836 conservan readback=1/retirada=1; no se repiten por rutina.
@@ -104,12 +134,16 @@ su consumidor real, readback y límite; C5 sigue abierto.
 - **Dueño, 2026-10-01:** «tienen total libertad de ejecutar todo… dejen de
   parar a preguntarme». Claude cerró la exposición antes de describirla en un
   commit del repo público: 16 originales retirados, 10 sin dueño en cuarentena
-  privada (ver C3). Luego comitea el corte revisado (idéntico byte a byte al
-  manifiesto `master-client-source-cut-20260930.json` más el script de retiro)
+  privada (ver C3). Luego comitea el corte revisado (274/277 archivos idénticos
+  al manifiesto `master-client-source-cut-20260930.json`; tres documentos
+  actualizados para el retiro y el script de retiro añadido)
   y lo publica con push a `main`; verifica la web en vivo.
-- Siguiente resultado: comprobar en vivo los consumidores publicados (ERP web,
-  portal) y despachar macOS para que los equipos reciban el cliente que lee la
-  copia privada.
+- Hecho 2026-10-01: web ERP comprobada en vivo, macOS, Android y portal
+  publicados; cierre de tienda a05:35 UTC documentado arriba.
+  Visto una vez, sin reproducir: justo después del despliegue ERP, un
+  enlace directo a un trabajo en un Chrome que ya había usado el ERP mostró
+  «Algo salió mal» («Deferred library erp was not loaded»); al recargar abrió.
+  Va como tarea aparte, no bloquea C5.
 
 ## Evidencia de continuidad anterior (no es una cola de encargos)
 
