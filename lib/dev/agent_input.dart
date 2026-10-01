@@ -164,6 +164,28 @@ void registerAgentInputExtensions() {
     });
   });
 
+  // Un mouse sintético que pasa por encima sin apretar: hover de filas,
+  // menús que se arman al entrar. Va de (x, y) a (x2, y2) en `steps` pasos
+  // de `ms` milisegundos y se queda ahí; `leave=1` lo retira al final. El
+  // cursor real del dueño no se mueve.
+  developer.registerExtension('ext.vinabike.input.hover', (_, params) async {
+    final from = _offset(params);
+    if (from == null) return _err('x and y are required');
+    final toX = double.tryParse(params['x2'] ?? '');
+    final toY = double.tryParse(params['y2'] ?? '');
+    final to = toX == null || toY == null ? from : Offset(toX, toY);
+    await _hover(
+      from,
+      to,
+      steps: int.tryParse(params['steps'] ?? '') ?? 1,
+      stepMs: int.tryParse(params['ms'] ?? '') ?? 16,
+      leave: params['leave'] == '1',
+    );
+    return _ok({
+      'hovered': [from.dx, from.dy, to.dx, to.dy]
+    });
+  });
+
   developer.registerExtension('ext.vinabike.input.drag', (_, params) async {
     final from = _offset(params);
     final toX = double.tryParse(params['x2'] ?? '');
@@ -634,6 +656,48 @@ Future<void> _tap(Offset at) async {
   _dispatch(PointerUpEvent(pointer: id, position: at, viewId: _viewId));
   // Let the tap settle before the caller screenshots it.
   await Future<void>.delayed(const Duration(milliseconds: 60));
+}
+
+/// El mouse sintético del hover: un dispositivo propio, para no pisar el
+/// estado del mouse real.
+const int _hoverDevice = 9301;
+bool _hoverDeviceAdded = false;
+
+Future<void> _hover(
+  Offset from,
+  Offset to, {
+  required int steps,
+  required int stepMs,
+  required bool leave,
+}) async {
+  if (!_hoverDeviceAdded) {
+    _dispatch(PointerAddedEvent(
+      kind: PointerDeviceKind.mouse,
+      device: _hoverDevice,
+      position: from,
+      viewId: _viewId,
+    ));
+    _hoverDeviceAdded = true;
+  }
+  final count = steps < 1 ? 1 : steps;
+  for (var i = 0; i <= count; i++) {
+    _dispatch(PointerHoverEvent(
+      kind: PointerDeviceKind.mouse,
+      device: _hoverDevice,
+      position: Offset.lerp(from, to, i / count)!,
+      viewId: _viewId,
+    ));
+    await Future<void>.delayed(Duration(milliseconds: stepMs));
+  }
+  if (leave) {
+    _dispatch(PointerRemovedEvent(
+      kind: PointerDeviceKind.mouse,
+      device: _hoverDevice,
+      position: to,
+      viewId: _viewId,
+    ));
+    _hoverDeviceAdded = false;
+  }
 }
 
 Future<void> _drag(Offset from, Offset to, {int steps = 12}) async {

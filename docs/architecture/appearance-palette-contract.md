@@ -100,6 +100,17 @@ on-accent foreground, `surface*` the layer ladder, `onSurface(Variant)` ink.
    `onContainer` de texto, que el resolver garantiza legibles en los dos
    temas. Un frame sólo oscuro no prueba nada de esto.
 
+9. **Apagar un color es su mismo color con alfa 0, nunca
+   `Colors.transparent`.** `Colors.transparent` es negro transparente: una
+   animación de blanco hacia él pasa por gris a mitad de camino, y su borde
+   por gris oscuro. En la tabla de líneas del trabajo cada fila que el mouse
+   soltaba dejaba las cajas de cantidad y precio grises unos 100 ms, y un
+   barrido rápido se veía como varias filas encendidas en un gris raro que
+   parpadeaba (dueño, 2026-10-01). Se anima `rol` ↔ `rol.withValues(alpha: 0)`,
+   y el fondo de la fila y sus campos con el mismo tiempo y curva
+   (`JobLineRow.hoverFade`). Guarda: `test/widget/job_line_row_test.dart`,
+   «al pasar el mouse la fila se anima sin pasar por gris».
+
 ## Verification gates (what "supports appearance" means)
 
 - Rendered matrix over **all presets × light/dark** for the surface family

@@ -6,6 +6,8 @@
 #   app_control.sh click X Y [wait]      # tap in FRAME coordinates
 #   app_control.sh scroll X Y [lines]    # scroll wheel at that point
 #   app_control.sh drag X Y X2 Y2        # press, move, release
+#   app_control.sh hover X Y [X2 Y2]     # synthetic mouse passes over, no press
+#                                        # (APP_CONTROL_HOVER_LEAVE=1 removes it after)
 #   app_control.sh read [--filter text]   # semantics tree, optionally filtered
 #   app_control.sh find --key|--label X  # live, hittable targets
 #   app_control.sh tap  --key|--label X  # resolve and tap one live target
@@ -120,6 +122,15 @@ try:
         call('ext.vinabike.input.scroll', isolateId=isolate,
              x=logical_x, y=logical_y,
              dy=-float(a if a is not None else -5) * 40)
+    elif verb == 'hover':
+        # Synthetic mouse that never presses: from (x, y) to (a, b) if given.
+        params = dict(isolateId=isolate, x=logical_x, y=logical_y,
+                      steps=24, ms=16)
+        if a is not None and b is not None:
+            params.update(x2=float(a) / dpr, y2=float(b) / dpr)
+        if __import__('os').environ.get('APP_CONTROL_HOVER_LEAVE') == '1':
+            params['leave'] = 1           # the synthetic mouse leaves the app
+        call('ext.vinabike.input.hover', **params)
     elif verb == 'drag':
         if a is None or b is None:
             sys.exit(1)
@@ -573,6 +584,13 @@ EOF
       exit 1
     fi
     echo "archivo elegido en la app debug: $file_path"
+    ;;
+
+  hover)
+    [ $# -ge 3 ] || { echo "uso: app_control.sh hover X Y [X2 Y2]" >&2; exit 2; }
+    # Only the in-app channel: a real cursor move would take the owner's mouse.
+    vm_input "$@" || { echo "hover necesita la app debug con ext.vinabike.input.hover (hot restart)" >&2; exit 1; }
+    sleep "${APP_CONTROL_SETTLE:-0.4}"
     ;;
 
   click|scroll|drag)

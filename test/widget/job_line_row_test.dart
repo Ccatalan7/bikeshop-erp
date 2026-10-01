@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/modules/bikeshop/widgets/job_line_row.dart';
@@ -94,6 +95,64 @@ void main() {
     expect(tester.getSize(find.byKey(const ValueKey('menu'))).width,
         greaterThanOrEqualTo(36),
         reason: 'con la tabla en su ancho mínimo el menú no se recorta');
+  });
+
+  // Barrido con el mouse (dueño, 2026-10-01): las filas que se soltaban
+  // dejaban cajas grises porque el recuadro se apagaba hacia
+  // `Colors.transparent` (negro). A mitad de camino, entrando y saliendo,
+  // todo color pintado es el de su rol, sólo con menos alfa.
+  testWidgets('al pasar el mouse la fila se anima sin pasar por gris',
+      (tester) async {
+    tester.view.physicalSize = const Size(
+      (JobLineRow.fixedWidth + 300) * 2,
+      600,
+    );
+    tester.view.devicePixelRatio = 2;
+    addTearDown(tester.view.reset);
+    final theme = ThemeData(useMaterial3: true);
+    final scheme = theme.colorScheme;
+    await tester.pumpWidget(MaterialApp(
+      theme: theme,
+      home: Scaffold(body: _row(mobile: false, selected: [])),
+    ));
+    final allowed = {
+      scheme.surface,
+      scheme.surfaceContainerLow,
+      scheme.outlineVariant,
+    }.map((color) => color.withValues(alpha: 1).toARGB32()).toSet();
+
+    void expectNoGrey(String moment) {
+      final painted = <Color>[];
+      for (final box in tester.widgetList<DecoratedBox>(find.descendant(
+        of: find.byType(JobLineRow),
+        matching: find.byType(DecoratedBox),
+      ))) {
+        final decoration = box.decoration;
+        if (decoration is! BoxDecoration) continue;
+        if (decoration.color case final color?) painted.add(color);
+        final border = decoration.border;
+        if (border is Border) painted.add(border.top.color);
+      }
+      for (final color in painted.where((color) => color.a > 0)) {
+        expect(allowed, contains(color.withValues(alpha: 1).toARGB32()),
+            reason: '$moment: $color no es un color del tema');
+      }
+    }
+
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    addTearDown(mouse.removePointer);
+    await mouse.addPointer(location: Offset.zero);
+    await tester.pump();
+    await mouse.moveTo(tester.getCenter(find.text('Enrayado + Centrado')));
+    await tester.pump();
+    await tester.pump(JobLineRow.hoverFade ~/ 2);
+    expectNoGrey('entrando');
+    await tester.pumpAndSettle();
+    await mouse.moveTo(const Offset(1, 590));
+    await tester.pump();
+    await tester.pump(JobLineRow.hoverFade ~/ 2);
+    expectNoGrey('saliendo');
+    await tester.pumpAndSettle();
   });
 
   testWidgets('una línea protegida no ofrece acciones ni un menú vacío',

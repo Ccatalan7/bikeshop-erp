@@ -70,6 +70,10 @@ class JobLineRow extends StatefulWidget {
       8;
   static const double thumbSize = 40;
 
+  /// Lo que tardan la fila y sus campos en encenderse o apagarse al pasar
+  /// el mouse.
+  static const Duration hoverFade = Duration(milliseconds: 160);
+
   @override
   State<JobLineRow> createState() => _JobLineRowState();
 }
@@ -275,11 +279,15 @@ class _JobLineRowState extends State<JobLineRow> {
 
   Widget _buildRow(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    // Fila y campos se encienden y se apagan juntos (mismo tiempo y curva) y
+    // cada color se desvanece hacia sí mismo transparente: hacia
+    // `Colors.transparent`, que es negro, la mitad del camino era gris y el
+    // barrido dejaba cajas grises en las filas que el mouse iba soltando
+    // (dueño, 2026-10-01).
+    final hoverFill = scheme.surfaceContainerLow;
     final background = widget.highlighted
         ? scheme.primaryContainer.withValues(alpha: 0.22)
-        : (_hovered
-            ? scheme.surfaceContainerHighest.withValues(alpha: 0.35)
-            : Colors.transparent);
+        : (_hovered ? hoverFill : hoverFill.withValues(alpha: 0));
     final row = Padding(
       padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
       child: Row(
@@ -324,7 +332,9 @@ class _JobLineRowState extends State<JobLineRow> {
       child: MouseRegion(
         onEnter: (_) => setState(() => _hovered = true),
         onExit: (_) => setState(() => _hovered = false),
-        child: DecoratedBox(
+        child: AnimatedContainer(
+          duration: JobLineRow.hoverFade,
+          curve: Curves.easeOutCubic,
           decoration: BoxDecoration(
             color: background,
             border: Border(
@@ -432,20 +442,23 @@ class _FieldShellState extends State<_FieldShell> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final visible = widget.boxed || _focused;
+    // Apagado es el mismo color con alfa 0, nunca `Colors.transparent`: así
+    // el recuadro aparece y se va sin pasar por gris.
+    final fill = scheme.surface;
+    final edge = _focused ? scheme.primary : scheme.outlineVariant;
     return Focus(
       canRequestFocus: false,
       skipTraversal: true,
       onFocusChange: (focused) => setState(() => _focused = focused),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 120),
+        duration: JobLineRow.hoverFade,
+        curve: Curves.easeOutCubic,
         height: 40,
         decoration: BoxDecoration(
-          color: visible ? scheme.surface : Colors.transparent,
+          color: visible ? fill : fill.withValues(alpha: 0),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: _focused
-                ? scheme.primary
-                : (visible ? scheme.outlineVariant : Colors.transparent),
+            color: visible ? edge : edge.withValues(alpha: 0),
           ),
         ),
         alignment: Alignment.centerRight,

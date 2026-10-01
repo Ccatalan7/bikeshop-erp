@@ -324,10 +324,23 @@ scripts/dev/app_control.sh geometry          # pid · window · frame size
 scripts/dev/app_control.sh click X Y         # current `shot` only; never reuse
 scripts/dev/app_control.sh scroll X Y -5
 scripts/dev/app_control.sh drag X Y X2 Y2
+scripts/dev/app_control.sh hover X Y [X2 Y2] # pasa un mouse sin apretar
 scripts/dev/app_control.sh type "texto"
 scripts/dev/app_control.sh key 36            # 36 return · 53 esc · 48 tab
 scripts/dev/app_control.sh choose-file /ruta/absoluta/cartola.png
 ```
+
+### `hover`: un mouse sintético dentro de la app (2026-10-01)
+
+Un defecto de hover (filas que se encienden, menús que se arman al entrar)
+no se veía sin mover el cursor real del dueño, que suele estar usando el
+Mac. `hover` manda un mouse propio (`ext.vinabike.input.hover`, dispositivo
+9301) por el canal de depuración: recorre de `X Y` a `X2 Y2` en 24 pasos de
+16 ms y **se queda donde terminó**, así que la fila sigue encendida en el
+`shot` siguiente; `APP_CONTROL_HOVER_LEAVE=1` lo retira. Con
+`APP_CONTROL_SETTLE=0` el `shot` cae justo al terminar el barrido, que es
+cuando se ve lo que deja una animación de salida. La extensión se registra
+al arrancar: después de agregarla hace falta un hot restart, no un reload.
 
 ### `type` y `key` se caen solos; `enter-text` no (2026-08-21)
 
