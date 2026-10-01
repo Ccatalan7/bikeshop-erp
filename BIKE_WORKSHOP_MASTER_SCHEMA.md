@@ -54,13 +54,13 @@ la ruta excepcional de sólo tienda documentada en el runbook de releases.
 ERP permanece en el mismo commit. Los defectos de UI registrados y el nuevo
 encargo de reparación del buscador son tareas separadas de este cierre.
 
-**Una línea es de una bici, 2026-10-01 (local, sin desplegar; el dueño dijo
-«no publiques hasta que yo te lo diga»):** `20261001200000` hace cumplir en la
-base que en un trabajo de una sola bici toda línea es de ella, corrige cómo la
-factura → el trabajo encuentra la línea que continúa cada ítem, y pasa a su
-bici las 352 líneas de General de 126 trabajos de una bici. El detalle, la
-causa y la evidencia están en «Una línea es de una bici», después de
-«Asignar a <bici>».
+**General y la factura, 2026-10-01 (local, sin desplegar; el dueño dijo «no
+publiques hasta que yo te lo diga»):** General es a propósito, también con una
+sola bici: lo que el cliente compra aparte (dueño). `20261001200000` arregla la
+factura → el trabajo, que borraba la línea de la bici y la recreaba en
+General, y pasa a su bici los servicios y componentes que quedaron ahí (328
+líneas de 122 trabajos); los accesorios se quedan. El detalle está en
+«General y la factura», después de «Asignar a <bici>».
 
 **Production checkpoint, 2026-09-29:** 16 forward migrations from
 `20260928050000` through `20260929040000` (including `20260928052000`) are
@@ -4453,10 +4453,7 @@ the retained audit row.
   This default is never retroactively applied when loading an existing
   billable service. Converting a service budget reuses every persisted
   `mechanic_job_bikes` relationship, preserves every existing line attribution
-  and leaves intentional `job_bike_id = NULL` General lines as job-wide work
-  (**corregido 2026-10-01** para trabajos de una sola bici: ahí no hay
-  General; la base le da la línea a esa bici —`20261001200000`, «Una línea es
-  de una bici»—; con varias bicis, General sigue siendo de ninguna).
+  and leaves intentional `job_bike_id = NULL` General lines as job-wide work.
   It never asks the worker to replace the received bicycle; only standalone
   Cotización chooses its approved outcome and may assign previously unscoped
   lines to the bicycle selected during conversion.
@@ -4498,13 +4495,9 @@ the retained audit row.
   and without rewriting `mechanic_job_items.job_bike_id`. The 2026-08-15
   correction removed the former conversion-time NULL-line assignment because
   its cost-rollup trigger attempted to mutate the frozen bike graph and because
-  NULL is a valid General scope, not missing data. **Corregido 2026-10-01:**
-  NULL es General válido con varias bicis o ninguna; con una sola bici era un
-  dato sin dueño que el resto del sistema ya trataba como de ella
-  (`job_line_bike_internal`, la memoria de la bici) y que la ficha mostraba
-  aparte. La regla nueva no toca el grafo congelado: una cotización decidida
-  ya rechaza toda escritura de líneas, y al convertirla el trabajo pasa a
-  `service` antes de que la factura escriba las suyas.
+  NULL is a valid General scope, not missing data. **Confirmado por el dueño
+  el 2026-10-01:** General vale también con una sola bici —lo que el cliente
+  compra aparte, que no es de la bici—; ver «General y la factura».
 - a `sale/none` row means a real product sale tracked operationally in the same
   workshop table without any bicycle or loose component received. It has no
   diagnosis or service-warranty window and never contributes to bicycle or
@@ -7483,96 +7476,76 @@ desplegar).**
     la vista sigue a la línea). En la app, sin guardar: un trabajo nuevo con la Monk y la Totem
     de un cliente real y dos líneas en General, en escritorio y en 430 px;
     PG-00187 (pagado) muestra sus líneas de General con candado y sin menú.
-- **Una línea es de una bici** (dueño, 2026-10-01; local, sin desplegar). El
-  dueño vio PG-00142 —una sola bici— con sus cinco productos en General y lo
-  leyó como un error del personal. No lo era: General tenía dos significados,
-  «venta aparte o sin asignar» y «sin dueño porque quien escribió no sabía la
-  bici», y el segundo lo producían tres escritores. Producción, lectura: 352
-  líneas de General en 126 trabajos de una bici (PG-00142 es de enero, antes
-  de las líneas por bici); desde marzo, todas las nuevas nacieron después de
-  su factura, de a varias en el mismo segundo.
-  - **Causa 1, la factura → el trabajo**
-    (`sync_invoice_items_to_job_workshop_internal`): un ítem sin `id` sólo
-    se emparejaba con líneas de General (`job_bike_id is not distinct from`
-    la bici del ítem, que no traía) y sólo si había una igual. La línea de la
+- **General y la factura** (dueño, 2026-10-01; local, sin desplegar). El
+  dueño vio PG-00142 —una sola bici— con sus cinco productos en General y
+  pidió revisar la arquitectura. **General es a propósito, también con una
+  sola bici**: lo que el cliente compra aparte en el mismo trabajo (un casco,
+  un bombín, luces), que no es de la bici (dueño, corrigiendo una primera
+  versión que obligaba toda línea de un trabajo de una bici a su bici). Lo
+  que estaba mal era que trabajo de la bici caía en General sin que nadie lo
+  eligiera. Producción, lectura: en los trabajos de una bici, General tenía
+  352 líneas —214 servicios, 13 ítems de la categoría «Servicio», 103
+  componentes y 22 accesorios, mantenimiento o sin categoría—; PG-00142 es de
+  enero, antes de las líneas por bici, y desde marzo todas las nuevas nacieron
+  después de su factura, de a varias en el mismo segundo.
+  - **Causa, la factura → el trabajo**
+    (`sync_invoice_items_to_job_workshop_internal`): un ítem sin `id` sólo se
+    emparejaba con líneas de General (`job_bike_id is not distinct from` la
+    bici del ítem, que no traía) y sólo si había una igual. La línea de la
     bici quedaba sin pareja: se **borraba** —y con ella sus tareas, por
     `mechanic_job_tasks.parent_item_id ON DELETE CASCADE`— y volvía como
     línea nueva de General con otro id (PG-00309: cuatro líneas recreadas el
-    2026-07-03, factura del 1 de abril con dos ítems sin `id`). Un ítem nuevo
-    de la factura también nacía en General, y una factura que repetía el
-    mismo `id` abortaba con `duplicate key … workshop_desired_items_pkey`.
-  - **Causa 2, el formulario**: lo agregado antes de elegir la bici pasaba a
-    General al elegirla (`_moveStandaloneLinesToGeneralTab`), y en un trabajo
-    de una bici no había salida: «Asignar a…» pedía dos bicis.
-  - **La regla, en la base** (`trg_mechanic_job_items_only_bike`, BEFORE
-    INSERT/UPDATE): una línea sin bici en un trabajo de una sola bici es de
-    ella, la escriba quien la escriba —el formulario, un cliente viejo
-    instalado, la factura, el comando— y en cualquier escritura, así una
-    línea sin dueño que vuelve con un respaldo antiguo se arregla al primer
-    cambio. Corre después de las dos guardias que bloquean la fila del
-    trabajo (orden alfabético de los BEFORE): cuenta las bicis con lo que ya
-    confirmó quien tenía el trabajo, y una bici que entraba a la vez no se le
-    escapa. Una línea que pasa a otro trabajo sin nombrar bici suelta la del
-    anterior y la regla decide en el nuevo (antes la validación del grafo la
-    rechazaba si tenía bici).
-    `trg_mechanic_job_bikes_adopt_general_lines` (AFTER INSERT/DELETE):
-    cuando el trabajo queda con una sola bici, lo de General pasa a ella; las
-    líneas de una bici que sale se van antes en cascada. Un trabajo pagado no
-    recibe ni suelta bicis, así que nunca mueve una línea protegida. Con
-    varias bicis o ninguna, General sigue siendo General.
-  - **La factura → el trabajo continúa la línea**: por su `id` (la primera
-    vez que aparece); sin `id`, por su contenido entre las líneas que nadie
-    tomó, la n-ésima igual con la n-ésima igual, en la bici que esté (si el
-    ítem nombra bici, sólo en esa), y le conserva la bici; si cambió el
-    precio o la cantidad, por el mismo producto (un ítem libre, por su
-    nombre) entre las que quedan. Un ítem nuevo nace sin bici y la regla le
-    da la única.
-  - **Los datos**: en la misma migración, las líneas de General de cada
-    trabajo de una bici pasan a ella bajo la marca de la sincronización desde
-    la factura (sólo cambia de quién es la línea: 0 de 352 con un total
-    distinto de cantidad × precio, 0 con tareas ligadas, 0 con
-    configuración), y el subtotal de la bici se rehace como lo rehace esa
-    sincronización. La cotización decidida PG-00511 (2 líneas) queda como
-    está: es inmutable. Todo o nada: si un trabajo no se deja (14 líneas
-    pasan por la puerta de cambio de partes; ninguna tiene marca), la
-    migración entera se deshace nombrando los que fallan. Los 5 trabajos de
-    dos bicis (25 líneas) y los 47 con la bici sólo en la cabecera no se
-    tocan.
-  - **El formulario**: lo agregado antes de elegir la bici entra en ella
-    cuando el trabajo tiene una sola, también al quitar una de dos y al
-    llegar la bici de una garantía (`_placeUnassignedLines`,
-    `adoptUnassignedJobLines`). «Asignar a <bici>» aparece en General con
-    cualquier número de bicis, y «Pasar a <bici>» en la pestaña de una bici
-    de un trabajo con varias, con la misma línea y sin marca: la bici
-    equivocada se corrige sin quitar y agregar.
-  - **La recuperación de respaldos** sólo escribe en tablas cuyos efectos
-    revisó: los dos disparadores quedan registrados como `hook` en
-    `workshop_restore_trigger_review_internal` (32 `hook`, 12 `keep`), y un
-    respaldo vuelve tal como se respaldó.
-  - Revisión independiente de Codex (sólo lectura, 2026-10-01): seis
-    hallazgos. Corregidos: un ítem sin id con otro precio todavía borraba la
-    línea y sus tareas (tercera pasada por producto); una bici que entra a la
-    vez que una línea podía dejarla sin dueño (la regla va después de las
-    guardias que bloquean el trabajo); la corrección de datos podía quedar a
-    medias (todo o nada); una línea sin dueño restaurada no se arreglaba con
-    un cambio cualquiera (la regla corre en toda escritura). Límite sabido:
-    dos bicis que entran una tras otra en la misma transacción a un trabajo
-    sin bicis dejan lo de General en la primera; hoy nadie lo hace sin mandar
-    las líneas (el comando inserta las bicis antes y una línea que llega sin
-    bici vuelve a General con dos), y el formulario nuevo la muestra en esa
-    pestaña con «Pasar a…». El subtotal de bici con `adhoc` es el hallazgo
+    2026-07-03, factura del 1 de abril con dos ítems sin `id`). Una factura
+    que repetía el mismo `id` abortaba con
+    `duplicate key … workshop_desired_items_pkey`.
+  - **Arreglo** (`20261001200000_invoice_sync_keeps_job_lines`): la línea que
+    continúa cada ítem se busca por su `id` (la primera vez que aparece); sin
+    `id`, por su contenido entre las líneas que nadie tomó —la n-ésima igual
+    con la n-ésima igual, esté en una bici o en General, y si el ítem nombra
+    bici, sólo en esa—; y si cambió el precio o la cantidad, por el mismo
+    producto (un ítem libre, por su nombre). La línea conserva su lugar, sus
+    tareas y su configuración. Un ítem nuevo de la factura sigue naciendo en
+    General: quien edita la factura no dice de qué bici es.
+  - **Los datos**: en la misma migración, en los trabajos de una sola bici,
+    los servicios y los ítems de «Componentes» o «Servicio» que quedaron en
+    General pasan a su bici (328 líneas de 122 trabajos; la cotización
+    decidida PG-00511 es inmutable y queda). Los 22 accesorios se quedan en
+    General. Sólo cambia de quién es la línea —ninguna tiene un total
+    distinto de cantidad × precio—, bajo la marca de la sincronización desde
+    la factura (la guardia de lo pagado la deja pasar como a esa
+    sincronización; no se reescriben facturas ni totales del trabajo), y el
+    subtotal de la bici se rehace como lo rehace esa sincronización. Todo o
+    nada: si un trabajo no se deja, la migración entera se deshace
+    nombrándolo. Los trabajos de varias bicis y los 47 con la bici sólo en la
+    cabecera no se tocan.
+  - **El formulario**: el menú ⋯ de una línea lleva a cualquier otra pestaña
+    —«Asignar a <bici>» desde General (también con una sola bici), «Pasar a
+    <bici>» entre bicis y «Pasar a General» desde una bici, con la bolsa como
+    ícono—, con la misma línea y sin marca de ficha. Lo agregado antes de
+    elegir la bici sigue yendo a General, como antes. Una línea protegida no
+    tiene menú, así que los trabajos pagados se corrigen sólo con la
+    reparación de datos.
+  - Queda igual, y es una pregunta abierta: en un trabajo terminado de una
+    sola bici, una línea de General todavía se cuenta como de esa bici para
+    la ficha y la memoria (`job_line_bike_internal`, `job_general_item_sync`
+    en `syncBikeMemoryFromJob`), lo que contradice «compra aparte» para un
+    accesorio. Con la reparación de datos, lo que queda en General son
+    accesorios; separarlo de la ficha y la memoria es un cambio aparte.
+  - Revisión independiente de Codex (sólo lectura) sobre la primera versión:
+    seis hallazgos. Sigue corregido el que tocaba la factura (con otro precio
+    sin id se borraba la línea y sus tareas); los otros eran de la regla que
+    se retiró, salvo el subtotal de bici con `adhoc`, que es el hallazgo
     aparte de abajo.
   - Evidencia (local, base alineada con producción por md5 en todo el
-    camino): `workshop_job_lines_only_bike.sql` 25/25 —contra el código
-    anterior fallan 9 de las primeras 13 y la factura con el `id` repetido
-    aborta—; `part_change_rim` y `part_change_bike_facts` verdes con las tres
-    escenas que cambian por diseño (Marlin 6, Marlin 4 y Orion 8: una
-    segunda bici ya no deja la línea sin dueño); 45 archivos del taller sin
-    regresiones contra la línea base (18 fallan igual sin el cambio). Read-back
-    `20261001200000` verde en local. Dart: `part_bike_fact_change_test` 75 y
-    las suites del formulario, verdes. En la app de debug, sin guardar:
-    cliente con una bici, una cadena agregada antes de elegirla, y al elegir
-    la Norco Charger la cadena queda en su pestaña, sin General.
+    camino): `workshop_invoice_sync_keeps_job_lines.sql` —contra el código
+    anterior fallan la línea borrada, la tarea perdida y el precio cambiado,
+    y la factura con el `id` repetido aborta—; la reparación, probada con su
+    propio texto sobre un trabajo con servicio, componente y luz (la luz se
+    queda); `part_change_*`, recuperación y atribución de la factura verdes,
+    sin regresiones contra la línea base. Read-back verde en local. Dart:
+    `part_bike_fact_change_test` y las suites del formulario, verdes. En la
+    app de debug, sin guardar: un casco pasado a General con una sola bici, y
+    desde General «Asignar a Norco Charger».
   - Hallazgo aparte, no corregido: el subtotal de una bici tiene tres
     definiciones (`recalculate_job_bike_costs`: producto o nulo / servicio;
     la sincronización: producto / servicio o adhoc;

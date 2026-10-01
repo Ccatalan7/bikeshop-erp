@@ -294,15 +294,16 @@ double? parseJobLineQuantity(String text) {
   return double.parse(normalized);
 }
 
-/// Pasa una línea de General —o de otra bici— a la pestaña de una bici: la
-/// misma línea —mismo id, producto, cantidad, precio, descripción y
-/// respuestas de «Configurar»—, sin duplicarla; sólo cambia de dueño, y al
-/// guardar el comando la actualiza en su lugar con la versión que vio el
-/// formulario. Lo que confirmó para la ficha (`part_change`) se suelta: se
-/// vio sin bici o con otra, y se vuelve a confirmar en la suya. En General de
-/// un trabajo con varias bicis una línea no es de ninguna
-/// (`line_without_bike`); ésta es la forma de resolverlo sin quitarla y
-/// agregarla de nuevo (2026-09-28), y de corregir la bici equivocada
+/// Pasa una línea de una pestaña a otra —de General a una bici, de una bici
+/// a otra, o a General—: la misma línea —mismo id, producto, cantidad,
+/// precio, descripción y respuestas de «Configurar»—, sin duplicarla; sólo
+/// cambia de dueño, y al guardar el comando la actualiza en su lugar con la
+/// versión que vio el formulario. Lo que confirmó para la ficha
+/// (`part_change`) se suelta: se vio sin bici o con otra, y se vuelve a
+/// confirmar en la suya. En General de un trabajo con varias bicis una línea
+/// no es de ninguna (`line_without_bike`); ésta es la forma de resolverlo sin
+/// quitarla y agregarla de nuevo (2026-09-28), de corregir la bici
+/// equivocada y de dejar aparte lo que el cliente compró sin ser de la bici
 /// (2026-10-01). Devuelve la línea pasada, o nula si no estaba en [general].
 JobPartItem? assignJobLineToBike({
   required List<JobPartItem> general,
@@ -315,31 +316,5 @@ JobPartItem? assignJobLineToBike({
   bikeLines
     ..removeWhere((item) => item.id == itemId)
     ..add(moved);
-  return moved;
-}
-
-/// Una línea del trabajo es de una bici (20261001200000): cuando el trabajo
-/// tiene una sola, lo que estaba sin bici —agregado antes de elegirla, o en
-/// General— pasa a ella. Antes quedaba en General y en un trabajo de una
-/// bici no había cómo sacarlo de ahí (PG-00142, 2026-10-01). Son las mismas
-/// líneas (ids, precios, respuestas de «Configurar»); lo que confirmaron
-/// para una ficha se suelta, porque se vio sin bici. Deja vacías las listas
-/// de [unassigned] y devuelve cuántas líneas pasó.
-int adoptUnassignedJobLines({
-  required List<JobPartItem> bikeLines,
-  required List<List<JobPartItem>> unassigned,
-}) {
-  final known = {for (final item in bikeLines) item.id};
-  var moved = 0;
-  for (final source in unassigned) {
-    for (final item in source) {
-      if (item.id.trim().isNotEmpty && !known.add(item.id)) continue;
-      bikeLines.add(
-        item.partChange == null ? item : item.copyWith(clearPartChange: true),
-      );
-      moved++;
-    }
-    source.clear();
-  }
   return moved;
 }

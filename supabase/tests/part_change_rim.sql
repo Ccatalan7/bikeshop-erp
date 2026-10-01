@@ -1261,20 +1261,26 @@ select is(
   '["27.5\"", [584, null, "job_completion"], [32, null, "job_completion"]]'::jsonb,
   'con el aro que queda en 27,5″, la llanta de 584 se instala en el mismo guardado');
 
--- La Marlin 6: la U32 TL escrita sin bici en un trabajo de una sola bici,
--- ya en su ficha. Desde 20261001200000 una línea así es de esa bici (antes
--- quedaba en General, y una segunda bici la dejaba sin dueño y bloqueaba el
--- guardado): la segunda bici entra y la llanta sigue en la Marlin.
+-- La Marlin 6: la U32 TL en General, ya en su ficha. Agregar una segunda
+-- bici la deja sin bici: la puerta lo dice aunque la línea no cambie.
 insert into results select 'marlin6', pg_temp.finish('082');
 select is(
-  jsonb_build_array(pg_temp.problems('marlin6'), pg_temp.fact('58', 'rearWheelBsdMm'),
-    (select jb.bike_id from public.mechanic_job_items i
-       join public.mechanic_job_bikes jb on jb.id = i.job_bike_id
-      where i.id = pg_temp.id('375'))),
-  '[[], [622, null, "job_completion"], "e2840000-0000-4000-8000-000000000058"]'::jsonb,
-  'la llanta escrita sin bici es de la única bici');
-insert into results select 'marlin6_segunda', pg_temp.save('082', 'segunda-bici',
-  array['375'], '{}'::jsonb, '[]'::jsonb,
+  jsonb_build_array(pg_temp.problems('marlin6'), pg_temp.fact('58', 'rearWheelBsdMm')),
+  '[[], [622, null, "job_completion"]]'::jsonb,
+  'la llanta de General es de la única bici');
+select throws_like(
+  $$select pg_temp.save('082', 'segunda-bici', array['375'], '{}'::jsonb, '[]'::jsonb,
+      jsonb_build_array(jsonb_build_object(
+        'client_key', 'b2', 'bike_id', 'e2840000-0000-4000-8000-000000000059')))$$,
+  '%«Llanta Weinmann U32 TL 29" Ojetillos 32H Presta Negro» no se guardó: no dice de qué bici del trabajo es. Asígnala a su bici%',
+  'con dos bicis, la llanta de General ya no es de ninguna: el guardado se rechaza');
+insert into results select 'marlin6_asignada', pg_temp.save('082', 'segunda-bici-asignada',
+  array['375'],
+  jsonb_build_object('375', jsonb_build_object('job_bike_id',
+    (select jb.id from public.mechanic_job_bikes jb
+      where jb.job_id = pg_temp.id('082')
+        and jb.bike_id = 'e2840000-0000-4000-8000-000000000058'))),
+  '[]'::jsonb,
   jsonb_build_array(jsonb_build_object(
     'client_key', 'b2', 'bike_id', 'e2840000-0000-4000-8000-000000000059')));
 select is(
@@ -1282,27 +1288,19 @@ select is(
     (select count(*)::integer from public.mechanic_job_bikes where job_id = pg_temp.id('082')),
     pg_temp.fact('58', 'rearWheelBsdMm'),
     pg_temp.fact('59', 'rearWheelBsdMm'),
-    (select count(*)::integer from public.mechanic_job_line_gate_deferrals),
-    (select jb.bike_id from public.mechanic_job_items i
-       join public.mechanic_job_bikes jb on jb.id = i.job_bike_id
-      where i.id = pg_temp.id('375'))),
-  '[2, [622, null, "job_completion"], null, 0, "e2840000-0000-4000-8000-000000000058"]'::jsonb,
-  'la segunda bici entra y la llanta sigue en la Marlin');
+    (select count(*)::integer from public.mechanic_job_line_gate_deferrals)),
+  '[2, [622, null, "job_completion"], null, 0]'::jsonb,
+  'asignada a su bici en el mismo guardado, la segunda bici entra');
 
 -- La Marlin 4: lo mismo con un escritor directo, sin el comando.
 insert into results select 'marlin4', pg_temp.finish('084');
-select lives_ok(
+select throws_like(
   $$insert into public.mechanic_job_bikes (tenant_id, job_id, bike_id)
     values ('e2840000-0000-4000-8000-000000000001',
             'e2840000-0000-4000-8000-000000000084',
             'e2840000-0000-4000-8000-000000000059')$$,
-  'una segunda bici agregada directo entra: la llanta ya tenía bici');
-select is(
-  (select jb.bike_id from public.mechanic_job_items i
-     join public.mechanic_job_bikes jb on jb.id = i.job_bike_id
-    where i.id = pg_temp.id('376')),
-  'e2840000-0000-4000-8000-000000000063'::uuid,
-  'y la llanta sigue en la Marlin 4');
+  '%no dice de qué bici del trabajo es%',
+  'una segunda bici agregada directo tampoco deja una marca de General sin bici');
 
 -- La Orion 6 no tiene filas de bicis: su bici es la de la cabecera. Cambiarla
 -- en el trabajo terminado mueve la llanta de General a la otra bici.
@@ -1341,27 +1339,22 @@ select is(
   '[[], [622, null, "job_completion"], [32, null, "job_completion"]]'::jsonb,
   'quitada la otra bici, el mismo cierre reintentado instala la llanta en la Marlin');
 
--- La Orion 8: la FOSS de 32 de su pestaña calzó con la maza de 32 escrita
--- sin bici. Antes esa maza quedaba en General y una segunda bici se la
--- quitaba a la llanta (segunda revisión de Codex, 2026-09-29); desde
--- 20261001200000 la maza es de la Orion, y la segunda bici no cambia nada.
+-- La Orion 8: la FOSS de 32 de su pestaña calzó con la maza de 32 del trabajo
+-- (en General). Con una segunda bici, esa maza ya no es de la Orion y la
+-- llanta queda contra la maza de 28 que tenía: la puerta mira también las
+-- líneas con bici (segunda revisión de Codex, 2026-09-29).
 insert into results select 'orion8', pg_temp.finish('087');
 select is(
   jsonb_build_array(pg_temp.problems('orion8'), pg_temp.fact('68', 'rearSpokeHoles')),
   '[[], [32, null, "job_completion"]]'::jsonb,
   'con la maza de 32 del trabajo, la llanta de 32 entra');
-select lives_ok(
+select throws_like(
   $$insert into public.mechanic_job_bikes (tenant_id, job_id, bike_id)
     values ('e2840000-0000-4000-8000-000000000001',
             'e2840000-0000-4000-8000-000000000087',
             'e2840000-0000-4000-8000-000000000069')$$,
-  'una segunda bici no le quita a la llanta la maza, que ya es de la Orion');
-select is(
-  (select count(*)::integer from public.mechanic_job_items
-    where id in (pg_temp.id('380'), pg_temp.id('381'))
-      and job_bike_id = 'e2840000-0000-4000-8000-000000000871'),
-  2,
-  'la llanta y la maza siguen las dos en la Orion');
+  '%«Llanta FOSS F22 Aluminio Doble Pared con Ojetillos 29x32H» no se guardó:%no calza con la ficha de la bici (la maza trasera tiene 28 perforaciones)%',
+  'una segunda bici que le quita la maza de General a la llanta de una pestaña se rechaza');
 
 -- La Orion 9: su fila de bici no se va a otro trabajo dejando la llanta de su
 -- pestaña sin bici (segunda revisión de Codex, 2026-09-29).

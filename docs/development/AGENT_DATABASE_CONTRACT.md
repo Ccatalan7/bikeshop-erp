@@ -676,7 +676,8 @@ reaplicando `20260319_disable_job_items_invoice_backsync.sql`.
 
 ## Un pgTAP rojo en local no es tuyo hasta compararlo sin tu cambio (2026-10-01)
 
-Con `20261001200000` aplicada, 20 archivos del taller salieron rojos. Sin la
+Con la primera versión de `20261001200000` aplicada, 20 archivos del taller
+salieron rojos. Sin la
 migración (deshecha sólo en local con un script inverso), los mismos 18
 fallaban en las mismas pruebas: fixtures que ya no cumplen una FK
 (`mechanic_jobs_created_by_fkey`), `update_workshop_supply_need_v1` ausente en
@@ -696,9 +697,11 @@ que no está en `workshop_restore_trigger_review_internal`. Un disparador nuevo
 `when (not public.workshop_restore_effect_suppressed('public.<tabla>'::regclass, '<nombre>'::name))`
 (sin otras condiciones: la revisión compara el texto que imprime
 `pg_get_triggerdef`) y se agrega al registro renombrando la función y
-uniéndola, como `20260930181000` y `20261001200000`. Con eso la recuperación
-lo apaga y devuelve las filas tal como se respaldaron. El read-back de cada
-migración fija los totales (30/12 en `181000`, 32/12 desde `20261001200000`).
+uniéndola, como `20260930181000`. Con eso la recuperación lo apaga y devuelve
+las filas tal como se respaldaron. El read-back de cada migración fija los
+totales (30/12 en `181000`). Se probó con una primera versión de
+`20261001200000` que agregaba dos disparadores; el dueño la corrigió y esa
+versión no se desplegó.
 
 ## JSONB backup redaction preserves structure and derived metadata
 

@@ -1,172 +1,38 @@
--- Una línea del trabajo es de una bici. «General» existe sólo donde no hay a
--- quién dársela: un trabajo sin bici (venta, presupuesto) o uno con varias,
--- hasta que se asigna. En un trabajo de una sola bici, toda línea es de ella.
+-- La factura → el trabajo continúa la misma línea (dueño, 2026-10-01).
 --
--- El dueño vio PG-00142 con sus productos en «General» (2026-10-01) y lo
--- leyó como un error del personal. No lo era: 352 líneas de 126 trabajos de
--- una bici estaban así, y salían de tres escritores que no sabían de qué bici
--- era la línea y la dejaban sin dueño:
---   1. La factura → el trabajo (`sync_invoice_items_to_job_workshop_internal`):
---      un ítem sin `id` sólo se emparejaba con líneas de General, así que la
---      línea de la bici se borraba —con sus tareas, en cascada— y volvía como
---      línea nueva de General. Un ítem nuevo de la factura también nacía ahí.
---   2. El formulario: lo agregado antes de elegir la bici pasaba a General al
---      elegirla, y en un trabajo de una bici no había cómo sacarlo de ahí
---      («Asignar a…» pedía dos bicis).
---   3. Los trabajos de diciembre y enero, anteriores a las líneas por bici.
--- La base ya trataba esas líneas como de la bici (`job_line_bike_internal`,
--- la memoria de la bici), pero la ficha las mostraba aparte y el subtotal de
--- la bici no las contaba. Aquí la regla pasa a la base, para todo escritor.
-begin;
-set local lock_timeout = '5s';
-set local statement_timeout = '120s';
-
--- 1. La regla, en la fila: una línea sin bici en un trabajo de una sola bici
--- es de esa bici. Los BEFORE corren en orden alfabético: éste va después de
--- las dos guardias que bloquean la fila del trabajo (`guard_final_quotation`
--- y `guard_paid_snapshot`, `for update`), así cuenta las bicis con lo que ya
--- confirmó quien tenía el trabajo —una bici que entraba a la vez no se le
--- escapa—, y antes de la del grafo del taller, que valida la bici que pone.
--- Corre en toda escritura de la línea, no sólo cuando cambia su bici: una
--- línea sin dueño que vuelve con un respaldo antiguo se arregla al primer
--- cambio. Una línea de un trabajo pagado no cambia por otra cosa (la guardia
--- la rechaza antes), y si sólo le falta su bici, darle la única no toca nada
--- de lo cobrado.
-create function public.assign_job_line_to_only_bike()
-returns trigger
-language plpgsql
-security definer
-set search_path to 'pg_catalog', 'public', 'pg_temp'
-as $function$
-declare
-  v_count integer;
-  v_only uuid;
-begin
-  -- Una línea que pasa a otro trabajo sin que nadie nombre su bici trae la
-  -- del trabajo anterior, que aquí no existe: se decide de nuevo en éste.
-  if tg_op = 'UPDATE'
-     and new.job_id is distinct from old.job_id
-     and new.job_bike_id is not distinct from old.job_bike_id then
-    new.job_bike_id := null;
-  end if;
-  if new.job_bike_id is not null then
-    return new;
-  end if;
-  select count(*)::integer, min(jb.id::text)::uuid
-    into v_count, v_only
-    from public.mechanic_job_bikes jb
-   where jb.job_id = new.job_id
-     and jb.tenant_id = new.tenant_id;
-  if v_count = 1 then
-    new.job_bike_id := v_only;
-  end if;
-  return new;
-end;
-$function$;
-
-revoke all on function public.assign_job_line_to_only_bike()
-  from public, anon, authenticated, service_role;
-
--- La recuperación de un respaldo devuelve la fila tal como se respaldó: el
--- disparador lleva la marca que ella apaga (20260930171000).
-create trigger trg_mechanic_job_items_only_bike
-  before insert or update on public.mechanic_job_items
-  for each row
-  when (not public.workshop_restore_effect_suppressed(
-    'public.mechanic_job_items'::regclass,
-    'trg_mechanic_job_items_only_bike'::name))
-  execute function public.assign_job_line_to_only_bike();
-
--- 2. Cuando el trabajo queda con una sola bici —recibe la primera, o le
--- quitan una de dos— lo que estaba en General pasa a ella. Las líneas de la
--- bici que sale ya se fueron en cascada (`ON DELETE CASCADE`, cuyo disparador
--- interno corre antes que éste). Un trabajo pagado no recibe ni suelta bicis
--- (`trg_mechanic_job_bikes_guard_paid_snapshot`), así que esto nunca mueve
--- una línea protegida. Límite sabido (revisión de Codex): dos bicis que
--- entran una tras otra en la misma transacción a un trabajo sin bicis dejan
--- lo de General en la primera. Hoy nadie lo hace sin mandar las líneas: el
--- comando de guardado inserta las bicis antes de escribir las líneas, y una
--- línea que el cliente manda sin bici vuelve a General con dos bicis; el
--- formulario nuevo la muestra en la pestaña de la primera y «Pasar a…» la
--- corrige.
-create function public.adopt_general_job_lines_for_only_bike()
-returns trigger
-language plpgsql
-security definer
-set search_path to 'pg_catalog', 'public', 'pg_temp'
-as $function$
-declare
-  v_job_id uuid;
-  v_tenant_id uuid;
-  v_count integer;
-  v_only uuid;
-begin
-  if tg_op = 'DELETE' then
-    v_job_id := old.job_id;
-    v_tenant_id := old.tenant_id;
-  else
-    v_job_id := new.job_id;
-    v_tenant_id := new.tenant_id;
-  end if;
-  select count(*)::integer, min(jb.id::text)::uuid
-    into v_count, v_only
-    from public.mechanic_job_bikes jb
-   where jb.job_id = v_job_id
-     and jb.tenant_id = v_tenant_id;
-  if v_count = 1 then
-    update public.mechanic_job_items i
-       set job_bike_id = v_only
-     where i.job_id = v_job_id
-       and i.tenant_id = v_tenant_id
-       and i.job_bike_id is null;
-  end if;
-  return null;
-end;
-$function$;
-
-revoke all on function public.adopt_general_job_lines_for_only_bike()
-  from public, anon, authenticated, service_role;
-
-create trigger trg_mechanic_job_bikes_adopt_general_lines
-  after insert or delete on public.mechanic_job_bikes
-  for each row
-  when (not public.workshop_restore_effect_suppressed(
-    'public.mechanic_job_bikes'::regclass,
-    'trg_mechanic_job_bikes_adopt_general_lines'::name))
-  execute function public.adopt_general_job_lines_for_only_bike();
-
--- 3. La recuperación sólo escribe en tablas cuyos efectos revisó: los dos
--- disparadores nuevos se apagan mientras devuelve filas.
-alter function public.workshop_restore_trigger_review_internal()
-  rename to workshop_restore_trigger_review_without_only_bike_internal;
-create function public.workshop_restore_trigger_review_internal()
-returns table(table_name text, trigger_name name, review text, function_md5 text)
-language sql immutable
-set search_path to 'pg_catalog', 'public', 'pg_temp'
-as $function$
-  select * from public.workshop_restore_trigger_review_without_only_bike_internal()
-  union all select 'mechanic_job_items', 'trg_mechanic_job_items_only_bike'::name,
-    'hook', null::text
-  union all select 'mechanic_job_bikes', 'trg_mechanic_job_bikes_adopt_general_lines'::name,
-    'hook', null::text
-$function$;
-
-revoke all on function public.workshop_restore_trigger_review_internal(),
-  public.workshop_restore_trigger_review_without_only_bike_internal()
-  from public, anon, authenticated, service_role;
-
--- 4. La factura → el trabajo. Igual que antes salvo cómo encuentra la línea
--- que continúa cada ítem:
+-- El dueño vio PG-00142 con sus productos en «General» y pidió revisar la
+-- arquitectura. General es a propósito —lo que el cliente compra aparte en el
+-- mismo trabajo, aunque tenga una sola bici: un casco, un bombín, luces—, pero
+-- la sincronización de la factura metía ahí líneas que eran de la bici: un
+-- ítem sin `id` sólo se emparejaba con líneas de General (`job_bike_id is not
+-- distinct from` la bici del ítem, que no traía) y sólo si había una igual. La
+-- línea de la bici quedaba sin pareja, se **borraba** —con sus tareas, por
+-- `mechanic_job_tasks.parent_item_id ON DELETE CASCADE`— y volvía como línea
+-- nueva de General con otro id (PG-00309: cuatro líneas recreadas el
+-- 2026-07-03 desde una factura del 1 de abril con dos ítems sin `id`). Y una
+-- factura que repetía el mismo `id` abortaba con `duplicate key …
+-- workshop_desired_items_pkey`.
+--
+-- Igual que antes salvo cómo encuentra la línea que continúa cada ítem:
 --   - por su `id`, la primera vez que aparece;
 --   - sin `id`, por su contenido (tipo, producto, nombre, cantidad, precio y
 --     total) entre las líneas que ningún otro ítem tomó: el n-ésimo ítem
 --     igual continúa la n-ésima línea igual. Un ítem que nombra su bici sólo
 --     continúa una línea de esa bici; uno que no nombra ninguna continúa la
---     línea esté donde esté y le conserva la bici. Antes pedía que la línea
---     estuviera en General y que hubiera una sola igual;
+--     línea esté donde esté —en una bici o en General— y le conserva el lugar;
 --   - y si cambió el precio o la cantidad, por el mismo producto (un ítem
---     libre, por su nombre) entre las que quedan.
--- Un ítem nuevo nace sin bici y la regla de arriba le da la única que haya.
+--     libre, por su nombre) entre las que quedan (revisión de Codex).
+-- Un ítem nuevo de la factura, sin bici, sigue naciendo en General: quien
+-- edita la factura no dice de qué bici es, y en la ficha se asigna.
+--
+-- Y repara lo que esos caminos dejaron mal: en los trabajos de una sola bici,
+-- los servicios y los componentes que quedaron en General pasan a su bici; los
+-- accesorios y lo demás se quedan donde están (ver el paso 2).
+begin;
+set local lock_timeout = '5s';
+set local statement_timeout = '60s';
+
+-- 1. La factura → el trabajo.
 create or replace function public.sync_invoice_items_to_job_workshop_internal(p_invoice_id uuid)
 returns void
 language plpgsql
@@ -630,24 +496,47 @@ exception
 end;
 $function$;
 
--- 5. Lo que ya estaba: las líneas de General de cada trabajo de una sola bici
--- pasan a ella. Sólo cambia de quién es la línea —ni precio, ni cantidad, ni
--- stock, ni contabilidad: 0 de las 352 tiene un total distinto de cantidad ×
--- precio, que su disparador recalcula—, así que corre bajo la marca de la
--- sincronización desde la factura: la guardia de lo pagado la deja pasar como
--- deja pasar esa sincronización, y no se reescriben facturas ni totales del
--- trabajo. El subtotal de la bici se rehace como lo rehace esa
--- sincronización. Una cotización decidida es inmutable y queda como está.
--- Todo o nada: si un trabajo no se deja (la puerta de cambio de partes, un
--- bloqueo), se juntan todos los que fallan y la migración entera se deshace
--- nombrándolos; nada queda aplicado a medias ni sin sellar.
+-- 2. Lo que ya estaba. En los trabajos de una sola bici, General tenía 352
+-- líneas (lectura de producción, 2026-10-01): 214 servicios, 13 ítems de la
+-- categoría «Servicio» y 103 componentes («Componentes / Ruedas, Frenos,
+-- Transmisión, Cambios, Dirección, Fundas y piolas») —trabajo en la bici que
+-- llegó ahí por los caminos de arriba— y 22 accesorios, mantenimiento o sin
+-- categoría (luces, bombín, candado, guantes, stickers, campanillas, pedales,
+-- puños, parches), que pueden ser una compra aparte y se quedan en General.
+-- Pasan a su bici sólo las del primer grupo. Sólo cambia de quién es la línea
+-- —ni precio, ni cantidad, ni stock, ni contabilidad: ninguna tiene un total
+-- distinto de cantidad × precio, que su disparador recalcula—, así que corre
+-- bajo la marca de la sincronización desde la factura: la guardia de lo
+-- pagado la deja pasar como deja pasar esa sincronización, y no se reescriben
+-- facturas ni totales del trabajo. El subtotal de la bici se rehace como lo
+-- rehace esa sincronización. Una cotización decidida es inmutable y queda
+-- como está; los trabajos de varias bicis o con la bici sólo en la cabecera no
+-- se tocan. Todo o nada: si un trabajo no se deja (la puerta de cambio de
+-- partes, un bloqueo), se juntan los que fallan y la migración entera se
+-- deshace nombrándolos.
+create function pg_temp.is_bike_work(p_line public.mechanic_job_items)
+returns boolean
+language sql stable
+as $$
+  select p_line.item_type = 'service'
+      or exists (
+        select 1
+          from public.products product
+          join public.product_categories category
+            on category.id = product.category_id
+           and category.tenant_id = product.tenant_id
+         where product.id = coalesce(p_line.product_id, p_line.service_product_id)
+           and product.tenant_id = p_line.tenant_id
+           and split_part(category.full_path, ' / ', 1) in ('Componentes', 'Servicio'))
+$$;
+
 do $backfill$
 declare
   v_job record;
   v_count integer;
   v_lines integer := 0;
   v_jobs integer := 0;
-  v_skipped jsonb := '[]'::jsonb;
+  v_failed jsonb := '[]'::jsonb;
 begin
   perform set_config('app.syncing_invoice_to_job', 'true', true);
   for v_job in
@@ -658,7 +547,8 @@ begin
      where exists (
              select 1 from public.mechanic_job_items i
               where i.job_id = j.id and i.tenant_id = j.tenant_id
-                and i.job_bike_id is null)
+                and i.job_bike_id is null
+                and pg_temp.is_bike_work(i))
        and not (j.workflow_kind = 'quotation'
                 and coalesce(j.quotation_status, 'pending') <> 'pending')
      group by j.id, j.tenant_id, j.job_number
@@ -670,7 +560,8 @@ begin
          set job_bike_id = v_job.job_bike_id
        where i.job_id = v_job.id
          and i.tenant_id = v_job.tenant_id
-         and i.job_bike_id is null;
+         and i.job_bike_id is null
+         and pg_temp.is_bike_work(i);
       get diagnostics v_count = row_count;
 
       update public.mechanic_job_bikes jb
@@ -692,31 +583,19 @@ begin
       v_lines := v_lines + v_count;
       v_jobs := v_jobs + 1;
     exception when others then
-      v_skipped := v_skipped || jsonb_build_object(
+      v_failed := v_failed || jsonb_build_object(
         'job', v_job.job_number, 'sqlstate', sqlstate, 'message', sqlerrm);
     end;
   end loop;
   perform set_config('app.syncing_invoice_to_job', '', true);
-  if jsonb_array_length(v_skipped) > 0 then
-    raise exception 'Only-bike backfill refused by % job(s): %',
-      jsonb_array_length(v_skipped), v_skipped
+  if jsonb_array_length(v_failed) > 0 then
+    raise exception 'Bike-work repair refused by % job(s): %',
+      jsonb_array_length(v_failed), v_failed
       using errcode = '23514';
   end if;
-  raise notice 'Lines adopted by the only bike: % lines in % jobs.',
+  raise notice 'Bike work moved from General to the only bike: % lines in % jobs.',
     v_lines, v_jobs;
 end;
 $backfill$;
 
--- Contrato: los dos disparadores revisados por la recuperación y la regla
--- cumplida, salvo cotizaciones decididas.
-do $contract$
-begin
-  if public.workshop_restore_effects_review_internal(
-       'public.mechanic_job_items'::regclass) is not null
-     or public.workshop_restore_effects_review_internal(
-       'public.mechanic_job_bikes'::regclass) is not null then
-    raise exception 'The only-bike line triggers are not reviewed by recovery';
-  end if;
-end;
-$contract$;
 commit;

@@ -70,6 +70,13 @@ import 'bike_form_dialog.dart';
 import '../widgets/bike_diagram_illustration.dart';
 import '../widgets/bike_system_controller.dart';
 
+/// Una pestaña a la que se puede pasar una línea, como la ofrece su menú.
+typedef JobLineMoveTarget = ({
+  String label,
+  IconData icon,
+  VoidCallback? onSelected,
+});
+
 // ============================================================
 // Per-Bike Data Container (Multi-bike support)
 // ============================================================
@@ -3187,39 +3194,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     _selectedServiceIndex = null;
   }
 
-  /// Lo que está sin bici, cuando cambian las bicis del trabajo (llega la
-  /// primera, se quita una de dos, llega la de una garantía): con una sola
-  /// bici pasa a ella —en un trabajo de una bici toda línea es suya, y la
-  /// base lo hace cumplir (20261001200000)—; con varias, lo agregado antes de
-  /// elegirlas queda en General para asignarlo. Así Cotización/Componente →
-  /// Servicio tampoco deja líneas en la colección suelta, que el guardado
-  /// ignoraría.
-  void _placeUnassignedLines() {
-    final physical =
-        _bikeTabs.where((tab) => !tab.isGeneralTab).toList(growable: false);
-    if (physical.length != 1) {
-      _moveStandaloneLinesToGeneralTab();
-      return;
-    }
-    final bikeTab = physical.single;
-    final general = _bikeTabs.where((tab) => tab.isGeneralTab).firstOrNull;
-    final moved = adoptUnassignedJobLines(
-      bikeLines: bikeTab.partItems,
-      unassigned: [if (general != null) general.partItems, _partItems],
-    );
-    if (moved == 0) return;
-    _selectedServiceIndex = null;
-    // General vacía se esconde: la vista no puede quedarse en ella.
-    final selected =
-        _selectedBikeTabIndex >= 0 && _selectedBikeTabIndex < _bikeTabs.length
-            ? _bikeTabs[_selectedBikeTabIndex]
-            : null;
-    if (selected == null || selected.isGeneralTab) {
-      _selectedBikeTabIndex = _bikeTabs.indexOf(bikeTab);
-    }
-  }
-
-  /// Con varias bicis, lo que no es de ninguna va a General.
+  /// A physical bicycle uses its own diagnosis tab, while unassigned
+  /// products/services belong to the General tab. This is called whenever the
+  /// first bicycle is added so Quote/Component -> Service cannot strand lines
+  /// in the legacy standalone collection that the save path would ignore.
   void _moveStandaloneLinesToGeneralTab() {
     if (_partItems.isEmpty) return;
     final generalTab = _bikeTabs.where((tab) => tab.isGeneralTab).firstOrNull;
@@ -3375,7 +3353,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         _selectedBikeTabIndex = _bikeTabs.length - 2;
       }
 
-      _placeUnassignedLines();
+      _moveStandaloneLinesToGeneralTab();
 
       // Also set legacy single bike (for backward compat)
       _selectedBike = bike;
@@ -3493,8 +3471,6 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       if (_selectedBikeTabIndex >= _bikeTabs.length) {
         _selectedBikeTabIndex = _bikeTabs.length - 1;
       }
-      // Con la bici que queda sola, lo de General pasa a ella.
-      _placeUnassignedLines();
       // Update legacy single bike
       _selectedBike = _bikeTabs[_selectedBikeTabIndex].bike;
     });
@@ -3948,41 +3924,40 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     return holes >= 12 && holes <= 48 ? holes : null;
   }
 
-  /// «Asignar a <bici>» para una línea de General: con varias bicis ahí no es
-  /// de ninguna y al terminar no cambiaría ninguna ficha
-  /// (`line_without_bike`). «Pasar a <bici>» para una línea de una bici, en
-  /// un trabajo con varias: la que quedó en la equivocada se corrige sin
-  /// quitarla y agregarla de nuevo (2026-10-01). Una protegida no tiene menú;
-  /// una que se está configurando espera a que se cierre «Configurar», y
-  /// mientras se guarda espera al recibo: el comando ya lleva la línea donde
-  /// estaba (revisión de Codex, 2026-09-28).
-  List<({String label, VoidCallback? onSelected})> _assignTargetsFor(
-    JobPartItem item,
-  ) {
+  /// Mover la línea a otra pestaña: «Asignar a <bici>» desde General (con
+  /// varias bicis ahí no es de ninguna y al terminar no cambiaría ninguna
+  /// ficha, `line_without_bike`), «Pasar a <bici>» desde otra bici, y «Pasar a
+  /// General» desde una bici: General es lo que el cliente compra aparte, aunque
+  /// el trabajo tenga una sola bici (dueño, 2026-10-01). Una protegida no
+  /// tiene menú; una que se está configurando espera a que se cierre
+  /// «Configurar», y mientras se guarda espera al recibo: el comando ya lleva
+  /// la línea donde estaba (revisión de Codex, 2026-09-28).
+  List<JobLineMoveTarget> _assignTargetsFor(JobPartItem item) {
     final currentTab = _currentBikeTab;
     if (currentTab == null || _isCommercialSnapshotLocked) {
       return const [];
     }
-    final targets = [
-      for (final (index, tab) in _bikeTabs.indexed)
-        if (!tab.isGeneralTab && !identical(tab, currentTab))
-          (index: index, tab: tab),
-    ];
-    if (targets.isEmpty) return const [];
-    final verb = currentTab.isGeneralTab ? 'Asignar a' : 'Pasar a';
     final waiting = _configuringItemId == item.id || _isSaving;
     return [
-      for (final target in targets)
-        (
-          label: '$verb ${target.tab.displayName}',
-          onSelected:
-              waiting ? null : () => _assignLineToBike(item.id, target.index),
-        ),
+      for (final (index, tab) in _bikeTabs.indexed)
+        if (!identical(tab, currentTab))
+          (
+            label: tab.isGeneralTab
+                ? 'Pasar a General'
+                : '${currentTab.isGeneralTab ? 'Asignar a' : 'Pasar a'} '
+                    '${tab.displayName}',
+            icon: tab.isGeneralTab
+                ? Icons.shopping_bag_outlined
+                : Icons.pedal_bike_outlined,
+            onSelected:
+                waiting ? null : () => _assignLineToBike(item.id, index),
+          ),
     ];
   }
 
-  /// Pasa la misma línea (su id, precio y datos) a la pestaña de la bici; lo
-  /// que había confirmado para la ficha se vuelve a confirmar ahí.
+  /// Pasa la misma línea (su id, precio y datos) a la pestaña elegida; lo
+  /// que había confirmado para la ficha se vuelve a confirmar en la bici, y en
+  /// General no cambia ninguna ficha.
   void _assignLineToBike(String itemId, int tabIndex) {
     final source = _currentBikeTab;
     if (_isSaving ||
@@ -3990,7 +3965,6 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         _isCommercialSnapshotLocked ||
         tabIndex < 0 ||
         tabIndex >= _bikeTabs.length ||
-        _bikeTabs[tabIndex].isGeneralTab ||
         identical(_bikeTabs[tabIndex], source)) {
       return;
     }
@@ -4031,7 +4005,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       ..showSnackBar(SnackBar(
         content: Text(
           '«${line.name}» quedó en ${target.displayName}.'
-          '${hadPartChange ? ' Confirma ahí su cambio de ficha.' : ''}',
+          '${hadPartChange && !target.isGeneralTab ? ' Confirma ahí su cambio de ficha.' : ''}',
         ),
         action: sourceHidden
             ? null
@@ -17847,9 +17821,9 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
               isGeneralTab: true,
               tabId: 'general_tab',
             ));
+          _moveStandaloneLinesToGeneralTab();
           _selectedBike = sourceBike;
           _selectedBikeTabIndex = 0;
-          _placeUnassignedLines();
           _isLoadingWarrantySourceObject = false;
         });
         unawaited(_loadSelectedBikeProfile(sourceBike));
@@ -19865,10 +19839,10 @@ class _PartItemRow extends StatefulWidget {
   final _LineWork? work;
   final ValueChanged<String>? onOpenTask;
 
-  /// «Asignar a <bici>» desde General, o «Pasar a <bici>» desde otra bici:
-  /// una por bici. Sin acción ([onSelected] nula) mientras la línea está en
-  /// «Configurar».
-  final List<({String label, VoidCallback? onSelected})> assignTargets;
+  /// «Asignar a <bici>» desde General, «Pasar a <bici>» desde otra bici y
+  /// «Pasar a General» desde una bici. Sin acción ([onSelected] nula)
+  /// mientras la línea está en «Configurar».
+  final List<JobLineMoveTarget> assignTargets;
 
   const _PartItemRow({
     super.key,
@@ -20099,7 +20073,7 @@ class _PartItemRowState extends State<_PartItemRow> {
       for (final (index, target) in widget.assignTargets.indexed)
         JobLineAction(
           key: ValueKey('${prefix}_assign_bike_${item.id}_$index'),
-          icon: Icons.pedal_bike_outlined,
+          icon: target.icon,
           label: target.label,
           onSelected: target.onSelected,
           startsGroup: index == 0,
