@@ -55,7 +55,7 @@ jobs:
             > build/web_erp/release.sha256
 
       - name: Retain ERP release evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: erp-release-evidence-${{ github.sha }}
           path: |
