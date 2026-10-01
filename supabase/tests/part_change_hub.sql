@@ -340,13 +340,17 @@ select 'e2830000-0000-4000-8000-000000000001', j.id, j.bike_id
 -- Las líneas, con la marca que deja el mecánico al elegir la rueda. Una
 -- marca de varios datos es una lista. Las de un Enrayado dicen sus
 -- perforaciones y su rueda, como el asistente.
+-- Cada una va en la pestaña de su bici: una de General no es de ninguna
+-- (20261001195000).
 insert into public.mechanic_job_items (
-  id, tenant_id, job_id, product_id, product_name, item_type, location_key,
+  id, tenant_id, job_id, job_bike_id, product_id, product_name, item_type, location_key,
   quantity, unit_price, service_configuration_data
 )
 select ('e2830000-0000-4000-8000-000000000' || l.n)::uuid,
        'e2830000-0000-4000-8000-000000000001',
        ('e2830000-0000-4000-8000-000000000' || l.job)::uuid,
+       (select jb.id from public.mechanic_job_bikes jb
+         where jb.job_id = ('e2830000-0000-4000-8000-000000000' || l.job)::uuid),
        case when l.product is not null
          then ('e2830000-0000-4000-8000-000000000' || l.product)::uuid end,
        coalesce(p.name, 'Enrayado + Centrado'),
@@ -869,10 +873,11 @@ select throws_ok(
 -- En la Orion terminada, agregar la maza de 32H no se guarda; una de 36H sí.
 select throws_like(
   $$insert into public.mechanic_job_items (
-      tenant_id, job_id, product_id, product_name, item_type, location_key,
+      tenant_id, job_id, job_bike_id, product_id, product_name, item_type, location_key,
       quantity, unit_price, service_configuration_data)
     values ('e2830000-0000-4000-8000-000000000001',
             'e2830000-0000-4000-8000-000000000052',
+            (select id from public.mechanic_job_bikes where job_id = 'e2830000-0000-4000-8000-000000000052'),
             'e2830000-0000-4000-8000-000000000109',
             'Maza Trasera Freewheel Disco 32h Betta', 'product', 'rear', 1, 19990,
             '{"part_change": {"key": "freehubType", "value": "threaded_freewheel"}}')$$,
@@ -880,10 +885,11 @@ select throws_like(
   'en un trabajo terminado, la maza que no se raya en la rueda no se guarda, y lo dice');
 select lives_ok(
   $$insert into public.mechanic_job_items (
-      tenant_id, job_id, product_id, product_name, item_type, location_key,
+      tenant_id, job_id, job_bike_id, product_id, product_name, item_type, location_key,
       quantity, unit_price, service_configuration_data)
     values ('e2830000-0000-4000-8000-000000000001',
             'e2830000-0000-4000-8000-000000000052',
+            (select id from public.mechanic_job_bikes where job_id = 'e2830000-0000-4000-8000-000000000052'),
             'e2830000-0000-4000-8000-000000000101',
             'Maza Trasera Disco 36H para Piñon con hilo QR 13mm 8S', 'product', 'rear', 1, 19990,
             '{"part_change": {"key": "freehubType", "value": "threaded_freewheel"}}')$$,
@@ -898,10 +904,11 @@ select is(
   'la Trek 3700 termina con su cassette HG');
 select throws_like(
   $$insert into public.mechanic_job_items (
-      tenant_id, job_id, product_id, product_name, item_type, location_key,
+      tenant_id, job_id, job_bike_id, product_id, product_name, item_type, location_key,
       quantity, unit_price, service_configuration_data)
     values ('e2830000-0000-4000-8000-000000000001',
             'e2830000-0000-4000-8000-000000000075',
+            (select id from public.mechanic_job_bikes where job_id = 'e2830000-0000-4000-8000-000000000075'),
             'e2830000-0000-4000-8000-000000000101',
             'Maza Trasera Disco 36H para Piñon con hilo QR 13mm 8S', 'product', 'rear', 1, 19990,
             '{"part_change": {"key": "freehubType", "value": "threaded_freewheel"}}')$$,
@@ -911,10 +918,11 @@ select is(pg_temp.fact('55', 'freehubType'), '["shimano_hg", true, "mechanic"]':
   'y la ficha sigue diciendo HG');
 select throws_like(
   $$insert into public.mechanic_job_items (
-      tenant_id, job_id, product_id, product_name, item_type, location_key,
+      tenant_id, job_id, job_bike_id, product_id, product_name, item_type, location_key,
       quantity, unit_price, service_configuration_data)
     values ('e2830000-0000-4000-8000-000000000001',
             'e2830000-0000-4000-8000-000000000075',
+            (select id from public.mechanic_job_bikes where job_id = 'e2830000-0000-4000-8000-000000000075'),
             'e2830000-0000-4000-8000-000000000101',
             'Maza Trasera Disco 36H para Piñon con hilo QR 13mm 8S', 'product', 'rear', 1, 19990, '{}')$$,
   '«Maza Trasera Disco 36H para Piñon con hilo QR 13mm 8S» no se guardó: «Cassette Shimano 7V CS-HG200-7 12/32T», del mismo trabajo, no calza con esta maza%',
@@ -960,29 +968,32 @@ select throws_like(
 -- queda preso de eso.
 select lives_ok(
   $$insert into public.mechanic_job_items (
-      tenant_id, job_id, product_id, product_name, item_type, location_key,
+      tenant_id, job_id, job_bike_id, product_id, product_name, item_type, location_key,
       quantity, unit_price, service_configuration_data)
     values ('e2830000-0000-4000-8000-000000000001',
             'e2830000-0000-4000-8000-000000000056',
+            (select id from public.mechanic_job_bikes where job_id = 'e2830000-0000-4000-8000-000000000056'),
             'e2830000-0000-4000-8000-000000000102',
             'maza shimano hb-rm66 36h (cl) delantero negro bolsa', 'product', 'front', 1, 19990,
             '{"part_change": {"key": "frontRotorMount", "value": "centerlock"}}')$$,
   'en la Vision terminada, una maza delantera se guarda aunque atrás el cassette no calce');
 select lives_ok(
   $$insert into public.mechanic_job_items (
-      tenant_id, job_id, product_name, item_type, location_key,
+      tenant_id, job_id, job_bike_id, product_name, item_type, location_key,
       quantity, unit_price, service_configuration_data)
     values ('e2830000-0000-4000-8000-000000000001',
             'e2830000-0000-4000-8000-000000000056',
+            (select id from public.mechanic_job_bikes where job_id = 'e2830000-0000-4000-8000-000000000056'),
             'Enrayado + Centrado', 'service', 'none', 1, 15000,
             '{"hole_count": "36", "which_wheel": "rear"}')$$,
   'y un Enrayado trasero de 36 también: el cassette no se mide con los rayos');
 select throws_like(
   $$insert into public.mechanic_job_items (
-      tenant_id, job_id, product_id, product_name, item_type, location_key,
+      tenant_id, job_id, job_bike_id, product_id, product_name, item_type, location_key,
       quantity, unit_price, service_configuration_data)
     values ('e2830000-0000-4000-8000-000000000001',
             'e2830000-0000-4000-8000-000000000056',
+            (select id from public.mechanic_job_bikes where job_id = 'e2830000-0000-4000-8000-000000000056'),
             'e2830000-0000-4000-8000-000000000141',
             'Cassette Shimano 7V CS-HG200-7 12/32T', 'product', 'rear', 1, 19990,
             '{"part_change": {"key": "freehubType", "value": "shimano_hg"}}')$$,
@@ -994,10 +1005,11 @@ select throws_like(
 -- el recibo ya exista (revisión de Codex, 2026-09-28).
 select lives_ok(
   $$insert into public.mechanic_job_items (
-      tenant_id, job_id, product_id, product_name, item_type, location_key,
+      tenant_id, job_id, job_bike_id, product_id, product_name, item_type, location_key,
       quantity, unit_price, service_configuration_data)
     values ('e2830000-0000-4000-8000-000000000001',
             'e2830000-0000-4000-8000-000000000075',
+            (select id from public.mechanic_job_bikes where job_id = 'e2830000-0000-4000-8000-000000000075'),
             'e2830000-0000-4000-8000-000000000144',
             'Mando Shimano Tourney SL-TX50 8V derecho', 'product', 'none', 1, 12990, '{}')$$,
   'la Trek 3700 terminada suma un mando trasero');
@@ -1019,11 +1031,12 @@ select is(
 -- con la ficha de 6 pernos; con la HB-RM66 en el mismo trabajo, sí.
 select lives_ok(
   $$insert into public.mechanic_job_items (
-      id, tenant_id, job_id, product_id, product_name, item_type, location_key,
+      id, tenant_id, job_id, job_bike_id, product_id, product_name, item_type, location_key,
       quantity, unit_price, service_configuration_data)
     values ('e2830000-0000-4000-8000-000000000186',
             'e2830000-0000-4000-8000-000000000001',
             'e2830000-0000-4000-8000-000000000054',
+            (select id from public.mechanic_job_bikes where job_id = 'e2830000-0000-4000-8000-000000000054'),
             'e2830000-0000-4000-8000-000000000102',
             'maza shimano hb-rm66 36h (cl) delantero negro bolsa', 'product', 'front', 1, 19990,
             '{"part_change": {"key": "frontRotorMount", "value": "centerlock"}}')$$,
@@ -1053,10 +1066,11 @@ select throws_like(
   'cambiar su maza de 36H por la Betta de 32H con la misma marca no se guarda');
 select throws_like(
   $$insert into public.mechanic_job_items (
-      tenant_id, job_id, product_name, item_type, location_key,
+      tenant_id, job_id, job_bike_id, product_name, item_type, location_key,
       quantity, unit_price, service_configuration_data)
     values ('e2830000-0000-4000-8000-000000000001',
             'e2830000-0000-4000-8000-000000000051',
+            (select id from public.mechanic_job_bikes where job_id = 'e2830000-0000-4000-8000-000000000051'),
             'Enrayado + Centrado', 'service', 'none', 1, 15000,
             '{"hole_count": "40", "which_wheel": "rear"}')$$,
   '«Enrayado + Centrado» no se guardó: otro Enrayado del mismo trabajo arma la rueda trasera a 36 rayos%',
@@ -1093,11 +1107,12 @@ select throws_like(
 -- Una maza que dice ser de la otra rueda no es la maza de ésta.
 select lives_ok(
   $$insert into public.mechanic_job_items (
-      id, tenant_id, job_id, product_id, product_name, item_type, location_key,
+      id, tenant_id, job_id, job_bike_id, product_id, product_name, item_type, location_key,
       quantity, unit_price, service_configuration_data)
     values ('e2830000-0000-4000-8000-000000000190',
             'e2830000-0000-4000-8000-000000000001',
             'e2830000-0000-4000-8000-000000000067',
+            (select id from public.mechanic_job_bikes where job_id = 'e2830000-0000-4000-8000-000000000067'),
             'e2830000-0000-4000-8000-000000000122',
             'Disco freno G3 AE 160mm Genérico con tornillos 1Un', 'product', 'rear', 1, 9990, '{}')$$,
   'un rotor trasero en el trabajo de la Lahsen');

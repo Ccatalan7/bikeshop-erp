@@ -688,6 +688,44 @@ log con `grep -v "Failed: 0"`: un archivo que muere antes de su plan sale con
 `Tests: 0 Failed: 0` y queda fuera del filtro; se leen todas las líneas
 `Wstat`.
 
+**Ampliado el 2026-10-01, con la suite completa.** Lo que `just db-test`
+imprime al fallar son las últimas 120 líneas: con 261 archivos, el resumen
+queda cortado y una comparación hecha sobre esa cola pierde archivos (la
+primera, con `20261001190000`–`200000`, dio un «archivo nuevo en rojo» que no
+lo era). El log entero queda en `.tmp/db/pgtap-<fecha>-<hora>.log`; se compara
+ése. Cuando el cambio es el cuerpo de funciones, «sin el cambio» se arma sin
+escribir a mano un inverso: se leen los cuerpos de producción con
+`pg_get_functiondef` por `query.sh production --format json`, se aplican en
+local en una transacción, se corre la suite, y se reaplican las migraciones
+(por eso tienen que ser idempotentes: un `create function` sin `or replace`
+lo impide). Ese día, 110 de los 261 archivos estaban rojos en local por la
+deriva conocida, idénticos prueba por prueba con y sin el cambio. Y
+`query.sh <entorno> --file` exige que el archivo termine en `;`: sin él, el
+`rollback` que agrega para la lectura sale como `syntax error at or near
+"rollback"`.
+
+## Una reparación por heurística corre una vez, cuando reemplaza al escritor roto (2026-10-01)
+
+`20261001200000` pasa a su bici las líneas de General que parecen de la bici
+(servicios, «Componentes», «Servicio»). Eso vale para lo que dejó la
+sincronización vieja; después del arreglo, un componente en General puede ser
+una compra aparte, y la regla de «migración idempotente» hacía que volver a
+correrla lo moviera (revisión de Codex). La marca es el cuerpo exacto del
+escritor roto: antes del paso que lo reemplaza, una tabla temporal `on commit
+drop` guarda si `md5(prosrc)` es el de producción antes del cambio, y la
+reparación sólo corre si lo es. Un recálculo puro (subtotales, espejos de la
+factura) sí se repite sin marca. Y el read-back no puede exigir «ninguna
+línea queda así»: eso es lo que hizo la migración, no una regla del sistema;
+va como columna informativa.
+
+Para probar una reparación sobre un estado viejo, ese estado se siembra con
+`set local session_replication_role = replica`. Con los disparadores vivos,
+vincular la factura al trabajo corre la factura → el trabajo, que reescribe
+líneas y espejos, y una factura `paid` sin pago vuelve a `confirmed`: el
+fixture deja de parecerse a producción (costó dos corridas). Se agrega un
+control: sin la marca de la sincronización, la guardia de lo pagado sigue
+rechazando el mismo cambio.
+
 ## Un disparador nuevo en una tabla del respaldo del taller se registra en la recuperación (2026-10-01)
 
 `workshop_restore_effects_review_internal` rechaza la recuperación

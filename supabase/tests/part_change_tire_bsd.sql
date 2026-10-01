@@ -244,72 +244,102 @@ select 'e2810000-0000-4000-8000-000000000001', j.id, j.bike_id
  where j.tenant_id = 'e2810000-0000-4000-8000-000000000001'
 on conflict (job_id, bike_id) do nothing;
 
+-- Cada línea va en la pestaña de su bici: una de General no es de ninguna
+-- (20261001195000).
 -- Trabajo 1 (Oxford 29"): el Ardent atrás y un 27,5 adelante.
 -- Trabajo 2 (Avalanche 26''): el Cameron (559) adelante y el Ardent (622)
 -- atrás. Trabajo 3 (Trek, «27.5" - 26"»): el Voltage (584) adelante y el
 -- Cameron (559) atrás. Trabajo 4 (sin aro): el Ardent adelante. Trabajo 5
 -- (la misma bici sin aro, después): el FREEDOM (622) adelante.
 insert into public.mechanic_job_items (
-  id, tenant_id, job_id, product_id, product_name, item_type, location_key,
+  id, tenant_id, job_id, job_bike_id, product_id, product_name, item_type, location_key,
   quantity, unit_price, service_configuration_data
 ) values
   ('e2810000-0000-4000-8000-000000000061', 'e2810000-0000-4000-8000-000000000001',
-   'e2810000-0000-4000-8000-000000000051', 'e2810000-0000-4000-8000-000000000101',
+   'e2810000-0000-4000-8000-000000000051',
+   (select id from public.mechanic_job_bikes where job_id = 'e2810000-0000-4000-8000-000000000051'),
+   'e2810000-0000-4000-8000-000000000101',
    'MAXXIS ALAMBRE 29X2.25 M315P ARDENT', 'product', 'rear', 1, 32990,
    '{"part_change": {"key": "rearWheelBsdMm", "value": 622}}'),
   ('e2810000-0000-4000-8000-000000000062', 'e2810000-0000-4000-8000-000000000001',
-   'e2810000-0000-4000-8000-000000000051', 'e2810000-0000-4000-8000-000000000102',
+   'e2810000-0000-4000-8000-000000000051',
+   (select id from public.mechanic_job_bikes where job_id = 'e2810000-0000-4000-8000-000000000051'),
+   'e2810000-0000-4000-8000-000000000102',
    'Neumatico Bicicleta Aro 27.5 X 2.10 Voltage Best', 'product', 'front', 1, 14990,
    '{"part_change": {"key": "frontWheelBsdMm", "value": 584}}'),
   ('e2810000-0000-4000-8000-000000000063', 'e2810000-0000-4000-8000-000000000001',
-   'e2810000-0000-4000-8000-000000000052', 'e2810000-0000-4000-8000-000000000103',
+   'e2810000-0000-4000-8000-000000000052',
+   (select id from public.mechanic_job_bikes where job_id = 'e2810000-0000-4000-8000-000000000052'),
+   'e2810000-0000-4000-8000-000000000103',
    'NEUMATICO ARISUN 26 X 2.10 MOUNT CAMERON', 'product', 'front', 1, 12990,
    '{"part_change": {"key": "frontWheelBsdMm", "value": 559}}'),
   ('e2810000-0000-4000-8000-000000000064', 'e2810000-0000-4000-8000-000000000001',
-   'e2810000-0000-4000-8000-000000000052', 'e2810000-0000-4000-8000-000000000101',
+   'e2810000-0000-4000-8000-000000000052',
+   (select id from public.mechanic_job_bikes where job_id = 'e2810000-0000-4000-8000-000000000052'),
+   'e2810000-0000-4000-8000-000000000101',
    'MAXXIS ALAMBRE 29X2.25 M315P ARDENT', 'product', 'rear', 1, 32990,
    '{"part_change": {"key": "rearWheelBsdMm", "value": 622}}'),
   ('e2810000-0000-4000-8000-000000000065', 'e2810000-0000-4000-8000-000000000001',
-   'e2810000-0000-4000-8000-000000000053', 'e2810000-0000-4000-8000-000000000102',
+   'e2810000-0000-4000-8000-000000000053',
+   (select id from public.mechanic_job_bikes where job_id = 'e2810000-0000-4000-8000-000000000053'),
+   'e2810000-0000-4000-8000-000000000102',
    'Neumatico Bicicleta Aro 27.5 X 2.10 Voltage Best', 'product', 'front', 1, 14990,
    '{"part_change": {"key": "frontWheelBsdMm", "value": 584}}'),
   ('e2810000-0000-4000-8000-000000000066', 'e2810000-0000-4000-8000-000000000001',
-   'e2810000-0000-4000-8000-000000000053', 'e2810000-0000-4000-8000-000000000103',
+   'e2810000-0000-4000-8000-000000000053',
+   (select id from public.mechanic_job_bikes where job_id = 'e2810000-0000-4000-8000-000000000053'),
+   'e2810000-0000-4000-8000-000000000103',
    'NEUMATICO ARISUN 26 X 2.10 MOUNT CAMERON', 'product', 'rear', 1, 12990,
    '{"part_change": {"key": "rearWheelBsdMm", "value": 559}}'),
   ('e2810000-0000-4000-8000-000000000067', 'e2810000-0000-4000-8000-000000000001',
-   'e2810000-0000-4000-8000-000000000054', 'e2810000-0000-4000-8000-000000000101',
+   'e2810000-0000-4000-8000-000000000054',
+   (select id from public.mechanic_job_bikes where job_id = 'e2810000-0000-4000-8000-000000000054'),
+   'e2810000-0000-4000-8000-000000000101',
    'MAXXIS ALAMBRE 29X2.25 M315P ARDENT', 'product', 'front', 1, 32990,
    '{"part_change": {"key": "frontWheelBsdMm", "value": 622}}'),
   ('e2810000-0000-4000-8000-000000000068', 'e2810000-0000-4000-8000-000000000001',
-   'e2810000-0000-4000-8000-000000000055', 'e2810000-0000-4000-8000-000000000104',
+   'e2810000-0000-4000-8000-000000000055',
+   (select id from public.mechanic_job_bikes where job_id = 'e2810000-0000-4000-8000-000000000055'),
+   'e2810000-0000-4000-8000-000000000104',
    'Neumático FREEDOM Dual, 29x2.10', 'product', 'front', 1, 15990,
    '{"part_change": {"key": "frontWheelBsdMm", "value": 622}}'),
   ('e2810000-0000-4000-8000-000000000071', 'e2810000-0000-4000-8000-000000000001',
-   'e2810000-0000-4000-8000-000000000056', 'e2810000-0000-4000-8000-000000000102',
+   'e2810000-0000-4000-8000-000000000056',
+   (select id from public.mechanic_job_bikes where job_id = 'e2810000-0000-4000-8000-000000000056'),
+   'e2810000-0000-4000-8000-000000000102',
    'Neumatico Bicicleta Aro 27.5 X 2.10 Voltage Best', 'product', 'front', 1, 14990,
    '{"part_change": {"key": "frontWheelBsdMm", "value": 584}}'),
   -- Trabajos 7 y 8 (Bianchi 26''): dos Voltage adelante, uno después del otro.
   ('e2810000-0000-4000-8000-000000000072', 'e2810000-0000-4000-8000-000000000001',
-   'e2810000-0000-4000-8000-000000000057', 'e2810000-0000-4000-8000-000000000102',
+   'e2810000-0000-4000-8000-000000000057',
+   (select id from public.mechanic_job_bikes where job_id = 'e2810000-0000-4000-8000-000000000057'),
+   'e2810000-0000-4000-8000-000000000102',
    'Neumatico Bicicleta Aro 27.5 X 2.10 Voltage Best', 'product', 'front', 1, 14990,
    '{"part_change": {"key": "frontWheelBsdMm", "value": 584}}'),
   ('e2810000-0000-4000-8000-000000000073', 'e2810000-0000-4000-8000-000000000001',
-   'e2810000-0000-4000-8000-000000000058', 'e2810000-0000-4000-8000-000000000102',
+   'e2810000-0000-4000-8000-000000000058',
+   (select id from public.mechanic_job_bikes where job_id = 'e2810000-0000-4000-8000-000000000058'),
+   'e2810000-0000-4000-8000-000000000102',
    'Neumatico Bicicleta Aro 27.5 X 2.10 Voltage Best', 'product', 'front', 1, 14990,
    '{"part_change": {"key": "frontWheelBsdMm", "value": 584}}'),
   -- Trabajo 9 (sin aro): la llanta Weinmann 29" adelante. Trabajo 10: un
   -- Voltage adelante después.
   ('e2810000-0000-4000-8000-000000000074', 'e2810000-0000-4000-8000-000000000001',
-   'e2810000-0000-4000-8000-000000000059', 'e2810000-0000-4000-8000-000000000105',
+   'e2810000-0000-4000-8000-000000000059',
+   (select id from public.mechanic_job_bikes where job_id = 'e2810000-0000-4000-8000-000000000059'),
+   'e2810000-0000-4000-8000-000000000105',
    'Llanta Weinmann U32 TL 29" Ojetillos 32H Presta Negro', 'product', 'front', 1, 45990,
    '{"part_change": {"key": "frontWheelBsdMm", "value": 622}}'),
   ('e2810000-0000-4000-8000-000000000075', 'e2810000-0000-4000-8000-000000000001',
-   'e2810000-0000-4000-8000-000000000060', 'e2810000-0000-4000-8000-000000000102',
+   'e2810000-0000-4000-8000-000000000060',
+   (select id from public.mechanic_job_bikes where job_id = 'e2810000-0000-4000-8000-000000000060'),
+   'e2810000-0000-4000-8000-000000000102',
    'Neumatico Bicicleta Aro 27.5 X 2.10 Voltage Best', 'product', 'front', 1, 14990,
    '{"part_change": {"key": "frontWheelBsdMm", "value": 584}}'),
   ('e2810000-0000-4000-8000-000000000076', 'e2810000-0000-4000-8000-000000000001',
-   'e2810000-0000-4000-8000-000000000059', 'e2810000-0000-4000-8000-000000000101',
+   'e2810000-0000-4000-8000-000000000059',
+   (select id from public.mechanic_job_bikes where job_id = 'e2810000-0000-4000-8000-000000000059'),
+   'e2810000-0000-4000-8000-000000000101',
    'MAXXIS ALAMBRE 29X2.25 M315P ARDENT', 'product', 'front', 1, 24990,
    '{"part_change": {"key": "frontWheelBsdMm", "value": 622}}');
 
@@ -441,11 +471,13 @@ select is(
 -- siembra sin disparadores para que no se aplique sola.
 set local session_replication_role = replica;
 insert into public.mechanic_job_items (
-  id, tenant_id, job_id, product_id, product_name, item_type, location_key,
+  id, tenant_id, job_id, job_bike_id, product_id, product_name, item_type, location_key,
   quantity, unit_price, service_configuration_data
 ) values
   ('e2810000-0000-4000-8000-000000000069', 'e2810000-0000-4000-8000-000000000001',
-   'e2810000-0000-4000-8000-000000000051', 'e2810000-0000-4000-8000-000000000104',
+   'e2810000-0000-4000-8000-000000000051',
+   (select id from public.mechanic_job_bikes where job_id = 'e2810000-0000-4000-8000-000000000051'),
+   'e2810000-0000-4000-8000-000000000104',
    'Neumático FREEDOM Dual, 29x2.10', 'product', 'front', 1, 15990,
    '{"part_change": {"key": "frontWheelBsdMm", "value": 622}}');
 set local session_replication_role = origin;
@@ -588,11 +620,13 @@ select is(
 -- 559 del mismo trabajo.
 select throws_like(
   $$insert into public.mechanic_job_items (
-      id, tenant_id, job_id, product_id, product_name, item_type, location_key,
+      id, tenant_id, job_id, job_bike_id, product_id, product_name, item_type, location_key,
       quantity, unit_price, service_configuration_data)
     values (
       'e2810000-0000-4000-8000-000000000070', 'e2810000-0000-4000-8000-000000000001',
-      'e2810000-0000-4000-8000-000000000053', 'e2810000-0000-4000-8000-000000000105',
+      'e2810000-0000-4000-8000-000000000053',
+      (select id from public.mechanic_job_bikes where job_id = 'e2810000-0000-4000-8000-000000000053'),
+      'e2810000-0000-4000-8000-000000000105',
       'Llanta Weinmann U32 TL 29" Ojetillos 32H Presta Negro', 'product', 'rear', 1, 45990,
       '{"part_change": {"key": "rearWheelBsdMm", "value": 622}}')$$,
   '%Llanta Weinmann U32 TL 29" Ojetillos 32H Presta Negro» no se guardó: 622 (29″/700c) en la rueda trasera no calza con el neumático que instala el trabajo (el neumático trasero es 559 (26″))%',

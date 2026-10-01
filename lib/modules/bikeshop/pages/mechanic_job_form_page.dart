@@ -3822,8 +3822,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
   /// Los cambios de ficha que propone una línea de repuesto, con la ficha de
   /// la bici de la línea y las marcas que el mecánico ya confirmó en ella. La
-  /// bici es la de `job_line_bike_internal`: la de su pestaña; en General, la
-  /// única bici del trabajo; con varias (o sin bicis), ninguna: el chip pide
+  /// bici es la de `job_line_bike_internal`: la de su pestaña, y nada más.
+  /// General es lo que el cliente compra aparte: una línea de General no es de
+  /// ninguna bici, tampoco con una sola (dueño, 2026-10-01). Ahí el chip pide
   /// asignar la línea a su bici («Asignar a…») y no deja marca, porque al
   /// terminar el servidor no escribiría (`line_without_bike`). Así el chip no
   /// promete lo que el servidor rechazará (revisión de Codex, 2026-09-28).
@@ -3844,23 +3845,17 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     final physicalTabs =
         _bikeTabs.where((tab) => !tab.isGeneralTab).toList(growable: false);
     final currentTab = _currentBikeTab;
-    final tab = currentTab != null &&
-            currentTab.isGeneralTab &&
-            physicalTabs.length == 1
-        ? physicalTabs.single
-        : currentTab;
-    final profile = tab == null || tab.isGeneralTab
+    final tab =
+        currentTab != null && !currentTab.isGeneralTab ? currentTab : null;
+    final profile = tab == null
         ? null
         : _pendingBikeProfileForBike(tab.bike) ??
             (_selectedBike?.id == tab.bike?.id ? _selectedBikeProfile : null);
-    final bike = tab == null || tab.isGeneralTab ? null : tab.bike;
-    // Las otras líneas de esa bici: las de su pestaña y, cuando el trabajo
-    // tiene una sola bici, las de General.
+    final bike = tab?.bike;
+    // Las otras líneas de esa bici: las de su pestaña. Las de General no son
+    // de ninguna bici.
     final others = [
-      if (tab != null && !tab.isGeneralTab) ...tab.partItems,
-      if (physicalTabs.length == 1 || tab == null || tab.isGeneralTab)
-        for (final general in _bikeTabs.where((t) => t.isGeneralTab))
-          ...general.partItems,
+      if (tab != null) ...tab.partItems,
       if (_bikeTabs.isEmpty) ..._partItems,
     ].where((other) => other.id != item.id);
     return partBikeFactChanges(
@@ -3904,7 +3899,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             ),
       ], links),
       lineBike: partLineBike(
-        inBikeTab: currentTab != null && !currentTab.isGeneralTab,
+        inBikeTab: tab != null,
         bikeCount: physicalTabs.length,
       ),
       jobFinished: _existingJob?.status == JobStatus.finalizado ||

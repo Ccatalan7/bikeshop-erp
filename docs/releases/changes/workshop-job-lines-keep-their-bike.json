@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "workshop",
+  "id": "workshop-job-lines-keep-their-bike",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Las líneas del trabajo se quedan en su bici al facturar",
+  "summary": "General queda para lo que el cliente compra aparte: el menú de cada línea la pasa a otra bici o a General, y el subtotal de cada bici suma también lo escrito a mano.",
+  "items": [
+    "Editar la factura ya no borra las líneas de la bici ni sus tareas, y lo que va en General ya no cambia la ficha ni la historia de la bici."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/bikeshop/services/job_form_lines.dart",
+      "sha256": "dbf19adc637f75dad0d659f143cce04c4db5db050e9c54a75b3394e26a77835c"
+    },
+    {
+      "path": "lib/modules/bikeshop/pages/mechanic_job_form_page.dart",
+      "sha256": "0c411cca3eac54412d4bb744b067e067210f2777253c2bee9f8ff1b9cb9d562f"
+    },
+    {
+      "path": "lib/modules/bikeshop/services/part_bike_fact_change.dart",
+      "sha256": "b97ef759fbe1599966069cf4480a77420973f5e8ce7d5b980148eb58e2a10bbe"
+    },
+    {
+      "path": "lib/modules/bikeshop/services/bikeshop_service.dart",
+      "sha256": "6ed66d9afb2118c7ca9bc22d19ffa79c41226c72c1b252a6aa6537655cdf9021"
+    }
+  ]
+}

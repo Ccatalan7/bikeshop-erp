@@ -221,9 +221,11 @@ insert into public.mechanic_job_bikes (tenant_id, job_id, bike_id) values
    'e2800000-0000-4000-8000-000000000034')
 on conflict (job_id, bike_id) do nothing;
 
--- Trabajo 1 (Scott): el RT56 de 180 va atrás con su marca, en la pestaña de
--- la bici; un RT56 de 160 adelante sin marca (como las 4 líneas antiguas con
--- rueda: no cambia nada), y unas pastillas en General.
+-- Cada línea va en la pestaña de su bici: una de General no es de ninguna
+-- (20261001195000).
+-- Trabajo 1 (Scott): el RT56 de 180 va atrás con su marca; un RT56 de 160
+-- adelante sin marca (como las 4 líneas antiguas con rueda: no cambia nada),
+-- y unas pastillas en General.
 -- Trabajo 2 (Norco): un ZTTO de 203 adelante con marca, que se borra antes de
 -- terminar. Trabajo 3 (Trek, freno de llanta): un RT56 de 180 adelante.
 -- Trabajo 4 (otra Norco): un RT56 de 180 atrás cuya marca dice 160.
@@ -241,7 +243,9 @@ insert into public.mechanic_job_items (
    '{"part_change": {"key": "rearRotorSizeMm", "value": 180}}'::jsonb),
   ('e2800000-0000-4000-8000-000000000062',
    'e2800000-0000-4000-8000-000000000001',
-   'e2800000-0000-4000-8000-000000000051', null,
+   'e2800000-0000-4000-8000-000000000051',
+   (select id from public.mechanic_job_bikes
+     where job_id = 'e2800000-0000-4000-8000-000000000051'),
    'e2800000-0000-4000-8000-000000000102',
    'Disco freno Shimano Deore RT56 160MM', 'product', 'front', 1, 22990, null),
   ('e2800000-0000-4000-8000-000000000063',
@@ -251,19 +255,25 @@ insert into public.mechanic_job_items (
    'Pastillas de freno Shimano B01S resina', 'product', 'none', 1, 8990, null),
   ('e2800000-0000-4000-8000-000000000064',
    'e2800000-0000-4000-8000-000000000001',
-   'e2800000-0000-4000-8000-000000000052', null,
+   'e2800000-0000-4000-8000-000000000052',
+   (select id from public.mechanic_job_bikes
+     where job_id = 'e2800000-0000-4000-8000-000000000052'),
    'e2800000-0000-4000-8000-000000000103',
    'Rotor ZTTO Acero Inoxidable 203x2.3mm', 'product', 'front', 1, 19990,
    '{"part_change": {"key": "frontRotorSizeMm", "value": 203}}'::jsonb),
   ('e2800000-0000-4000-8000-000000000065',
    'e2800000-0000-4000-8000-000000000001',
-   'e2800000-0000-4000-8000-000000000053', null,
+   'e2800000-0000-4000-8000-000000000053',
+   (select id from public.mechanic_job_bikes
+     where job_id = 'e2800000-0000-4000-8000-000000000053'),
    'e2800000-0000-4000-8000-000000000101',
    'Disco freno Shimano Deore RT56 180MM', 'product', 'front', 1, 25990,
    '{"part_change": {"key": "frontRotorSizeMm", "value": 180}}'::jsonb),
   ('e2800000-0000-4000-8000-000000000066',
    'e2800000-0000-4000-8000-000000000001',
-   'e2800000-0000-4000-8000-000000000054', null,
+   'e2800000-0000-4000-8000-000000000054',
+   (select id from public.mechanic_job_bikes
+     where job_id = 'e2800000-0000-4000-8000-000000000054'),
    'e2800000-0000-4000-8000-000000000101',
    'Disco freno Shimano Deore RT56 180MM', 'product', 'rear', 1, 25990,
    '{"part_change": {"key": "rearRotorSizeMm", "value": 160}}'::jsonb);
@@ -652,7 +662,9 @@ select ok(
 -- Una línea que cambia la ficha no se mueve a otro trabajo.
 select throws_like(
   $$update public.mechanic_job_items
-       set job_id = 'e2800000-0000-4000-8000-000000000051'
+       set job_id = 'e2800000-0000-4000-8000-000000000051',
+           job_bike_id = (select id from public.mechanic_job_bikes
+                           where job_id = 'e2800000-0000-4000-8000-000000000051')
      where id = 'e2800000-0000-4000-8000-000000000065'$$,
   '%no pasa a otro trabajo%',
   'mover el rotor de la Trek al trabajo de la Scott se detiene');
@@ -660,12 +672,14 @@ select throws_like(
 -- Una línea nueva con rotor en el trabajo terminado de la Trek no se guarda.
 select throws_ok(
   $$insert into public.mechanic_job_items (
-      id, tenant_id, job_id, product_id, product_name, item_type,
+      id, tenant_id, job_id, job_bike_id, product_id, product_name, item_type,
       location_key, quantity, unit_price, service_configuration_data)
     values (
       'e2800000-0000-4000-8000-000000000067',
       'e2800000-0000-4000-8000-000000000001',
       'e2800000-0000-4000-8000-000000000053',
+      (select id from public.mechanic_job_bikes
+        where job_id = 'e2800000-0000-4000-8000-000000000053'),
       'e2800000-0000-4000-8000-000000000102',
       'Disco freno Shimano Deore RT56 160MM', 'product', 'rear', 1, 22990,
       '{"part_change": {"key": "rearRotorSizeMm", "value": 160}}'::jsonb)$$,
@@ -749,11 +763,11 @@ select is(
   'la línea queda como estaba');
 
 -- ============================================================================
--- Revisión de Codex: la bici de una línea de General es una sola
+-- La bici de una línea es la de su fila: ni la cabecera ni General
 -- ============================================================================
 
 -- Trabajo 5: la cabecera dice Scott, pero su única fila de bicis es la
--- Norco. Una línea de General es de la Norco, también para el parche. Lleva
+-- Norco. Una línea de la Norco es de la Norco, también para el parche. Lleva
 -- además una línea mal formada que dice perforaciones y un repuesto.
 insert into public.mechanic_jobs (id, tenant_id, customer_id, bike_id, job_number, created_by)
 values ('e2800000-0000-4000-8000-000000000055',
@@ -773,13 +787,17 @@ insert into public.mechanic_job_items (
 ) values
   ('e2800000-0000-4000-8000-000000000069',
    'e2800000-0000-4000-8000-000000000001',
-   'e2800000-0000-4000-8000-000000000055', null,
+   'e2800000-0000-4000-8000-000000000055',
+   (select id from public.mechanic_job_bikes
+     where job_id = 'e2800000-0000-4000-8000-000000000055'),
    'e2800000-0000-4000-8000-000000000101',
    'Disco freno Shimano Deore RT56 180MM', 'product', 'rear', 1, 25990,
    '{"part_change": {"key": "rearRotorSizeMm", "value": 180}}'::jsonb),
   ('e2800000-0000-4000-8000-000000000070',
    'e2800000-0000-4000-8000-000000000001',
-   'e2800000-0000-4000-8000-000000000055', null,
+   'e2800000-0000-4000-8000-000000000055',
+   (select id from public.mechanic_job_bikes
+     where job_id = 'e2800000-0000-4000-8000-000000000055'),
    'e2800000-0000-4000-8000-000000000103',
    'Rotor ZTTO Acero Inoxidable 203x2.3mm', 'product', 'front', 1, 19990,
    '{"hole_count": "28", "part_change": {"key": "frontRotorSizeMm", "value": 203}}'::jsonb);
@@ -789,7 +807,16 @@ select is(
     'e2800000-0000-4000-8000-000000000001',
     'e2800000-0000-4000-8000-000000000069'),
   'e2800000-0000-4000-8000-000000000032'::uuid,
-  'la línea de General es de la única bici del trabajo, no de la cabecera');
+  'la línea es de la bici de su fila, no de la cabecera');
+
+-- General es lo que el cliente compra aparte: no es de ninguna bici, tampoco
+-- en un trabajo de una sola (dueño, 2026-10-01).
+select is(
+  public.job_line_bike_internal(
+    'e2800000-0000-4000-8000-000000000001',
+    'e2800000-0000-4000-8000-000000000063'),
+  null::uuid,
+  'las pastillas de General no son de la única bici del trabajo');
 
 select throws_ok(
   $$select public.transition_mechanic_job_status(
@@ -837,12 +864,14 @@ select throws_ok(
   'el parche no lo escribe en la Scott de la cabecera');
 select throws_ok(
   $$insert into public.mechanic_job_items (
-      id, tenant_id, job_id, product_id, product_name, item_type,
+      id, tenant_id, job_id, job_bike_id, product_id, product_name, item_type,
       location_key, quantity, unit_price, service_configuration_data)
     values (
       'e2800000-0000-4000-8000-000000000071',
       'e2800000-0000-4000-8000-000000000001',
       'e2800000-0000-4000-8000-000000000055',
+      (select id from public.mechanic_job_bikes
+        where job_id = 'e2800000-0000-4000-8000-000000000055'),
       'e2800000-0000-4000-8000-000000000102',
       'Disco freno Shimano Deore RT56 160MM', 'product', 'front', 1, 22990,
       '{"hole_count": "28", "part_change": {"key": "frontRotorSizeMm", "value": 160}}'::jsonb)$$,
@@ -911,13 +940,15 @@ insert into public.mechanic_job_items (
 ) values
   ('e2800000-0000-4000-8000-000000000072',
    'e2800000-0000-4000-8000-000000000001',
-   'e2800000-0000-4000-8000-000000000056', null,
+   'e2800000-0000-4000-8000-000000000056',
+   (select id from public.mechanic_job_bikes where job_id = 'e2800000-0000-4000-8000-000000000056'),
    'e2800000-0000-4000-8000-000000000105',
    'Disco freno SRAM 180MM Acero Inoxidable', 'product', 'front', 1, 24990,
    '{"part_change": {"key": "frontRotorSizeMm", "value": 180}}'::jsonb),
   ('e2800000-0000-4000-8000-000000000073',
    'e2800000-0000-4000-8000-000000000001',
-   'e2800000-0000-4000-8000-000000000057', null,
+   'e2800000-0000-4000-8000-000000000057',
+   (select id from public.mechanic_job_bikes where job_id = 'e2800000-0000-4000-8000-000000000057'),
    'e2800000-0000-4000-8000-000000000103',
    'Rotor ZTTO Acero Inoxidable 203x2.3mm', 'product', 'front', 1, 19990,
    '{"part_change": {"key": "frontRotorSizeMm", "value": 203}}'::jsonb);
@@ -955,13 +986,15 @@ insert into public.mechanic_job_items (
 ) values
   ('e2800000-0000-4000-8000-000000000074',
    'e2800000-0000-4000-8000-000000000001',
-   'e2800000-0000-4000-8000-000000000056', null,
+   'e2800000-0000-4000-8000-000000000056',
+   (select id from public.mechanic_job_bikes where job_id = 'e2800000-0000-4000-8000-000000000056'),
    'e2800000-0000-4000-8000-000000000105',
    'Disco freno SRAM 180MM Acero Inoxidable', 'product', 'rear', 1, 24990,
    '{"part_change": {"key": "rearRotorSizeMm", "value": 180}}'::jsonb),
   ('e2800000-0000-4000-8000-000000000075',
    'e2800000-0000-4000-8000-000000000001',
-   'e2800000-0000-4000-8000-000000000057', null,
+   'e2800000-0000-4000-8000-000000000057',
+   (select id from public.mechanic_job_bikes where job_id = 'e2800000-0000-4000-8000-000000000057'),
    'e2800000-0000-4000-8000-000000000101',
    'Disco freno Shimano Deore RT56 180MM', 'product', 'rear', 1, 25990,
    '{"part_change": {"key": "rearRotorSizeMm", "value": 180}}'::jsonb);

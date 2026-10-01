@@ -281,9 +281,11 @@ String _rotorWord(String? key) =>
     key != null && key.startsWith('front') ? 'delantero' : 'trasero';
 
 /// De qué bici es una línea, como lo decide `job_line_bike_internal`: la de
-/// su pestaña; una de General es de la única bici del trabajo; con varias
-/// bicis, de ninguna, y un trabajo sin bicis no tiene ficha que cambiar.
-enum PartLineBike { resolved, several, none }
+/// su pestaña, y nada más. General es lo que el cliente compra aparte, así
+/// que una línea de General no es de ninguna bici, tampoco en un trabajo de
+/// una sola (dueño, 2026-10-01; 20261001195000); un trabajo sin bicis no
+/// tiene ficha que cambiar.
+enum PartLineBike { resolved, general, none }
 
 /// La bici de una línea según dónde está: en la pestaña de una bici
 /// ([inBikeTab]) o en General, con las [bikeCount] bicis del trabajo.
@@ -291,17 +293,17 @@ PartLineBike partLineBike({
   required bool inBikeTab,
   required int bikeCount,
 }) {
-  if (inBikeTab || bikeCount == 1) return PartLineBike.resolved;
-  return bikeCount > 1 ? PartLineBike.several : PartLineBike.none;
+  if (inBikeTab) return PartLineBike.resolved;
+  return bikeCount > 0 ? PartLineBike.general : PartLineBike.none;
 }
 
 /// Qué hace el repuesto con la ficha de la bici.
 enum PartBikeFactChangeStatus {
-  /// La línea no es de ninguna bici: en General de un trabajo con varias
-  /// (o sin bicis). Al terminar el servidor no escribe y avisa
-  /// `line_without_bike`; el chip no promete nada ni guarda marca hasta que
-  /// la línea se asigne a su bici («Asignar a…» en su menú, que la pasa sin
-  /// duplicarla) (revisión, 2026-09-28).
+  /// La línea no es de ninguna bici: está en General (o el trabajo no tiene
+  /// bicis). Al terminar el servidor no escribe y avisa `line_without_bike`;
+  /// el chip no promete nada ni guarda marca hasta que la línea se asigne a
+  /// su bici («Asignar a…» en su menú, que la pasa sin duplicarla)
+  /// (revisión, 2026-09-28; con una sola bici también, 2026-10-01).
   chooseBike,
 
   /// Falta elegir la rueda: sin ella no cambia nada.
@@ -573,10 +575,11 @@ class PartBikeFactChange {
   /// La precaución que acompaña al cambio, cuando la hay.
   String? get tooltip => switch (status) {
         PartBikeFactChangeStatus.chooseBike
-            when lineBike == PartLineBike.several =>
-          'El trabajo tiene varias bicis y una línea de General no es de '
-              'ninguna: al terminar, la ficha no cambiaría. «Asignar a…» en '
-              'el menú de la línea la pasa a su bici, sin duplicarla.',
+            when lineBike == PartLineBike.general =>
+          'General es lo que el cliente compra aparte: una línea de General '
+              'no es de ninguna bici y, al terminar, la ficha no cambiaría. '
+              '«Asignar a…» en el menú de la línea la pasa a su bici, sin '
+              'duplicarla.',
         PartBikeFactChangeStatus.unconfirmed =>
           'Esta línea no cambia la ficha de la bici hasta que confirmes que '
               'la pieza se instaló en esa rueda.',

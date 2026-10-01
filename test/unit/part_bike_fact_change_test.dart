@@ -1268,7 +1268,7 @@ void main() {
     });
   });
 
-  group('una línea de General es de una bici sólo si el trabajo tiene una', () {
+  group('una línea de General no es de ninguna bici, tampoco con una sola', () {
     // Rotor, neumático y cassette, como los entrega PostgREST.
     final links = [
       ..._links,
@@ -1322,30 +1322,28 @@ void main() {
       expect(
           partLineBike(inBikeTab: true, bikeCount: 2), PartLineBike.resolved);
       expect(
-          partLineBike(inBikeTab: false, bikeCount: 1), PartLineBike.resolved);
+          partLineBike(inBikeTab: true, bikeCount: 1), PartLineBike.resolved);
       expect(
-          partLineBike(inBikeTab: false, bikeCount: 2), PartLineBike.several);
+          partLineBike(inBikeTab: false, bikeCount: 1), PartLineBike.general);
+      expect(
+          partLineBike(inBikeTab: false, bikeCount: 2), PartLineBike.general);
       expect(partLineBike(inBikeTab: false, bikeCount: 0), PartLineBike.none);
     });
 
-    test('con una bici promete y marca; con dos, no', () {
+    test('en General no promete ni marca, con una bici o con dos', () {
       const hgMarker = {'key': 'freehubType', 'value': 'shimano_hg'};
-      final oneBike = inGeneral(hg200x7, hgMarker, bikes: 1)!;
-      expect(oneBike.status, PartBikeFactChangeStatus.change);
-      expect(oneBike.marker, hgMarker);
-      expect(oneBike.label,
-          'La ficha lo anota al terminar: driver trasero Shimano HG');
-
-      final twoBikes = inGeneral(hg200x7, hgMarker, bikes: 2)!;
-      expect(twoBikes.status, PartBikeFactChangeStatus.chooseBike);
-      expect(twoBikes.marker, isNull);
-      expect(
-        twoBikes.label,
-        'Cassette (driver Shimano HG): asígnalo a su bici para anotarlo en '
-        'la ficha',
-      );
-      expect(twoBikes.tooltip, contains('varias bicis'));
-      expect(twoBikes.tooltip, contains('«Asignar a…»'));
+      for (final bikes in const [1, 2]) {
+        final change = inGeneral(hg200x7, hgMarker, bikes: bikes)!;
+        expect(change.status, PartBikeFactChangeStatus.chooseBike);
+        expect(change.marker, isNull);
+        expect(
+          change.label,
+          'Cassette (driver Shimano HG): asígnalo a su bici para anotarlo en '
+          'la ficha',
+        );
+        expect(change.tooltip, contains('compra aparte'));
+        expect(change.tooltip, contains('«Asignar a…»'));
+      }
 
       // Lo mismo para el rotor y el neumático.
       final rotor = inGeneral(
@@ -2879,8 +2877,9 @@ void main() {
             "'\${mobileLayout ? 'mobile' : 'desktop'}_part_change_\${item.id}'"));
     expect(editor, contains('label: partChange.label'));
 
-    // En General, la línea es de la única bici del trabajo, como en el
-    // servidor.
+    // La bici de la línea es la de su pestaña, como en el servidor: una de
+    // General no es de ninguna, tampoco con una sola bici (dueño,
+    // 2026-10-01).
     final changeFor = source.substring(
       source.indexOf('List<PartBikeFactChange> _partChangesFor('),
       source.indexOf('void _choosePartWheel('),
@@ -2892,12 +2891,15 @@ void main() {
     expect(changeFor, contains('job: jobWheelParts(['));
     expect(changeFor, contains('holeCount: _enrayadoHoles(other),'));
     expect(changeFor, contains('bikeHubSpacingMm: {'));
-    expect(changeFor, contains('physicalTabs.length == 1'));
+    expect(changeFor, isNot(contains('physicalTabs.length == 1')));
+    expect(
+        changeFor,
+        contains('currentTab != null && !currentTab.isGeneralTab ? currentTab '
+            ': null;'));
     expect(changeFor, contains('_pendingBikeProfileForBike(tab.bike)'));
-    // Con varias bicis (o ninguna), la línea de General no es de ninguna:
-    // ni promete ni marca, y una línea protegida no muestra el aviso.
-    expect(changeFor,
-        contains('inBikeTab: currentTab != null && !currentTab.isGeneralTab,'));
+    // En General la línea no es de ninguna bici: ni promete ni marca, y una
+    // línea protegida no muestra el aviso.
+    expect(changeFor, contains('inBikeTab: tab != null,'));
     expect(changeFor, contains('bikeCount: physicalTabs.length,'));
     expect(
         editor,

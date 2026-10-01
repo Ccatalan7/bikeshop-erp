@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "general",
+  "id": "general-open-another-record",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Abrir otra ficha desde una ficha abierta muestra la nueva",
+  "summary": "Con un trabajo abierto, elegir otro en el buscador, seguir un enlace o volver Atrás muestra el que elegiste; antes la pantalla seguía en el primero.",
+  "items": [
+    "Con una ficha abierta, elegir otra del mismo tipo en el buscador, un enlace o Atrás muestra la que elegiste."
+  ],
+  "evidence": [
+    {
+      "path": "lib/shared/routes/app_router.dart",
+      "sha256": "3f55be5c15ea5cbdf71163c22a73856f114c0a1e9fa7ac4e2202180c35feae52"
+    },
+    {
+      "path": "lib/shared/routes/workspace_page_key.dart",
+      "sha256": "1a08ed5889e600e149fbbd994414779c325ec7fb543d1be5fd46ff6a8f85e727"
+    }
+  ]
+}

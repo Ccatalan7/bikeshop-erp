@@ -8,6 +8,8 @@ select no_plan();
 -- transacción que la guarda, sin la llamada que la app hace después (ítem 4,
 -- 2026-09-28). Si la app se cierra entre guardar la línea y esa llamada, la
 -- ficha ya no queda atrás.
+-- Las líneas van en la pestaña de su bici: una de General no es de ninguna
+-- (20261001195000).
 
 select has_trigger('public', 'mechanic_job_items',
   'trg_mechanic_job_items_installed_bike_facts_update',
@@ -66,16 +68,18 @@ insert into public.mechanic_job_bikes (tenant_id, job_id, bike_id) values
    'e27a0000-0000-4000-8000-000000000031')
 on conflict (job_id, bike_id) do nothing;
 insert into public.mechanic_job_items (
-  id, tenant_id, job_id, product_name, item_type, location_key,
+  id, tenant_id, job_id, job_bike_id, product_name, item_type, location_key,
   service_configuration_data, unit_price
 ) values
   ('e27a0000-0000-4000-8000-000000000061',
    'e27a0000-0000-4000-8000-000000000001',
-   'e27a0000-0000-4000-8000-000000000051', 'Enrayado + Centrado',
+   'e27a0000-0000-4000-8000-000000000051',
+   (select id from public.mechanic_job_bikes where job_id = 'e27a0000-0000-4000-8000-000000000051'), 'Enrayado + Centrado',
    'service', 'rear', '{"hole_count": "28"}'::jsonb, 25000),
   ('e27a0000-0000-4000-8000-000000000062',
    'e27a0000-0000-4000-8000-000000000001',
-   'e27a0000-0000-4000-8000-000000000052', 'Enrayado en curso',
+   'e27a0000-0000-4000-8000-000000000052',
+   (select id from public.mechanic_job_bikes where job_id = 'e27a0000-0000-4000-8000-000000000052'), 'Enrayado en curso',
    'service', 'front', '{"hole_count": "32"}'::jsonb, 25000);
 
 select set_config('request.jwt.claims', jsonb_build_object(
@@ -157,12 +161,13 @@ select is(pg_temp.receipts(), 2, 'un trabajo en curso no instala');
 -- ============================================================================
 
 insert into public.mechanic_job_items (
-  id, tenant_id, job_id, product_name, item_type, location_key,
+  id, tenant_id, job_id, job_bike_id, product_name, item_type, location_key,
   service_configuration_data, unit_price
 ) values (
   'e27a0000-0000-4000-8000-000000000063',
   'e27a0000-0000-4000-8000-000000000001',
-  'e27a0000-0000-4000-8000-000000000051', 'Enrayado delantero',
+  'e27a0000-0000-4000-8000-000000000051',
+   (select id from public.mechanic_job_bikes where job_id = 'e27a0000-0000-4000-8000-000000000051'), 'Enrayado delantero',
   'service', 'front', '{"hole_count": "28"}'::jsonb, 25000);
 
 select is(
@@ -326,12 +331,13 @@ select is(
 -- Borrar con el disparador activo deja el aviso en la misma sentencia, sin
 -- ninguna llamada después.
 insert into public.mechanic_job_items (
-  id, tenant_id, job_id, product_name, item_type, location_key,
+  id, tenant_id, job_id, job_bike_id, product_name, item_type, location_key,
   service_configuration_data, unit_price
 ) values (
   'e27a0000-0000-4000-8000-000000000064',
   'e27a0000-0000-4000-8000-000000000001',
-  'e27a0000-0000-4000-8000-000000000051', 'Enrayado delantero nuevo',
+  'e27a0000-0000-4000-8000-000000000051',
+   (select id from public.mechanic_job_bikes where job_id = 'e27a0000-0000-4000-8000-000000000051'), 'Enrayado delantero nuevo',
   'service', 'front', '{"hole_count": "32"}'::jsonb, 25000);
 delete from public.mechanic_job_items
  where id = 'e27a0000-0000-4000-8000-000000000064';

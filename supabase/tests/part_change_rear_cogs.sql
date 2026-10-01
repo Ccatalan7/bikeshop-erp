@@ -304,13 +304,19 @@ insert into public.mechanic_job_bikes (tenant_id, job_id, bike_id) values
    'e2820000-0000-4000-8000-000000000071',
    'e2820000-0000-4000-8000-000000000050');
 
+-- Cada línea va en la pestaña de su bici, menos las de 199 a 202, que van en
+-- General: una línea de General no es de ninguna bici (20261001195000).
 insert into public.mechanic_job_items (
-  id, tenant_id, job_id, product_id, product_name, item_type, location_key,
-  quantity, unit_price, service_configuration_data
+  id, tenant_id, job_id, job_bike_id, product_id, product_name, item_type,
+  location_key, quantity, unit_price, service_configuration_data
 )
 select ('e2820000-0000-4000-8000-000000000' || l.n)::uuid,
        'e2820000-0000-4000-8000-000000000001',
        ('e2820000-0000-4000-8000-000000000' || l.job)::uuid,
+       case when l.n::int < 199 then
+         (select jb.id from public.mechanic_job_bikes jb
+           where jb.job_id = ('e2820000-0000-4000-8000-000000000' || l.job)::uuid)
+       end,
        p.id, p.name, 'product', l.location_key, 1, 19990,
        coalesce(l.data::jsonb, '{}'::jsonb)
   from (values
@@ -355,7 +361,8 @@ select ('e2820000-0000-4000-8000-000000000' || l.n)::uuid,
     -- En General de 070 y 071, cada una con su marca de antes.
     ('200', '070', '101', 'rear', '{"part_change": {"key": "freehubType", "value": "shimano_hg"}}'),
     ('201', '071', '101', 'rear', '{"part_change": {"key": "freehubType", "value": "shimano_hg"}}'),
-    -- En General de 072, que sólo tiene la Bianchi; la Orion llega al guardar.
+    -- En General de 072, que sólo tiene la Bianchi (no es de ella); la Orion
+    -- llega al guardar.
     ('202', '072', '101', 'rear', '{"part_change": {"key": "freehubType", "value": "shimano_hg"}}')
   ) l(n, job, product, location_key, data)
   join public.products p on p.id = ('e2820000-0000-4000-8000-000000000' || l.product)::uuid;
@@ -511,11 +518,13 @@ select is(
 -- siembra sin disparadores para que no se aplique sola.
 set local session_replication_role = replica;
 insert into public.mechanic_job_items (
-  id, tenant_id, job_id, product_id, product_name, item_type, location_key,
+  id, tenant_id, job_id, job_bike_id, product_id, product_name, item_type, location_key,
   quantity, unit_price, service_configuration_data
 ) values
   ('e2820000-0000-4000-8000-000000000179', 'e2820000-0000-4000-8000-000000000001',
-   'e2820000-0000-4000-8000-000000000051', 'e2820000-0000-4000-8000-000000000102',
+   'e2820000-0000-4000-8000-000000000051',
+   (select id from public.mechanic_job_bikes where job_id = 'e2820000-0000-4000-8000-000000000051'),
+   'e2820000-0000-4000-8000-000000000102',
    'PIÑON CASSETTE HG 8V 12-32T SUNRACE MOD.CSM400 8BU 8BU', 'product', 'rear', 1, 19990,
    '{"part_change": {"key": "freehubType", "value": "shimano_hg"}}');
 set local session_replication_role = origin;
@@ -879,11 +888,20 @@ select is(
   'la Scott sigue con el HG que instalaron los dos, sin recibo nuevo');
 
 -- ============================================================================
--- General con dos bicis: la línea no es de ninguna
+-- General: la línea no es de ninguna bici
 -- ============================================================================
 
--- Con una sola bici, una línea de General es de esa bici (todas las líneas de
--- arriba lo son). Con dos, no: al terminar no se escribe nada y se informa.
+-- General es lo que el cliente compra aparte (dueño, 2026-10-01): una línea
+-- de General no es de ninguna bici, tenga el trabajo una o dos. Si dice un
+-- cambio de ficha, al terminar no se escribe nada y se informa.
+insert into results select 'una_bici', pg_temp.blocked_finish('072');
+select is(
+  jsonb_build_array(
+    pg_temp.problems('una_bici'),
+    (select count(*) from public.bike_technical_fact_patches
+      where job_id = 'e2820000-0000-4000-8000-000000000072')),
+  '[[{"key": "freehubType", "value": "shimano_hg", "reason": "line_without_bike"}], 0]'::jsonb,
+  'un cassette en General de un trabajo de una sola bici tampoco es de ella: bloquea el cierre sin escribir ficha');
 insert into results select 'dos_bicis', pg_temp.blocked_finish('069');
 select is(
   jsonb_build_array(

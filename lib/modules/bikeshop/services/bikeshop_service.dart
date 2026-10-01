@@ -62,6 +62,9 @@ class BikeshopService extends ChangeNotifier {
   static const List<String> _derivedJobObservationSources = [
     'job_diagnosis_sync',
   ];
+  // `job_general_item_sync` ya no se escribe (2026-10-01): sigue en estas
+  // listas para que volver a sincronizar un trabajo borre lo que se anotó
+  // desde General.
   static const List<String> _derivedJobItemSources = [
     'job_item_sync',
     'job_general_item_sync',
@@ -1268,17 +1271,10 @@ class BikeshopService extends ChangeNotifier {
         }
       }
 
-      if (isCompleted && jobBikes.length == 1) {
-        final orphanItems = itemsByJobBikeId[null] ?? const <MechanicJobItem>[];
-        if (orphanItems.isNotEmpty) {
-          await _syncCompletedJobBikeItems(
-            job: job,
-            jobBike: jobBikes.first,
-            items: orphanItems,
-            sourceOverride: 'job_general_item_sync',
-          );
-        }
-      }
+      // Las líneas de General no entran en la memoria de ninguna bici:
+      // General es lo que el cliente compra aparte, también con una sola bici
+      // (dueño, 2026-10-01). Lo que antes se anotó desde General
+      // (`job_general_item_sync`) se borra al volver a sincronizar el trabajo.
 
       await _refreshDerivedSystemStates(staleTargets.values);
     } catch (e) {
@@ -1303,7 +1299,7 @@ class BikeshopService extends ChangeNotifier {
   /// perforaciones de la rueda que armó el Enrayado). La regla y la escritura
   /// son del servidor (ítem 4, 2026-09-28): la app ya no calcula lo instalado
   /// ni busca recibos, sólo pide reaplicarlo y cuenta lo que no entró. Una
-  /// línea de General de un trabajo de una sola bici instala en esa bici.
+  /// línea de General no instala en ninguna bici (20261001195000).
   Future<List<String>> _syncInstalledBikeFacts(MechanicJob job) async {
     final jobId = job.id;
     if (jobId == null) return const [];
@@ -2162,8 +2158,8 @@ class BikeshopService extends ChangeNotifier {
     required MechanicJob job,
     required MechanicJobBike jobBike,
     required List<MechanicJobItem> items,
-    String sourceOverride = 'job_item_sync',
   }) async {
+    const source = 'job_item_sync';
     final performedAt = _resolveJobItemPerformedAt(job);
 
     for (final item in items) {
@@ -2176,7 +2172,7 @@ class BikeshopService extends ChangeNotifier {
           bikeId: jobBike.bikeId,
           target: target,
           item: item,
-          source: sourceOverride,
+          source: source,
         );
 
         String? fromLifecycleId;
@@ -2226,7 +2222,7 @@ class BikeshopService extends ChangeNotifier {
                 componentLabel: item.productName,
                 status: BikeComponentLifecycleStatus.installed,
                 installedAt: performedAt,
-                source: sourceOverride,
+                source: source,
                 notes: item.notes,
                 payload: {
                   'job_number': job.jobNumber,
@@ -2269,7 +2265,7 @@ class BikeshopService extends ChangeNotifier {
               title: _buildInterventionTitle(target, item),
               summary: _buildInterventionSummary(item),
               performedAt: performedAt,
-              source: sourceOverride,
+              source: source,
               payload: interventionPayload,
             ),
           );
@@ -2300,7 +2296,7 @@ class BikeshopService extends ChangeNotifier {
                 _truncateForStateNote(_buildInterventionTitle(target, item)),
             lastReviewedAt: performedAt,
             payload: {
-              'source': sourceOverride,
+              'source': source,
               'job_number': job.jobNumber,
             },
           ),

@@ -334,7 +334,9 @@ delete from public.mechanic_job_bikes
 
 -- Las líneas, con la marca que deja el mecánico al elegir la rueda (una
 -- lista si son varios datos). Un Enrayado dice sus perforaciones y su rueda.
--- En cada trabajo se escriben en el orden de su número.
+-- En cada trabajo se escriben en el orden de su número. Cada una va en la
+-- pestaña de la única bici de su trabajo, en la que dice (a, b, d, e) o en
+-- General (g): una línea de General no es de ninguna bici (20261001195000).
 insert into public.mechanic_job_items (
   id, tenant_id, job_id, job_bike_id, product_id, product_name, item_type,
   location_key, quantity, unit_price, service_configuration_data, created_at
@@ -347,6 +349,9 @@ select ('e2840000-0000-4000-8000-000000000' || l.n)::uuid,
          when 'b' then 'e2840000-0000-4000-8000-000000000692'::uuid
          when 'd' then 'e2840000-0000-4000-8000-000000000871'::uuid
          when 'e' then 'e2840000-0000-4000-8000-000000000881'::uuid
+         when 'g' then null
+         else (select jb.id from public.mechanic_job_bikes jb
+                where jb.job_id = ('e2840000-0000-4000-8000-000000000' || l.job)::uuid)
        end,
        case when l.product is not null
          then ('e2840000-0000-4000-8000-000000000' || l.product)::uuid end,
@@ -410,7 +415,7 @@ select ('e2840000-0000-4000-8000-000000000' || l.n)::uuid,
     ('331', '068', '202', 'rear', '{"part_change": [{"key": "rearWheelBsdMm", "value": 622}, {"key": "rearSpokeHoles", "value": 32}]}', null),
     -- Dos bicis: la llanta en General no es de ninguna; en la pestaña del
     -- Baltoro, es suya.
-    ('332', '069', '202', 'rear', '{"part_change": [{"key": "rearWheelBsdMm", "value": 622}, {"key": "rearSpokeHoles", "value": 32}]}', null),
+    ('332', '069', '202', 'rear', '{"part_change": [{"key": "rearWheelBsdMm", "value": 622}, {"key": "rearSpokeHoles", "value": 32}]}', 'g'),
     ('333', '069', '202', 'rear', '{"part_change": [{"key": "rearWheelBsdMm", "value": 622}, {"key": "rearSpokeHoles", "value": 32}]}', 'b'),
     -- y un Voltage de 584 en la pestaña de la XT9007: no es la rueda del
     -- Baltoro.
@@ -458,16 +463,17 @@ select ('e2840000-0000-4000-8000-000000000' || l.n)::uuid,
     -- La Orion 3 (27,5″) y la Duel (29″): la U28 de 584, todavía sin marca.
     ('373', '081', '207', 'rear', '{}', null),
     ('374', '083', '207', 'rear', '{}', null),
-    -- En General: la Marlin 6, la Marlin 4 y la Orion 6 (sin filas de bicis).
-    ('375', '082', '202', 'rear', '{"part_change": [{"key": "rearWheelBsdMm", "value": 622}, {"key": "rearSpokeHoles", "value": 32}]}', null),
+    -- La U32 TL en General de la Marlin 6 (su única bici) y de la Orion 6 (sin
+    -- filas de bicis); en la pestaña de la Marlin 4.
+    ('375', '082', '202', 'rear', '{"part_change": [{"key": "rearWheelBsdMm", "value": 622}, {"key": "rearSpokeHoles", "value": 32}]}', 'g'),
     ('376', '084', '202', 'rear', '{"part_change": [{"key": "rearWheelBsdMm", "value": 622}, {"key": "rearSpokeHoles", "value": 32}]}', null),
-    ('377', '085', '202', 'rear', '{"part_change": [{"key": "rearWheelBsdMm", "value": 622}, {"key": "rearSpokeHoles", "value": 32}]}', null),
+    ('377', '085', '202', 'rear', '{"part_change": [{"key": "rearWheelBsdMm", "value": 622}, {"key": "rearSpokeHoles", "value": 32}]}', 'g'),
     -- La Marlin 8 y la Fuel EX: la U32 TL en General de un trabajo de dos.
-    ('378', '086', '202', 'rear', '{"part_change": [{"key": "rearWheelBsdMm", "value": 622}, {"key": "rearSpokeHoles", "value": 32}]}', null),
+    ('378', '086', '202', 'rear', '{"part_change": [{"key": "rearWheelBsdMm", "value": 622}, {"key": "rearSpokeHoles", "value": 32}]}', 'g'),
     -- La Orion 8 (28 atrás): la FOSS de 32 en su pestaña, con una maza de 32
     -- sin marca en General.
     ('380', '087', '201', 'rear', '{"part_change": {"key": "rearSpokeHoles", "value": 32}}', 'd'),
-    ('381', '087', '223', 'rear', null, null),
+    ('381', '087', '223', 'rear', null, 'g'),
     -- La Orion 9: la U32 TL en su pestaña.
     ('382', '088', '202', 'rear', '{"part_change": [{"key": "rearWheelBsdMm", "value": 622}, {"key": "rearSpokeHoles", "value": 32}]}', 'e')
   ) l(n, job, product, location_key, data, tab)
@@ -1010,10 +1016,12 @@ select is(
 insert into results select 'cross', pg_temp.finish('067');
 select throws_ok(
   $$insert into public.mechanic_job_items (
-      id, tenant_id, job_id, product_id, product_name, item_type, location_key,
+      id, tenant_id, job_id, job_bike_id, product_id, product_name, item_type, location_key,
       quantity, unit_price, service_configuration_data)
     values ('e2840000-0000-4000-8000-000000000350', 'e2840000-0000-4000-8000-000000000001',
-      'e2840000-0000-4000-8000-000000000067', 'e2840000-0000-4000-8000-000000000203',
+      'e2840000-0000-4000-8000-000000000067',
+      (select id from public.mechanic_job_bikes where job_id = 'e2840000-0000-4000-8000-000000000067'),
+      'e2840000-0000-4000-8000-000000000203',
       'Llanta Weinmann U32 TL 27.5" Ojetillos 28H Presta Negro', 'product', 'rear', 1, 0,
       '{"part_change": [{"key": "rearWheelBsdMm", "value": 584}, {"key": "rearSpokeHoles", "value": 28}]}')$$,
   '23514',
@@ -1025,10 +1033,12 @@ select throws_ok(
 insert into results select 'merak2', pg_temp.finish('068');
 select throws_ok(
   $$insert into public.mechanic_job_items (
-      id, tenant_id, job_id, product_id, product_name, item_type, location_key,
+      id, tenant_id, job_id, job_bike_id, product_id, product_name, item_type, location_key,
       quantity, unit_price, service_configuration_data)
     values ('e2840000-0000-4000-8000-000000000351', 'e2840000-0000-4000-8000-000000000001',
-      'e2840000-0000-4000-8000-000000000068', 'e2840000-0000-4000-8000-000000000233',
+      'e2840000-0000-4000-8000-000000000068',
+      (select id from public.mechanic_job_bikes where job_id = 'e2840000-0000-4000-8000-000000000068'),
+      'e2840000-0000-4000-8000-000000000233',
       'Neumatico Bicicleta Aro 27.5 X 2.10 Voltage Best', 'product', 'rear', 1, 0,
       '{"part_change": {"key": "rearWheelBsdMm", "value": 584}}')$$,
   '23514',
@@ -1036,20 +1046,24 @@ select throws_ok(
   'un neumático marcado que no calza con la llanta del trabajo no se guarda');
 select throws_ok(
   $$insert into public.mechanic_job_items (
-      id, tenant_id, job_id, product_id, product_name, item_type, location_key,
+      id, tenant_id, job_id, job_bike_id, product_id, product_name, item_type, location_key,
       quantity, unit_price, service_configuration_data)
     values ('e2840000-0000-4000-8000-000000000352', 'e2840000-0000-4000-8000-000000000001',
-      'e2840000-0000-4000-8000-000000000068', 'e2840000-0000-4000-8000-000000000233',
+      'e2840000-0000-4000-8000-000000000068',
+      (select id from public.mechanic_job_bikes where job_id = 'e2840000-0000-4000-8000-000000000068'),
+      'e2840000-0000-4000-8000-000000000233',
       'Neumatico Bicicleta Aro 27.5 X 2.10 Voltage Best', 'product', 'rear', 1, 0, '{}')$$,
   '23514',
   '«Neumatico Bicicleta Aro 27.5 X 2.10 Voltage Best» no se guardó: «Llanta Weinmann U32 TL 29" Ojetillos 32H Presta Negro», del mismo trabajo, no calza con este neumático (el neumático trasero es 584 (27,5″/650b)). En un trabajo terminado las líneas y la ficha se guardan juntas: corrige una de las dos líneas.',
   'ni sin marca: la llanta que ya escribió se mide con él');
 select lives_ok(
   $$insert into public.mechanic_job_items (
-      id, tenant_id, job_id, product_id, product_name, item_type, location_key,
+      id, tenant_id, job_id, job_bike_id, product_id, product_name, item_type, location_key,
       quantity, unit_price, service_configuration_data)
     values ('e2840000-0000-4000-8000-000000000353', 'e2840000-0000-4000-8000-000000000001',
-      'e2840000-0000-4000-8000-000000000068', 'e2840000-0000-4000-8000-000000000233',
+      'e2840000-0000-4000-8000-000000000068',
+      (select id from public.mechanic_job_bikes where job_id = 'e2840000-0000-4000-8000-000000000068'),
+      'e2840000-0000-4000-8000-000000000233',
       'Neumatico Bicicleta Aro 27.5 X 2.10 Voltage Best', 'product', 'front', 1, 0, '{}')$$,
   'en la otra rueda no queda preso');
 select lives_ok(
@@ -1063,21 +1077,31 @@ select is(
 -- Mover de trabajo: una línea cualquiera sí (un rotor sin marca); un
 -- neumático, aunque no tenga marca, no (su rueda se mide con él).
 insert into public.mechanic_job_items (
-  id, tenant_id, job_id, product_id, product_name, item_type, location_key,
+  id, tenant_id, job_id, job_bike_id, product_id, product_name, item_type, location_key,
   quantity, unit_price, service_configuration_data)
 values
   ('e2840000-0000-4000-8000-000000000354', 'e2840000-0000-4000-8000-000000000001',
-   'e2840000-0000-4000-8000-000000000073', 'e2840000-0000-4000-8000-000000000241',
+   'e2840000-0000-4000-8000-000000000073',
+   (select id from public.mechanic_job_bikes where job_id = 'e2840000-0000-4000-8000-000000000073'),
+   'e2840000-0000-4000-8000-000000000241',
    'ROTOR FRENO DISCO SHIMANO SM-RT10 160MM AE', 'product', 'none', 1, 0, '{}'),
   ('e2840000-0000-4000-8000-000000000355', 'e2840000-0000-4000-8000-000000000001',
-   'e2840000-0000-4000-8000-000000000073', 'e2840000-0000-4000-8000-000000000232',
+   'e2840000-0000-4000-8000-000000000073',
+   (select id from public.mechanic_job_bikes where job_id = 'e2840000-0000-4000-8000-000000000073'),
+   'e2840000-0000-4000-8000-000000000232',
    'MAXXIS ALAMBRE 29X2.25 M315P ARDENT', 'product', 'front', 1, 0, '{}');
 select lives_ok(
-  $$update public.mechanic_job_items set job_id = 'e2840000-0000-4000-8000-000000000074'
+  $$update public.mechanic_job_items
+       set job_id = 'e2840000-0000-4000-8000-000000000074',
+           job_bike_id = (select id from public.mechanic_job_bikes
+                           where job_id = 'e2840000-0000-4000-8000-000000000074')
      where id = 'e2840000-0000-4000-8000-000000000354'$$,
   'una línea que no instala ni se mide pasa a otro trabajo');
 select throws_like(
-  $$update public.mechanic_job_items set job_id = 'e2840000-0000-4000-8000-000000000074'
+  $$update public.mechanic_job_items
+       set job_id = 'e2840000-0000-4000-8000-000000000074',
+           job_bike_id = (select id from public.mechanic_job_bikes
+                           where job_id = 'e2840000-0000-4000-8000-000000000074')
      where id = 'e2840000-0000-4000-8000-000000000355'$$,
   '%no se movió: una línea que cambia la ficha de la bici no pasa a otro trabajo%',
   'un neumático sin marca no pasa a otro trabajo');
@@ -1184,10 +1208,12 @@ select is(
 -- flotante (el límite de 20260928130000). En el mismo trabajo, una llanta
 -- delantera sin configuración (nula), como las líneas viejas.
 insert into public.mechanic_job_items (
-  id, tenant_id, job_id, product_id, product_name, item_type, location_key,
+  id, tenant_id, job_id, job_bike_id, product_id, product_name, item_type, location_key,
   quantity, unit_price, service_configuration_data)
 values ('e2840000-0000-4000-8000-000000000346', 'e2840000-0000-4000-8000-000000000001',
-  'e2840000-0000-4000-8000-000000000072', 'e2840000-0000-4000-8000-000000000201',
+  'e2840000-0000-4000-8000-000000000072',
+  (select id from public.mechanic_job_bikes where job_id = 'e2840000-0000-4000-8000-000000000072'),
+  'e2840000-0000-4000-8000-000000000201',
   'Llanta FOSS F22 Aluminio Doble Pared con Ojetillos 29x32H', 'product', 'front', 1, 0, null);
 insert into results select 'scott', pg_temp.finish('072');
 select throws_like(
@@ -1261,19 +1287,21 @@ select is(
   '["27.5\"", [584, null, "job_completion"], [32, null, "job_completion"]]'::jsonb,
   'con el aro que queda en 27,5″, la llanta de 584 se instala en el mismo guardado');
 
--- La Marlin 6: la U32 TL en General, ya en su ficha. Agregar una segunda
--- bici la deja sin bici: la puerta lo dice aunque la línea no cambie.
+-- General es lo que el cliente compra aparte (dueño, 2026-10-01): una línea
+-- de General no es de ninguna bici, tenga el trabajo una, dos o ninguna fila
+-- de bicis (20261001195000).
+
+-- La Marlin 6: la U32 TL en General de un trabajo de una sola bici. No es de
+-- la Marlin: el cierre lo dice y no escribe su ficha.
 insert into results select 'marlin6', pg_temp.finish('082');
 select is(
   jsonb_build_array(pg_temp.problems('marlin6'), pg_temp.fact('58', 'rearWheelBsdMm')),
-  '[[], [622, null, "job_completion"]]'::jsonb,
-  'la llanta de General es de la única bici');
-select throws_like(
-  $$select pg_temp.save('082', 'segunda-bici', array['375'], '{}'::jsonb, '[]'::jsonb,
-      jsonb_build_array(jsonb_build_object(
-        'client_key', 'b2', 'bike_id', 'e2840000-0000-4000-8000-000000000059')))$$,
-  '%«Llanta Weinmann U32 TL 29" Ojetillos 32H Presta Negro» no se guardó: no dice de qué bici del trabajo es. Asígnala a su bici%',
-  'con dos bicis, la llanta de General ya no es de ninguna: el guardado se rechaza');
+  '[[{"key": "rearSpokeHoles", "value": 32, "reason": "line_without_bike"},
+     {"key": "rearWheelBsdMm", "value": 622, "reason": "line_without_bike"}],
+    null]'::jsonb,
+  'la llanta de General no es de la única bici: el cierre la informa sin escribir la ficha');
+-- Asignada a su pestaña en el mismo guardado que agrega una segunda bici, el
+-- cierre la instala en la Marlin y en nadie más.
 insert into results select 'marlin6_asignada', pg_temp.save('082', 'segunda-bici-asignada',
   array['375'],
   jsonb_build_object('375', jsonb_build_object('job_bike_id',
@@ -1283,42 +1311,48 @@ insert into results select 'marlin6_asignada', pg_temp.save('082', 'segunda-bici
   '[]'::jsonb,
   jsonb_build_array(jsonb_build_object(
     'client_key', 'b2', 'bike_id', 'e2840000-0000-4000-8000-000000000059')));
+insert into results select 'marlin6_terminada', pg_temp.finish('082');
 select is(
   jsonb_build_array(
     (select count(*)::integer from public.mechanic_job_bikes where job_id = pg_temp.id('082')),
+    pg_temp.problems('marlin6_terminada'),
     pg_temp.fact('58', 'rearWheelBsdMm'),
     pg_temp.fact('59', 'rearWheelBsdMm'),
     (select count(*)::integer from public.mechanic_job_line_gate_deferrals)),
-  '[2, [622, null, "job_completion"], null, 0]'::jsonb,
-  'asignada a su bici en el mismo guardado, la segunda bici entra');
+  '[2, [], [622, null, "job_completion"], null, 0]'::jsonb,
+  'asignada a su bici, la llanta se instala en la Marlin; la segunda bici no la toca');
 
--- La Marlin 4: lo mismo con un escritor directo, sin el comando.
+-- La Marlin 4: la U32 TL en su pestaña. Una segunda bici agregada directo,
+-- sin el comando, no cambia de quién es ninguna línea.
 insert into results select 'marlin4', pg_temp.finish('084');
-select throws_like(
+select lives_ok(
   $$insert into public.mechanic_job_bikes (tenant_id, job_id, bike_id)
     values ('e2840000-0000-4000-8000-000000000001',
             'e2840000-0000-4000-8000-000000000084',
             'e2840000-0000-4000-8000-000000000059')$$,
-  '%no dice de qué bici del trabajo es%',
-  'una segunda bici agregada directo tampoco deja una marca de General sin bici');
-
--- La Orion 6 no tiene filas de bicis: su bici es la de la cabecera. Cambiarla
--- en el trabajo terminado mueve la llanta de General a la otra bici.
-insert into results select 'orion6', pg_temp.finish('085');
-update public.mechanic_jobs
-   set bike_id = 'e2840000-0000-4000-8000-000000000065'
- where id = pg_temp.id('085');
+  'una segunda bici agregada directo se acepta: la llanta sigue en su pestaña');
 select is(
-  jsonb_build_array(
-    pg_temp.fact('64', 'rearWheelBsdMm'),
-    pg_temp.fact('65', 'rearWheelBsdMm'),
-    pg_temp.fact('65', 'rearSpokeHoles')),
-  '[[622, null, "job_completion"], [622, null, "job_completion"], [32, null, "job_completion"]]'::jsonb,
-  'con otra bici en la cabecera, la puerta instala la llanta de General en ella');
+  jsonb_build_array(pg_temp.problems('marlin4'), pg_temp.fact('63', 'rearWheelBsdMm'),
+                    public.job_line_bike_internal('e2840000-0000-4000-8000-000000000001',
+                                                  pg_temp.id('376'))),
+  jsonb_build_array('[]'::jsonb, '[622, null, "job_completion"]'::jsonb,
+                    'e2840000-0000-4000-8000-000000000063'),
+  'y la llanta sigue siendo de la Marlin 4');
 
--- La Marlin 8 y la Fuel EX: al terminar, la llanta de General no es de
--- ninguna. Quitar la Fuel (sin líneas propias) la deja de la Marlin, y la
--- puerta la instala en el mismo cambio.
+-- La Orion 6 es de los trabajos viejos, sin filas de bicis: sus líneas están
+-- en General (el formulario ya las cargaba así) y la cabecera no las hace de
+-- su bici.
+insert into results select 'orion6', pg_temp.finish('085');
+select is(
+  jsonb_build_array(pg_temp.problems('orion6'), pg_temp.fact('64', 'rearWheelBsdMm')),
+  '[[{"key": "rearSpokeHoles", "value": 32, "reason": "line_without_bike"},
+     {"key": "rearWheelBsdMm", "value": 622, "reason": "line_without_bike"}],
+    null]'::jsonb,
+  'sin filas de bicis, la llanta no es de la bici de la cabecera');
+
+-- La Marlin 8 y la Fuel EX: la llanta de General no es de ninguna. Quitar la
+-- Fuel (sin líneas propias) tampoco la hace de la Marlin; asignada a su
+-- pestaña, el mismo cierre reintentado la instala.
 insert into results select 'marlin8', pg_temp.finish('086');
 select is(
   jsonb_build_array(
@@ -1331,30 +1365,52 @@ select is(
   'con dos bicis, la llanta de General bloquea el cierre');
 delete from public.mechanic_job_bikes
  where id = 'e2840000-0000-4000-8000-000000000862';
+insert into results select 'marlin8_una_bici', pg_temp.finish('086');
+select is(
+  jsonb_build_array(
+    (select jsonb_agg(distinct problem->>'reason') from results r,
+       jsonb_array_elements(coalesce(r.result->'installed_bike_facts'->'problems',
+                                   r.result->'problems')) problem
+      where r.label = 'marlin8_una_bici'),
+    pg_temp.fact('66', 'rearWheelBsdMm')),
+  '[["line_without_bike"], null]'::jsonb,
+  'quitada la otra bici, la llanta de General sigue sin ser de la Marlin');
+update public.mechanic_job_items
+   set job_bike_id = (select jb.id from public.mechanic_job_bikes jb
+                       where jb.job_id = pg_temp.id('086'))
+ where id = pg_temp.id('378');
 insert into results select 'marlin8_corregida', pg_temp.finish('086');
 select is(
   jsonb_build_array(pg_temp.problems('marlin8_corregida'),
                     pg_temp.fact('66', 'rearWheelBsdMm'),
                     pg_temp.fact('66', 'rearSpokeHoles')),
   '[[], [622, null, "job_completion"], [32, null, "job_completion"]]'::jsonb,
-  'quitada la otra bici, el mismo cierre reintentado instala la llanta en la Marlin');
+  'asignada a la Marlin, el mismo cierre reintentado la instala');
 
--- La Orion 8: la FOSS de 32 de su pestaña calzó con la maza de 32 del trabajo
--- (en General). Con una segunda bici, esa maza ya no es de la Orion y la
--- llanta queda contra la maza de 28 que tenía: la puerta mira también las
--- líneas con bici (segunda revisión de Codex, 2026-09-29).
+-- La Orion 8 (28 atrás): la FOSS de 32 en su pestaña y una maza de 32 sin
+-- marca en General. Esa maza no es de la Orion: la llanta se mide con la
+-- maza de 28 de su ficha y el cierre lo dice. Asignada la maza a la Orion,
+-- la llanta entra, y una segunda bici ya no le quita nada.
 insert into results select 'orion8', pg_temp.finish('087');
 select is(
   jsonb_build_array(pg_temp.problems('orion8'), pg_temp.fact('68', 'rearSpokeHoles')),
+  '[[{"key": "rearSpokeHoles", "value": 32, "reason": "incompatible", "requires_key": "rearHubSpokeHoles", "requires_value": "28"}],
+    [28, true, "mechanic"]]'::jsonb,
+  'la maza de General no es de la Orion: la llanta de 32 no calza con su maza de 28');
+update public.mechanic_job_items
+   set job_bike_id = 'e2840000-0000-4000-8000-000000000871'
+ where id = pg_temp.id('381');
+insert into results select 'orion8_asignada', pg_temp.finish('087');
+select is(
+  jsonb_build_array(pg_temp.problems('orion8_asignada'), pg_temp.fact('68', 'rearSpokeHoles')),
   '[[], [32, null, "job_completion"]]'::jsonb,
-  'con la maza de 32 del trabajo, la llanta de 32 entra');
-select throws_like(
+  'con la maza de 32 en su pestaña, la llanta de 32 entra');
+select lives_ok(
   $$insert into public.mechanic_job_bikes (tenant_id, job_id, bike_id)
     values ('e2840000-0000-4000-8000-000000000001',
             'e2840000-0000-4000-8000-000000000087',
             'e2840000-0000-4000-8000-000000000069')$$,
-  '%«Llanta FOSS F22 Aluminio Doble Pared con Ojetillos 29x32H» no se guardó:%no calza con la ficha de la bici (la maza trasera tiene 28 perforaciones)%',
-  'una segunda bici que le quita la maza de General a la llanta de una pestaña se rechaza');
+  'una segunda bici no le quita a la Orion la maza de su pestaña');
 
 -- La Orion 9: su fila de bici no se va a otro trabajo dejando la llanta de su
 -- pestaña sin bici (segunda revisión de Codex, 2026-09-29).

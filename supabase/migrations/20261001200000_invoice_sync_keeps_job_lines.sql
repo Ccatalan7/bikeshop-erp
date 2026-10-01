@@ -27,10 +27,43 @@
 --
 -- Y repara lo que esos caminos dejaron mal: en los trabajos de una sola bici,
 -- los servicios y los componentes que quedaron en General pasan a su bici; los
--- accesorios y lo demás se quedan donde están (ver el paso 2).
+-- accesorios y lo demás se quedan donde están (paso 2). Después rehace los
+-- subtotales y los totales con la regla única de 20261001190000 (paso 3).
+-- Va después de 20261001190000 (`job_line_cost_bucket`) y de 20261001195000.
 begin;
 set local lock_timeout = '5s';
 set local statement_timeout = '60s';
+
+-- El paso 2 repara lo que dejó la sincronización vieja, y sólo cuando la
+-- reemplaza: su cuerpo en producción antes de este cambio era
+-- 586c672c1e77d65be585e15a065917d5. Una categoría no prueba que algo sea de
+-- la bici; después del arreglo, un componente en General puede ser una compra
+-- aparte, y volver a correr esta migración no lo mueve (revisión de Codex).
+-- Con el cuerpo nuevo (2aa84b35…) o sin la función no hay nada que reparar;
+-- con cualquier otro, alguien cambió la sincronización y la migración se
+-- detiene en vez de saltarse la reparación en silencio.
+create temporary table workshop_sync_repair_due on commit drop as
+select case (
+         select md5(p.prosrc)
+           from pg_proc p
+          where p.oid = to_regprocedure(
+                  'public.sync_invoice_items_to_job_workshop_internal(uuid)'))
+         when '586c672c1e77d65be585e15a065917d5' then true
+         when '2aa84b351c96dae2186f88bde92cf2c8' then false
+       end as due,
+       to_regprocedure(
+         'public.sync_invoice_items_to_job_workshop_internal(uuid)') is null
+         as function_missing;
+
+do $baseline$
+begin
+  if not (select function_missing from pg_temp.workshop_sync_repair_due)
+     and (select due from pg_temp.workshop_sync_repair_due) is null then
+    raise exception 'Unrecognized invoice sync body: review the bike-work repair of 20261001200000 against it before deploying'
+      using errcode = '55000';
+  end if;
+end;
+$baseline$;
 
 -- 1. La factura → el trabajo.
 create or replace function public.sync_invoice_items_to_job_workshop_internal(p_invoice_id uuid)
@@ -452,20 +485,28 @@ begin
      );
 
   select
-    coalesce(sum(case when item_type = 'product' then total_price else 0 end), 0),
-    coalesce(sum(case when item_type in ('service', 'adhoc') then total_price else 0 end), 0)
+    coalesce(sum(total_price) filter (
+      where public.job_line_cost_bucket(item_type) = 'parts'), 0),
+    coalesce(sum(total_price) filter (
+      where public.job_line_cost_bucket(item_type) = 'labor'), 0)
     into v_parts, v_labor
     from public.mechanic_job_items
-   where job_id = v_job_id;
+   where job_id = v_job_id
+     and tenant_id = v_invoice.tenant_id;
 
   with totals as (
     select
       job_bike.id,
-      coalesce(sum(case when item.item_type = 'product' then item.total_price else 0 end), 0) as parts_cost,
-      coalesce(sum(case when item.item_type in ('service', 'adhoc') then item.total_price else 0 end), 0) as labor_cost
+      coalesce(sum(item.total_price) filter (
+        where public.job_line_cost_bucket(item.item_type) = 'parts'), 0) as parts_cost,
+      coalesce(sum(item.total_price) filter (
+        where public.job_line_cost_bucket(item.item_type) = 'labor'), 0) as labor_cost
     from public.mechanic_job_bikes job_bike
-    left join public.mechanic_job_items item on item.job_bike_id = job_bike.id
+    left join public.mechanic_job_items item
+      on item.job_bike_id = job_bike.id
+     and item.tenant_id = job_bike.tenant_id
     where job_bike.job_id = v_job_id
+      and job_bike.tenant_id = v_invoice.tenant_id
     group by job_bike.id
   )
   update public.mechanic_job_bikes job_bike
@@ -496,6 +537,11 @@ exception
 end;
 $function$;
 
+-- Privada, como en producción: el `create or replace` conserva sus permisos,
+-- y esto los fija también si se crea de cero (revisión de Codex).
+revoke all on function public.sync_invoice_items_to_job_workshop_internal(uuid)
+  from public, anon, authenticated, service_role;
+
 -- 2. Lo que ya estaba. En los trabajos de una sola bici, General tenía 352
 -- líneas (lectura de producción, 2026-10-01): 214 servicios, 13 ítems de la
 -- categoría «Servicio» y 103 componentes («Componentes / Ruedas, Frenos,
@@ -508,13 +554,14 @@ $function$;
 -- distinto de cantidad × precio, que su disparador recalcula—, así que corre
 -- bajo la marca de la sincronización desde la factura: la guardia de lo
 -- pagado la deja pasar como deja pasar esa sincronización, y no se reescriben
--- facturas ni totales del trabajo. El subtotal de la bici se rehace como lo
--- rehace esa sincronización. Una cotización decidida es inmutable y queda
+-- facturas ni totales del trabajo. El subtotal de la bici se rehace con la
+-- regla única (`job_line_cost_bucket`, 20261001190000). Una cotización decidida es inmutable y queda
 -- como está; los trabajos de varias bicis o con la bici sólo en la cabecera no
 -- se tocan. Todo o nada: si un trabajo no se deja (la puerta de cambio de
 -- partes, un bloqueo), se juntan los que fallan y la migración entera se
 -- deshace nombrándolos.
-create function pg_temp.is_bike_work(p_line public.mechanic_job_items)
+-- Corre una sola vez: al reemplazar la sincronización vieja (arriba).
+create or replace function pg_temp.is_bike_work(p_line public.mechanic_job_items)
 returns boolean
 language sql stable
 as $$
@@ -538,6 +585,10 @@ declare
   v_jobs integer := 0;
   v_failed jsonb := '[]'::jsonb;
 begin
+  if not coalesce((select due from pg_temp.workshop_sync_repair_due), false) then
+    raise notice 'Bike-work repair skipped: the invoice sync was already fixed.';
+    return;
+  end if;
   perform set_config('app.syncing_invoice_to_job', 'true', true);
   for v_job in
     select j.id, j.tenant_id, j.job_number, min(jb.id::text)::uuid as job_bike_id
@@ -571,8 +622,10 @@ begin
              updated_at = clock_timestamp()
         from (
           select
-            coalesce(sum(case when i.item_type = 'product' then i.total_price else 0 end), 0) as parts_cost,
-            coalesce(sum(case when i.item_type in ('service', 'adhoc') then i.total_price else 0 end), 0) as labor_cost
+            coalesce(sum(i.total_price) filter (
+              where public.job_line_cost_bucket(i.item_type) = 'parts'), 0) as parts_cost,
+            coalesce(sum(i.total_price) filter (
+              where public.job_line_cost_bucket(i.item_type) = 'labor'), 0) as labor_cost
             from public.mechanic_job_items i
            where i.job_bike_id = v_job.job_bike_id
              and i.tenant_id = v_job.tenant_id
@@ -597,5 +650,98 @@ begin
     v_lines, v_jobs;
 end;
 $backfill$;
+
+-- 3. Los subtotales y los totales con la regla única (20261001190000), una
+-- vez. Lectura de producción del 2026-10-01, fuera de las bicis que ya rehace
+-- el paso 2: 27 bicis no sumaban sus líneas (8 dejaban fuera su ítem libre, 8
+-- lo tenían en mano de obra porque lo escribió la factura, y 11 no se
+-- recalcularon después de un cambio), 8 trabajos facturados tenían su ítem
+-- libre en mano de obra, y 22 trabajos facturados no decían lo de su
+-- factura: 9 en el total (cuatro con IVA sumado otra vez sobre su factura,
+-- uno por redondeo, y el disparador que escribía el neto de las líneas) y 13
+-- sólo en el IVA, guardado sin redondear. Los 33 trabajos sin factura ya
+-- cuadraban con la regla, descuento incluido. Sólo cambia cómo se lee lo
+-- que ya está: ni una línea, ni una factura, ni stock ni asientos. Corre bajo
+-- la marca de la sincronización desde la factura, que es quien escribe esos
+-- espejos. Las bicis de un presupuesto decidido son inmutables y quedan.
+do $rollups$
+declare
+  v_bikes integer;
+  v_jobs integer;
+  v_mirrors integer;
+begin
+  perform set_config('app.syncing_invoice_to_job', 'true', true);
+
+  with totals as (
+    select jb.id, jb.tenant_id,
+      coalesce(sum(i.total_price) filter (
+        where public.job_line_cost_bucket(i.item_type) = 'parts'), 0) as parts_cost,
+      coalesce(sum(i.total_price) filter (
+        where public.job_line_cost_bucket(i.item_type) = 'labor'), 0) as labor_cost
+      from public.mechanic_job_bikes jb
+      join public.mechanic_jobs j on j.id = jb.job_id and j.tenant_id = jb.tenant_id
+      left join public.mechanic_job_items i
+        on i.job_bike_id = jb.id and i.tenant_id = jb.tenant_id
+     where not (j.workflow_kind = 'quotation' and j.intake_kind = 'bike'
+                and coalesce(j.quotation_status, 'pending') <> 'pending')
+     group by jb.id, jb.tenant_id
+  )
+  update public.mechanic_job_bikes jb
+     set parts_cost = t.parts_cost,
+         labor_cost = t.labor_cost,
+         subtotal = t.parts_cost + t.labor_cost,
+         updated_at = clock_timestamp()
+    from totals t
+   where jb.id = t.id
+     and jb.tenant_id = t.tenant_id
+     and (jb.parts_cost, jb.labor_cost, jb.subtotal)
+         is distinct from (t.parts_cost, t.labor_cost, t.parts_cost + t.labor_cost);
+  get diagnostics v_bikes = row_count;
+
+  -- Un trabajo sin factura ya tenía la regla (`recalculate_mechanic_job_costs`).
+  with totals as (
+    select j.id, j.tenant_id,
+      round(coalesce(sum(i.total_price) filter (
+        where public.job_line_cost_bucket(i.item_type) = 'parts'), 0), 2) as parts_cost,
+      round(coalesce(sum(i.total_price) filter (
+        where public.job_line_cost_bucket(i.item_type) = 'labor'), 0), 2) as labor_cost
+      from public.mechanic_jobs j
+      left join public.mechanic_job_items i
+        on i.job_id = j.id and i.tenant_id = j.tenant_id
+     where j.invoice_id is not null
+     group by j.id, j.tenant_id
+  )
+  update public.mechanic_jobs j
+     set parts_cost = t.parts_cost,
+         labor_cost = t.labor_cost,
+         updated_at = clock_timestamp()
+    from totals t
+   where j.id = t.id
+     and j.tenant_id = t.tenant_id
+     and (round(j.parts_cost, 2), round(j.labor_cost, 2))
+         is distinct from (t.parts_cost, t.labor_cost);
+  get diagnostics v_jobs = row_count;
+
+  -- Lo que es de la factura se lee de la factura, como lo escribe la
+  -- sincronización: el total y el IVA (revisión de Codex: el total sin el IVA
+  -- dejaba IVA sobre una factura sin impuesto).
+  update public.mechanic_jobs j
+     set total_cost = inv.total,
+         final_cost = inv.total,
+         tax_amount = inv.iva_amount,
+         tax_treatment = inv.tax_treatment,
+         updated_at = clock_timestamp()
+    from public.sales_invoices inv
+   where inv.id = j.invoice_id
+     and inv.tenant_id = j.tenant_id
+     and (j.total_cost, j.final_cost, j.tax_amount, j.tax_treatment)
+         is distinct from (inv.total, inv.total, inv.iva_amount, inv.tax_treatment);
+  get diagnostics v_mirrors = row_count;
+
+  perform set_config('app.syncing_invoice_to_job', '', true);
+  raise notice 'One cost rule: % bike subtotals, % job splits, % invoice mirrors.',
+    v_bikes, v_jobs, v_mirrors;
+end;
+$rollups$;
 
 commit;

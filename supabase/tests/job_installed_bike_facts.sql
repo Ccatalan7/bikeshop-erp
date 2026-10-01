@@ -120,8 +120,9 @@ insert into public.mechanic_job_bikes (tenant_id, job_id, bike_id) values
    'e2790000-0000-4000-8000-000000000033')
 on conflict (job_id, bike_id) do nothing;
 
--- Trabajo 1: el Enrayado arma la trasera de 28H (línea de General, rueda por
--- la respuesta), otro arma «ambas» (no instala una rueda) y otro dice 99H.
+-- Trabajo 1: el Enrayado arma la trasera de 28H (rueda por la respuesta),
+-- otro arma «ambas» (no instala una rueda) y otro dice 99H. Van en la pestaña
+-- de su bici: una línea de General no es de ninguna (20261001195000).
 -- Trabajo 2: una línea de General sin bici en un trabajo de dos, y una línea
 -- de la Oxford Dos que arma su delantera de 36H.
 insert into public.mechanic_job_items (
@@ -130,23 +131,28 @@ insert into public.mechanic_job_items (
 ) values
   ('e2790000-0000-4000-8000-000000000061',
    'e2790000-0000-4000-8000-000000000001',
-   'e2790000-0000-4000-8000-000000000051', null, 'Enrayado + Centrado',
+   'e2790000-0000-4000-8000-000000000051',
+   (select id from public.mechanic_job_bikes where job_id = 'e2790000-0000-4000-8000-000000000051'), 'Enrayado + Centrado',
    'service', 'none', '{"which_wheel": "rear", "hole_count": "28"}'::jsonb),
   ('e2790000-0000-4000-8000-000000000062',
    'e2790000-0000-4000-8000-000000000001',
-   'e2790000-0000-4000-8000-000000000051', null, 'Enrayado ambas',
+   'e2790000-0000-4000-8000-000000000051',
+   (select id from public.mechanic_job_bikes where job_id = 'e2790000-0000-4000-8000-000000000051'), 'Enrayado ambas',
    'service', 'none', '{"which_wheel": "both", "hole_count": "32"}'::jsonb),
   ('e2790000-0000-4000-8000-000000000063',
    'e2790000-0000-4000-8000-000000000001',
-   'e2790000-0000-4000-8000-000000000051', null, 'Enrayado mal tipeado',
+   'e2790000-0000-4000-8000-000000000051',
+   (select id from public.mechanic_job_bikes where job_id = 'e2790000-0000-4000-8000-000000000051'), 'Enrayado mal tipeado',
    'service', 'front', '{"hole_count": "99"}'::jsonb),
   ('e2790000-0000-4000-8000-000000000066',
    'e2790000-0000-4000-8000-000000000001',
-   'e2790000-0000-4000-8000-000000000051', null, 'Enrayado sin rueda',
+   'e2790000-0000-4000-8000-000000000051',
+   (select id from public.mechanic_job_bikes where job_id = 'e2790000-0000-4000-8000-000000000051'), 'Enrayado sin rueda',
    'service', 'none', '{"hole_count": "28"}'::jsonb),
   ('e2790000-0000-4000-8000-000000000067',
    'e2790000-0000-4000-8000-000000000001',
-   'e2790000-0000-4000-8000-000000000051', null, 'Enrayado raro',
+   'e2790000-0000-4000-8000-000000000051',
+   (select id from public.mechanic_job_bikes where job_id = 'e2790000-0000-4000-8000-000000000051'), 'Enrayado raro',
    'service', 'rear', '{"hole_count": "28.5"}'::jsonb),
   ('e2790000-0000-4000-8000-000000000064',
    'e2790000-0000-4000-8000-000000000001',
@@ -574,12 +580,18 @@ select is(
 
 -- Un fallo transitorio del parche no parece un dato mal elegido: ni estado ni
 -- recibo sobreviven, y la misma llave podrá reconciliarse/reintentarse.
+insert into public.mechanic_job_bikes (tenant_id, job_id, bike_id) values
+  ('e2790000-0000-4000-8000-000000000001',
+   'e2790000-0000-4000-8000-000000000053',
+   'e2790000-0000-4000-8000-000000000034');
 insert into public.mechanic_job_items (
-  tenant_id, job_id, product_name, item_type, location_key,
+  tenant_id, job_id, job_bike_id, product_name, item_type, location_key,
   service_configuration_data
 ) values (
   'e2790000-0000-4000-8000-000000000001',
   'e2790000-0000-4000-8000-000000000053',
+  (select id from public.mechanic_job_bikes
+    where job_id = 'e2790000-0000-4000-8000-000000000053'),
   'Enrayado Oxford Reintento', 'service', 'rear',
   '{"which_wheel":"rear","hole_count":"30"}'::jsonb
 );

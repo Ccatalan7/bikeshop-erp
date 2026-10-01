@@ -94,18 +94,33 @@ insert into public.mechanic_jobs (id, tenant_id, customer_id, bike_id, job_numbe
    'e2780000-0000-4000-8000-000000000032', 'PG-FICHA-2',
    'e2780000-0000-4000-8000-000000000099');
 
+-- Cada trabajo con su bici, y la línea en la pestaña de esa bici: una línea
+-- de General no es de ninguna (20261001195000).
+insert into public.mechanic_job_bikes (id, tenant_id, job_id, bike_id) values
+  ('e2780000-0000-4000-8000-000000000071',
+   'e2780000-0000-4000-8000-000000000001',
+   'e2780000-0000-4000-8000-000000000051',
+   'e2780000-0000-4000-8000-000000000031'),
+  ('e2780000-0000-4000-8000-000000000073',
+   'e2780000-0000-4000-8000-000000000001',
+   'e2780000-0000-4000-8000-000000000052',
+   'e2780000-0000-4000-8000-000000000032');
+
 -- La línea del Enrayado que arma la rueda delantera de 28H, y una línea de
 -- otro trabajo.
 insert into public.mechanic_job_items (
-  id, tenant_id, job_id, product_name, item_type, service_configuration_data
+  id, tenant_id, job_id, job_bike_id, product_name, item_type,
+  service_configuration_data
 ) values
   ('e2780000-0000-4000-8000-000000000061',
    'e2780000-0000-4000-8000-000000000001',
-   'e2780000-0000-4000-8000-000000000051', 'Enrayado + Centrado', 'service',
+   'e2780000-0000-4000-8000-000000000051',
+   'e2780000-0000-4000-8000-000000000071', 'Enrayado + Centrado', 'service',
    '{"which_wheel": "front", "hole_count": "28"}'::jsonb),
   ('e2780000-0000-4000-8000-000000000062',
    'e2780000-0000-4000-8000-000000000001',
-   'e2780000-0000-4000-8000-000000000052', 'Enrayado + Centrado', 'service',
+   'e2780000-0000-4000-8000-000000000052',
+   'e2780000-0000-4000-8000-000000000073', 'Enrayado + Centrado', 'service',
    '{}'::jsonb);
 
 select set_config('request.jwt.claims', jsonb_build_object(
@@ -554,20 +569,16 @@ select throws_ok(
   'The job line did not install rearSpokeHoles',
   'la línea armó la rueda delantera, no la trasera');
 
--- Una línea de General sólo instala en un trabajo de una sola bici. Desde
--- 20260928140000 la puerta ya rechaza agregar la segunda bici a un trabajo
--- terminado con una línea así; el parche se defiende igual de ese estado
--- viejo, que aquí se arma sin ella.
-alter table public.mechanic_job_bikes disable trigger trg_mechanic_job_bikes_gate_job_lines;
-insert into public.mechanic_job_bikes (id, tenant_id, job_id, bike_id) values
-  ('e2780000-0000-4000-8000-000000000071',
-   'e2780000-0000-4000-8000-000000000001',
-   'e2780000-0000-4000-8000-000000000051',
-   'e2780000-0000-4000-8000-000000000031'),
-  ('e2780000-0000-4000-8000-000000000072',
-   'e2780000-0000-4000-8000-000000000001',
-   'e2780000-0000-4000-8000-000000000051',
-   'e2780000-0000-4000-8000-000000000032');
+-- Una línea de General no es de ninguna bici, tampoco en un trabajo de una
+-- sola (20261001195000). Desde ese día la puerta no deja terminar un trabajo
+-- con una línea así; el parche se defiende igual de ese estado, que aquí se
+-- arma sin ella.
+alter table public.mechanic_job_items
+  disable trigger trg_mechanic_job_items_installed_bike_facts_update;
+update public.mechanic_job_items
+   set job_bike_id = null
+ where id = 'e2780000-0000-4000-8000-000000000061'
+   and tenant_id = 'e2780000-0000-4000-8000-000000000001';
 
 select throws_ok(
   $$select public.patch_bike_technical_facts_v1(
@@ -576,12 +587,14 @@ select throws_ok(
     '[{"key": "frontSpokeHoles", "op": "set", "value": 28, "expected": 32, "expected_confirmed": false}]'::jsonb)$$,
   '42501',
   'The job line is not part of this job and bicycle',
-  'una línea de General no elige bici en un trabajo de dos');
+  'una línea de General no cambia la ficha de la única bici del trabajo');
 
-delete from public.mechanic_job_bikes
- where job_id = 'e2780000-0000-4000-8000-000000000051'
+update public.mechanic_job_items
+   set job_bike_id = 'e2780000-0000-4000-8000-000000000071'
+ where id = 'e2780000-0000-4000-8000-000000000061'
    and tenant_id = 'e2780000-0000-4000-8000-000000000001';
-alter table public.mechanic_job_bikes enable trigger trg_mechanic_job_bikes_gate_job_lines;
+alter table public.mechanic_job_items
+  enable trigger trg_mechanic_job_items_installed_bike_facts_update;
 
 select lives_ok(
   $$select public.patch_bike_technical_facts_v1(

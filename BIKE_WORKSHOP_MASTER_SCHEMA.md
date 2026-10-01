@@ -59,8 +59,12 @@ publiques hasta que yo te lo diga»):** General es a propósito, también con un
 sola bici: lo que el cliente compra aparte (dueño). `20261001200000` arregla la
 factura → el trabajo, que borraba la línea de la bici y la recreaba en
 General, y pasa a su bici los servicios y componentes que quedaron ahí (328
-líneas de 122 trabajos); los accesorios se quedan. El detalle está en
-«General y la factura», después de «Asignar a <bici>».
+líneas de 122 trabajos); los accesorios se quedan. `20261001195000`: una línea
+de General no es de ninguna bici, tampoco con una sola, ni para la ficha ni
+para la memoria. `20261001190000`: una sola regla reparte las líneas entre
+repuestos y mano de obra en la bici, el trabajo, la factura y la cotización.
+Orden: 190000, 195000, 200000, y la app después. El detalle está en «General
+y la factura», después de «Asignar a <bici>».
 
 **Production checkpoint, 2026-09-29:** 16 forward migrations from
 `20260928050000` through `20260929040000` (including `20260928052000`) are
@@ -4844,7 +4848,9 @@ el 2026-09-27):
   llamador podía dejar un recibo que atribuía 28H a una línea que no la armó.
 - **General también instala.** En un trabajo de una sola bici, una línea de
   General con perforaciones se escribe en esa bici; antes sólo quedaba en la
-  memoria.
+  memoria. **Retirado el 2026-10-01** (`20261001195000`): General es lo que
+  el cliente compra aparte y no es de ninguna bici; ver «General y la
+  factura».
 - **Un error antes del parche también se dice.** Si la sincronización falla
   al leer las líneas o la memoria de un trabajo terminado, devuelve el aviso
   en vez de «sin problemas».
@@ -7292,7 +7298,8 @@ desplegar).**
     lado» también en el piñón. Un cassette de 7
     piñones sobre `shimano_hg` agrega que lleva un separador de 4,5 mm (el
     código es la familia del núcleo, no su largo). El chip de una línea de
-    General usa la única bici del trabajo, como el servidor. Los mensajes
+    General usa la única bici del trabajo, como el servidor (desde el
+    2026-10-01, ninguna: ver «General y la factura»). Los mensajes
     del servidor (`installedBikeFactProblemMessages`) dicen lo mismo que el
     SQL.
 - **Decisiones del dueño, abiertas** (el corte no las supone):
@@ -7332,7 +7339,8 @@ desplegar).**
   - **P2 — `shimano_hg` no dice el largo del cuerpo**: el chip lo dice
     (separador de 4,5 mm para 7 piñones) y queda como límite.
   - **P2 — el chip de una línea de General no veía la bici del servidor**:
-    corregido (la única bici del trabajo; también para rotor y neumático).
+    corregido (la única bici del trabajo; también para rotor y neumático;
+    desde el 2026-10-01, ninguna).
   - **P2 — total incoherente con la transmisión y cuentas fuera de rango**:
     corregido (coherencia en el parche, rango en la revisión, techo en la
     condición). Mi prueba había escrito 24 en una 2x8.
@@ -7420,6 +7428,9 @@ desplegar).**
   escriben; el mutante «General con varias bicis toma una» muere. Dart:
   1 y 2 bicis para chip y marca en cassette, rotor y neumático, y dos
   mutantes (sin la rama y «varias bicis resuelven») muertos.
+  **Desde el 2026-10-01** una línea de General no es de ninguna bici también
+  con una sola (`20261001195000`, `partLineBike` → `general`): lo de arriba
+  vale igual para un trabajo de una bici. Ver «General y la factura».
 - **«Asignar a <bici>»** (revisión del dueño, 2026-09-28): la corrección de
   arriba evitaba la promesa falsa, pero una línea que ya estaba en General
   no tenía salida: reagregarla creaba otra línea (otro id, sin su precio,
@@ -7514,7 +7525,7 @@ desplegar).**
     distinto de cantidad × precio—, bajo la marca de la sincronización desde
     la factura (la guardia de lo pagado la deja pasar como a esa
     sincronización; no se reescriben facturas ni totales del trabajo), y el
-    subtotal de la bici se rehace como lo rehace esa sincronización. Todo o
+    subtotal de la bici se rehace con la regla única (abajo). Todo o
     nada: si un trabajo no se deja, la migración entera se deshace
     nombrándolo. Los trabajos de varias bicis y los 47 con la bici sólo en la
     cabecera no se tocan.
@@ -7525,12 +7536,69 @@ desplegar).**
     elegir la bici sigue yendo a General, como antes. Una línea protegida no
     tiene menú, así que los trabajos pagados se corrigen sólo con la
     reparación de datos.
-  - Queda igual, y es una pregunta abierta: en un trabajo terminado de una
-    sola bici, una línea de General todavía se cuenta como de esa bici para
-    la ficha y la memoria (`job_line_bike_internal`, `job_general_item_sync`
-    en `syncBikeMemoryFromJob`), lo que contradice «compra aparte» para un
-    accesorio. Con la reparación de datos, lo que queda en General son
-    accesorios; separarlo de la ficha y la memoria es un cambio aparte.
+  - **General no es de ninguna bici, tampoco con una sola**
+    (`20261001195000`; el dueño: «of course I need you to do that, not doing
+    so it contrary of what master schema propose»). La bici de una línea es
+    la de su fila y nada más: `job_line_bike_internal` dejó de dar a una
+    línea de General la única bici del trabajo y, sin filas de bicis, la de
+    la cabecera. Así el aplicador de lo instalado, la puerta de cambio de
+    partes, la rueda que arma el trabajo y el parche de la ficha no cuentan
+    General como de la bici; una línea de General que dice un cambio de
+    ficha se informa `line_without_bike` y se asigna con «Asignar a…». La
+    memoria tampoco: `syncBikeMemoryFromJob` ya no anota General
+    (`job_general_item_sync`); ese origen se sigue borrando al volver a
+    sincronizar un trabajo. En el formulario, `partLineBike` da `general`
+    para toda línea de General con bicis: el chip pide asignarla y no deja
+    marca. Los trabajos viejos con la bici sólo en la cabecera ya cargaban
+    sus líneas en General («no se pueden atribuir con verdad»), y ahora el
+    servidor dice lo mismo. Producción, lectura del 2026-10-01: ninguna
+    línea de General tiene marca de ficha, así que ningún dato instalado
+    cambia; de lo que la memoria anotó desde General (152 intervenciones, 31
+    ciclos de componente), todo menos un protector de plato es trabajo de la
+    bici que la reparación pasa a su bici, así que esa historia sigue siendo
+    verdad y no se borra. Desplegar la migración antes que la app: con la app
+    nueva y sin la reparación, volver a sincronizar un trabajo borraría esa
+    memoria sin reponerla.
+  - **Una sola regla de costos** (`20261001190000`). Había tres reglas para
+    repartir las líneas y un cuarto escritor: `recalculate_job_bike_costs`
+    (la bici) contaba producto o sin tipo como repuesto y servicio como mano
+    de obra, y un ítem libre en ninguna; la factura → el trabajo, el ítem
+    libre en mano de obra; `recalculate_mechanic_job_costs` (el trabajo),
+    todo lo que no es servicio como repuesto. Y `update_mechanic_job_costs`,
+    que corre después en cada cambio de línea, escribía `total_cost =
+    repuestos + mano de obra`, sin descuento ni IVA: en un trabajo facturado
+    el total que ve el cliente pasaba del de la factura al neto. Ahora la
+    regla vive en `job_line_cost_bucket` —servicio es mano de obra; todo lo
+    demás, repuesto—, la usan la bici, el trabajo y la factura, la guardia
+    de la cotización pendiente ya la tenía, y el disparador pide la cuenta
+    del trabajo en vez de hacer la suya. La migración `20261001200000`
+    rehace una vez lo que quedó desalineado (lectura del 2026-10-01, fuera
+    de las bicis que ya rehace la reparación): 27 bicis (8 sin su ítem libre,
+    8 con el ítem libre en mano de obra, 11 sin recalcular tras un cambio),
+    8 repartos de trabajos facturados y 22 trabajos facturados que no
+    decían lo de su factura (9 en el total, 13 sólo en el IVA sin
+    redondear): el total y el IVA se leen de la factura, como los escribe
+    la sincronización. Los 33 trabajos sin factura ya cuadraban. Sólo
+    cambia cómo se lee lo que ya está: ni líneas, ni facturas, ni stock, ni
+    asientos.
+  - **Revisión de Codex** (sólo lectura) de General sin bici y la regla
+    única: cinco hallazgos. Corregidos: la reparación de líneas por
+    categoría corre una sola vez, cuando reemplaza la sincronización vieja
+    (su cuerpo de producción, `586c672c…`), porque después del arreglo un
+    componente en General puede ser una compra aparte y volver a correr la
+    migración no debe moverlo —su cuenta en el read-back es informativa—;
+    los espejos de la factura incluyen el IVA; y una función temporal con
+    `create` que impedía repetir la migración en la misma conexión.
+    Medidos y sin cambio: los totales con descuento sin factura (0 de 33
+    distintos en producción; queda como chequeo del read-back) y la memoria
+    anotada desde General (181 de 183 filas son trabajo de la bici que la
+    reparación pasa a su bici; las otras dos, un protector de plato que sí
+    se instaló). En la segunda pasada Codex confirmó esos arreglos y agregó
+    dos que se corrigieron: si el cuerpo de la sincronización no es ni el
+    viejo ni el nuevo, la migración se detiene en vez de saltarse la
+    reparación en silencio, y la función queda privada aunque se cree de
+    cero. Queda como residuo conocido la memoria de ese protector de plato,
+    que se borra si alguien vuelve a sincronizar su trabajo.
   - Revisión independiente de Codex (sólo lectura) sobre la primera versión:
     seis hallazgos. Sigue corregido el que tocaba la factura (con otro precio
     sin id se borraba la línea y sus tareas); los otros eran de la regla que
@@ -7546,11 +7614,23 @@ desplegar).**
     `part_bike_fact_change_test` y las suites del formulario, verdes. En la
     app de debug, sin guardar: un casco pasado a General con una sola bici, y
     desde General «Asignar a Norco Charger».
-  - Hallazgo aparte, no corregido: el subtotal de una bici tiene tres
-    definiciones (`recalculate_job_bike_costs`: producto o nulo / servicio;
-    la sincronización: producto / servicio o adhoc;
-    `recalculate_mechanic_job_costs`: no servicio / servicio). Un adhoc cae en
-    mano de obra en una y en ninguna en la otra.
+  - Evidencia de General sin bici y de la regla única (local):
+    `workshop_job_line_costs.sql` (14) —contra los cuerpos de producción
+    fallan 7: la bici sin su ítem libre, el descuento que se perdía, el ítem
+    libre en mano de obra desde la factura y el total facturado que pasaba al
+    neto—; las suites de cambio de partes, lo instalado y el parche,
+    reescritas para que una línea instale desde la pestaña de su bici, con
+    los casos de General que ahora no instalan (Marlin 6 de una bici, Orion
+    6 sin filas, la maza de General que no es de la Orion 8). Suite pgTAP
+    completa con y sin el cambio: fuera de esos archivos, los mismos 110
+    rojos de siempre en las mismas pruebas. Read-back de las tres verde en
+    local; las tres se reaplican sin cambios (la reparación avisa que se
+    salta). Los pasos 2 y 3, con su propio texto, sobre un trabajo pagado de
+    una bici sembrado como los de producción (IVA sumado sobre una factura
+    sin impuesto): pasan a la bici el disco y la mantención, la luz se queda,
+    la bici suma, el trabajo dice el total y el IVA de su factura, y ni la
+    factura, ni asientos, ni stock, ni el pago cambian; sin la marca de la
+    sincronización, la guardia de lo pagado sigue sin dejar mover la línea.
 - En la app real: la sesión de debug recargó sin errores; el chip no se
   puede ver hasta desplegar (la tabla no existe en producción).
 - Límites, en este orden:
