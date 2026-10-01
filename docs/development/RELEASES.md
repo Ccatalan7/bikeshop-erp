@@ -25,6 +25,21 @@ still runs `erp-integrity-gate.yml` before publishing. See
   invariant dashboard. A critical violation fails the release record without
   attempting an automatic data repair.
 
+**Storefront correction, 2026-10-01:** when a storefront push fails its gate,
+a subsequent fix confined to tests/docs does not trigger its `paths` filter.
+Read the live version before reporting delivery; the daily rebuild is pending
+work until its release is verified. `workflow_dispatch` requires a real durable
+publication UUID, and cannot substitute for the missing production ledger.
+The exceptional store-only Mac path documented in
+`docs/runbooks/MAIN_BRANCH_CUTOVER.md` remains available under delivery authority:
+use a clean export of the approved commit, verify every source byte/mode and
+its existing exact-SHA integrity qualification, run SEO/build/budget/snapshot
+guards, write truthful `manual-shell` evidence, publish only `hosting:store`,
+and compare the release and checksums on both live origins. Preserve shared
+changes and stop before upload if the source or another storefront deployment
+has advanced. The C5 receipt is
+`.tmp/e2e/store-publication-2706b1f8-20261001/evidence.json`.
+
 ## Cuánto tarda publicar, y por qué (2026-08-07)
 
 Línea base medida en el run 31153201788, antes de tocar nada:

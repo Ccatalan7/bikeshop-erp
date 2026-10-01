@@ -64,8 +64,13 @@ verificada del mismo commit. C1–C5 y los siete criterios quedan entregados.
 La reparación del buscador que el dueño encargó en otro chat de Claude conserva
 sus fuentes y la sesión Debug; pertenece a ese encargo separado.
 Después de esta publicación, `main` avanzó a `39d94d16` por esa reparación;
-su gate y su nueva publicación estaban en curso al leerlos. No se describe
-esa corrección como publicada ni se confunde con el corte C1–C5 entregado.
+su gate y su nueva publicación estaban en curso en la primera lectura.
+**Readback posterior, 2026-10-01:** los gates36820795748/36820804455
+terminaron verdes; ERP web/run36820796002 y tienda/run36820795995 sirven
+ese commit exacto. macOS1.0.3/261 tiene manifiesto estable con `39d94d16`
+y run36822992431; Android/run36823003512 completó su publicación protegida
+del mismo commit (build2077). La reparación queda publicada y sigue siendo
+un encargo separado del corte C1–C5 entregado en `2706b1f8`.
 
 **Antecedente — revisión independiente de Codex, 2026-10-01 05:00 UTC:** se leyó el cierre
 de Claude y la instrucción directa del dueño de ejecutar la entrega. `main`
