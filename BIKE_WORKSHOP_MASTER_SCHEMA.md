@@ -7268,9 +7268,18 @@ desplegar).**
     «Pendiente: el trabajo cambia la maza trasera; elige su driver en la
     ficha», «Pendiente: el trabajo cambia el mando trasero; revisa la
     transmisión 3x8 en la ficha», «Corrige la ficha al terminar: driver
-    trasero Micro Spline → Shimano HG». Sin rueda: «Cassette (driver Shimano
-    HG): toca para elegir la rueda trasera y anotarlo en la ficha» —el
-    cassette va sólo atrás y tocar el chip la elige—. Un cassette de 7
+    trasero Micro Spline → Shimano HG». **Corrección del dueño,
+    2026-10-01** («acaso existe un piñón delantero?»; «sin lado tampoco
+    tiene sentido»): un repuesto ofrece lado sólo si puede ir en más de una
+    rueda según lo que su producto le escribe a la ficha
+    (`partWheelPositions`: cassette y rueda libre sólo atrás; rotor, llanta,
+    neumático y maza según su producto). Uno de una sola rueda queda en ella
+    al llegar su ficha técnica, sin chip ni pregunta; uno de dos ruedas
+    ofrece Delantero/Trasero y, sin rueda, «Elegir rueda»; nunca «sin
+    lado». En un servicio de dos lados (freno, ruedas) «sin lado» se lee
+    «Ambos», que es como el asistente de ruedas guarda «ambas». Antes: «Sin
+    rueda: toca para elegir la rueda trasera» y un menú con «Sin fijar
+    lado» también en el piñón. Un cassette de 7
     piñones sobre `shimano_hg` agrega que lleva un separador de 4,5 mm (el
     código es la familia del núcleo, no su largo). El chip de una línea de
     General usa la única bici del trabajo, como el servidor. Los mensajes

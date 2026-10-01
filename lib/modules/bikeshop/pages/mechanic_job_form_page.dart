@@ -3766,7 +3766,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     final links = await BikeFactSpecLinks.load();
     if (!mounted) return;
     if (!identical(links, _bikeFactSpecLinks)) {
-      setState(() => _bikeFactSpecLinks = links);
+      setState(() {
+        _bikeFactSpecLinks = links;
+        _settleSingleWheelParts();
+      });
     }
     if (links == null || links.isEmpty) return;
     if (products == null) unawaited(_loadPartChangeWriters());
@@ -3786,14 +3789,22 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             !_partSpecValues.containsKey(product.id))
           product.id: product,
     };
-    if (missing.isEmpty) return;
+    if (missing.isEmpty) {
+      // La ficha ya estaba (otra línea del mismo repuesto): igual se fija la
+      // rueda de la línea nueva.
+      setState(_settleSingleWheelParts);
+      return;
+    }
     try {
       final values = await _bikeProductCompatibilityService.productSpecValues(
         products: missing.values.toList(growable: false),
         tenantId: await TenantService().getTenantId() ?? '',
       );
       if (!mounted) return;
-      setState(() => _partSpecValues.addAll(values));
+      setState(() {
+        _partSpecValues.addAll(values);
+        _settleSingleWheelParts();
+      });
     } catch (error) {
       // Sin la ficha técnica la línea no propone nada y, al guardar,
       // conserva la marca que tenía.
@@ -7755,7 +7766,47 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     }
   }
 
+  /// Las ruedas en que puede ir un repuesto según la ficha de su producto
+  /// ([partWheelPositions]); vacío mientras la ficha no llega o si no tiene
+  /// lado.
+  Set<BikeMemoryLocation> _partWheelPositions(JobPartItem item) {
+    final links = _bikeFactSpecLinks;
+    final product = item.product;
+    if (item.isServiceItem || product == null || links == null) {
+      return const {};
+    }
+    final specs = _partSpecValues[product.id];
+    if (specs == null) return const {};
+    return partWheelPositions(links: links, productSpecValues: specs);
+  }
+
+  /// Un repuesto de una sola rueda (un cassette, una rueda libre, una maza
+  /// trasera) va en ella: no se pregunta el lado (dueño, 2026-10-01: «acaso
+  /// existe un piñón delantero»). Corre cuando llega la ficha técnica de los
+  /// repuestos; fuera de un setState no repinta.
+  void _settleSingleWheelParts() {
+    if (_isCommercialSnapshotLocked) return;
+    void settle(List<JobPartItem> items) {
+      for (var index = 0; index < items.length; index++) {
+        final item = items[index];
+        final positions = _partWheelPositions(item);
+        if (positions.length != 1 || positions.contains(item.location)) {
+          continue;
+        }
+        items[index] = item.copyWith(location: positions.single);
+      }
+    }
+
+    for (final tab in _bikeTabs) {
+      settle(tab.partItems);
+    }
+    settle(_partItems);
+  }
+
   Set<BikeMemoryLocation> _availableServiceLocationsForItem(JobPartItem item) {
+    // Un repuesto ofrece sólo las ruedas en que de verdad puede ir; nunca
+    // «sin lado».
+    if (!item.isServiceItem) return _partWheelPositions(item);
     final wizardProfile =
         ServiceWizardService.normalizeProfile(item.wizardProfile);
     if (_serviceProfileHasNoneOnlyTarget(wizardProfile)) {
@@ -19955,10 +20006,13 @@ class _PartItemRowState extends State<_PartItemRow> {
     );
   }
 
+  /// «Sin lado» sólo existe en un servicio de dos lados (frenos, ruedas), y
+  /// ahí es de los dos: el asistente de ruedas guarda «ambas» así. Un
+  /// repuesto nunca lo ofrece (dueño, 2026-10-01).
   String _locationLabel(BikeMemoryLocation location) => switch (location) {
         BikeMemoryLocation.front => 'Delantero',
         BikeMemoryLocation.rear => 'Trasero',
-        _ => 'Sin fijar lado',
+        _ => 'Ambos',
       };
 
   String _lineMeta(JobPartItem item) {
@@ -20075,9 +20129,9 @@ class _PartItemRowState extends State<_PartItemRow> {
     final description = (item.notes ?? '').trim();
     final configStatus = widget.configStatus;
     final orderedLocations = const [
-      BikeMemoryLocation.none,
       BikeMemoryLocation.front,
       BikeMemoryLocation.rear,
+      BikeMemoryLocation.none,
     ].where(widget.availableServiceLocations.contains).toList();
     final chipMinHeight = mobileLayout ? 48.0 : 0.0;
     final chipVisibleHeight = mobileLayout ? 40.0 : 26.0;
@@ -20133,12 +20187,15 @@ class _PartItemRowState extends State<_PartItemRow> {
             ],
             child: JobLineChip(
               icon: Icons.place_outlined,
-              label: _locationLabel(item.location),
+              // Un repuesto de dos ruedas sin la suya la pide.
+              label: orderedLocations.contains(item.location)
+                  ? _locationLabel(item.location)
+                  : 'Elegir rueda',
               trailingIcon: Icons.expand_more,
               minHeight: chipVisibleHeight,
-              tone: item.location == BikeMemoryLocation.none
-                  ? JobLineChipTone.warning
-                  : JobLineChipTone.info,
+              tone: orderedLocations.contains(item.location)
+                  ? JobLineChipTone.info
+                  : JobLineChipTone.warning,
             ),
           ),
         ),

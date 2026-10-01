@@ -1121,6 +1121,28 @@ PartBikeFactChange? partBikeFactChange({
   return changes.isEmpty ? null : changes.first;
 }
 
+/// En qué ruedas puede ir un repuesto: las de los datos que le escribe a la
+/// ficha con su producto. Un cassette o una rueda libre sólo escriben datos
+/// de la rueda trasera, así que no tienen lado que elegir; un rotor, una
+/// llanta o un neumático, las dos. Vacío si no le escribe nada a la ficha:
+/// una cadena no tiene lado (dueño, 2026-10-01: «solo tiene que existir la
+/// opción en productos que realmente tengan opciones»).
+Set<BikeMemoryLocation> partWheelPositions({
+  required List<BikeFactSpecLink> links,
+  required Map<String, dynamic> productSpecValues,
+}) {
+  final templateKey = productSpecValues['__template_key']?.toString();
+  return {
+    for (final link in links)
+      if (!link.isCheck &&
+          link.appliesTo(templateKey) &&
+          link.productValue(productSpecValues) != null &&
+          (link.position == BikeMemoryLocation.front ||
+              link.position == BikeMemoryLocation.rear))
+        link.position,
+  };
+}
+
 /// Los cambios que propone un repuesto, uno por dato de la ficha: el rotor,
 /// el neumático y el cassette, uno; una maza trasera, su driver y el anclaje
 /// del rotor de su rueda. Con la ficha técnica de su producto

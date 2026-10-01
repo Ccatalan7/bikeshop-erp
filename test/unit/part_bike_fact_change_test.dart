@@ -964,6 +964,25 @@ void main() {
       );
     });
 
+    // Dueño, 2026-10-01: «acaso existe un piñón delantero?». Sólo tiene
+    // lado lo que de verdad puede ir en una u otra rueda.
+    test(
+        'el piñón va sólo atrás, el rotor en cualquiera y sin datos no hay lado',
+        () {
+      expect(partWheelPositions(links: links, productSpecValues: hg200x7),
+          {BikeMemoryLocation.rear});
+      expect(partWheelPositions(links: links, productSpecValues: fw71),
+          {BikeMemoryLocation.rear});
+      expect(partWheelPositions(links: links, productSpecValues: _rt56At180),
+          {BikeMemoryLocation.front, BikeMemoryLocation.rear});
+      expect(
+          partWheelPositions(
+            links: links,
+            productSpecValues: const {'__template_key': 'chain'},
+          ),
+          isEmpty);
+    });
+
     test('lo mismo confirma y lo que calza sin ser lo mismo no cambia', () {
       expect(
         change(hg200x7, values: const {'freehubType': 'shimano_hg'})!.label,
