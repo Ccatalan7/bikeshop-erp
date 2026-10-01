@@ -317,7 +317,11 @@ usable workflow remains pending. The owning policy is
   `git reset -q HEAD -- <mis archivos>`, devolviendo el índice como estaba.
   Se comitea siempre con `git commit --only -F msg -- <mis archivos>`, que
   ignora lo preparado por otros, y se lee `git show --stat HEAD` antes de
-  empujar.
+  empujar. **Nunca `--amend`:** minutos después, el otro agente comiteó entre
+  dos comandos de Claude y el `--amend --only` cayó sobre **su** commit (le
+  agregó un archivo ajeno con su mensaje); se repuso con `git reset --soft
+  <su commit>` comprobando que el árbol quedara idéntico. Una corrección va
+  en un commit nuevo.
 - Do not pattern-kill Flutter, Dart, browser, or preview processes. Use the
   canonical preview owner and verified process identity.
 - **Sin techo de herramientas** (decisión del owner, 2026-07-31): Workflows,
