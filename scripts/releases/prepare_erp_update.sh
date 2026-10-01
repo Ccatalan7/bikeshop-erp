@@ -147,7 +147,7 @@ prepare_shared_release_notes() {
     echo 'Could not resolve a safe release-note range.' >&2
     exit 1
   fi
-  echo 'Gemini Flash will generate the shared release notes inside protected CI.'
+  echo 'Protected CI will assemble the committed reviewed release changes.'
 }
 
 for required in awk bash chmod date git gh jq mktemp mv node; do
@@ -199,11 +199,19 @@ else
   exit 127
 fi
 
+step 'Preparing the next visible release version'
+release_version_plan="$(node scripts/releases/release_version.mjs --prepare --write --macos)"
+review_from_commit="$(jq -er '.notes_base' <<< "$release_version_plan")"
+printf 'Visible version: %s\n' "$(jq -er '.version' <<< "$release_version_plan")"
+
 step 'Staging all reviewed Source Control changes once'
 git add -A
 staged_files="$(git diff --cached --name-only)"
 
 if [[ -n "$staged_files" ]]; then
+  step 'Verifying reviewed release changes before creating the commit'
+  node scripts/releases/generate_release_notes.mjs \
+    --check-index --from-commit "$review_from_commit"
   if [[ -z "$MESSAGE" ]]; then
     MESSAGE="chore: publish ERP update $(date '+%Y-%m-%d %H:%M')"
   fi

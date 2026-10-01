@@ -394,7 +394,7 @@ verify_published_release() {
     "$head_sha"
 }
 
-prepare_gemini_release_notes() {
+prepare_reviewed_release_notes() {
   local head_commit="$1"
   local base_commit
 
@@ -409,7 +409,7 @@ prepare_gemini_release_notes() {
         "$head_commit" \
         2>/dev/null
   )"; then
-    echo 'The previous macOS release could not be resolved for Gemini notes.' >&2
+    echo 'The previous macOS release could not be resolved for reviewed notes.' >&2
     exit 1
   fi
   if [[ ! "$base_commit" =~ ^[0-9a-f]{40}$ || "$base_commit" == "$head_commit" ]]; then
@@ -417,7 +417,7 @@ prepare_gemini_release_notes() {
     exit 1
   fi
   RELEASE_NOTES_FROM_COMMIT="$base_commit"
-  echo 'Gemini Flash will generate release notes inside protected CI.'
+  echo 'Protected CI will assemble the committed reviewed release changes.'
 }
 
 require_command awk
@@ -464,11 +464,16 @@ if [[ -n "$PREPARED_STATE_REQUEST" ]]; then
   fi
 
 else
+  step 'Preparing the next visible release version'
+  release_version_plan="$(node scripts/releases/release_version.mjs --prepare --write --macos)"
+  review_from_commit="$(jq -er '.notes_base' <<< "$release_version_plan")"
   step 'Staging all Source Control changes'
   git add -A
   staged_files="$(git diff --cached --name-only)"
 
   if [[ -n "$staged_files" ]]; then
+    node scripts/releases/generate_release_notes.mjs \
+      --check-index --from-commit "$review_from_commit"
     if [[ -z "$MESSAGE" ]]; then
       MESSAGE="chore: publish macOS update $(date '+%Y-%m-%d %H:%M')"
     fi
@@ -496,13 +501,13 @@ else
   fi
 
   head_sha="$(git rev-parse HEAD)"
-  prepare_gemini_release_notes "$head_sha"
+  prepare_reviewed_release_notes "$head_sha"
 
   step "Pushing $branch at $head_sha"
   git push origin "$branch"
 fi
 
-notes_title_identity="${RELEASE_NOTES_CANDIDATE_SHA256:-gemini}"
+notes_title_identity="${RELEASE_NOTES_CANDIDATE_SHA256:-reviewed}"
 notes_base_identity="${RELEASE_NOTES_FROM_COMMIT:-auto}"
 integrity_title_identity="${INTEGRITY_RUN_ID:-self}"
 expected_run_title="macOS publish · ${head_sha} · notes ${notes_title_identity} · from ${notes_base_identity} · integrity ${integrity_title_identity}"

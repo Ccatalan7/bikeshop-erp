@@ -145,7 +145,7 @@ void main() {
 
   test('protected publish binds release notes before signing the manifest', () {
     final publishJob = workflow.indexOf('\n  publish:');
-    final geminiReleaseNotesSecret = workflow.indexOf(
+    final obsoleteProviderSecret = workflow.indexOf(
       r'GEMINI_RELEASE_API_KEY: ${{ secrets.GEMINI_RELEASE_API_KEY }}',
     );
     final sourceGuardJob = workflow.indexOf('\n  source-guard:');
@@ -186,27 +186,18 @@ void main() {
       isNot(contains('CODEX_RELEASE_NOTES_CANDIDATE_B64')),
       reason: 'Standard macOS publication must not consume local model output.',
     );
-    expect(geminiReleaseNotesSecret, greaterThan(publishJob));
-    expect(
-      workflow,
-      contains(
-        r"GEMINI_RELEASE_NOTES_MODEL: ${{ vars.GEMINI_RELEASE_NOTES_MODEL || 'gemini-3.1-flash-lite' }}",
-      ),
-    );
-    expect(
-      RegExp(r'secrets\.GEMINI_RELEASE_API_KEY').allMatches(workflow).length,
-      1,
-      reason:
-          'The Gemini key must only be exposed inside protected publication.',
-    );
+    expect(obsoleteProviderSecret, -1);
+    expect(workflow, isNot(contains('GEMINI_RELEASE_NOTES_MODEL')));
+    expect(workflow, contains('--platform macos'));
+    expect(workflow, contains('--check-desktop macos'));
     expect(RegExp(r'secrets\.OPENAI_API_KEY').allMatches(workflow), isEmpty);
     expect(baseResolution, greaterThan(publishJob));
     expect(generation, greaterThan(baseResolution));
     final cliMain = releaseNotesGenerator.substring(
       releaseNotesGenerator.indexOf('async function main()'),
     );
-    expect(cliMain, contains('process.env.GEMINI_RELEASE_API_KEY'));
-    expect(cliMain, contains('process.env.GEMINI_RELEASE_NOTES_MODEL'));
+    expect(cliMain, isNot(contains('process.env.GEMINI_RELEASE_API_KEY')));
+    expect(releaseNotesGenerator, contains('--check-index'));
     expect(cliMain, isNot(contains('process.env.OPENAI_API_KEY')));
     expect(cliMain, isNot(contains('CODEX_RELEASE_NOTES_CANDIDATE_B64')));
     expect(
@@ -233,25 +224,11 @@ void main() {
       ),
       reason: 'A retry must refresh both assets and their release notes.',
     );
-    expect(runbook, contains('GEMINI_RELEASE_API_KEY'));
-    expect(runbook, contains('gemini-3.1-flash-lite'));
-    expect(runbook, contains('deterministic fallback'));
-    expect(runbook, contains('human reviewers'));
-    final normalizedRunbook = runbook.replaceAll(RegExp(r'\s+'), ' ');
-    expect(
-      normalizedRunbook,
-      contains('Gemini Flash/Flash-Lite allowlist'),
-      reason: 'The documented automatic provider must remain Gemini Flash.',
-    );
-    expect(
-      normalizedRunbook,
-      allOf(
-        contains('source, diffs'),
-        contains('sanitized'),
-      ),
-      reason:
-          'The runbook must retain the protected-CI metadata privacy boundary.',
-    );
+    expect(runbook, contains('provider: reviewed-change-records'));
+    expect(runbook, contains('Debug-only records never become Release improvements'));
+    expect(runbook, contains('source hashes'));
+    expect(runbook, contains('higher visible version'));
+
   });
 
   test('release-note baseline skips same-SHA retries and stays ancestral', () {
@@ -539,7 +516,7 @@ void main() {
     final stage = publishHelper.indexOf('git add -A');
     final commit = publishHelper.indexOf('git commit -m', stage);
     final geminiNotes = publishHelper.indexOf(
-      'prepare_gemini_release_notes "\$head_sha"',
+      'prepare_reviewed_release_notes "\$head_sha"',
       commit,
     );
     final push = publishHelper.indexOf('git push origin', commit);
@@ -598,12 +575,12 @@ void main() {
     expect(publishHelper, isNot(contains('--preflight-only')));
   });
 
-  test('standard helper delegates release-note generation only to Gemini CI',
+  test('standard helper prepares versioned reviewed notes for protected CI',
       () {
-    expect(publishHelper, contains('prepare_gemini_release_notes'));
+    expect(publishHelper, contains('prepare_reviewed_release_notes'));
     expect(
       publishHelper,
-      contains('Gemini Flash will generate release notes inside protected CI.'),
+      contains('Protected CI will assemble the committed reviewed release changes.'),
     );
     expect(publishHelper.toLowerCase(), isNot(contains('codex')));
     expect(publishHelper, isNot(contains('OPENAI_API_KEY')));

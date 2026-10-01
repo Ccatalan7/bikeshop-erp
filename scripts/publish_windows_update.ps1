@@ -739,6 +739,7 @@ function Find-ActiveWorkflowRun {
 
 Require-Command git
 Require-Command gh
+Require-Command node
 
 $repoRoot = (git rev-parse --show-toplevel).Trim()
 Set-Location $repoRoot
@@ -789,6 +790,10 @@ if (-not [string]::IsNullOrWhiteSpace($PreparedState)) {
     Write-Host "Prepared source: $headSha"
     Write-Host 'Git staging, commit, and push are owned by the shared preparation step.'
 } else {
+    Write-Step 'Preparing the next visible release version'
+    $versionPlanJson = & node scripts/releases/release_version.mjs --prepare --write --windows
+    if ($LASTEXITCODE -ne 0) { throw 'Could not prepare the next visible release version.' }
+    $versionPlan = $versionPlanJson | ConvertFrom-Json
     Write-Step 'Staging all Source Control changes'
     git add -A
     if ($LASTEXITCODE -ne 0) {
@@ -797,6 +802,10 @@ if (-not [string]::IsNullOrWhiteSpace($PreparedState)) {
 
     $stagedFiles = @(git diff --cached --name-only)
     $hasStagedChanges = $stagedFiles.Count -gt 0
+    if ($hasStagedChanges) {
+        & node scripts/releases/generate_release_notes.mjs --check-index --from-commit $versionPlan.notes_base
+        if ($LASTEXITCODE -ne 0) { throw 'Review the release changes before creating the commit.' }
+    }
 
     if ($hasStagedChanges -and [string]::IsNullOrWhiteSpace($Message)) {
         $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm'
@@ -863,7 +872,7 @@ if ($null -ne $preparedUpdate) {
 $notesTitleIdentity = if (
     [string]::IsNullOrWhiteSpace($releaseNotesCandidateSha256)
 ) {
-    'gemini'
+    'reviewed'
 } else {
     $releaseNotesCandidateSha256
 }

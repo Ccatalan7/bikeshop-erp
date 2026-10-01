@@ -3,7 +3,7 @@ name: Publish Android ERP Release
 run-name: >-
   Android ${{ inputs.publish_release == true && 'publish' || 'validation' }}
   · ${{ github.sha }}
-  · notes ${{ inputs.release_notes_candidate_sha256 || 'gemini' }}
+  · notes ${{ inputs.release_notes_candidate_sha256 || 'reviewed' }}
   · from ${{ inputs.release_notes_from_commit || 'auto' }}
   · integrity ${{ inputs.integrity_run_id || 'self' }}
 
@@ -275,14 +275,13 @@ jobs:
       - name: Validate and generate exact-range release notes
         env:
           NOTES_BASE: ${{ steps.notes-base.outputs.commit }}
-          GEMINI_RELEASE_API_KEY: ${{ secrets.GEMINI_RELEASE_API_KEY }}
-          GEMINI_RELEASE_NOTES_MODEL: ${{ vars.GEMINI_RELEASE_NOTES_MODEL || 'gemini-3.1-flash-lite' }}
         run: |
           set -euo pipefail
 
           node scripts/releases/generate_release_notes.mjs \
             --from-commit "$NOTES_BASE" \
             --to-commit "$GITHUB_SHA" \
+            --platform android \
             --output "$RUNNER_TEMP/android-release-notes.json"
 
           jq -e \
@@ -292,6 +291,7 @@ jobs:
               (. | keys | sort) == ["release_notes"]
               and .release_notes.schema_version == 1
               and .release_notes.locale == "es-CL"
+              and .release_notes.source == "ai"
               and .release_notes.from_commit == $base
               and .release_notes.to_commit == $head
               and (.release_notes.modules | type == "array" and length > 0)

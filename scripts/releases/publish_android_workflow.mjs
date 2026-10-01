@@ -310,7 +310,7 @@ function expectedAndroidRunTitle(state) {
   return [
     "Android publish",
     state.headSha,
-    `notes ${state.releaseNotesCandidateSha256 || "gemini"}`,
+    `notes ${state.releaseNotesCandidateSha256 || "reviewed"}`,
     `from ${state.releaseNotesFromCommit || "auto"}`,
     `integrity ${state.integrityRunId || "self"}`,
   ].join(" · ");
@@ -703,7 +703,7 @@ export async function main({
     const runId = await waitForRun(workflowRun, { state });
     const manifest = await verifyRunEvidence(state, runId);
     stdout.write(
-      `Published Android ${manifest.version_name}+${manifest.build_number} ` +
+      `Published Android ${manifest.version_name} ` +
         `(APK code ${manifest.version_code}) from ${state.headSha}.\n`,
     );
     return 0;

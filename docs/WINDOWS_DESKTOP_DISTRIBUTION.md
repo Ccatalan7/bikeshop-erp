@@ -102,8 +102,8 @@ independent publishers:
    Windows release. The older ancestor, or their one unique safe merge base,
    becomes the common `Novedades` baseline. Missing, expired, non-ancestral, or
    ambiguous evidence stops safely.
-5. It resolves the exact common release-note range. Gemini Flash generates the
-   bounded, user-friendly Spanish copy later inside each protected publish job.
+5. It resolves the exact common release-note range. Protected CI assembles
+   committed reviewed changes verbatim for the actual platform and Release scope.
 6. It writes a short-lived, current-user-only Windows+Android handoff inside
    `.git`, separate from the macOS paired-release state, binding the branch,
    exact local and remote SHA, and release-note base. Legacy candidate fields
@@ -133,11 +133,13 @@ Only cancelled, timed-out, stale, or startup-failed qualification may rerun the
 same GitHub run once. `Publish Windows Update (all changes)` carries no shared
 proof and therefore retains its own complete integrity fallback.
 
-Both protected jobs run the same Gemini Flash generator over the same exact
-range, so their `Novedades` describe the same committed ERP update. Each
-workflow independently reconstructs and validates the committed evidence before
-accepting it. If Gemini is unavailable or its output is rejected, the validated
-deterministic fallback remains intact and publication can be retried safely.
+Both protected jobs assemble reviewed changes over the same exact range and
+select the actual platform. Their shared user-facing changes have identical
+text. Each workflow reconstructs and validates committed source hashes and
+coverage independently. Missing or stale review blocks publication; filenames
+and green tests do not establish a user benefit. Preparation advances the
+visible version for new source while preserving same-commit retries and
+monotonic native build counters.
 
 The workstation never receives the private Supabase credential. It derives the
 Android side of the common baseline from the bounded successful Actions evidence
@@ -156,36 +158,16 @@ The newest non-prerelease GitHub Release whose
 The next time users open the app, the Flutter workspace prepares the update
 silently, then shows an update prompt only when the update is ready.
 
-The protected publish job first creates deterministic Spanish fallback notes
-for the exact previous-release commit range so the local intermediate file is
-always valid, then prefers the Gemini API when `GEMINI_RELEASE_API_KEY` exists
-in the protected `Production` environment. The default model is
-`gemini-3.1-flash-lite`, with `GEMINI_RELEASE_NOTES_MODEL` available as an
-optional override. If Google reports that model unavailable or rejects its
-output-format contract, the generator performs one metadata-free model-list
-request and retries only with an available model from its fixed Gemini
-Flash/Flash-Lite allowlist. When the Gemini key is absent, the existing
-deterministic fallback remains in place. The standard workflows do not call
-Codex and do not receive an OpenAI credential.
-
-Errors, exhausted quota, timeouts, or invalid output leave the validated
-deterministic fallback in place and must not block publication. The generator
-prints the selected provider, active Gemini model, and only a sanitized failure
-category so an AI downgrade is visible without exposing Google error text or
-release metadata.
-
-Only sanitized, bounded release metadata is eligible for the provider:
-fixed canonical ERP module/topic labels, status and change counts, and opaque
-evidence IDs. Commit subjects, commit SHAs, raw/current/previous paths, source,
-diffs, credentials, generated bundles, binary contents, customer data, and
-other personal or confidential information stay local and must never be sent.
-Opaque evidence IDs are mapped back to local changed paths only after the model
-output passes schema and evidence validation.
-
-Google's free/unpaid Gemini service may use submitted inputs and generated
-outputs to improve its products, and human reviewers may process them; release
-metadata must therefore remain within this non-sensitive boundary. See the
-[Gemini API Additional Terms of Service](https://ai.google.dev/gemini-api/terms).
+The protected publish job assembles the implementation agent's reviewed
+records under `docs/releases/changes/`, selecting Windows and Release scope.
+It validates the exact range, source hashes, coverage, module ownership and
+plain-text limits before binding the notes to the archive. No provider call,
+credentials or speculative fallback is used. Logs identify
+`source: ai; provider: reviewed-change-records`; installed clients retain their
+existing manifest format. Debug/internal records do not advertise benefits.
+A new commit with an already-published visible version is rejected.
+See [RELEASES.md](development/RELEASES.md#versiones-y-novedades-verificadas-corregido-el-2026-10-01)
+for the record format, author review and automatic visible version progression.
 
 The CI gate deliberately does not start `vinabike_erp.exe`: application startup
 initializes the production Supabase fallback and notifications before login.

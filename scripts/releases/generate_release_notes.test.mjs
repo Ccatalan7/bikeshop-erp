@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import {
@@ -21,7 +22,7 @@ import {
   createCodexReleaseEnvelope,
   createFallbackReleaseNotes,
   decodeCodexReleaseEnvelopeBase64,
-  generateReleaseNotes,
+  generateLegacyMetadataReleaseNotes as generateReleaseNotes,
   isBinaryReleasePath,
   isGeneratedReleasePath,
   isSensitiveReleasePath,
@@ -1640,7 +1641,7 @@ test("keeps the fallback for timeout, 429, malformed JSON, and fabricated eviden
   }
 });
 
-test("CLI exits zero with fallback and nonzero for an invalid exact commit", async (t) => {
+test("publication CLI rejects unreviewed changes and invalid exact commits", async (t) => {
   const { repoDir, fromCommit, toCommit } = await createFixtureRepo(t);
   const outputPath = path.join(repoDir, "out", "cli.json");
   const environment = { ...process.env };
@@ -1657,6 +1658,8 @@ test("CLI exits zero with fallback and nonzero for an invalid exact commit", asy
       fromCommit,
       "--to-commit",
       toCommit,
+      "--platform",
+      "android",
       "--output",
       outputPath,
     ],
@@ -1666,12 +1669,9 @@ test("CLI exits zero with fallback and nonzero for an invalid exact commit", asy
       encoding: "utf8",
     },
   );
-  assert.equal(success.status, 0, success.stderr);
-  assert.match(success.stdout, /Release notes source: fallback/u);
-  assert.equal(
-    JSON.parse(await readFile(outputPath, "utf8")).release_notes.source,
-    "fallback",
-  );
+  assert.notEqual(success.status, 0);
+  assert.match(success.stderr, /Missing reviewed release changes/u);
+  assert.equal(existsSync(outputPath), false);
 
   const failure = spawnSync(
     process.execPath,
@@ -1681,6 +1681,8 @@ test("CLI exits zero with fallback and nonzero for an invalid exact commit", asy
       "0".repeat(40),
       "--to-commit",
       toCommit,
+      "--platform",
+      "android",
       "--output",
       path.join(repoDir, "out", "invalid.json"),
     ],

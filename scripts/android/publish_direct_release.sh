@@ -553,7 +553,7 @@ prepare_ci_version() {
       "$CI_EXACT_SHA" \
       "$RELEASE_NOTES_FROM_COMMIT"
     write_release_evidence "$LATEST_ANDROID_RELEASE_JSON"
-    echo "Android ${LATEST_ANDROID_VERSION_NAME}+${LATEST_ANDROID_BUILD_NUMBER} is already published from commit $CI_EXACT_SHA."
+    echo "Android ${LATEST_ANDROID_VERSION_NAME} (internal build ${LATEST_ANDROID_BUILD_NUMBER}) is already published from commit $CI_EXACT_SHA."
     exit 0
   fi
 
@@ -564,7 +564,7 @@ prepare_ci_version() {
     fi
     VERSION_CODE=$((LATEST_ANDROID_BUILD_NUMBER + 1))
   fi
-  echo "Protected Android release selected ${VERSION_NAME}+${VERSION_CODE}."
+  echo "Protected Android release selected ${VERSION_NAME} (internal build ${VERSION_CODE})."
 }
 
 prepare_next_android_version() {
@@ -583,7 +583,7 @@ prepare_next_android_version() {
     "$current_head" == "$LATEST_ANDROID_COMMIT" &&
     -z "$(git status --porcelain)"
   ]]; then
-    echo "Android ${VERSION_NAME}+${VERSION_CODE} is already published from this clean commit."
+    echo "Android ${VERSION_NAME} (internal build ${VERSION_CODE}) is already published from this clean commit."
     return
   fi
 
@@ -622,6 +622,10 @@ assert_android_version_is_publishable() {
 
   if android_release_is_already_published "$release_commit"; then
     return 2
+  fi
+  if ! node scripts/releases/release_version.mjs --assert-forward \
+    "$VERSION_NAME" "$LATEST_ANDROID_VERSION_NAME" "$release_commit" "$LATEST_ANDROID_COMMIT"; then
+    return 1
   fi
   if (( VERSION_CODE <= LATEST_ANDROID_BUILD_NUMBER )); then
     echo "Android build number ${VERSION_CODE} is not newer than published build ${LATEST_ANDROID_BUILD_NUMBER}." >&2
@@ -692,7 +696,7 @@ if [[ "$PREPARE_VERSION" == true ]]; then
   "${FLUTTER_COMMAND[@]}" pub get
   read_pubspec_version
   prepare_next_android_version
-  echo "Android shared-release preflight passed for ${VERSION_NAME}+${VERSION_CODE}."
+  echo "Android shared-release preflight passed for ${VERSION_NAME} (internal build ${VERSION_CODE})."
   exit 0
 fi
 
@@ -705,7 +709,7 @@ fi
 version_status=0
 assert_android_version_is_publishable "$release_commit" || version_status=$?
 if (( version_status == 2 )); then
-  echo "Android ${VERSION_NAME}+${VERSION_CODE} is already published from commit $release_commit."
+  echo "Android ${VERSION_NAME} (internal build ${VERSION_CODE}) is already published from commit $release_commit."
   exit 0
 fi
 if (( version_status != 0 )); then
@@ -713,7 +717,7 @@ if (( version_status != 0 )); then
 fi
 
 if [[ "$CHECK_ONLY" == true ]]; then
-  echo "Android direct-release preflight passed for ${VERSION_NAME}+${VERSION_CODE}."
+  echo "Android direct-release preflight passed for ${VERSION_NAME} (internal build ${VERSION_CODE})."
   exit 0
 fi
 
@@ -1180,7 +1184,7 @@ if (( version_status == 2 )); then
       "$RELEASE_NOTES_FROM_COMMIT"
     write_release_evidence "$LATEST_ANDROID_RELEASE_JSON"
   fi
-  echo "Android ${VERSION_NAME}+${VERSION_CODE} was published while this APK was building."
+  echo "Android ${VERSION_NAME} (internal build ${VERSION_CODE}) was published while this APK was building."
   exit 0
 fi
 if (( version_status != 0 )); then
@@ -1333,5 +1337,5 @@ if [[ -n "$CI_EXACT_SHA" ]]; then
 fi
 
 unset SIGNING_PASSWORD SIGNING_KEY_PASSWORD SUPABASE_RELEASE_SECRET
-echo "Published Vinabike ERP Android ${VERSION_NAME}+${VERSION_CODE}."
+echo "Published Vinabike ERP Android ${VERSION_NAME} (APK code ${APK_VERSION_CODE})."
 echo "Private page: https://vinabike.cl/cuenta/descargas/android"

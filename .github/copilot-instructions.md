@@ -1821,44 +1821,51 @@ may replace the internal trust bootstrap with notarization, but it must preserve
 the stable install path, signed release evidence, rollback, and no-VS-Code user
 experience.
 
-### Desktop Release Notes Contract
+### Desktop Release Notes Contract (corrected 2026-10-01)
 
-macOS and Windows coworker releases may include a bounded `release_notes`
-object in their exact-SHA manifest. The protected `Production` publish job is
-the only authority that may accept, bind, and sign that object. It must write a
-deterministic `es-CL` fallback first, summarize the complete previous-platform-
-release-to-current-SHA range, and validate every AI item against an inventory
-that it independently reconstructs from the committed range.
+The visible release version advances for each new source publication:
+`1.0.3` -> `1.0.4` -> `1.0.5`. The shared preparation step reads independently
+verified desktop and Android publication manifests, increments the patch in
+`pubspec.yaml` when necessary, and preserves an intentionally higher minor or
+major version. Clean same-commit retries reuse the published visible version.
+Native macOS bundle and Android APK counters remain monotonic installation
+metadata; incrementing only those counters is not a new visible version.
+Protected publishers reject a new source commit with an already-published
+visible version. Do not rename or alter old immutable release artifacts.
 
-The standard macOS, Windows, and Android workflows use Gemini as their only
-automated AI release-note provider. Preparation never calls Codex and protected
-CI never receives `OPENAI_API_KEY`. `GEMINI_RELEASE_NOTES_MODEL` is durably set
-in the `Production` environment; the checked-in default is
-`gemini-3.1-flash-lite`, followed only by the fixed Flash/Flash-Lite discovery
-allowlist when Google reports that model unavailable.
+Release notes are authored with the implementation, not guessed from changed
+filenames. Before committing a change that will ship, the implementing agent
+writes a reviewed record under `docs/releases/changes/` according to
+`docs/development/RELEASES.md`. It describes concrete verified before/after
+behavior in plain Chilean Spanish, declares actual platforms and
+Release/Debug/internal scope, and binds exact changed source files with SHA-256.
+Debug/internal records have no advertised benefit. Tests and documentation
+alone do not establish shipped behavior.
 
-Only fixed canonical ERP module/topic labels, statuses, numeric change counts,
-and opaque evidence IDs may be sent to the provider. Commit subjects, commit SHAs,
-raw/current/previous paths, source, diffs, credentials, generated bundles,
-binary contents, customer data, and other personal or confidential information
-must stay inside the protected job.
+**Cause of the 2026-10-01 correction:** Gemini received module labels and file
+counts without actual behavior. Valid paths, ranges and vocabulary still let
+it invent workshop, navigation and performance benefits for a Debug-only
+change. Schema validation is not semantic review. The standard publication
+CLI now assembles committed reviewed text verbatim, with no provider call,
+credentials, rewrite or speculative fallback. AI authoring still occurs with
+the implementation; `source: ai` retains compatibility with installed clients,
+and logs identify `provider: reviewed-change-records`, never a Gemini call.
 
-`GEMINI_RELEASE_API_KEY` is a `Production` environment secret and must never
-enter Flutter builds, artifacts, manifests, logs, pull-request jobs, or
-artifact-only release jobs. Missing credentials, timeouts, quota exhaustion,
-API errors, invalid
-JSON, unsupported evidence, vague or oversized text must retain the
-deterministic fallback and must not block signing or publication. Logs may
-identify only the selected source and a fixed sanitized failure category; they
-must never echo model prompts, responses, provider errors, or release source.
-The app renders validated plain text only; it must not interpret model output as
-Markdown or HTML.
+Preparation validates staged records before creating a commit. Protected CI
+independently reconstructs the exact source range, checks evidence hashes,
+coverage, platform, scope, immutable records, canonical module ownership,
+plain text and size limits. Missing or stale review blocks publication. When
+only Debug/internal changes apply to a platform, notes state honestly that
+there are no visible functional changes. No item is silently dropped to fit.
+Legacy metadata-only model utilities are historical diagnostics, not a
+publication path. Do not restore them to make a missing review pass.
 
-Merge macOS notes before signing the release manifest, then persist that exact
-manifest only after the LaunchAgent verifies its signature. Windows must require
-the selected release tag, target commit, manifest archive name, and prepared
-archive to agree. `Reiniciar` remains the primary action on both platforms;
-`Novedades` is optional and hidden for absent or invalid notes.
+The protected `Production` job remains the authority that binds and signs
+notes. Merge macOS notes before signing the release manifest, then persist the
+exact manifest only after the LaunchAgent verifies its signature. Windows
+requires selected tag, commit, manifest archive and prepared archive to agree.
+`Reiniciar` stays primary; `Novedades` is optional and hidden for absent or
+invalid notes. The app renders validated plain text, never Markdown or HTML.
 
 The generated Univer spreadsheet bundles are tracked release assets. The integrity,
 Windows release, and macOS release jobs must each run `npm ci` and

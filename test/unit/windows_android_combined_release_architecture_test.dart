@@ -92,7 +92,7 @@ void main() {
     final stage = preparation.indexOf('git add -A');
     final commit = preparation.indexOf('git commit -m');
     final gemini = preparation.indexOf(
-      'Gemini Flash will generate the shared release notes inside protected CI.',
+      'Protected CI will assemble the committed reviewed release changes.',
       commit,
     );
     final push = preparation.indexOf('git push origin');
@@ -281,7 +281,7 @@ void main() {
       contains('Publish ERP Update (Windows + Android)'),
     );
     expect(runbook, contains('at most one new commit'));
-    expect(runbook, contains('Gemini Flash generates'));
+    expect(runbook, contains('Protected CI assembles'));
     expect(runbook, contains('same exact'));
     expect(runbook, isNot(contains('Codex CLI once')));
     expect(runbook, isNot(contains('same validated Codex candidate')));
@@ -290,6 +290,6 @@ void main() {
     expect(runbook, contains('Missing, expired, non-ancestral, or'));
     expect(runbook, contains('handoff after its'));
     expect(runbook, contains('schema-v3 qualification upgrade'));
-    expect(runbook, contains('deterministic fallback'));
+    expect(runbook, contains('Missing or stale review blocks publication'));
   });
 }

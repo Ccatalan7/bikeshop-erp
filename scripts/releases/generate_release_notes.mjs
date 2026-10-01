@@ -701,7 +701,7 @@ function containsPrivateIdentifier(value) {
   );
 }
 
-function isPlainUserText(value) {
+export function isPlainUserText(value) {
   if (!isBoundedString(value, 280)) return false;
   if (/[\r\n\t<>`]/u.test(value)) return false;
   if (/(?:https?:\/\/|www\.)/iu.test(value)) return false;
@@ -1658,7 +1658,9 @@ export function decodeCodexReleaseEnvelopeBase64(value) {
   }
 }
 
-export async function generateReleaseNotes({
+// Historical metadata/provider behavior is retained for compatibility tests
+// and old diagnostic tools. Publication never calls this speculative producer.
+export async function generateLegacyMetadataReleaseNotes({
   repoDir = process.cwd(),
   fromCommit,
   toCommit,
@@ -1845,6 +1847,14 @@ export async function generateReleaseNotes({
   };
 }
 
+export async function generateReleaseNotes({ repoDir = process.cwd(), fromCommit, toCommit, platform, outputPath } = {}) {
+  if (!outputPath) throw new Error("An output path is required.");
+  const { generateReviewedReleaseNotes } = await import("./reviewed_release_changes.mjs");
+  const result = generateReviewedReleaseNotes({ repoDir, fromCommit, toCommit, platform });
+  await writeJsonAtomically(outputPath, { release_notes: result.release_notes });
+  return result;
+}
+
 function parseCliArgs(argv) {
   const values = {};
   for (let index = 0; index < argv.length; index += 1) {
@@ -1852,7 +1862,11 @@ function parseCliArgs(argv) {
     if (argument === "--help" || argument === "-h") {
       return { help: true };
     }
-    if (!["--from-commit", "--to-commit", "--output"].includes(argument)) {
+    if (argument === "--check-index") {
+      values.check_index = true;
+      continue;
+    }
+    if (!["--from-commit", "--to-commit", "--output", "--platform"].includes(argument)) {
       throw new Error(`Unknown argument: ${argument}`);
     }
     const value = argv[index + 1];
@@ -1862,9 +1876,10 @@ function parseCliArgs(argv) {
     values[argument.slice(2).replaceAll("-", "_")] = value;
     index += 1;
   }
-  if (!values.from_commit || !values.to_commit || !values.output) {
+  if (values.check_index && values.from_commit) return values;
+  if (!values.from_commit || !values.to_commit || !values.output || !values.platform) {
     throw new Error(
-      "--from-commit, --to-commit, and --output are all required.",
+      "--from-commit, --to-commit, --platform, and --output are all required.",
     );
   }
   return values;
@@ -1877,13 +1892,11 @@ function printUsage() {
       "  node scripts/releases/generate_release_notes.mjs \\",
       "    --from-commit <40-character-sha> \\",
       "    --to-commit <40-character-sha> \\",
+      "    --platform <macos|windows|android|web|ios> \\",
       "    --output <release-notes.json>",
       "",
-      "Optional environment:",
-      "  GEMINI_RELEASE_API_KEY (the only automated AI provider)",
-      "  GEMINI_RELEASE_NOTES_MODEL (default: gemini-3.1-flash-lite)",
-      "  GEMINI_RELEASE_NOTES_TIMEOUT_MS",
-      "  GEMINI_RELEASE_NOTES_MAX_ATTEMPTS",
+      "Text comes verbatim from reviewed changes committed with their source evidence.",
+      "No provider credential or network generation is used by publication.",
       "",
     ].join("\n"),
   );
@@ -1896,15 +1909,20 @@ async function main() {
     return;
   }
 
+  if (args.check_index) {
+    const { collectReviewedReleaseChanges, assembleReviewedReleaseNotes } = await import("./reviewed_release_changes.mjs");
+    const collected = collectReviewedReleaseChanges({ repoDir: process.cwd(), fromCommit: args.from_commit, index: true });
+    for (const platform of ["macos", "windows", "android", "web", "ios"]) assembleReviewedReleaseNotes({ ...collected, platform });
+    process.stdout.write(`Reviewed release changes verified before commit: ${collected.records.length}\n`);
+    return;
+  }
+
   const result = await generateReleaseNotes({
     repoDir: process.cwd(),
     fromCommit: args.from_commit,
     toCommit: args.to_commit,
     outputPath: args.output,
-    geminiApiKey: process.env.GEMINI_RELEASE_API_KEY ?? "",
-    geminiModel: process.env.GEMINI_RELEASE_NOTES_MODEL || DEFAULT_GEMINI_MODEL,
-    timeoutMs: process.env.GEMINI_RELEASE_NOTES_TIMEOUT_MS,
-    maxAttempts: process.env.GEMINI_RELEASE_NOTES_MAX_ATTEMPTS,
+    platform: args.platform,
   });
   const suffix = result.reason ? ` (${result.reason})` : "";
   const modelSuffix =

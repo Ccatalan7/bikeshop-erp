@@ -113,6 +113,13 @@
   eliminate-then-rank order, the identity/fitment split, and why a measurement
   is never a model.
 - For bike workshop architecture work, read `BIKE_WORKSHOP_MASTER_SCHEMA.md` first and update it in the same task when behavior/schema/data-flow changes.
+- For an implementation that will ship, author its reviewed release change in
+  `docs/releases/changes/` alongside the verified source. Follow
+  `docs/development/RELEASES.md`: concrete before/after behavior, actual
+  platforms, explicit Release/Debug/internal scope, and exact source hashes.
+  Publication assembles these records verbatim; filenames or green tests do
+  not establish a user benefit. Preparation advances the visible version for
+  new source; internal native build counters are separate.
 - For Supabase/database work, follow `docs/development/AGENT_DATABASE_CONTRACT.md`.
   It is the single entry point for every agent and points to the two
   authoritative documents. Do not restate database policy or command paths in

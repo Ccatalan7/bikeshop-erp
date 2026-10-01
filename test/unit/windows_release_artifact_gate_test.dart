@@ -130,7 +130,7 @@ void main() {
       'Check out release verification material',
       publishJob,
     );
-    final geminiReleaseNotesSecret = workflow.indexOf(
+    final obsoleteProviderSecret = workflow.indexOf(
       r'GEMINI_RELEASE_API_KEY: ${{ secrets.GEMINI_RELEASE_API_KEY }}',
     );
     final baseResolution = workflow.indexOf(
@@ -156,17 +156,10 @@ void main() {
         contains('fetch-depth: 0'),
       ),
     );
-    expect(geminiReleaseNotesSecret, greaterThan(publishJob));
-    expect(
-      workflow,
-      contains(
-        r"GEMINI_RELEASE_NOTES_MODEL: ${{ vars.GEMINI_RELEASE_NOTES_MODEL || 'gemini-3.1-flash-lite' }}",
-      ),
-    );
-    expect(
-      RegExp(r'secrets\.GEMINI_RELEASE_API_KEY').allMatches(workflow).length,
-      1,
-    );
+    expect(obsoleteProviderSecret, -1);
+    expect(workflow, isNot(contains('GEMINI_RELEASE_NOTES_MODEL')));
+    expect(workflow, contains('--platform windows'));
+    expect(workflow, contains('--check-desktop windows'));
     expect(RegExp(r'secrets\.OPENAI_API_KEY').allMatches(workflow), isEmpty);
     expect(generation, greaterThan(baseResolution));
     expect(
@@ -190,14 +183,11 @@ void main() {
       ),
       reason: 'A retry must refresh both assets and their release notes.',
     );
-    expect(distributionRunbook, contains('GEMINI_RELEASE_API_KEY'));
-    expect(distributionRunbook, contains('gemini-3.1-flash-lite'));
-    expect(distributionRunbook, contains('deterministic fallback'));
-    expect(distributionRunbook, contains('human reviewers'));
-    expect(
-      distributionRunbook,
-      contains('standard workflows do not call\nCodex'),
-    );
+    expect(distributionRunbook, contains('provider: reviewed-change-records'));
+    expect(distributionRunbook, contains('source hashes'));
+    expect(distributionRunbook, contains('Debug/internal records do not advertise benefits'));
+    expect(distributionRunbook, contains('visible version is rejected'));
+
   });
 
   test('release-note baseline ignores a current-SHA retry', () {

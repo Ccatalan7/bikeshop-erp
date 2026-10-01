@@ -186,46 +186,81 @@ roto. Ya era frágil; correr cuatro procesos a la vez sólo lo hizo visible. Se
 le dio holgura sin cambiar lo que afirma. Un test que mide tiempo real necesita
 márgenes que aguanten un corredor ocupado.
 
-## El recuadro de novedades (corregido el 2026-08-24)
+## Versiones y novedades verificadas (corregido el 2026-10-01)
 
-La preparación sólo fija el rango exacto de commits. La nota de usuario se
-genera dentro del job protegido con **Gemini Flash** y se valida contra ese
-rango antes de firmar o publicar el manifiesto. El camino estándar no llama a
-Codex local, no acepta `--notes-candidate` y no entrega una clave de OpenAI al
-CI. `GEMINI_RELEASE_NOTES_MODEL` queda fijado en el environment `Production` a
-`gemini-3.1-flash-lite`; si Google retira ese modelo, el generador sólo puede
-elegir otro Flash/Flash-Lite de su allowlist después de consultar los modelos
-disponibles.
+Cada entrega de código nuevo avanza la versión visible: **1.0.4, 1.0.5…**.
+`release_version.mjs` lee los manifiestos publicados de escritorio y Android
+antes del commit y actualiza el patch de `pubspec.yaml`. Respeta una subida
+intencional de minor/major; rechaza versiones inferiores a las publicadas. Un
+reintento limpio del mismo commit conserva la versión. El contador de bundle
+macOS y el código de APK Android siguen siendo crecientes, separados de la
+versión que ve la persona. Los publicadores protegidos también rechazan otro
+commit con la misma versión visible; no se renumeran artefactos históricos.
 
-La validación sigue siendo la autoridad sobre el texto generado:
+La congelación anterior tenía una causa concreta: `pubspec.yaml` seguía en
+1.0.3 mientras el publicador avanzaba sólo el código técnico. Las notas tenían
+otra: Gemini recibía módulos y cantidades de archivos, no la conducta real.
+El rango, rutas y vocabulario pasaban la validación incluso al inventar mejoras
+de presupuestos, navegación o rendimiento sobre un cambio sólo de Debug.
 
-1. Forma exacta: `{title ≤80, summary ≤280, modules[1..5]}`, y cada módulo
-   `{id, label, items[1..3] ≤160, evidence_ids[1..12]}`. `id` y `label` salen
-   de `RELEASE_NOTE_MODULES`; el label debe ser el del id, no otro.
-2. **Cada `evidence_id` debe pertenecer al módulo que lo cita.** El módulo lo
-   decide la ruta del archivo, no el tema: casi todo el trabajo de AliExpress
-   vive en `lib/shared/` y por eso cuenta como `general`, no como `purchases`.
-3. Sólo valen las evidencias del catálogo **inspeccionable** (sin binarios,
-   generados ni sensibles); por ejemplo un `supabase/tests/*.sql` queda fuera.
-4. Los `change_NNN` se leen del inventario del rango, no se inventan:
-   `collectReleaseInventory(...)` + `createCodexReleaseContext(inv).changes`.
-5. **El gate mide qué tan concreta es la nota, no sólo su forma.** Rechaza con
-   «AI release notes are too generic» si los ítems no nombran algo observable.
-   Cada ítem se valida contra dos vocabularios de `generate_release_notes.mjs`:
-   el del módulo (`CONCRETE_RELEASE_LANGUAGE`, p. ej. en `general`: botones,
-   ventanas, listas, notificaciones, búsqueda, descargas) y el de conducta
-   visible (`USER_OBSERVABLE_RELEASE_LANGUAGE`: ahora, puedes, muestra, avisa,
-   elige, móvil…), con un mínimo de 6 palabras. En una publicación con dos o
-   más commits, **la mitad de los ítems y al menos dos deben pasar**. Escribir
-   «se mejoró el flujo» nunca pasa; «Ahora el menú del móvil incorpora un botón
-   para abrir otro espacio de trabajo» sí, y además se entiende.
+Ahora el agente escribe las novedades al implementar y verificar el cambio.
+El publicador las reúne automáticamente **sin reescribirlas**. Antes de crear
+el commit, preparación exige un registro nuevo en `docs/releases/changes/`:
 
-El generador siempre materializa primero una nota determinista válida, por lo
-que una caída de Google no corrompe el artefacto. Pero cuando la publicación
-requiere texto escrito por IA no basta con que el workflow quede verde: en los
-dos logs se debe leer `Release notes source: ai; Gemini model: ...`. Un log con
-`source: fallback` obliga a diagnosticar y repetir sólo el publicador afectado
-sobre el mismo SHA calificado; no se declara cerrada esa publicación.
+```json
+{
+  "schema_version": 1,
+  "id": "search-input",
+  "source": "ai",
+  "scope": "release",
+  "platforms": ["macos", "android"],
+  "module": "general",
+  "title": "Búsqueda disponible al volver a abrirla",
+  "summary": "El buscador vuelve a recibir lo que escribes después de cerrarlo y abrirlo otra vez.",
+  "items": ["Puedes cerrar y volver a abrir el buscador sin perder la posibilidad de escribir."],
+  "evidence": [{"path": "ruta/real/del/dueno.dart", "sha256": "sha256 exacto del archivo verificado"}]
+}
+```
+
+El ejemplo ilustra la forma; una evidencia inventada no pasa. El registro real
+usa rutas cambiadas en el rango y hashes completos de sus blobs finales. Para
+una eliminación se cita el blob anterior. Cada archivo de implementación o
+publicación cambiado debe estar cubierto por un registro; documentación y tests
+por sí solos no sustentan una conducta publicada. La nota dice qué deja de
+fallar o qué puede hacer ahora la persona, sin jerga, relleno, datos privados,
+beneficios supuestos ni afirmar que un test equivale a aceptación de producto.
+Se revisa cada afirmación contra el código y la verificación real antes de
+registrarla. El hash detecta revisiones pendientes; no prueba la veracidad del
+texto por sí solo.
+
+`scope` puede ser `release`, `debug` o `internal`. Sólo `release` aparece en
+las plataformas declaradas. Debug/internal llevan `title`, `summary` vacíos e
+`items: []`; no anuncian beneficios. La subida automática de versión genera su
+registro interno de metadatos. Si una plataforma sólo tiene cambios internos,
+la nota declara que no hay cambios funcionales visibles. Los registros ya
+publicados son inmutables: una corrección agrega otro. Para un canal atrasado,
+se revisa todo su rango real; nunca se corta el historial para ocultar cambios.
+
+El ensamblador valida evidencia, cobertura, alcance, plataforma, módulo dueño,
+texto plano y límites: título 80, resumen 280, 1–5 módulos, hasta 3 ítems de 160
+caracteres por módulo y hasta 12 rutas en el manifiesto. El registro conserva
+la evidencia completa; no se recortan afirmaciones para cumplir los límites.
+
+```bash
+node scripts/releases/generate_release_notes.mjs \
+  --check-index --from-commit <base-publicada-exacta>
+node scripts/releases/generate_release_notes.mjs \
+  --from-commit <base-publicada-exacta> --to-commit <corte-exacto> \
+  --platform android --output <notas.json>
+```
+
+CI vuelve a validar el rango y los hashes antes de firmar/publicar. Falta de
+registro o evidencia obsoleta **bloquea** la entrega: no produce una nota
+vacía de valor para que el job quede verde. No usa Gemini ni credenciales de
+modelos. El texto sigue siendo escrito y revisado por la IA que implementa;
+`source: ai` conserva el contrato de las apps instaladas. El log correcto es
+`Release notes source: ai; provider: reviewed-change-records`. Las utilidades
+históricas de generación con metadatos quedan fuera del publicador estándar.
 
 Firebase rollback uses the previous Hosting release. Windows rollback uses the previous signed/checksummed artifact. macOS internal rollback restores the previous verified bundle retained under the per-user updater support directory. Database rollback follows the database backup/restore runbook and must not improvise destructive reverse SQL.
 

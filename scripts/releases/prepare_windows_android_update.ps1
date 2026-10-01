@@ -280,6 +280,12 @@ if (Test-GitAncestor -Ancestor $remoteBefore -Descendant HEAD) {
 Write-Step 'Normalizing pinned Flutter dependencies'
 Invoke-FlutterDependencyNormalization -RepositoryRoot $repoRoot
 
+Write-Step 'Preparing the next visible release version'
+$versionPlanJson = & $node.Source scripts/releases/release_version.mjs --prepare --write --windows
+if ($LASTEXITCODE -ne 0) { throw 'Could not prepare the next visible release version.' }
+$versionPlan = $versionPlanJson | ConvertFrom-Json
+Write-Host "Visible version: $($versionPlan.version)"
+
 Write-Step 'Staging all reviewed Source Control changes once'
 git add -A
 if ($LASTEXITCODE -ne 0) {
@@ -287,6 +293,8 @@ if ($LASTEXITCODE -ne 0) {
 }
 $stagedFiles = @(git diff --cached --name-only)
 if ($stagedFiles.Count -gt 0) {
+    & $node.Source scripts/releases/generate_release_notes.mjs --check-index --from-commit $versionPlan.notes_base
+    if ($LASTEXITCODE -ne 0) { throw 'Review the release changes before creating the commit.' }
     if ([string]::IsNullOrWhiteSpace($Message)) {
         $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm'
         $Message = "chore: publish ERP update $timestamp"
@@ -332,7 +340,7 @@ if ($releaseNotesFromCommit -notmatch '^[0-9a-f]{40}$') {
 $statePath = Resolve-ErpUpdateStatePath `
     -RequestedPath $StateFile `
     -RepositoryRoot $repoRoot
-Write-Host 'Gemini Flash will generate the shared release notes inside protected CI.'
+Write-Host 'Protected CI will assemble the committed reviewed release changes.'
 $candidateBase64 = ''
 $candidateSha256 = ''
 

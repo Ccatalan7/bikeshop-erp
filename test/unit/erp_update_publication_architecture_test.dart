@@ -169,7 +169,7 @@ void main() {
     expect(
       prepareHelper,
       contains(
-        'Gemini Flash will generate the shared release notes inside protected CI.',
+        'Protected CI will assemble the committed reviewed release changes.',
       ),
     );
     expect(prepareHelper, contains("release_notes_candidate_b64=''"));

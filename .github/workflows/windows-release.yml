@@ -3,7 +3,7 @@ name: Build Windows Desktop Release
 run-name: >-
   Windows ${{ inputs.publish_release == true && 'publish' || 'artifact gate' }}
   · ${{ github.sha }}
-  · notes ${{ inputs.release_notes_candidate_sha256 || 'gemini' }}
+  · notes ${{ inputs.release_notes_candidate_sha256 || 'reviewed' }}
   · from ${{ inputs.release_notes_from_commit || 'auto' }}
   · integrity ${{ inputs.integrity_run_id || 'self' }}
 
@@ -367,11 +367,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          GEMINI_RELEASE_API_KEY: ${{ secrets.GEMINI_RELEASE_API_KEY }}
-          GEMINI_RELEASE_NOTES_MODEL: ${{ vars.GEMINI_RELEASE_NOTES_MODEL || 'gemini-3.1-flash-lite' }}
+          APP_VERSION: ${{ needs.build.outputs.app_version }}
           RELEASE_NOTES_FROM_COMMIT: ${{ inputs.release_notes_from_commit }}
         run: |
           set -euo pipefail
+
+          node scripts/releases/release_version.mjs --check-desktop windows \
+            "${APP_VERSION%%+*}" "$GITHUB_SHA"
 
           base_commit="$(
             bash scripts/releases/resolve_previous_release_commit.sh \
@@ -392,6 +394,7 @@ jobs:
           node scripts/releases/generate_release_notes.mjs \
             --from-commit "$base_commit" \
             --to-commit "$GITHUB_SHA" \
+            --platform windows \
             --output dist/release-notes.json
 
           jq -e \
@@ -400,6 +403,7 @@ jobs:
             '
               .release_notes.schema_version == 1 and
               .release_notes.locale == "es-CL" and
+              .release_notes.source == "ai" and
               .release_notes.from_commit == $base and
               .release_notes.to_commit == $head and
               (.release_notes.modules | type == "array")

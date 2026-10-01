@@ -143,7 +143,7 @@ Android Actions evidence artifact and combines its exact commit with the latest
 applicable macOS release. The older ancestral commit, or their one unique safe
 merge base, becomes the common `Novedades` baseline; an expired, missing,
 non-ancestral, or ambiguous Android history fails closed. Preparation uses that
-range as the shared Gemini input boundary, pushes once, and writes a short-lived
+range as the shared reviewed-change boundary, pushes once, and writes a short-lived
 schema-v2 exact-SHA handoff inside `.git`. Legacy candidate fields remain empty.
 A diverged history or
 overlapping local change stops before publication.
@@ -208,14 +208,15 @@ determinista —«Incluye ajustes y mejoras de estabilidad en…», que no dice
 nada— sólo se arregla publicando **otra** versión, porque la siguiente
 actualización arranca su rango en ese commit y ya no describe estos cambios.
 
-Desde el 2026-08-24 la preparación **no llama Codex ni acepta un candidato
-local**. Sólo fija el rango exacto; el job protegido genera el texto con Gemini
-Flash. La variable durable de `Production` es
-`GEMINI_RELEASE_NOTES_MODEL=gemini-3.1-flash-lite`. Si ese modelo deja de estar
-disponible, el generador descubre una alternativa únicamente dentro de su lista
-cerrada Flash/Flash-Lite. Si Google no responde, queda el fallback determinista
-y la publicación sigue siendo segura, pero quien conduce una publicación que
-exige texto IA debe comprobar en el log `Release notes source: ai`.
+**Corrección 2026-10-01:** las novedades se escriben y revisan junto con la
+implementación en `docs/releases/changes/`, con alcance, plataformas y hashes
+de fuentes reales. Preparación las valida antes del commit; CI ensambla el
+texto literal del rango exacto antes de firmar. No hay llamada a Gemini ni
+fallback que invente beneficios por nombres de archivo. El log identifica
+`source: ai; provider: reviewed-change-records`. El contrato y formato están en
+[RELEASES.md](development/RELEASES.md#versiones-y-novedades-verificadas-corregido-el-2026-10-01).
+La versión visible avanza para código nuevo; los reintentos del mismo commit
+conservan la versión y los contadores nativos siguen separados.
 
 The normal developer action is the selectable VS Code task:
 
@@ -228,9 +229,9 @@ model as the Windows publisher:
 
 1. Verify that the current branch may enter the protected `Production`
    environment.
-2. Stage every Source Control change and create a timestamped commit when
-   needed. A clean checkout publishes the already-committed branch head.
-3. Resolve the exact prior-release range that protected Gemini will summarize.
+2. Prepare the next visible version, validate staged reviewed changes, and
+   create a timestamped commit when needed. A clean checkout publishes the already-committed branch head.
+3. Resolve the exact prior-release range that protected CI will assemble.
 4. Push that exact commit without switching branches or creating a worktree.
 5. Reuse an active publish run for the same commit, or dispatch
    `.github/workflows/macos-release.yml` once with `publish_release=true`.
@@ -243,7 +244,7 @@ model as the Windows publisher:
 The standalone macOS task remains available for a macOS-only release. In the
 combined task, prepared mode consumes the already-resolved shared notes range.
 It skips only duplicate Git stage, commit, push, and range-resolution work;
-protected CI, Gemini release-note generation, validation, signing, waiting,
+protected CI, reviewed release-note assembly, validation, signing, waiting,
 failure diagnostics, and exact publication verification remain unchanged.
 
 A same-commit application-test failure is reported immediately when the task
@@ -253,37 +254,15 @@ GitHub run once. The standalone macOS task supplies no shared proof and keeps
 the complete integrity gate as its safe fallback.
 
 The protected `Production` job remains the final release-note authority. It
-always creates a deterministic fallback, independently resolves the previous
-macOS release, reconstructs the committed change inventory and evidence
-catalog, and validates Gemini's exact range, schema, size, plain-text/privacy
-rules, module ownership, and evidence IDs before signing. It maps opaque IDs
-back to local changed paths only after validation.
-
-Protected CI uses the Gemini API when the `Production` environment contains
-`GEMINI_RELEASE_API_KEY`. The configured model is
-`gemini-3.1-flash-lite`. If Google
-reports that model unavailable or rejects its output-format contract, the
-generator performs one metadata-free model-list request and retries only with
-an available model from its fixed Gemini Flash/Flash-Lite allowlist. There is no
-Codex or OpenAI provider fallback in the standard publication workflows.
-
-Only sanitized, bounded release metadata is eligible for those protected-CI
-provider calls: fixed canonical ERP module/topic labels, status and change
-counts, and opaque evidence IDs. Commit subjects, commit SHAs,
-raw/current/previous paths, source, diffs, credentials, generated bundles,
-binary contents, customer data, and other personal or confidential information
-stay inside the protected job. A missing key, timeout, exhausted quota, API
-failure, invalid response, or rejected output leaves the validated
-deterministic fallback in place. Logs expose only the selected source/model and
-a fixed sanitized failure category, never provider error text, prompts, source,
-diffs, or generated contents.
-
-Google's free/unpaid Gemini service may use submitted inputs and generated
-outputs to improve its products, and human reviewers may process them; release
-metadata must therefore remain within this non-sensitive boundary. See the
-[Gemini API Additional Terms of Service](https://ai.google.dev/gemini-api/terms).
-The resulting JSON is validated and merged before the manifest is signed, so
-displayed macOS notes belong to the same trust boundary as the archive.
+independently reconstructs the exact committed range, verifies complete review
+coverage and source hashes, selects the platform and Release scope, and copies
+reviewed plain-language notes verbatim into the signed manifest. Missing or
+stale evidence blocks publication. Valid paths and green tests do not establish
+a user benefit. Debug-only records never become Release improvements. No
+source, diffs, credentials or customer data are sent to a release-note provider.
+A new source commit must also carry a higher visible version than the current
+publication. Same-commit retries remain valid. See the authoritative
+[version and release-note contract](development/RELEASES.md#versiones-y-novedades-verificadas-corregido-el-2026-10-01).
 
 The normal publish task no longer installs Node packages, resolves Flutter,
 runs analyzer/tests, or compiles web locally before commit. GitHub Actions is

@@ -169,7 +169,7 @@ void main() {
     expect(
       workflow,
       contains(
-        "notes \${{ inputs.release_notes_candidate_sha256 || 'gemini' }}",
+        "notes \${{ inputs.release_notes_candidate_sha256 || 'reviewed' }}",
       ),
     );
     expect(workflow, contains('environment: Production'));
@@ -236,18 +236,9 @@ void main() {
       workflow,
       contains('VINABIKE_ANDROID_RELEASE_NOTES_FROM_COMMIT:'),
     );
-    expect(
-      workflow,
-      contains(
-        r'GEMINI_RELEASE_API_KEY: ${{ secrets.GEMINI_RELEASE_API_KEY }}',
-      ),
-    );
-    expect(
-      workflow,
-      contains(
-        r"GEMINI_RELEASE_NOTES_MODEL: ${{ vars.GEMINI_RELEASE_NOTES_MODEL || 'gemini-3.1-flash-lite' }}",
-      ),
-    );
+    expect(workflow, isNot(contains('GEMINI_RELEASE_API_KEY')));
+    expect(workflow, isNot(contains('GEMINI_RELEASE_NOTES_MODEL')));
+    expect(workflow, contains('--platform android'));
     expect(workflow, isNot(contains('CODEX_RELEASE_NOTES_CANDIDATE_B64')));
     expect(workflow, isNot(contains('OPENAI_API_KEY')));
     expect(

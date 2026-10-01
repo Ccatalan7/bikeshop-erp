@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "id": "release-notes-and-visible-versions",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android"
+  ],
+  "module": "general",
+  "title": "Versiones nuevas y novedades concretas",
+  "summary": "Las actualizaciones avanzan su versión visible y muestran novedades ligadas a los cambios que incluye cada entrega.",
+  "items": [
+    "Cada actualización avanza la versión visible; esta entrega pasa de 1.0.3 a 1.0.4.",
+    "Las novedades describen los cambios revisados de esta entrega y excluyen las funciones disponibles sólo en pruebas."
+  ],
+  "evidence": [
+    {
+      "path": ".github/workflows/android-release.yml",
+      "sha256": "f440a169bae8ab8f8b7142af0373e6d91866391aab22a86c7319024af986941b"
+    },
+    {
+      "path": ".github/workflows/macos-release.yml",
+      "sha256": "1d9d17f894b271bc926ae53116af812394e78cd416efa201cb034b66319b5b08"
+    },
+    {
+      "path": ".github/workflows/windows-release.yml",
+      "sha256": "3652c394d84cbba88dbef124bc3b73ecb5d0fcdddf9c3f097418995e3a40aa97"
+    },
+    {
+      "path": "pubspec.yaml",
+      "sha256": "e93b1b53dfc013c714703de4907a75596ae739498fd89477b47cc2e0a62ee0e2"
+    },
+    {
+      "path": "scripts/android/publish_direct_release.sh",
+      "sha256": "3a0be6528053aba41a41d61da87e914d9c04520fb4664d7da04171c5c028191f"
+    },
+    {
+      "path": "scripts/publish_macos_update.sh",
+      "sha256": "5b820502bcf739824f9638439b7c0848a8e0b01d8a9ad8ce5de5b4cbad86ea1e"
+    },
+    {
+      "path": "scripts/publish_windows_update.ps1",
+      "sha256": "6b68dd55a13ca136214edde83a962ec1ac5099f51c0ddcfcf0229999579c7f75"
+    },
+    {
+      "path": "scripts/releases/generate_release_notes.mjs",
+      "sha256": "4b52d5fddbee52705f17e2937abb14fdc5046405b8f57312695674fd6d8fcba5"
+    },
+    {
+      "path": "scripts/releases/prepare_erp_update.sh",
+      "sha256": "446d81b2746214c33f594bdacafdaaa8650fb5f009de56e50f72e5ed76c082c8"
+    },
+    {
+      "path": "scripts/releases/prepare_windows_android_update.ps1",
+      "sha256": "6cc8790631491de1017dccb2ad1233f808d3d67455f144d7a1ce078b3bb2e12f"
+    },
+    {
+      "path": "scripts/releases/publish_android_workflow.mjs",
+      "sha256": "f351a88f896013b584b84588b7922098d8205b7442e274427be837382fbb4f29"
+    },
+    {
+      "path": "scripts/releases/resolve_paired_release_notes_base.mjs",
+      "sha256": "42cdd441021ebdd2ed225964d67f4cf1e879f7c039133649f2ca56a1ad31611f"
+    },
+    {
+      "path": "scripts/releases/release_version.mjs",
+      "sha256": "739d4f425e8306eb88b57489a1b729efb7d5ffe1c01d245567211b0e85e2b862"
+    },
+    {
+      "path": "scripts/releases/reviewed_release_changes.mjs",
+      "sha256": "dd102344d23023b0f8dcf05ee6c6a172a659d7a42027cd45c7008bb34fea9ad2"
+    }
+  ]
+}

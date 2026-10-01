@@ -179,7 +179,7 @@ function validateLiveAndroidRun(run, expected) {
   }
 }
 
-export async function resolveLatestPriorAndroidCommit({
+export async function resolveLatestAndroidPublicationManifest({
   repositoryRoot,
   branch,
   headSha,
@@ -247,10 +247,15 @@ export async function resolveLatestPriorAndroidCommit({
       ),
       candidate.headSha,
     );
-    return androidBaselineFromManifest(manifest, headSha);
+    return manifest;
   } finally {
     await rm(privateDirectory, { recursive: true, force: true });
   }
+}
+
+export async function resolveLatestPriorAndroidCommit(options) {
+  const manifest = await resolveLatestAndroidPublicationManifest(options);
+  return androidBaselineFromManifest(manifest, options.headSha);
 }
 
 function commandSucceeded(run, args, cwd) {
