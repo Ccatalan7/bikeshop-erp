@@ -57,7 +57,8 @@ mkdir -p "\$output"
 printf '<html>local</html>\\n' >"\$output/index.html"
 url=""
 if [ -n "\$defines" ]; then
-  stat -f %Lp "\$defines" >"$definesModeFile"
+  # `stat -f %Lp` is BSD-only; CI runs this on Linux (2026-10-01).
+  python3 -c 'import os,sys; print(format(os.stat(sys.argv[1]).st_mode & 0o777, "o"))' "\$defines" >"$definesModeFile"
   url="\$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["SUPABASE_URL"])' "\$defines")"
 fi
 ${compileUrl ? r'printf "var u=\"%s/rest/v1\";\n" "$url"' : r'printf "var u=null;\n"'} >"\$output/main.dart.js"

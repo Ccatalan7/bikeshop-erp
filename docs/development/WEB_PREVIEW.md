@@ -428,6 +428,17 @@ state". A real foregrounded browser tab — the user's own — does not have thi
 problem, which is why the same build looks fine to a human and broken to the
 automation.
 
+## Trap 5 — the script's tests run on Linux in CI (2026-10-01)
+
+`test/unit/web_preview_local_profile_test.dart` fakes `flutter` and `supabase`
+with bash stubs, and the ERP Integrity Gate runs it on Ubuntu. A stub that
+used the BSD-only `stat -f %Lp` passed every local gate on the Mac and then
+failed three tests in CI (`stat: cannot read file system information for
+'%Lp'`), which blocked the web deploy of `e0474159` and cost a second push.
+A green local suite on macOS does not prove these tests: anything the stub or
+the script calls must exist with the same flags on GNU coreutils (read file
+modes with `python3 os.stat`, not `stat -f`/`stat -c`).
+
 ## What this does not cover
 
 Flutter web paints into a canvas and does not publish an accessibility tree by
