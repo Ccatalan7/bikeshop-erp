@@ -307,6 +307,17 @@ usable workflow remains pending. The owning policy is
   production writes` handoff stops applying when a later owner instruction asks
   to implement, fix, finish, ship, or deploy the same result. The guard remains
   a hard stop for bypass paths and destructive or ambiguous effects.
+- **El índice también es compartido (2026-10-01).** En el mismo checkout,
+  otro agente puede tener archivos ya preparados (`git add`) para su propio
+  commit, y puede prepararlos entre tu `git status` y tu `git commit`. Un
+  `git add <mis archivos>` seguido de `git commit -F msg` se lleva **todo**
+  el índice: Claude publicó así, con su mensaje de una corrección de hover,
+  29 archivos de la versión 1.0.4 que otra sesión estaba preparando. Lo detectó el
+  `--stat` antes del push y se deshizo con `git reset --soft HEAD~1` +
+  `git reset -q HEAD -- <mis archivos>`, devolviendo el índice como estaba.
+  Se comitea siempre con `git commit --only -F msg -- <mis archivos>`, que
+  ignora lo preparado por otros, y se lee `git show --stat HEAD` antes de
+  empujar.
 - Do not pattern-kill Flutter, Dart, browser, or preview processes. Use the
   canonical preview owner and verified process identity.
 - **Sin techo de herramientas** (decisión del owner, 2026-07-31): Workflows,
