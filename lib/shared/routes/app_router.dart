@@ -17,6 +17,7 @@ import '../../public_store/widgets/persistent_editor_shell.dart';
 import '../../public_store/widgets/storefront_navigation_guard_scope.dart';
 import '../services/auth_service.dart';
 // ERP / Admin Modules (Deferred to reduce initial bundle size)
+import 'workspace_page_key.dart';
 import 'erp_routes_barrel.dart' deferred as erp
     show
         AcceptInvitationPage,
@@ -248,10 +249,10 @@ Page<dynamic> _buildPageWithNoTransition(
   GoRouterState state,
   Widget child,
 ) {
-  // Use state.pageKey to allow Flutter to preserve state when the route stack is updated
-  // This ensures that back navigation restores the previous widget state instead of rebuilding it
+  // The same concrete route keeps its key, so back navigation restores the
+  // previous widget state instead of rebuilding it.
   return NoTransitionPage<void>(
-    key: state.pageKey,
+    key: workspacePageKey(state),
     child: child,
   );
 }
@@ -3110,7 +3111,7 @@ class AppRouter {
     LocalKey? pageKeyOverride,
   }) {
     return CustomTransitionPage<void>(
-      key: pageKeyOverride ?? state.pageKey,
+      key: pageKeyOverride ?? workspacePageKey(state),
       child: FutureBuilder(
         future: _erpLibraryOnce,
         builder: (context, snapshot) {
