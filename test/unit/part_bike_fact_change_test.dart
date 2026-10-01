@@ -1468,6 +1468,59 @@ void main() {
       expect(row.serviceConfigurationData, const {'cadena': 'revisada'});
     });
 
+    test(
+        'con una sola bici, lo agregado antes y lo de General pasa a ella '
+        '(PG-00142, 2026-10-01)', () {
+      final chain = JobPartItem(
+          id: 'e2820000-0000-4000-8000-000000000201',
+          name: 'Cadena KMC Z7',
+          quantity: 1,
+          unitPrice: 8990);
+      final line = cassette();
+      final already = JobPartItem(
+          id: 'e2820000-0000-4000-8000-000000000202',
+          name: 'Mantención Maza',
+          quantity: 1,
+          unitPrice: 15000);
+      final bike = [already];
+      final general = [line];
+      final standalone = [chain, already];
+
+      final moved = adoptUnassignedJobLines(
+        bikeLines: bike,
+        unassigned: [general, standalone],
+      );
+
+      expect(moved, 2);
+      expect(general, isEmpty);
+      expect(standalone, isEmpty);
+      // Las mismas líneas, una vez cada una; la que ya era de la bici no se
+      // repite.
+      expect(bike.map((item) => item.id), [already.id, line.id, chain.id]);
+      expect(bike[1].unitPrice, 19990);
+      expect(bike[1].wizardAnswers, const {'cadena': 'revisada'});
+      // Lo confirmó sin bici: se vuelve a confirmar en la suya.
+      expect(bike[1].partChange, isNull);
+    });
+
+    test('«Pasar a…» corrige la bici equivocada con la misma línea', () {
+      final line = cassette();
+      final trek = [line];
+      final bianchi = <JobPartItem>[];
+
+      final moved = assignJobLineToBike(
+        general: trek,
+        bikeLines: bianchi,
+        itemId: line.id,
+      )!;
+
+      expect(trek, isEmpty);
+      expect(bianchi.single, same(moved));
+      expect(moved.id, line.id);
+      // Lo confirmó contra la ficha de la otra bici.
+      expect(moved.partChange, isNull);
+    });
+
     test('el aviso del servidor dice cómo resolverlo', () {
       final messages = installedBikeFactProblemMessages(const {
         'problems': [
@@ -1494,10 +1547,17 @@ void main() {
         source.indexOf('_assignTargetsFor(\n    JobPartItem item,'),
         source.indexOf('void _assignLineToBike('),
       );
-      // Sólo en General, con dos o más bicis y con lo cobrado editable.
-      expect(targets, contains('!currentTab.isGeneralTab ||'));
+      // Con lo cobrado editable, hacia otra bici: desde General «Asignar a»,
+      // desde una bici «Pasar a» (2026-10-01; antes sólo desde General y con
+      // dos o más bicis). Nunca hacia General ni hacia la misma pestaña.
       expect(targets, contains('_isCommercialSnapshotLocked'));
-      expect(targets, contains('if (targets.length < 2) return const [];'));
+      expect(targets,
+          contains('if (!tab.isGeneralTab && !identical(tab, currentTab))'));
+      expect(targets, contains('if (targets.isEmpty) return const [];'));
+      expect(
+          targets,
+          contains(
+              "final verb = currentTab.isGeneralTab ? 'Asignar a' : 'Pasar a';"));
       // Mientras se configura o se guarda, espera: el comando ya lleva la
       // línea donde estaba.
       expect(
@@ -1514,7 +1574,8 @@ void main() {
       expect(assign, contains('_isCommercialSnapshotLocked ||'));
       expect(assign, contains('assignJobLineToBike('));
       // General vacía se esconde: la vista pasa a la bici elegida.
-      expect(assign, contains('if (generalEmptied) showTarget();'));
+      expect(assign, contains('if (sourceHidden) showTarget();'));
+      expect(assign, contains('identical(_bikeTabs[tabIndex], source)'));
       // El aviso con «Ver <bici>» no queda fijo al salir del trabajo.
       expect(assign, contains('persist: false,'));
 

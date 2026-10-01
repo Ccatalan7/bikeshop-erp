@@ -668,6 +668,38 @@ compilar. Los comandos del taller (`save_bike_aggregate`,
 `transition_mechanic_job_status`, `smart_task_create_v1` y toda la puerta de
 cambio de partes) ya eran idénticos; sólo el cierre heredado difería.
 
+**2026-10-01, otra diferencia del mismo tipo:** el
+`sync_job_items_to_invoice_statement` local era el back-sync de antes del
+2026-03-19 (activo); en producción es un no-op. Una prueba de líneas del
+taller en local reescribía la factura y en producción no. Se alineó local
+reaplicando `20260319_disable_job_items_invoice_backsync.sql`.
+
+## Un pgTAP rojo en local no es tuyo hasta compararlo sin tu cambio (2026-10-01)
+
+Con `20261001200000` aplicada, 20 archivos del taller salieron rojos. Sin la
+migración (deshecha sólo en local con un script inverso), los mismos 18
+fallaban en las mismas pruebas: fixtures que ya no cumplen una FK
+(`mechanic_jobs_created_by_fkey`), `update_workshop_supply_need_v1` ausente en
+local, un `job_subjects` duplicado. Los dos de verdad nuevos eran los que
+describían la regla vieja. El método: correr los mismos archivos sin el
+cambio y comparar número de prueba por número de prueba. Ojo con resumir el
+log con `grep -v "Failed: 0"`: un archivo que muere antes de su plan sale con
+`Tests: 0 Failed: 0` y queda fuera del filtro; se leen todas las líneas
+`Wstat`.
+
+## Un disparador nuevo en una tabla del respaldo del taller se registra en la recuperación (2026-10-01)
+
+`workshop_restore_effects_review_internal` rechaza la recuperación
+(`unreviewed_effect`) si una tabla del respaldo tiene un disparador de INSERT
+que no está en `workshop_restore_trigger_review_internal`. Un disparador nuevo
+—también uno de UPDATE que incluya INSERT— se crea con exactamente
+`when (not public.workshop_restore_effect_suppressed('public.<tabla>'::regclass, '<nombre>'::name))`
+(sin otras condiciones: la revisión compara el texto que imprime
+`pg_get_triggerdef`) y se agrega al registro renombrando la función y
+uniéndola, como `20260930181000` y `20261001200000`. Con eso la recuperación
+lo apaga y devuelve las filas tal como se respaldaron. El read-back de cada
+migración fija los totales (30/12 en `181000`, 32/12 desde `20261001200000`).
+
 ## JSONB backup redaction preserves structure and derived metadata
 
 **2026-08-09 — supplier historical-backup gate.** Removing sensitive keys
