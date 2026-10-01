@@ -10,16 +10,17 @@ import '../../../shared/widgets/product_autocomplete_field.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/models/product.dart';
 import '../../../shared/models/product_compatibility.dart';
+import '../../../shared/themes/vinabike_theme_roles.dart';
+import 'job_line_instructions.dart';
 
-/// Smart Tasks Tab - Collapsible hierarchical checklist with three-way sync
+/// Pestaña Tareas del trabajo: por cada línea, su instrucción y sus tareas.
 ///
-/// Features:
-/// - Auto-parsed sub-tasks from product/service descriptions
-/// - Ad-hoc tasks with optional pricing
-/// - Visual completion states (green/orange/grey)
-/// - Collapsible parent items (products/services)
-/// - Progress badges and percentage
-/// - Three-way sync: Tasks ↔ Trabajo Items ↔ Invoice
+/// - **Instrucción** ([JobLineInstructions]): qué incluye el servicio (su
+///   descripción del catálogo, la que ve el cliente) y las indicaciones de este
+///   trabajo. Se lee; no tiene casillas.
+/// - **Tareas**: lo accionable, con casilla y avance. Las crea una persona, en
+///   la línea o sueltas; una con cobro crea su línea (`sync_adhoc_task_to_item`).
+///   Desde 2026-09-29 ninguna nace de la descripción (20260929040000).
 class TasksTabView extends StatefulWidget {
   final String jobId;
   final bool readOnly;
@@ -49,6 +50,9 @@ class _TasksTabViewState extends State<TasksTabView> {
   final _bikeProductCompatibilityService = BikeProductCompatibilityService();
   Map<String, List<MechanicJobTask>> _groupedTasks = {};
   List<MechanicJobItem> _items = [];
+
+  /// La descripción del catálogo de cada servicio de las líneas, por id.
+  Map<String, String> _catalogDescriptions = {};
   TaskProgress? _progress;
   bool _isLoading = true;
   final Set<String> _collapsedItems = {}; // Track collapsed parent items
@@ -241,13 +245,19 @@ class _TasksTabViewState extends State<TasksTabView> {
           Future.value(<MechanicJobItem>[]),
       ]);
 
+      final items = widget.externalItems == null && !onlyNonItems
+          ? results[3] as List<MechanicJobItem>
+          : _items;
+      final descriptions = await _fetchCatalogDescriptions(items);
+
       if (mounted) {
         setState(() {
           _groupedTasks = results[1] as Map<String, List<MechanicJobTask>>;
           _progress = results[2] as TaskProgress?;
           if (widget.externalItems == null && !onlyNonItems) {
-            _items = results[3] as List<MechanicJobItem>;
+            _items = items;
           }
+          _catalogDescriptions = descriptions;
           _isLoading = false;
         });
       }
@@ -261,9 +271,12 @@ class _TasksTabViewState extends State<TasksTabView> {
 
   Future<List<MechanicJobItem>> _fetchItems() async {
     try {
+      final tenantId = await _tenantService?.getTenantId();
+      if (tenantId == null) return [];
       final data = await Supabase.instance.client
           .from('mechanic_job_items')
           .select()
+          .eq('tenant_id', tenantId)
           .eq('job_id', widget.jobId)
           .order('created_at', ascending: true);
 
@@ -273,6 +286,41 @@ class _TasksTabViewState extends State<TasksTabView> {
     } catch (e) {
       debugPrint('❌ Failed to fetch items: $e');
       return [];
+    }
+  }
+
+  /// El servicio del catálogo de una línea, si es un servicio.
+  static String? _catalogServiceId(MechanicJobItem item) =>
+      item.serviceProductId ??
+      (item.itemType == 'service' ? item.productId : null);
+
+  /// Las descripciones del catálogo de los servicios de [items]: son la
+  /// instrucción de cada línea. Los repuestos no la muestran (su descripción
+  /// es de venta: «+ Instalación en $45.000»).
+  Future<Map<String, String>> _fetchCatalogDescriptions(
+    List<MechanicJobItem> items,
+  ) async {
+    final ids = {
+      for (final item in items)
+        if (_catalogServiceId(item) case final id?) id,
+    };
+    if (ids.isEmpty) return const {};
+    try {
+      final tenantId = await _tenantService?.getTenantId();
+      if (tenantId == null) return const {};
+      final data = await Supabase.instance.client
+          .from('products')
+          .select('id, description')
+          .eq('tenant_id', tenantId)
+          .inFilter('id', ids.toList());
+      return {
+        for (final row in data as List)
+          if ((row['description'] as String?)?.trim().isNotEmpty == true)
+            row['id'] as String: row['description'] as String,
+      };
+    } catch (e) {
+      debugPrint('❌ Failed to fetch catalog descriptions: $e');
+      return const {};
     }
   }
 
@@ -314,13 +362,11 @@ class _TasksTabViewState extends State<TasksTabView> {
             ),
           ),
           const Spacer(),
-          if (_progress != null)
+          if (_progress != null && _progress!.totalTasks > 0)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: (_progress!.completedTasks == _progress!.totalTasks)
-                    ? Colors.green.shade50
-                    : Colors.orange.shade50,
+                color: _progressTone(_progress!.isDone).container,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
@@ -328,9 +374,7 @@ class _TasksTabViewState extends State<TasksTabView> {
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  color: (_progress!.completedTasks == _progress!.totalTasks)
-                      ? Colors.green.shade700
-                      : Colors.orange.shade700,
+                  color: _progressTone(_progress!.isDone).onContainer,
                 ),
               ),
             ),
@@ -356,7 +400,10 @@ class _TasksTabViewState extends State<TasksTabView> {
   }
 
   Widget _buildTaskList() {
-    if (_items.isEmpty) {
+    // Sin líneas, una tarea suelta igual se ve: se puede agregar desde el
+    // encabezado (revisión de Codex, 2026-09-29).
+    final standalone = _groupedTasks['standalone'] ?? const <MechanicJobTask>[];
+    if (_items.isEmpty && standalone.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -368,7 +415,7 @@ class _TasksTabViewState extends State<TasksTabView> {
             ),
             const SizedBox(height: 16),
             Text(
-              'No tasks yet',
+              'Este trabajo todavía no tiene líneas',
               style: TextStyle(
                 fontSize: 16,
                 color: Colors.grey.shade600,
@@ -376,7 +423,7 @@ class _TasksTabViewState extends State<TasksTabView> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Add products/services to auto-generate tasks',
+              'Agrega un servicio para ver qué incluye y anotar sus tareas',
               style: TextStyle(
                 fontSize: 14,
                 color: Colors.grey.shade500,
@@ -393,8 +440,7 @@ class _TasksTabViewState extends State<TasksTabView> {
         ..._items
             .where((item) => !item.productName.startsWith('Ad-hoc: '))
             .map((item) => _buildItemGroup(item)),
-        if (_groupedTasks.containsKey('standalone'))
-          _buildStandaloneTasksGroup(_groupedTasks['standalone']!),
+        if (standalone.isNotEmpty) _buildStandaloneTasksGroup(standalone),
       ],
     );
   }
@@ -402,16 +448,15 @@ class _TasksTabViewState extends State<TasksTabView> {
   /// Build item (product) group with parent checkbox and sub-tasks
   Widget _buildItemGroup(MechanicJobItem item) {
     final subTasks = _groupedTasks['item_${item.id}'] ?? [];
-
-    // Sort tasks: auto-generated first, then manual tasks
     final sortedTasks = List<MechanicJobTask>.from(subTasks)
-      ..sort((a, b) {
-        // Auto-generated tasks come first
-        if (a.parsedFromDescription && !b.parsedFromDescription) return -1;
-        if (!a.parsedFromDescription && b.parsedFromDescription) return 1;
-        // Within each group, sort by displayOrder
-        return a.displayOrder.compareTo(b.displayOrder);
-      });
+      ..sort((a, b) => a.displayOrder.compareTo(b.displayOrder));
+    final instructions = JobLineInstructions(
+      catalogDescription: switch (_catalogServiceId(item)) {
+        final id? => _catalogDescriptions[id],
+        null => null,
+      },
+      notes: item.notes,
+    );
 
     final completionStatus = _getCompletionStatus(sortedTasks);
     final isCollapsed = _collapsedItems.contains('item_${item.id}');
@@ -423,7 +468,19 @@ class _TasksTabViewState extends State<TasksTabView> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Parent item header
-          _buildItemHeader(item, sortedTasks, completionStatus),
+          _buildItemHeader(
+            item,
+            sortedTasks,
+            completionStatus,
+            collapsible: sortedTasks.isNotEmpty || !instructions.isEmpty,
+          ),
+
+          // La instrucción de la línea: se lee, no se marca.
+          if (!instructions.isEmpty && !isCollapsed)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(32, 10, 12, 4),
+              child: instructions,
+            ),
 
           // Sub-tasks (if any and not collapsed)
           if (sortedTasks.isNotEmpty && !isCollapsed)
@@ -462,7 +519,7 @@ class _TasksTabViewState extends State<TasksTabView> {
                 SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Standalone Tasks',
+                    'Tareas del trabajo',
                     style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
@@ -482,8 +539,9 @@ class _TasksTabViewState extends State<TasksTabView> {
   Widget _buildItemHeader(
     MechanicJobItem item,
     List<MechanicJobTask> subTasks,
-    ParentCompletionStatus? status,
-  ) {
+    ParentCompletionStatus? status, {
+    required bool collapsible,
+  }) {
     final completed = subTasks.where((t) => t.isCompleted).length;
     final total = subTasks.length;
     final isCollapsed = _collapsedItems.contains('item_${item.id}');
@@ -525,9 +583,10 @@ class _TasksTabViewState extends State<TasksTabView> {
                     _toggleItemCompletion(item, subTasks, value ?? true),
           ),
 
-          // Collapse/Expand toggle (only if has subtasks)
-          if (total > 0)
+          // Plegar la instrucción y las tareas de la línea.
+          if (collapsible)
             IconButton(
+              tooltip: isCollapsed ? 'Mostrar' : 'Plegar',
               icon: Icon(
                 isCollapsed ? Icons.chevron_right : Icons.expand_more,
                 size: 20,
@@ -578,7 +637,7 @@ class _TasksTabViewState extends State<TasksTabView> {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'Qty: ${item.quantity.toStringAsFixed(0)} • \$${item.unitPrice.toStringAsFixed(0)} • Total \$${item.totalPrice.toStringAsFixed(0)}',
+                    'Cant. ${item.quantity.toStringAsFixed(0)} • \$${item.unitPrice.toStringAsFixed(0)} • Total \$${item.totalPrice.toStringAsFixed(0)}',
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.grey.shade600,
@@ -610,7 +669,7 @@ class _TasksTabViewState extends State<TasksTabView> {
             const SizedBox(width: 8),
             IconButton(
               icon: const Icon(Icons.delete_outline, size: 18),
-              tooltip: 'Eliminar producto',
+              tooltip: 'Quitar del trabajo',
               onPressed: () => _confirmRemoveItem(item),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
@@ -624,7 +683,6 @@ class _TasksTabViewState extends State<TasksTabView> {
   /// Build service header with pricing summary
   Widget _buildTaskItem(MechanicJobTask task) {
     final isEditing = _editingTaskId == task.id;
-    final isAutoGenerated = task.parsedFromDescription;
 
     if (isEditing) {
       // Inline edit mode
@@ -676,17 +734,6 @@ class _TasksTabViewState extends State<TasksTabView> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       constraints: const BoxConstraints(minHeight: 48),
-      decoration: isAutoGenerated
-          ? BoxDecoration(
-              color: Colors.blue.shade50.withValues(alpha: 0.3),
-              border: Border(
-                left: BorderSide(
-                  color: Colors.blue.shade300,
-                  width: 3,
-                ),
-              ),
-            )
-          : null,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -699,10 +746,10 @@ class _TasksTabViewState extends State<TasksTabView> {
           ),
           const SizedBox(width: 12),
 
-          // Task name (clickable for inline edit if not auto-generated)
+          // El nombre se edita tocándolo.
           Expanded(
             child: InkWell(
-              onTap: widget.readOnly || isAutoGenerated
+              onTap: widget.readOnly
                   ? null
                   : () {
                       setState(() => _editingTaskId = task.id);
@@ -714,7 +761,6 @@ class _TasksTabViewState extends State<TasksTabView> {
                   decoration:
                       task.isCompleted ? TextDecoration.lineThrough : null,
                   color: task.isCompleted ? Colors.grey.shade600 : null,
-                  fontWeight: isAutoGenerated ? FontWeight.w500 : null,
                 ),
               ),
             ),
@@ -739,8 +785,7 @@ class _TasksTabViewState extends State<TasksTabView> {
               ),
             ),
 
-          // Delete button (only for manual tasks)
-          if (!widget.readOnly && !isAutoGenerated)
+          if (!widget.readOnly)
             IconButton(
               icon: const Icon(Icons.delete_outline, size: 18),
               iconSize: 18,
@@ -760,7 +805,7 @@ class _TasksTabViewState extends State<TasksTabView> {
         parentId: parentId,
       ),
       icon: const Icon(Icons.add, size: 16),
-      label: const Text('Agregar subtarea'),
+      label: const Text('Agregar tarea'),
       style: TextButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       ),
@@ -783,7 +828,7 @@ class _TasksTabViewState extends State<TasksTabView> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
-                'Overall Progress',
+                'Avance de las tareas',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -816,7 +861,7 @@ class _TasksTabViewState extends State<TasksTabView> {
           if (_progress!.totalAdHocPrice > 0) ...[
             const SizedBox(height: 8),
             Text(
-              'Ad-hoc total: \$${_progress!.totalAdHocPrice.toStringAsFixed(0)}',
+              'Tareas con cobro: \$${_progress!.totalAdHocPrice.toStringAsFixed(0)}',
               style: TextStyle(
                 fontSize: 12,
                 color: Colors.grey.shade600,
@@ -836,22 +881,27 @@ class _TasksTabViewState extends State<TasksTabView> {
     return ParentCompletionStatus(
       totalTasks: total,
       completedTasks: completed,
-      isAllCompleted: completed == total,
+      // Sin tareas no hay nada hecho: la línea no se pinta como terminada.
+      isAllCompleted: total > 0 && completed == total,
       isInProgress: completed > 0 && completed < total,
       isNotStarted: completed == 0,
     );
   }
 
-  Color _getGroupBackgroundColor(ParentCompletionStatus? status) {
-    if (status == null) return Colors.white;
+  /// Terminadas: el tono de éxito; con algo pendiente: el de atención. Por
+  /// los roles del tema, para que el oscuro se lea (los `shade50` fijos
+  /// pintaban la línea blanca en oscuro).
+  VinabikeSemanticTone _progressTone(bool done) {
+    final roles = VinabikeThemeRoles.of(context);
+    return done ? roles.success : roles.warning;
+  }
 
-    if (status.isAllCompleted) {
-      return Colors.green.shade50;
-    } else if (status.isInProgress) {
-      return Colors.orange.shade50;
-    } else {
-      return Colors.grey.shade50;
+  Color _getGroupBackgroundColor(ParentCompletionStatus? status) {
+    final scheme = Theme.of(context).colorScheme;
+    if (status == null || status.isNotStarted) {
+      return scheme.surfaceContainerLow;
     }
+    return _progressTone(status.isAllCompleted).container;
   }
 
   Color _getStatusBadgeColor(ParentCompletionStatus? status) {
@@ -880,7 +930,7 @@ class _TasksTabViewState extends State<TasksTabView> {
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Add Item'),
+        title: const Text('Agregar al trabajo'),
         content: SizedBox(
           width: 500,
           child: ProductAutocompleteField(
@@ -902,7 +952,7 @@ class _TasksTabViewState extends State<TasksTabView> {
               await _addCatalogItem(selection.product!);
             },
             allowCustomItems: false,
-            labelText: 'Product or Service',
+            labelText: 'Servicio o repuesto',
             hintText: 'Buscar en el catálogo por nombre o SKU',
             autoFocus: true,
             compatibilityContextKey: _compatibilityContextKey,
@@ -914,7 +964,7 @@ class _TasksTabViewState extends State<TasksTabView> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: const Text('Cancelar'),
           ),
         ],
       ),
@@ -957,45 +1007,8 @@ class _TasksTabViewState extends State<TasksTabView> {
 
       final created = await _bikeshopService!.createJobItem(item);
 
-      // 🤖 Auto-generate tasks from product description if available
-      debugPrint('🔍 Product description check:');
-      debugPrint('  - Has description: ${product.description != null}');
-      debugPrint('  - Description length: ${product.description?.length ?? 0}');
-      debugPrint('  - Description content: "${product.description}"');
-      debugPrint('  - TaskService available: ${_taskService != null}');
-      debugPrint('  - Created item ID: ${created.id}');
-
-      if (product.description != null &&
-          product.description!.isNotEmpty &&
-          _taskService != null &&
-          created.id != null) {
-        debugPrint('🤖 Generating auto-tasks from product description');
-        try {
-          final generatedTasks =
-              await _taskService!.generateAutoTasksFromDescription(
-            jobId: widget.jobId,
-            parentItemId: created.id!,
-            description: product.description!,
-          );
-          debugPrint(
-              '✅ Auto-tasks generated successfully: ${generatedTasks.length} tasks');
-        } catch (e) {
-          debugPrint('⚠️ Failed to generate auto-tasks: $e');
-          // Don't fail the whole operation if auto-task generation fails
-        }
-      } else {
-        debugPrint('⚠️ Skipping auto-task generation:');
-        if (product.description == null || product.description!.isEmpty) {
-          debugPrint('  - Product has no description');
-        }
-        if (_taskService == null) {
-          debugPrint('  - TaskService is null');
-        }
-        if (created.id == null) {
-          debugPrint('  - Created item has no ID');
-        }
-      }
-
+      // La línea nueva no trae tareas: su descripción del catálogo se muestra
+      // como instrucción (20260929040000).
       if (widget.onItemAdded != null) {
         widget.onItemAdded!(created);
       }
@@ -1005,7 +1018,7 @@ class _TasksTabViewState extends State<TasksTabView> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('✅ Added: ${created.productName}'),
+            content: Text('Agregado: ${created.productName}'),
             backgroundColor: Colors.green,
             duration: const Duration(seconds: 1),
           ),
@@ -1126,41 +1139,27 @@ class _TasksTabViewState extends State<TasksTabView> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update task: $e')),
+          SnackBar(content: Text('No se pudo actualizar la tarea: $e')),
         );
       }
     }
   }
 
   Future<void> _deleteTask(MechanicJobTask task) async {
-    // Prevent deletion of auto-generated tasks
-    if (task.parsedFromDescription) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('❌ Cannot delete auto-generated tasks'),
-            backgroundColor: Colors.orange,
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-      return;
-    }
-
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Task'),
-        content: Text('Delete "${task.taskName}"?'),
+        title: const Text('Eliminar tarea'),
+        content: Text('¿Eliminar «${task.taskName}»?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: const Text('Cancelar'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
+            child: const Text('Eliminar'),
           ),
         ],
       ),
@@ -1174,7 +1173,7 @@ class _TasksTabViewState extends State<TasksTabView> {
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to delete task: $e')),
+            SnackBar(content: Text('No se pudo eliminar la tarea: $e')),
           );
         }
       }
@@ -1191,17 +1190,17 @@ class _TasksTabViewState extends State<TasksTabView> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Remove Product'),
-        content: Text('Remove "${item.productName}" from this job?'),
+        title: const Text('Quitar del trabajo'),
+        content: Text('¿Quitar «${item.productName}» de este trabajo?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: const Text('Cancelar'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Remove'),
+            child: const Text('Quitar'),
           ),
         ],
       ),
@@ -1221,7 +1220,7 @@ class _TasksTabViewState extends State<TasksTabView> {
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Add Standalone Task'),
+        title: const Text('Tarea del trabajo'),
         content: SizedBox(
           width: 400,
           child: Column(
@@ -1230,9 +1229,9 @@ class _TasksTabViewState extends State<TasksTabView> {
               TextField(
                 controller: nameController,
                 decoration: const InputDecoration(
-                  labelText: 'Task Name',
+                  labelText: 'Qué hay que hacer',
                   border: OutlineInputBorder(),
-                  hintText: 'e.g., Final inspection, Quality check',
+                  hintText: 'Ej.: prueba de ruta, avisar al cliente',
                 ),
                 autofocus: true,
               ),
@@ -1240,7 +1239,7 @@ class _TasksTabViewState extends State<TasksTabView> {
               TextField(
                 controller: descriptionController,
                 decoration: const InputDecoration(
-                  labelText: 'Description (optional)',
+                  labelText: 'Detalle (opcional)',
                   border: OutlineInputBorder(),
                 ),
                 maxLines: 2,
@@ -1249,10 +1248,10 @@ class _TasksTabViewState extends State<TasksTabView> {
               TextField(
                 controller: priceController,
                 decoration: const InputDecoration(
-                  labelText: 'Price (optional)',
+                  labelText: 'Cobro (opcional)',
                   border: OutlineInputBorder(),
                   prefixText: '\$',
-                  hintText: 'Leave 0 for no charge',
+                  hintText: '0 si no se cobra',
                 ),
                 keyboardType: TextInputType.number,
               ),
@@ -1262,11 +1261,11 @@ class _TasksTabViewState extends State<TasksTabView> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: const Text('Cancelar'),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Add'),
+            child: const Text('Agregar'),
           ),
         ],
       ),
@@ -1301,13 +1300,13 @@ class _TasksTabViewState extends State<TasksTabView> {
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Task added')),
+            const SnackBar(content: Text('Tarea agregada')),
           );
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error adding task: $e')),
+            SnackBar(content: Text('No se pudo agregar la tarea: $e')),
           );
         }
       }
@@ -1324,7 +1323,7 @@ class _TasksTabViewState extends State<TasksTabView> {
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Add Sub-Task'),
+        title: const Text('Tarea de esta línea'),
         content: SizedBox(
           width: 400,
           child: Column(
@@ -1333,9 +1332,9 @@ class _TasksTabViewState extends State<TasksTabView> {
               TextField(
                 controller: nameController,
                 decoration: const InputDecoration(
-                  labelText: 'Task Name',
+                  labelText: 'Qué hay que hacer',
                   border: OutlineInputBorder(),
-                  hintText: 'e.g., Check compatibility, Test functionality',
+                  hintText: 'Ej.: revisar juego del eje',
                 ),
                 autofocus: true,
               ),
@@ -1343,7 +1342,7 @@ class _TasksTabViewState extends State<TasksTabView> {
               TextField(
                 controller: descriptionController,
                 decoration: const InputDecoration(
-                  labelText: 'Description (optional)',
+                  labelText: 'Detalle (opcional)',
                   border: OutlineInputBorder(),
                 ),
                 maxLines: 2,
@@ -1352,10 +1351,10 @@ class _TasksTabViewState extends State<TasksTabView> {
               TextField(
                 controller: priceController,
                 decoration: const InputDecoration(
-                  labelText: 'Additional Price (optional)',
+                  labelText: 'Cobro adicional (opcional)',
                   border: OutlineInputBorder(),
                   prefixText: '\$',
-                  hintText: 'Extra charge for this task',
+                  hintText: '0 si no se cobra aparte',
                 ),
                 keyboardType: TextInputType.number,
               ),
@@ -1365,11 +1364,11 @@ class _TasksTabViewState extends State<TasksTabView> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: const Text('Cancelar'),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Add'),
+            child: const Text('Agregar'),
           ),
         ],
       ),
@@ -1408,13 +1407,13 @@ class _TasksTabViewState extends State<TasksTabView> {
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Sub-task added')),
+            const SnackBar(content: Text('Tarea agregada')),
           );
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error adding sub-task: $e')),
+            SnackBar(content: Text('No se pudo agregar la tarea: $e')),
           );
         }
       }
@@ -1431,19 +1430,21 @@ class _TasksTabViewState extends State<TasksTabView> {
     try {
       await Supabase.instance.client
           .from('mechanic_job_tasks')
-          .update({'task_name': newName}).eq('id', task.id!);
+          .update({'task_name': newName})
+          .eq('tenant_id', task.tenantId)
+          .eq('id', task.id!);
 
       await _loadTasks();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Task updated')),
+          const SnackBar(content: Text('Tarea actualizada')),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update task: $e')),
+          SnackBar(content: Text('No se pudo actualizar la tarea: $e')),
         );
       }
     }
@@ -1463,7 +1464,7 @@ class _TasksTabViewState extends State<TasksTabView> {
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Edit Product'),
+        title: const Text('Cambiar la línea'),
         content: SizedBox(
           width: 500,
           child: Column(
@@ -1474,8 +1475,8 @@ class _TasksTabViewState extends State<TasksTabView> {
                   selectedProduct = selection;
                 },
                 allowCustomItems: true,
-                labelText: 'Product',
-                hintText: 'Search or enter custom item',
+                labelText: 'Servicio o repuesto',
+                hintText: 'Busca en el catálogo o escribe uno',
                 autoFocus: true,
                 initialValue: item.productName,
                 compatibilityContextKey: _compatibilityContextKey,
@@ -1486,7 +1487,7 @@ class _TasksTabViewState extends State<TasksTabView> {
               const SizedBox(height: 16),
               TextField(
                 decoration: const InputDecoration(
-                  labelText: 'Quantity',
+                  labelText: 'Cantidad',
                   border: OutlineInputBorder(),
                 ),
                 keyboardType: TextInputType.number,
@@ -1502,11 +1503,11 @@ class _TasksTabViewState extends State<TasksTabView> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: const Text('Cancelar'),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Save'),
+            child: const Text('Guardar'),
           ),
         ],
       ),
@@ -1528,19 +1529,20 @@ class _TasksTabViewState extends State<TasksTabView> {
         await Supabase.instance.client
             .from('mechanic_job_items')
             .update(updates)
+            .eq('tenant_id', item.tenantId)
             .eq('id', item.id!);
 
         await _loadTasks();
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Product updated')),
+            const SnackBar(content: Text('Línea actualizada')),
           );
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to update product: $e')),
+            SnackBar(content: Text('No se pudo cambiar la línea: $e')),
           );
         }
       }

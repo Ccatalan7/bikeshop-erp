@@ -424,7 +424,7 @@ class _ChatAttachmentViewerState extends State<ChatAttachmentViewer> {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(12),
           child: Material(
-            color: Colors.white,
+            color: theme.colorScheme.surface,
             child: FutureBuilder<_AttachmentPayload>(
               future: _payloadFuture,
               builder: (context, snapshot) {
@@ -510,8 +510,10 @@ class _ChatAttachmentViewerState extends State<ChatAttachmentViewer> {
     final payload = snapshot.data!;
 
     if (widget.isImage) {
+      // Escenario oscuro fijo a propósito: una foto se lee mejor sobre un
+      // neutro oscuro en los dos temas, y no lleva texto ni íconos encima.
       return ColoredBox(
-        color: const Color(0xFF0F172A),
+        color: _imageStage,
         child: InteractiveViewer(
           transformationController: _imageTransformController,
           minScale: 0.6,
@@ -528,16 +530,21 @@ class _ChatAttachmentViewerState extends State<ChatAttachmentViewer> {
             child: Image.memory(
               payload.bytes,
               fit: BoxFit.contain,
-              errorBuilder: (_, __, ___) => _AttachmentEmptyState(
-                icon: Icons.broken_image_outlined,
-                title: 'Imagen no compatible',
-                subtitle: 'Puedes descargarla o abrirla fuera del ERP.',
-                primaryIcon: Icons.download_outlined,
-                primaryLabel: 'Descargar',
-                onPrimary: () => _download(payload),
-                secondaryIcon: Icons.open_in_new_outlined,
-                secondaryLabel: 'Abrir externo',
-                onSecondary: _openExternal,
+              // El aviso lleva su superficie: sobre el escenario oscuro, el
+              // texto del tema claro no se leería.
+              errorBuilder: (_, __, ___) => ColoredBox(
+                color: theme.colorScheme.surface,
+                child: _AttachmentEmptyState(
+                  icon: Icons.broken_image_outlined,
+                  title: 'Imagen no compatible',
+                  subtitle: 'Puedes descargarla o abrirla fuera del ERP.',
+                  primaryIcon: Icons.download_outlined,
+                  primaryLabel: 'Descargar',
+                  onPrimary: () => _download(payload),
+                  secondaryIcon: Icons.open_in_new_outlined,
+                  secondaryLabel: 'Abrir externo',
+                  onSecondary: _openExternal,
+                ),
               ),
             ),
           ),
@@ -558,8 +565,8 @@ class _ChatAttachmentViewerState extends State<ChatAttachmentViewer> {
           canDebug: false,
           dynamicLayout: false,
           pdfFileName: _safeFileName(widget.fileName),
-          scrollViewDecoration: const BoxDecoration(
-            color: Color(0xFFE5E7EB),
+          scrollViewDecoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerHighest,
           ),
           loadingWidget:
               const Center(child: CircularProgressIndicator(strokeWidth: 2)),
@@ -576,7 +583,7 @@ class _ChatAttachmentViewerState extends State<ChatAttachmentViewer> {
       return Container(
         width: double.infinity,
         height: double.infinity,
-        color: const Color(0xFFF8FAFC),
+        color: theme.colorScheme.surfaceContainerLow,
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
           child: SelectableText(
@@ -584,7 +591,7 @@ class _ChatAttachmentViewerState extends State<ChatAttachmentViewer> {
             style: theme.textTheme.bodyMedium?.copyWith(
               fontFamily: 'monospace',
               height: 1.45,
-              color: const Color(0xFF0F172A),
+              color: theme.colorScheme.onSurface,
             ),
           ),
         ),
@@ -606,6 +613,8 @@ class _ChatAttachmentViewerState extends State<ChatAttachmentViewer> {
       onSecondary: _openExternal,
     );
   }
+
+  static const Color _imageStage = Color(0xFF0F172A);
 
   static String _safeFileName(String value) {
     final cleaned = value
@@ -752,21 +761,26 @@ class _AttachmentHeader extends StatelessWidget {
 
   Widget _buildBar(BuildContext context, {required bool compact}) {
     final theme = Theme.of(context);
+    final colors = theme.colorScheme;
 
+    // Fondo, texto e íconos salen del mismo tema: con el fondo fijo en claro,
+    // el oscuro pintaba Compartir, Más acciones y Cerrar en gris claro sobre
+    // blanco (C1 nativo, 2026-09-30).
     return Container(
+      key: const ValueKey('chat-attachment-header'),
       height: 58,
       padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 16),
-      color: const Color(0xFFF8FAFC),
+      color: colors.surfaceContainerLow,
       child: Row(
         children: [
           Container(
             width: 34,
             height: 34,
             decoration: BoxDecoration(
-              color: const Color(0xFFEFF6FF),
+              color: colors.primaryContainer,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(icon, size: 19, color: const Color(0xFF2563EB)),
+            child: Icon(icon, size: 19, color: colors.onPrimaryContainer),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -780,7 +794,7 @@ class _AttachmentHeader extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w800,
-                    color: const Color(0xFF0F172A),
+                    color: colors.onSurface,
                   ),
                 ),
                 Text(
@@ -792,7 +806,7 @@ class _AttachmentHeader extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: const Color(0xFF64748B),
+                    color: colors.onSurfaceVariant,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -913,13 +927,14 @@ class _ZoomToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final percent = '${(zoom * 100).round()}%';
+    final colors = Theme.of(context).colorScheme;
 
     return Container(
       height: 34,
       padding: const EdgeInsets.symmetric(horizontal: 4),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        color: colors.surface,
+        border: Border.all(color: colors.outlineVariant),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -928,6 +943,7 @@ class _ZoomToolbar extends StatelessWidget {
           _compactIconButton(
             tooltip: 'Alejar',
             icon: Icons.remove,
+            color: colors.onSurface,
             onPressed: onZoomOut,
           ),
           InkWell(
@@ -937,10 +953,10 @@ class _ZoomToolbar extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: Text(
                 percent,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w800,
-                  color: Color(0xFF334155),
+                  color: colors.onSurfaceVariant,
                 ),
               ),
             ),
@@ -948,6 +964,7 @@ class _ZoomToolbar extends StatelessWidget {
           _compactIconButton(
             tooltip: 'Acercar',
             icon: Icons.add,
+            color: colors.onSurface,
             onPressed: onZoomIn,
           ),
         ],
@@ -958,6 +975,7 @@ class _ZoomToolbar extends StatelessWidget {
   Widget _compactIconButton({
     required String tooltip,
     required IconData icon,
+    required Color color,
     required VoidCallback onPressed,
   }) {
     return Tooltip(
@@ -968,7 +986,7 @@ class _ZoomToolbar extends StatelessWidget {
         child: SizedBox(
           width: 28,
           height: 28,
-          child: Icon(icon, size: 17, color: const Color(0xFF0F172A)),
+          child: Icon(icon, size: 17, color: color),
         ),
       ),
     );
@@ -996,7 +1014,9 @@ class _PdfPagesCanvas extends StatelessWidget {
         final canvasWidth = math.max(constraints.maxWidth, pageWidth + 112);
 
         return DecoratedBox(
-          decoration: const BoxDecoration(color: Color(0xFFE5E7EB)),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          ),
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: SizedBox(
@@ -1018,6 +1038,7 @@ class _PdfPagesCanvas extends StatelessWidget {
                       margin: EdgeInsets.only(
                         bottom: index == pages.length - 1 ? 28 : 22,
                       ),
+                      // Papel: una página PDF es blanca en los dos temas.
                       decoration: BoxDecoration(
                         color: Colors.white,
                         boxShadow: [
@@ -1073,6 +1094,7 @@ class _AttachmentEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colors = theme.colorScheme;
 
     return SizedBox.expand(
       child: Center(
@@ -1087,10 +1109,10 @@ class _AttachmentEmptyState extends StatelessWidget {
                   width: 72,
                   height: 72,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFEFF6FF),
+                    color: colors.primaryContainer,
                     borderRadius: BorderRadius.circular(18),
                   ),
-                  child: Icon(icon, color: const Color(0xFF2563EB), size: 34),
+                  child: Icon(icon, color: colors.onPrimaryContainer, size: 34),
                 ),
                 const SizedBox(height: 18),
                 Text(
@@ -1098,7 +1120,7 @@ class _AttachmentEmptyState extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w900,
-                    color: const Color(0xFF0F172A),
+                    color: colors.onSurface,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -1106,7 +1128,7 @@ class _AttachmentEmptyState extends StatelessWidget {
                   subtitle,
                   textAlign: TextAlign.center,
                   style: theme.textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF64748B),
+                    color: colors.onSurfaceVariant,
                     height: 1.35,
                   ),
                 ),
@@ -1116,7 +1138,7 @@ class _AttachmentEmptyState extends StatelessWidget {
                     meta!,
                     textAlign: TextAlign.center,
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: const Color(0xFF94A3B8),
+                      color: colors.onSurfaceVariant,
                       fontWeight: FontWeight.w800,
                     ),
                   ),

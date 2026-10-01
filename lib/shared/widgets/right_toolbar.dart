@@ -647,37 +647,19 @@ class _RightToolbarState extends State<RightToolbar> {
               ),
               const Spacer(),
               if (tool == ToolbarTool.performance)
-                Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: () => context
-                        .read<RightToolbarService>()
-                        .unpinGaugeFromToolbar(),
-                    borderRadius: BorderRadius.circular(6),
-                    child: Padding(
-                      padding: const EdgeInsets.all(4),
-                      child: Icon(
-                        Icons.push_pin_outlined,
-                        size: 18,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
+                _PanelHeaderIconButton(
+                  icon: Icons.push_pin_outlined,
+                  tooltip: 'Quitar de la barra',
+                  onPressed: () => context
+                      .read<RightToolbarService>()
+                      .unpinGaugeFromToolbar(),
                 ),
-              Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: _close,
-                  borderRadius: BorderRadius.circular(6),
-                  child: Padding(
-                    padding: const EdgeInsets.all(4),
-                    child: Icon(
-                      Icons.close,
-                      size: 18,
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
+              // Con nombre: sin él el lector anunciaba «botón» a secas y un
+              // recorrido no podía cerrar el panel (C1/C4 web, 2026-09-30).
+              _PanelHeaderIconButton(
+                icon: Icons.close,
+                tooltip: 'Cerrar ${tool.toolbarPresentation.title}',
+                onPressed: _close,
               ),
             ],
           ),
@@ -818,6 +800,36 @@ class _RightToolbarState extends State<RightToolbar> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Un icono de la cabecera del panel: el nombre sale del `tooltip`, como en
+/// el resto de los botones de icono (uno solo en el árbol accesible).
+class _PanelHeaderIconButton extends StatelessWidget {
+  const _PanelHeaderIconButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      icon: Icon(icon, size: 18),
+      tooltip: tooltip,
+      onPressed: onPressed,
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
+      padding: const EdgeInsets.all(4),
+      constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+      style: IconButton.styleFrom(
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
       ),
     );
   }

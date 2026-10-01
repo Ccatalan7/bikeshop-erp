@@ -44,6 +44,12 @@ TaskModel _build(TaskModel? editing) => buildTaskFormSaveModel(
     );
 
 void main() {
+  test('una tarea nueva nace pendiente aunque se pida otro estado', () {
+    final saved = _build(null);
+    expect(saved.status, TaskStatus.pending);
+    expect(taskFormStatusOptions(null), [TaskStatus.pending]);
+  });
+
   test('editar una nota preserva tipo y no le inventa ciclo ni responsable',
       () {
     final saved = _build(_model(kind: TaskKind.note));

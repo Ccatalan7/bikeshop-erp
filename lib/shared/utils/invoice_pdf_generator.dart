@@ -7,6 +7,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:provider/provider.dart';
 
+import '../../modules/bikeshop/services/workshop_asset_service.dart';
 import '../../modules/sales/models/sales_models.dart';
 import '../../modules/settings/services/appearance_service.dart';
 import '../../shared/services/database_service.dart';
@@ -104,6 +105,13 @@ class InvoiceDiagnosisNarrative {
 
   final String title;
   final String content;
+}
+
+class InvoiceWorkshopPhoto {
+  const InvoiceWorkshopPhoto({required this.name, required this.bytes});
+
+  final String name;
+  final Uint8List bytes;
 }
 
 class InvoicePdfGenerator {
@@ -249,7 +257,16 @@ class InvoicePdfGenerator {
     DateTime? validUntil,
     double discountAmount = 0,
   }) async {
+    final includeWorkshopPhotos =
+        documentKind == InvoicePdfDocumentKind.serviceBudget ||
+            diagnosisNarratives.isNotEmpty;
+    final db = includeWorkshopPhotos ? context.read<DatabaseService>() : null;
     final logoImage = await _loadLogoImage(context);
+    // La factura simple conserva su contenido. El anexo de diagnóstico y el
+    // presupuesto del taller llevan las fotos del trabajo recibido.
+    final photos = db != null
+        ? await _resolveWorkshopPhotos(db, invoice)
+        : const <InvoiceWorkshopPhoto>[];
 
     return buildDocumentPDF(
       invoice,
@@ -259,6 +276,7 @@ class InvoicePdfGenerator {
       documentKind: documentKind,
       validUntil: validUntil,
       discountAmount: discountAmount,
+      workshopPhotos: photos,
     );
   }
 
@@ -318,6 +336,7 @@ class InvoicePdfGenerator {
     InvoicePdfDocumentKind documentKind = InvoicePdfDocumentKind.invoice,
     DateTime? validUntil,
     double discountAmount = 0,
+    List<InvoiceWorkshopPhoto> workshopPhotos = const [],
   }) {
     final pdf = pw.Document();
 
@@ -351,11 +370,83 @@ class InvoicePdfGenerator {
               documentKind,
             ),
           ],
+          if (workshopPhotos.isNotEmpty) ...[
+            pw.NewPage(),
+            pw.Text('Fotos del trabajo',
+                style:
+                    pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 16),
+            for (final photo in workshopPhotos)
+              pw.Column(children: [
+                pw.Image(pw.MemoryImage(photo.bytes),
+                    width: 480, height: 270, fit: pw.BoxFit.contain),
+                pw.SizedBox(height: 6),
+                pw.Text(photo.name, style: const pw.TextStyle(fontSize: 9)),
+                pw.SizedBox(height: 18),
+              ]),
+          ],
         ],
       ),
     );
 
     return pdf;
+  }
+
+  static Future<List<InvoiceWorkshopPhoto>> _resolveWorkshopPhotos(
+    DatabaseService db,
+    Invoice invoice,
+  ) async {
+    final actor = db.supabase.auth.currentUser?.id;
+    if (actor == null) throw const WorkshopAssetUnavailable();
+    final jobBikeIds = invoice.items
+        .map((item) => item.jobBikeId)
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+    final jobId = await _resolveLinkedJobId(db, invoice, jobBikeIds);
+    if (db.supabase.auth.currentUser?.id != actor) {
+      throw const WorkshopAssetUnavailable();
+    }
+    if (jobId == null) return const [];
+    final job = await db.supabase
+        .from('mechanic_jobs')
+        .select('image_urls,tenant_id,customer_id')
+        .eq('id', jobId)
+        .maybeSingle();
+    if (db.supabase.auth.currentUser?.id != actor ||
+        job == null ||
+        job['tenant_id'] != invoice.tenantId ||
+        (invoice.customerId != null &&
+            job['customer_id'] != invoice.customerId)) {
+      throw const WorkshopAssetUnavailable();
+    }
+    final references = [
+      for (final reference in job['image_urls'] as List? ?? const [])
+        if (reference is String &&
+            RegExp(r'\.(jpe?g|png)$', caseSensitive: false)
+                .hasMatch(Uri.tryParse(reference)?.path ?? ''))
+          reference,
+    ];
+    if (references.length > 30) {
+      throw const WorkshopAssetUnavailable();
+    }
+    final assets = WorkshopAssetService(db.supabase);
+    final photos = <InvoiceWorkshopPhoto>[];
+    var bytesTotal = 0;
+    for (final reference in references) {
+      final bytes = await assets.download(reference);
+      if (db.supabase.auth.currentUser?.id != actor) {
+        throw const WorkshopAssetUnavailable();
+      }
+      bytesTotal += bytes.length;
+      if (bytesTotal > 33554432) throw const WorkshopAssetUnavailable();
+      photos.add(InvoiceWorkshopPhoto(
+        name: Uri.parse(reference).pathSegments.last,
+        bytes: bytes,
+      ));
+    }
+    return photos;
   }
 
   static String quotationFileNameFor(String quotationNumber) =>

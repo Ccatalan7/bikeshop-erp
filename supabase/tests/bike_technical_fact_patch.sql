@@ -204,7 +204,7 @@ select throws_ok(
     'e2780000-0000-4000-8000-000000000051', 'service_wizard',
     '[{"key": "drivetrainSpeeds", "op": "set", "value": 9, "expected": 7, "expected_confirmed": false},
       {"key": "frontRotorSizeMm", "op": "set", "value": 180, "expected": null, "expected_confirmed": false}]'::jsonb)$$,
-  '40001',
+  'PT409',
   'Bicycle facts changed since they were loaded; reload before saving',
   'un dato que cambió desde que se cargó rechaza el comando');
 
@@ -369,7 +369,7 @@ select throws_ok(
     'op-13', 'e2780000-0000-4000-8000-000000000031',
     'e2780000-0000-4000-8000-000000000051', 'service_wizard',
     '[{"key": "valveType", "op": "remove", "expected": "schrader", "expected_confirmed": false}]'::jsonb)$$,
-  '40001',
+  'PT409',
   'Bicycle facts changed since they were loaded; reload before saving',
   'borrar desde una copia que veía el dato sin confirmar no pisa la confirmación de otro');
 
@@ -414,7 +414,7 @@ select throws_ok(
     'op-19', 'e2780000-0000-4000-8000-000000000031',
     'e2780000-0000-4000-8000-000000000051', 'service_wizard',
     '[{"key": "valveType", "op": "set", "value": "schrader", "expected": "presta", "expected_confirmed": false}]'::jsonb)$$,
-  '40001',
+  'PT409',
   'Bicycle facts changed since they were loaded; reload before saving',
   'afirmar desde una copia vieja el valor que ya está no lo confirma sin verlo');
 
@@ -554,7 +554,11 @@ select throws_ok(
   'The job line did not install rearSpokeHoles',
   'la línea armó la rueda delantera, no la trasera');
 
--- Una línea de General sólo instala en un trabajo de una sola bici.
+-- Una línea de General sólo instala en un trabajo de una sola bici. Desde
+-- 20260928140000 la puerta ya rechaza agregar la segunda bici a un trabajo
+-- terminado con una línea así; el parche se defiende igual de ese estado
+-- viejo, que aquí se arma sin ella.
+alter table public.mechanic_job_bikes disable trigger trg_mechanic_job_bikes_gate_job_lines;
 insert into public.mechanic_job_bikes (id, tenant_id, job_id, bike_id) values
   ('e2780000-0000-4000-8000-000000000071',
    'e2780000-0000-4000-8000-000000000001',
@@ -577,6 +581,7 @@ select throws_ok(
 delete from public.mechanic_job_bikes
  where job_id = 'e2780000-0000-4000-8000-000000000051'
    and tenant_id = 'e2780000-0000-4000-8000-000000000001';
+alter table public.mechanic_job_bikes enable trigger trg_mechanic_job_bikes_gate_job_lines;
 
 select lives_ok(
   $$select public.patch_bike_technical_facts_v1(

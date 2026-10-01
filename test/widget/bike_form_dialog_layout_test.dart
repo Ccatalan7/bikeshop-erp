@@ -8,7 +8,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:vinabike_erp/modules/bikeshop/pages/bike_form_dialog.dart';
 import 'package:vinabike_erp/modules/bikeshop/models/bikeshop_models.dart';
 import 'package:vinabike_erp/modules/bikeshop/services/bikeshop_service.dart';
+import 'package:vinabike_erp/modules/bikeshop/services/workshop_command_outbox.dart';
 import 'package:vinabike_erp/shared/widgets/branded_loading.dart';
+import 'package:vinabike_erp/shared/themes/app_theme.dart';
+import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 
 void main() {
   setUpAll(() async {
@@ -174,6 +177,10 @@ void main() {
           ChangeNotifierProvider<BikeshopService>.value(
             value: service,
             child: MaterialApp(
+              theme: AppTheme.resolve(
+                preset: AppearancePresets.all.first,
+                brightness: Brightness.light,
+              ),
               builder: (context, child) => MediaQuery(
                 data: MediaQuery.of(context).copyWith(
                   textScaler: TextScaler.linear(testCase.textScale),
@@ -294,6 +301,10 @@ void main() {
           ChangeNotifierProvider<BikeshopService>.value(
             value: service,
             child: MaterialApp(
+              theme: AppTheme.resolve(
+                preset: AppearancePresets.all.first,
+                brightness: Brightness.light,
+              ),
               builder: (context, child) => MediaQuery(
                 data: MediaQuery.of(context).copyWith(
                   textScaler: const TextScaler.linear(1.3),
@@ -653,6 +664,26 @@ class _BikeFormLayoutService extends ChangeNotifier implements BikeshopService {
       BikeAggregate(bike: bike, profile: null);
 
   @override
+  Future<List<WorkshopCommandRun>> resumePendingBikeCommands({
+    String? bikeId,
+    String? jobId,
+  }) async =>
+      const [];
+
+  @override
+  Future<({String? pendingSaveKey, bool unreadable})> pendingBikeSaveState(
+    String bikeId,
+  ) async =>
+      (pendingSaveKey: null, unreadable: false);
+
+  @override
+  Future<({List<({String bikeId, String label})> creations, bool unreadable})>
+      pendingBikeCreations(String customerId) async => (
+            creations: const <({String bikeId, String label})>[],
+            unreadable: false
+          );
+
+  @override
   Future<List<BikeBrand>> getBikeBrands({bool activeOnly = true}) async => [
         BikeBrand(
           id: 'brand-1',
@@ -718,6 +749,26 @@ class _DelayedBikeReferenceService extends ChangeNotifier
   @override
   Future<BikeAggregate> getBikeAggregate(String bikeId) async =>
       BikeAggregate(bike: bike, profile: null);
+
+  @override
+  Future<List<WorkshopCommandRun>> resumePendingBikeCommands({
+    String? bikeId,
+    String? jobId,
+  }) async =>
+      const [];
+
+  @override
+  Future<({String? pendingSaveKey, bool unreadable})> pendingBikeSaveState(
+    String bikeId,
+  ) async =>
+      (pendingSaveKey: null, unreadable: false);
+
+  @override
+  Future<({List<({String bikeId, String label})> creations, bool unreadable})>
+      pendingBikeCreations(String customerId) async => (
+            creations: const <({String bikeId, String label})>[],
+            unreadable: false
+          );
 
   @override
   Future<List<BikeBrand>> getBikeBrands({bool activeOnly = true}) =>

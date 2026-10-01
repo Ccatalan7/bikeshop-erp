@@ -6,13 +6,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:vinabike_erp/modules/bikeshop/widgets/pegas_tasks_widget.dart';
+import 'package:vinabike_erp/modules/bikeshop/widgets/task_form_dialog.dart';
 import 'package:vinabike_erp/modules/tasks/models/task_model.dart';
 import 'package:vinabike_erp/modules/tasks/services/task_service.dart';
 import 'package:vinabike_erp/shared/services/tenant_service.dart';
 import 'package:vinabike_erp/shared/themes/app_theme.dart';
 import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 import 'package:vinabike_erp/shared/services/user_management_service.dart';
-
 
 /// El VbSegmented del alcance exige VinabikeThemeRoles: todo host de prueba
 /// monta el tema canónico, igual que la app real.
@@ -316,6 +316,47 @@ void main() {
     expect(find.text('Nueva Tarea'), findsOneWidget);
     expect(find.text('Título de la tarea'), findsOneWidget);
     expect(find.text('Guardar'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('opens empty compact attachments in the exact task form',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(384, 824));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    final taskService = _SeededTaskService(_sampleTasks());
+    addTearDown(taskService.dispose);
+
+    await tester.pumpWidget(
+      _taskProviders(
+        taskService: taskService,
+        child: MaterialApp(
+          theme: _canonicalTheme(),
+          home: const Scaffold(body: PegasTasksWidget()),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey('workshop-task-compact-disclosure-task-overdue'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final attachmentsAction = find.byKey(
+      const ValueKey('workshop-task-compact-attachments-task-overdue'),
+    );
+    await tester.ensureVisible(attachmentsAction);
+    await tester.tap(attachmentsAction);
+    await tester.pumpAndSettle();
+
+    final form = tester.widget<TaskFormDialog>(find.byType(TaskFormDialog));
+    expect(form.taskToEdit?.id, 'task-overdue');
+    expect(form.openAttachments, isTrue);
+    expect(find.text('Agregar archivo'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

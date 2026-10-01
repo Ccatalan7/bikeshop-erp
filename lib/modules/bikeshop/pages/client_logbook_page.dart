@@ -1778,8 +1778,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
           ),
           child: Row(
             children: [
-              if (usesCompactLayout) Expanded(child: tabBar) else tabBar,
-              if (!usesCompactLayout) const Spacer(),
+              Expanded(child: tabBar),
               _buildTabContextAction(compact: usesCompactLayout),
             ],
           ),

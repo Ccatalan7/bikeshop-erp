@@ -77,6 +77,29 @@ JobIntakeKind mechanicJobCreationIntakeKind({
   );
 }
 
+/// Los estados de una factura que todavía no descontó stock ni tiene asiento
+/// (los mismos que `handle_sales_invoice_change` y el comando de líneas). Con
+/// cualquier otro, la factura está confirmada.
+const Set<String> nonPostedSalesInvoiceStatuses = {
+  'draft',
+  'borrador',
+  'sent',
+  'enviado',
+  'enviada',
+  'issued',
+  'emitido',
+  'emitida',
+  'cancelled',
+  'cancelado',
+  'cancelada',
+  'anulado',
+  'anulada',
+};
+
+bool isPostedSalesInvoiceStatus(String? status) =>
+    !nonPostedSalesInvoiceStatuses
+        .contains((status ?? 'draft').trim().toLowerCase());
+
 /// A persisted job whose linked invoice has payment evidence is an accounting
 /// record, not an editable commercial draft.
 ///
@@ -85,17 +108,24 @@ JobIntakeKind mechanicJobCreationIntakeKind({
 /// saved, but status/status_id, products, prices, discounts, totals and invoice
 /// projection must remain exactly as they were until the linked invoice can be
 /// read reliably.
+///
+/// Una factura confirmada sin pagos también (revisión del 2026-09-28): ya
+/// descontó stock y tiene su asiento, el comando rechaza lo que cambiaría lo
+/// que se cobra y eso se corrige desde la factura.
 bool shouldProtectJobCommercialSnapshot({
   required MechanicJob? existingJob,
   required bool linkedInvoiceHasActivePayments,
   required bool linkedInvoicePaymentStateUnknown,
+  bool linkedInvoiceIsPosted = false,
 }) {
   final linkedInvoiceId = existingJob?.invoiceId?.trim();
   final hasPersistedLinkedInvoice = existingJob?.id != null &&
       linkedInvoiceId != null &&
       linkedInvoiceId.isNotEmpty;
   return hasPersistedLinkedInvoice &&
-      (linkedInvoiceHasActivePayments || linkedInvoicePaymentStateUnknown);
+      (linkedInvoiceHasActivePayments ||
+          linkedInvoicePaymentStateUnknown ||
+          linkedInvoiceIsPosted);
 }
 
 /// Builds the narrow job-header update allowed while a linked invoice is

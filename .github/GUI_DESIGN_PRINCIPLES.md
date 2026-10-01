@@ -1109,6 +1109,33 @@ compositions:
 - expose retry and recovery where they are real;
 - never represent an authoritative load failure as a trustworthy empty result.
 
+### Un aviso con acción no se va solo (2026-09-28)
+
+En Flutter 3.38 un `SnackBar` con `action` nace con `persist = true`
+(`persist ?? action != null`): queda abajo hasta que alguien lo cierra, y
+sobrevive a salir de la pantalla que lo mostró. Con «Ver Totem 4423» del
+«Asignar a…» del taller, el aviso seguía encima del selector de cliente del
+trabajo siguiente. Cuando la acción es un atajo y no una decisión pendiente,
+se pasa `persist: false`. Y para reemplazar un aviso se usa
+`clearSnackBars()`: `hideCurrentSnackBar()` sólo quita el visible, y el
+siguiente en cola —de otra acción, ya falso— apareció en su lugar.
+El 2026-09-30 el de «Presupuesto aprobado · Facturar ahora» tapó en teléfono
+la hoja «Cambiar vista» y la lista hasta tocarlo (recorrido nativo del
+taller); se corrigió igual. Ese día quedaban 27 `SnackBarAction` en 11
+archivos de `lib/` y sólo 2 con `persist` decidido: al tocar uno, se decide.
+
+### El resultado de una acción de diálogo vive dentro del diálogo (2026-09-30)
+
+En `TaskFormDialog` real, fallar Storage después de guardar la tarea mostraba
+un `SnackBar` detrás de la barrera modal: atenuado y fuera del árbol accesible.
+El aviso de esa acción se muestra dentro del diálogo, como región anunciada,
+con palabras del operador y el nombre del botón que reintenta. La excepción
+cruda queda en diagnóstico. Si la tarea ya se guardó, se conserva su identidad
+y los archivos pendientes; reintentar no crea otra tarea. Regresión mínima:
+prueba del aviso/acción y recorrido real con fallo, reintento y salida. La
+corrida local `task-form-20260930-033442` comprobó ambas rutas; esto no prescribe
+que todo aviso de toda pantalla deba ser inline.
+
 ## 10. Motion and transitions
 
 Motion should explain where content came from, what changed, and whether the
@@ -1280,6 +1307,26 @@ Accessibility is part of the component contract:
 
 Pointer and keyboard efficiency must not reduce touch usability, and touch
 composition must not remove keyboard-accessible commands from desktop.
+
+**Tooltip y etiqueta explícita no deben anunciarse dos veces (2026-09-30).**
+En el ERP real local, `VbShellIconButton` exponía «Configuración rápida
+Configuración rápida»: el `Tooltip` y el `Semantics(label:)` se fusionaban.
+La búsqueda exacta de la acción no podía encontrarla. Cuando el dueño del
+control ya aporta etiqueta y rol explícitos, su tooltip lleva
+`excludeFromSemantics: true`. Si ese nodo excluye la semántica del hijo,
+también aporta `onTap`; ocultar el hijo sin reponer su acción impide activarlo
+con el lector de pantalla. Corregido en los dueños shell y surface, sin
+variantes locales. Regresión mínima: nombre exacto una sola vez y acción tap
+en `workspace_chrome_actions_test.dart` (6/6); comprobarlo además en el bundle
+real recompilado. Una coincidencia parcial del nombre no detectaba el defecto.
+
+El mismo defecto se encontró en `VbButton` durante C2: con una sola acción,
+el diálogo web fusionaba su etiqueta y no exponía el botón «Entendido».
+El dueño común ahora aporta nodo propio y acción tap explícita. Regresión
+mínima en `vb_button_test.dart`: ejecutar la acción semántica de un diálogo
+con un solo botón y comprobar que deshabilitado/ocupado no ofrecen tap
+(6/6 conjunto). El gate web recompilado debe usar el botón identificado;
+Escape no acredita su corrección.
 
 **Un tooltip no nombra un `PopupMenuButton` (2026-09-27).** El menú «⋯» de
 cada línea de Productos y Servicios tenía `tooltip`, y el lector de pantalla
@@ -1857,3 +1904,17 @@ y sólo se podía abrir entrando a la ficha y desplegando un menú.
   y el resto de usuario. El esquema se detecta por los dos puntos, no por `://`.
 - **El techo se dice, no se descubre fallando.** Con diez espacios abiertos el
   resultado no puede hacer nada; entonces lo explica en vez de quedarse mudo.
+
+### Mapa técnico en un panel estrecho (2026-09-30)
+
+Un shell de escritorio puede alojar un panel mucho más estrecho que su
+ventana. En el historial de bicicleta, conservar el ancho de la imagen por
+una relación de aspecto dentro de un viewport corto comprimía sus etiquetas;
+la tira de pestañas del padre tampoco reservaba espacio para su acción.
+El mapa usa el ancho real disponible y sus etiquetas exteriores se envuelven
+dentro de ese ancho; los hints no capturan los toques. El padre acota la tira
+con scroll junto a la acción. La composición compacta conserva identidad y
+acciones antes del scroll de lectura. Condiciones verificadas: mapa 320×260
+y 430×560, ambos lados accionables, macOS ancho/estrecho claro/oscuro sin
+recorte. Regresión mínima: límites de etiquetas y toque de ambas ruedas en el
+dueño compartido; no convertir esa composición en receta para otros módulos.

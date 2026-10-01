@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../shared/themes/vinabike_theme_roles.dart';
+
 import '../models/bikeshop_models.dart';
 import 'bike_diagram_illustration.dart';
 
@@ -255,15 +257,17 @@ class _BikeSystemControllerState extends State<BikeSystemController>
   }
 
   Color _statusColor(BikeSystemOverallStatus status) {
+    final scheme = Theme.of(context).colorScheme;
+    final roles = VinabikeThemeRoles.of(context);
     switch (status) {
       case BikeSystemOverallStatus.critical:
-        return const Color(0xFFFF4B4B);
+        return roles.danger.accent;
       case BikeSystemOverallStatus.attention:
-        return const Color(0xFFFFAB2E);
+        return roles.warning.accent;
       case BikeSystemOverallStatus.ok:
-        return const Color(0xFF3EFFD0);
+        return roles.success.accent;
       case BikeSystemOverallStatus.unknown:
-        return const Color(0xFF94A3B8);
+        return scheme.onSurfaceVariant;
     }
   }
 
@@ -326,6 +330,7 @@ class _BikeSystemControllerState extends State<BikeSystemController>
     required BikeDiagramVariant variant,
     required BikeSystemControllerEntry? selectedEntry,
   }) {
+    final scheme = Theme.of(context).colorScheme;
     return LayoutBuilder(
       key: const ValueKey('full_schema'),
       builder: (context, constraints) {
@@ -356,12 +361,36 @@ class _BikeSystemControllerState extends State<BikeSystemController>
               final isSelected =
                   widget.selectedSystemKey == entry.spec.systemKey;
 
+              // Keep the pin on its component and give the outward label
+              // only the space available inside the card. It wraps instead
+              // of being clipped or covering the opposite wheel's hit target.
+              final labelPainter = TextPainter(
+                text: TextSpan(
+                  text: entry.spec.label,
+                  style: DefaultTextStyle.of(context).style.merge(
+                        _pinLabelStyle.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                ),
+                textDirection: Directionality.of(context),
+                textScaler: MediaQuery.textScalerOf(context),
+              )..layout();
+              final availableWidth = placement.labelRight
+                  ? constraints.maxWidth - px + 16
+                  : px + 16;
+              final pinWidth = math.min(
+                availableWidth,
+                (labelPainter.width + 62).ceilToDouble(),
+              );
+              labelPainter.layout(maxWidth: math.max(1, pinWidth - 62));
+              final pinHeight = math.max(32.0, labelPainter.height + 8);
+              labelPainter.dispose();
+
               return Positioned(
-                left: placement.labelRight ? px - 16 : null,
-                right: placement.labelRight
-                    ? null
-                    : constraints.maxWidth - px - 16,
-                top: py - 16,
+                left: placement.labelRight ? px - 16 : px + 16 - pinWidth,
+                width: pinWidth,
+                height: pinHeight,
+                top: (py - pinHeight / 2).clamp(
+                    0.0, math.max(0.0, constraints.maxHeight - pinHeight)),
                 child: _BikeSystemControllerPin(
                   label: entry.spec.label,
                   color: _statusColor(entry.status),
@@ -391,26 +420,35 @@ class _BikeSystemControllerState extends State<BikeSystemController>
               bottom: 0,
               left: 0,
               right: 0,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                    colors: [Color(0x18FFFFFF), Colors.transparent],
+              child: IgnorePointer(
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: [
+                        scheme.surface.withValues(alpha: 0.1),
+                        Colors.transparent
+                      ],
+                    ),
                   ),
-                ),
-                child: Text(
-                  selectedEntry == null
-                      ? widget.idleHintText
-                      : widget.selectedHintText,
-                  style: const TextStyle(
-                    color: Color(0xFFB0BEC5),
-                    fontSize: 10,
-                    letterSpacing: 0.3,
+                  child: Text(
+                    constraints.maxHeight < 340
+                        ? selectedEntry == null
+                            ? 'Toca un sistema para abrirlo'
+                            : 'Toca otro sistema para cambiar la vista'
+                        : selectedEntry == null
+                            ? widget.idleHintText
+                            : widget.selectedHintText,
+                    style: TextStyle(
+                      color: scheme.onSurfaceVariant,
+                      fontSize: 10,
+                      letterSpacing: 0.3,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
-                  textAlign: TextAlign.center,
                 ),
               ),
             ),
@@ -536,6 +574,7 @@ class _SystemDetailView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -545,7 +584,7 @@ class _SystemDetailView extends StatelessWidget {
           child: Transform(
             alignment: Alignment.center,
             transform: flipX
-                ? (Matrix4.identity()..scale(-1.0, 1.0))
+                ? Matrix4.diagonal3Values(-1.0, 1.0, 1.0)
                 : Matrix4.identity(),
             child: Image.asset(
               assetPath,
@@ -567,10 +606,10 @@ class _SystemDetailView extends StatelessWidget {
                   vertical: 5,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.92),
+                  color: scheme.surfaceContainerHigh.withValues(alpha: 0.96),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: const Color(0xFFCBD5E1),
+                    color: scheme.outlineVariant,
                     width: 1,
                   ),
                   boxShadow: const [
@@ -581,19 +620,19 @@ class _SystemDetailView extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
                       Icons.arrow_back_ios_new_rounded,
                       size: 10,
-                      color: Color(0xFF475569),
+                      color: scheme.onSurfaceVariant,
                     ),
-                    SizedBox(width: 4),
+                    const SizedBox(width: 4),
                     Text(
                       'Vista general',
                       style: TextStyle(
-                        color: Color(0xFF475569),
+                        color: scheme.onSurfaceVariant,
                         fontSize: 10,
                         fontWeight: FontWeight.w600,
                         letterSpacing: 0.2,
@@ -612,17 +651,14 @@ class _SystemDetailView extends StatelessWidget {
           right: 0,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.bottomCenter,
-                end: Alignment.topCenter,
-                colors: [Color(0x18FFFFFF), Colors.transparent],
-              ),
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainerHigh,
+              border: Border(top: BorderSide(color: scheme.outlineVariant)),
             ),
             child: Text(
               '$label — componentes',
-              style: const TextStyle(
-                color: Color(0xFFB0BEC5),
+              style: TextStyle(
+                color: scheme.onSurfaceVariant,
                 fontSize: 10,
                 letterSpacing: 0.3,
               ),
@@ -634,6 +670,8 @@ class _SystemDetailView extends StatelessWidget {
     );
   }
 }
+
+const _pinLabelStyle = TextStyle(fontSize: 10, letterSpacing: 0.2);
 
 class _BikeSystemControllerPin extends StatefulWidget {
   final String label;
@@ -666,6 +704,7 @@ class _BikeSystemControllerPinState extends State<_BikeSystemControllerPin> {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final active = _isHovered || widget.isSelected;
     final effectiveColor =
         widget.selectable ? widget.color : widget.color.withValues(alpha: 0.45);
@@ -757,12 +796,12 @@ class _BikeSystemControllerPinState extends State<_BikeSystemControllerPin> {
         vertical: 3,
       ),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.92),
+        color: scheme.surfaceContainerHigh.withValues(alpha: 0.96),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: active
               ? effectiveColor.withValues(alpha: 0.7)
-              : const Color(0xFFCBD5E1),
+              : scheme.outlineVariant,
           width: 1,
         ),
         boxShadow: active
@@ -792,13 +831,13 @@ class _BikeSystemControllerPinState extends State<_BikeSystemControllerPin> {
             ),
           ),
           const SizedBox(width: 5),
-          Text(
-            widget.label,
-            style: TextStyle(
-              color: active ? const Color(0xFF1E293B) : const Color(0xFF475569),
-              fontSize: 10,
-              fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-              letterSpacing: 0.2,
+          Flexible(
+            child: Text(
+              widget.label,
+              style: _pinLabelStyle.copyWith(
+                color: active ? scheme.onSurface : scheme.onSurfaceVariant,
+                fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+              ),
             ),
           ),
         ],
@@ -827,8 +866,8 @@ class _BikeSystemControllerPinState extends State<_BikeSystemControllerPin> {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: widget.labelRight
-              ? [pin, const SizedBox(width: 2), label]
-              : [label, const SizedBox(width: 2), pin],
+              ? [pin, const SizedBox(width: 2), Expanded(child: label)]
+              : [Expanded(child: label), const SizedBox(width: 2), pin],
         ),
       ),
     );

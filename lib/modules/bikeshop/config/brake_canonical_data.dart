@@ -8,6 +8,18 @@ const Map<String, String> kBikeProfileBrakeTypeOptions = {
   'band_brake': 'Banda',
 };
 
+/// El anclaje del rotor de cada rueda (`frontRotorMount` / `rearRotorMount`,
+/// 20260928130000). Lo pone la maza de esa rueda; el rotor tiene que calzar
+/// con él. Los nombres son los de `rotor_mount_label` en el servidor.
+const Map<String, String> kBikeRotorMountOptions = {
+  'six_bolt': '6 pernos',
+  'centerlock': 'Center Lock',
+};
+
+/// El anclaje del rotor como se dice en el taller («Center Lock»).
+String rotorMountLabel(Object? code) =>
+    kBikeRotorMountOptions['$code'] ?? '$code';
+
 const Map<String, String> kRimBrakeFamilyOptions = {
   'v_brake': 'V-Brake',
   'cantilever': 'Cantilever',

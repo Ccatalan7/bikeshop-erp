@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart' as syncfusion;
 import 'package:vinabike_erp/modules/sales/models/sales_models.dart';
@@ -5,6 +7,36 @@ import 'package:vinabike_erp/shared/utils/invoice_pdf_generator.dart';
 
 void main() {
   group('Invoice PDF commercial document kind', () {
+    test('a workshop photo is embedded in a stable appendix', () async {
+      final photo = InvoiceWorkshopPhoto(
+        name: 'rueda-trasera.png',
+        bytes: File('assets/images/rear_wheel_exploded.png').readAsBytesSync(),
+      );
+      final pdf = InvoicePdfGenerator.buildDocumentPDF(
+        _documentFixture(),
+        const <String, String>{'single': 'Bicicleta de prueba'},
+        documentKind: InvoicePdfDocumentKind.serviceBudget,
+        workshopPhotos: [photo],
+      );
+      final bytes = await pdf.save();
+      final loaded = syncfusion.PdfDocument(inputBytes: bytes);
+      try {
+        expect(loaded.pages.count, 2);
+        final text = syncfusion.PdfTextExtractor(loaded)
+            .extractText()
+            .replaceAll(RegExp(r'\s+'), ' ');
+        expect(text, contains('Fotos del trabajo'));
+        expect(text, contains('rueda-trasera.png'));
+        expect(text, isNot(contains('/object/sign/')),
+            reason: 'el documento conserva los bytes, no una URL que expire');
+      } finally {
+        loaded.dispose();
+      }
+      final artifact = File('.tmp/e2e/workshop-private-photo.pdf');
+      artifact.parent.createSync(recursive: true);
+      artifact.writeAsBytesSync(bytes);
+    });
+
     test('uses different names for invoice, quotation and service budget', () {
       expect(
         InvoicePdfDocumentKind.invoice.fileNameFor('FV-00809'),

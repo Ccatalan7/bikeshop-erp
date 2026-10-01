@@ -46,3 +46,42 @@ exista el trigger `spec_coherence_publication_guard`. Los once coincidieron.
 - La captura de fichas por RPC con `set local role authenticated` no puede leer
   `product_spec_bindings_internal_v1` («permission denied for view»): resolver
   los IDs con el rol por defecto y pasarlos en línea al SQL que cambia de rol.
+
+## 2026-09-30: la base se reconstruyó otra vez y el motor volvió a faltar
+
+La base local se reconstruye desde `supabase/sql/core_schema.sql`, que incluye
+migraciones sólo hasta `20260816162400`; cada reconstrucción borra el motor.
+Ese día faltaban `spec_facts`, los lectores y 120 funciones, pero **sí** estaban
+las funciones de cambio de partes de `20260928100000`–`140000` que los llaman:
+sus pgTAP reemplazan el lector dentro de la transacción y pasaban igual. Un
+recorrido por la app con un repuesto habría fallado recién al terminar.
+
+La lista exacta que funcionó, en orden, está en
+`local-engine-replay-2026-09-30.txt` (89 archivos, un pase, ~9 min). Lo que la
+decide:
+
+- **Empieza antes de lo que dice este documento**: el bloque del pedalier
+  (`20260820220000`–`20260821120000`) crea `option_rules`, que
+  `20260906070000` escribe; y `20260821160000`/`170000` crean
+  `spec_definition_values`, que exige `20260821180000`. En este pase el bloque
+  del pedalier entró después de `20260821160000`: sus valores pueden no estar
+  como filas; en una base nueva, seguir el orden del archivo.
+- **Se dejan fuera a propósito** `20260817150000`, `20260817160000` y
+  `20260821130000`–`150000`: tocan fichas, pero sólo redefinen funciones de
+  compras y del buscador del asistente que migraciones posteriores ya
+  reemplazaron; aplicarlas después las haría retroceder.
+- **`20260916000100`** (higiene de RLS de todo el esquema) se detiene en una
+  tabla de compras que local no tiene y reescribiría políticas más nuevas: se
+  salta.
+- **Desde `20260916150000`** son publicaciones de catálogo con guardias de
+  preimagen: exigen los ids de plantilla de producción (el `tire` local es otro
+  uuid) y el validador del día; se niegan por diseño y así se dejan. Lo que el
+  recorrido necesita de ellas —el BSD del neumático— lo pone
+  `supabase/tests/fixtures/part_change_tire_bsd_local_seed.sql`, con la fila de
+  producción, validado por los disparadores del propio motor.
+
+Verificación: `just db-drift local production` y el snapshot de cuerpos,
+políticas y permisos antes y después. Los lectores que usan la app y el cierre
+quedaron idénticos a producción; ninguna función o política que ya igualaba a
+producción cambió; 9 más pasaron a igualarla. Lo que sigue distinto es código
+de investigación y de facetas públicas que ningún recorrido del taller toca.

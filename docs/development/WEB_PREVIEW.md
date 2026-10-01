@@ -58,6 +58,23 @@ ruta generada y ver la página en un navegador, no sólo recibir HTTP 200.
 are modes of the same script, sharing the port-ownership rules below.
 (`store_release_preview.sh` survives only as a deprecated delegate.)
 
+**2026-09-30 — portal con Auth/Storage local:** `build --store --local`
+usa `lib/main_store.dart`, el stack local y el origen separado `:54335`.
+Se fija la tienda sintética con `VINABIKE_STORE_TENANT_ID` y
+`VINABIKE_STORE_SUBDOMAIN`; el sello del bundle incluye ambos. El perfil
+hereda las guardas de URL local y clave pública del ERP local. Una ruta
+`/cuenta` en el ERP release no acredita el portal: ese montaje depende de
+la autoridad ERP y sus parámetros de desarrollo se ignoran en release.
+Ese error dejó un spinner mientras se intentaba comprobar la foto privada.
+La regresión mínima compila el entrypoint real con defines privados y sello
+de stack/tienda; el consumidor se comprueba en el portal real, con su cliente.
+
+```bash
+VINABIKE_STORE_TENANT_ID=<fixture-uuid> VINABIKE_STORE_SUBDOMAIN=<fixture-slug> scripts/dev/web_preview.sh build --store --local
+scripts/dev/web_preview.sh serve-release --store --local
+scripts/dev/web_preview.sh url /cuenta/login --store --local
+```
+
 ### VS Code interactive Chrome debugger
 
 The launch configurations `Debug Vinabike Store (Chrome)` and `Reset State`
@@ -116,6 +133,143 @@ Lifecycle safety rules the script enforces (and you should not work around):
   process. Marker-based recovery also captures and revalidates that timestamp,
   argv identity, and listener PID immediately before sending TERM; it never
   escalates to a broad kill or `KILL`.
+
+## The ERP against the local Supabase stack (`--local`, 2026-09-30)
+
+The production ERP preview compiles `lib/main.dart` without Supabase defines,
+and `SupabaseConfig` then defaults to **production**. The two local profiles
+are ERP `--local` and portal `--store --local`. To click through the ERP
+against local Auth, REST and Storage — synthetic users, fault injection,
+anything that must not touch real data — use the local profile:
+
+```bash
+scripts/dev/web_preview.sh build --local   # compile lib/main.dart for the running local stack
+scripts/dev/web_preview.sh start --local   # serve it on http://localhost:54334
+scripts/dev/web_preview.sh stop --local    # (stop --all also stops it)
+```
+
+- **Release only, its own origin.** Port `54334` (`ERP_LOCAL_WEB_PORT`), its
+  own PID/run dir and `build/web_erp_local_preview_versions/`
+  (`WEB_PREVIEW_LOCAL_BUILD_STATE_DIR`; the generic override never applies to
+  it). A port equal to the production previews' (`54330`/`54331`) is refused:
+  browser storage is per origin, and a production session must never share
+  one with a local bundle.
+- **Defines come from the running stack, privately.** `scripts/supabase_cli.sh
+  status -o env` goes to a 0700 temp directory; only `API_URL`, `ANON_KEY`
+  and `PUBLISHABLE_KEY` are kept, written to a 0600 JSON passed with
+  `--dart-define-from-file`, and deleted right after the compile. The keys are
+  never in argv, the log or the terminal. The build refuses a missing stack, a
+  URL that is not exactly `http://127.0.0.1:<port>` or `http://localhost:<port>`
+  (so `http://127.0.0.1:54321@host` fails), and a key that is not public (a
+  `service_role` JWT or an `sb_secret_…` key).
+- **No bundle crosses over.** The build fails unless the local API URL is
+  compiled into the JS, and stamps the release with the stack's URL and a key
+  fingerprint (`.vinabike-local-profile`, no key). The local server refuses a
+  bundle without that stamp, the production previews refuse one with it, and
+  `start --local` rebuilds when the stamp belongs to another stack. Code
+  changes still need an explicit `build --local`, as in every release mode.
+- **Signing in.** The local bundle has no production session and the login is
+  the real one. Use only the disposable synthetic credentials of the named
+  local fixture. A launcher can pass them by environment, as
+  `scripts/e2e/run_task_form_local.sh` does; Computer Use can enter that same
+  fixture's credentials in the verified local origin. Never use or save the
+  owner's production password. Keep credential files private and do not
+  capture the login tree. The local stack itself is started and inspected
+  per [`AGENT_DATABASE_CONTRACT.md`](AGENT_DATABASE_CONTRACT.md).
+
+This is the web client. A narrow window proves the compact web layout, not the
+native phone client.
+
+### Driving Flutter web with Playwright (2026-09-30)
+
+Ten runs of the task-form journey found these. Each one looked like an
+app defect, and one did cost three runs:
+
+- **`locator.isVisible()` does not wait.** A Flutter menu (dropdown,
+  `MenuAnchor`) opens with an animation. Until it ends, its items are
+  `menuitem`s with **no name** and nothing painted. Checked too early, the
+  «Asignar a» menu looked like it held only «Sin asignar» while the directory
+  had answered 200 with two people: about 12 minutes chasing a non-defect.
+  Use `waitFor({ state: "visible" })`.
+- **Typing right after a click loses the first letter** in a field without
+  `autofocus`: Flutter mounts the editable DOM element on focus. «Pastillas»
+  was saved as «astillas». Wait for `toBeFocused()`, then assert `toHaveValue`.
+- **Set `actionTimeout`.** Without it, a click on a missing control waits
+  for the whole test timeout (12 minutes in the first run).
+- **Accessible names are not the visible text.** Today `VbShellIconButton`
+  doubles its name («Capturas Capturas»), the workshop dropdowns carry their
+  emoji («📋 Vista: Tabla»), and a row's title lives inside its button's
+  name. Match with a pattern, and read the tree (`ariaSnapshot`) when a
+  locator fails.
+- **Escape does not close a Flutter `Dialog`** once focus sits in the
+  semantics DOM. Use its «Cerrar» button, scoped to the `dialog`.
+- **A SnackBar opened under a dialog is not in the tree.** It sits behind the
+  modal barrier, dimmed, and is never announced. A test that looks for it by
+  text fails for that reason, not because the message is missing.
+- **Save the tree on failure, never on `/login`.** The DOM password field
+  holds what was typed.
+
+The desktop workshop journey (`run_android_local_journey.sh --journey
+workshop --surface web`, `e2e/workshop_local.spec.ts`, 2026-09-30) added:
+
+- **Explore a held page instead of rerunning.** With `--hold`, a failed step
+  leaves the page open with its session and it runs whatever lands in
+  `.tmp/e2e/web-workshop-<fecha>-hold/cmd.js` (an async body with `page`,
+  `h`, `expect`; answer in `out.txt`; `exit` ends it). The desktop names were
+  learned that way in one sitting, not one run per control. The body has no
+  `require`; `Buffer` is there.
+- **Roles are not the phone's.** A tappable row or chip that only has a
+  label is a `group` (the customer in «Seleccionar cliente», the task's
+  line); the wheel-side menu offers `menuitemcheckbox`; the Enrayado wizard
+  is inline on desktop and its wheels are `checkbox`es. Desktop also names
+  things differently: «Productos y Servicios», «Configurar servicio Falta:
+  …», the row's «Cambiar estado y ver acciones …», «Descargar o ver más
+  acciones de presupuesto» (where «Facturar presupuesto» lives).
+- **A text field's value is not in the tree until it has focus**: the edit
+  form's title looked empty in `ariaSnapshot` and was filled on screen.
+  `inputValue()` on an unfocused Flutter field is empty too.
+- **Names keep their line breaks.** A caption under a field is the button's
+  description, and a long group name joins lines with `\n`: `.` does not
+  cross them, `[\s\S]` does.
+- **`Tooltip` around a `Semantics(label:)` doubles the name and adds a second
+  node** (the tooltip) with the same name; the click went to the wrong one.
+  An icon button is an `IconButton` with `tooltip`, one node, one name.
+- **A node past the table's visible width keeps its scrolled position.** In
+  the jobs table the «Factura» column is off to the right; its menu's
+  semantics box sat at x≈1236 with the table unscrolled, right on top of the
+  «Detalles» cell, and only matched the drawing once the table was scrolled.
+  Playwright clicked the box, and the «Detalles» editor opened «by itself»
+  three runs in a row; it looked like an app defect after approving. Scroll
+  the table with the wheel (`mouse.wheel(900, 0)` over it) before touching
+  the right-hand columns, and back afterwards; compare `boundingBox()` with a
+  screenshot when a click lands on a neighbour. For a screen-reader user on
+  web this is a real mismatch; it is reported, not fixed.
+
+The backup recovery journey (`--journey backup --surface web`,
+`e2e/backup_local.spec.ts`, C2 2026-09-30) added:
+
+- **An `AlertDialog` is `alertdialog`, not `dialog`, and its body is one
+  `group`.** Title and body do not come as separate nodes: `getByText` on a
+  row inside finds nothing. Read the dialog with `ariaSnapshot()`, collapse
+  whitespace and match a pattern across rows. A list that shows «y N tipos
+  más» after eight rows hides the rest from the tree too: what the test must
+  see has to be among the first rows.
+- **An `AlertDialog` whose only action is a `VbButton` publishes no node for
+  that button on web** (open defect, 2026-09-30). The result's «Entendido»
+  and the no-changes review's «Cerrar» are missing from the DOM (30 nodes:
+  route, title, body), yet `find.bySemanticsLabel('Entendido')` finds the
+  button in a widget test with the same snackbar sequence. The review with
+  two actions (Cancelar + Restaurar) exposes both. Relayout and Tab do not
+  bring it back. The barrier's «Cerrar» is exposed and Escape closes these
+  dialogs (it did in this journey, unlike the workshop `Dialog` above), so
+  the spec records `…=sin_nodo_web` and closes with Escape; it does not
+  pretend the button exists. Two runs were spent before it was clear the
+  button, not the locator, was missing.
+
+A Storage outage is the real container:
+`docker stop supabase_storage_bikeshop-erp`. Kong answers 502/503 at once,
+and routes again after `docker start` once `/storage/v1/status` is below 500.
+The launcher always leaves it started.
 
 ## Preview a pull request from any device (iPad, phone)
 

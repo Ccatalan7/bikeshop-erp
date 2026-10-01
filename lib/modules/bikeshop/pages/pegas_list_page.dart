@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
@@ -14,10 +16,13 @@ import '../../../shared/widgets/app_button.dart';
 import '../../crm/models/crm_models.dart';
 import '../../crm/services/customer_service.dart';
 import '../services/bikeshop_service.dart';
+import '../services/mechanic_job_status_transition_coordinator.dart';
+import '../services/job_completion_blocked.dart';
 import '../models/bikeshop_models.dart';
 import '../widgets/pega_detail_view.dart';
 import '../widgets/split_new_job_button.dart';
 import '../widgets/bike_fact_problems_snackbar.dart';
+import '../widgets/job_completion_blocked_dialog.dart';
 
 class PegasListPage extends StatefulWidget {
   const PegasListPage({super.key});
@@ -319,6 +324,13 @@ class _PegasListPageState extends State<PegasListPage> {
     });
   }
 
+  Future<void> _reviewBlockedJobLines(MechanicJob job) async {
+    final jobId = job.id;
+    if (jobId == null || !mounted) return;
+    await context.push('/taller/pegas/$jobId?tab=products');
+    if (mounted) await _loadData();
+  }
+
   Future<void> _updateJobStatus(MechanicJob job, JobStatus newStatus) async {
     try {
       await _bikeshopService.transitionJobStatusByLegacyStatus(
@@ -335,6 +347,24 @@ class _PegasListPageState extends State<PegasListPage> {
             content: Text('Estado actualizado a ${newStatus.displayName}'),
             backgroundColor: Colors.green,
           ),
+        );
+      }
+    } on MechanicJobStatusTransitionPending catch (pending) {
+      // Respaldado con su llave: se aplica solo, en la cola del trabajo.
+      await _loadData();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$pending')),
+        );
+      }
+    } on JobCompletionBlockedException catch (blocked) {
+      await _loadData();
+      if (mounted) {
+        await showJobCompletionBlocked(
+          context,
+          blocked,
+          jobLabel: job.jobNumber,
+          onReviewLines: () => unawaited(_reviewBlockedJobLines(job)),
         );
       }
     } catch (e) {

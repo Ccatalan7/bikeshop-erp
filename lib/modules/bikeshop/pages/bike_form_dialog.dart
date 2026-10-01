@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -12,7 +13,10 @@ import '../config/bottom_bracket_canonical_data.dart';
 import '../config/drivetrain_canonical_data.dart';
 import '../config/wheel_canonical_data.dart';
 import '../models/bikeshop_models.dart';
+import '../models/bike_fact_origin.dart';
 import '../services/bikeshop_service.dart';
+import '../services/workshop_command_notices.dart';
+import '../services/workshop_command_outbox.dart';
 import '../widgets/bike_system_controller.dart';
 import '../../../shared/services/image_service.dart';
 import '../../../shared/models/bike_catalog_models.dart';
@@ -47,6 +51,13 @@ const Map<String, String> _suspensionLayoutOptions = {
 const Map<String, String> _axleInterfaceOptions = {
   ...kAxleInterfaceLabels,
   kRegistryUnknownCode: 'Desconocido / sin confirmar',
+};
+
+/// El anclaje del rotor con «Desconocido»: revisado, nunca confirmado, y no
+/// refuta ningún rotor.
+const Map<String, String> _rotorMountOptions = {
+  ...kBikeRotorMountOptions,
+  'unknown': 'Desconocido',
 };
 
 bool _isKnownAxleInterface(String? value) =>
@@ -252,6 +263,9 @@ class BikeFormDialog extends StatefulWidget {
   final List<Bike> bikePickerOptions;
   final Future<bool> Function(Bike bike)? onBikePickerSelected;
 
+  /// El catálogo de modelos; sólo las pruebas lo reemplazan.
+  final BikeCatalogService? catalogService;
+
   const BikeFormDialog({
     super.key,
     required this.customerId,
@@ -261,6 +275,7 @@ class BikeFormDialog extends StatefulWidget {
     this.onCanceled,
     this.bikePickerOptions = const [],
     this.onBikePickerSelected,
+    @visibleForTesting this.catalogService,
   });
 
   @override
@@ -271,7 +286,8 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   static const int _technicalStepIndex = 2;
 
   final _formKey = GlobalKey<FormState>();
-  final BikeCatalogService _bikeCatalogService = BikeCatalogService();
+  late final BikeCatalogService _bikeCatalogService =
+      widget.catalogService ?? BikeCatalogService();
 
   // Controllers
   late TextEditingController _yearController;
@@ -308,6 +324,31 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   final Set<String> _pendingUploadedImageUrls = {};
   bool _isUploadingImage = false;
 
+  /// Taller y persona con que se anotaron las fotos subidas, para liberarlas
+  /// al cerrar sin guardar.
+  WorkshopCommandScope? _imageScope;
+
+  /// Un guardado anterior de esta bici que quedó en la bandeja del equipo sin
+  /// confirmar (la app se cerró sin respuesta). Se reenvía tal cual; los
+  /// campos del formulario no son su contenido.
+  String? _restoredPendingOperationKey;
+
+  /// Este formulario, como dueño de las fotos que sube: al cerrarse libera
+  /// sólo las suyas, no las de otro formulario abierto de la misma bici.
+  final String _formInstanceId = const Uuid().v4();
+
+  /// Bicis nuevas de este cliente que quedaron pendientes en el equipo, para
+  /// no crear la misma otra vez (revisión de Codex, 2026-09-28).
+  List<({String bikeId, String label})> _pendingCreations = const [];
+
+  List<String> get _pendingCreationLabels =>
+      _pendingCreations.map((creation) => creation.label).toList();
+
+  /// Por qué el formulario no deja editar aunque la ficha pudiera cargar: no
+  /// se pudo leer lo pendiente de esta bici en el equipo, o hay un comando
+  /// suyo que esta versión no sabe leer.
+  String? _pendingBlockMessage;
+
   BikeProfile? _existingProfile;
   Bike? _authoritativeBike;
   BikeCatalogEntry? _selectedCatalogBike;
@@ -334,11 +375,22 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   String? _spindleInterface;
   int? _frontRotorSizeMm;
   int? _rearRotorSizeMm;
+
+  /// El diámetro real de cada llanta (BSD, ISO 5775; 20260928110000): lo
+  /// anota el neumático instalado y lo corrige aquí el mecánico.
+  int? _frontWheelBsdMm;
+  int? _rearWheelBsdMm;
   // Paso F.2: códigos del registro (`fluid_type`, `axle_type`).
   String? _frontBrakeFluidType;
   String? _rearBrakeFluidType;
   String? _frontAxleInterface;
   String? _rearAxleInterface;
+
+  /// El anclaje del rotor de cada rueda (6 pernos o Center Lock): lo pone la
+  /// maza (20260928130000). Es de la maza, no del freno: no se borra al
+  /// cambiar a freno de llanta.
+  String? _frontRotorMount;
+  String? _rearRotorMount;
   int? _frontChainringCount;
   int? _rearCogCount;
   String? _legacyDrivetrainConfig;
@@ -366,6 +418,11 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     super.initState();
 
     _draftBikeId = widget.bike?.id ?? const Uuid().v4();
+    if (widget.bike?.id == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _loadPendingCreations();
+      });
+    }
     _authoritativeBike = widget.bike;
     _aggregateLoadState = widget.bike?.id == null
         ? _BikeAggregateLoadState.creating
@@ -412,14 +469,219 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       _aggregateLoadState == _BikeAggregateLoadState.conflicted ||
       _aggregateLoadState == _BikeAggregateLoadState.outcomeUnknown;
 
+  /// Sólo para el aviso de arriba: la decisión de crear vuelve a leer la
+  /// bandeja al guardar ([_confirmCreationDespitePending]).
+  Future<void> _loadPendingCreations() async {
+    try {
+      final state = await context
+          .read<BikeshopService>()
+          .pendingBikeCreations(widget.customerId);
+      if (!mounted) return;
+      setState(() => _pendingCreations = state.creations);
+    } catch (error) {
+      debugPrint('No se leyeron las bicis nuevas pendientes: $error');
+    }
+  }
+
+  /// Reenvía ahora las altas pendientes de este cliente.
+  Future<void> _retryPendingCreations() async {
+    final service = context.read<BikeshopService>();
+    final messenger = ScaffoldMessenger.of(context);
+    final notices = <String>[];
+    for (final creation in _pendingCreations) {
+      try {
+        final runs =
+            await service.resumePendingBikeCommands(bikeId: creation.bikeId);
+        notices.addAll(runs
+            .map((run) => workshopCommandNotice(run, includeOffline: true))
+            .whereType<String>());
+      } catch (error) {
+        notices.add('${creation.label}: no se pudo reenviar. $error');
+      }
+    }
+    await _loadPendingCreations();
+    if (notices.isNotEmpty) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(notices.join('\n')),
+          duration: const Duration(seconds: 8),
+        ),
+      );
+    }
+  }
+
+  bool _checkingPendingCreations = false;
+
+  /// Las altas pendientes que el mecánico vio al decidir crear otra bici. La
+  /// bandeja las vuelve a comprobar al respaldar el alta: otra pestaña pudo
+  /// dejar una mientras subían las fotos.
+  Set<String> _acknowledgedPendingCreations = const {};
+
+  /// Con una bici nueva de este cliente pendiente en el equipo, crear otra es
+  /// una decisión explícita: si es la misma, se guarda sola y no se duplica.
+  /// La bandeja se lee aquí, al guardar, y no de lo que se leyó al abrir: otra
+  /// pestaña pudo dejar un alta después, o esa lectura falló o no terminó. Si
+  /// no se puede leer, no se crea (revisión del 2026-09-28).
+  Future<bool> _confirmCreationDespitePending() async {
+    if (widget.bike?.id != null) return true;
+    if (_checkingPendingCreations) return false;
+    _checkingPendingCreations = true;
+    try {
+      return await _decideCreationAgainstPending();
+    } finally {
+      _checkingPendingCreations = false;
+    }
+  }
+
+  Future<bool> _decideCreationAgainstPending() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final ({
+      List<({String bikeId, String label})> creations,
+      bool unreadable,
+    }) state;
+    try {
+      state = await context
+          .read<BikeshopService>()
+          .pendingBikeCreations(widget.customerId);
+    } catch (error) {
+      messenger.showSnackBar(SnackBar(
+        content: Text(
+          'No se pudo revisar si en este equipo quedó pendiente una bicicleta '
+          'nueva de este cliente, así que no se crea otra todavía. Vuelve a '
+          'guardar en un momento. ($error)',
+        ),
+        duration: const Duration(seconds: 8),
+      ));
+      return false;
+    }
+    if (!mounted) return false;
+    setState(() => _pendingCreations = state.creations);
+    if (state.unreadable) {
+      messenger.showSnackBar(const SnackBar(
+        content: Text(
+          'En este equipo quedó un cambio pendiente de este cliente que esta '
+          'versión de la app no sabe leer; puede ser esta misma bicicleta. '
+          'Actualiza la app antes de crear otra.',
+        ),
+        duration: Duration(seconds: 8),
+      ));
+      return false;
+    }
+    if (state.creations.isEmpty) {
+      _acknowledgedPendingCreations = const {};
+      return true;
+    }
+    final createAnother = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('¿Es otra bicicleta?'),
+        // Sin tope, un AlertDialog toma el ancho de su línea más larga.
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 440),
+          child: Text(
+            'En este equipo quedó pendiente una bicicleta nueva de este '
+            'cliente (${_pendingCreationLabels.join(', ')}), sin respuesta '
+            'del servidor. Si es la misma, no la crees de nuevo: se guarda '
+            'sola, o usa Reintentar en el aviso.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Es la misma'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Es otra, crearla'),
+          ),
+        ],
+      ),
+    );
+    if (createAnother != true) return false;
+    _acknowledgedPendingCreations = {
+      for (final creation in state.creations) creation.bikeId,
+    };
+    return true;
+  }
+
+  /// Un alta con resultado incierto no se cierra: otra alta crearía otra bici
+  /// con otro id aunque la primera sí haya llegado. Una bici que ya existe se
+  /// puede cerrar, porque su guardado queda en la bandeja con su llave.
+  bool get _closingBlocked =>
+      _isSaving ||
+      (_aggregateLoadState == _BikeAggregateLoadState.outcomeUnknown &&
+          widget.bike?.id == null);
+
+  /// Antes de leer la ficha se resuelve lo que un guardado anterior de esta
+  /// bici dejó en la bandeja del equipo (ítem 3): el formulario muestra lo que
+  /// quedó de verdad. Si sigue sin respuesta, se bloquea la edición encima de
+  /// él y «Confirmar guardado» lo reenvía tal como se respaldó.
   Future<void> _loadBikeAggregate() async {
     if (widget.bike?.id == null) return;
 
     setState(() {
       _aggregateLoadState = _BikeAggregateLoadState.loading;
+      _pendingBlockMessage = null;
     });
+    final service = context.read<BikeshopService>();
+    final notices = <String>[];
+    String? stillPending;
     try {
-      final service = context.read<BikeshopService>();
+      final runs =
+          await service.resumePendingBikeCommands(bikeId: widget.bike!.id!);
+      for (final run in runs) {
+        final notice = workshopCommandNotice(run, includeOffline: true);
+        if (notice != null) notices.add(notice);
+      }
+      final pendingState = await service.pendingBikeSaveState(widget.bike!.id!);
+      stillPending = pendingState.pendingSaveKey;
+      if (pendingState.unreadable) {
+        throw StateError(
+          'Hay un cambio pendiente de esta bicicleta que esta versión de la '
+          'app no sabe leer (quizá lo dejó una versión más nueva). Actualiza '
+          'la app o ábrela donde se hizo el cambio.',
+        );
+      }
+    } catch (error) {
+      // Sin saber qué quedó pendiente, editar podría guardar encima de un
+      // cambio sin confirmar (revisión del 2026-09-28).
+      debugPrint('No se pudo retomar lo pendiente de la bici: $error');
+      if (!mounted) return;
+      setState(() {
+        _pendingBlockMessage = error is StateError
+            ? error.message
+            : 'No se pudo leer lo que esta bicicleta dejó pendiente en este '
+                'equipo. El formulario queda bloqueado para no guardar encima '
+                'de un cambio sin confirmar.';
+        _aggregateLoadState = _BikeAggregateLoadState.failed;
+      });
+      return;
+    }
+    if (!mounted) return;
+
+    await _loadBikeAggregateFromServer(service);
+    if (!mounted) return;
+    final loaded =
+        _aggregateLoadState == _BikeAggregateLoadState.loadedWithProfile ||
+            _aggregateLoadState == _BikeAggregateLoadState.loadedWithoutProfile;
+    if (stillPending != null && loaded) {
+      setState(() {
+        _restoredPendingOperationKey = stillPending;
+        _aggregateLoadState = _BikeAggregateLoadState.outcomeUnknown;
+      });
+    }
+    if (notices.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(notices.join('\n')),
+          duration: const Duration(seconds: 8),
+        ),
+      );
+    }
+  }
+
+  Future<void> _loadBikeAggregateFromServer(BikeshopService service) async {
+    try {
       final aggregate = await service.getBikeAggregate(widget.bike!.id!);
       if (!mounted) return;
 
@@ -487,12 +749,18 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         );
         _frontAxleInterface = technicalValues['frontAxleInterface']?.toString();
         _rearAxleInterface = technicalValues['rearAxleInterface']?.toString();
+        _frontRotorMount = technicalValues['frontRotorMount']?.toString();
+        _rearRotorMount = technicalValues['rearRotorMount']?.toString();
         _frontRotorSizeMm = !_isDiscBrakeType(_brakeType)
             ? null
             : _parseNullableIntValue(technicalValues['frontRotorSizeMm']);
         _rearRotorSizeMm = !_isDiscBrakeType(_brakeType)
             ? null
             : _parseNullableIntValue(technicalValues['rearRotorSizeMm']);
+        _frontWheelBsdMm =
+            _parseNullableIntValue(technicalValues['frontWheelBsdMm']);
+        _rearWheelBsdMm =
+            _parseNullableIntValue(technicalValues['rearWheelBsdMm']);
         _frontSpokeHolesController.text =
             technicalValues['frontSpokeHoles']?.toString() ??
                 aggregate.bike.spokeCount?.toString() ??
@@ -652,6 +920,75 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     _technicalConfirmed[key] = true;
   }
 
+  /// Los datos base que viven en `bikes` (aro, tipo, espaciados de maza) y
+  /// que el modelo del catálogo copia: su origen va en la ficha con la misma
+  /// clave que lee la ficha de la bici.
+  static const Set<String> _baseFactKeys = {
+    'wheelSize',
+    'bikeType',
+    'frontHubSpacingMm',
+    'rearHubSpacingMm',
+  };
+
+  /// Lo copió el modelo: del catálogo y sin confirmar. Sólo al copiarlo; el
+  /// vínculo con el modelo no dice nada de un dato que no se copió.
+  void _markBaseFactFromCatalog(String key) {
+    _technicalSources[key] = 'catalog';
+    _technicalConfirmed[key] = false;
+  }
+
+  /// El mecánico lo eligió: la misma regla que los datos técnicos. Si lo
+  /// vació, no queda origen de un dato que ya no está.
+  void _markBaseFactEdited(String key, {required bool hasValue}) {
+    if (hasValue) {
+      _markTechnicalFieldManual(key);
+    } else {
+      _technicalSources.remove(key);
+      _technicalConfirmed.remove(key);
+    }
+  }
+
+  /// El modelo que sembró la ficha, sólo desde la entrada del catálogo que la
+  /// bici enlaza: marca, modelo y año de la bici son editables y no prueban de
+  /// dónde vinieron los datos.
+  String? get _catalogOriginModel {
+    final entry = _selectedCatalogBike;
+    if (entry == null || _catalogLinkExplicitlyCleared) return null;
+    return bikeCatalogModelLabel(
+      brand: entry.brand,
+      model: entry.modelName,
+      year: entry.modelYear,
+    );
+  }
+
+  /// De dónde vino el dato del campo y si falta confirmarlo. Varias claves (el
+  /// desglose de la transmisión) cuentan como un dato: confirmado si alguna
+  /// lo está. Un origen desconocido no se muestra.
+  String? _technicalOriginCaption(List<String>? keys) {
+    if (keys == null || keys.isEmpty) return null;
+    String? source;
+    var confirmed = false;
+    for (final key in keys) {
+      source ??= _technicalSources[key];
+      confirmed = confirmed || _technicalConfirmed[key] == true;
+    }
+    return bikeFactOriginCaption(
+      source,
+      confirmed: confirmed,
+      catalogModel: source == 'catalog' ? _catalogOriginModel : null,
+    );
+  }
+
+  /// Cuántos datos trajo el modelo que nadie confirmó todavía. La
+  /// transmisión se guarda en dos claves pero es un dato del taller.
+  int get _unconfirmedCatalogFactCount => _technicalSources.entries
+      .where((entry) =>
+          entry.value == 'catalog' && _technicalConfirmed[entry.key] != true)
+      .map((entry) =>
+          entry.key == 'drivetrainSpeeds' ? 'drivetrainConfig' : entry.key)
+      .toSet()
+      .length;
+
   BikeType? _mapCatalogBikeType(String? value) {
     switch (value) {
       case 'road':
@@ -684,16 +1021,21 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       }
       if (_wheelSizeController.text.trim().isEmpty && entry.wheelSize != null) {
         _wheelSizeController.text = entry.wheelSize!;
+        _markBaseFactFromCatalog('wheelSize');
       }
+      final catalogType = _mapCatalogBikeType(entry.bikeType);
       if ((_selectedType == BikeType.other || widget.bike == null) &&
-          entry.bikeType != null) {
-        _selectedType = _mapCatalogBikeType(entry.bikeType) ?? _selectedType;
+          catalogType != null) {
+        _selectedType = catalogType;
+        _markBaseFactFromCatalog('bikeType');
       }
       if (entry.frontHubSpacingMm != null) {
         _frontHubSpacingController.text = entry.frontHubSpacingMm!.toString();
+        _markBaseFactFromCatalog('frontHubSpacingMm');
       }
       if (entry.rearHubSpacingMm != null) {
         _rearHubSpacingController.text = entry.rearHubSpacingMm!.toString();
+        _markBaseFactFromCatalog('rearHubSpacingMm');
       }
       if (entry.spokeCount != null) {
         _frontSpokeHolesController.text = entry.spokeCount!.toString();
@@ -901,6 +1243,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   void _handleBikeTypeChanged(BikeType value) {
     setState(() {
       _selectedType = value;
+      _markBaseFactEdited('bikeType', hasValue: true);
       _applyBikeTypeDefaults();
     });
   }
@@ -1777,6 +2120,18 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
 
   @override
   void dispose() {
+    // Fotos subidas que ningún guardado se llevó: nadie más las reclama. Las
+    // que van en un guardado pendiente se quedan con él en la bandeja.
+    final imageScope = _imageScope;
+    if (imageScope != null && _pendingUploadedImageUrls.isNotEmpty) {
+      unawaited(
+        WorkshopCommandOutbox.shared
+            .releaseImages(imageScope, ownerForm: _formInstanceId)
+            .catchError((Object error) {
+          debugPrint('No se liberaron las fotos sin guardar: $error');
+        }),
+      );
+    }
     _yearController.dispose();
     _serialNumberController.dispose();
     _colorController.dispose();
@@ -1806,10 +2161,14 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         _rearSpokeHolesController.text.trim().isNotEmpty ||
         _frontRotorSizeMm != null ||
         _rearRotorSizeMm != null ||
+        _frontWheelBsdMm != null ||
+        _rearWheelBsdMm != null ||
         _frontBrakeFluidType != null ||
         _rearBrakeFluidType != null ||
         _frontAxleInterface != null ||
         _rearAxleInterface != null ||
+        _frontRotorMount != null ||
+        _rearRotorMount != null ||
         _effectiveDrivetrainSpeeds != null ||
         (_effectiveDrivetrainConfig?.isNotEmpty ?? false) ||
         _acquisitionCondition != null ||
@@ -1874,10 +2233,14 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       'rearSpokeHoles',
       'frontRotorSizeMm',
       'rearRotorSizeMm',
+      'frontWheelBsdMm',
+      'rearWheelBsdMm',
       'frontBrakeFluidType',
       'rearBrakeFluidType',
       'frontAxleInterface',
       'rearAxleInterface',
+      'frontRotorMount',
+      'rearRotorMount',
       'drivetrainSpeeds',
       'drivetrainConfig',
     };
@@ -1909,6 +2272,8 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         'frontRotorSizeMm': _frontRotorSizeMm,
       if (_showRotorSizeFields && _rearRotorSizeMm != null)
         'rearRotorSizeMm': _rearRotorSizeMm,
+      if (_frontWheelBsdMm != null) 'frontWheelBsdMm': _frontWheelBsdMm,
+      if (_rearWheelBsdMm != null) 'rearWheelBsdMm': _rearWheelBsdMm,
       if (_frontBrakeFluidType != null)
         'frontBrakeFluidType': _frontBrakeFluidType,
       if (_rearBrakeFluidType != null)
@@ -1916,6 +2281,8 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       if (_frontAxleInterface != null)
         'frontAxleInterface': _frontAxleInterface,
       if (_rearAxleInterface != null) 'rearAxleInterface': _rearAxleInterface,
+      if (_frontRotorMount != null) 'frontRotorMount': _frontRotorMount,
+      if (_rearRotorMount != null) 'rearRotorMount': _rearRotorMount,
       if (_effectiveDrivetrainSpeeds != null)
         'drivetrainSpeeds': _effectiveDrivetrainSpeeds,
       if (_effectiveDrivetrainConfig != null &&
@@ -1923,19 +2290,30 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         'drivetrainConfig': _effectiveDrivetrainConfig,
     });
 
+    // Los datos base viven en `bikes`: su origen sólo si el dato quedó.
+    final baseFactPresent = <String, bool>{
+      'wheelSize': savedBike.wheelSize?.trim().isNotEmpty ?? false,
+      'bikeType': savedBike.bikeType != null,
+      'frontHubSpacingMm': savedBike.frontHubSpacingMm != null,
+      'rearHubSpacingMm': savedBike.rearHubSpacingMm != null,
+    };
+    bool baseFactGone(String key) =>
+        _baseFactKeys.contains(key) && baseFactPresent[key] != true;
     final technicalSources = Map<String, dynamic>.from(_technicalSources)
       ..removeWhere((key, _) =>
-          managedTechnicalKeys.contains(key) &&
-          !technicalValues.containsKey(key));
+          (managedTechnicalKeys.contains(key) &&
+              !technicalValues.containsKey(key)) ||
+          baseFactGone(key));
     // «Desconocido» queda guardado como revisado por el mecánico, pero nunca
     // confirmado: no es un dato de la bici y el próximo servicio lo vuelve a
     // preguntar (2026-09-27; `patch_bike_technical_facts_v1` no lo escribe).
     final technicalConfirmed = Map<String, dynamic>.from(_technicalConfirmed)
       ..removeWhere((key, _) =>
-          managedTechnicalKeys.contains(key) &&
-          (!technicalValues.containsKey(key) ||
-              technicalValues[key] == 'unknown' ||
-              technicalValues[key] == kRegistryUnknownCode));
+          (managedTechnicalKeys.contains(key) &&
+              (!technicalValues.containsKey(key) ||
+                  technicalValues[key] == 'unknown' ||
+                  technicalValues[key] == kRegistryUnknownCode)) ||
+          baseFactGone(key));
 
     final summarySnapshot = <String, dynamic>{
       ...?_existingProfile?.summarySnapshot,
@@ -2061,6 +2439,18 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     }
   }
 
+  static const String _bikeImagesBucket = 'bike-images';
+
+  /// La extensión del archivo elegido, si es una que el bucket acepta.
+  static String _bikeImageExtension(String fileName) {
+    final dot = fileName.lastIndexOf('.');
+    final extension = dot < 0 ? '' : fileName.substring(dot + 1).toLowerCase();
+    return const {'jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'}
+            .contains(extension)
+        ? '.$extension'
+        : '.jpg';
+  }
+
   void _removeImage(int index, bool isNew) {
     setState(() {
       if (isNew) {
@@ -2072,7 +2462,10 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     });
   }
 
-  Future<void> _saveBike({bool allowIncompleteTechnicalKernel = false}) async {
+  Future<void> _saveBike({
+    bool allowIncompleteTechnicalKernel = false,
+    bool retryingUnknownOutcome = false,
+  }) async {
     if (_aggregateLoadBlocksEditing) {
       final message = switch (_aggregateLoadState) {
         _BikeAggregateLoadState.loading =>
@@ -2110,6 +2503,11 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       return;
     }
 
+    if (!retryingUnknownOutcome && !await _confirmCreationDespitePending()) {
+      return;
+    }
+    if (!mounted) return;
+
     final bikeshopService =
         Provider.of<BikeshopService>(context, listen: false);
     final tenantService = Provider.of<TenantService>(context, listen: false);
@@ -2130,23 +2528,37 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
           _isUploadingImage = true;
         });
 
+        // Cada foto va en <taller>/<bici>/<nombre al azar> y se anota en la
+        // bandeja antes de subirla: si la bici no se guarda, o la app se
+        // cierra a mitad, la próxima sesión borra la que nadie reclama.
+        final imageScope =
+            _imageScope ??= await bikeshopService.workshopCommandScope();
         final pendingImages = List.of(_newImages);
         for (final imageData in pendingImages) {
           try {
-            final timestamp = DateTime.now().millisecondsSinceEpoch;
-            final fileName = 'bike_${widget.customerId}_$timestamp.jpg';
-
-            final url = await ImageService.uploadBytes(
-              bytes: imageData.bytes,
-              fileName: fileName,
-              bucket: 'bike-images',
-              folder: widget.customerId,
+            final objectPath = '${imageScope.tenantId}/$_draftBikeId/'
+                '${const Uuid().v4()}${_bikeImageExtension(imageData.name)}';
+            final publicUrl =
+                ImageService.publicUrlFor(_bikeImagesBucket, objectPath);
+            await WorkshopCommandOutbox.shared.recordImageIntent(
+              imageScope,
+              PendingBikeImage(
+                bucket: _bikeImagesBucket,
+                objectPath: objectPath,
+                publicUrl: publicUrl,
+                bikeId: _draftBikeId,
+                createdAt: DateTime.now().toUtc(),
+                ownerForm: _formInstanceId,
+              ),
             );
-
-            if (url == null) {
-              throw Exception(
-                  'El servidor no confirmó la foto ${imageData.name}');
-            }
+            final upload = await ImageService.uploadBytesToPath(
+              bytes: imageData.bytes,
+              bucket: _bikeImagesBucket,
+              objectPath: objectPath,
+            );
+            await WorkshopCommandOutbox.shared
+                .markImageUploaded(imageScope, objectPath);
+            final url = upload.publicUrl;
 
             uploadedUrls.add(url);
             if (mounted) {
@@ -2248,28 +2660,24 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       Object? saveError;
       try {
         aggregateCommandWasSent = true;
+        // La bandeja respalda el comando antes de enviarlo; si la conexión
+        // se pierde después de escribir, busca el recibo antes de volver, y
+        // si no hay respuesta el comando queda pendiente con su llave aunque
+        // la app se cierre.
         saveResult = await bikeshopService.saveBikeAggregate(
           bike: bike,
           profile: profile,
           operationKey: operationKey,
           expectedBikeUpdatedAt: _authoritativeBike?.updatedAt,
           expectedProfileUpdatedAt: _existingProfile?.updatedAt,
+          trigger: retryingUnknownOutcome
+              ? WorkshopCommandTrigger.retry
+              : WorkshopCommandTrigger.save,
+          acknowledgedPendingCreations:
+              widget.bike?.id == null ? _acknowledgedPendingCreations : null,
         );
       } catch (e) {
         saveError = e;
-        if (_isTransportAmbiguity(e)) {
-          // A connection can disappear after PostgreSQL commits but before the
-          // response arrives. Resolve only transport ambiguity through the
-          // durable command receipt; server rejections have no committed result.
-          try {
-            saveResult = await bikeshopService.getBikeAggregateSaveOperation(
-              operationKey,
-            );
-          } catch (receiptError) {
-            debugPrint(
-                'Could not reconcile bicycle save receipt: $receiptError');
-          }
-        }
       }
 
       if (saveResult == null) {
@@ -2299,11 +2707,31 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     } catch (e) {
       if (!mounted) return;
       final isConflict = _isAggregateConflict(e);
-      final isOutcomeUnknown =
-          aggregateCommandWasSent && _isTransportAmbiguity(e);
+      // Otra alta de este cliente apareció mientras se guardaba: ésta no se
+      // respaldó ni se envió, así que no hay resultado incierto.
+      final isPendingCreation = e is WorkshopPendingCreationException;
+      if (isPendingCreation) unawaited(_loadPendingCreations());
+      // Una foto subida que la bandeja ya borró (la ventana estuvo inactiva
+      // y otra la dio por abandonada) o que es de otra bici: no se respaldó
+      // nada. Sale de la lista para volver a subirla, en vez de guardar un
+      // enlace roto (carrera del barrido, 2026-09-29).
+      final unavailable = e is WorkshopImageUnavailableException ? e : null;
+      final isOutcomeUnknown = aggregateCommandWasSent &&
+          e is! WorkshopOutboxPersistenceException &&
+          !isPendingCreation &&
+          unavailable == null &&
+          classifyWorkshopCommandError(e) == WorkshopCommandOutcome.offline;
       setState(() {
         _isSaving = false;
         _isUploadingImage = false;
+        if (unavailable != null) {
+          final gone = {
+            ...unavailable.removedUrls,
+            ...unavailable.foreignUrls,
+          };
+          _imageUrls.removeWhere(gone.contains);
+          _pendingUploadedImageUrls.removeAll(gone);
+        }
         if (isConflict) {
           _aggregateLoadState = _BikeAggregateLoadState.conflicted;
         } else if (isOutcomeUnknown) {
@@ -2315,11 +2743,14 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         SnackBar(
           content: Text(isConflict
               ? 'Otra persona o proceso cambió esta bicicleta. El guardado fue rechazado para proteger la ficha; recarga los datos antes de intentarlo otra vez.'
-              : e is PostgrestException
-                  ? 'El servidor rechazó el guardado y no aplicó cambios. ${e.message}'
-                  : isOutcomeUnknown
-                      ? 'No se pudo confirmar el guardado. Revisa la conexión y usa Confirmar guardado; se reutilizará la misma operación sin duplicar la bicicleta.\n$e'
-                      : 'No se pudo completar el guardado. $e'),
+              : isPendingCreation
+                  ? '$e No se creó nada: vuelve a guardar para decidir si es '
+                      'la misma bicicleta.'
+                  : e is PostgrestException
+                      ? 'El servidor rechazó el guardado y no aplicó cambios. ${e.message}'
+                      : isOutcomeUnknown
+                          ? 'No se pudo confirmar el guardado. Quedó respaldado en este equipo con la misma operación y se reintenta solo; también puedes usar Confirmar guardado. No se duplicará la bicicleta.\n$e'
+                          : 'No se pudo completar el guardado. $e'),
           backgroundColor: Theme.of(context).colorScheme.error,
           duration: const Duration(seconds: 8),
         ),
@@ -2327,19 +2758,17 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     }
   }
 
-  bool _isTransportAmbiguity(Object error) {
-    return error is! PostgrestException ||
-        error.code == null ||
-        error.code!.isEmpty;
-  }
-
   bool _isAggregateConflict(Object error) {
     return error is PostgrestException &&
-        (error.code == '40001' ||
-            error.message.contains('changed since it was loaded'));
+        classifyWorkshopCommandError(error) == WorkshopCommandOutcome.stale;
   }
 
   void _retryUnknownSaveOutcome() {
+    final restoredKey = _restoredPendingOperationKey;
+    if (restoredKey != null) {
+      _retryRestoredPendingSave(restoredKey);
+      return;
+    }
     setState(() {
       _aggregateLoadState = widget.bike?.id == null
           ? _BikeAggregateLoadState.creating
@@ -2350,7 +2779,39 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     _saveBike(
       allowIncompleteTechnicalKernel:
           _pendingSaveAllowsIncompleteTechnicalKernel,
+      retryingUnknownOutcome: true,
     );
+  }
+
+  /// Reenvía el guardado que otra sesión dejó pendiente, con lo que se
+  /// respaldó. Con una respuesta definitiva se vuelve a leer la ficha.
+  Future<void> _retryRestoredPendingSave(String operationKey) async {
+    final service = context.read<BikeshopService>();
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _isSaving = true);
+    WorkshopCommandRun? run;
+    Object? failure;
+    try {
+      run = await service.retryPendingBikeCommand(operationKey);
+    } catch (error) {
+      failure = error;
+    }
+    if (!mounted) return;
+    setState(() => _isSaving = false);
+    final notice = run == null
+        ? 'No se pudo reenviar el guardado pendiente; sigue en este equipo. '
+            '$failure'
+        : workshopCommandNotice(run, includeOffline: true);
+    // Un error local no resuelve nada: la llave y el bloqueo se quedan.
+    if (run != null && run.outcome.isFinal) {
+      _restoredPendingOperationKey = null;
+      await _loadBikeAggregate();
+    }
+    if (notice != null) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(notice), duration: const Duration(seconds: 8)),
+      );
+    }
   }
 
   Future<void> _confirmConflictReload() async {
@@ -2984,9 +3445,14 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       label: 'Aro',
       icon: Icons.tire_repair_outlined,
       options: resolvedOptions,
+      originKeys: const ['wheelSize'],
       onChanged: (value) {
         setState(() {
           _wheelSizeController.text = value ?? '';
+          _markBaseFactEdited(
+            'wheelSize',
+            hasValue: (value ?? '').trim().isNotEmpty,
+          );
         });
       },
     );
@@ -3639,12 +4105,16 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
 
   Widget _buildBikeTypePreviewDropdown() {
     return DropdownButtonFormField<BikeType>(
+      // El modelo del catálogo puede cambiar el tipo después de abrir.
+      key: ValueKey<String>('bike-type-dropdown:${_selectedType.name}'),
       initialValue: _selectedType,
       isExpanded: true,
-      decoration: const InputDecoration(
+      decoration: InputDecoration(
         labelText: 'Tipo de bicicleta',
-        border: OutlineInputBorder(),
-        prefixIcon: Icon(Icons.category_outlined),
+        border: const OutlineInputBorder(),
+        prefixIcon: const Icon(Icons.category_outlined),
+        helperText: _technicalOriginCaption(const ['bikeType']),
+        helperMaxLines: 2,
       ),
       items: BikeType.values.map((type) {
         return DropdownMenuItem(
@@ -4165,6 +4635,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       label: 'Layout de suspension',
       options: _suspensionLayoutOptionsForBikeType(_selectedType),
       icon: Icons.timeline_outlined,
+      originKeys: const ['suspensionLayout'],
       onChanged: (value) {
         setState(() {
           _suspensionLayout = value;
@@ -4178,6 +4649,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       label: 'Tipo de freno',
       options: kBikeProfileBrakeTypeOptions,
       icon: Icons.disc_full,
+      originKeys: const ['brakeType'],
       onChanged: _handleBrakeTypeChanged,
     );
 
@@ -4186,6 +4658,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       label: 'Familia freno de llanta',
       options: kRimBrakeFamilyOptions,
       icon: Icons.settings_input_component_outlined,
+      originKeys: const ['rimBrakeFamily'],
       onChanged: (value) {
         setState(() {
           _rimBrakeFamily = value;
@@ -4199,6 +4672,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       label: 'Rotor delantero',
       icon: Icons.radio_button_checked,
       unit: 'mm',
+      originKeys: const ['frontRotorSizeMm'],
       options: _resolvedRotorSizeOptions(_frontRotorSizeMm),
       onChanged: (value) {
         setState(() {
@@ -4213,6 +4687,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       label: 'Rotor trasero',
       icon: Icons.radio_button_checked,
       unit: 'mm',
+      originKeys: const ['rearRotorSizeMm'],
       options: _resolvedRotorSizeOptions(_rearRotorSizeMm),
       onChanged: (value) {
         setState(() {
@@ -4226,6 +4701,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       value: _frontChainringCount,
       label: 'Platos delanteros',
       icon: Icons.tune_outlined,
+      originKeys: const ['drivetrainConfig', 'drivetrainSpeeds'],
       options: _frontChainringCountOptions,
       onChanged: _handleFrontChainringCountChanged,
     );
@@ -4234,6 +4710,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       value: _rearCogCount,
       label: 'Piñones traseros',
       icon: Icons.linear_scale_outlined,
+      originKeys: const ['drivetrainConfig', 'drivetrainSpeeds'],
       options: _rearCogCountOptions,
       onChanged: _handleRearCogCountChanged,
     );
@@ -4268,6 +4745,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       label: _rearDriverFieldLabel,
       options: kDrivetrainFreehubTypeOptions,
       icon: Icons.hub_outlined,
+      originKeys: const ['freehubType'],
       onChanged: (value) {
         setState(() {
           _freehubType = value;
@@ -4281,6 +4759,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       label: 'Familia pedalier / BB',
       options: kBottomBracketFamilyOptions,
       icon: Icons.settings_input_component_outlined,
+      originKeys: const ['bottomBracketFamily'],
       onChanged: (value) {
         setState(() {
           _bottomBracketFamily = canonicalBottomBracketFamilyValue(value);
@@ -4293,6 +4772,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     final bottomBracketShellWidthField = _buildCodeDropdown(
       value: _bbShellWidthValue,
       label: 'Ancho caja pedalier',
+      originKeys: const ['bbShellWidthMm'],
       options: _resolvedLabeledOptions(
         bottomBracketShellWidthOptionsForFamily(_bottomBracketFamily),
         _bbShellWidthValue,
@@ -4309,6 +4789,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     final bottomBracketShellDiameterField = _buildCodeDropdown(
       value: _bbShellDiameterValue,
       label: 'Diametro shell / bore',
+      originKeys: const ['bbShellDiameterMm'],
       options: _resolvedLabeledOptions(
         bottomBracketShellDiameterOptionsForFamily(_bottomBracketFamily),
         _bbShellDiameterValue,
@@ -4325,6 +4806,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     final spindleInterfaceField = _buildCodeDropdown(
       value: _spindleInterface,
       label: 'Interfaz del eje',
+      originKeys: const ['spindleInterface'],
       options: _resolvedLabeledOptions(
         bottomBracketSpindleInterfaceOptionsForFamily(_bottomBracketFamily),
         _spindleInterface,
@@ -4344,6 +4826,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       label: 'Espaciado maza delantera',
       icon: Icons.swap_horiz_outlined,
       unit: 'mm',
+      originKeys: const ['frontHubSpacingMm'],
       options: _resolvedIntOptions(
         _frontHubSpacingOptions,
         _parseNullableWholeNumberText(_frontHubSpacingController.text),
@@ -4351,6 +4834,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       onChanged: (value) {
         setState(() {
           _frontHubSpacingController.text = value?.toString() ?? '';
+          _markBaseFactEdited('frontHubSpacingMm', hasValue: value != null);
         });
       },
     );
@@ -4360,6 +4844,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       label: 'Espaciado maza trasera',
       icon: Icons.swap_horiz_outlined,
       unit: 'mm',
+      originKeys: const ['rearHubSpacingMm'],
       options: _resolvedIntOptions(
         _rearHubSpacingOptions,
         _parseNullableWholeNumberText(_rearHubSpacingController.text),
@@ -4367,6 +4852,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       onChanged: (value) {
         setState(() {
           _rearHubSpacingController.text = value?.toString() ?? '';
+          _markBaseFactEdited('rearHubSpacingMm', hasValue: value != null);
         });
       },
     );
@@ -4375,6 +4861,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       value: _parseNullableIntText(_frontSpokeHolesController.text),
       label: 'Rayos delanteros',
       icon: Icons.blur_on_outlined,
+      originKeys: const ['frontSpokeHoles'],
       options: _resolvedIntOptions(
         _spokeHoleOptions,
         _parseNullableIntText(_frontSpokeHolesController.text),
@@ -4391,6 +4878,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       value: _parseNullableIntText(_rearSpokeHolesController.text),
       label: 'Rayos traseros',
       icon: Icons.blur_on_outlined,
+      originKeys: const ['rearSpokeHoles'],
       options: _resolvedIntOptions(
         _spokeHoleOptions,
         _parseNullableIntText(_rearSpokeHolesController.text),
@@ -4403,9 +4891,46 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       },
     );
 
+    // El diámetro real de la llanta: lo que un neumático tiene que calzar.
+    // El aro escrito de la bici puede ser varios (26″); éste es uno. En el
+    // grupo de cada rueda el título ya la nombra, como en «Aro»; sólo la
+    // vista agregada la dice («Diámetro de llanta delanter…» se cortaba en la
+    // grilla de dos columnas, 2026-09-28).
+    Widget wheelBsdField({required bool isFront, bool named = false}) {
+      final value = isFront ? _frontWheelBsdMm : _rearWheelBsdMm;
+      return _buildIntDropdown(
+        value: value,
+        label: !named
+            ? 'Llanta (BSD)'
+            : isFront
+                ? 'Llanta delantera (BSD)'
+                : 'Llanta trasera (BSD)',
+        icon: Icons.trip_origin,
+        originKeys: [isFront ? 'frontWheelBsdMm' : 'rearWheelBsdMm'],
+        options: [
+          ...kIsoWheelBsdOptions,
+          if (value != null && !kIsoWheelBsdOptions.contains(value)) value,
+        ],
+        optionLabel: isoWheelBsdLabel,
+        onChanged: (selected) {
+          setState(() {
+            if (isFront) {
+              _frontWheelBsdMm = selected;
+            } else {
+              _rearWheelBsdMm = selected;
+            }
+            _markTechnicalFieldManual(
+              isFront ? 'frontWheelBsdMm' : 'rearWheelBsdMm',
+            );
+          });
+        },
+      );
+    }
+
     final valveTypeField = _buildCodeDropdown(
       value: _valveType,
       label: 'Tipo de valvula',
+      originKeys: const ['valveType'],
       options: _valveTypeOptions,
       icon: Icons.radio_button_checked,
       onChanged: (value) {
@@ -4423,6 +4948,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       return _buildCodeDropdown(
         value: value,
         label: 'Fluido de freno',
+        originKeys: [isFront ? 'frontBrakeFluidType' : 'rearBrakeFluidType'],
         options: _resolvedLabeledOptions(kBrakeFluidTypeOptions, value),
         selectedLabels: kBrakeFluidTypeLabels,
         icon: Icons.water_drop_outlined,
@@ -4446,6 +4972,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       return _buildCodeDropdown(
         value: value,
         label: isFront ? 'Eje delantero' : 'Eje trasero',
+        originKeys: [isFront ? 'frontAxleInterface' : 'rearAxleInterface'],
         options: _resolvedLabeledOptions(_axleInterfaceOptions, value),
         icon: Icons.settings_ethernet_outlined,
         onChanged: (selected) {
@@ -4457,6 +4984,37 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
             }
             _markTechnicalFieldManual(
               isFront ? 'frontAxleInterface' : 'rearAxleInterface',
+            );
+          });
+        },
+      );
+    }
+
+    // El anclaje del rotor lo pone la maza de esa rueda y el rotor tiene que
+    // calzar con él (20260928130000). Se pide con freno de disco; si ya lo
+    // dice la ficha (una maza de disco en una bici de llanta), se muestra.
+    bool showsRotorMount({required bool isFront}) =>
+        _showRotorSizeFields ||
+        (isFront ? _frontRotorMount : _rearRotorMount) != null;
+
+    Widget rotorMountField({required bool isFront}) {
+      final value = isFront ? _frontRotorMount : _rearRotorMount;
+      return _buildCodeDropdown(
+        value: value,
+        // La tarjeta ya dice la rueda: el rótulo corto cabe sin cortarse.
+        label: 'Anclaje del rotor',
+        originKeys: [isFront ? 'frontRotorMount' : 'rearRotorMount'],
+        options: _resolvedLabeledOptions(_rotorMountOptions, value),
+        icon: Icons.settings_outlined,
+        onChanged: (selected) {
+          setState(() {
+            if (isFront) {
+              _frontRotorMount = selected;
+            } else {
+              _rearRotorMount = selected;
+            }
+            _markTechnicalFieldManual(
+              isFront ? 'frontRotorMount' : 'rearRotorMount',
             );
           });
         },
@@ -4525,18 +5083,20 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       'front_wheel' => _buildTechnicalKernelGroup(
           title: 'Rueda delantera',
           description:
-              'Aro, eje, ancho de maza, cantidad de rayos y tipo de válvula de la rueda delantera.',
+              'Aro, diámetro real de la llanta, eje, ancho de maza, anclaje del rotor, cantidad de rayos y tipo de válvula de la rueda delantera.',
           icon: Icons.tire_repair_outlined,
           fields: [
             _buildWheelSizeField(),
+            wheelBsdField(isFront: true),
             axleField(isFront: true),
             frontHubSpacingField,
+            if (showsRotorMount(isFront: true)) rotorMountField(isFront: true),
             frontSpokeHolesField,
             valveTypeField,
           ],
           minItemWidth: 220,
           footerText:
-              'Aro y válvula describen el conjunto; eje, ancho de maza y rayos corresponden a esta rueda.',
+              'Aro y válvula describen el conjunto; el diámetro de llanta, eje, ancho de maza, anclaje del rotor y rayos corresponden a esta rueda. El eje y el ancho los fija el cuadro u horquilla; el anclaje, la maza.',
         ),
       'bottom_bracket' => _buildTechnicalKernelGroup(
           title: 'Pedalier / BB',
@@ -4556,18 +5116,21 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       'rear_wheel' => _buildTechnicalKernelGroup(
           title: 'Rueda trasera',
           description:
-              'Aro, eje, ancho de maza, cantidad de rayos y tipo de válvula de la rueda trasera.',
+              'Aro, diámetro real de la llanta, eje, ancho de maza, anclaje del rotor, cantidad de rayos y tipo de válvula de la rueda trasera.',
           icon: Icons.tire_repair_outlined,
           fields: [
             _buildWheelSizeField(),
+            wheelBsdField(isFront: false),
             axleField(isFront: false),
             rearHubSpacingField,
+            if (showsRotorMount(isFront: false))
+              rotorMountField(isFront: false),
             rearSpokeHolesField,
             valveTypeField,
           ],
           minItemWidth: 220,
           footerText:
-              'Aro y válvula describen el conjunto; eje, ancho de maza y rayos corresponden a esta rueda.',
+              'Aro y válvula describen el conjunto; el diámetro de llanta, eje, ancho de maza, anclaje del rotor y rayos corresponden a esta rueda. El eje y el ancho los fija el cuadro u horquilla; el anclaje, la maza.',
         ),
       'wheels' => _buildTechnicalKernelGroup(
           title: 'Wheelset agregado',
@@ -4576,6 +5139,8 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
           icon: Icons.tire_repair_outlined,
           fields: [
             _buildWheelSizeField(),
+            wheelBsdField(isFront: true, named: true),
+            wheelBsdField(isFront: false, named: true),
             axleField(isFront: true),
             axleField(isFront: false),
             frontHubSpacingField,
@@ -4967,7 +5532,10 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     // Lo que se lee en el campo ya elegido, cuando la opción de la lista
     // lleva una ayuda que no cabe (el fluido con sus marcas).
     Map<String, String>? selectedLabels,
+    // Las claves de ficha del campo: su origen y si falta confirmarlo.
+    List<String>? originKeys,
   }) {
+    final origin = _technicalOriginCaption(originKeys);
     return DropdownButtonFormField<String>(
       key: ValueKey<String>(
         'code-dropdown:$label:${value ?? ''}:${options.keys.join('|')}',
@@ -4988,6 +5556,8 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         labelText: label,
         border: const OutlineInputBorder(),
         prefixIcon: Icon(icon),
+        helperText: origin,
+        helperMaxLines: 2,
       ),
       items: options.entries
           .map(
@@ -5011,7 +5581,9 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     required IconData icon,
     required List<String> options,
     required ValueChanged<String?> onChanged,
+    List<String>? originKeys,
   }) {
+    final origin = value == null ? null : _technicalOriginCaption(originKeys);
     return DropdownButtonFormField<String>(
       key: ValueKey<String>(
         'string-dropdown:$label:${value ?? ''}:${options.join('|')}',
@@ -5022,6 +5594,8 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         labelText: label,
         border: const OutlineInputBorder(),
         prefixIcon: Icon(icon),
+        helperText: origin,
+        helperMaxLines: 2,
       ),
       items: options
           .map(
@@ -5046,7 +5620,10 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     required List<int> options,
     required ValueChanged<int?> onChanged,
     String? unit,
+    String Function(int option)? optionLabel,
+    List<String>? originKeys,
   }) {
+    final origin = _technicalOriginCaption(originKeys);
     return DropdownButtonFormField<int>(
       key: ValueKey<String>(
         'int-dropdown:$label:${value?.toString() ?? ''}:${options.join('|')}',
@@ -5058,13 +5635,16 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         border: const OutlineInputBorder(),
         prefixIcon: Icon(icon),
         suffixText: unit,
+        helperText: origin,
+        helperMaxLines: 2,
       ),
       items: options
           .map(
             (option) => DropdownMenuItem<int>(
               value: option,
               child: Text(
-                unit == null ? '$option' : '$option $unit',
+                optionLabel?.call(option) ??
+                    (unit == null ? '$option' : '$option $unit'),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -5226,7 +5806,9 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                         Text(
                           [
                             if (selectedBike.bikeType != null)
-                              selectedBike.bikeType!,
+                              _mapCatalogBikeType(selectedBike.bikeType)
+                                      ?.displayName ??
+                                  selectedBike.bikeType!,
                             if (selectedBike.wheelSize != null)
                               selectedBike.wheelSize!,
                           ].join(' · '),
@@ -5236,6 +5818,21 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                             color: theme.colorScheme.onSurfaceVariant,
                           ),
                         ),
+                        if (_unconfirmedCatalogFactCount > 0) ...[
+                          const SizedBox(height: 3),
+                          Text(
+                            _unconfirmedCatalogFactCount == 1
+                                ? 'Trajo 1 dato sin confirmar: revísalo en la bici.'
+                                : 'Trajo $_unconfirmedCatalogFactCount datos sin '
+                                    'confirmar: revísalos en la bici.',
+                            key: const ValueKey(
+                                'bike-catalog-unconfirmed-facts'),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -5346,9 +5943,11 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                 child: Text(
                   isConflict
                       ? 'La bicicleta cambió mientras este formulario estaba abierto. El guardado fue bloqueado para no sobrescribir datos más nuevos; recarga antes de continuar.'
-                      : isNewBikeReferenceFailure
-                          ? 'No se pudieron cargar las marcas y modelos. El formulario queda bloqueado para no confundir una falla de conexión con listas vacías.'
-                          : 'No se pudo cargar la ficha técnica. Los campos no se muestran como vacíos y el guardado queda bloqueado hasta recuperar la información.',
+                      : _pendingBlockMessage != null
+                          ? _pendingBlockMessage!
+                          : isNewBikeReferenceFailure
+                              ? 'No se pudieron cargar las marcas y modelos. El formulario queda bloqueado para no confundir una falla de conexión con listas vacías.'
+                              : 'No se pudo cargar la ficha técnica. Los campos no se muestran como vacíos y el guardado queda bloqueado hasta recuperar la información.',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onErrorContainer,
                     fontWeight: FontWeight.w600,
@@ -5383,7 +5982,9 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'La conexión se perdió durante el guardado y todavía no sabemos si el servidor alcanzó a confirmar la operación. Los campos quedan bloqueados para conservar exactamente el mismo reintento.',
+                  _restoredPendingOperationKey != null
+                      ? 'Un guardado anterior de esta bicicleta quedó pendiente en este equipo, sin respuesta del servidor. Se reintenta solo; los campos quedan bloqueados para no guardar encima de él.'
+                      : 'La conexión se perdió durante el guardado. Quedó respaldado en este equipo y se reintenta solo; los campos quedan bloqueados para conservar exactamente el mismo reintento.',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onTertiaryContainer,
                     fontWeight: FontWeight.w600,
@@ -5412,14 +6013,47 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
           ),
         );
       case _BikeAggregateLoadState.creating:
+        if (_pendingCreationLabels.isEmpty) return const SizedBox.shrink();
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          color: theme.colorScheme.tertiaryContainer,
+          child: Row(
+            children: [
+              Icon(
+                Icons.cloud_sync_outlined,
+                size: 20,
+                color: theme.colorScheme.onTertiaryContainer,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'En este equipo quedó pendiente una bicicleta nueva de este cliente (${_pendingCreationLabels.join(', ')}). Se guarda sola al volver la respuesta del servidor; no la vuelvas a crear si es la misma.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onTertiaryContainer,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              TextButton.icon(
+                onPressed: _isSaving ? null : _retryPendingCreations,
+                icon: const Icon(Icons.sync, size: 18),
+                label: const Text('Reintentar'),
+              ),
+            ],
+          ),
+        );
       case _BikeAggregateLoadState.loadedWithProfile:
         return const SizedBox.shrink();
     }
   }
 
   Widget _buildMobileActionRow(ThemeData theme, int stepCount) {
-    final navigationBlocked = _isSaving ||
-        _aggregateLoadState == _BikeAggregateLoadState.outcomeUnknown;
+    // Cerrar no espera al guardado incierto de una bici que ya existe: está
+    // respaldado en la bandeja del equipo y se reintenta solo (ítem 3). Un
+    // alta incierta sí espera (ver [_closingBlocked]).
+    final navigationBlocked = _closingBlocked;
     final editingBlocked = _isSaving || _aggregateLoadBlocksEditing;
     final isLastStep = _currentStep == stepCount - 1;
 
@@ -5905,12 +6539,14 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                             Padding(
                               padding: const EdgeInsets.only(left: 8, top: 6),
                               child: IconButton(
+                                // Como en teléfono: sin nombre, el lector
+                                // anunciaba «botón» (C1/C4 web, 2026-09-30).
+                                tooltip: 'Cerrar editor',
                                 icon: Icon(
                                   Icons.close,
                                   color: theme.colorScheme.onSurfaceVariant,
                                 ),
-                                onPressed: _aggregateLoadState ==
-                                        _BikeAggregateLoadState.outcomeUnknown
+                                onPressed: _closingBlocked
                                     ? null
                                     : () {
                                         if (widget.isEmbedded) {
@@ -5963,8 +6599,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                                     Icons.close,
                                     color: theme.colorScheme.onSurfaceVariant,
                                   ),
-                                  onPressed: _aggregateLoadState ==
-                                          _BikeAggregateLoadState.outcomeUnknown
+                                  onPressed: _closingBlocked
                                       ? null
                                       : () {
                                           if (widget.isEmbedded) {
@@ -6111,10 +6746,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
                                         )
                                       else
                                         TextButton(
-                                          onPressed: _isSaving ||
-                                                  _aggregateLoadState ==
-                                                      _BikeAggregateLoadState
-                                                          .outcomeUnknown
+                                          onPressed: _closingBlocked
                                               ? null
                                               : () {
                                                   if (widget.isEmbedded) {
@@ -6242,7 +6874,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     }
 
     return PopScope(
-      canPop: _aggregateLoadState != _BikeAggregateLoadState.outcomeUnknown,
+      canPop: !_closingBlocked,
       child: Dialog(
         insetPadding: usesCompactHost
             ? const EdgeInsets.all(8)

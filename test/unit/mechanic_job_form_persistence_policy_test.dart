@@ -184,6 +184,42 @@ void main() {
       );
     });
 
+    test(
+        'locks a confirmed unpaid invoice: what is charged is corrected from '
+        'the invoice', () {
+      final service = MechanicJob(
+        id: 'service-posted',
+        tenantId: 'tenant-1',
+        customerId: 'customer-1',
+        invoiceId: 'invoice-service-posted',
+      );
+      expect(
+        shouldProtectJobCommercialSnapshot(
+          existingJob: service,
+          linkedInvoiceHasActivePayments: false,
+          linkedInvoicePaymentStateUnknown: false,
+          linkedInvoiceIsPosted: true,
+        ),
+        isTrue,
+      );
+      // Los mismos estados que el comando y `handle_sales_invoice_change`.
+      for (final status in ['confirmed', 'CONFIRMED', 'paid', 'overdue']) {
+        expect(isPostedSalesInvoiceStatus(status), isTrue, reason: status);
+      }
+      for (final status in [
+        null,
+        'draft',
+        'Borrador',
+        'sent',
+        'issued',
+        'emitida',
+        'cancelled',
+        'anulada',
+      ]) {
+        expect(isPostedSalesInvoiceStatus(status), isFalse, reason: status);
+      }
+    });
+
     test('does not lock an unpaid invoice or a job without a linked invoice',
         () {
       expect(

@@ -176,6 +176,13 @@ operador qué faltó. Ejemplo completo en
 Un probe con lógica plpgsql sí es válido, pero es de `local` y se corre con
 `query.sh local --file` (ver `scripts/db/probes/`).
 
+Una lectura de producción que necesita SQL dinámico (contar filas en tablas
+que se leen del catálogo, por ejemplo) tampoco necesita DO: `query_to_xml`
+ejecuta el texto y `xpath` saca el número, en un `select` plano
+(`(xpath('/row/count/text()', query_to_xml(format('select count(*) …'), false,
+true, '')))[1]::text::bigint`). Así se midió el 2026-09-29 qué borraría
+restaurar un respaldo en producción, con `--max-rows 0`.
+
 ## Antes de afirmar que un dato falta, comprueba que no falle tu lectura
 
 Reads are autonomous precisely so this is cheap. Use it.
@@ -630,6 +637,37 @@ orden canónico (`BEFORE DELETE OR UPDATE`), no en el orden del `create
 trigger`. Un `like` con el orden del archivo divide por cero en local aunque
 el trigger exista.
 
+## Antes de un recorrido local, comparar su camino con producción (2026-09-30)
+
+Un recorrido por la app contra la base local prueba lo que corre **en local**.
+El 2026-09-30, antes del C1/C4 del taller, `just db-drift local production` y
+una comparación de `md5(pg_get_functiondef)` sobre cada función del camino
+del recorrido encontraron dos cosas que ninguna prueba había visto:
+
+- **Faltaba el motor de fichas entero**, aunque sus consumidores estaban: los
+  pgTAP de cambio de partes reemplazan el lector y pasaban. Instalación y lista
+  exacta: `docs/development/product-specs-research-2026-09-05/local-engine-restore-2026-09-16.md`.
+- **El cierre de un trabajo no era el de producción.** El
+  `handle_mechanic_job_change` de `core_schema.sql` descuenta stock y crea el
+  asiento al pasar a EN_CURSO/FINALIZADO; el de producción calcula esas
+  banderas y nunca las ejecuta. El cuerpo no tenía dueño en el repositorio
+  al detectar la diferencia. `20260930152000_capture_workshop_job_lifecycle.sql`
+  lo captura ahora sin cambiar el comportamiento, APPLIED a 15:34:04 UTC;
+  el readback compara definición normalizada, ACL y dos triggers. Otros dos cuerpos del mismo
+  camino estaban atrasados (`normalize_mechanic_job_lifecycle_timestamps`, de
+  `20260805210000`, y `create_mechanic_job_erp_notification` con su trigger, de
+  `20260817170000`). Local se alinea con
+  `supabase/tests/fixtures/job_lifecycle_production_local_seed.sql`, copia
+  verificada por md5 de producción. El forward captura exactamente el cuerpo
+  ya ejercido en ese seed; una corrección local por sí sola no lo reconstruye.
+
+La regla: para cada comando y disparador que el recorrido ejerce, cuerpo local
+= cuerpo de producción por md5, o la diferencia queda explicada antes de
+compilar. Los comandos del taller (`save_bike_aggregate`,
+`create_mechanic_job_v1`, `save_mechanic_job_lines_v1`,
+`transition_mechanic_job_status`, `smart_task_create_v1` y toda la puerta de
+cambio de partes) ya eran idénticos; sólo el cierre heredado difería.
+
 ## JSONB backup redaction preserves structure and derived metadata
 
 **2026-08-09 — supplier historical-backup gate.** Removing sensitive keys
@@ -756,6 +794,22 @@ públicas (`service_role` seguía con EXECUTE): costó una corrida y una reaplic
   `results_eq` importa, `order by columna collate "C"` en ambos lados; la expectativa entonces
   vale en local, en CI y en producción.
 
+**Un pgTAP no borra de `storage.objects` sin la marca de la API (2026-09-29).** El
+disparador `storage.protect_delete` rechaza un `delete` directo («Direct deletion from
+storage tables is not allowed»), también como `postgres`, y la prueba se corta ahí sin
+plan. La API de Storage borra con `select set_config('storage.allow_delete_query', 'true',
+true);` dentro de la transacción; la prueba hace lo mismo. Estaba sólo en un comentario de
+`workshop_command_outbox.sql` y costó una corrida en `managed_image_urls_exist.sql`.
+
+**Con las tablas pasa lo mismo, y los privilegios son siete (2026-09-29).** Una tabla nueva
+nace con todos para `anon` y `authenticated`. `revoke select, insert, update, delete` deja
+TRUNCATE, REFERENCES y TRIGGER, y el RLS no cubre TRUNCATE. Así nació
+`mechanic_job_creations` (recibos del alta). Su read-back miraba sólo los cuatro de siempre y
+pasó; lo encontró la revisión de Codex. Una tabla que la API no toca lleva
+`revoke all on … from public, anon, authenticated`. Su verificación recorre los siete con
+`has_table_privilege` (patrón en
+`supabase/manual_checks/verification/20260929010000_create_mechanic_job.sql`).
+
 ## Un trigger diferido se prueba nombrándolo, nunca con `set constraints all` (2026-09-26)
 
 Un pgTAP corre en una transacción que nunca hace commit, así que un `constraint trigger …
@@ -772,6 +826,19 @@ un falso rojo que costó una ronda de diagnóstico.
 - La verificación `--verify` de un trigger así afirma `tgdeferrable`/`tginitdeferred` y
   `tgenabled in ('O','A')`: un trigger en modo `R` (réplica) existe, pero no dispara en
   una sesión normal.
+
+## Antes de llevar un efecto de la app a un comando, mira los triggers de la tabla (2026-09-28)
+
+Lo que la app hacía «después de la respuesta» se pierde cuando otro confirma el comando (la
+bandeja tras un reinicio, la consulta del recibo), y la corrección natural es meterlo en el
+comando. Antes de escribirlo, lista los triggers de cada tabla que el comando escribe
+(`select tgname, pg_get_triggerdef(oid) from pg_trigger where tgrelid = '<tabla>'::regclass
+and not tgisinternal`): puede que la base ya lo haga. `trg_auto_parse_item_description`
+(AFTER INSERT en `mechanic_job_items`) creaba las tareas de cada línea del catálogo desde su
+descripción, y la app las volvía a crear con otra regla: 32 nombres repetidos en 8 líneas de
+producción. La primera corrección del comando de líneas agregó una tercera copia; su pgTAP
+pasaba porque la línea de prueba no tenía `product_id` y el trigger no la tocaba. El dueño es
+el trigger; se quitan las copias y la prueba usa una fila que sí lo dispara.
 
 ## El archivo `--verify` no admite bloques ni constantes plegables (2026-08-19)
 
@@ -1063,6 +1130,53 @@ sentido del movimiento.
   Antes de desplegar se corren **todas** las pruebas que nombran la función:
   `grep -l <función> supabase/tests/*.sql`.
 
+## Una alternativa que puede dar nulo abre un `if not (…)` (2026-09-28)
+
+`if not (regla_vieja or f(x) @> y) then raise` deja pasar **todo** lo que
+debía rechazar cuando `f` devuelve nulo: `false or null` es `null`,
+`not null` es `null` y un `if null` no entra. Pasó al agregarle al parche de
+la ficha (`20260928100000`) la prueba de un repuesto como segunda
+alternativa: con las líneas del Enrayado, `job_line_part_change_internal`
+es nulo y el parche aceptó «32H» de una línea que armó 28H. Lo atraparon las
+pruebas viejas (`bike_technical_fact_patch.sql` 48–52), no la nueva. Toda
+alternativa que pueda dar nulo dentro de una guardia negada va con
+`coalesce(…, false)`, y al tocar una guardia se corren las pruebas de sus
+casos anteriores, no sólo las del caso que se agrega.
+
+## Un parche por bloque DO con marcador no se reaplica en local (2026-09-28)
+
+Las migraciones que cambian `patch_bike_technical_facts_v1` lo hacen con un
+bloque DO que lee `pg_get_functiondef`, reemplaza anclas y sale sin tocar
+nada si ya encuentra su marcador: así se puede volver a correr en producción.
+En local, la misma protección esconde la iteración. Al cambiar la firma de
+`bike_fact_part_conflict_internal` (`20260928110000`) y reaplicar la
+migración, la función del parche siguió llamando a la firma vieja: el
+marcador ya estaba, el bloque no hizo nada, y la suite del rotor falló con
+`function … does not exist` como `rejected`. Costó una corrida en entender
+que no era la regla. Si cambias el **texto que inserta** un bloque así en
+una migración ya aplicada en local, arregla la función local con un script
+aparte en el scratchpad (el mismo `replace` sobre `pg_get_functiondef`) y no
+agregues a la migración `drop` ni reparaciones de una firma que producción
+nunca tuvo. Las anclas que busca no cambian, así que la corrida real sobre la
+versión anterior sigue valiendo.
+
+## Una variable de sesión no es una señal de confianza (2026-09-29)
+
+Para que el comando de guardado corriera la puerta del trabajo terminado una
+sola vez al final, el borrador de `20260928140000` hacía que el disparador de
+las líneas esperara mientras `current_setting('vinabike.job_line_gate_job')`
+dijera ese trabajo. La revisión de Codex lo encontró: cualquier escritor con
+`UPDATE` y SQL transaccional hace `set local` de esa variable, cambia una línea
+incompatible y confirma sin puerta. `set_config` no tiene dueño ni permiso.
+Cuando un disparador tiene que creerle a un comando, la señal va en una tabla
+privada (RLS sin políticas y `revoke all` a `anon`, `authenticated` y
+`service_role`) con la fila por `txid_current()` que abre y borra el mismo
+comando `security definer`; el disparador sólo le cree a esa fila. Y una
+columna `not null` sobre lo que se anota en ella hace ruido donde la variable
+callaba: `set_config(nombre, null)` vaciaba la lista sin error (un mutante lo
+demostró con la tabla). Pruébalo fijando la variable vieja a mano y
+esperando el rechazo de siempre.
+
 ## Un adaptador que normaliza el payload rompe la idempotencia del kernel (2026-09-19)
 
 `apply_bank_reconciliation_actions_v2` traduce lo que le llega antes de
@@ -1122,7 +1236,35 @@ después del commit y «pasó» sin competir (la sesión que retiene duerme 15 s
 y el hook de Bash rechaza un comando cuyo texto trae SQL («Raw SQL and
 Supabase database commands bypass…»), también en un heredoc que sólo escribe
 un archivo. El SQL de una sonda se escribe como archivo en
-`supabase/manual_checks/probes/` y el script sólo nombra rutas.
+`supabase/manual_checks/probes/` y el script sólo nombra rutas. Basta la
+palabra del cliente de Postgres en cualquier parte del texto, incluso como
+patrón de un `grep` sobre un log (C2, 2026-09-30): se busca por otra palabra.
+
+**Una sonda que pasa por un comando hereda su `lock_timeout` (2026-09-28).**
+`transition_mechanic_job_status`, `sync_job_installed_bike_facts_v1` y
+`save_mechanic_job_lines_v1` llevan `SET lock_timeout TO '750ms'`
+(20260928060000/080000): la segunda conexión **no espera** los 15 s de la
+primera, corta con 55P03 y el aplicador lo devuelve como `rejected`, sin
+escribir. La sonda de dos trabajos que terminan con la misma bici
+(`scripts/db/part_change_rear_cogs_race_probe.sh`) afirma ese rechazo, que la
+primera seguía reteniendo cuando la segunda terminó, y el **reintento**
+después del commit, en vez de medir cuánto esperó (la primera versión exigía
+«esperó más de 5 s» y falló por eso). El aviso de reintento tampoco entra
+mientras la bici está tomada: escribir en la historia de la bici chequea su
+llave foránea, y ese aviso es de mejor esfuerzo por diseño.
+
+**La limpieza de una sonda no se deshace entera (2026-09-28).** Si la sonda
+reemplaza una función (el lector del motor de fichas, que la base local no
+trae), devolverla va en su propia transacción, **antes** de borrar la
+fixture: la primera limpieza de esa sonda falló en una llave foránea
+(`mechanic_job_status_transition_events`) y su rollback se llevó también la
+restauración, dejando el lector falso en la base local hasta la siguiente
+corrida. Una fixture que pasó por comandos deja filas en tablas que el seed
+no conoce (eventos de transición, compromisos de inventario, lista de
+compras, más lo que siembra un taller nuevo); la limpieza borra por
+`tenant_id` en todas las tablas de `public` que lo tienen, con
+`session_replication_role = replica` sólo en esa transacción, y termina
+leyendo que no quedó nada y que la función real volvió.
 
 ## Una reversa se fecha el día del movimiento que anula (2026-09-19)
 
@@ -1398,3 +1540,79 @@ un eje al registro, el siguiente read-back falla y el comando lo rechaza con
 «Desconocido / sin confirmar» del registro es un código `catalog_…`, no el
 texto `unknown`: la guardia que rechaza confirmar lo desconocido tiene que
 nombrar ese código aparte.
+
+## Un conflicto con `40001` no llega al cliente: PostgREST lo reintenta sin fin (2026-09-28)
+
+PostgREST 14 —el de producción, 14.5— trata un `40001`
+(`serialization_failure`) lanzado por una función como transitorio y
+reejecuta la transacción él mismo, sin tope. El cliente recibe un **504** del
+gateway, no el conflicto, y la base sigue ejecutándola. La historia completa y
+la corrección del diagnóstico del 15-09 están en
+`docs/development/SUPABASE_WORKFLOW.md` («Corrección 2026-09-28»).
+
+- **Regla:** un conflicto de negocio (versión vieja, recibo superado, fila
+  que ya no existe) se lanza con `PT409` (HTTP 409, `code` = `PT409`) o clase
+  23, con `detail`. `40001` sólo si repetir la misma transacción puede
+  resultar distinto.
+- **Si un bucle está vivo:** en `pg_stat_activity` se ven conexiones de
+  `PostgREST 14.x` alternando `active` e `idle in transaction (aborted)` sobre
+  la misma sentencia, con `query_start` renovado cada pocos milisegundos
+  (`pg_stat_statements` no lo muestra: sólo cuenta lo que termina bien).
+  Primero se corta la fuente (la app o la bandeja que reenvía); después
+  `pg_terminate_backend(pid)` de esas conexiones, con
+  `VINABIKE_DB_WRITE_CONFIRM=production` y el `pid` y la sentencia en el
+  mismo `where`. `pg_cancel_backend` no basta: PostgREST empieza otra vuelta.
+- **Cuáles quedan:**
+
+  ```sql
+  select n.nspname || '.' || p.proname
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname in ('public', 'private') and p.prokind = 'f'
+     and (pg_get_functiondef(p.oid) ilike '%serialization_failure%'
+          or pg_get_functiondef(p.oid) ilike '%''40001''%');
+  ```
+
+  79 el 2026-09-28, antes de `20260928052000` (que saca las dos de la ficha).
+- **Costo:** una prueba del ítem 3 con la bici fixture abrió tres bucles en
+  producción durante ~20 minutos hasta que se terminaron a mano; ninguno
+  escribió (el conflicto aborta cada vuelta).
+
+## Lo que borra y reinserta se mide contra todas las llaves, no contra su lista (2026-09-29)
+
+`restore_backup` borra y reinserta, por taller, las 38 tablas que guarda el
+respaldo; el esquema creció alrededor. Leído del catálogo en producción: 173
+llaves foráneas desde tablas que el respaldo no guarda bloquean ese borrado,
+70 borrarían en cascada (fichas técnicas, historia de las bicis, tareas,
+líneas de facturas de compra…) y 48 dejarían vínculos en null. La restauración
+fallaba en todos los talleres por `payment_terminal_terms`, que cada taller
+trae al crearse, y **ese fallo era lo único que protegía el resto**: arreglar
+el síntoma (apagar la llave, o sembrar las terminales en el respaldo) habría
+dejado pasar las cascadas. Casi se cierra así el corte de adjuntos faltantes:
+el pgTAP falló en la llave de las terminales, no en lo que se probaba.
+
+Antes de reparar o reemplazar una función que borra y reinserta un conjunto de
+tablas, lista las llaves foráneas **hacia** ese conjunto **desde fuera** de él
+(`pg_constraint`, `confdeltype`) y cuenta las filas por taller: `c` pierde
+datos, `n`/`d` los desconecta, el resto bloquea. `restore_backup_uncovered_dependents`
+lo hace en vivo y es la guardia de `restore_backup`; el read-back de
+`20260929030000` compara su lista de tablas con los `delete from` de la
+función, para que no se separen.
+
+Codex encontró el caso peor en la revisión: la restauración borra las 38
+tablas pero reinserta sólo las que el respaldo trae, y al único respaldo
+completado del taller principal (2025-12-09) le faltan las 7 de la
+mensajería. Restaurarlo vaciaba los mensajes y daba éxito. Ojo al medirlo:
+`create_backup` guarda una tabla vacía como `null`, así que «falta» es **la
+clave ausente** (`not (data ? tabla)`), no `jsonb_typeof(...) <> 'array'`. Con
+la segunda condición conté 18 faltantes y el pgTAP negó todos sus propios
+respaldos recién hechos.
+
+Dos datos del taller de prueba que cuestan una corrida si no se saben: un
+taller nuevo nace con `payment_terminal_terms` (2), `payment_terminal_profiles`
+(1) y `expense_categories` (1), y cada trabajo insertado crea su
+`mechanic_job_status_transitions`; y reinsertar un medio de pago con tarjeta
+vuelve a sembrar sus terminales (`zz_seed_terminal_from_legacy_card`), así que
+una segunda restauración en la misma prueba las encuentra de nuevo. El
+medio de pago y la terminal se apuntan entre sí: soltar la terminal exige
+poner `terminal_profile_id` en null antes, o la reinserción del medio de pago
+falla en `payment_methods_terminal_profile_fk`.

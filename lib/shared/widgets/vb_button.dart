@@ -151,10 +151,12 @@ class VbButton extends StatelessWidget {
     }
 
     final button = Semantics(
+      container: true,
       button: true,
       enabled: enabled,
       label: semanticLabel ?? label,
       excludeSemantics: true,
+      onTap: enabled ? onPressed : null,
       child: Material(
         color: fill,
         shape: RoundedRectangleBorder(

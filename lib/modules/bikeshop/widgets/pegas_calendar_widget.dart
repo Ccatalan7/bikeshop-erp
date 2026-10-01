@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -7,6 +10,8 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart'; // For WhatsApp
 import 'package:uuid/uuid.dart';
 
 import '../services/bikeshop_service.dart';
+import '../services/mechanic_job_status_transition_coordinator.dart';
+import '../services/job_completion_blocked.dart';
 import '../services/job_status_service.dart';
 import '../models/bikeshop_models.dart';
 import '../../crm/services/customer_service.dart';
@@ -16,6 +21,7 @@ import '../../sales/widgets/sales_invoice_editor.dart'; // Import Invoice Editor
 import '../widgets/tasks_tab_view.dart'; // Import Tasks Tab
 import 'smart_job_details_editor.dart'; // Import Smart Editor
 import 'bike_fact_problems_snackbar.dart';
+import 'job_completion_blocked_dialog.dart';
 
 /// Parent-owned calendar browsing context.
 ///
@@ -2583,6 +2589,18 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
     }
   }
 
+  Future<void> _reviewBlockedJobLines(MechanicJob job) async {
+    final jobId = job.id;
+    if (jobId == null || !mounted) return;
+    await context.push('/taller/pegas/$jobId?tab=products');
+    if (!mounted) return;
+    if (_useExternalData) {
+      widget.onRefreshNeeded?.call();
+    } else {
+      await _loadJobs();
+    }
+  }
+
   /// Callback when a new status is selected from the popup menu
   Future<void> _changeJobStatus(
       MechanicJob job, JobStatusCustom newStatus) async {
@@ -2625,6 +2643,22 @@ class _PegasCalendarWidgetState extends State<PegasCalendarWidget> {
             content: Text('Estado cambiado a ${newStatus.name}'),
             backgroundColor: newStatus.colorValue,
           ),
+        );
+      }
+    } on MechanicJobStatusTransitionPending catch (pending) {
+      // Respaldado con su llave: se aplica solo, en la cola del trabajo.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$pending')),
+        );
+      }
+    } on JobCompletionBlockedException catch (blocked) {
+      if (mounted) {
+        await showJobCompletionBlocked(
+          context,
+          blocked,
+          jobLabel: job.jobNumber,
+          onReviewLines: () => unawaited(_reviewBlockedJobLines(job)),
         );
       }
     } catch (e) {

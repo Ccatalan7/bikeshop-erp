@@ -47,10 +47,12 @@ class VbShellIconButton extends StatelessWidget {
     final enabled = onPressed != null;
     return Tooltip(
       message: tooltip,
+      excludeFromSemantics: true,
       child: Semantics(
         button: true,
         enabled: enabled,
         label: tooltip,
+        onTap: onPressed,
         excludeSemantics: true,
         child: Material(
           key: buttonKey,

@@ -437,9 +437,49 @@ scripts/dev/app_control.sh tap --key service_configuration_cancel      # cerrar
   viewport: `drag 430 1500 430 600` en bucle hasta que `find` lo vea.
 - `click` y `scroll` piden píxeles del `shot`, y `find` imprime lógicos; con
   `scroll`, las líneas negativas bajan (`scroll X Y -12`).
+- **Escribir sin un campo con foco abre el buscador global** (2026-09-28):
+  un `click` con coordenadas lógicas cayó fuera del campo de cantidad y el
+  `type "1,5"` siguiente abrió la paleta de búsqueda con «1,5». Antes de
+  `type`, un `read` debe mostrar `[campo con foco]` con el tamaño del campo
+  que querías; la paleta se cierra con `key 53` (Esc). Los campos de
+  cantidad y precio de escritorio no tienen clave: se tocan con `click` en
+  píxeles del `shot`.
 - Al salir: «Cancelar» del trabajo no pregunta si no hubo cambios; en la lista
   de trabajos, `tap --label "Inicio"` coincide con 11 textos de los hitos:
   `--index 0` es el del menú.
+
+### Una línea de General en un trabajo con varias bicis, sin guardar (2026-09-28)
+
+En producción no hay dónde verlo abierto: los 14 trabajos vigentes con dos
+bicis tienen la factura pagada (sus líneas van con candado y sin `⋯`). Se arma
+un trabajo nuevo y se descarta:
+
+```bash
+scripts/dev/app_control.sh tap --label "Nuevo trabajo" --index 0
+scripts/dev/app_control.sh tap --label "Seleccionar cliente"
+# click en el buscador (píxeles del shot), `read` hasta ver [campo con foco]
+scripts/dev/app_control.sh type "Nicolta"      # el segundo Paul Nicolta tiene bicis
+scripts/dev/app_control.sh tap --label "Paul Nicolta" --index 1
+scripts/dev/app_control.sh tap --label "Productos y Servicios"
+# agregar las líneas AHORA, antes de cualquier bici
+scripts/dev/app_control.sh tap --label "Seleccione una bicicleta"
+scripts/dev/app_control.sh tap --label "Monk Negra MTB"
+# «+» de las pestañas (click), luego:
+scripts/dev/app_control.sh tap --label "Totem 4423"
+scripts/dev/app_control.sh tap --label "Bicicleta General"   # en 430 px; en escritorio "General" --index 0
+```
+
+- **Las líneas van antes que las bicis.** General vacía no tiene pestaña; lo
+  que se agrega sin bici queda suelto y pasa a General al elegir la primera.
+- **`type` se come los espacios**: «Paul Nicolta» llegó como «PaulNicolta» y
+  el buscador no halló a nadie. Se busca una sola palabra.
+- **El buscador de trabajos busca dentro del alcance elegido**: con
+  «Trabajos: Activos» un entregado (PG-00187) no aparece. Se cambia a
+  «Todos» y al final se vuelve a «Activos» (queda guardado en el equipo).
+- Al contar trabajos reales, se excluye `deleted_at`: PG-00523 salía con dos
+  bicis y estaba eliminado.
+- Salir de PG-00187 (pagado) después de sólo cambiar de pestaña pidió
+  «¿Descartar cambios?»; «Descartar» (`--index 1`) no escribe nada.
 
 ### Capturar un estado que sólo existe MIENTRAS carga
 

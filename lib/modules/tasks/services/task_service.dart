@@ -12,6 +12,7 @@ import 'package:vinabike_erp/modules/tasks/models/smart_task_job_item.dart';
 import 'package:vinabike_erp/modules/tasks/models/smart_task_service_note.dart';
 import 'package:vinabike_erp/modules/tasks/models/task_assignment_principal.dart';
 import 'package:vinabike_erp/modules/tasks/models/task_model.dart';
+import 'package:vinabike_erp/modules/tasks/services/task_upload_cleanup_journal.dart';
 import 'package:vinabike_erp/shared/services/authority_scoped_cache.dart';
 import 'package:vinabike_erp/shared/services/tenant_service.dart';
 
@@ -39,8 +40,11 @@ const taskLinkableJobCustomerEmbed =
     'customers!mechanic_jobs_customer_id_fkey(name)';
 
 class TaskService extends ChangeNotifier {
+  static const maxAttachmentBytes = 20 * 1024 * 1024;
   final SupabaseClient _supabase;
   final TenantService _tenantService;
+  final TaskUploadCleanupJournal _uploadCleanupJournal;
+  final String _uploadOwnerSession = _uuid.v4();
 
   // In-memory cache
   List<TaskModel> _tasks = [];
@@ -50,6 +54,8 @@ class TaskService extends ChangeNotifier {
   static const _uuid = Uuid();
   bool _isInit = false;
   bool _isDisposed = false;
+  final Set<String> _attachmentCleanupInFlight = {};
+  final Set<String> _uploadIntentReconciliationInFlight = {};
   final AuthorityCacheScope _cacheScope = AuthorityCacheScope();
   late final AuthorityScopedLoad<_TaskTrayLoad> _tasksLoad =
       AuthorityScopedLoad<_TaskTrayLoad>(_cacheScope);
@@ -96,7 +102,12 @@ class TaskService extends ChangeNotifier {
     }).length;
   }
 
-  TaskService(this._supabase, this._tenantService) {
+  TaskService(
+    this._supabase,
+    this._tenantService, {
+    TaskUploadCleanupJournal? uploadCleanupJournal,
+  }) : _uploadCleanupJournal =
+            uploadCleanupJournal ?? TaskUploadCleanupJournal() {
     _authSubscription = _supabase.auth.onAuthStateChange.listen((data) {
       if (_isDisposed) return;
 
@@ -168,6 +179,8 @@ class TaskService extends ChangeNotifier {
         return;
       }
       _isInit = true;
+      unawaited(_retryPendingAttachmentCleanup(loadedLease));
+      unawaited(_reconcileLinkedUploadIntents(loadedLease));
     }
     await _setupTasksRealtime();
     _startFallbackRefresh();
@@ -233,6 +246,7 @@ class TaskService extends ChangeNotifier {
             }
             loadedTasks.add(TaskModel.fromJson(map));
           }
+          await _hydratePrivateTaskAttachments(lease, loadedTasks);
           await _hydrateTaskContexts(lease, loadedTasks);
           loadedTasks.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
@@ -306,6 +320,55 @@ class TaskService extends ChangeNotifier {
         debugPrint('❌ [TaskService] Stack: $stackTrace');
       }
       return null;
+    }
+  }
+
+  /// El vínculo privado vive por archivo. Leerlo aparte impide que un embed
+  /// o una URL temporal reemplacen la identidad durable de la tarea.
+  Future<void> _hydratePrivateTaskAttachments(
+    AuthorityCacheLease lease,
+    List<TaskModel> tasks,
+  ) async {
+    if (tasks.isEmpty) return;
+    final byTask = <String, List<Map<String, dynamic>>>{};
+    const pageSize = 500;
+    for (var offset = 0;; offset += pageSize) {
+      final rows = await _supabase
+          .from('smart_task_attachments')
+          .select('id, tenant_id, task_id, file_name, mime_type, size_bytes, '
+              'storage_path, created_at, version')
+          .eq('tenant_id', lease.scope.tenantId)
+          .order('created_at')
+          .order('id')
+          .range(offset, offset + pageSize - 1);
+      _assertOwnedLease(lease);
+      for (final row in (rows as List<dynamic>)) {
+        final item = Map<String, dynamic>.from(row as Map);
+        if (item['tenant_id']?.toString() != lease.scope.tenantId) {
+          throw StateError('Task attachment crossed the authority tenant');
+        }
+        final taskId = item['task_id']?.toString();
+        if (taskId == null) continue;
+        byTask.putIfAbsent(taskId, () => []).add({
+          'id': item['id'],
+          'name': item['file_name'],
+          'type': item['mime_type'],
+          'size': item['size_bytes'],
+          'storage_bucket': 'task-attachments',
+          'storage_path': item['storage_path'],
+          'uploaded_at': item['created_at'],
+          'version': item['version'],
+        });
+      }
+      if (rows.length < pageSize) break;
+    }
+    for (var index = 0; index < tasks.length; index++) {
+      final task = tasks[index];
+      final privateFiles = byTask[task.id];
+      if (privateFiles == null || privateFiles.isEmpty) continue;
+      tasks[index] = task.copyWith(
+        attachments: [...task.attachments, ...privateFiles],
+      );
     }
   }
 
@@ -392,7 +455,10 @@ class TaskService extends ChangeNotifier {
 
   /// Compatibilidad: los llamadores antiguos entran igual por la RPC, para
   /// que ninguna tarea nazca sin su rastro de eventos.
-  Future<TaskModel> createTask(TaskModel task) {
+  Future<TaskModel> createTask(
+    TaskModel task, {
+    String? idempotencyKey,
+  }) {
     return createTrayTask(
       title: task.title,
       description: task.description,
@@ -400,20 +466,26 @@ class TaskService extends ChangeNotifier {
       visibility: task.visibility,
       priority: task.priority,
       dueDate: task.dueDate,
-      assignedTo: task.assignedTo,
+      // Un trabajador va sólo como trabajador y el servidor deriva su cuenta
+      // (mismo contrato que la tarea rápida: mandar ambas choca si la cuenta
+      // cambió, `assignee_employee_mismatch`).
+      assignedTo: task.assignedEmployeeId != null ? null : task.assignedTo,
+      assignedEmployeeId: task.assignedEmployeeId,
       linkedJobId: task.linkedJobId,
       linkedCustomerId: task.linkedCustomerId,
       linkedSupplierId: task.linkedSupplierId,
       linkedPurchaseInvoiceId: task.linkedPurchaseInvoiceId,
       linkedSalesInvoiceId: task.linkedSalesInvoiceId,
+      idempotencyKey: idempotencyKey,
     );
   }
 
   /// Puente de compatibilidad: los llamadores antiguos entregan el modelo
   /// completo; aquí se convierte en los comandos RPC equivalentes (diff
   /// contra la caché), para que la autoridad, el versionado, el ledger y las
-  /// notificaciones rijan también para la UI legada. Sin comandos que emitir,
-  /// no escribe nada.
+  /// notificaciones rijan también para la UI legada. Los adjuntos privados
+  /// hidratados son de lectura: este comando nunca reescribe el JSONB legacy.
+  /// Sin comandos que emitir, no escribe nada.
   Future<void> updateTask(TaskModel task) async {
     final id = task.id;
     if (id == null) throw Exception('Task ID cannot be null for update');
@@ -460,8 +532,14 @@ class TaskService extends ChangeNotifier {
       await setTaskJobItems(id, jobId: task.linkedJobId);
     }
 
-    if (current != null && task.assignedTo != current.assignedTo) {
-      await assignTask(id, task.assignedTo);
+    // La persona responsable es el trabajador si lo hay, si no la cuenta.
+    if (current != null && task.assigneeKey != current.assigneeKey) {
+      await sendCommand(id, command: 'assign', payload: {
+        if (task.assignedEmployeeId != null)
+          'assigned_employee_id': task.assignedEmployeeId
+        else
+          'assigned_to': task.assignedTo,
+      });
     }
 
     if (current == null || task.status != current.status) {
@@ -785,62 +863,354 @@ class TaskService extends ChangeNotifier {
 
   // ── Attachments ──
 
+  /// Private bytes are opened through short-lived URLs, never persisted in a
+  /// task row or exposed through the public asset bucket.
+  Future<String> createSignedAttachmentUrl(String storagePath) {
+    return _supabase.storage
+        .from('task-attachments')
+        .createSignedUrl(storagePath, 300);
+  }
+
+  /// Resume authorized private-file cleanup without reloading the task list.
+  /// The login path also runs this operation in the background.
+  Future<void> resumePendingAttachmentCleanup() async {
+    final lease = await _requireAuthorityLease();
+    await _retryPendingAttachmentCleanup(lease);
+  }
+
+  /// Retire local upload intents only after the server confirms this uploader's
+  /// active or removed link. An absent link never proves Storage bytes are safe
+  /// to delete: another session may still be uploading or linking them.
+  Future<void> reconcileLinkedUploadIntents() async {
+    final lease = await _requireAuthorityLease();
+    await _reconcileLinkedUploadIntents(lease);
+  }
+
+  Future<void> _reconcileLinkedUploadIntents(
+    AuthorityCacheLease lease,
+  ) async {
+    final key = '${lease.scope.userId}/${lease.scope.tenantId}/'
+        '${lease.generation}';
+    if (!_uploadIntentReconciliationInFlight.add(key)) return;
+    try {
+      final intents = await _uploadCleanupJournal.pendingFor(
+        lease.scope.tenantId,
+        lease.scope.userId,
+      );
+      for (final intent in intents) {
+        _assertOwnedLease(lease);
+        Object? state;
+        try {
+          state = await _supabase.rpc(
+            'smart_task_attachment_recovery_status_v1',
+            params: {
+              'p_tenant_id': intent.tenantId,
+              'p_task_id': intent.taskId,
+              'p_attachment_id': intent.attachmentId,
+            },
+          );
+        } on PostgrestException catch (error) {
+          if (error.code == '42501') {
+            // The task or link no longer belongs to this uploader. Keep the
+            // intent; another eligible task should still be reconciled.
+            continue;
+          }
+          rethrow;
+        }
+        _assertOwnedLease(lease);
+        if (state == 'absent') continue;
+        if (state != 'active' && state != 'removed') {
+          throw StateError(
+              'El servidor no entregó un estado de adjunto válido');
+        }
+        await _uploadCleanupJournal.forget(intent);
+      }
+    } on AuthorityScopeChangedException {
+      // Another authority now owns the client; retain the old scoped intents.
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('⚠️ [TaskService] Upload intent reconciliation deferred: '
+            '$error');
+      }
+    } finally {
+      _uploadIntentReconciliationInFlight.remove(key);
+    }
+  }
+
+  /// A removal can tombstone its link and then lose the Storage response.
+  /// The server exposes only tombstones this principal may manage; a later
+  /// login finishes their physical deletion without resurfacing the file.
+  Future<void> _retryPendingAttachmentCleanup(
+    AuthorityCacheLease lease,
+  ) async {
+    const batchSize = 25;
+    final key = '${lease.scope.userId}/${lease.scope.tenantId}/'
+        '${lease.generation}';
+    if (!_attachmentCleanupInFlight.add(key)) return;
+    try {
+      while (true) {
+        _assertOwnedLease(lease);
+        final response = await _supabase.rpc(
+          'smart_task_attachment_pending_cleanup_v2',
+          params: {
+            'p_tenant_id': lease.scope.tenantId,
+            'p_limit': batchSize,
+          },
+        );
+        _assertOwnedLease(lease);
+        if (response is! List) {
+          throw StateError('El servidor no entregó la cola de limpieza');
+        }
+        var hadFailure = false;
+        for (final raw in response) {
+          _assertOwnedLease(lease);
+          if (raw is! Map) {
+            throw StateError(
+                'La cola de limpieza contiene un vínculo inválido');
+          }
+          final pending = Map<String, dynamic>.from(raw);
+          final taskId = pending['task_id']?.toString();
+          final attachmentId = pending['id']?.toString();
+          final path = pending['storage_path']?.toString();
+          if (taskId == null ||
+              attachmentId == null ||
+              path == null ||
+              !path.startsWith(
+                  '${lease.scope.tenantId}/$taskId/$attachmentId/')) {
+            // An assignee may also see a task in another tenant. Never send
+            // that path to Storage, but finish valid rows already in this page.
+            // Stop after the page: the same foreign tombstone would otherwise
+            // be returned forever until the server scopes its queue.
+            hadFailure = true;
+            if (kDebugMode) {
+              debugPrint('⚠️ [TaskService] Skipped out-of-scope private file '
+                  'cleanup row');
+            }
+            continue;
+          }
+          try {
+            await _deletePrivateTaskObjectAndAck(
+              taskId: taskId,
+              attachmentId: attachmentId,
+              storagePath: path,
+              lease: lease,
+            );
+          } on AuthorityScopeChangedException {
+            rethrow;
+          } catch (error) {
+            hadFailure = true;
+            if (kDebugMode) {
+              debugPrint('⚠️ [TaskService] Pending private file cleanup: '
+                  '$error');
+            }
+          }
+        }
+        // The RPC returns the oldest unacknowledged rows. A failed row would
+        // appear in the next page, so stop rather than retry it in a loop.
+        if (hadFailure || response.length < batchSize) break;
+      }
+    } on AuthorityScopeChangedException {
+      // A different session now owns the client and may resume its own queue.
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('⚠️ [TaskService] Private file cleanup deferred: $error');
+      }
+    } finally {
+      _attachmentCleanupInFlight.remove(key);
+    }
+  }
+
+  Future<void> _deletePrivateTaskObjectAndAck({
+    required String taskId,
+    required String attachmentId,
+    required String storagePath,
+    AuthorityCacheLease? lease,
+  }) async {
+    if (lease != null) _assertOwnedLease(lease);
+    await _supabase.storage.from('task-attachments').remove([storagePath]);
+    if (lease != null) _assertOwnedLease(lease);
+    final receipt = await _supabase.rpc(
+      'smart_task_attachment_ack_cleanup_v1',
+      params: {'p_task_id': taskId, 'p_attachment_id': attachmentId},
+    );
+    if (lease != null) _assertOwnedLease(lease);
+    if (receipt is! Map ||
+        receipt['id']?.toString() != attachmentId ||
+        receipt['task_id']?.toString() != taskId ||
+        receipt['storage_deleted_at'] == null) {
+      throw StateError('El servidor no confirmó la limpieza del archivo');
+    }
+  }
+
+  /// The operator may leave after a failed upload. Keep only the identities
+  /// of attempts started by this service instance so a later session can
+  /// distinguish them from uploads still active in another instance.
+  Future<void> abandonPendingAttachmentUploads({
+    required String taskId,
+    required Iterable<String> attachmentIds,
+  }) async {
+    final ids = attachmentIds.toSet();
+    if (ids.isEmpty) return;
+    final lease = await _requireAuthorityLease();
+    final pending = await _uploadCleanupJournal.pendingFor(
+      lease.scope.tenantId,
+      lease.scope.userId,
+    );
+    for (final intent in pending) {
+      if (intent.taskId != taskId ||
+          intent.ownerSession != _uploadOwnerSession ||
+          !ids.contains(intent.attachmentId)) {
+        continue;
+      }
+      _assertOwnedLease(lease);
+      await _uploadCleanupJournal
+          .remember(intent.abandon(DateTime.now().toUtc()));
+    }
+  }
+
   /// Upload a file to Supabase Storage and attach it to a task.
   Future<void> addAttachment({
     required String taskId,
     required String fileName,
     required Uint8List bytes,
     required String mimeType,
+    String? attachmentId,
   }) async {
-    final tenantId = await _tenantService.getTenantId();
-    if (tenantId == null) throw Exception('No tenant ID');
+    final lease = await _requireAuthorityLease();
+    final tenantId = lease.scope.tenantId;
+    final id = attachmentId ?? _uuid.v4();
+    final name = fileName.trim();
+    if (name.isEmpty ||
+        name.length > 255 ||
+        mimeType.trim().isEmpty ||
+        mimeType.length > 200 ||
+        bytes.isEmpty ||
+        bytes.length > maxAttachmentBytes) {
+      throw ArgumentError('El archivo debe tener nombre y medir hasta 20 MB');
+    }
 
     try {
-      // Sanitize filename
-      final safeFileName = fileName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
-      final storagePath = 'tasks/attachments/$tenantId/$taskId/$safeFileName';
+      final safeName = name.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+      final storagePath = '$tenantId/$taskId/$id/'
+          '${safeName.isEmpty ? 'archivo' : safeName}';
+      final actorId = lease.scope.userId;
+      final cleanupIntent = TaskUploadCleanupIntent(
+        tenantId: tenantId,
+        userId: actorId,
+        taskId: taskId,
+        attachmentId: id,
+        ownerSession: _uploadOwnerSession,
+        createdAt: DateTime.now().toUtc(),
+      );
+      // A lost Storage response may leave private bytes without a task link.
+      // Persist the identity before the first remote read or upload.
+      await _uploadCleanupJournal.remember(cleanupIntent);
+      _assertOwnedLease(lease);
 
-      // Upload to Supabase Storage
-      await _supabase.storage.from('vinabike-assets').uploadBinary(
-            storagePath,
-            bytes,
-            fileOptions: FileOptions(contentType: mimeType, upsert: true),
-          );
+      Future<bool> alreadyLinked() async {
+        _assertOwnedLease(lease);
+        final row = await _supabase
+            .from('smart_task_attachments')
+            .select('tenant_id, task_id, uploaded_by, storage_path, '
+                'file_name, mime_type, size_bytes')
+            .eq('id', id)
+            .maybeSingle();
+        _assertOwnedLease(lease);
+        if (row == null) return false;
+        if (row['tenant_id']?.toString() != tenantId ||
+            row['task_id']?.toString() != taskId ||
+            row['uploaded_by']?.toString() != actorId ||
+            row['storage_path']?.toString() != storagePath ||
+            row['file_name']?.toString() != name ||
+            row['mime_type']?.toString() != mimeType.trim() ||
+            row['size_bytes']?.toString() != bytes.length.toString()) {
+          throw StateError('El ID del adjunto ya pertenece a otro archivo');
+        }
+        return true;
+      }
 
-      // Get public URL
-      final publicUrl =
-          _supabase.storage.from('vinabike-assets').getPublicUrl(storagePath);
+      Future<bool> storedBytesMatch() async {
+        _assertOwnedLease(lease);
+        final storedBytes = await _supabase.storage
+            .from('task-attachments')
+            .download(storagePath);
+        _assertOwnedLease(lease);
+        return listEquals(storedBytes, bytes);
+      }
 
-      // Build attachment metadata
-      final attachment = {
-        'name': fileName,
-        'url': publicUrl,
-        'type': mimeType,
-        'size': bytes.length,
-        'storage_path': storagePath,
-        'uploaded_at': DateTime.now().toIso8601String(),
-      };
+      if (await alreadyLinked()) {
+        if (!await storedBytesMatch()) {
+          throw StateError('El archivo pendiente no coincide con los bytes '
+              'guardados; quítalo y selecciónalo otra vez');
+        }
+      } else {
+        try {
+          await _supabase.storage.from('task-attachments').uploadBinary(
+                storagePath,
+                bytes,
+                fileOptions: FileOptions(contentType: mimeType, upsert: false),
+              );
+        } catch (uploadError, uploadStackTrace) {
+          _assertOwnedLease(lease);
+          // A lost upload response and an occupied path look alike. The
+          // existing object is usable only when its bytes match this pending
+          // file; otherwise a replay could attach false metadata to it.
+          bool matches;
+          try {
+            matches = await storedBytesMatch();
+          } catch (_) {
+            Error.throwWithStackTrace(uploadError, uploadStackTrace);
+          }
+          if (!matches) {
+            throw StateError('El archivo pendiente no coincide con los bytes '
+                'guardados; quítalo y selecciónalo otra vez');
+          }
+        }
+      }
+      // A scope switch during Storage must not send a link RPC for the old
+      // task. The private object remains discoverable by its journal ID.
+      _assertOwnedLease(lease);
 
-      // Fetch current attachments from DB and append
-      final current = await _supabase
-          .from('smart_tasks')
-          .select('attachments')
-          .eq('id', taskId)
-          .eq('tenant_id', tenantId)
-          .single();
-
-      final existingAttachments =
-          List<Map<String, dynamic>>.from(current['attachments'] ?? []);
-      existingAttachments.add(attachment);
-
-      await _supabase
-          .from('smart_tasks')
-          .update({'attachments': existingAttachments})
-          .eq('id', taskId)
-          .eq('tenant_id', tenantId);
+      // A SQL rejection rolls back this link command, but an absent link is
+      // not proof that another session stopped uploading or linking the same
+      // UUID. Keep the object and journal until a server claim excludes that
+      // producer; never delete by a point-in-time SELECT here.
+      final receipt =
+          await _supabase.rpc('smart_task_attachment_add_v1', params: {
+        'p_task_id': taskId,
+        'p_attachment_id': id,
+        'p_file_name': name,
+        'p_storage_path': storagePath,
+        'p_mime_type': mimeType,
+        'p_size_bytes': bytes.length,
+        'p_idempotency_key': 'task-file-add:$id',
+      });
+      if (receipt is! Map ||
+          receipt['id']?.toString() != id ||
+          receipt['task_id']?.toString() != taskId ||
+          receipt['storage_path']?.toString() != storagePath) {
+        throw StateError('El servidor no confirmó el vínculo del archivo');
+      }
+      if (!await alreadyLinked()) {
+        // An old idempotency receipt is not proof that a link is still active:
+        // another writer may have removed it after the original upload.
+        throw StateError(
+            'El adjunto ya no está activo; vuelve a seleccionarlo');
+      }
+      _assertOwnedLease(lease);
+      await _uploadCleanupJournal.forget(cleanupIntent);
 
       // Refresh local cache
-      await fetchTasks();
+      try {
+        await fetchTasks();
+      } catch (refreshError) {
+        // The write was acknowledged. A failed read must not invite a second
+        // upload on retry; Realtime/fallback refresh will reconcile the list.
+        if (kDebugMode) {
+          debugPrint('⚠️ [TaskService] Attachment saved; refresh failed: '
+              '$refreshError');
+        }
+      }
       if (kDebugMode) {
         debugPrint('✅ [TaskService] Attachment added: $fileName');
       }
@@ -852,59 +1222,72 @@ class TaskService extends ChangeNotifier {
     }
   }
 
-  /// Remove an attachment from a task (deletes from storage + updates JSONB).
-  Future<void> removeAttachment({
+  /// Tombstone the link first, then retire its private bytes through Storage.
+  /// Returns false when the file is already hidden but physical cleanup must
+  /// resume later. The caller must not present it as an active attachment.
+  Future<bool> removeAttachment({
     required String taskId,
-    required String attachmentUrl,
+    required String attachmentId,
   }) async {
-    final tenantId = await _tenantService.getTenantId();
-    if (tenantId == null) throw Exception('No tenant ID');
-
     try {
-      // Fetch current attachments
-      final current = await _supabase
-          .from('smart_tasks')
-          .select('attachments')
-          .eq('id', taskId)
-          .eq('tenant_id', tenantId)
-          .single();
-
-      final existingAttachments =
-          List<Map<String, dynamic>>.from(current['attachments'] ?? []);
-
-      // Find the attachment to remove
-      final toRemove =
-          existingAttachments.where((a) => a['url'] == attachmentUrl).toList();
-
-      // Delete from storage if we have the storage_path
-      for (final att in toRemove) {
-        final storagePath = att['storage_path'] as String?;
-        if (storagePath != null) {
-          try {
-            await _supabase.storage
-                .from('vinabike-assets')
-                .remove([storagePath]);
-          } catch (e) {
-            if (kDebugMode) {
-              debugPrint('⚠️ [TaskService] Could not delete from storage: $e');
-            }
-          }
+      final lease = await _requireAuthorityLease();
+      _assertOwnedLease(lease);
+      final receipt = await _supabase.rpc(
+        'smart_task_attachment_remove_v1',
+        params: {
+          'p_task_id': taskId,
+          'p_attachment_id': attachmentId,
+          'p_idempotency_key': 'task-file-remove:$attachmentId',
+        },
+      );
+      // The RPC may have tombstoned the link while the operator switched
+      // authority. Leave its durable cleanup queue for the original scope.
+      if (!_cacheScope.owns(lease)) return false;
+      if (receipt is! Map ||
+          receipt['id']?.toString() != attachmentId ||
+          receipt['storage_bucket'] != 'task-attachments') {
+        throw StateError('El servidor no confirmó el retiro del archivo');
+      }
+      final storagePath = receipt['storage_path']?.toString();
+      if (storagePath == null || storagePath.isEmpty) {
+        throw StateError('Falta la ruta privada del archivo retirado');
+      }
+      if (!storagePath
+          .startsWith('${lease.scope.tenantId}/$taskId/$attachmentId/')) {
+        throw StateError('La ruta privada no pertenece a este adjunto');
+      }
+      var cleanupCompleted = true;
+      try {
+        await _deletePrivateTaskObjectAndAck(
+          taskId: taskId,
+          attachmentId: attachmentId,
+          storagePath: storagePath,
+          lease: lease,
+        );
+      } catch (cleanupError) {
+        cleanupCompleted = false;
+        if (kDebugMode) {
+          debugPrint('⚠️ [TaskService] Attachment hidden; cleanup pending: '
+              '$cleanupError');
         }
       }
+      if (!_cacheScope.owns(lease)) return false;
 
-      // Update DB
-      existingAttachments.removeWhere((a) => a['url'] == attachmentUrl);
-      await _supabase
-          .from('smart_tasks')
-          .update({'attachments': existingAttachments})
-          .eq('id', taskId)
-          .eq('tenant_id', tenantId);
-
-      // Refresh local cache
-      await fetchTasks();
-      if (kDebugMode) {
-        debugPrint('✅ [TaskService] Attachment removed');
+      // The tombstone has succeeded. A failed read must not present the file
+      // as active again; Realtime/fallback refresh will reconcile the list.
+      try {
+        await fetchTasks();
+      } catch (refreshError) {
+        if (kDebugMode) {
+          debugPrint('⚠️ [TaskService] Attachment removed; refresh failed: '
+              '$refreshError');
+        }
       }
+      if (kDebugMode) {
+        debugPrint('✅ [TaskService] Attachment hidden; '
+            'cleanup completed: $cleanupCompleted');
+      }
+      return cleanupCompleted;
     } catch (e) {
       if (kDebugMode) {
         debugPrint('❌ [TaskService] Error removing attachment: $e');

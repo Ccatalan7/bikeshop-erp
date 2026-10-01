@@ -6,8 +6,12 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'
+    show PostgrestException, Supabase;
 
 import '../../../shared/models/product.dart' as shared_product;
+import '../../../shared/models/current_user_profile.dart';
+import '../../../shared/services/current_user_profile_service.dart';
 import '../../../shared/services/database_service.dart';
 import '../../../shared/services/image_service.dart';
 import '../../../shared/services/inventory_service.dart' as shared_inventory;
@@ -73,6 +77,7 @@ class _DashboardQuery {
     required this.projectionRevision,
     required this.coordinator,
     required this.tenantId,
+    required this.actor,
   });
 
   final _AccountingBasis basis;
@@ -81,6 +86,7 @@ class _DashboardQuery {
   final int projectionRevision;
   final FinancialProjectionRefreshCoordinator coordinator;
   final String? tenantId;
+  final String? actor;
 }
 
 enum _IncomeDetailViewMode { transactions, days }
@@ -162,6 +168,7 @@ class AccountingDashboardSection extends StatefulWidget {
     _AccountingDashboardSectionState._cachedProjectionRevision = null;
     _AccountingDashboardSectionState._cachedCoordinator = null;
     _AccountingDashboardSectionState._cachedTenantId = null;
+    _AccountingDashboardSectionState._cachedActor = null;
   }
 
   @override
@@ -179,12 +186,18 @@ class _AccountingDashboardSectionState
   // Data State
   _DashboardPayload? _data;
   bool _isLoading = true;
+  // Sin autoridad contable la base niega con 42501 (can_manage_tenant_accounting);
+  // el panel no lo pide ni ofrece un «Reintentar» que nunca funcionará.
+  bool _accessDenied = false;
   String? _error;
   FinancialProjectionRefreshCoordinator? _refreshCoordinator;
   StreamSubscription<FinancialProjectionRefreshSignal>? _refreshSubscription;
   Future<void>? _activeRefresh;
   bool _refreshPending = false;
   bool _surfaceActive = true;
+  // Quién mira: si cambia (otra cuenta, otra autoridad) lo cargado se descarta.
+  String? _boundActor;
+  bool _actorBound = false;
 
   // Static cache - persists across widget rebuilds
   static _DashboardPayload? _cachedData;
@@ -195,6 +208,9 @@ class _AccountingDashboardSectionState
   static int? _cachedProjectionRevision;
   static FinancialProjectionRefreshCoordinator? _cachedCoordinator;
   static String? _cachedTenantId;
+  // La caché es de un actor: lo que cargó un administrador no se le sirve a
+  // un mecánico del mismo taller en el mismo equipo.
+  static String? _cachedActor;
   static const Duration _cacheDuration = Duration(minutes: 5);
 
   static const Map<String, int> _periodToMonths = {
@@ -241,6 +257,7 @@ class _AccountingDashboardSectionState
     final nextCoordinator = widget.refreshCoordinator ??
         FinancialProjectionRefreshCoordinator.fallback;
     _bindRefreshCoordinator(nextCoordinator);
+    _bindActor(_actorKey(listen: true));
 
     final wasActive = _surfaceActive;
     _surfaceActive = TickerMode.of(context);
@@ -286,6 +303,7 @@ class _AccountingDashboardSectionState
         _data = null;
         _isLoading = true;
         _error = null;
+        _accessDenied = false;
       });
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _requestRefresh();
@@ -303,11 +321,34 @@ class _AccountingDashboardSectionState
           _data = null;
           _isLoading = true;
           _error = null;
+          _accessDenied = false;
         });
       }
     }
     _refreshPending = true;
     _requestRefresh();
+  }
+
+  /// Otra cuenta u otra autoridad en el mismo panel: nada de lo cargado ni de
+  /// la negativa anterior sigue valiendo; se vuelve a decidir con el actor
+  /// nuevo.
+  void _bindActor(String? actor) {
+    if (!_actorBound) {
+      _actorBound = true;
+      _boundActor = actor;
+      return;
+    }
+    if (actor == _boundActor) return;
+    _boundActor = actor;
+    AccountingDashboardSection.invalidateCache();
+    _data = null;
+    _isLoading = true;
+    _error = null;
+    _accessDenied = false;
+    _refreshPending = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _requestRefresh();
+    });
   }
 
   void _loadInitialData() {
@@ -317,11 +358,17 @@ class _AccountingDashboardSectionState
       return;
     }
 
+    // La autoridad se valida antes de mirar la caché.
+    if (_deniedByKnownProfile()) return;
+
     final coordinator =
         _refreshCoordinator ?? FinancialProjectionRefreshCoordinator.fallback;
     final projectionRevision = coordinator.revision;
+    final actor = _actorKey();
     // Check if we have valid cached data
-    final isCacheValid = _cachedData != null &&
+    final isCacheValid = actor != null &&
+        _cachedActor == actor &&
+        _cachedData != null &&
         _cacheTimestamp != null &&
         DateTime.now().difference(_cacheTimestamp!) < _cacheDuration &&
         _cachedPeriod == _selectedPeriod &&
@@ -337,6 +384,7 @@ class _AccountingDashboardSectionState
         _data = _cachedData;
         _isLoading = false;
         _error = null;
+        _accessDenied = false;
       });
     } else {
       // Need to fetch fresh data
@@ -542,7 +590,10 @@ class _AccountingDashboardSectionState
       projectionRevision: coordinator.revision,
       coordinator: coordinator,
       tenantId: coordinator.tenantId,
+      actor: _actorKey(),
     );
+
+    if (_deniedByKnownProfile()) return;
 
     setState(() {
       _isLoading = true;
@@ -555,13 +606,7 @@ class _AccountingDashboardSectionState
         final newData = await _fetchData(query);
         if (!mounted) return;
 
-        final queryStillCurrent = query.basis == _basis &&
-            query.period == _selectedPeriod &&
-            query.breakdownRange == _breakdownRange &&
-            identical(query.coordinator, _refreshCoordinator) &&
-            query.tenantId == _refreshCoordinator?.tenantId &&
-            query.projectionRevision == (_refreshCoordinator?.revision ?? 0);
-        if (!queryStillCurrent || !_surfaceActive) {
+        if (!_isCurrent(query) || !_surfaceActive) {
           _refreshPending = true;
           return;
         }
@@ -574,14 +619,27 @@ class _AccountingDashboardSectionState
         _cachedProjectionRevision = query.projectionRevision;
         _cachedCoordinator = query.coordinator;
         _cachedTenantId = query.tenantId;
+        _cachedActor = query.actor;
 
         setState(() {
           _data = newData;
           _isLoading = false;
           _error = null;
+          _accessDenied = false;
         });
         return;
       } catch (error) {
+        if (error is PostgrestException && error.code == '42501') {
+          if (!mounted) return;
+          // La negativa es del actor que preguntó; si ya es otro, se vuelve
+          // a preguntar por él.
+          if (query.actor != _actorKey()) {
+            _refreshPending = true;
+            return;
+          }
+          _showAccessDenied();
+          return;
+        }
         finalError = error;
         final errorText = error.toString();
         final transient = errorText.contains('HandshakeException') ||
@@ -593,20 +651,71 @@ class _AccountingDashboardSectionState
     }
 
     if (!mounted) return;
-    final queryStillCurrent = query.basis == _basis &&
-        query.period == _selectedPeriod &&
-        query.breakdownRange == _breakdownRange &&
-        identical(query.coordinator, _refreshCoordinator) &&
-        query.tenantId == _refreshCoordinator?.tenantId &&
-        query.projectionRevision == (_refreshCoordinator?.revision ?? 0);
-    if (!queryStillCurrent || !_surfaceActive) {
+    if (!_isCurrent(query) || !_surfaceActive) {
       _refreshPending = true;
       return;
     }
+    // El detalle técnico va al registro; el operador lee qué hacer.
+    debugPrint('Accounting dashboard load failed: $finalError');
     setState(() {
       _error = finalError?.toString() ?? 'Error desconocido';
       _isLoading = false;
     });
+  }
+
+  bool _isCurrent(_DashboardQuery query) =>
+      query.basis == _basis &&
+      query.period == _selectedPeriod &&
+      query.breakdownRange == _breakdownRange &&
+      identical(query.coordinator, _refreshCoordinator) &&
+      query.tenantId == _refreshCoordinator?.tenantId &&
+      query.projectionRevision == (_refreshCoordinator?.revision ?? 0) &&
+      query.actor == _actorKey();
+
+  /// El perfil conocido sin autoridad contable: no se pide nada ni se muestra
+  /// lo que haya cargado otro.
+  bool _deniedByKnownProfile() {
+    final profile = _knownProfile();
+    if (profile == null || profile.canAccessAccounting) return false;
+    _showAccessDenied();
+    return true;
+  }
+
+  void _showAccessDenied() {
+    AccountingDashboardSection.invalidateCache();
+    setState(() {
+      _accessDenied = true;
+      _data = null;
+      _isLoading = false;
+      _error = null;
+    });
+  }
+
+  /// El perfil del operador, si el host lo monta. Sin él, la negación 42501
+  /// de la base sigue llevando al mismo estado sin acceso.
+  CurrentUserProfile? _knownProfile({bool listen = false}) {
+    try {
+      return Provider.of<CurrentUserProfileService>(context, listen: listen)
+          .profile;
+    } on ProviderNotFoundException {
+      return null;
+    }
+  }
+
+  /// Quién pide y con qué autoridad: la cuenta del perfil, o la de la sesión
+  /// si el host no monta el perfil. Sin ninguna no hay llave y la caché no se
+  /// reutiliza.
+  String? _actorKey({bool listen = false}) {
+    final profile = _knownProfile(listen: listen);
+    if (profile != null) {
+      return '${profile.userId}|${profile.canAccessAccounting}';
+    }
+    try {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      return userId == null ? null : '$userId|?';
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<_DashboardPayload> _fetchData(_DashboardQuery query) async {
@@ -707,6 +816,8 @@ class _AccountingDashboardSectionState
 
   @override
   Widget build(BuildContext context) {
+    if (_accessDenied) return const _DashboardNoAccess();
+
     // 1. Initial loading (no data yet)
     if (_data == null) {
       if (_isLoading) return const _DashboardSkeleton();
@@ -857,6 +968,49 @@ class _SkeletonCard extends StatelessWidget {
   }
 }
 
+/// El panorama financiero es de quien administra la contabilidad del taller.
+/// Otro rol ve por qué no está, sin error ni reintento.
+class _DashboardNoAccess extends StatelessWidget {
+  const _DashboardNoAccess();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    return Card(
+      key: const ValueKey('accounting-dashboard-no-access'),
+      color: colors.surfaceContainerLow,
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.lock_outline, color: colors.onSurfaceVariant),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Panorama financiero',
+                      style: theme.textTheme.titleMedium),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Lo ve quien administra la contabilidad del taller.',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: colors.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _DashboardError extends StatelessWidget {
   final Object? error;
   final VoidCallback onRetry;
@@ -881,7 +1035,7 @@ class _DashboardError extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              error?.toString() ?? 'Error desconocido',
+              'Revisa la conexión e inténtalo de nuevo.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Theme.of(context).colorScheme.onErrorContainer,
                   ),

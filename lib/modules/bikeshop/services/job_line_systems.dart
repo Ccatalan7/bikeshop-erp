@@ -11,7 +11,8 @@
 /// a 221 de 253 repuestos y la familia a 168 de 260 servicios. Lo demás
 /// —«Mecánica Básica», «Limpieza General», fundas y piolas (de freno o de
 /// cambio), lubricantes— es trabajo sobre la bici entera y queda en «General».
-/// La posición (delantera o trasera) es la de la línea.
+/// La categoría heredada «Neumáticos», aun sin árbol vinculado, también
+/// identifica una rueda. La posición (delantera o trasera) es la de la línea.
 library;
 
 import '../models/bikeshop_models.dart';
@@ -67,7 +68,8 @@ JobLineSystem jobLineSystem({
     (_, 'transmision' || 'cambios' || 'groupset' || 'pedales') =>
       JobLineSystem.drivetrain,
     (_, 'frenos' || 'liquido frenos') => _positioned(location, _Kind.brake),
-    (_, 'ruedas' || 'rueda estabilizadora') =>
+    ('neumaticos', _) ||
+    (_, 'ruedas' || 'rueda estabilizadora' || 'neumaticos') =>
       _positioned(location, _Kind.wheel),
     (_, 'direccion' || 'punos') => JobLineSystem.cockpit,
     (_, 'shock' || 'suspension') => JobLineSystem.suspension,

@@ -64,6 +64,28 @@ void main() {
     );
   });
 
+  test('la categoría heredada de neumáticos conserva la rueda asignada', () {
+    expect(
+      jobLineSystem(
+        categoryPath: 'Neumáticos',
+        location: BikeMemoryLocation.front,
+      ),
+      JobLineSystem.frontWheel,
+    );
+    expect(
+      jobLineSystem(
+        categoryPath: 'Neumáticos',
+        location: BikeMemoryLocation.rear,
+      ),
+      JobLineSystem.rearWheel,
+    );
+    expect(
+      jobLineSystem(location: BikeMemoryLocation.rear),
+      JobLineSystem.general,
+      reason: 'la posición sola no distingue un freno de una rueda',
+    );
+  });
+
   test('los grupos siguen el orden de la bici y el de cada trabajo', () {
     final groups = groupJobLinesBySystem<String>(
       ['maza', 'mecánica', 'cadena', 'rayos'],

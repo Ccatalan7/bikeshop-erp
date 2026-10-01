@@ -29,9 +29,13 @@ final Map<String, String> _labelByWizardValue = {
 /// La etiqueta de la ficha que corresponde a lo que la bici tiene escrito, o
 /// `null` si no se puede leer sin adivinar.
 ///
+/// Gramática explícita, la misma que `iso_bsd_candidates_for_wheel_size` en
+/// el servidor: un número entero o decimal con espacios sólo alrededor y a lo
+/// más la pulgada; `650b`; `700`, `700c` o `700"`.
+///
 /// Casos que quedan sin leer a propósito:
 /// - `28`: en Chile se usa para 700c y también para el 28" antiguo (ISO 635).
-/// - `27.5" - 26"`: dos aros en un campo.
+/// - `27.5" - 26"`: dos aros en un campo; `2 9`: no se juntan dígitos.
 /// - medidas que la ficha no ofrece, como `14''`.
 String? canonicalBikeWheelSizeLabel(String? raw) {
   if (raw == null) return null;
@@ -41,22 +45,157 @@ String? canonicalBikeWheelSizeLabel(String? raw) {
       .replaceAll('”', '"')
       .replaceAll('″', '"')
       .replaceAll("''", '"')
-      .replaceAll(',', '.')
-      .replaceAll(' ', '');
-  if (text.isEmpty) return null;
+      .replaceAll(',', '.');
+  if (RegExp(r'^650\s*b$').hasMatch(text)) return '650b';
+  if (RegExp(r'^700\s*(c|")?$').hasMatch(text)) return '700c';
 
-  final number = RegExp(r'\d+(\.\d+)?').allMatches(text).toList();
-  if (number.length != 1) return null;
-
-  if (text == '650b') return '650b';
-  if (text == '700' || text == '700c' || text == '700"') return '700c';
-
-  final unit = text.replaceFirst(number.single.group(0)!, '');
-  if (unit.isNotEmpty && unit != '"') return null;
-
-  final label = '${number.single.group(0)}"';
+  final number = RegExp(r'^(\d+(?:\.\d+)?)\s*"?$').firstMatch(text);
+  if (number == null) return null;
+  final label = '${number.group(1)}"';
   return kWheelSizeWizardValueByLabel.containsKey(label) ? label : null;
 }
+
+/// Los rótulos de aro que son un solo diámetro de asiento (BSD, ISO 5775) y
+/// por eso refutan un neumático de otro: 29″/700c = 622 y 27,5″/650b = 584.
+/// La misma tabla que `iso_bsd_candidates_for_wheel_size` en el servidor
+/// (20260928110000). Los demás no refutan: 26″ son al menos seis diámetros
+/// (559, 571, 584 —el 650B se vendió como «26 × 1 1/2»—, 590, 597 y 599) y
+/// 24″, 20″, 16″ y 14″ tampoco tienen un conjunto que se pueda dar por
+/// completo (Sheldon Brown, «Tire Sizing»; la primera versión refutaba con
+/// listas incompletas, revisión de Codex del 2026-09-28).
+///
+/// La matriz de compatibilidad tiene su propia lectura: ella sugiere lo
+/// probable; ésta sólo refuta lo imposible.
+const Map<String, Set<int>> kIsoBsdCandidatesByWheelLabel = {
+  '27.5"': {584},
+  '29"': {622},
+  '700c': {622},
+  '650b': {584},
+};
+
+/// El BSD que exige el aro escrito en la bici; vacío si el rótulo no es un
+/// solo diámetro o no se lee sin adivinar (`26"`, `28`, `27.5" - 26"`):
+/// lo vacío no refuta nada.
+Set<int> isoBsdCandidatesForBikeWheelSize(String? raw) =>
+    kIsoBsdCandidatesByWheelLabel[canonicalBikeWheelSizeLabel(raw)] ?? const {};
+
+// Los BSD de la tabla ISO de Sheldon Brown («Tire Sizing») entre 150 y 700
+// mm, con el nombre que usa el taller; el mismo texto que
+// `iso_bsd_wheel_label` en el servidor.
+const Map<int, String> _isoBsdWheelName = {
+  686: '32″',
+  642: '28″ 700A',
+  635: '28″ 635',
+  630: '27″',
+  622: '29″/700c',
+  609: '27″ danés',
+  599: '26″ 599',
+  597: '26″ inglés',
+  590: '26″ 650a',
+  584: '27,5″/650b',
+  583: '700D',
+  571: '26″ 650c',
+  559: '26″',
+  547: '24″ 547',
+  541: '24″ 600A',
+  540: '24″ 540',
+  534: '24″ holandés',
+  520: '24″ 520',
+  507: '24″',
+  501: '22″ inglés',
+  490: '22″ 550A',
+  489: '22″ holandés',
+  484: '22″ 550B',
+  457: '22″',
+  451: '20″ 451',
+  440: '20″ 500A',
+  438: '20″ holandés',
+  428: '20″ sueco',
+  419: '20″ 419',
+  406: '20″',
+  400: '18″ 400',
+  390: '18″ 450A',
+  369: '17″',
+  355: '18″',
+  349: '16″ 349',
+  340: '16″ 400A',
+  337: '16″ 337',
+  335: '16″ 335',
+  317: '16″ 317',
+  305: '16″',
+  298: '14″ 298',
+  288: '14″ 350A',
+  254: '14″',
+  252: '12″ francés',
+  203: '12″',
+  152: '10″',
+};
+
+/// Los BSD que ofrece la ficha de la bici: primero los tres del taller
+/// (29″, 27,5″ y 26″) y después el resto, del más grande al más chico. Una
+/// lista `const`, no derivada del mapa: una recarga en caliente no vuelve a
+/// calcular un `final` global ya calculado (2026-09-28).
+const List<int> kIsoWheelBsdOptions = [
+  // Los tres del taller.
+  622, 584, 559,
+  // El resto, del más grande al más chico.
+  686,
+  642,
+  635,
+  630,
+  609,
+  599,
+  597,
+  590,
+  583,
+  571,
+  547,
+  541,
+  540,
+  534,
+  520,
+  507,
+  501,
+  490,
+  489,
+  484,
+  457,
+  451,
+  440,
+  438,
+  428,
+  419,
+  406,
+  400,
+  390,
+  369,
+  355,
+  349,
+  340,
+  337,
+  335,
+  317,
+  305,
+  298,
+  288,
+  254,
+  252,
+  203,
+  152,
+];
+
+/// «622 (29″/700c)»: un BSD como lo dice el taller (el mismo texto que
+/// `iso_bsd_wheel_label` en el servidor).
+String isoWheelBsdLabel(int bsd) {
+  final name = _isoBsdWheelName[bsd];
+  return name == null ? '$bsd' : '$bsd ($name)';
+}
+
+/// El BSD de cada rueda en la ficha de la bici (20260928110000).
+const Map<String, String> kWheelBsdFactKeyByPosition = {
+  'front': 'frontWheelBsdMm',
+  'rear': 'rearWheelBsdMm',
+};
 
 /// El valor del registro para una etiqueta de la ficha, o `null`.
 String? wheelSizeWizardValueForLabel(String? label) =>

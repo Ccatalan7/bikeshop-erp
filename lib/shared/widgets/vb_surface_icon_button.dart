@@ -92,10 +92,12 @@ class _VbSurfaceIconButtonState extends State<VbSurfaceIconButton> {
 
     return Tooltip(
       message: widget.tooltip,
+      excludeFromSemantics: true,
       child: Semantics(
         button: true,
         enabled: enabled,
         label: widget.tooltip,
+        onTap: widget.onPressed,
         excludeSemantics: true,
         child: Material(
           key: widget.buttonKey,

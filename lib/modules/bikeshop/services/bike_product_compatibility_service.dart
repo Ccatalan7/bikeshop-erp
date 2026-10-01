@@ -571,6 +571,22 @@ class BikeProductCompatibilityService {
                 (issue['code'] != 'unmapped' && issue['blocking'] != false),
           );
 
+  /// La ficha técnica de cada producto como la lee la app
+  /// (`get_product_spec_contexts_v1`), con la misma caché que la
+  /// compatibilidad. La usa la línea del trabajo para el cambio de ficha que
+  /// propone un repuesto (`part_bike_fact_change.dart`).
+  Future<Map<String, Map<String, dynamic>>> productSpecValues({
+    required List<Product> products,
+    required String tenantId,
+  }) async {
+    if (products.isEmpty) return const {};
+    await _ensureProductSpecs(products: products, tenantId: tenantId);
+    return {
+      for (final product in products)
+        product.id: _productSpecCache[product.id]?.values ?? const {},
+    };
+  }
+
   @visibleForTesting
   void primeCompatibilityCaches({
     Map<String, Map<String, dynamic>> productSpecsByProductId = const {},

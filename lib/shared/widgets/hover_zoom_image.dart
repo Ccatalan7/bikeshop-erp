@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
+import 'workshop_asset_content.dart';
+
 class HoverZoomImage extends StatefulWidget {
   final String imageUrl;
   final double size;
@@ -93,20 +95,23 @@ class _HoverZoomImageState extends State<HoverZoomImage> {
               ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(4),
-                child: CachedNetworkImage(
-                  imageUrl: widget.imageUrl,
-                  width: _zoomSize,
-                  height: _zoomSize,
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) => const SizedBox(
+                child: WorkshopAssetContent(
+                  reference: widget.imageUrl,
+                  builder: (context, url) => CachedNetworkImage(
+                    imageUrl: url,
                     width: _zoomSize,
                     height: _zoomSize,
-                    child: Center(child: CircularProgressIndicator()),
-                  ),
-                  errorWidget: (context, url, error) => const SizedBox(
-                    width: _zoomSize,
-                    height: _zoomSize,
-                    child: Center(child: Icon(Icons.broken_image)),
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => const SizedBox(
+                      width: _zoomSize,
+                      height: _zoomSize,
+                      child: Center(child: CircularProgressIndicator()),
+                    ),
+                    errorWidget: (context, url, error) => const SizedBox(
+                      width: _zoomSize,
+                      height: _zoomSize,
+                      child: Center(child: Icon(Icons.broken_image)),
+                    ),
                   ),
                 ),
               ),
@@ -131,12 +136,15 @@ class _HoverZoomImageState extends State<HoverZoomImage> {
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(4),
-          child: CachedNetworkImage(
-            imageUrl: widget.imageUrl,
-            fit: BoxFit.cover,
-            placeholder: (context, url) => Container(color: Colors.grey[200]),
-            errorWidget: (context, url, error) =>
-                const Icon(Icons.error, size: 12),
+          child: WorkshopAssetContent(
+            reference: widget.imageUrl,
+            builder: (context, url) => CachedNetworkImage(
+              imageUrl: url,
+              fit: BoxFit.cover,
+              placeholder: (context, url) => Container(color: Colors.grey[200]),
+              errorWidget: (context, url, error) =>
+                  const Icon(Icons.error, size: 12),
+            ),
           ),
         ),
       ),

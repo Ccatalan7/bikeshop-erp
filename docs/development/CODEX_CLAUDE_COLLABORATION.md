@@ -6,6 +6,14 @@ optional collaboration is active, the two agents remain independent reviewers
 whose goal is to expose different failure modes before they reach the
 application.
 
+**2026-09-30, autonomía para cerrar el Master:** el dueño pidió dar libertad
+y capacidad de ejecución a Claude. Puede implementar su corte, consultar por
+los wrappers y elegir/correr pruebas focales sin aprobación rutinaria. La
+coordinación de Codex fija entregables, exclusión de archivos y turnos de DB,
+no una autorización por comando ni una limitación a propuestas. Se integran
+los resultados y se avanza según `PLANS.md`; no se encadenan sondas o pruebas
+redundantes. Los límites explícitos de datos/publicación siguen vigentes.
+
 ## Ownership
 
 | Work | Lead | Required cross-review |
@@ -246,6 +254,28 @@ the broad invariants above, promote it to this gate.
 9. **Handoff:** report exact files, behavior, evidence, known uncertainty, and
    explicitly distinguish local code from commit, push, deployment, or
    production data changes.
+
+**Continuity correction, 2026-09-30.** When the owner has requested supervised
+collaboration until a Master is closed, a completed slice closes that slice;
+it does not end Claude's assignment to the project. Leaving R0 without its
+next assignment kept Claude idle for approximately five hours while the
+Master remained open. The supervising agent must review the checkpoint,
+dispatch the next safe slice with exact file ownership, and visibly verify
+that the intended Claude session is running. Update the automation's current
+assignment and continuation instruction in the same round. A rule against
+resending completed work must prevent duplicates, not prevent new work. If a
+slice needs integration review, give Claude an independent safe slice while
+that review proceeds; only a real authority or information blocker justifies
+waiting for the owner.
+
+**Focus correction, 2026-09-30.** For the workshop Master, read `PLANS.md`
+before dispatching another slice. Name the deliverable and observable result
+in plain language, with exclusive files. Every test must decide a remaining
+acceptance criterion or a concrete defect; existing sufficient evidence is
+reused. A reproduced defect leads to its integrated correction and then back
+to the deliverable. Do not keep dispatching successive prototypes while the
+usable workflow remains pending. The owning policy is
+`.github/copilot-instructions.md`, “mantener el rumbo del Master”.
 
 ## Safety boundary
 

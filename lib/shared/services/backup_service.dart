@@ -92,6 +92,23 @@ class BackupService extends ChangeNotifier {
     }
   }
 
+  /// Comprueba qué valores presentes se pueden recuperar conservando filas,
+  /// campos y vínculos posteriores. La base niega efectos no revisados.
+  Future<RestorePreflight> restorePreflight(String backupId) async {
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null) throw Exception('No tenant ID found');
+
+    final response =
+        await _client.rpc('restore_backup_merge_preflight', params: {
+      'p_backup_id': backupId,
+      'p_tenant_id': tenantId,
+    });
+    if (response is! Map) {
+      throw Exception('Unexpected response format: ${response.runtimeType}');
+    }
+    return RestorePreflight.fromJson(response.cast<String, dynamic>());
+  }
+
   /// Restore database from backup
   Future<BackupResult> restoreBackup(String backupId) async {
     try {
@@ -100,7 +117,7 @@ class BackupService extends ChangeNotifier {
 
       debugPrint('🔄 Restoring backup: $backupId');
 
-      final response = await _client.rpc('restore_backup', params: {
+      final response = await _client.rpc('restore_backup_merge', params: {
         'p_backup_id': backupId,
         'p_tenant_id': tenantId,
       });
@@ -121,8 +138,14 @@ class BackupService extends ChangeNotifier {
       final result = BackupResult.fromJson(responseData);
 
       if (result.success) {
-        await loadBackups(); // Reload list
         debugPrint('✅ Backup restored successfully');
+        // Ya se restauró: si falla la recarga de la lista, el resultado sigue
+        // siendo éxito (revisión de Codex, 2026-09-29).
+        try {
+          await loadBackups();
+        } catch (e) {
+          debugPrint('⚠️ Backup list reload failed after restore: $e');
+        }
       }
 
       return result;

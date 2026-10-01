@@ -39,6 +39,10 @@ import '../../settings/services/appearance_service.dart';
 import '../../../shared/services/image_service.dart';
 import '../../ai_assistant/services/ai_assistant_context_service.dart';
 import '../services/bikeshop_service.dart';
+import '../services/mechanic_job_status_transition_coordinator.dart';
+import '../services/job_completion_blocked.dart';
+import '../services/workshop_command_outbox.dart';
+import '../services/job_line_save.dart';
 import '../services/job_status_service.dart';
 import '../services/mechanic_job_intake_classification_coordinator.dart';
 import '../services/mechanic_job_quotation_command_coordinator.dart';
@@ -52,8 +56,10 @@ import '../widgets/pega_detail_view.dart';
 import '../widgets/pegas_calendar_widget.dart';
 import '../widgets/deadline_cell.dart';
 import '../widgets/job_time_metrics_widget.dart';
+import '../widgets/warranty_decision_pending_notice.dart';
 import '../widgets/smart_job_details_editor.dart';
 import '../widgets/pegas_tasks_widget.dart';
+import '../widgets/tasks_tab_view.dart';
 import '../widgets/workshop_board_compact_view.dart';
 import '../widgets/workshop_mobile_bike_chooser.dart';
 import '../widgets/workshop_mobile_payment_workspace.dart';
@@ -64,6 +70,7 @@ import '../../purchases/services/intelligent_purchasing_service.dart';
 import 'bike_form_dialog.dart';
 import 'mechanic_job_form_page.dart';
 import '../widgets/bike_fact_problems_snackbar.dart';
+import '../widgets/job_completion_blocked_dialog.dart';
 
 /// Modern, professional Trabajos management with advanced data table
 class PegasTablePage extends StatefulWidget {
@@ -76,6 +83,7 @@ class PegasTablePage extends StatefulWidget {
 enum _MobileWorkshopSurface {
   job,
   items,
+  tasks,
   bike,
   invoice,
   payment,
@@ -338,6 +346,10 @@ class _PegasTablePageState extends State<PegasTablePage>
       _pendingIntakeClassificationAttempts = {};
   final Map<String, _PendingWarrantyDecisionAttempt>
       _pendingWarrantyDecisionAttempts = {};
+
+  /// Las decisiones de garantía que siguen en la bandeja del equipo, por
+  /// trabajo: se muestran como pendientes, nunca como aplicadas.
+  Map<String, WarrantyOutcome> _pendingWarrantyOutcomes = const {};
   final Map<String, _PendingQuotationTransitionAttempt>
       _pendingQuotationTransitionAttempts = {};
   final Map<String, _PendingQuotationConversionAttempt>
@@ -1275,11 +1287,14 @@ class _PegasTablePageState extends State<PegasTablePage>
       final companionResults = await Future.wait<Object>([
         _loadCompactJobItemSummaries(jobs),
         _loadJobSupplyAttentionSummaries(jobs),
+        _loadPendingWarrantyOutcomes(),
       ]);
       final jobItemsMap =
           companionResults[0] as Map<String, List<MechanicJobItem>>;
       final supplyAttentionByJob =
           companionResults[1] as Map<String, JobSupplyAttention>;
+      final pendingWarrantyOutcomes =
+          companionResults[2] as Map<String, WarrantyOutcome>;
 
       final customerMap = _buildCustomerMap(customers);
       final bikeMap = _buildBikeMap(bikes);
@@ -1300,6 +1315,7 @@ class _PegasTablePageState extends State<PegasTablePage>
           _jobBikesMap = jobBikesMap;
           _jobItemsMap = jobItemsMap;
           _supplyAttentionByJob = supplyAttentionByJob;
+          _pendingWarrantyOutcomes = pendingWarrantyOutcomes;
           _isLoading = false;
         });
         _applyFiltersAndSort();
@@ -1337,6 +1353,21 @@ class _PegasTablePageState extends State<PegasTablePage>
       // caller that awaited it to verify its own operation.
       if (rethrowErrors) rethrow;
     }
+  }
+
+  /// Una bandeja que no se deja leer no impide ver la tabla.
+  Future<Map<String, WarrantyOutcome>> _loadPendingWarrantyOutcomes() async {
+    try {
+      return await _bikeshopService.pendingWarrantyDecisions();
+    } catch (error) {
+      debugPrint('Could not read pending warranty decisions: $error');
+      return const {};
+    }
+  }
+
+  Future<void> _refreshPendingWarrantyOutcomes() async {
+    final pending = await _loadPendingWarrantyOutcomes();
+    if (mounted) setState(() => _pendingWarrantyOutcomes = pending);
   }
 
   Future<Map<String, List<MechanicJobItem>>> _loadCompactJobItemSummaries(
@@ -1559,6 +1590,15 @@ class _PegasTablePageState extends State<PegasTablePage>
 
   Future<void> _openJobProductsAndServices(MechanicJob job) {
     return _openJobEditorAt(job, initialTab: 'products');
+  }
+
+  void _reviewBlockedJobLines(MechanicJob job) {
+    if (!mounted) return;
+    if (ResponsiveViewport.usesCompactShell(context)) {
+      _openMobileInlineSurface(job, _MobileWorkshopSurface.items);
+      return;
+    }
+    unawaited(_openJobProductsAndServices(job));
   }
 
   void _openMobileInlineSurface(
@@ -2196,6 +2236,7 @@ class _PegasTablePageState extends State<PegasTablePage>
             onCanceled: _closeMobileInlineSurface,
           ),
         ),
+      _MobileWorkshopSurface.tasks => _buildMobileTasksWorkspace(job),
       _MobileWorkshopSurface.bike => _buildMobileBikeWorkspace(workspace, job),
       _MobileWorkshopSurface.invoice => KeyedSubtree(
           key: const ValueKey('workshop-mobile-inline-invoice'),
@@ -2219,6 +2260,80 @@ class _PegasTablePageState extends State<PegasTablePage>
       _MobileWorkshopSurface.proposalPdf =>
         _buildMobileProposalPdfWorkspace(workspace, job),
     };
+  }
+
+  /// Tareas e instrucciones en teléfono: la misma pestaña del detalle de
+  /// escritorio (`TasksTabView`), con su vuelta a la lista.
+  Widget _buildMobileTasksWorkspace(MechanicJob job) {
+    final theme = Theme.of(context);
+    final jobLabel = job.jobNumber?.trim().isNotEmpty == true
+        ? job.jobNumber!.trim()
+        : 'Trabajo';
+
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) _closeMobileInlineSurface();
+      },
+      child: ColoredBox(
+        key: const ValueKey('workshop-mobile-inline-tasks'),
+        color: theme.colorScheme.surface,
+        child: Column(
+          children: [
+            Container(
+              constraints: const BoxConstraints(minHeight: 58),
+              padding: const EdgeInsets.fromLTRB(4, 5, 8, 5),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: theme.colorScheme.outlineVariant),
+                ),
+              ),
+              child: Row(
+                children: [
+                  IconButton(
+                    key: const ValueKey('workshop-mobile-inline-back'),
+                    tooltip: 'Volver a trabajos',
+                    onPressed: _closeMobileInlineSurface,
+                    icon: const Icon(Icons.arrow_back_rounded),
+                  ),
+                  const SizedBox(width: 2),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Tareas e instrucciones',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        Text(
+                          jobLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: TasksTabView(
+                jobId: job.id!,
+                readOnly: job.hasFinalProposalDecision,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildMobileBikeWorkspace(
@@ -3324,6 +3439,16 @@ class _PegasTablePageState extends State<PegasTablePage>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
               content: Text('Estado actualizado a ${newStatus.displayName}')),
+        );
+      }
+    } on JobCompletionBlockedException catch (blocked) {
+      await _loadData();
+      if (mounted) {
+        await showJobCompletionBlocked(
+          context,
+          blocked,
+          jobLabel: job?.jobNumber,
+          onReviewLines: () => _reviewBlockedJobLines(job!),
         );
       }
     } catch (e) {
@@ -6256,6 +6381,15 @@ class _PegasTablePageState extends State<PegasTablePage>
                     'Copiar email',
                   ),
               ],
+              if (!isArchived) ...[
+                sectionLabel('Taller'),
+                actionTile(
+                  'tasks',
+                  Icons.checklist_rounded,
+                  'Tareas e instrucciones',
+                  subtitle: 'Qué incluye cada servicio y qué hay que hacer',
+                ),
+              ],
               if ((invoiceId != null && invoiceId.isNotEmpty) ||
                   (!isArchived &&
                       job.isQuotationWorkflow &&
@@ -6324,6 +6458,9 @@ class _PegasTablePageState extends State<PegasTablePage>
 
     if (!mounted || selection == null) return;
     switch (selection) {
+      case 'tasks':
+        _openMobileInlineSurface(job, _MobileWorkshopSurface.tasks);
+        break;
       case 'call':
         _callCustomer(customer!.phone!);
         break;
@@ -6897,81 +7034,103 @@ class _PegasTablePageState extends State<PegasTablePage>
   }
 
   Future<void> _uploadFilesForJob(MechanicJob job, List<XFile> files) async {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Subiendo archivos...')),
-    );
-
-    final newUrls = <String>[];
-    int successCount = 0;
-
-    try {
-      for (final file in files) {
-        final bytes = await file.readAsBytes();
-        final name = file.name;
-
-        final url = await ImageService.uploadBytes(
-          bytes: bytes,
-          fileName: name,
-          bucket: 'vinabike-assets',
-          folder: 'mechanic_jobs/${job.customerId}/',
-        );
-
-        if (url != null) {
-          newUrls.add(url);
-          successCount++;
-        }
-      }
-
-      await _updateJobImages(job, newUrls, successCount);
-    } catch (e) {
-      _handleUploadError(e);
+    final read = <({Uint8List bytes, String name})>[];
+    for (final file in files) {
+      read.add((bytes: await file.readAsBytes(), name: file.name));
     }
+    await _attachFilesToJob(job, read);
   }
 
   Future<void> _uploadFileBytesForJob(
-      MechanicJob job, Uint8List bytes, String name) async {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Subiendo archivo...')),
+          MechanicJob job, Uint8List bytes, String name) =>
+      _attachFilesToJob(job, [(bytes: bytes, name: name)]);
+
+  /// Los adjuntos que se sueltan o eligen en la tabla van por el mismo camino
+  /// que los del formulario: cada uno anotado en la bandeja y subido a
+  /// `job-images/<taller>/<trabajo>/`, y después agregados al trabajo por su
+  /// comando, sólo `image_urls` con lo que tenía como lo visto. Antes se
+  /// subían a `vinabike-assets` y la tabla reescribía la fila completa del
+  /// trabajo desde su caché, también lo que otra persona había cambiado
+  /// mientras tanto (checkpoint de fotos, 2026-09-28).
+  Future<void> _attachFilesToJob(
+    MechanicJob job,
+    List<({Uint8List bytes, String name})> files,
+  ) async {
+    final jobId = job.id;
+    if (jobId == null || files.isEmpty) return;
+    // El dueño de los adjuntos de este intento: si ningún guardado se los
+    // lleva, se liberan éstos y no los de otra carga que sigue en curso
+    // (revisión de Codex del barrido, 2026-09-29). Un adjunto que algún
+    // trabajo muestra nunca se borra.
+    final attachmentOwner = const Uuid().v4();
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          files.length == 1 ? 'Subiendo archivo...' : 'Subiendo archivos...',
+        ),
+      ),
     );
-
     try {
-      final url = await ImageService.uploadBytes(
-        bytes: bytes,
-        fileName: name,
-        bucket: 'vinabike-assets',
-        folder: 'mechanic_jobs/${job.customerId}/',
-      );
-
-      if (url != null) {
-        await _updateJobImages(job, [url], 1);
+      final urls = <String>[];
+      for (final file in files) {
+        urls.add(await _bikeshopService.uploadJobAttachment(
+          jobId: jobId,
+          bytes: file.bytes,
+          fileName: file.name,
+          ownerForm: attachmentOwner,
+        ));
       }
+      final result = await _bikeshopService.addJobAttachments(
+        jobId: jobId,
+        urls: urls,
+        label: 'Trabajo ${job.jobNumber}',
+      );
+      final saved = result.header?['image_urls'];
+      if (mounted && saved is List) {
+        setState(() {
+          final index = _jobs.indexWhere((j) => j.id == jobId);
+          if (index != -1) {
+            _jobs[index] = _jobs[index].copyWith(
+              imageUrls: saved.map((url) => '$url').toList(),
+            );
+          }
+        });
+      }
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            urls.length == 1
+                ? 'Archivo agregado al trabajo'
+                : '${urls.length} archivos agregados al trabajo',
+          ),
+        ),
+      );
+    } on JobLineSavePendingException {
+      // Respaldado en este equipo con sus adjuntos: se agrega solo.
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Sin respuesta del servidor. Los archivos quedaron guardados en '
+            'este equipo y se agregan al trabajo solos.',
+          ),
+        ),
+      );
     } catch (e) {
+      // Ningún guardado se los llevó: se liberan.
+      unawaited(_releaseTableAttachments(attachmentOwner));
       _handleUploadError(e);
     }
   }
 
-  Future<void> _updateJobImages(
-      MechanicJob job, List<String> newUrls, int successCount) async {
-    if (newUrls.isNotEmpty) {
-      final updatedImageUrls = [...job.imageUrls, ...newUrls];
-
-      // Optimistic update
-      setState(() {
-        final index = _jobs.indexWhere((j) => j.id == job.id);
-        if (index != -1) {
-          _jobs[index] = job.copyWith(imageUrls: updatedImageUrls);
-        }
-      });
-
-      await _bikeshopService
-          .updateJob(job.copyWith(imageUrls: updatedImageUrls));
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('$successCount archivos subidos exitosamente')),
-        );
-      }
+  Future<void> _releaseTableAttachments(String attachmentOwner) async {
+    try {
+      await WorkshopCommandOutbox.shared.releaseImages(
+        await _bikeshopService.workshopCommandScope(),
+        ownerForm: attachmentOwner,
+      );
+    } catch (error) {
+      debugPrint('No se liberaron los adjuntos sin guardar: $error');
     }
   }
 
@@ -8767,11 +8926,13 @@ class _PegasTablePageState extends State<PegasTablePage>
         );
 
       case 'actions':
+        // Cada icono con nombre: sin tooltip el lector anunciaba cuatro
+        // «botón» seguidos (C1/C4 web, 2026-09-30).
         if (job.deletedAt != null) {
           return PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert, size: 16),
             padding: EdgeInsets.zero,
-            tooltip: '',
+            tooltip: 'Más acciones del trabajo',
             itemBuilder: (context) => const [
               PopupMenuItem(
                 value: 'restore',
@@ -8796,12 +8957,14 @@ class _PegasTablePageState extends State<PegasTablePage>
           children: [
             IconButton(
               icon: const Icon(Icons.edit, size: 16),
+              tooltip: 'Editar trabajo',
               onPressed: () => _openJobEditor(job),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
             ),
             IconButton(
               icon: const Icon(Icons.phone, size: 16),
+              tooltip: 'Copiar teléfono',
               onPressed: customer?.phone != null
                   ? () {
                       Clipboard.setData(ClipboardData(text: customer!.phone!));
@@ -8816,7 +8979,7 @@ class _PegasTablePageState extends State<PegasTablePage>
             PopupMenuButton(
               icon: const Icon(Icons.more_vert, size: 16),
               padding: EdgeInsets.zero,
-              tooltip: '',
+              tooltip: 'Más acciones del trabajo',
               iconSize: 16,
               itemBuilder: (context) => [
                 if (job.modeNeedsReview)
@@ -10810,6 +10973,9 @@ class _PegasTablePageState extends State<PegasTablePage>
             '$successMessage$refreshSuffix',
           ),
           duration: const Duration(seconds: 8),
+          // Con acción, Flutter 3.38 la deja fija y los 8 s no corren: tapaba
+          // la lista en teléfono (C1/C4 nativo, 2026-09-30).
+          persist: false,
           backgroundColor: refreshError == null
               ? Colors.green.shade700
               : Colors.orange.shade800,
@@ -10900,6 +11066,24 @@ class _PegasTablePageState extends State<PegasTablePage>
             const SnackBar(
                 content: Text('Trabajo completado'),
                 duration: Duration(seconds: 1)),
+          );
+        }
+      } on MechanicJobStatusTransitionPending catch (pending) {
+        // Respaldado con su llave: se aplica solo, en la cola del trabajo.
+        _loadData();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('$pending')),
+          );
+        }
+      } on JobCompletionBlockedException catch (blocked) {
+        await _loadData();
+        if (mounted) {
+          await showJobCompletionBlocked(
+            context,
+            blocked,
+            jobLabel: job.jobNumber,
+            onReviewLines: () => _reviewBlockedJobLines(job),
           );
         }
       } catch (e) {
@@ -11241,7 +11425,13 @@ class _PegasTablePageState extends State<PegasTablePage>
       supplyAttention: job.id == null ? null : _supplyAttentionByJob[job.id!],
       jobStatusService: _jobStatusService,
       warrantyPaymentReviewRequired: _hasWarrantyPaymentEvidence(job),
-      onStatusSelected: (status) => _updateJobToCustomStatus(job, status),
+      pendingWarrantyOutcome:
+          job.id == null ? null : _pendingWarrantyOutcomes[job.id!],
+      onStatusSelected: (status) => _updateJobToCustomStatus(
+        job,
+        status,
+        statusManagerContext: dialogContext,
+      ),
       onSupplyNeedCreated: (need) => _recordSupplyNeedCreated(job, need),
       onSupplyNeedUpdated: (need) {
         unawaited(_refreshSupplyAttention(job.id));
@@ -11260,8 +11450,24 @@ class _PegasTablePageState extends State<PegasTablePage>
       },
       onWarrantyOutcomeSelected: (outcome) async {
         Navigator.pop(dialogContext);
-        final currentOutcome = job.warrantyOutcome ?? WarrantyOutcome.pending;
-        if (outcome == currentOutcome) return;
+        // Una decisión que sigue en la bandeja del equipo es la que vale para
+        // elegir: volver a elegirla la reenvía con su llave y su motivo, sin
+        // otra decisión; elegir otra la pone detrás.
+        ({
+          WarrantyOutcome outcome,
+          String? reason,
+          String operationKey
+        })? pendingDecision;
+        try {
+          pendingDecision =
+              await _bikeshopService.pendingWarrantyDecision(job.id!);
+        } catch (error) {
+          debugPrint('Could not read the pending warranty decision: $error');
+        }
+        final currentOutcome = pendingDecision?.outcome ??
+            job.warrantyOutcome ??
+            WarrantyOutcome.pending;
+        if (outcome == currentOutcome && pendingDecision == null) return;
         if (outcome == WarrantyOutcome.covered &&
             _hasWarrantyPaymentEvidence(job)) {
           if (!mounted) return;
@@ -11283,18 +11489,31 @@ class _PegasTablePageState extends State<PegasTablePage>
           );
           return;
         }
-        final reason = await _requestWarrantyDecisionReason(job, outcome);
-        if (reason == null) return;
-        final normalizedReason = reason.trim().isEmpty ? null : reason.trim();
+        final retryingPending =
+            pendingDecision != null && pendingDecision.outcome == outcome;
+        final String? normalizedReason;
+        if (retryingPending) {
+          normalizedReason = pendingDecision.reason;
+        } else {
+          final reason = await _requestWarrantyDecisionReason(job, outcome);
+          if (reason == null) return;
+          normalizedReason = reason.trim().isEmpty ? null : reason.trim();
+        }
         final existingAttempt = _pendingWarrantyDecisionAttempts[job.id!];
-        final attempt = existingAttempt != null &&
-                existingAttempt.matches(outcome, normalizedReason)
-            ? existingAttempt
-            : _PendingWarrantyDecisionAttempt(
+        final attempt = retryingPending
+            ? _PendingWarrantyDecisionAttempt(
                 outcome: outcome,
                 reason: normalizedReason,
-                operationKey: const Uuid().v4(),
-              );
+                operationKey: pendingDecision.operationKey,
+              )
+            : existingAttempt != null &&
+                    existingAttempt.matches(outcome, normalizedReason)
+                ? existingAttempt
+                : _PendingWarrantyDecisionAttempt(
+                    outcome: outcome,
+                    reason: normalizedReason,
+                    operationKey: const Uuid().v4(),
+                  );
         _pendingWarrantyDecisionAttempts[job.id!] = attempt;
         _startLocalOperation();
         try {
@@ -11303,7 +11522,9 @@ class _PegasTablePageState extends State<PegasTablePage>
             outcome: outcome,
             reason: normalizedReason,
             operationKey: attempt.operationKey,
+            label: job.jobNumber == null ? null : 'Trabajo ${job.jobNumber}',
           );
+          unawaited(_refreshPendingWarrantyOutcomes());
           if (mounted) {
             final receiptInvoiceId = receipt['invoice_id']?.toString();
             var updated = job.copyWith(
@@ -11379,18 +11600,22 @@ class _PegasTablePageState extends State<PegasTablePage>
               ),
             );
           }
-        } on MechanicJobWarrantyCommandOutcomeUnknown catch (error) {
-          debugPrint(
-            'Warranty decision outcome remains unknown for ${job.id} with '
-            'operation ${attempt.operationKey}: $error',
+        } on MechanicJobWarrantyDecisionPending catch (pending) {
+          // Sin respuesta, o detrás de otro cambio del mismo trabajo que sigue
+          // sin respuesta: la decisión quedó en la bandeja con la llave que
+          // vale (la de una igual ya pendiente, si la había) y se aplica sola.
+          // La fila sigue diciendo lo aplicado; el panel, lo pendiente.
+          _pendingWarrantyDecisionAttempts[job.id!] =
+              _PendingWarrantyDecisionAttempt(
+            outcome: outcome,
+            reason: normalizedReason,
+            operationKey: pending.operationKey,
           );
+          unawaited(_refreshPendingWarrantyOutcomes());
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: const Text(
-                  'No se pudo confirmar el resultado. La decisión puede haberse guardado; vuelve a elegir exactamente la misma opción y motivo para reutilizar la misma operación.',
-                ),
-                backgroundColor: Colors.orange.shade900,
+                content: Text(pending.toString()),
                 duration: const Duration(seconds: 10),
               ),
             );
@@ -11402,6 +11627,7 @@ class _PegasTablePageState extends State<PegasTablePage>
           )) {
             _pendingWarrantyDecisionAttempts.remove(job.id!);
           }
+          unawaited(_refreshPendingWarrantyOutcomes());
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -11512,6 +11738,9 @@ class _PegasTablePageState extends State<PegasTablePage>
               '$approvedMessage$refreshSuffix',
             ),
             duration: const Duration(seconds: 8),
+            // Con acción, Flutter 3.38 la deja fija hasta tocarla: tapaba la
+            // hoja «Cambiar vista» y la lista en teléfono (C1/C4, 2026-09-30).
+            persist: false,
             backgroundColor: refreshError == null
                 ? Colors.green.shade700
                 : Colors.orange.shade800,
@@ -11729,8 +11958,15 @@ class _PegasTablePageState extends State<PegasTablePage>
     return result;
   }
 
+  /// [statusManagerContext] es el gestor de estados desde el que se pidió el
+  /// cambio: si el cierre se rechaza y el mecánico elige «Revisar líneas», el
+  /// gestor se cierra antes de mostrar las líneas. En teléfono quedaba encima
+  /// y las líneas abrían detrás (C1/C4 nativo, 2026-09-30).
   Future<bool> _updateJobToCustomStatus(
-      MechanicJob job, JobStatusCustom newStatus) async {
+    MechanicJob job,
+    JobStatusCustom newStatus, {
+    BuildContext? statusManagerContext,
+  }) async {
     if (job.id == null || newStatus.id == null) return false;
     if (newStatus.id == job.statusId) {
       _setSupplyAttentionCapability(job, newStatus);
@@ -11758,6 +11994,32 @@ class _PegasTablePageState extends State<PegasTablePage>
         );
       }
       return true;
+    } on MechanicJobStatusTransitionPending catch (pending) {
+      // Respaldado con su llave: se aplica solo, en la cola del trabajo.
+      await _loadData();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$pending')),
+        );
+      }
+      return false;
+    } on JobCompletionBlockedException catch (blocked) {
+      await _loadData();
+      if (mounted) {
+        await showJobCompletionBlocked(
+          context,
+          blocked,
+          jobLabel: job.jobNumber,
+          onReviewLines: () {
+            final manager = statusManagerContext;
+            if (manager != null && manager.mounted) {
+              Navigator.of(manager).pop();
+            }
+            _reviewBlockedJobLines(job);
+          },
+        );
+      }
+      return false;
     } catch (e) {
       await _loadData();
       if (mounted) {
@@ -12517,6 +12779,9 @@ class _PegasTablePageState extends State<PegasTablePage>
     _startLocalOperation();
     var succeeded = 0;
     final failures = <String>[];
+    final blockedFailures = <String>[];
+    final failedJobIds = <String>{};
+    MechanicJob? firstBlockedJob;
     try {
       for (var job in selectedJobs) {
         try {
@@ -12532,13 +12797,24 @@ class _PegasTablePageState extends State<PegasTablePage>
           succeeded++;
         } catch (error) {
           failures.add('${job.jobNumber ?? job.id}: $error');
+          failedJobIds.add(job.id!);
+          if (error is JobCompletionBlockedException) {
+            firstBlockedJob ??= job;
+            blockedFailures.addAll(error.problems.map(
+              (problem) => '${job.jobNumber ?? job.id}: $problem',
+            ));
+          }
         }
       }
       if (failures.isNotEmpty) {
         await _loadData();
       }
       if (mounted) {
-        setState(_selectedJobIds.clear);
+        setState(() {
+          _selectedJobIds
+            ..clear()
+            ..addAll(failedJobIds);
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -12547,6 +12823,19 @@ class _PegasTablePageState extends State<PegasTablePage>
             ),
             backgroundColor: failures.isEmpty ? Colors.green : Colors.orange,
           ),
+        );
+      }
+      if (mounted && blockedFailures.isNotEmpty) {
+        await showJobCompletionBlocked(
+          context,
+          JobCompletionBlockedException(blockedFailures),
+          jobLabel: 'Trabajos',
+          intro: 'Estos trabajos siguen abiertos. Corrige las líneas '
+              'indicadas en cada uno y vuelve a Finalizar o Entregar:',
+          onReviewLines: firstBlockedJob == null
+              ? null
+              : () => _reviewBlockedJobLines(firstBlockedJob!),
+          reviewActionLabel: 'Revisar primer trabajo',
         );
       }
     } catch (e) {
@@ -13834,6 +14123,10 @@ class _StatusManagerDialog extends StatefulWidget {
   final Future<void> Function(QuotationStatus)? onQuotationStatusSelected;
   final bool warrantyPaymentReviewRequired;
 
+  /// La decisión de garantía que sigue en la bandeja del equipo: se muestra
+  /// como pendiente, al lado de la aplicada.
+  final WarrantyOutcome? pendingWarrantyOutcome;
+
   /// Render as an anchored popover surface instead of a centred dialog.
   /// Set by callers that have a trigger to anchor to; see guide S-05.
   final bool asPopover;
@@ -13852,6 +14145,7 @@ class _StatusManagerDialog extends StatefulWidget {
     this.onWarrantyOutcomeSelected,
     this.onQuotationStatusSelected,
     this.warrantyPaymentReviewRequired = false,
+    this.pendingWarrantyOutcome,
     this.asPopover = false,
     this.initiallyCapturingSupplyNeed = false,
     this.initialSupplyJobBikeId,
@@ -14338,10 +14632,16 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
 
   Widget _buildWarrantyOutcomeSection() {
     final current = widget.job.warrantyOutcome ?? WarrantyOutcome.pending;
+    final pending = widget.pendingWarrantyOutcome;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (pending != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: WarrantyDecisionPendingNotice(outcome: pending),
+          ),
         if (widget.warrantyPaymentReviewRequired)
           Container(
             width: double.infinity,
@@ -14376,6 +14676,7 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
         Row(
           children: WarrantyOutcome.values.map((outcome) {
             final isSelected = outcome == current;
+            final isPending = outcome == pending;
             final isBlockedByPayment = widget.warrantyPaymentReviewRequired &&
                 outcome == WarrantyOutcome.covered;
             final Color color = switch (outcome) {
@@ -14393,8 +14694,11 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
                 padding: const EdgeInsets.only(right: 6),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(8),
+                  // Con una decisión pendiente, elegirla la reenvía y elegir
+                  // la aplicada la pone detrás; sin ella, la aplicada no se
+                  // vuelve a elegir.
                   onTap: widget.onWarrantyOutcomeSelected != null
-                      ? (isSelected || isBlockedByPayment
+                      ? ((isSelected && pending == null) || isBlockedByPayment
                           ? null
                           : () => widget.onWarrantyOutcomeSelected!(outcome))
                       : null,
@@ -14420,7 +14724,9 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
                         Icon(
                           isSelected
                               ? Icons.check_circle
-                              : Icons.radio_button_unchecked,
+                              : isPending
+                                  ? Icons.schedule
+                                  : Icons.radio_button_unchecked,
                           size: 18,
                           color: isSelected
                               ? color
@@ -15051,79 +15357,88 @@ class _StatusManagerDialogState extends State<_StatusManagerDialog> {
       );
     }
 
+    // Lo mismo que en teléfono: sin esto el lector anunciaba un grupo «En
+    // Curso» sin acción y once «Editar» iguales (C1/C4 web, 2026-09-30).
     return Material(
       key: key,
       color: Colors.transparent,
-      child: InkWell(
-        onTap: _isChangingStatus ? null : () => _selectStatus(status),
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          child: Row(
-            children: [
-              // Drag handle
-              ReorderableDragStartListener(
-                index: index,
-                child: MouseRegion(
-                  cursor: SystemMouseCursors.grab,
-                  child: Padding(
-                    padding: const EdgeInsets.only(right: 4),
-                    child: Icon(
-                      Icons.drag_indicator,
-                      size: 16,
-                      color: Colors.grey[400],
+      child: Semantics(
+        button: true,
+        selected: isSelected,
+        label: 'Cambiar estado a ${status.name}',
+        child: InkWell(
+          onTap: _isChangingStatus ? null : () => _selectStatus(status),
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            child: Row(
+              children: [
+                // Drag handle
+                ReorderableDragStartListener(
+                  index: index,
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.grab,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: Icon(
+                        Icons.drag_indicator,
+                        size: 16,
+                        color: Colors.grey[400],
+                      ),
                     ),
                   ),
                 ),
-              ),
-              // Color dot
-              Container(
-                width: 14,
-                height: 14,
-                decoration: BoxDecoration(
-                  color: statusColor,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: isSelected
-                        ? statusColor
-                        : statusColor.withValues(alpha: 0.5),
-                    width: isSelected ? 3 : 1,
+                // Color dot
+                Container(
+                  width: 14,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    color: statusColor,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: isSelected
+                          ? statusColor
+                          : statusColor.withValues(alpha: 0.5),
+                      width: isSelected ? 3 : 1,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              // Name
-              Expanded(
-                child: Text(
-                  status.name,
-                  style: TextStyle(
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                    color: isSelected ? statusColor : null,
-                    fontSize: 14,
+                const SizedBox(width: 12),
+                // Name
+                Expanded(
+                  child: Text(
+                    status.name,
+                    style: TextStyle(
+                      fontWeight:
+                          isSelected ? FontWeight.bold : FontWeight.w500,
+                      color: isSelected ? statusColor : null,
+                      fontSize: 14,
+                    ),
                   ),
                 ),
-              ),
-              // Edit button
-              IconButton(
-                icon: Icon(Icons.edit_outlined,
-                    size: 16, color: Colors.grey[400]),
-                tooltip: 'Editar',
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                onPressed: () => _startEditing(status),
-              ),
-              // Delete button (only for non-system statuses)
-              if (!status.isSystem)
+                // Edit button
                 IconButton(
-                  icon: Icon(Icons.delete_outline,
+                  icon: Icon(Icons.edit_outlined,
                       size: 16, color: Colors.grey[400]),
-                  tooltip: 'Eliminar',
+                  tooltip: 'Editar ${status.name}',
                   padding: EdgeInsets.zero,
                   constraints:
                       const BoxConstraints(minWidth: 28, minHeight: 28),
-                  onPressed: () => _deleteStatus(status),
+                  onPressed: () => _startEditing(status),
                 ),
-            ],
+                // Delete button (only for non-system statuses)
+                if (!status.isSystem)
+                  IconButton(
+                    icon: Icon(Icons.delete_outline,
+                        size: 16, color: Colors.grey[400]),
+                    tooltip: 'Eliminar ${status.name}',
+                    padding: EdgeInsets.zero,
+                    constraints:
+                        const BoxConstraints(minWidth: 28, minHeight: 28),
+                    onPressed: () => _deleteStatus(status),
+                  ),
+              ],
+            ),
           ),
         ),
       ),

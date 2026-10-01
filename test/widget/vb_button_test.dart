@@ -1,3 +1,5 @@
+import 'dart:ui' show SemanticsAction, SemanticsActionEvent;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/shared/themes/app_theme.dart';
@@ -22,6 +24,47 @@ Material _material(WidgetTester tester, Key key) => tester.widget<Material>(find
     .first);
 
 void main() {
+  testWidgets('one dialog action keeps its own executable semantics',
+      (tester) async {
+    final semantics = tester.ensureSemantics();
+    var taps = 0;
+    await _pump(
+      tester,
+      AlertDialog(
+        title: const Text('Respaldo restaurado'),
+        content: const Text('Volvió el trabajo perdido.'),
+        actions: [VbButton(label: 'Entendido', onPressed: () => taps++)],
+      ),
+    );
+    final node = tester.getSemantics(find.bySemanticsLabel('Entendido'));
+    expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+    tester.binding.performSemanticsAction(SemanticsActionEvent(
+      type: SemanticsAction.tap,
+      viewId: tester.view.viewId,
+      nodeId: node.id,
+    ));
+    await tester.pump();
+    expect(taps, 1);
+    semantics.dispose();
+  });
+
+  testWidgets('disabled and busy actions cannot execute through semantics',
+      (tester) async {
+    final semantics = tester.ensureSemantics();
+    await _pump(
+      tester,
+      const Column(mainAxisSize: MainAxisSize.min, children: [
+        VbButton(label: 'Deshabilitado', onPressed: null),
+        VbButton(label: 'En curso', onPressed: _noop, busy: true),
+      ]),
+    );
+    for (final label in ['Deshabilitado', 'En curso']) {
+      final node = tester.getSemantics(find.bySemanticsLabel(label));
+      expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isFalse);
+    }
+    semantics.dispose();
+  });
+
   testWidgets('A-01: height follows density and the label never wraps',
       (tester) async {
     await _pump(

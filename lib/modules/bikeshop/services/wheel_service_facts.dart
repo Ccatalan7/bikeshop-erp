@@ -6,9 +6,10 @@
 ///
 /// - **Por posición** (`frontSpokeHoles`, `rearSpokeHoles`): las pregunta el
 ///   Enrayado y describen la rueda que se arma, no la que llegó. Son estado
-///   instalado: la ficha cambia **al terminar el trabajo**
-///   ([wheelInstalledFacts], aplicado por la sincronización de la memoria),
-///   nunca al configurar. Una sola respuesta para «ambas» no se escribe: 3 de
+///   instalado: la ficha cambia **al terminar el trabajo**, nunca al
+///   configurar. La escribe el servidor en la misma transacción que termina
+///   el trabajo (`apply_job_installed_bike_facts_internal`, ítem 4);
+///   [wheelInstalledFacts] es la misma regla para anunciarla en el asistente. Una sola respuesta para «ambas» no se escribe: 3 de
 ///   44 bicis tienen perforaciones distintas adelante y atrás.
 /// - **De una rueda, como llegó** (`front/rearRotorSizeMm`,
 ///   `front/rearAxleInterface`, `front/rearBrakeFluidType`): se confirman con
@@ -29,8 +30,11 @@
 library;
 
 import '../config/brake_canonical_data.dart';
+import '../config/drivetrain_canonical_data.dart';
 import '../config/wheel_canonical_data.dart';
 import '../models/bikeshop_models.dart';
+import 'bike_technical_fact_patch.dart' show kBikeWheelSizeFactKey;
+import 'part_bike_fact_change.dart' show bikeRequirementLabel, kWheelSizeAdvice;
 
 /// Las ruedas que toca un servicio: la ubicación de la línea si la tiene; si
 /// no, la respuesta «¿qué rueda?», donde «ambas» son las dos. Freno y ruedas
@@ -115,6 +119,7 @@ String bikeFactValueLabel(String key, Object? value) => switch (key) {
       'frontAxleInterface' ||
       'rearAxleInterface' =>
         axleInterfaceLabel(value) ?? '$value',
+      'frontRotorMount' || 'rearRotorMount' => rotorMountLabel(value),
       _ => '$value',
     };
 
@@ -457,12 +462,237 @@ Map<String, Object> wheelInstalledFacts({
   return {key: holes};
 }
 
-/// Cómo se dice en el taller un dato instalado: «28H en la rueda trasera».
+/// Lo que el servidor no pudo escribir en la ficha al terminar un trabajo
+/// (`installed_bike_facts.problems` de la transición o de
+/// `sync_job_installed_bike_facts_v1`), dicho en el taller y con qué hacer.
+List<String> installedBikeFactProblemMessages(Object? installed) {
+  if (installed is! Map) return const [];
+  final problems = installed['problems'];
+  if (problems is! List) return const [];
+  return [
+    for (final problem in problems.whereType<Map>())
+      _installedProblemMessage(
+        item: problem['item_name']?.toString().trim(),
+        fact: wheelInstalledFactLabel(
+          problem['key']?.toString() ?? '',
+          problem['value'],
+        ),
+        reason: problem['reason']?.toString(),
+        message: problem['message']?.toString(),
+        bike: problem['bike_label']?.toString().trim(),
+        wheel: _spokeHoleKeys.contains(problem['key']?.toString()) ||
+            problem['key'] == null,
+        requiresKey: problem['requires_key']?.toString(),
+        requires: problem['requires_value']?.toString(),
+        requiresSource: problem['requires_source']?.toString(),
+        pending: problem['pending']?.toString(),
+        previous: problem['previous'] == null
+            ? null
+            : wheelInstalledFactLabel(
+                problem['key']?.toString() ?? '',
+                problem['previous'],
+              ),
+      ),
+  ];
+}
+
+const Set<String> _spokeHoleKeys = {'frontSpokeHoles', 'rearSpokeHoles'};
+
+String _installedProblemMessage({
+  required String? item,
+  required String fact,
+  required String? reason,
+  required String? message,
+  String? bike,
+  String? previous,
+  bool wheel = true,
+  String? requiresKey,
+  String? requires,
+  String? requiresSource,
+  String? pending,
+}) {
+  final line = item == null || item.isEmpty ? 'Una línea' : '«$item»';
+  // Con qué no calza: la ficha, o lo que instala el mismo trabajo en esa
+  // rueda (`requires_source`, 20260928130000, 20260928140000).
+  final against = switch (requiresSource) {
+    'job_hub' => 'la maza que instala el trabajo',
+    'job_build' => 'la rueda que arma el trabajo',
+    'job_rim' => 'la llanta que instala el trabajo',
+    'job_tire' => 'el neumático que instala el trabajo',
+    _ => 'la ficha de la bici',
+  };
+  final side = requiresKey != null && requiresKey.startsWith('front')
+      ? 'delanter'
+      : 'traser';
+  final bikeName = bike == null || bike.isEmpty ? 'otra bici' : bike;
+  return switch (reason) {
+    // La línea pasó a otra bici o rueda, o se borró: lo que escribió no se
+    // deshace solo, porque no se sabe cuál asignación era la equivocada.
+    'no_longer_installed' => 'La ficha de $bikeName sigue diciendo $fact por '
+        '${item == null || item.isEmpty ? 'una línea que ya no está' : line}, '
+        'que ya no dice haberlo instalado ahí'
+        '${previous == null ? ' (antes no tenía el dato)' : ' (antes: $previous)'}. '
+        '${wheel ? 'Si esa rueda no se armó' : 'Si esa pieza no se instaló'}, '
+        'corrige su ficha; si sí, vuelve a elegir el dato en su campo de la '
+        'ficha para confirmarlo.',
+    'line_without_bike' => '$line no dice de qué bici es: la ficha no tomó '
+        '$fact. Asígnala a su bici («Asignar a…» en el menú de la línea) y '
+        'guarda el trabajo.',
+    'out_of_range' => wheel
+        ? '$line dice $fact, fuera de 12 a 48 perforaciones: la ficha no lo '
+            'tomó. Corrige la línea y guarda el trabajo.'
+        : '$line dice $fact, fuera de lo que acepta la ficha: no lo tomó. '
+            'Revisa la ficha técnica del repuesto.',
+    // Un repuesto que no calza con la bici: un rotor en una bici con freno
+    // de llanta confirmado; un neumático cuyo BSD no es el de su rueda, o
+    // que el aro escrito de la bici no admite (el mismo texto que
+    // `bike_fact_requirement_text` y `bike_fact_requirement_advice`).
+    'incompatible' => switch (requiresKey) {
+        kBikeWheelSizeFactKey => '$line dice $fact, pero la ficha de '
+            'la bici dice aro $requires: la ficha no cambió. $kWheelSizeAdvice',
+        // Una llanta que no calza con su maza, su Enrayado o su neumático, o
+        // un neumático con la llanta del trabajo (20260928140000).
+        'frontHubSpokeHoles' || 'rearHubSpokeHoles' => '$line dice $fact, '
+            'pero $against dice que la maza ${side}a tiene $requires '
+            'perforaciones: la ficha no cambió. $_rimHubAdvice',
+        'frontBuildSpokeHoles' || 'rearBuildSpokeHoles' => '$line dice $fact, '
+            'pero $against dice que la rueda ${side}a lleva $requires rayos: '
+            'la ficha no cambió. $_rimBuildAdvice',
+        'frontTireBsdMm' || 'rearTireBsdMm' => '$line dice $fact, pero '
+            '$against dice que el neumático ${side}o es '
+            '${_bsdRequirement(requires)}: la ficha no cambió. $_rimTireAdvice',
+        'frontRimBsdMm' || 'rearRimBsdMm' => '$line dice $fact, pero '
+            '$against dice que la llanta ${side}a es '
+            '${_bsdRequirement(requires)}: la ficha no cambió. $_tireRimAdvice',
+        final key? when kWheelBsdFactKeyByPosition.containsValue(key) =>
+          '$line dice $fact, pero la ficha de la bici dice que '
+              '${key == 'frontWheelBsdMm' ? 'la rueda delantera' : 'la rueda trasera'} '
+              'es ${isoWheelBsdLabel(int.tryParse(requires ?? '') ?? 0)}: la '
+              'ficha no cambió. $_tireAdvice',
+        // Un cassette o piñón de rosca que no entra en el driver de la maza,
+        // o con otros piñones que la transmisión (20260928120000).
+        'freehubType' => '$line dice $fact, pero $against dice que '
+            'el driver trasero es «${_freehubLabel(requires)}»: la ficha no '
+            'cambió. $_freehubAdvice',
+        // Una maza que no se raya en la rueda que queda, o un rotor que no
+        // entra en el anclaje de su maza (20260928130000).
+        'frontSpokeHoles' || 'rearSpokeHoles' => '$line dice $fact, pero '
+            '$against dice que la rueda '
+            '${requiresKey == 'frontSpokeHoles' ? 'delantera' : 'trasera'} '
+            'lleva $requires rayos: la ficha no cambió. $_spokeHolesAdvice',
+        'frontRotorMount' || 'rearRotorMount' => '$line dice $fact, pero '
+            '$against dice que el anclaje del rotor '
+            '${requiresKey == 'frontRotorMount' ? 'delantero' : 'trasero'} '
+            'es «${rotorMountLabel(requires)}»: la ficha no cambió. '
+            '$_rotorMountAdvice',
+        'drivetrainConfig' => '$line dice $fact, pero la transmisión de la '
+            'ficha es $requires: la ficha no cambió. $_drivetrainAdvice',
+        _ => '$line dice $fact, pero en la ficha el tipo de freno '
+            'es «${bikeRequirementLabel(requires)}»: la ficha no cambió. Si la '
+            'bici lleva freno de disco, corrige el tipo de freno en su ficha; '
+            'si no, quita la línea.',
+      },
+    // No calza con la ficha, pero el mismo trabajo cambia la pieza que lo
+    // decide: nada se escribe y el mecánico lo decide en la ficha
+    // (`bike_fact_pending_text`).
+    'pending' => '$line dice $fact y la ficha de la bici dice '
+        '${requiresKey == 'drivetrainConfig' ? 'que la transmisión es $requires' : 'que el driver trasero es «${_freehubLabel(requires)}»'}, '
+        'pero ${pending == 'hub_change' ? 'el trabajo también cambia la maza trasera: el driver lo dice la maza nueva. Elígelo en la ficha de la bici' : 'el trabajo también cambia el mando trasero: si la transmisión cambió, corrígela en la ficha de la bici'} '
+        'y guarda el trabajo. La ficha no cambió.',
+    // Dos Enrayados de la misma rueda que no dicen lo mismo (20260928130000).
+    'conflicting_build' => '$line dice $fact, pero otro Enrayado del mismo '
+        'trabajo arma esa rueda a $requires rayos: la ficha no cambió. Una '
+        'rueda se arma una vez: deja una sola línea con la cantidad real y '
+        'guarda el trabajo.',
+    // Una línea instala una sola cosa.
+    'mixed_change' => '$line dice perforaciones y un cambio de repuesto a la '
+        'vez: la ficha no tomó ninguno. Deja en la línea sólo lo que instaló '
+        'y guarda el trabajo.',
+    // Lo que el mecánico vio al elegir la rueda ya no es el repuesto o la
+    // rueda de la línea.
+    'stale_change' => '$line: el cambio de ficha que guardó ($fact) ya no '
+        'calza con su repuesto o con la rueda elegida, y la ficha no cambió. '
+        'Ábrela, vuelve a elegir la rueda y guarda el trabajo.',
+    'no_wheel' => '$line tiene perforaciones pero no dice qué rueda armó: '
+        'la ficha no cambió. Elige la rueda en Configurar y guarda el trabajo.',
+    'invalid_value' => '$line no dice un número de perforaciones que la '
+        'ficha entienda: no cambió. Corrige la línea y guarda el trabajo.',
+    _ => 'La ficha no tomó $fact de $line'
+        '${message == null || message.isEmpty ? '' : ' ($message)'}; se '
+        'reintenta al guardar el trabajo o volver a cambiar su estado.',
+  };
+}
+
+const String _tireAdvice = 'Revisa la medida del neumático y la de esa '
+    'rueda: si el neumático sí va ahí, corrige la ficha de la bici y guarda '
+    'el trabajo; si no, cambia la línea.';
+
+const String _rimHubAdvice = 'Una llanta se raya en una maza con sus mismas '
+    'perforaciones (o con más, en los patrones de Sheldon Brown), nunca con '
+    'menos: si también cambiaste la maza, agrega su línea en esa rueda; si la '
+    'maza tiene otra cantidad, corrige la ficha; si no, cambia la línea.';
+
+const String _rimBuildAdvice = 'La rueda queda con las perforaciones de su '
+    'llanta: si el Enrayado u otra llanta de esa rueda dice otra cantidad, '
+    'corrige esa línea; si no, cambia ésta.';
+
+const String _rimTireAdvice = 'Una llanta y su neumático tienen el mismo '
+    'BSD: si también cambiaste el neumático, agrega su línea en esa rueda; si '
+    'la rueda es otra, corrige la ficha; si no, cambia la línea.';
+
+const String _tireRimAdvice = 'Un neumático calza sólo en una llanta de su '
+    'mismo BSD: si la llanta del trabajo es la que va, cambia esta línea; si '
+    'no, corrige la de la llanta.';
+
+/// «584 (27,5″/650b)», o tal cual si son dos («584 o 622»).
+String _bsdRequirement(String? value) {
+  final whole = int.tryParse(value ?? '');
+  return whole == null ? value ?? '?' : isoWheelBsdLabel(whole);
+}
+
+const String _freehubAdvice = 'Revisa el núcleo de la maza trasera: si es '
+    'otro, corrige el driver en la ficha de la bici y guarda el trabajo; si '
+    'no, cambia la línea.';
+
+const String _spokeHolesAdvice = 'Una maza con menos perforaciones que la '
+    'llanta no se puede rayar: si también cambiaste la llanta, agrega su '
+    'línea en esa rueda; si la rueda lleva otra cantidad, corrige la ficha; '
+    'si no, cambia la línea.';
+
+const String _rotorMountAdvice = 'Un rotor Center Lock no va en una maza de '
+    '6 pernos, y uno de 6 pernos va en una Center Lock sólo con el adaptador '
+    'SM-RTAD05, que no sirve con araña de aluminio (flotantes, SM-RT86 y '
+    'SM-RT76): si la maza es otra, corrige la ficha; si no, cambia la línea.';
+
+const String _drivetrainAdvice = 'Un cassette o piñón de otra velocidad '
+    'necesita el mando de esa velocidad: si también lo cambiaste, agrega su '
+    'línea o corrige la transmisión en la ficha; si no, cambia la línea.';
+
+String _freehubLabel(Object? code) =>
+    kDrivetrainFreehubTypeOptions['$code'] ?? '$code';
+
+/// Cómo se dice en el taller un dato instalado: «28H en la rueda trasera»,
+/// «180 mm en el rotor trasero», «622 (29″/700c) en la rueda trasera» (el
+/// mismo texto que `installed_bike_fact_label` en el servidor).
 String wheelInstalledFactLabel(String key, Object? value) => switch (key) {
       'frontSpokeHoles' => '${value}H en la rueda delantera',
       'rearSpokeHoles' => '${value}H en la rueda trasera',
+      'frontRotorSizeMm' => '$value mm en el rotor delantero',
+      'rearRotorSizeMm' => '$value mm en el rotor trasero',
+      'frontWheelBsdMm' => '${_bsd(value)} en la rueda delantera',
+      'rearWheelBsdMm' => '${_bsd(value)} en la rueda trasera',
+      'freehubType' => '${_freehubLabel(value)} en el driver trasero',
+      'frontRotorMount' =>
+        '${rotorMountLabel(value)} en el anclaje del rotor delantero',
+      'rearRotorMount' =>
+        '${rotorMountLabel(value)} en el anclaje del rotor trasero',
       _ => '${_factLabel[key] ?? key} $value',
     };
+
+String _bsd(Object? value) {
+  final bsd = value is num ? value.toInt() : int.tryParse('$value');
+  return bsd == null ? '$value' : isoWheelBsdLabel(bsd);
+}
 
 const Map<String, String> _factLabel = {
   'frontSpokeHoles': 'perforaciones delanteras',
@@ -472,10 +702,16 @@ const Map<String, String> _factLabel = {
   'rimBrakeFamily': 'familia de freno de llanta',
   'frontRotorSizeMm': 'rotor delantero',
   'rearRotorSizeMm': 'rotor trasero',
+  'frontWheelBsdMm': 'diámetro de la rueda delantera (BSD)',
+  'rearWheelBsdMm': 'diámetro de la rueda trasera (BSD)',
   'frontBrakeFluidType': 'fluido del freno delantero',
   'rearBrakeFluidType': 'fluido del freno trasero',
   'frontAxleInterface': 'eje delantero',
   'rearAxleInterface': 'eje trasero',
+  'freehubType': 'driver trasero',
+  'drivetrainConfig': 'transmisión',
+  'frontRotorMount': 'anclaje del rotor delantero',
+  'rearRotorMount': 'anclaje del rotor trasero',
 };
 
 /// Lo que el mecánico lee al cerrar el asistente de un servicio de rueda o de

@@ -90,17 +90,27 @@ class SmartTaskService extends ChangeNotifier {
   // CRUD OPERATIONS
   // ============================================================
 
-  /// Get all tasks for a job (with optional parent filter)
+  /// Las tareas accionables de un trabajo (con filtro opcional por línea).
+  ///
+  /// Sólo las que creó una persona: las copiadas de la descripción del
+  /// catálogo (`parsed_from_description`, heredadas hasta 2026-09-29) repiten
+  /// la instrucción de la línea, que la pestaña muestra entera, y no cuentan
+  /// en el avance. La base ya no admite nuevas (20260929040000).
   Future<List<MechanicJobTask>> getTasksForJob(
     String jobId, {
     String? parentItemId,
     bool? isStandalone,
   }) async {
     try {
+      final tenantId = await _tenantService.getTenantId();
+      if (tenantId == null) throw Exception('No tenant ID');
+
       var query = Supabase.instance.client
           .from('mechanic_job_tasks')
           .select()
-          .eq('job_id', jobId);
+          .eq('tenant_id', tenantId)
+          .eq('job_id', jobId)
+          .eq('parsed_from_description', false);
 
       if (parentItemId != null) {
         query = query.eq('parent_item_id', parentItemId);
@@ -153,60 +163,6 @@ class SmartTaskService extends ChangeNotifier {
       return MechanicJobTask.fromJson(data);
     } catch (e) {
       if (kDebugMode) print('❌ Error creating task: $e');
-      rethrow;
-    }
-  }
-
-  /// Generate auto-tasks from product description
-  /// Parses description by newlines and creates a task for each non-empty line
-  Future<List<MechanicJobTask>> generateAutoTasksFromDescription({
-    required String jobId,
-    required String parentItemId,
-    required String description,
-  }) async {
-    try {
-      final tenantId = await _tenantService.getTenantId();
-      if (tenantId == null) throw Exception('No tenant ID');
-
-      // Split description by newlines and filter empty lines
-      final lines = description
-          .split('\n')
-          .map((line) => line.trim())
-          .where((line) => line.isNotEmpty)
-          .toList();
-
-      if (kDebugMode) {
-        print(
-            '🤖 [SmartTaskService] Generating ${lines.length} auto-tasks from description');
-      }
-
-      final tasks = <MechanicJobTask>[];
-
-      for (int i = 0; i < lines.length; i++) {
-        final task = MechanicJobTask(
-          tenantId: tenantId,
-          jobId: jobId,
-          parentItemId: parentItemId,
-          taskName: lines[i],
-          taskDescription: null,
-          isCompleted: false,
-          isStandalone: false,
-          isAdhoc: false,
-          parsedFromDescription: true, // Mark as auto-generated
-          displayOrder: i, // Auto-tasks get lower order numbers
-        );
-
-        final created = await createTask(task);
-        tasks.add(created);
-      }
-
-      if (kDebugMode) {
-        print('✅ [SmartTaskService] Created ${tasks.length} auto-tasks');
-      }
-
-      return tasks;
-    } catch (e) {
-      if (kDebugMode) print('❌ Error generating auto-tasks: $e');
       rethrow;
     }
   }
@@ -370,6 +326,9 @@ class TaskProgress {
     required this.percentage,
     required this.totalAdHocPrice,
   });
+
+  /// Todas hechas. Sin tareas no hay nada hecho: 0 de 0 no es «terminado».
+  bool get isDone => totalTasks > 0 && completedTasks == totalTasks;
 }
 
 class ParentCompletionStatus {

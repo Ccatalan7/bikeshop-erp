@@ -438,6 +438,18 @@ Required behavior:
 - preserve entered data on validation or transport failure; and
 - dismiss the keyboard intentionally when moving to a non-text step.
 
+A form inside a `Dialog` with a `maxHeight` fails the save-action rule when its
+actions are the last child of the same `SingleChildScrollView`: on a phone they
+sit under the fields and attachments, and the keyboard hides them (C1 native
+Android, 2026-09-30). Validated condition: header and actions outside the
+scroll, fields in a `Flexible` scroll between them; `Dialog` already subtracts
+`viewInsets`, so the actions stay above the keyboard. Fall back to one scroll
+below ~360 logical px of height, and scroll a new inline notice into view,
+because it no longer sits next to the save button. Minimum regression: at the
+real phone size with a `FakeViewPadding` keyboard, the actions are
+`hitTestable` before and after scrolling to the last section
+(`test/widgets/task_form_assignment_and_notice_test.dart`).
+
 Stack fields that no longer scan as a coherent row. Do not keep a two-column
 desktop form merely because each text field can shrink.
 

@@ -90,6 +90,16 @@ on-accent foreground, `surface*` the layer ladder, `onSurface(Variant)` ink.
    quiera respetar la paleta. La regla 6 dice de dónde hereda un componente;
    ésta dice que heredar **no ocurre solo** cuando el tema se deriva.
 
+8. **Un `Colors.xAccent.shade100` como texto es un color de fondo oscuro.**
+   `BikeRecordPanel` pintaba las etiquetas del historial («Servicio»,
+   «Reemplazo», «Activo», «3 trabajos», «2 componentes activos») con
+   `tealAccent.shade100`/`lightBlueAccent.shade100` sobre su mismo tono al
+   15 %: en oscuro se leían, en claro eran pastel sobre pastel, invisibles
+   (frames Android del 2026-09-30). Una etiqueta de estado usa un
+   `VinabikeSemanticTone` completo: `container` de fondo, `border` y
+   `onContainer` de texto, que el resolver garantiza legibles en los dos
+   temas. Un frame sólo oscuro no prueba nada de esto.
+
 ## Verification gates (what "supports appearance" means)
 
 - Rendered matrix over **all presets × light/dark** for the surface family

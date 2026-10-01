@@ -152,6 +152,52 @@ class MechanicJobWarrantyCommandOutcomeUnknown implements Exception {
       'Reintentar debe reutilizar la misma clave de operación.';
 }
 
+/// La decisión de garantía no se aplicó todavía: quedó en la bandeja del
+/// equipo con su llave [operationKey], sin respuesta del servidor o detrás de
+/// otro comando del mismo trabajo ([queued]), y se envía sola. No es una
+/// decisión aplicada: la cobertura y el documento siguen como estaban.
+class MechanicJobWarrantyDecisionPending implements Exception {
+  const MechanicJobWarrantyDecisionPending({
+    required this.operationKey,
+    this.queued = false,
+    this.busy = false,
+  });
+
+  final String operationKey;
+  final bool queued;
+  final bool busy;
+
+  @override
+  String toString() => busy
+      ? 'Otra pestaña abierta está enviando la decisión de garantía; su '
+          'resultado se verá al terminar.'
+      : queued
+          ? 'La decisión de garantía quedó en este equipo detrás de otro '
+              'cambio del mismo trabajo que sigue sin respuesta; se aplica sola '
+              'cuando ése se resuelva. Hasta entonces la cobertura y el '
+              'documento siguen como estaban.'
+          : 'La decisión de garantía quedó sin respuesta del servidor. Está '
+              'respaldada en este equipo con su llave y se aplica sola; hasta '
+              'entonces la cobertura y el documento siguen como estaban.';
+}
+
+/// El registro de la garantía de un trabajo nuevo no se aplicó todavía: quedó
+/// en la bandeja del equipo detrás de las líneas del alta, con su llave, y se
+/// envía solo. Hasta entonces la garantía no está vinculada con su trabajo
+/// original.
+class MechanicJobWarrantyRegistrationPending implements Exception {
+  const MechanicJobWarrantyRegistrationPending({this.busy = false});
+
+  final bool busy;
+
+  @override
+  String toString() => busy
+      ? 'Otra pestaña abierta está vinculando la garantía con su trabajo '
+          'original; su resultado se verá al terminar.'
+      : 'La garantía todavía no quedó vinculada con su trabajo original: el '
+          'registro quedó en este equipo, con su llave, y se envía solo.';
+}
+
 class MechanicJobWarrantyCommandCoordinator {
   const MechanicJobWarrantyCommandCoordinator({
     required this.send,

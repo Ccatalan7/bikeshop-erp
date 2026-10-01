@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/modules/bikeshop/models/bikeshop_models.dart';
 import 'package:vinabike_erp/modules/bikeshop/services/bike_technical_fact_patch.dart';
+import 'package:vinabike_erp/modules/bikeshop/services/wheel_service_facts.dart';
 
 BikeProfile _profile(
   Map<String, dynamic> values, {
@@ -224,64 +225,6 @@ void main() {
     );
   });
 
-  test('lo que no llegó a la ficha espera hasta llegar o descartarse',
-      () async {
-    unsentBikeFactPromotionsByJob.clear();
-    PendingBikeFactPromotion promotion(String key) => PendingBikeFactPromotion(
-          operationKey: key,
-          baseline: _profile({}),
-          target: _profile({'valveType': 'presta'}),
-        );
-    final pending = {
-      'sin-red': promotion('op-a'),
-      'cambiada': promotion('op-b'),
-      'escrita': promotion('op-c'),
-    };
-    final networkUp = <String>{};
-    Future<BikeProfile?> patch({
-      required String operationKey,
-      required String bikeId,
-      required String jobId,
-      required List<BikeTechnicalFact> facts,
-    }) async {
-      if (bikeId == 'cambiada') {
-        throw const BikeTechnicalFactConflict(['valveType']);
-      }
-      if (bikeId == 'sin-red' && !networkUp.contains(bikeId)) {
-        throw Exception('sin red');
-      }
-      return _profile({'valveType': 'presta'});
-    }
-
-    // Primer intento y un reintento al abrir que vuelve a fallar: el
-    // pendiente sigue ahí, con su llave; el conflicto y lo escrito no.
-    for (var attempt = 0; attempt < 2; attempt++) {
-      final outcome = await writePendingBikeFactPromotions(
-        jobId: 'job',
-        pending: attempt == 0
-            ? pending
-            : Map.of(unsentBikeFactPromotionsByJob['job']!),
-        patch: patch,
-      );
-      expect(outcome.failed.keys, ['sin-red']);
-      expect(unsentBikeFactPromotionsByJob['job']!.keys, ['sin-red']);
-      expect(unsentBikeFactPromotionsByJob['job']!['sin-red']!.operationKey,
-          'op-a');
-      if (attempt == 0) {
-        expect(outcome.discarded.keys, ['cambiada']);
-        expect(outcome.written.keys, ['escrita']);
-      }
-    }
-
-    networkUp.add('sin-red');
-    await writePendingBikeFactPromotions(
-      jobId: 'job',
-      pending: Map.of(unsentBikeFactPromotionsByJob['job']!),
-      patch: patch,
-    );
-    expect(unsentBikeFactPromotionsByJob.containsKey('job'), isFalse);
-  });
-
   test('el conflicto nombra las claves que cambiaron', () {
     expect(
       const BikeTechnicalFactConflict(['brakeType']).toString(),
@@ -289,38 +232,73 @@ void main() {
     );
   });
 
-  test('una línea terminada que se corrige vuelve a escribir lo que instala',
-      () {
-    const line = 'e2790000-0000-4000-8000-000000000061';
-    final keys = <String>[];
-    String? next(int holes) {
-      final key = nextJobCompletionOperationKey(
-        itemId: line,
-        installed: {'rearSpokeHoles': holes},
-        existingKeys: keys,
-      );
-      if (key != null) keys.add(key);
-      return key;
-    }
+  // La llave `job_completion:<línea>:<n>:<datos>` y el 28H → 32H → 28H los
+  // cuida ahora el servidor (supabase/tests/job_installed_bike_facts.sql):
+  // la app sólo cuenta lo que no entró (ítem 4, 2026-09-28).
+  test('lo instalado que la ficha no tomó se dice en el taller', () {
+    final messages = installedBikeFactProblemMessages({
+      'applied': [
+        {'key': 'rearSpokeHoles', 'value': 28},
+      ],
+      'problems': [
+        {
+          'item_name': 'Enrayado sin bici',
+          'key': 'frontSpokeHoles',
+          'value': 28,
+          'reason': 'line_without_bike',
+        },
+        {
+          'item_name': 'Enrayado mal tipeado',
+          'key': 'frontSpokeHoles',
+          'value': 99,
+          'reason': 'out_of_range',
+        },
+        {
+          'item_name': 'Enrayado',
+          'key': 'rearSpokeHoles',
+          'value': 32,
+          'reason': 'rejected',
+          'message': 'Bicycle not found for current tenant',
+        },
+        {
+          'item_name': 'Enrayado sin rueda',
+          'value': '28',
+          'reason': 'no_wheel'
+        },
+        {
+          'item_name': 'Enrayado raro',
+          'value': '28.5',
+          'reason': 'invalid_value',
+        },
+        {
+          'item_name': 'Enrayado Oxford',
+          'bike_label': 'Oxford Dos',
+          'key': 'frontSpokeHoles',
+          'value': 36,
+          'previous': 32,
+          'reason': 'no_longer_installed',
+        },
+      ],
+    });
 
-    expect(next(28), 'job_completion:$line:1:rearSpokeHoles=28');
-    expect(next(28), isNull, reason: 'un reintento no reescribe');
-    expect(next(32), 'job_completion:$line:2:rearSpokeHoles=32');
-    expect(next(28), 'job_completion:$line:3:rearSpokeHoles=28',
-        reason: 'con la llave <línea>:<datos> este 28H encontraba el primer '
-            'recibo y la ficha quedaba en 32H');
+    expect(messages, hasLength(6));
     expect(
-      nextJobCompletionOperationKey(
-        itemId: line,
-        installed: {'rearSpokeHoles': 28},
-        existingKeys: [
-          ...keys,
-          'job_completion:otra-linea:9:rearSpokeHoles=36',
-          'job_completion:$line:rearSpokeHoles=36',
-        ],
-      ),
-      isNull,
-      reason: 'sólo cuentan los recibos numerados de esta línea',
+      messages[5],
+      'La ficha de Oxford Dos sigue diciendo 36H en la rueda delantera por '
+      '«Enrayado Oxford», que ya no dice haberlo instalado ahí (antes: 32H en '
+      'la rueda delantera). Si esa rueda no se armó, corrige su ficha; si sí, '
+      'vuelve a elegir el dato en su campo de la ficha para confirmarlo.',
+    );
+    expect(messages[3], contains('no dice qué rueda armó'));
+    expect(messages[4], contains('no dice un número de perforaciones'));
+    expect(messages[0], contains('«Enrayado sin bici» no dice de qué bici es'));
+    expect(messages[0], contains('28H en la rueda delantera'));
+    expect(messages[1], contains('fuera de 12 a 48'));
+    expect(messages[2], contains('se reintenta'));
+    expect(installedBikeFactProblemMessages(null), isEmpty);
+    expect(
+      installedBikeFactProblemMessages({'applied': [], 'problems': []}),
+      isEmpty,
     );
   });
 }

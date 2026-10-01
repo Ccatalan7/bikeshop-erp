@@ -22,6 +22,7 @@ import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/widgets/product_autocomplete_field.dart';
 import '../../../shared/widgets/smart_product_field.dart';
 import '../../../shared/widgets/line_row_wrapper.dart';
+import '../../../shared/widgets/workshop_asset_content.dart';
 import '../../../shared/services/inventory_service.dart';
 import '../../../shared/services/right_toolbar_service.dart';
 import '../../../shared/services/tenant_service.dart';
@@ -39,16 +40,26 @@ import '../services/bike_product_compatibility_service.dart';
 import '../services/bikeshop_service.dart';
 import '../services/mechanic_job_form_persistence_policy.dart';
 import '../services/bike_technical_fact_patch.dart';
+import '../services/job_form_lines.dart';
+import '../services/part_bike_fact_change.dart';
+import '../services/job_line_save.dart';
+import '../services/workshop_command_notices.dart';
+import '../services/job_attachments.dart';
+import '../services/mechanic_job_status_transition_coordinator.dart';
+import '../services/job_completion_blocked.dart';
+import '../services/mechanic_job_warranty_command_coordinator.dart';
+import '../services/workshop_command_outbox.dart';
 import '../services/bearing_symptom_findings.dart';
 import '../services/service_answer_changes.dart';
 import '../services/wheel_service_facts.dart';
-import '../services/smart_task_service.dart';
 import '../services/service_wizard_service.dart';
 import '../widgets/bikeshop_multi_select_picker_field.dart';
 import '../widgets/job_line_row.dart';
 import '../services/job_line_systems.dart';
 import '../../inventory/services/category_service.dart';
 import '../widgets/service_wizard_dialog.dart';
+import '../widgets/warranty_decision_pending_notice.dart';
+import '../widgets/job_completion_blocked_dialog.dart';
 import '../../../shared/services/image_service.dart'; // Add ImageService import
 import '../services/job_status_service.dart';
 import '../models/bikeshop_models.dart';
@@ -78,7 +89,7 @@ class _BikeTabData {
       TextEditingController();
 
   // Per-bike items
-  final List<_JobPartItem> partItems = [];
+  final List<JobPartItem> partItems = [];
 
   // Per-bike flags
   bool isWarrantyWork = false;
@@ -1650,6 +1661,61 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   // Una llave por contenido pendiente: se reusa al reintentar una respuesta
   // perdida y se renueva cuando otra promoción cambia lo pendiente.
   final Map<String, String> _pendingBikeProfileOperationKeys = {};
+  // La versión de cada línea del trabajo tal como el formulario la cargó (o
+  // la recibió del último guardado). El guardado la manda de vuelta: si otra
+  // persona tocó las líneas mientras tanto, el servidor lo rechaza en vez de
+  // pisarlas (`save_mechanic_job_lines_v1`).
+  final Map<String, String> _seenLineVersions = {};
+  // El guardado de líneas que se envió y quedó sin respuesta. El comando
+  // completo y su llave viven en la bandeja del equipo (sobreviven al cierre
+  // de la app); aquí queda lo que el formulario necesita para adoptar su
+  // recibo. El próximo guardado lo resuelve antes de escribir nada.
+  _PendingLineSave? _pendingLineSave;
+  // La cabecera tal como la mandó el servidor al cargar (o en el último
+  // recibo): el valor visto de cada campo que el guardado cambia.
+  Map<String, dynamic> _headerBaseline = {};
+  // El id del trabajo nuevo, elegido una vez por formulario, y la llave de su
+  // alta: el alta que llegó y perdió su respuesta devuelve su recibo en vez
+  // de crear otro trabajo ([BikeshopService.jobCreationCommand]).
+  final String _newJobId = const Uuid().v4();
+
+  /// El trabajo nuevo de este formulario, con el recibo de su alta: desde
+  /// entonces cada guardado es el de un trabajo guardado, y lo editado
+  /// después del alta viaja con él (cierre del Master Schema, 2026-09-29).
+  MechanicJob? _createdJob;
+
+  /// El trabajo guardado de este formulario: el que abrió, o el nuevo cuya
+  /// alta ya tiene recibo. Null mientras el alta no llegue.
+  String? get _savedJobId => widget.jobId ?? _createdJob?.id;
+
+  /// El formulario dueño de los adjuntos que sube: al cerrarse sin guardar,
+  /// libera sólo los suyos (los de otro formulario abierto no).
+  final String _formInstanceId = const Uuid().v4();
+  WorkshopCommandScope? _imageScope;
+  bool _uploadedAttachments = false;
+  // Lo que el formulario mostró de los campos de la cabecera que repiten la
+  // primera bici ([_headerMirror]). Un campo cuenta como editado si difiere
+  // de esto, no de la cabecera: con la bici vacía y la cabecera escrita, un
+  // guardado sin tocar el diagnóstico lo borraba (20 trabajos así en
+  // producción al 2026-09-28), y uno ajeno se veía como conflicto (revisión
+  // de Codex).
+  Map<String, dynamic> _headerShown = {};
+  // Cada bici del trabajo como la mandó el servidor al cargar (o en el último
+  // recibo): lo visto de cada campo que el guardado cambia. Y las que el
+  // formulario mostraba en sus pestañas: sólo ésas salen si se quitan; una
+  // que otra persona agregó mientras tanto no se toca (segunda revisión de
+  // Codex, 2026-09-28).
+  final Map<String, Map<String, dynamic>> _jobBikeBaseline = {};
+  final Set<String> _shownJobBikeIds = {};
+  // Bicis cuya ficha no tomó lo de «Configurar» en el último guardado, con el
+  // aviso: el trabajo no se guarda hasta reconfirmarlo (o quitar sus servicios
+  // configurados), para que ninguna línea quede diciendo otra cosa que la
+  // ficha.
+  final Map<String, String> _bikeFactsAwaitingReconfirmation = {};
+  // El id con que quedó guardada cada línea de mano de obra de esta sesión del
+  // formulario: el siguiente guardado la actualiza en vez de crearla de nuevo
+  // (y perder sus tareas).
+  final Map<String, String> _laborLinePersistedIds = {};
   final Map<String, Map<String, dynamic>> _pendingServiceWizardAnswers = {};
   JobPriority _selectedPriority = JobPriority.normal;
   JobStatus _selectedStatus = JobStatus.pendiente;
@@ -1680,6 +1746,14 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   String? _pendingWarrantyRegistrationOperationKey;
   String? _pendingWarrantyDecisionOperationKey;
   String? _pendingWarrantyDecisionFingerprint;
+
+  /// La decisión de garantía de este trabajo que sigue en la bandeja del
+  /// equipo: el panel la dice pendiente, nunca aplicada.
+  ({
+    WarrantyOutcome outcome,
+    String? reason,
+    String operationKey
+  })? _pendingWarrantyDecision;
   String? _pendingStatusTransitionOperationKey;
   String? _pendingStatusTransitionFingerprint;
   final _warrantySaveCheckpoint = MechanicJobWarrantySaveCheckpoint();
@@ -1705,7 +1779,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       _isServiceBudget ? 'presupuesto' : 'cotización';
 
   // Parts and services
-  final List<_JobPartItem> _partItems = [];
+  final List<JobPartItem> _partItems = [];
   final List<_JobServiceItem> _serviceItems = [];
 
   // Service wizard
@@ -1713,6 +1787,19 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   final _serviceWizardService = ServiceWizardService();
   final _bikeProductCompatibilityService = BikeProductCompatibilityService();
   int? _selectedServiceIndex; // Index into _currentPartItems for sidebar detail
+
+  /// La relación única concepto + posición (`bike_fact_spec_links`) y la
+  /// ficha técnica de los repuestos de las líneas: con ellas cada línea dice
+  /// el cambio de ficha que propone. Nula mientras no se pudo leer.
+  List<BikeFactSpecLink>? _bikeFactSpecLinks = BikeFactSpecLinks.loaded;
+  final Map<String, Map<String, dynamic>> _partSpecValues = {};
+
+  /// Lo que cada línea escribió en la ficha y la ficha todavía dice como
+  /// suyo, según el servidor (`job_part_change_writers_v1`, por id de
+  /// línea; una marca o varias): un neumático sólo reemplaza el BSD que
+  /// escribió su propia línea (20260928110000). Vacío hasta leerlo, o si no
+  /// se pudo.
+  Map<String, Object> _partChangeWriters = const {};
 
   // Key to reset autocomplete field after adding product
   int _partAutocompleteKey = 0;
@@ -1751,6 +1838,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   bool _linkedInvoiceHasActivePayments = false;
   bool _linkedInvoicePaymentStateUnknown = false;
 
+  /// La factura vinculada está confirmada y sin pagos: lo que se cobra se
+  /// corrige desde ella (el comando rechaza cambiarlo desde aquí).
+  bool _linkedInvoiceIsPosted = false;
+
   // Edit mode
   MechanicJob? _existingJob;
   String? _existingJobLoadError;
@@ -1775,6 +1866,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         existingJob: _existingJob,
         linkedInvoiceHasActivePayments: _linkedInvoiceHasActivePayments,
         linkedInvoicePaymentStateUnknown: _linkedInvoicePaymentStateUnknown,
+        linkedInvoiceIsPosted: _linkedInvoiceIsPosted,
       );
 
   bool get _isCommercialSnapshotLocked =>
@@ -1869,9 +1961,10 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     }
   }
 
-  JobLineSystem _systemOfLine(_JobPartItem item) => jobLineSystem(
+  JobLineSystem _systemOfLine(JobPartItem item) => jobLineSystem(
         serviceFamily: item.wizardProfile?.serviceFamily,
-        categoryPath: _categoryPathById[item.product?.categoryId],
+        categoryPath: _categoryPathById[item.product?.categoryId] ??
+            item.product?.categoryName,
         location: item.location,
       );
 
@@ -1922,6 +2015,19 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
   @override
   void dispose() {
+    // Adjuntos subidos que ningún guardado se llevó: nadie más los reclama.
+    // Los que van en un guardado pendiente se quedan con él en la bandeja, y
+    // los que algún trabajo ya muestra nunca se borran.
+    final imageScope = _imageScope;
+    if (imageScope != null && _uploadedAttachments) {
+      unawaited(
+        WorkshopCommandOutbox.shared
+            .releaseImages(imageScope, ownerForm: _formInstanceId)
+            .catchError((Object error) {
+          debugPrint('No se liberaron los adjuntos sin guardar: $error');
+        }),
+      );
+    }
     _initialLoadGeneration++;
     _clientRequestController.dispose();
     _diagnosisController.dispose();
@@ -2093,6 +2199,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         String? invoiceNumber,
         bool hasActivePayments,
         bool paymentStateUnknown,
+        bool isPosted,
       })> _readLinkedInvoiceFinancialState({
     required DatabaseService databaseService,
     required MechanicJob job,
@@ -2103,6 +2210,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         invoiceNumber: null,
         hasActivePayments: false,
         paymentStateUnknown: false,
+        isPosted: false,
       );
     }
 
@@ -2124,6 +2232,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           invoiceNumber: null,
           hasActivePayments: hasActivePayments,
           paymentStateUnknown: true,
+          isPosted: false,
         );
       }
 
@@ -2145,6 +2254,12 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         invoiceNumber: invoiceNumber,
         hasActivePayments: hasActivePayments,
         paymentStateUnknown: false,
+        // Confirmada, o con nota de crédito (cuya guardia no deja cambiar
+        // sus líneas): lo que se cobra se corrige desde la factura.
+        isPosted: !hasActivePayments &&
+            (isPostedSalesInvoiceStatus(invoiceData['status']?.toString()) ||
+                (num.tryParse('${invoiceData['credited_amount'] ?? 0}') ?? 0) >
+                    0),
       );
     } catch (error) {
       debugPrint(
@@ -2154,6 +2269,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         invoiceNumber: null,
         hasActivePayments: hasActivePayments,
         paymentStateUnknown: true,
+        isPosted: false,
       );
     }
   }
@@ -2186,6 +2302,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       _linkedInvoiceNumber = state.invoiceNumber;
       _linkedInvoiceHasActivePayments = state.hasActivePayments;
       _linkedInvoicePaymentStateUnknown = false;
+      _linkedInvoiceIsPosted = false;
       return true;
     } catch (reconcileError) {
       debugPrint(
@@ -2213,6 +2330,21 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           Provider.of<DatabaseService>(context, listen: false);
       final customerService =
           Provider.of<CustomerService>(context, listen: false);
+
+      // Lo que quedó en la bandeja del equipo para este trabajo (la app se
+      // cerró o perdió la red antes de la respuesta) se reenvía antes de leer
+      // las líneas: si llega, lo cargado ya lo tiene.
+      final pendingLineSaves =
+          await _resumePendingLineSaves(bikeshopService, widget.jobId!);
+      // Una decisión de garantía que sigue en la bandeja se muestra como
+      // pendiente: la cobertura a la vista es la del servidor.
+      try {
+        _pendingWarrantyDecision =
+            await bikeshopService.pendingWarrantyDecision(widget.jobId!);
+      } catch (error) {
+        debugPrint('⚠️ No se pudo leer la decisión de garantía pendiente: '
+            '$error');
+      }
 
       debugPrint('🔍 Loading job with ID: ${widget.jobId}');
       final job = await bikeshopService.getJobById(
@@ -2259,6 +2391,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         String? invoiceNumber,
         bool hasActivePayments,
         bool paymentStateUnknown,
+        bool isPosted,
       });
       final customer = exactResults[1] as Customer?;
       final customerBikes = exactResults[2] as List<Bike>;
@@ -2518,28 +2651,12 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         return wizardProfilesByProductId[product!.id];
       }
 
-      _JobPartItem buildLoadedPartItem(MechanicJobItem item) {
+      JobPartItem buildLoadedPartItem(MechanicJobItem item) {
         final product = productByItem[item];
-        final wizardProfile = getWizardProfileForLoadedItem(item, product);
-        return _JobPartItem(
-          id: item.id,
+        return JobPartItem.fromPersisted(
+          item,
           product: product,
-          name: item.productName,
-          isCatalogProduct: product != null ||
-              item.productId != null ||
-              item.serviceProductId != null,
-          isServiceItem: item.itemType == 'service' ||
-              item.serviceProductId != null ||
-              product?.isService == true,
-          quantity: item.quantity.toInt(),
-          unitPrice: item.unitPrice,
-          location: item.location,
-          notes: item.notes,
-          wizardAnswers: item.serviceConfigurationData == null ||
-                  item.serviceConfigurationData!.isEmpty
-              ? null
-              : Map<String, dynamic>.from(item.serviceConfigurationData!),
-          wizardProfile: wizardProfile,
+          wizardProfile: getWizardProfileForLoadedItem(item, product),
         );
       }
 
@@ -2662,7 +2779,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         persistedItems: allItems,
         hasPhysicalBikeTabs: loadedBikeTabs.any((tab) => !tab.isGeneralTab),
       );
-      final loadedStandaloneItems = <_JobPartItem>[];
+      final loadedStandaloneItems = <JobPartItem>[];
       for (final item in standalonePersistedItems) {
         loadedStandaloneItems.add(buildLoadedPartItem(item));
       }
@@ -2728,6 +2845,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               linkedInvoiceState.hasActivePayments;
           _linkedInvoicePaymentStateUnknown =
               linkedInvoiceState.paymentStateUnknown;
+          _linkedInvoiceIsPosted = linkedInvoiceState.isPosted;
           _discountController.text = job.discountAmount.toString();
           _estimatedDurationController.text =
               job.estimatedDurationHours?.toString() ?? '';
@@ -2797,17 +2915,53 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             ..clear()
             ..addAll(loadedStandaloneItems);
           _serviceItems.clear();
+          _seenLineVersions
+            ..clear()
+            ..addAll({
+              for (final item in allItems)
+                if (item.id != null && item.version != null)
+                  item.id!: item.version!,
+            });
+          // Uno que sigue sin respuesta es de un formulario anterior: las
+          // líneas a la vista son las del servidor, sin él.
+          _pendingLineSave = pendingLineSaves.isEmpty
+              ? null
+              : _PendingLineSave.restored(pendingLineSaves);
+          _headerBaseline = Map<String, dynamic>.of(job.persistedHeader ?? {});
+          _jobBikeBaseline
+            ..clear()
+            ..addAll({
+              for (final jobBike in jobBikes)
+                if (jobBike.id != null)
+                  jobBike.id!:
+                      Map<String, dynamic>.of(jobBike.persisted ?? const {}),
+            });
+          _shownJobBikeIds
+            ..clear()
+            ..addAll({
+              for (final tab in loadedBikeTabs)
+                if (tab.jobBikeId != null) tab.jobBikeId!,
+            });
+          _headerShown = _headerMirror(
+            protect: _isPaymentProtectedCommercialSnapshotLocked,
+          );
+          _bikeFactsAwaitingReconfirmation.clear();
+          _laborLinePersistedIds.clear();
 
           // Image URLs
           _imageUrls = List.from(job.imageUrls);
         });
 
-        // La ficha se lee antes de retomar lo que un guardado anterior no
-        // escribió: una lectura tardía pisaba la ficha recién escrita.
-        unawaited(() async {
-          await _loadSelectedBikeProfile(loadedBikeTabs.firstOrNull?.bike);
-          await _resumeUnsentBikeFactPromotions(job.id!);
-        }());
+        unawaited(_loadSelectedBikeProfile(loadedBikeTabs.firstOrNull?.bike));
+        unawaited(_loadPartChangeContext());
+        if (pendingLineSaves.isNotEmpty) {
+          _showBikeFactOutcome(
+            'Este trabajo tiene un guardado de líneas que quedó en este equipo '
+            'sin respuesta del servidor; se envía solo al volver la conexión. '
+            'Las líneas a la vista son las del servidor, sin ese cambio: '
+            'espera a que llegue antes de cambiarlas.',
+          );
+        }
       }
     } catch (e) {
       debugPrint('❌ Error loading job: $e');
@@ -3017,8 +3171,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   /// ficha/diagnosis context is intentionally removed. Stable instances and
   /// IDs keep wizard answers and future invoice linkage intact.
   void _moveBikeTabLinesToStandalone() {
-    final preserved = preserveMechanicJobModeLines<_JobPartItem>(
-      collections: <Iterable<_JobPartItem>>[
+    final preserved = preserveMechanicJobModeLines<JobPartItem>(
+      collections: <Iterable<JobPartItem>>[
         _partItems,
         ..._bikeTabs.map((tab) => tab.partItems),
       ],
@@ -3041,8 +3195,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     if (_partItems.isEmpty) return;
     final generalTab = _bikeTabs.where((tab) => tab.isGeneralTab).firstOrNull;
     if (generalTab == null) return;
-    final preserved = preserveMechanicJobModeLines<_JobPartItem>(
-      collections: <Iterable<_JobPartItem>>[
+    final preserved = preserveMechanicJobModeLines<JobPartItem>(
+      collections: <Iterable<JobPartItem>>[
         generalTab.partItems,
         _partItems,
       ],
@@ -3053,6 +3207,48 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       ..addAll(preserved);
     _partItems.clear();
     _selectedServiceIndex = null;
+  }
+
+  /// Lo que el guardado deja en los campos de la cabecera que repiten algo
+  /// del trabajo: con bicis, el relato y las marcas de la primera
+  /// (compatibilidad); sin bicis, los del propio trabajo. Al cargar es lo que
+  /// el formulario mostró de esos campos ([_headerShown]), que puede no ser
+  /// la cabecera: la primera bici puede decir otra cosa.
+  Map<String, dynamic> _headerMirror({required bool protect}) {
+    // Under payment protection, only an already-persisted physical tab may
+    // contribute diagnosis to the legacy job mirror. A bike added during a
+    // payment race must not silently become the invoiced object's narrative.
+    final firstTab = protect
+        ? _bikeTabs
+            .where((tab) =>
+                !tab.isGeneralTab &&
+                tab.jobBikeId != null &&
+                tab.jobBikeId!.isNotEmpty)
+            .firstOrNull
+        : (_bikeTabs.isNotEmpty ? _bikeTabs.first : null);
+    String? narrative(
+      TextEditingController? bike,
+      TextEditingController job,
+    ) {
+      final bikeText = bike?.text.trim() ?? '';
+      if (bikeText.isNotEmpty) return bikeText;
+      final jobText = job.text.trim();
+      return jobText.isEmpty ? null : jobText;
+    }
+
+    return {
+      'client_request': narrative(
+          firstTab?.clientRequestController, _clientRequestController),
+      'diagnosis':
+          narrative(firstTab?.diagnosisController, _diagnosisController),
+      'work_performed':
+          narrative(firstTab?.workRequestedController, _workSummaryController),
+      'notes': narrative(
+          firstTab?.technicianNotesController, _technicianNotesController),
+      'requires_approval': firstTab?.requiresApproval ?? _requiresApproval,
+      'is_warranty_job':
+          firstTab?.isWarrantyWork ?? (_jobType == JobType.warranty),
+    };
   }
 
   /// Quote/component intake keeps narrative at job level. When the user turns
@@ -3503,12 +3699,12 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   }
 
   /// Get the current part items list (from bike tab or legacy)
-  List<_JobPartItem> get _currentPartItems {
+  List<JobPartItem> get _currentPartItems {
     final tab = _currentBikeTab;
     return tab != null ? tab.partItems : _partItems;
   }
 
-  Map<String, dynamic>? _effectiveWizardAnswersForItem(_JobPartItem item) {
+  Map<String, dynamic>? _effectiveWizardAnswersForItem(JobPartItem item) {
     final answers = item.wizardAnswers ?? _pendingServiceWizardAnswers[item.id];
     if (answers == null || answers.isEmpty) {
       return null;
@@ -3516,7 +3712,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     return Map<String, dynamic>.from(answers);
   }
 
-  void _syncPendingWizardAnswerCache(_JobPartItem item) {
+  void _syncPendingWizardAnswerCache(JobPartItem item) {
     final answers = item.wizardAnswers;
     if (answers == null || answers.isEmpty) {
       _pendingServiceWizardAnswers.remove(item.id);
@@ -3539,7 +3735,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     if (!mounted) return;
 
     setState(() {
-      _currentPartItems.add(_JobPartItem(
+      _currentPartItems.add(JobPartItem(
         product: product,
         name: product.name,
         isCatalogProduct: true,
@@ -3552,12 +3748,311 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       ));
       _partAutocompleteKey++; // Reset autocomplete field
     });
+    unawaited(_loadPartChangeContext(products: [product]));
+  }
+
+  /// Qué escribió cada línea del trabajo en la ficha, según el servidor.
+  Future<void> _loadPartChangeWriters() async {
+    final jobId = _existingJob?.id;
+    if (jobId == null || jobId.isEmpty) return;
+    final writers = await loadPartChangeWriters(jobId);
+    if (!mounted || _existingJob?.id != jobId) return;
+    setState(() => _partChangeWriters = writers);
+  }
+
+  /// Lee la relación (una vez por sesión) y la ficha técnica de los
+  /// repuestos que faltan: los de [products], o los de todas las líneas.
+  Future<void> _loadPartChangeContext({Iterable<Product?>? products}) async {
+    final links = await BikeFactSpecLinks.load();
+    if (!mounted) return;
+    if (!identical(links, _bikeFactSpecLinks)) {
+      setState(() => _bikeFactSpecLinks = links);
+    }
+    if (links == null || links.isEmpty) return;
+    if (products == null) unawaited(_loadPartChangeWriters());
+
+    final candidates = products ??
+        [
+          for (final tab in _bikeTabs)
+            for (final item in tab.partItems)
+              if (!item.isServiceItem) item.product,
+          for (final item in _partItems)
+            if (!item.isServiceItem) item.product,
+        ];
+    final missing = <String, Product>{
+      for (final product in candidates)
+        if (product != null &&
+            !product.isService &&
+            !_partSpecValues.containsKey(product.id))
+          product.id: product,
+    };
+    if (missing.isEmpty) return;
+    try {
+      final values = await _bikeProductCompatibilityService.productSpecValues(
+        products: missing.values.toList(growable: false),
+        tenantId: await TenantService().getTenantId() ?? '',
+      );
+      if (!mounted) return;
+      setState(() => _partSpecValues.addAll(values));
+    } catch (error) {
+      // Sin la ficha técnica la línea no propone nada y, al guardar,
+      // conserva la marca que tenía.
+      debugPrint(
+          '⚠️ Ficha técnica de repuestos para la ficha de la bici: $error');
+    }
+  }
+
+  /// Los cambios de ficha que propone una línea de repuesto, con la ficha de
+  /// la bici de la línea y las marcas que el mecánico ya confirmó en ella. La
+  /// bici es la de `job_line_bike_internal`: la de su pestaña; en General, la
+  /// única bici del trabajo; con varias (o sin bicis), ninguna: el chip pide
+  /// asignar la línea a su bici («Asignar a…») y no deja marca, porque al
+  /// terminar el servidor no escribiría (`line_without_bike`). Así el chip no
+  /// promete lo que el servidor rechazará (revisión de Codex, 2026-09-28).
+  /// Lo que el mismo trabajo instala en esa bici (la maza, el Enrayado o la
+  /// llanta de cada rueda) manda sobre la ficha, como en el servidor
+  /// (20260928130000).
+  List<PartBikeFactChange> _partChangesFor(JobPartItem item) {
+    final links = _bikeFactSpecLinks;
+    final product = item.product;
+    if (links == null ||
+        links.isEmpty ||
+        item.isServiceItem ||
+        product == null) {
+      return const [];
+    }
+    final specs = _partSpecValues[product.id];
+    if (specs == null) return const [];
+    final physicalTabs =
+        _bikeTabs.where((tab) => !tab.isGeneralTab).toList(growable: false);
+    final currentTab = _currentBikeTab;
+    final tab = currentTab != null &&
+            currentTab.isGeneralTab &&
+            physicalTabs.length == 1
+        ? physicalTabs.single
+        : currentTab;
+    final profile = tab == null || tab.isGeneralTab
+        ? null
+        : _pendingBikeProfileForBike(tab.bike) ??
+            (_selectedBike?.id == tab.bike?.id ? _selectedBikeProfile : null);
+    final bike = tab == null || tab.isGeneralTab ? null : tab.bike;
+    // Las otras líneas de esa bici: las de su pestaña y, cuando el trabajo
+    // tiene una sola bici, las de General.
+    final others = [
+      if (tab != null && !tab.isGeneralTab) ...tab.partItems,
+      if (physicalTabs.length == 1 || tab == null || tab.isGeneralTab)
+        for (final general in _bikeTabs.where((t) => t.isGeneralTab))
+          ...general.partItems,
+      if (_bikeTabs.isEmpty) ..._partItems,
+    ].where((other) => other.id != item.id);
+    return partBikeFactChanges(
+      links: links,
+      productSpecValues: specs,
+      location: item.location,
+      confirmedMarker: item.partChange,
+      writtenMarker: _partChangeWriters[item.id],
+      bikeValues: profile?.technicalValues ?? const {},
+      bikeConfirmed: profile?.technicalConfirmed ?? const {},
+      bikeSources: profile?.technicalSources ?? const {},
+      bikeWheelSize: bike?.wheelSize,
+      bikeHubSpacingMm: {
+        if (bike?.frontHubSpacingMm case final front?)
+          BikeMemoryLocation.front: front,
+        if (bike?.rearHubSpacingMm case final rear?)
+          BikeMemoryLocation.rear: rear,
+      },
+      // Una maza o un mando trasero en las líneas de esa bici deciden el
+      // driver o la transmisión; la maza, el Enrayado o la llanta de una
+      // rueda, lo que se cruza con ella.
+      job: jobWheelParts([
+        for (final other in others)
+          if (other.isServiceItem)
+            (
+              location: other.location,
+              specs: null,
+              holeCount: _enrayadoHoles(other),
+              buildWheel: switch (other.wizardAnswers?['which_wheel']) {
+                'front' => BikeMemoryLocation.front,
+                'rear' => BikeMemoryLocation.rear,
+                _ => null,
+              },
+            )
+          else if (other.product != null)
+            (
+              location: other.location,
+              specs: _partSpecValues[other.product!.id],
+              holeCount: null,
+              buildWheel: null,
+            ),
+      ], links),
+      lineBike: partLineBike(
+        inBikeTab: currentTab != null && !currentTab.isGeneralTab,
+        bikeCount: physicalTabs.length,
+      ),
+      jobFinished: _existingJob?.status == JobStatus.finalizado ||
+          _existingJob?.status == JobStatus.entregado,
+    );
+  }
+
+  /// Las perforaciones que armó un Enrayado (`hole_count`), como las lee el
+  /// servidor: el texto tal cual, un entero de 12 a 48 (fuera de ese rango es
+  /// un error de tipeo, y un texto con espacios el servidor no lo lee).
+  static int? _enrayadoHoles(JobPartItem item) {
+    final text = item.wizardAnswers?['hole_count']?.toString();
+    if (text == null || !RegExp(r'^[1-9][0-9]{0,2}$').hasMatch(text)) {
+      return null;
+    }
+    final holes = int.parse(text);
+    return holes >= 12 && holes <= 48 ? holes : null;
+  }
+
+  /// «Asignar a <bici>» para una línea de General en un trabajo con varias
+  /// bicis: ahí no es de ninguna y al terminar no cambiaría ninguna ficha
+  /// (`line_without_bike`). Una protegida no tiene menú; una que se está
+  /// configurando espera a que se cierre «Configurar», y mientras se guarda
+  /// espera al recibo: el comando ya lleva la línea donde estaba (revisión de
+  /// Codex, 2026-09-28).
+  List<({String label, VoidCallback? onSelected})> _assignTargetsFor(
+    JobPartItem item,
+  ) {
+    final currentTab = _currentBikeTab;
+    if (currentTab == null ||
+        !currentTab.isGeneralTab ||
+        _isCommercialSnapshotLocked) {
+      return const [];
+    }
+    final targets = [
+      for (final (index, tab) in _bikeTabs.indexed)
+        if (!tab.isGeneralTab) (index: index, tab: tab),
+    ];
+    if (targets.length < 2) return const [];
+    final waiting = _configuringItemId == item.id || _isSaving;
+    return [
+      for (final target in targets)
+        (
+          label: 'Asignar a ${target.tab.displayName}',
+          onSelected:
+              waiting ? null : () => _assignLineToBike(item.id, target.index),
+        ),
+    ];
+  }
+
+  /// Pasa la misma línea (su id, precio y datos) a la pestaña de la bici; lo
+  /// que había confirmado para la ficha se vuelve a confirmar ahí.
+  void _assignLineToBike(String itemId, int tabIndex) {
+    final general = _currentBikeTab;
+    if (_isSaving ||
+        general == null ||
+        !general.isGeneralTab ||
+        _isCommercialSnapshotLocked ||
+        tabIndex < 0 ||
+        tabIndex >= _bikeTabs.length ||
+        _bikeTabs[tabIndex].isGeneralTab) {
+      return;
+    }
+    final target = _bikeTabs[tabIndex];
+    final hadPartChange = general.partItems
+        .any((item) => item.id == itemId && item.partChange != null);
+    JobPartItem? moved;
+    setState(() {
+      moved = assignJobLineToBike(
+        general: general.partItems,
+        bikeLines: target.partItems,
+        itemId: itemId,
+      );
+      // Los índices de General cambiaron: el detalle lateral se cierra.
+      _selectedServiceIndex = null;
+    });
+    final line = moved;
+    if (line == null || !mounted) return;
+    void showTarget() {
+      final index = _bikeTabs.indexOf(target);
+      if (!mounted || index < 0) return;
+      setState(() {
+        _selectedBikeTabIndex = index;
+        _selectedBike = target.bike;
+      });
+      unawaited(_loadSelectedBikeProfile(_selectedBike));
+    }
+
+    // General vacía se esconde: quedarse ahí dejaba la vista sin pestaña
+    // (visto en la app, 2026-09-28). Con otras líneas se sigue en General
+    // para asignar las demás, y el aviso lleva a la bici.
+    final generalEmptied = general.partItems.isEmpty;
+    if (generalEmptied) showTarget();
+    // Asignar varias seguidas: cada aviso reemplaza a los anteriores (el
+    // visible y los en cola), que ya no dicen dónde está la vista.
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(
+        content: Text(
+          '«${line.name}» quedó en ${target.displayName}.'
+          '${hadPartChange ? ' Confirma ahí su cambio de ficha.' : ''}',
+        ),
+        action: generalEmptied
+            ? null
+            : SnackBarAction(
+                label: 'Ver ${target.displayName}',
+                onPressed: showTarget,
+              ),
+        // Con acción, Flutter 3.38 lo deja fijo hasta cerrarlo: seguía
+        // abajo después de salir del trabajo.
+        persist: false,
+      ));
+  }
+
+  /// El mecánico elige (o vuelve a elegir) la rueda de un repuesto que
+  /// cambia la ficha: eso confirma el cambio y deja la marca en la línea.
+  void _choosePartWheel(int itemIndex, BikeMemoryLocation location) {
+    final moved = _currentPartItems[itemIndex].copyWith(
+      location: location,
+      clearPartChange: true,
+    );
+    // Todos los datos que la pieza cambia en esa rueda (una maza trasera, su
+    // driver y su anclaje), cada uno con su marca.
+    final marker = partChangeMarkerJson([
+      for (final change in _partChangesFor(moved)) change.marker,
+    ]);
+    setState(() {
+      _currentPartItems[itemIndex] = moved.copyWith(partChange: marker);
+    });
+  }
+
+  /// La marca que guarda la línea: la que confirmó el mecánico, mientras
+  /// siga calzando con el repuesto y la rueda de la línea. Si ya no calza (se
+  /// corrigió la ficha técnica del producto) se suelta y la línea vuelve a
+  /// pedir confirmación; si no se pudo leer la relación o la ficha técnica,
+  /// o la línea está protegida, se conserva tal cual. Una marca que ya tenía
+  /// una línea que quedó en General de un trabajo con varias bicis también se
+  /// conserva: al terminar, el servidor la informa (`line_without_bike`) en
+  /// vez de callar; lo que no hace el formulario es crear una nueva ahí.
+  Object? _partChangeMarkerForSave(JobPartItem item) {
+    if (item.isServiceItem) return null;
+    final marker = item.partChange;
+    if (marker == null || _isCommercialSnapshotLocked) return marker;
+    final links = _bikeFactSpecLinks;
+    final product = item.product;
+    final specs = product == null ? null : _partSpecValues[product.id];
+    if (links == null || links.isEmpty || specs == null) return marker;
+    // Cada marca por su clave: se conserva la que todavía calza.
+    final current = [
+      for (final change in partBikeFactChanges(
+        links: links,
+        productSpecValues: specs,
+        location: item.location,
+      ))
+        if (change.marker case final mark?) mark,
+    ];
+    return partChangeMarkerJson([
+      for (final mark in partChangeMarks(marker))
+        if (current.any((valid) => samePartChangeMarker(valid, mark))) mark,
+    ]);
   }
 
   void _addCustomPart(String description) {
     // Ad-hoc part with no product reference
     setState(() {
-      _currentPartItems.add(_JobPartItem(
+      _currentPartItems.add(JobPartItem(
         product: null,
         name: description,
         isCatalogProduct: false,
@@ -3574,7 +4069,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
   void _addEmptyPartLine() {
     // Add an empty line for the user to fill in
     setState(() {
-      _currentPartItems.add(_JobPartItem(
+      _currentPartItems.add(JobPartItem(
         product: null,
         name: '',
         isCatalogProduct: false,
@@ -3584,16 +4079,6 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         notes: null,
       ));
     });
-  }
-
-  String _itemTypeForPartItem(_JobPartItem item) {
-    if (item.isServiceItem) return 'service';
-    return item.isCatalogProduct ? 'product' : 'adhoc';
-  }
-
-  String? _serviceProductIdForPartItem(_JobPartItem item) {
-    if (!item.isServiceItem) return null;
-    return item.product?.id;
   }
 
   void _addServiceItem() {
@@ -3936,7 +4421,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     };
   }
 
-  Map<String, Object?> _inlinePartDraft(_JobPartItem item) {
+  Map<String, Object?> _inlinePartDraft(JobPartItem item) {
     return {
       'id': item.id,
       'product_id': item.product?.id,
@@ -4003,7 +4488,9 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
                   : 'No se pudo verificar de forma confiable el estado de pago. Por seguridad no se guardarán cambios comerciales. Sí puedes guardar la nota del acuerdo de pago.'
               : _linkedInvoiceHasActivePayments
                   ? 'Se registró un pago en la factura vinculada. Para proteger el historial financiero no se guardarán cambios de productos, precios, descuento, estado ni objeto físico. Sí puedes guardar el diagnóstico y las notas operativas.'
-                  : 'No se pudo verificar de forma confiable el estado de pago. Por seguridad no se guardarán cambios comerciales ni de ciclo. Sí puedes guardar el diagnóstico y las notas operativas.',
+                  : _linkedInvoiceIsPosted
+                      ? 'La factura ${_linkedInvoiceNumber ?? 'vinculada'} se confirmó mientras editabas. Lo que se cobra (productos, precios, descuento) se corrige ahora desde la factura, que rehace stock y contabilidad. Sí puedes guardar el diagnóstico y las notas operativas.'
+                      : 'No se pudo verificar de forma confiable el estado de pago. Por seguridad no se guardarán cambios comerciales ni de ciclo. Sí puedes guardar el diagnóstico y las notas operativas.',
         ),
         actions: [
           TextButton(
@@ -4260,6 +4747,27 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       return;
     }
 
+    // Guardar las líneas de esa bici sin su dato dejaría la línea configurada
+    // y la ficha diciendo otra cosa (revisión de Codex, 2026-09-28).
+    final awaitingReconfirmation = _bikesAwaitingReconfirmation();
+    if (awaitingReconfirmation.isNotEmpty) {
+      _revealFormIssue(
+        _MechanicJobFormIssueOwner.products,
+        awaitingReconfirmation.join(' '),
+      );
+      return;
+    }
+
+    // Una cantidad borrada o a medio escribir no se guarda como otra.
+    final incompleteQuantities = _linesWithIncompleteQuantity();
+    if (incompleteQuantities.isNotEmpty) {
+      _revealFormIssue(
+        _MechanicJobFormIssueOwner.products,
+        'Escribe la cantidad de ${incompleteQuantities.join(', ')}.',
+      );
+      return;
+    }
+
     var protectPaymentCommercialSnapshot =
         _isPaymentProtectedCommercialSnapshotLocked;
     final wasPaymentProtectedAtSaveStart = protectPaymentCommercialSnapshot;
@@ -4277,7 +4785,21 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     try {
       final bikeshopService =
           Provider.of<BikeshopService>(context, listen: false);
-      final taskService = Provider.of<SmartTaskService>(context, listen: false);
+
+      // Un guardado de líneas anterior que quedó sin respuesta se resuelve
+      // antes de escribir nada: si llegó, este guardado parte de su recibo; si
+      // sigue sin respuesta, no se escribe encima (ítem 4).
+      await _settlePendingLineSave(bikeshopService);
+      if (!mounted) return;
+      // Y una decisión de garantía de este trabajo que sigue en la bandeja
+      // (de este formulario o de la tabla): va antes que las líneas nuevas,
+      // y si se aplica, este guardado lleva su factura al día (punto 2 del
+      // cierre, 2026-09-29).
+      await _settlePendingWarrantyDecision(bikeshopService);
+      if (!mounted) return;
+      // El trabajo guardado: el que se abrió, o el nuevo cuya alta ya tiene
+      // recibo (también la de un intento anterior de este formulario).
+      final savedJobId = _savedJobId;
 
       // Una promoción a la ficha sólo viaja con una bici que este guardado deja
       // en el trabajo. La de una pestaña retirada haría fallar la ficha después
@@ -4309,6 +4831,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         _linkedInvoiceHasActivePayments = linkedInvoiceState.hasActivePayments;
         _linkedInvoicePaymentStateUnknown =
             linkedInvoiceState.paymentStateUnknown;
+        _linkedInvoiceIsPosted = linkedInvoiceState.isPosted;
         protectPaymentCommercialSnapshot =
             _isPaymentProtectedCommercialSnapshotLocked;
         requestedDiscountAmount = protectPaymentCommercialSnapshot
@@ -4352,29 +4875,41 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         return;
       }
 
-      // Upload new images
-      List<String> uploadedUrls = List.from(_imageUrls);
-
-      if (_newImages.isNotEmpty) {
-        for (var imageData in _newImages) {
-          try {
-            final timestamp = DateTime.now().millisecondsSinceEpoch;
-            final fileName = 'job_${_selectedCustomer!.id}_$timestamp.jpg';
-
-            final url = await ImageService.uploadBytes(
-              bytes: imageData.bytes,
-              fileName: fileName,
-              bucket: 'vinabike-assets', // Using existing public bucket
-              folder: 'mechanic_jobs/${_selectedCustomer!.id!}',
-            );
-
-            if (url != null) {
-              uploadedUrls.add(url);
-            }
-          } catch (e) {
-            debugPrint('Error uploading image: $e');
-            // Continue with other images even if one fails
-          }
+      // Cada adjunto va en job-images/<taller>/<trabajo>/<archivo al azar>,
+      // con su extensión, y se anota en la bandeja antes de subirlo
+      // (`uploadJobAttachment`): si el trabajo no se guarda, o la app se
+      // cierra a mitad, la próxima sesión borra el que nadie reclama. Uno que
+      // no sube detiene el guardado: antes el error se tragaba y el trabajo
+      // se guardaba sin él.
+      final uploadedUrls = List<String>.from(_imageUrls);
+      final attachmentJobId = savedJobId ?? _newJobId;
+      for (final imageData in List.of(_newImages)) {
+        final String url;
+        try {
+          _imageScope ??= await bikeshopService.workshopCommandScope();
+          _uploadedAttachments = true;
+          url = await bikeshopService.uploadJobAttachment(
+            jobId: attachmentJobId,
+            bytes: imageData.bytes,
+            fileName: imageData.name,
+            ownerForm: _formInstanceId,
+          );
+        } on JobAttachmentNotAcceptedException catch (error) {
+          throw _JobSaveStopped(error.toString());
+        } catch (error) {
+          debugPrint('Error uploading job attachment: $error');
+          throw _JobSaveStopped(
+            'No se pudo guardar el adjunto ${imageData.name}. El trabajo aún '
+            'no fue enviado; vuelve a guardar.',
+          );
+        }
+        uploadedUrls.add(url);
+        // Ya subido: un reintento del guardado no lo vuelve a subir.
+        if (mounted) {
+          setState(() {
+            _imageUrls.add(url);
+            _newImages.remove(imageData);
+          });
         }
       }
 
@@ -4389,21 +4924,11 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         throw Exception('La primera bicicleta no tiene ID');
       }
 
-      // Under payment protection, only an already-persisted physical tab may
-      // contribute diagnosis to the legacy job mirror. A bike added during a
-      // payment race must not silently become the invoiced object's narrative.
-      final firstTab = protectPaymentCommercialSnapshot
-          ? _bikeTabs
-              .where((tab) =>
-                  !tab.isGeneralTab &&
-                  tab.jobBikeId != null &&
-                  tab.jobBikeId!.isNotEmpty)
-              .firstOrNull
-          : (_bikeTabs.isNotEmpty ? _bikeTabs.first : null);
+      final mirror = _headerMirror(protect: protectPaymentCommercialSnapshot);
 
       // Create MechanicJob object (job-level data)
       final job = MechanicJob(
-        id: widget.jobId,
+        id: savedJobId ?? _newJobId,
         tenantId: tenantId,
         jobNumber:
             _existingJob?.jobNumber ?? '', // Will be auto-generated if empty
@@ -4472,36 +4997,15 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         deliveredAt: _existingJob?.deliveredAt, // ✅ Preserve
         createdAt: _existingJob?.createdAt ?? DateTime.now(),
         // Store first bike's data in legacy fields for backward compat
-        clientRequest: firstTab != null &&
-                firstTab.clientRequestController.text.trim().isNotEmpty
-            ? firstTab.clientRequestController.text.trim()
-            : (_clientRequestController.text.trim().isNotEmpty
-                ? _clientRequestController.text.trim()
-                : null),
-        diagnosis: firstTab != null &&
-                firstTab.diagnosisController.text.trim().isNotEmpty
-            ? firstTab.diagnosisController.text.trim()
-            : (_diagnosisController.text.trim().isNotEmpty
-                ? _diagnosisController.text.trim()
-                : null),
-        workPerformed: firstTab != null &&
-                firstTab.workRequestedController.text.trim().isNotEmpty
-            ? firstTab.workRequestedController.text.trim()
-            : (_workSummaryController.text.trim().isNotEmpty
-                ? _workSummaryController.text.trim()
-                : null),
-        notes: firstTab != null &&
-                firstTab.technicianNotesController.text.trim().isNotEmpty
-            ? firstTab.technicianNotesController.text.trim()
-            : (_technicianNotesController.text.trim().isNotEmpty
-                ? _technicianNotesController.text.trim()
-                : null),
+        clientRequest: mirror['client_request'] as String?,
+        diagnosis: mirror['diagnosis'] as String?,
+        workPerformed: mirror['work_performed'] as String?,
+        notes: mirror['notes'] as String?,
         deliveryDeadline: _jobType == JobType.sale
             ? _existingJob?.deliveryDeadline
             : _selectedDeadline,
-        requiresApproval: firstTab?.requiresApproval ?? _requiresApproval,
-        isWarrantyJob:
-            firstTab?.isWarrantyWork ?? (_jobType == JobType.warranty),
+        requiresApproval: mirror['requires_approval'] as bool,
+        isWarrantyJob: mirror['is_warranty_job'] as bool,
         // A paid/part-paid linked invoice is immutable commercial evidence.
         // Keep its exact monetary mirrors while allowing diagnosis/header-safe
         // fields to save. Unpaid jobs apply discount after all line requests.
@@ -4541,37 +5045,114 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         imageUrls: uploadedUrls,
       );
 
-      String jobId;
+      final String jobId;
+      MechanicJob savedHeader;
+      // El alta de un trabajo nuevo: no se envía aquí. Se respalda con sus
+      // líneas (y lo que las sigue) en la bandeja antes del primer envío, y
+      // sale primero (cierre del Master Schema, 2026-09-29). Antes se creaba
+      // aquí, antes de respaldar nada: un cierre entre el alta y las líneas
+      // dejaba un trabajo sin líneas ni factura.
+      PendingWorkshopCommand? creation;
 
-      if (widget.jobId != null) {
-        // Update existing job
-        await bikeshopService.updateJob(
-          job,
-          syncBikeMemory: false,
-          protectCommercialSnapshot: protectPaymentCommercialSnapshot,
-        );
-        jobId = widget.jobId!;
+      if (savedJobId != null) {
+        // La cabecera de un trabajo guardado ya no se reescribe entera aquí:
+        // lo que cambió viaja con las líneas y la ficha en un solo comando.
+        jobId = savedJobId;
+        savedHeader = _existingJob ?? job;
+        persistedJobId = jobId;
       } else {
-        // Create new job
-        final createdJob = await bikeshopService.createJob(job);
-        jobId = createdJob.id!;
+        jobId = _newJobId;
+        savedHeader = job;
+        creation = bikeshopService.jobCreationCommand(
+          job,
+          label: _newJobCommandLabel(),
+        );
+        // Lo visto por sus líneas es lo que el alta deja: el descuento parte
+        // del cero del alta.
+        final created = creation.params['p_job'] as Map<String, dynamic>;
+        _headerBaseline = {
+          for (final column in mechanicJobFormHeaderColumns)
+            column: created[column],
+        };
       }
-      persistedJobId = jobId;
+
+      // Sin la cabecera vista, un campo cambiado no tendría con qué
+      // compararse y se perdería en silencio: mejor no guardar. (Un trabajo
+      // nuevo la toma de su alta.)
+      final missingHeader = savedJobId == null
+          ? const <String>{}
+          : mechanicJobFormHeaderColumns
+              .difference(_headerBaseline.keys.toSet());
+      if (missingHeader.isNotEmpty) {
+        throw _JobSaveStopped(
+          'No se leyó completa la cabecera del trabajo '
+          '(${missingHeader.join(', ')}). Recárgalo antes de guardar.',
+        );
+      }
+
+      // Lo que el formulario deja en la cabecera. Con pago, sólo lo que no es
+      // comercial; sin pago, el descuento pedido (se aplica al final del
+      // comando, con el subtotal ya nuevo).
+      final editedHeader = protectPaymentCommercialSnapshot
+          ? mechanicJobPaymentProtectedUpdatePayload(
+              job.toJson(forUpdate: true),
+            )
+          : {
+              ...job.toJson(forUpdate: true),
+              'discount_amount': requestedDiscountAmount,
+            };
+
+      // La garantía se registra contra la cabecera guardada (cliente, bici,
+      // componente): en un trabajo ya guardado, lo que cambió de ella va
+      // antes, en su propio comando con recibo.
+      if (_jobType == JobType.warranty &&
+          savedJobId != null &&
+          _warrantySaveCheckpoint
+              .needsRegistration(_selectedWarrantySource?.jobId)) {
+        final earlyHeader = jobHeaderPatch(
+          seen: _headerBaseline,
+          shown: _headerShown,
+          edited: {...editedHeader}..remove('discount_amount'),
+        );
+        if (earlyHeader.isNotEmpty) {
+          await _saveLinesWithBikeFacts(
+            bikeshopService: bikeshopService,
+            jobId: jobId,
+            lines: null,
+            header: earlyHeader,
+            includeBikeFacts: false,
+            label: _jobCommandLabel(savedHeader),
+          );
+        }
+      }
 
       // Validate and register the warranty source before any line deletion or
       // inventory/invoice-affecting persistence. A server-side rejection can
       // now leave at most the recoverable job header, never a destructively
       // half-updated set of products/services.
-      if (_jobType == JobType.warranty) {
-        final sourceJobId = _selectedWarrantySource?.jobId;
-        if (_warrantySaveCheckpoint.needsRegistration(sourceJobId)) {
-          _pendingWarrantyRegistrationOperationKey ??= const Uuid().v4();
+      // En una garantía nueva el registro va detrás de sus líneas, en la
+      // misma cadena que el alta: el trabajo original elegido sólo vive en
+      // este formulario hasta registrarse, y el registro acepta la bici que
+      // las líneas dejaron (la marca como trabajo de garantía).
+      PendingWorkshopCommand? chainedRegistration;
+      final registrationSourceJobId = _selectedWarrantySource?.jobId;
+      if (_jobType == JobType.warranty &&
+          _warrantySaveCheckpoint.needsRegistration(registrationSourceJobId)) {
+        _pendingWarrantyRegistrationOperationKey ??= const Uuid().v4();
+        if (savedJobId != null) {
           await bikeshopService.registerWarrantyClaim(
             warrantyJobId: jobId,
-            sourceJobId: sourceJobId!,
+            sourceJobId: registrationSourceJobId!,
             operationKey: _pendingWarrantyRegistrationOperationKey!,
           );
-          _warrantySaveCheckpoint.confirmRegistration(sourceJobId);
+          _warrantySaveCheckpoint.confirmRegistration(registrationSourceJobId);
+        } else {
+          chainedRegistration = bikeshopService.warrantyRegistrationCommand(
+            warrantyJobId: jobId,
+            sourceJobId: registrationSourceJobId!,
+            operationKey: _pendingWarrantyRegistrationOperationKey!,
+            label: _newJobCommandLabel(),
+          );
         }
       }
 
@@ -4583,15 +5164,17 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       // registration can create the canonical mechanic_job_bikes row even for
       // a brand-new warranty; assuming a new form still has an empty aggregate
       // would attempt to insert that same (job, bike) relationship twice.
-      final existingItemsForSave = await bikeshopService.getJobItems(jobId);
-      final existingJobBikesForSave =
-          await bikeshopService.getJobBikes(jobId, forceRefresh: true);
+      // Un trabajo nuevo todavía no tiene nada guardado: no hay qué releer.
+      final existingItemsForSave = savedJobId == null
+          ? const <MechanicJobItem>[]
+          : await bikeshopService.getJobItems(jobId);
+      final existingJobBikesForSave = savedJobId == null
+          ? const <MechanicJobBike>[]
+          : await bikeshopService.getJobBikes(jobId, forceRefresh: true);
       final existingItemById = <String, MechanicJobItem>{
         for (final item in existingItemsForSave)
           if (item.id != null && item.id!.isNotEmpty) item.id!: item,
       };
-      final retainedItemIds = <String>{};
-      final retainedJobBikeIds = <String>{};
 
       final existingJobBikeById = <String, MechanicJobBike>{
         for (final jobBike in existingJobBikesForSave)
@@ -4618,73 +5201,39 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         return null;
       }
 
-      Future<MechanicJobItem> persistPartItem(
-        _JobPartItem item,
-        String? jobBikeId,
-      ) async {
-        final existing = existingItemById[item.id];
-        final quantity = item.quantity.toDouble();
-        final isCatalog = item.isCatalogProduct;
-        final jobItem = MechanicJobItem(
-          id: existing?.id,
-          jobId: jobId,
-          jobBikeId: jobBikeId,
-          tenantId: tenantId,
-          productId:
-              isCatalog ? (item.product?.id ?? existing?.productId) : null,
-          serviceProductId: item.isServiceItem
-              ? (_serviceProductIdForPartItem(item) ??
-                  existing?.serviceProductId)
-              : null,
-          productName: item.name,
-          productSku: item.sku ?? existing?.productSku ?? '',
-          quantity: quantity,
-          unitPrice: item.unitPrice,
-          totalPrice: quantity * item.unitPrice,
-          itemType: _itemTypeForPartItem(item),
-          systemKey: existing?.systemKey,
-          componentSlotKey: existing?.componentSlotKey,
-          location: item.location,
-          interventionType: existing?.interventionType,
-          createsLifecycle: existing?.createsLifecycle ?? false,
-          notes: item.notes,
-          serviceConfigurationData: _effectiveWizardAnswersForItem(item),
-          createdAt: existing?.createdAt,
-        );
+      // Las líneas se juntan aquí y se guardan todas, con lo que «Configurar»
+      // confirmó de la bici, en un solo comando al final (ítem 4): antes cada
+      // línea era su propia escritura y un corte dejaba la mitad guardada.
+      final linesToSave = <JobLineToSave>[];
+      final jobBikesToSave = <JobBikeToSave>[];
+      final keptJobBikeIds = <String>{};
 
-        final saved = existing == null
-            ? await bikeshopService.createJobItem(
-                jobItem,
-                syncBikeMemory: false,
-              )
-            : await bikeshopService.updateJobItem(
-                jobItem,
-                syncBikeMemory: false,
-              );
-        if (saved.id != null) retainedItemIds.add(saved.id!);
-        // Una línea nueva adopta su id de la base. Con el id temporal, un
-        // reintento tras un fallo posterior la insertaba de nuevo y borraba
-        // la primera, y con ella sus tareas y recibos (revisión de Codex,
-        // 2026-09-27).
-        if (existing == null && saved.id != null && saved.id != item.id) {
-          _adoptPersistedLineId(item.id, saved.id!);
-        }
-
-        if (existing == null &&
-            item.product?.description?.isNotEmpty == true &&
-            saved.id != null) {
-          try {
-            await taskService.generateAutoTasksFromDescription(
-              jobId: jobId,
-              parentItemId: saved.id!,
-              description: item.product!.description!,
-            );
-          } catch (e) {
-            debugPrint('⚠️ Failed to generate auto-tasks for ${item.name}: $e');
-          }
-        }
-
-        return saved;
+      void stagePartItem(
+        JobPartItem item,
+        String? jobBikeId, {
+        String? jobBikeKey,
+      }) {
+        // Guardada es la que el formulario cargó (o recibió del último
+        // guardado), con su versión: si otra persona la borró, el servidor lo
+        // dice en vez de insertarla de nuevo.
+        final persisted = _seenLineVersions.containsKey(item.id);
+        linesToSave.add(JobLineToSave(
+          clientKey: item.id,
+          persisted: persisted,
+          jobBikeKey: jobBikeKey,
+          item: jobLineFromPart(
+            item,
+            persisted: persisted,
+            jobId: jobId,
+            jobBikeId: jobBikeId,
+            tenantId: tenantId,
+            existing: existingItemById[item.id],
+            configuration: jobLineConfiguration(
+              answers: _effectiveWizardAnswersForItem(item),
+              partChange: _partChangeMarkerForSave(item),
+            ),
+          ),
+        ));
       }
 
       // Save each bike tab
@@ -4696,7 +5245,7 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           if (!protectPaymentCommercialSnapshot) {
             for (final item in tab.partItems) {
               if (item.name.isEmpty) continue; // Skip empty rows
-              await persistPartItem(item, null);
+              stagePartItem(item, null);
             }
           }
           continue; // Skip MechanicJobBike creation
@@ -4780,29 +5329,74 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           imageUrls: existingJobBike?.imageUrls ?? const <String>[],
         );
 
-        final savedJobBike = existingJobBike == null
-            ? await bikeshopService.addBikeToJob(
-                jobBike,
-                syncBikeMemory: false,
-              )
-            : await bikeshopService.updateJobBike(
-                jobBike,
-                syncBikeMemory: false,
-              );
-        final jobBikeId = savedJobBike.id;
-        tab.jobBikeId = jobBikeId;
-        if (jobBikeId != null) retainedJobBikeIds.add(jobBikeId);
-
-        debugPrint(
-            '✅ Saved job bike: ${tab.bike!.displayName} (id: $jobBikeId)');
+        // En el mismo comando que las líneas y la cabecera (revisión de Codex,
+        // 2026-09-28): una bici nueva toma allí su id y sus líneas la nombran
+        // por su llave, la bici, que está una sola vez en el trabajo. De una
+        // que ya estaba viaja sólo lo que cambió, con lo que se vio.
+        final jobBikeKey = tab.bike!.id!;
+        final existingJobBikeId = existingJobBike?.id;
+        if (existingJobBike == null || existingJobBikeId == null) {
+          jobBikesToSave.add(JobBikeToSave.added(
+            clientKey: jobBikeKey,
+            jobBike: jobBike,
+          ));
+        } else {
+          // Una bici que otra persona agregó al trabajo después de que se
+          // cargó (el formulario no mostraba su fila): escribirla con la
+          // fila releída al guardar pisaría lo suyo. Sólo se acepta la que
+          // acaba de crear el registro de la garantía de este guardado.
+          if (!_shownJobBikeIds.contains(existingJobBikeId) &&
+              !(willRegisterWarrantyClaim && tab.bike?.id == warrantyBikeId)) {
+            throw const _JobSaveStopped(
+              'Otra persona agregó esta bici al trabajo mientras lo editabas. '
+              'Recarga el trabajo antes de guardar.',
+            );
+          }
+          keptJobBikeIds.add(existingJobBikeId);
+          final changed = JobBikeToSave.changed(
+            clientKey: jobBikeKey,
+            jobBike: jobBike,
+            seen: _jobBikeBaseline[existingJobBikeId] ??
+                existingJobBike.persisted ??
+                const {},
+            // La hoja que se conserva sin mostrarla no se reescribe.
+            keep: shouldPreserveExistingDiagnosisSheet
+                ? const {
+                    'diagnosis_sheet_key',
+                    'diagnosis_sheet_data',
+                    'diagnosis_sheet_updated_at',
+                  }
+                : const {},
+          );
+          if (changed != null) jobBikesToSave.add(changed);
+        }
 
         // Save this bike's parts/products only while the commercial snapshot
         // remains editable. Diagnosis above is intentionally still writable.
         if (!protectPaymentCommercialSnapshot) {
           for (final item in tab.partItems) {
             if (item.name.isEmpty) continue; // Skip empty rows
-            await persistPartItem(item, jobBikeId);
+            stagePartItem(
+              item,
+              existingJobBike?.id,
+              jobBikeKey: existingJobBike == null ? jobBikeKey : null,
+            );
           }
+        }
+      }
+
+      // Las bicis que el formulario mostraba y ya no están en sus pestañas
+      // salen, con sus líneas. Una que ya no está, la quitó otro.
+      if (!protectPaymentCommercialSnapshot) {
+        for (final shownId in _shownJobBikeIds) {
+          final existing = existingJobBikeById[shownId];
+          if (keptJobBikeIds.contains(shownId) || existing == null) continue;
+          jobBikesToSave.add(JobBikeToSave.removed(
+            clientKey: 'sale-$shownId',
+            jobBikeId: shownId,
+            bikeId: existing.bikeId,
+            seen: _jobBikeBaseline[shownId] ?? existing.persisted ?? const {},
+          ));
         }
       }
 
@@ -4812,111 +5406,181 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
           _partItems.isNotEmpty) {
         for (final item in _partItems) {
           if (item.name.isEmpty) continue;
-          await persistPartItem(item, null);
+          stagePartItem(item, null);
         }
       }
 
-      // Add services (job-level, not per-bike for now)
-      for (final service in protectPaymentCommercialSnapshot
+      // Add services (job-level, not per-bike for now). Una ya guardada en
+      // esta sesión del formulario se actualiza por su id.
+      final laborItems = protectPaymentCommercialSnapshot
           ? const <_JobServiceItem>[]
-          : _serviceItems) {
+          : _serviceItems;
+      for (final service in laborItems) {
         final hoursWorked = service.hours;
         final hourlyRate = service.hourlyRate;
         final serviceProduct = service.serviceProduct;
         final name = service.description.isNotEmpty
             ? service.description
             : serviceProduct?.name ?? 'Servicio';
+        final persistedId = _laborLinePersistedIds[service.id];
+        final persisted =
+            persistedId != null && _seenLineVersions.containsKey(persistedId);
+        final clientKey = persisted ? persistedId : 'labor-${service.id}';
 
-        final jobServiceItem = MechanicJobItem(
-          jobId: jobId,
-          tenantId: tenantId,
-          productId: serviceProduct?.id,
-          serviceProductId: serviceProduct?.id,
-          productName: name,
-          productSku: serviceProduct?.sku,
-          quantity: hoursWorked,
-          unitPrice: hourlyRate,
-          totalPrice: service.total,
-          notes:
-              'Labor: ${hoursWorked.toStringAsFixed(1)}h @ \$${hourlyRate.toStringAsFixed(0)}/hr',
-        );
+        linesToSave.add(JobLineToSave(
+          clientKey: clientKey,
+          persisted: persisted,
+          item: jobLineFromLabor(
+            persistedId: persisted ? persistedId : null,
+            jobId: jobId,
+            tenantId: tenantId,
+            serviceProduct: serviceProduct,
+            name: name,
+            hours: hoursWorked,
+            hourlyRate: hourlyRate,
+          ),
+        ));
+      }
 
-        final created = await bikeshopService.createJobItem(
-          jobServiceItem,
-          syncBikeMemory: false,
-        );
-        if (created.id != null) retainedItemIds.add(created.id!);
-
-        if (serviceProduct != null &&
-            serviceProduct.description != null &&
-            serviceProduct.description!.isNotEmpty &&
-            created.id != null) {
-          try {
-            await taskService.generateAutoTasksFromDescription(
-              jobId: jobId,
-              parentItemId: created.id!,
-              description: serviceProduct.description!,
-            );
-            debugPrint('✅ Auto-tasks generated for service $name');
-          } catch (e) {
-            debugPrint(
-                '⚠️ Failed to generate auto-tasks for service $name: $e');
-          }
+      // La decisión de garantía de este guardado (y el cambio de estado que
+      // la sigue) se respalda en la bandeja en la misma escritura que las
+      // líneas, detrás de ellas: un cierre después de escribir las líneas ya
+      // no deja el trabajo sin decisión ni documento (punto 2 del cierre,
+      // 2026-09-29). Si las líneas no se escriben, salen con ellas.
+      final warrantyDecisionInSave = _jobType == JobType.warranty &&
+          _warrantySaveCheckpoint.needsDecision(desiredWarrantyOutcome);
+      String? decisionReason;
+      ({
+        String operationKey,
+        String statusId,
+        JobStatusCustom? target
+      })? chainedStatus;
+      final followUps = <PendingWorkshopCommand>[
+        // El registro de una garantía nueva va antes que su decisión.
+        if (chainedRegistration != null) chainedRegistration,
+      ];
+      if (warrantyDecisionInSave) {
+        decisionReason = _warrantyDecisionReasonController.text.trim().isEmpty
+            ? null
+            : _warrantyDecisionReasonController.text.trim();
+        final decisionFingerprint =
+            '${desiredWarrantyOutcome.dbValue}|${decisionReason ?? ''}';
+        if (_pendingWarrantyDecisionFingerprint != decisionFingerprint) {
+          _pendingWarrantyDecisionOperationKey = const Uuid().v4();
+          _pendingWarrantyDecisionFingerprint = decisionFingerprint;
+        }
+        followUps.add(bikeshopService.warrantyDecisionCommand(
+          warrantyJobId: jobId,
+          outcome: desiredWarrantyOutcome,
+          reason: decisionReason,
+          operationKey: _pendingWarrantyDecisionOperationKey!,
+          label: _jobCommandLabel(savedHeader),
+        ));
+        final plan = _plannedStatusTransition();
+        if (plan != null) {
+          final target = plan.statusId == null
+              ? await bikeshopService.activeStatusForLegacyStatus(
+                  _selectedStatus,
+                )
+              : _selectedCustomStatus;
+          chainedStatus = (
+            operationKey: plan.operationKey,
+            statusId: plan.statusId ?? target!.id!,
+            target: target,
+          );
+          followUps.add(bikeshopService.statusTransitionCommand(
+            jobId: jobId,
+            statusId: chainedStatus.statusId,
+            operationKey: chainedStatus.operationKey,
+            label: _jobCommandLabel(savedHeader),
+          ));
         }
       }
 
-      // Delete only rows that the user actually removed. Stable IDs keep
-      // invoice links and mechanic_job_tasks attached to retained lines.
-      if (!protectPaymentCommercialSnapshot) {
-        for (final existing in existingItemsForSave) {
-          final id = existing.id;
-          if (id != null && !retainedItemIds.contains(id)) {
-            await bikeshopService.deleteJobItem(
-              id,
-              syncBikeMemory: false,
-            );
-          }
+      // Líneas y ficha juntas, con recibo y versión (ítem 4). Las líneas que
+      // el formulario quitó las borra el mismo comando.
+      final lineSave = await _saveLinesWithBikeFacts(
+        bikeshopService: bikeshopService,
+        jobId: jobId,
+        lines: protectPaymentCommercialSnapshot ? null : linesToSave,
+        // Un trabajo recién creado ya tiene su cabecera: la insertó el alta
+        // con lo mismo que editó el formulario, y los disparadores la pudieron
+        // normalizar (ejes de modo). Reescribirla chocaría con esas guardias;
+        // sólo el descuento, que el alta deja en cero, viaja.
+        header: jobHeaderPatch(
+          seen: _headerBaseline,
+          shown: _headerShown,
+          edited: savedJobId != null
+              ? editedHeader
+              : {
+                  if (editedHeader.containsKey('discount_amount'))
+                    'discount_amount': editedHeader['discount_amount'],
+                },
+        ),
+        // Con las líneas van todas las bicis que quedan: la que falta sale en
+        // el mismo comando, con sus líneas. Sin líneas (con pago), sólo las
+        // que ya estaban, y ninguna sale.
+        jobBikes: jobBikesToSave,
+        // La factura queda al día en el mismo comando, salvo que la decisión
+        // de garantía de este guardado sea la dueña de su documento.
+        invoice: !warrantyDecisionInSave,
+        label: creation == null
+            ? _jobCommandLabel(savedHeader)
+            : _newJobCommandLabel(),
+        followUps: followUps,
+        creation: creation,
+        // Con el recibo del alta en la mano el trabajo existe, aunque sus
+        // líneas todavía no lleguen: sólo desde aquí se dice «creado».
+        onCreated: (created) {
+          _adoptCreatedJob(created);
+          persistedJobId = created.id;
+          savedHeader = created;
+        },
+      );
+      final bikeFactProblems = lineSave.problems;
+      String? registrationPendingNotice;
+      if (chainedRegistration != null) {
+        // El registro de la garantía nueva, detrás de sus líneas: la bandeja
+        // lo envía ahora. Sin respuesta, no se dice vinculada.
+        try {
+          await bikeshopService.settleWarrantyRegistration(
+            chainedRegistration.operationKey,
+          );
+          _warrantySaveCheckpoint.confirmRegistration(registrationSourceJobId!);
+        } on MechanicJobWarrantyRegistrationPending catch (pending) {
+          registrationPendingNotice = pending.toString();
         }
       }
-      if (!protectPaymentCommercialSnapshot) {
-        for (final existing in existingJobBikesForSave) {
-          final id = existing.id;
-          if (id != null && !retainedJobBikeIds.contains(id)) {
-            await bikeshopService.removeBikeFromJob(
-              id,
-              syncBikeMemory: false,
-            );
-          }
-        }
-      }
+      final invoiceOutcome = lineSave.result?.invoice;
+      String? statusPendingNotice;
+      String? warrantyDecisionPendingNotice;
 
-      if (!protectPaymentCommercialSnapshot) {
-        await bikeshopService.updateJobDiscount(
-          jobId,
-          requestedDiscountAmount,
-        );
-      }
-
-      if (_jobType == JobType.warranty) {
-        if (_warrantySaveCheckpoint.needsDecision(desiredWarrantyOutcome)) {
-          final decisionReason =
-              _warrantyDecisionReasonController.text.trim().isEmpty
-                  ? null
-                  : _warrantyDecisionReasonController.text.trim();
-          final decisionFingerprint =
-              '${desiredWarrantyOutcome.dbValue}|${decisionReason ?? ''}';
-          if (_pendingWarrantyDecisionFingerprint != decisionFingerprint) {
-            _pendingWarrantyDecisionOperationKey = const Uuid().v4();
-            _pendingWarrantyDecisionFingerprint = decisionFingerprint;
-          }
+      if (warrantyDecisionInSave) {
+        // La misma llave que quedó respaldada con las líneas: la bandeja la
+        // envía ahora, detrás de ellas. La decisión es la dueña del
+        // documento también mientras sigue pendiente: la factura genérica no
+        // se hace aquí.
+        warrantyDecisionManagedDocument = true;
+        try {
           await bikeshopService.decideWarrantyClaim(
             warrantyJobId: jobId,
             outcome: desiredWarrantyOutcome,
             reason: decisionReason,
             operationKey: _pendingWarrantyDecisionOperationKey!,
+            label: _jobCommandLabel(savedHeader),
           );
           _warrantySaveCheckpoint.confirmDecision(desiredWarrantyOutcome);
-          warrantyDecisionManagedDocument = true;
+          _pendingWarrantyDecision = null;
+        } on MechanicJobWarrantyDecisionPending catch (pending) {
+          // No está aplicada: la cobertura a la vista sigue siendo la del
+          // servidor y el panel la dice pendiente.
+          _pendingWarrantyDecisionOperationKey = pending.operationKey;
+          _pendingWarrantyDecision = (
+            outcome: desiredWarrantyOutcome,
+            reason: decisionReason,
+            operationKey: pending.operationKey,
+          );
+          warrantyDecisionPendingNotice = pending.toString();
         }
       }
 
@@ -4925,7 +5589,25 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         jobId: jobId,
       );
 
-      if (protectPaymentCommercialSnapshot) {
+      if (invoiceOutcome != null) {
+        // La factura ya quedó al día en el comando, en la misma transacción
+        // que su recibo; si no se pudo, el guardado igual quedó y se dice.
+        await _debugLogPegaInvoiceSnapshot(
+          'after_invoice_in_command',
+          jobId: jobId,
+          invoiceId: invoiceOutcome.invoiceId,
+        );
+        if (invoiceOutcome.failed) {
+          // Su continuación quedó en la bandeja del equipo: se vuelve a
+          // intentar sola, también tras cerrar la app.
+          throw Exception(
+            'El trabajo quedó guardado, pero su factura no se pudo hacer: '
+            '${invoiceOutcome.errorMessage ?? invoiceOutcome.errorCode}. '
+            'Quedó pendiente en este equipo y se vuelve a intentar sola; '
+            'resuelve eso y se hará.',
+          );
+        }
+      } else if (protectPaymentCommercialSnapshot) {
         // Migration 070 makes this paid branch a strict commercial no-op. Keep
         // the compatibility call, but do not claim that invoice lines are
         // projected back into the job: both persisted records stay untouched.
@@ -4998,22 +5680,23 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
       // covered warranty may post/reverse its invoice only after all accepted
       // lines and invoice mirrors are final. Keep one operation key across a
       // retry after a lost acknowledgement.
-      if (widget.jobId != null && !_isStatusTransitionLocked) {
-        final existingStatusId = _existingJob?.statusId;
-        final targetStatusId = _selectedCustomStatus?.id;
-        final needsCustomTransition = targetStatusId != null &&
-            targetStatusId.isNotEmpty &&
-            targetStatusId != existingStatusId;
-        final needsLegacyTransition =
-            targetStatusId == null && _existingJob?.status != _selectedStatus;
-        if (needsCustomTransition || needsLegacyTransition) {
-          final fingerprint = targetStatusId ?? _selectedStatus.dbValue;
-          if (_pendingStatusTransitionFingerprint != fingerprint) {
-            _pendingStatusTransitionFingerprint = fingerprint;
-            _pendingStatusTransitionOperationKey = const Uuid().v4();
-          }
-          final operationKey = _pendingStatusTransitionOperationKey!;
-          if (targetStatusId != null) {
+      final statusPlan = _plannedStatusTransition();
+      if (statusPlan != null) {
+        final targetStatusId = statusPlan.statusId;
+        final operationKey = statusPlan.operationKey;
+        try {
+          if (chainedStatus != null) {
+            // El mismo cambio que quedó respaldado detrás de la decisión:
+            // espera a que ésta se aplique, y si no se aplica sale con
+            // ella sin enviarse.
+            await bikeshopService.transitionJobStatus(
+              jobId,
+              chainedStatus.statusId,
+              operationKey: chainedStatus.operationKey,
+              targetStatus: chainedStatus.target,
+              syncBikeMemoryOnCompletion: false,
+            );
+          } else if (targetStatusId != null) {
             // La memoria se sincroniza una vez, al final de este guardado.
             await bikeshopService.transitionJobStatus(
               jobId,
@@ -5030,19 +5713,13 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
               syncBikeMemoryOnCompletion: false,
             );
           }
+        } on MechanicJobStatusTransitionPending catch (pending) {
+          // El trabajo quedó guardado; el estado quedó en la bandeja con su
+          // llave, detrás del guardado, y se aplica solo (también si se
+          // cierra la app). Guardar otra vez reusa la misma llave.
+          statusPendingNotice = pending.toString();
         }
       }
-
-      // La ficha se escribe cuando el trabajo, sus líneas y su estado ya se
-      // guardaron: si algo de eso falla, la bici no cambia, y un trabajo nuevo
-      // ya tiene id para quedar en el recibo. Antes se escribía primero y un
-      // guardado fallido dejaba la ficha cambiada (Codex, 2026-09-27).
-      // Si la ficha falla, el trabajo ya quedó guardado y así se dice.
-      // Lo que no llegó queda en memoria por id de trabajo y se reintenta al
-      // abrirlo; el formulario sale igual, porque el trabajo sí se guardó.
-      final bikeFactProblems = [
-        ...await _persistPendingBikeProfileOverrides(bikeshopService, jobId),
-      ];
 
       // Refresh bicycle memory only after the guarded commercial phase. When a
       // payment exists, this reads the persisted job aggregate; it does not
@@ -5055,10 +5732,14 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
 
       if (mounted && context.mounted) {
         _pendingWarrantyRegistrationOperationKey = null;
-        _pendingWarrantyDecisionOperationKey = null;
-        _pendingWarrantyDecisionFingerprint = null;
-        _pendingStatusTransitionOperationKey = null;
-        _pendingStatusTransitionFingerprint = null;
+        if (warrantyDecisionPendingNotice == null) {
+          _pendingWarrantyDecisionOperationKey = null;
+          _pendingWarrantyDecisionFingerprint = null;
+        }
+        if (statusPendingNotice == null) {
+          _pendingStatusTransitionOperationKey = null;
+          _pendingStatusTransitionFingerprint = null;
+        }
         final savedLabel = widget.jobId != null
             ? 'Trabajo actualizado correctamente'
             : 'Trabajo creado correctamente';
@@ -5076,6 +5757,22 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
             '${bikeFactProblems.join(' ')}',
           );
         }
+        // Lo que quedó en la bandeja se dice como pendiente, nunca como
+        // aplicado: la decisión de garantía y el estado detrás de ella.
+        final pendingNotices = [
+          if (registrationPendingNotice != null) registrationPendingNotice,
+          if (warrantyDecisionPendingNotice != null)
+            warrantyDecisionPendingNotice,
+          if (statusPendingNotice != null) statusPendingNotice,
+        ];
+        if (pendingNotices.isNotEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(pendingNotices.join(' ')),
+              duration: const Duration(seconds: 8),
+            ),
+          );
+        }
         if (widget.isEmbedded) {
           if (widget.onSaved != null) widget.onSaved!();
         } else if (bikeFactProblems.isNotEmpty && widget.jobId == null) {
@@ -5085,6 +5782,45 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
         } else {
           await _leaveRoutedForm(result: true);
         }
+      }
+    } on WorkshopImageUnavailableException catch (unavailable) {
+      // Un adjunto subido que la bandeja ya borró (la ventana estuvo
+      // inactiva y otra lo dio por abandonado) o que es de otro trabajo: no
+      // se respaldó nada. Sale de la lista para volver a adjuntarlo, en vez
+      // de guardar un enlace roto (carrera del barrido, 2026-09-29).
+      if (mounted) {
+        setState(() {
+          _imageUrls.removeWhere((url) =>
+              unavailable.removedUrls.contains(url) ||
+              unavailable.foreignUrls.contains(url));
+        });
+      }
+      if (mounted && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(unavailable.toString()),
+            duration: const Duration(seconds: 10),
+          ),
+        );
+      }
+    } on JobCreationPendingException catch (pending) {
+      // Nada se creó todavía: el formulario sigue abierto con lo editado, y
+      // el próximo Guardar (o la reanudación) manda primero lo respaldado.
+      if (mounted && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(pending.toString()),
+            duration: const Duration(seconds: 10),
+          ),
+        );
+      }
+    } on JobCompletionBlockedException catch (blocked) {
+      if (!mounted) return;
+      await showJobCompletionBlocked(context, blocked);
+      if (mounted && persistedJobId != null && widget.jobId == null) {
+        context.go('/taller/pegas/$persistedJobId?tab=products');
+      } else if (mounted) {
+        _selectWorkbenchTab(_JobWorkbenchTab.products);
       }
     } catch (e) {
       final recoveryJobId = persistedJobId ?? widget.jobId;
@@ -5900,18 +6636,21 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
                                   ),
                                 ))
                           : (_isImage(_imageUrls[relativeIndex])
-                              ? Image.network(
-                                  _imageUrls[relativeIndex],
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Container(
-                                      color: Colors.grey[200],
-                                      child: const Center(
-                                        child: Icon(Icons.broken_image,
-                                            color: Colors.grey),
-                                      ),
-                                    );
-                                  },
+                              ? WorkshopAssetContent(
+                                  reference: _imageUrls[relativeIndex],
+                                  builder: (context, url) => Image.network(
+                                    url,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Container(
+                                        color: Colors.grey[200],
+                                        child: const Center(
+                                          child: Icon(Icons.broken_image,
+                                              color: Colors.grey),
+                                        ),
+                                      );
+                                    },
+                                  ),
                                 )
                               : Container(
                                   color: Colors.grey[100],
@@ -6206,22 +6945,33 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     final statusLabel = _effectiveQuotationStatus.displayName.toLowerCase();
     final proposalLabel =
         _existingJob?.proposalDocumentLabel ?? _proposalDocumentLabel;
-    final title = isFinanciallyProtected
-        ? 'Historial financiero protegido'
-        : isFinalQuotation
-            ? '$proposalLabel $statusLabel · solo lectura'
-            : 'Propuesta original conservada';
-    final message = isFinanciallyProtected
+    final postedInvoice = isFinanciallyProtected &&
+        !_linkedInvoiceHasActivePayments &&
+        !_linkedInvoicePaymentStateUnknown &&
+        _linkedInvoiceIsPosted;
+    final invoiceName = _linkedInvoiceNumber ?? 'vinculada';
+    final title = postedInvoice
+        ? 'Factura $invoiceName confirmada'
+        : isFinanciallyProtected
+            ? 'Historial financiero protegido'
+            : isFinalQuotation
+                ? '$proposalLabel $statusLabel · solo lectura'
+                : 'Propuesta original conservada';
+    final message = postedInvoice
         ? _jobType == JobType.sale
-            ? _linkedInvoiceHasActivePayments
-                ? 'La factura de esta venta tiene abonos vigentes. Puedes actualizar la nota del acuerdo; productos, precios, descuento, totales y factura quedan protegidos.'
-                : 'No se pudo confirmar el estado de pago de la factura. Por seguridad solo puedes actualizar la nota del acuerdo hasta recargarla correctamente.'
-            : _linkedInvoiceHasActivePayments
-                ? 'La factura de este trabajo tiene pagos vigentes. Puedes actualizar diagnóstico, notas y el estado operativo de un servicio normal; productos, precios, descuento, totales y factura quedan protegidos. Una garantía cubierta requiere resolver primero el pago desde la factura.'
-                : 'No se pudo confirmar el estado de pago de la factura. Por seguridad puedes actualizar diagnóstico, notas y el estado operativo de un servicio normal; la información comercial queda protegida hasta recargarla correctamente.'
-        : isFinalQuotation
-            ? 'Este documento ya salió de edición. Para aprobar, rechazar, reabrir o convertir usa las acciones auditadas de la tabla; así no se altera lo enviado al cliente.'
-            : 'Este trabajo ya es un servicio cobrable y puede seguir actualizándose normalmente. Los valores que el cliente aprobó permanecen inmutables en el historial de la propuesta.';
+            ? 'Ya descontó stock y tiene su asiento. Productos, precios y descuento se corrigen desde la factura, que rehace ambos y lo trae aquí; puedes actualizar la nota del acuerdo.'
+            : 'Ya descontó stock y tiene su asiento. Productos, precios y descuento se corrigen desde la factura, que rehace ambos y lo trae aquí; puedes seguir con diagnóstico, notas y estado.'
+        : isFinanciallyProtected
+            ? _jobType == JobType.sale
+                ? _linkedInvoiceHasActivePayments
+                    ? 'La factura de esta venta tiene abonos vigentes. Puedes actualizar la nota del acuerdo; productos, precios, descuento, totales y factura quedan protegidos.'
+                    : 'No se pudo confirmar el estado de pago de la factura. Por seguridad solo puedes actualizar la nota del acuerdo hasta recargarla correctamente.'
+                : _linkedInvoiceHasActivePayments
+                    ? 'La factura de este trabajo tiene pagos vigentes. Puedes actualizar diagnóstico, notas y el estado operativo de un servicio normal; productos, precios, descuento, totales y factura quedan protegidos. Una garantía cubierta requiere resolver primero el pago desde la factura.'
+                    : 'No se pudo confirmar el estado de pago de la factura. Por seguridad puedes actualizar diagnóstico, notas y el estado operativo de un servicio normal; la información comercial queda protegida hasta recargarla correctamente.'
+            : isFinalQuotation
+                ? 'Este documento ya salió de edición. Para aprobar, rechazar, reabrir o convertir usa las acciones auditadas de la tabla; así no se altera lo enviado al cliente.'
+                : 'Este trabajo ya es un servicio cobrable y puede seguir actualizándose normalmente. Los valores que el cliente aprobó permanecen inmutables en el historial de la propuesta.';
 
     if (widget.isInlineWorkspace &&
         !isFinanciallyProtected &&
@@ -6954,7 +7704,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
 
     final hydrations = <_ServiceLocationHydration>[];
 
-    for (final item in List<_JobPartItem>.of(tab.partItems)) {
+    for (final item in List<JobPartItem>.of(tab.partItems)) {
       ServiceWizardProfile? wizardProfile =
           ServiceWizardService.normalizeProfile(item.wizardProfile);
 
@@ -7005,7 +7755,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     }
   }
 
-  Set<BikeMemoryLocation> _availableServiceLocationsForItem(_JobPartItem item) {
+  Set<BikeMemoryLocation> _availableServiceLocationsForItem(JobPartItem item) {
     final wizardProfile =
         ServiceWizardService.normalizeProfile(item.wizardProfile);
     if (_serviceProfileHasNoneOnlyTarget(wizardProfile)) {
@@ -7204,7 +7954,18 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     final confirmed =
         bikeProfile.technicalConfirmed['drivetrainConfig'] == true &&
             bikeProfile.technicalConfirmed['drivetrainSpeeds'] == true;
-    if (currentConfig == derivedConfig && confirmed) {
+    // Un total que no es platos × piñones también se repara: el parche ya no
+    // acepta dejarlos incoherentes (20260928120000, revisión de Codex).
+    final currentSpeeds = num.tryParse(
+      '${bikeProfile.technicalValues['drivetrainSpeeds'] ?? ''}',
+    );
+    final derivedSpeeds = drivetrainSpeedsFromCounts(
+      answers['front_chainring_count'],
+      answers['rear_cog_count'],
+    );
+    if (currentConfig == derivedConfig &&
+        confirmed &&
+        currentSpeeds == derivedSpeeds) {
       return null;
     }
 
@@ -7506,38 +8267,6 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
           ),
       };
 
-  /// Retoma lo que un guardado anterior de este trabajo no alcanzó a escribir
-  /// en la ficha, con la misma llave: si la escritura sí había llegado, el
-  /// servidor devuelve su recibo; si no, la hace ahora. Corre después de cargar
-  /// la ficha, para que esa lectura no pise la ficha recién escrita.
-  Future<void> _resumeUnsentBikeFactPromotions(String jobId) async {
-    final unsent = unsentBikeFactPromotionsByJob[jobId];
-    if (unsent == null || unsent.isEmpty || !mounted) {
-      return;
-    }
-    final bikeshopService =
-        Provider.of<BikeshopService>(context, listen: false);
-    setState(() {
-      for (final entry in unsent.entries) {
-        _pendingBikeProfileOverrides[entry.key] = entry.value.target;
-        _pendingBikeProfileBaselines[entry.key] = entry.value.baseline;
-        _pendingBikeProfileOperationKeys[entry.key] = entry.value.operationKey;
-      }
-    });
-    final messages =
-        await _persistPendingBikeProfileOverrides(bikeshopService, jobId);
-    if (!mounted || !context.mounted) {
-      return;
-    }
-    _showBikeFactOutcome(
-      messages.isEmpty
-          ? null
-          : 'La ficha de la bici sigue sin actualizarse. ${messages.join(' ')}',
-      success:
-          'La ficha de la bici quedó al día con lo que confirmó Configurar.',
-    );
-  }
-
   /// Un aviso de ficha no escrita queda a la vista hasta que el mecánico lo
   /// cierra: pide una acción suya, y un aviso breve se pierde al salir.
   void _showBikeFactOutcome(String? problem, {String? success}) {
@@ -7560,76 +8289,520 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     );
   }
 
-  /// Escribe en la ficha, bici por bici, lo que confirmó «Configurar», y
-  /// devuelve un aviso por cada bici que no quedó al día. No lanza: el trabajo
-  /// ya está guardado. Lo descartado sale del formulario y la ficha se vuelve
-  /// a leer, porque la que se vio ya cambió; lo que falló por otra razón sigue
-  /// pendiente en memoria para el próximo intento.
-  Future<List<String>> _persistPendingBikeProfileOverrides(
+  /// Guarda las líneas del trabajo y lo que confirmó «Configurar» en un solo
+  /// comando con recibo (`save_mechanic_job_lines_v1`, ítem 4): o quedan las
+  /// dos cosas o ninguna. [lines] en null deja las líneas como están (un
+  /// trabajo con pago) y sólo lleva la ficha. El comando se respalda en la
+  /// bandeja del equipo antes de enviarse; cabecera, fotos y estado no van en
+  /// él: se escriben antes (cabecera y fotos) y después (estado), cada uno por
+  /// su lado.
+  ///
+  /// Devuelve un aviso por cada promoción que no se pudo armar. Lanza si nada
+  /// se guardó: si otra persona cambió las líneas
+  /// ([JobLinesChangedException]), o si la ficha de una bici no tomó el dato;
+  /// en ese caso lo de «Configurar» para esa bici sale del formulario, para
+  /// que el siguiente guardado pase, y la ficha se vuelve a leer. Sin
+  /// respuesta del servidor ([JobLineSavePendingException]) el comando sigue
+  /// en la bandeja y el formulario recuerda su llave.
+  /// Lo que no tomó la ficha, y el recibo del comando (null si no hubo nada
+  /// que mandar).
+  Future<({List<String> problems, JobLineSaveResult? result})>
+      _saveLinesWithBikeFacts({
+    required BikeshopService bikeshopService,
+    required String jobId,
+    required List<JobLineToSave>? lines,
+    required Map<String, Map<String, dynamic>> header,
+    required String label,
+    List<JobBikeToSave>? jobBikes,
+    bool includeBikeFacts = true,
+    bool invoice = false,
+    List<PendingWorkshopCommand> followUps = const [],
+    PendingWorkshopCommand? creation,
+    void Function(MechanicJob job)? onCreated,
+  }) async {
+    final problems = <String>[];
+    final promotions = includeBikeFacts
+        ? _pendingBikeFactPromotions()
+        : const <String, PendingBikeFactPromotion>{};
+    final bikeFacts = <String, List<BikeTechnicalFact>>{};
+    for (final entry in promotions.entries) {
+      try {
+        bikeFacts[entry.key] = bikeTechnicalFactsDiff(
+          baseline: entry.value.baseline,
+          target: entry.value.target,
+        );
+      } on StateError catch (error) {
+        problems.add(
+          '${_bikeLabelForPendingPromotion(entry.key)}: ${error.message}',
+        );
+        _discardPendingBikeProfilePromotion(entry.key);
+      }
+    }
+
+    // Un trabajo nuevo siempre manda su alta con sus líneas.
+    if (creation == null &&
+        lines == null &&
+        header.isEmpty &&
+        (jobBikes == null || jobBikes.isEmpty) &&
+        bikeFacts.values.every((facts) => facts.isEmpty)) {
+      _forgetWrittenPromotions(promotions, bikeFacts.keys);
+      // Sin líneas que mandar, lo que las seguía se respalda igual antes de
+      // enviarse, en orden.
+      if (followUps.isNotEmpty) {
+        await bikeshopService.stageJobCommands(
+          followUps.first,
+          followUps: followUps.sublist(1),
+        );
+      }
+      return (problems: problems, result: null);
+    }
+
+    final params = bikeshopService.buildJobLineSaveParams(
+      jobId: jobId,
+      seenLines: lines == null
+          ? null
+          : [
+              for (final entry in _seenLineVersions.entries)
+                JobLineVersion(id: entry.key, version: entry.value),
+            ],
+      lines: lines,
+      bikeFacts: bikeFacts,
+      header: header,
+      jobBikes: jobBikes,
+      invoice: invoice,
+    );
+    // Cada guardado lleva su llave. Un reintento del mismo no pasa por aquí:
+    // lo reenvía la bandeja tal como se respaldó ([_settlePendingLineSave]).
+    final pendingSave = _PendingLineSave.sent(
+      operationKey: const Uuid().v4(),
+      jobId: jobId,
+      promotions: promotions,
+      bikeIds: bikeFacts.keys.toSet(),
+      creation: creation,
+      headerShown: _headerMirror(
+        protect: _isPaymentProtectedCommercialSnapshotLocked,
+      ),
+    );
+    _pendingLineSave = pendingSave;
+
+    final JobLineSaveResult result;
+    try {
+      if (creation != null) {
+        // El alta, sus líneas y lo que las sigue se respaldan juntos antes
+        // del primer envío, y salen en ese orden.
+        result = (await bikeshopService.createJobWithLines(
+          creation: creation,
+          lineOperationKey: pendingSave.operationKeys.single,
+          lineParams: params,
+          label: label,
+          followUps: followUps,
+          onCreated: onCreated,
+        ))
+            .lines;
+      } else {
+        result = await bikeshopService.saveJobLines(
+          operationKey: pendingSave.operationKeys.single,
+          params: params,
+          label: label,
+          followUps: followUps,
+        );
+      }
+    } on JobCreationPendingException {
+      // Ni el alta llegó: todo sigue en la bandeja, con su llave, y el
+      // próximo Guardar lo resuelve primero. No hay trabajo creado.
+      rethrow;
+    } on JobCreationRejectedException {
+      // El alta no se aceptó y lo que la seguía salió con ella.
+      _pendingLineSave = null;
+      rethrow;
+    } on JobLineSavePendingException catch (pending) {
+      // Sigue en la bandeja con su llave; el formulario la recuerda. Lo que
+      // lo seguía quedó detrás, respaldado.
+      if (followUps.isEmpty) rethrow;
+      // Si detrás va la decisión de garantía, el panel la dice pendiente
+      // desde ya, leída de la bandeja, no al guardar otra vez.
+      if (followUps.any((command) =>
+          command.kind == WorkshopCommandKind.jobWarrantyDecision)) {
+        try {
+          final decision = await bikeshopService.pendingWarrantyDecision(jobId);
+          if (mounted) setState(() => _pendingWarrantyDecision = decision);
+        } catch (error) {
+          debugPrint('Could not read the pending warranty decision: $error');
+        }
+      }
+      throw _JobLinesPendingWithFollowUps(pending, followUps);
+    } on JobLineSaveBikeFactException catch (error) {
+      _pendingLineSave = null;
+      throw await _stopForBikeFactRejection(error);
+    } on WorkshopOutboxPersistenceException {
+      // El respaldo pudo quedar a medias (cada llave es una escritura): el
+      // formulario conserva estas llaves y el próximo Guardar resuelve primero
+      // lo que haya quedado de ellas. Olvidarlas dejaba reusar la llave del
+      // alta con otro contenido mientras la anterior seguía en la bandeja
+      // (revisión de Codex del alta, 2026-09-29).
+      rethrow;
+    } catch (_) {
+      _pendingLineSave = null;
+      rethrow;
+    }
+    _pendingLineSave = null;
+    _adoptLineSave(result, pendingSave);
+    return (problems: problems, result: result);
+  }
+
+  /// El cambio de estado que pide este guardado, con su llave (la misma al
+  /// reintentar el mismo cambio), o null si no pide ninguno. [statusId] nulo
+  /// es un estado de los de antes, que se resuelve por su código.
+  ({String operationKey, String? statusId})? _plannedStatusTransition() {
+    if (_savedJobId == null || _isStatusTransitionLocked) return null;
+    final existingStatusId = _existingJob?.statusId;
+    final targetStatusId = _selectedCustomStatus?.id;
+    final needsCustomTransition = targetStatusId != null &&
+        targetStatusId.isNotEmpty &&
+        targetStatusId != existingStatusId;
+    final needsLegacyTransition =
+        targetStatusId == null && _existingJob?.status != _selectedStatus;
+    if (!needsCustomTransition && !needsLegacyTransition) return null;
+    final fingerprint = targetStatusId ?? _selectedStatus.dbValue;
+    if (_pendingStatusTransitionFingerprint != fingerprint) {
+      _pendingStatusTransitionFingerprint = fingerprint;
+      _pendingStatusTransitionOperationKey = const Uuid().v4();
+    }
+    return (
+      operationKey: _pendingStatusTransitionOperationKey!,
+      statusId: needsCustomTransition ? targetStatusId : null,
+    );
+  }
+
+  /// La decisión de garantía de este trabajo que sigue en la bandeja se
+  /// envía antes de escribir otra cosa. Si se aplica, es la cobertura del
+  /// trabajo (también la que se tomó desde la tabla) y el formulario la da
+  /// por confirmada: el guardado no la repite y lleva su factura al día. Si
+  /// sigue sin respuesta, no se escribe encima. Si el servidor no la acepta,
+  /// se dice y se detiene: lo que venía detrás ya salió con ella.
+  Future<void> _settlePendingWarrantyDecision(
+    BikeshopService bikeshopService,
+  ) async {
+    final jobId = _savedJobId;
+    if (jobId == null) return;
+    final pending = await bikeshopService.pendingWarrantyDecision(jobId);
+    if (pending == null) {
+      if (_pendingWarrantyDecision != null && mounted) {
+        setState(() => _pendingWarrantyDecision = null);
+      }
+      return;
+    }
+    try {
+      await bikeshopService.decideWarrantyClaim(
+        warrantyJobId: jobId,
+        outcome: pending.outcome,
+        reason: pending.reason,
+        operationKey: pending.operationKey,
+      );
+    } on MechanicJobWarrantyDecisionPending {
+      if (mounted) setState(() => _pendingWarrantyDecision = pending);
+      throw const _JobSaveStopped(
+        'La decisión de garantía anterior de este trabajo sigue sin '
+        'respuesta del servidor. Está respaldada en este equipo con su llave '
+        'y se aplica sola; para no escribir encima, este guardado no hizo '
+        'nada. Vuelve a guardar cuando haya conexión.',
+      );
+    } catch (error) {
+      if (mounted) setState(() => _pendingWarrantyDecision = null);
+      throw _JobSaveStopped(
+        'La decisión de garantía anterior de este trabajo no se aplicó '
+        '($error). Revisa la garantía y vuelve a guardar.',
+      );
+    }
+    if (!mounted) return;
+    setState(() {
+      _warrantyOutcome = pending.outcome;
+      _warrantySaveCheckpoint.confirmDecision(pending.outcome);
+      _pendingWarrantyDecision = null;
+      _pendingWarrantyDecisionOperationKey = null;
+      _pendingWarrantyDecisionFingerprint = null;
+    });
+  }
+
+  /// La ficha no tomó lo de «Configurar» y, con ella, las líneas tampoco se
+  /// guardaron. Lo que se armó sobre la ficha vieja ya no vale: sale, la
+  /// ficha se vuelve a leer y «Configurar» arma lo nuevo sobre la vigente.
+  /// Hasta entonces el trabajo no se guarda.
+  Future<_JobSaveStopped> _stopForBikeFactRejection(
+    JobLineSaveBikeFactException error,
+  ) async {
+    final label = _bikeLabelForPendingPromotion(error.bikeId);
+    _discardPendingBikeProfilePromotion(error.bikeId);
+    if (mounted) await _loadSelectedBikeProfile(_selectedBike);
+    final cause = error.cause;
+    final reason = cause is BikeTechnicalFactConflict
+        ? '$label: la ficha cambió mientras el trabajo estaba abierto'
+            '${cause.keys.isEmpty ? '' : ' (${cause.keys.join(', ')})'}'
+        : '$label: el servidor rechazó el dato de la ficha ($cause)';
+    _bikeFactsAwaitingReconfirmation[error.bikeId] =
+        '$reason. Vuelve a Configurar el servicio de esa bici (o quítalo) '
+        'antes de guardar el trabajo.';
+    return _JobSaveStopped(
+      '$reason, así que las líneas no se guardaron. Vuelve a Configurar el '
+      'servicio de esa bici con la ficha vigente (o quítalo) y guarda de '
+      'nuevo.',
+    );
+  }
+
+  /// El alta de este formulario llegó (con su recibo): el formulario pasa a
+  /// ser el del trabajo creado. La cabecera como quedó es lo visto para el
+  /// guardado siguiente.
+  void _adoptCreatedJob(MechanicJob job) {
+    _createdJob = job;
+    _existingJob = job;
+    _headerBaseline = Map<String, dynamic>.of(job.persistedHeader ?? {});
+  }
+
+  /// Lo que dejó escrito un guardado de líneas de este formulario pasa al
+  /// formulario: cada línea nueva adopta su id, todas su versión y lo de
+  /// «Configurar» ya escrito sale. Las tareas de las líneas nuevas no se
+  /// crean aquí: nacieron con ellas en el comando, también cuando lo
+  /// confirma la reanudación o la consulta del recibo.
+  void _adoptLineSave(JobLineSaveResult result, _PendingLineSave save) {
+    // La cabecera como quedó es lo visto para el guardado siguiente.
+    final header = result.header;
+    if (header != null) {
+      _headerBaseline = {..._headerBaseline, ...header};
+    }
+    // Una bici nueva adopta el id que tomó en el comando, y cada una lo que
+    // quedó como lo visto para el guardado siguiente.
+    final savedJobBikes = result.jobBikes;
+    if (savedJobBikes != null) {
+      _jobBikeBaseline
+        ..clear()
+        ..addAll({for (final saved in savedJobBikes) saved.id: saved.row});
+      for (final saved in savedJobBikes) {
+        for (final tab in _bikeTabs) {
+          if (!tab.isGeneralTab && tab.bike?.id == saved.bikeId) {
+            tab.jobBikeId = saved.id;
+          }
+        }
+      }
+      _shownJobBikeIds
+        ..clear()
+        ..addAll({
+          for (final tab in _bikeTabs)
+            if (!tab.isGeneralTab &&
+                tab.jobBikeId != null &&
+                _jobBikeBaseline.containsKey(tab.jobBikeId))
+              tab.jobBikeId!,
+        });
+    }
+    // Desde aquí, lo editado se mide contra lo que se mandó: lo que queda a
+    // la vista si se adopta al tiro, y no lo editado después si el recibo
+    // llega en un guardado posterior (cierre del Master Schema, 2026-09-29).
+    _headerShown = save.headerShown ??
+        _headerMirror(
+          protect: _isPaymentProtectedCommercialSnapshotLocked,
+        );
+    final savedLines = result.lines;
+    if (savedLines != null) {
+      // Una línea nueva adopta su id de la base, y todas su versión: el
+      // próximo guardado las actualiza en vez de insertarlas otra vez.
+      for (final line in savedLines) {
+        final clientKey = line.clientKey;
+        if (clientKey == null || clientKey == line.id) continue;
+        if (clientKey.startsWith('labor-')) {
+          _laborLinePersistedIds[clientKey.substring('labor-'.length)] =
+              line.id;
+        } else {
+          _adoptPersistedLineId(clientKey, line.id);
+        }
+      }
+      _seenLineVersions
+        ..clear()
+        ..addAll({for (final line in savedLines) line.id: line.version});
+      // Un trabajo terminado pudo cambiar la ficha al guardar: se vuelve a
+      // leer qué escribió cada línea.
+      unawaited(_loadPartChangeWriters());
+    }
+
+    _forgetWrittenPromotions(save.promotions, save.bikeIds);
+    final selectedBikeId = _selectedBike?.id;
+    final refreshedProfile = selectedBikeId == null
+        ? null
+        : result.bikeFacts[selectedBikeId]?.profile;
+    if (refreshedProfile != null) {
+      if (mounted) {
+        setState(() => _selectedBikeProfile = refreshedProfile);
+      } else {
+        _selectedBikeProfile = refreshedProfile;
+      }
+    }
+  }
+
+  /// Resuelve el guardado de líneas que quedó sin respuesta antes de escribir
+  /// otra cosa. Si llegó, el formulario adopta su recibo (o, si era de un
+  /// formulario anterior, recarga el trabajo y se detiene: las líneas a la
+  /// vista no lo tenían). Si sigue sin respuesta, se detiene sin escribir. Si
+  /// el servidor no lo aplicó, lo dice como lo habría dicho entonces.
+  Future<void> _settlePendingLineSave(BikeshopService bikeshopService) async {
+    final pending = _pendingLineSave;
+    if (pending == null) return;
+    // Un trabajo nuevo: su alta va antes que sus líneas. Si sigue sin
+    // respuesta, nada más se envía; si no se creó, este guardado la manda de
+    // nuevo; si llegó, el formulario pasa a ser el del trabajo creado y lo
+    // editado después viaja como cambio.
+    final creation = pending.creation;
+    if (creation != null) {
+      final MechanicJob? created;
+      try {
+        created = await bikeshopService.settleJobCreation(creation);
+      } on JobCreationPendingException {
+        throw const _JobSaveStopped(
+          'El trabajo nuevo sigue sin respuesta del servidor: todavía no está '
+          'creado. Está respaldado en este equipo, con sus líneas, y se envía '
+          'solo; para no mandarlo dos veces, este guardado no hizo nada. '
+          'Vuelve a guardar cuando haya conexión.',
+        );
+      } on WorkshopOutboxPersistenceException {
+        // Un fallo local al resolverlo tampoco lo olvida: sigue en la
+        // bandeja y el próximo Guardar lo intenta de nuevo (segunda revisión
+        // de Codex del alta, 2026-09-29).
+        rethrow;
+      } catch (_) {
+        _pendingLineSave = null;
+        rethrow;
+      }
+      if (created == null) {
+        _pendingLineSave = null;
+        return;
+      }
+      _adoptCreatedJob(created);
+    }
+    var wrote = false;
+    for (final operationKey in pending.operationKeys) {
+      final JobLineSaveResult? result;
+      try {
+        result = await bikeshopService.settleJobLineSave(operationKey);
+      } on JobLineSavePendingException {
+        throw const _JobSaveStopped(
+          'El guardado anterior de las líneas de este trabajo sigue sin '
+          'respuesta del servidor. Está respaldado en este equipo con su '
+          'llave y se envía solo; para no escribir encima, este guardado no '
+          'hizo nada. Vuelve a guardar cuando haya conexión.',
+        );
+      } on JobLineSaveBikeFactException catch (error) {
+        _pendingLineSave = null;
+        if (!pending.fromThisForm) continue;
+        throw await _stopForBikeFactRejection(error);
+      } on WorkshopOutboxPersistenceException {
+        rethrow;
+      } catch (_) {
+        _pendingLineSave = null;
+        if (!pending.fromThisForm) continue;
+        rethrow;
+      }
+      if (result == null) continue;
+      wrote = true;
+      if (pending.fromThisForm) _adoptLineSave(result, pending);
+    }
+    _pendingLineSave = null;
+    if (wrote && !pending.fromThisForm) {
+      await _loadExistingJob();
+      throw const _JobSaveStopped(
+        'Llegó el guardado de las líneas que había quedado pendiente en este '
+        'equipo y el trabajo se recargó con él. Revisa y vuelve a guardar lo '
+        'que hayas cambiado después.',
+      );
+    }
+  }
+
+  /// Reenvía lo que la bandeja del equipo guarda de [jobId] y devuelve las
+  /// llaves de los guardados de líneas que siguen sin respuesta. Una bandeja
+  /// que no se deja leer no impide abrir el trabajo: su guardado tampoco
+  /// podría respaldar nada y se detiene ahí.
+  Future<List<String>> _resumePendingLineSaves(
     BikeshopService bikeshopService,
     String jobId,
   ) async {
-    if (_pendingBikeProfileOverrides.isEmpty) {
+    try {
+      final runs = await bikeshopService.resumePendingBikeCommands(
+        jobId: jobId,
+      );
+      if (mounted) {
+        for (final run in runs) {
+          final continuation =
+              run.command.kind == WorkshopCommandKind.jobInvoiceContinuation;
+          if (run.command.kind != WorkshopCommandKind.jobLineSave &&
+              run.command.kind != WorkshopCommandKind.jobWarrantyDecision &&
+              !continuation) {
+            continue;
+          }
+          // Al abrir el trabajo se dice también que su factura sigue
+          // pendiente; la reanudación periódica no lo repite.
+          final notice =
+              workshopCommandNotice(run, includeOffline: continuation);
+          if (notice != null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(notice)),
+            );
+          }
+        }
+      }
+      return await bikeshopService.pendingJobLineSaves(jobId);
+    } catch (error) {
+      debugPrint('⚠️ No se pudo revisar la bandeja del trabajo: $error');
       return const [];
     }
+  }
 
-    // Sólo viajan los datos que la promoción cambió, cada uno con el valor que
-    // se vio al cargar la ficha. Reescribir la fila completa pisaba cualquier
-    // cambio hecho en la ficha mientras el trabajo estaba abierto.
-    final promotions = _pendingBikeFactPromotions();
-    final outcome = await writePendingBikeFactPromotions(
-      jobId: jobId,
-      pending: promotions,
-      patch: ({
-        required String operationKey,
-        required String bikeId,
-        required String jobId,
-        required List<BikeTechnicalFact> facts,
-      }) async =>
-          (await bikeshopService.patchBikeTechnicalFacts(
-        operationKey: operationKey,
-        bikeId: bikeId,
-        jobId: jobId,
-        facts: facts,
-      ))
-              .profile,
-    );
+  /// Cómo se nombra en los avisos un trabajo nuevo antes de tener número.
+  String _newJobCommandLabel() {
+    final customer = _selectedCustomer?.name.trim();
+    return customer == null || customer.isEmpty
+        ? 'Trabajo nuevo'
+        : 'Trabajo nuevo de $customer';
+  }
 
-    // Sale del formulario lo resuelto, salvo que «Configurar» haya promovido
-    // otra vez esa bici mientras se escribía (llave nueva).
-    for (final bikeId in [...outcome.written.keys, ...outcome.discarded.keys]) {
+  String _jobCommandLabel(MechanicJob job) {
+    final reference = _jobReference(job);
+    return reference.startsWith('Trabajo') ? reference : 'Trabajo $reference';
+  }
+
+  /// Las líneas cuyo campo de cantidad no dice una cantidad, en cualquier
+  /// pestaña (una pestaña que no se ve no valida su campo).
+  List<String> _linesWithIncompleteQuantity() => [
+        for (final item in [
+          for (final tab in _bikeTabs) ...tab.partItems,
+          if (_bikeTabs.isEmpty) ..._partItems,
+        ])
+          if (item.name.isNotEmpty && item.quantityDraft != null)
+            '«${item.displayName}»',
+      ];
+
+  /// Los avisos de las bicis que esperan reconfirmar lo de «Configurar». Una
+  /// bici que salió del trabajo, o que ya no tiene servicios configurados, no
+  /// espera nada: no queda línea que diga otra cosa que la ficha.
+  List<String> _bikesAwaitingReconfirmation() {
+    _bikeFactsAwaitingReconfirmation.removeWhere((bikeId, _) {
+      final tab = _bikeTabs
+          .where((tab) => !tab.isGeneralTab && tab.bike?.id == bikeId)
+          .firstOrNull;
+      return tab == null ||
+          !tab.partItems
+              .any((item) => _effectiveWizardAnswersForItem(item) != null);
+    });
+    return _bikeFactsAwaitingReconfirmation.values.toList();
+  }
+
+  /// Lo de «Configurar» que ya quedó en la ficha sale del formulario, salvo
+  /// que se haya vuelto a promover esa bici mientras se guardaba (llave nueva).
+  void _forgetWrittenPromotions(
+    Map<String, PendingBikeFactPromotion> promotions,
+    Iterable<String> bikeIds,
+  ) {
+    for (final bikeId in bikeIds.toList()) {
       if (_pendingBikeProfileOperationKeys[bikeId] ==
-          promotions[bikeId]!.operationKey) {
+          promotions[bikeId]?.operationKey) {
         _discardPendingBikeProfilePromotion(bikeId);
       }
     }
-
-    final selectedBike = _selectedBike;
-    final refreshedSelectedProfile =
-        selectedBike?.id == null ? null : outcome.written[selectedBike!.id!];
-    if (outcome.discarded.isNotEmpty && mounted) {
-      await _loadSelectedBikeProfile(_selectedBike);
-    } else if (refreshedSelectedProfile != null) {
-      if (mounted) {
-        setState(() => _selectedBikeProfile = refreshedSelectedProfile);
-      } else {
-        _selectedBikeProfile = refreshedSelectedProfile;
-      }
-    }
-
-    return [
-      for (final entry in outcome.discarded.entries)
-        entry.value is BikeTechnicalFactConflict
-            ? '${_bikeLabelForPendingPromotion(entry.key)}: la ficha cambió '
-                'mientras el trabajo estaba abierto '
-                '(${(entry.value as BikeTechnicalFactConflict).keys.join(', ')}) '
-                'y no se escribió. Confirma de nuevo en Configurar del servicio.'
-            : '${_bikeLabelForPendingPromotion(entry.key)}: '
-                '${(entry.value as StateError).message}',
-      for (final entry in outcome.failed.entries)
-        '${_bikeLabelForPendingPromotion(entry.key)}: ${entry.value}. '
-            'Se reintentará al abrir el trabajo.',
-    ];
   }
 
   String _bikeLabelForPendingPromotion(String bikeId) {
@@ -8650,7 +9823,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
 
   _ServiceWizardDialogConfig _buildServiceWizardDialogConfig(
     ServiceWizardProfile? profile,
-    _JobPartItem item,
+    JobPartItem item,
   ) {
     final currentTab = _currentBikeTab;
     final technicalValues = _bikeProfileForCurrentTab()?.technicalValues ??
@@ -9192,7 +10365,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
 
   String? _serviceWizardSyncFeedback(
     ServiceWizardProfile? profile,
-    _JobPartItem item,
+    JobPartItem item,
     Map<String, dynamic> answers,
   ) {
     if (_isBrakeServiceFamily(profile?.serviceFamily)) {
@@ -9325,7 +10498,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
   }
 
   void _applyWizardAnswersToDiagnosis({
-    required _JobPartItem item,
+    required JobPartItem item,
     required ServiceWizardProfile? profile,
     required Map<String, dynamic> answers,
   }) {
@@ -9450,7 +10623,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
   /// su estado): la configuración del servicio queda en la línea, no se copia
   /// al diagnóstico.
   void _applyWheelWizardAnswersToDiagnosis({
-    required _JobPartItem item,
+    required JobPartItem item,
     required ServiceWizardProfile profile,
     required Map<String, dynamic> answers,
   }) {
@@ -9521,7 +10694,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
   }
 
   void _applyBrakeWizardAnswersToDiagnosis({
-    required _JobPartItem item,
+    required JobPartItem item,
     required ServiceWizardProfile profile,
     required Map<String, dynamic> answers,
   }) {
@@ -16387,6 +17560,12 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
             ),
           ],
         ),
+        if (_pendingWarrantyDecision case final pending?) ...[
+          const SizedBox(height: 8),
+          // Lo que sigue en la bandeja no se muestra como aplicado: la
+          // cobertura de arriba es la del servidor.
+          WarrantyDecisionPendingNotice(outcome: pending.outcome),
+        ],
       ],
     );
   }
@@ -17090,7 +18269,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
   Widget _buildPartRow(
     ThemeData theme,
     int index,
-    _JobPartItem item,
+    JobPartItem item,
     int itemIndex, {
     bool mobileLayout = false,
     ({int? previous, int? next}) neighbors = (previous: null, next: null),
@@ -17116,6 +18295,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
       key: ValueKey('part_${item.id}'),
       item: item,
       availableServiceLocations: _availableServiceLocationsForItem(item),
+      partChanges: _partChangesFor(item),
       index: index,
       itemIndex: itemIndex,
       compatibilityContextKey: _partCompatibilityContextKey,
@@ -17138,11 +18318,19 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
       locked: _isCommercialSnapshotLocked,
       work: _currentLineWork[item.id],
       onOpenTask: _openLineTask,
+      assignTargets: _assignTargetsFor(item),
+      onChoosePartWheel: (location) => _choosePartWheel(itemIndex, location),
       onChanged: (newItem) {
+        // Otro repuesto no hereda el cambio que se confirmó para el anterior.
+        final productChanged = newItem.product?.id != item.product?.id;
+        if (productChanged) newItem = newItem.copyWith(clearPartChange: true);
         setState(() {
           _currentPartItems[itemIndex] = newItem;
           _syncPendingWizardAnswerCache(newItem);
         });
+        if (productChanged && newItem.product != null) {
+          unawaited(_loadPartChangeContext(products: [newItem.product]));
+        }
       },
       onRemove: () => setState(() {
         final removedId = _currentPartItems[itemIndex].id;
@@ -17167,7 +18355,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
 
   /// Qué le falta a un servicio o cómo quedó, con las mismas reglas del
   /// asistente: lo que la ficha ya confirma o la línea ya dice no falta.
-  _LineConfigStatus? _lineConfigStatus(_JobPartItem item) {
+  _LineConfigStatus? _lineConfigStatus(JobPartItem item) {
     if (!item.isServiceItem || item.product == null) return null;
     final profile = ServiceWizardService.normalizeProfile(item.wizardProfile);
     if (profile == null || profile.questions.isEmpty) return null;
@@ -17290,6 +18478,12 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
       if (index < 0) continue;
       tab.partItems[index] = tab.partItems[index].withPersistedId(persistedId);
     }
+    final standaloneIndex =
+        _partItems.indexWhere((item) => item.id == temporaryId);
+    if (standaloneIndex >= 0) {
+      _partItems[standaloneIndex] =
+          _partItems[standaloneIndex].withPersistedId(persistedId);
+    }
     final pendingAnswers = _pendingServiceWizardAnswers.remove(temporaryId);
     if (pendingAnswers != null) {
       _pendingServiceWizardAnswers[persistedId] = pendingAnswers;
@@ -17363,7 +18557,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
   }
 
   /// El panel de «Configurar» bajo la línea que lo pidió, o null.
-  Widget? _serviceConfigurationPanelFor(_JobPartItem item) {
+  Widget? _serviceConfigurationPanelFor(JobPartItem item) {
     final config = _configuringConfig;
     if (_configuringItemId != item.id || config == null) return null;
     final profile = _configuringProfile;
@@ -17420,7 +18614,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
   }
 
   Map<ServiceConfigurationLayer, ServiceConfigurationLayerCopy>
-      _serviceConfigurationLayerCopy(_JobPartItem item) {
+      _serviceConfigurationLayerCopy(JobPartItem item) {
     final bike = _selectedBike?.displayName.trim();
     final where = switch (item.location) {
       BikeMemoryLocation.front => ' · rueda delantera',
@@ -17491,6 +18685,15 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
             : _bikeProfilePromotionFeedback(profile);
 
     setState(() {
+      // Configurar con la ficha vigente cargada es la reconfirmación, cambie
+      // o no la ficha: otro pudo haber confirmado ya lo mismo, y entonces no
+      // hay nada que promover (revisión de Codex, 2026-09-28).
+      final reconfirmedBikeId = _currentBikeTab?.bike?.id;
+      if (reconfirmedBikeId != null &&
+          !_isLoadingSelectedBikeProfile &&
+          !_selectedBikeProfileLoadFailed) {
+        _bikeFactsAwaitingReconfirmation.remove(reconfirmedBikeId);
+      }
       _currentPartItems[itemIndex] = updatedItem;
       _syncPendingWizardAnswerCache(updatedItem);
       _applyWizardAnswersToDiagnosis(
@@ -18285,7 +19488,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
   }
 
   /// The currently selected service item (for sidebar detail)
-  _JobPartItem? get _selectedServiceItem {
+  JobPartItem? get _selectedServiceItem {
     if (_selectedServiceIndex == null) return null;
     if (_selectedServiceIndex! < 0 ||
         _selectedServiceIndex! >= _currentPartItems.length) {
@@ -18302,7 +19505,7 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
     return _buildServiceDetailCard(theme, item);
   }
 
-  Widget _buildServiceDetailCard(ThemeData theme, _JobPartItem item) {
+  Widget _buildServiceDetailCard(ThemeData theme, JobPartItem item) {
     final profile = ServiceWizardService.normalizeProfile(item.wizardProfile);
     final answers = ServiceWizardService.normalizeAnswersForProfile(
       profile,
@@ -18530,8 +19733,17 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
 // Helper classes for form items
 
 class _PartItemRow extends StatefulWidget {
-  final _JobPartItem item;
+  final JobPartItem item;
   final Set<BikeMemoryLocation> availableServiceLocations;
+
+  /// Los cambios de ficha que propone un repuesto con ficha técnica (un rotor
+  /// de 180 atrás; una maza trasera, su driver y su anclaje): la línea pide
+  /// la rueda y los dice, uno por chip.
+  final List<PartBikeFactChange> partChanges;
+
+  /// Elegir la rueda de ese repuesto, o volver a elegirla, confirma el
+  /// cambio.
+  final ValueChanged<BikeMemoryLocation>? onChoosePartWheel;
   final int index;
   final int itemIndex;
   final Future<Map<String, ProductCompatibilityAssessment>> Function(
@@ -18539,7 +19751,7 @@ class _PartItemRow extends StatefulWidget {
   final Object? compatibilityContextKey;
   final bool isFirst;
   final bool isLast;
-  final ValueChanged<_JobPartItem> onChanged;
+  final ValueChanged<JobPartItem> onChanged;
   final VoidCallback onRemove;
   final VoidCallback onMoveUp;
   final VoidCallback onMoveDown;
@@ -18569,6 +19781,11 @@ class _PartItemRow extends StatefulWidget {
   final _LineWork? work;
   final ValueChanged<String>? onOpenTask;
 
+  /// «Asignar a <bici>»: en General de un trabajo con varias bicis, una por
+  /// bici. Sin acción ([onSelected] nula) mientras la línea está en
+  /// «Configurar».
+  final List<({String label, VoidCallback? onSelected})> assignTargets;
+
   const _PartItemRow({
     super.key,
     required this.item,
@@ -18577,6 +19794,8 @@ class _PartItemRow extends StatefulWidget {
       BikeMemoryLocation.front,
       BikeMemoryLocation.rear,
     },
+    this.partChanges = const [],
+    this.onChoosePartWheel,
     required this.index,
     required this.itemIndex,
     this.compatibilityResolver,
@@ -18601,6 +19820,7 @@ class _PartItemRow extends StatefulWidget {
     this.locked = false,
     this.work,
     this.onOpenTask,
+    this.assignTargets = const [],
   });
 
   @override
@@ -18645,7 +19865,7 @@ class _PartItemRowState extends State<_PartItemRow> {
     return _buildDesktopRow(theme, item);
   }
 
-  Widget _buildDesktopRow(ThemeData theme, _JobPartItem item) {
+  Widget _buildDesktopRow(ThemeData theme, JobPartItem item) {
     return JobLineRow(
       thumb: _buildLineThumb(theme, item),
       body: _buildProductEditor(item, mobileLayout: false),
@@ -18660,7 +19880,7 @@ class _PartItemRowState extends State<_PartItemRow> {
     );
   }
 
-  Widget _buildMobileCard(ThemeData theme, _JobPartItem item) {
+  Widget _buildMobileCard(ThemeData theme, JobPartItem item) {
     return JobLineRow(
       key: ValueKey('mobile_part_semantics_${item.id}'),
       cardKey: ValueKey('mobile_part_card_${item.id}'),
@@ -18685,18 +19905,18 @@ class _PartItemRowState extends State<_PartItemRow> {
 
   bool _editingDescription = false;
 
-  String _lineLabel(_JobPartItem item) => item.displayName.trim().isEmpty
+  String _lineLabel(JobPartItem item) => item.displayName.trim().isEmpty
       ? (item.isServiceItem ? 'Servicio sin nombre' : 'Producto sin nombre')
       : item.displayName;
 
-  bool _hasLineIdentity(_JobPartItem item) =>
+  bool _hasLineIdentity(JobPartItem item) =>
       item.product != null || item.name.trim().isNotEmpty;
 
   /// La descripción del operador. En un servicio configurado `notes` guarda
   /// el resumen del asistente, que se ve como chip y no se edita a mano.
-  bool _ownsDescription(_JobPartItem item) => !item.hasWizardAnswers;
+  bool _ownsDescription(JobPartItem item) => !item.hasWizardAnswers;
 
-  Widget _buildLineThumb(ThemeData theme, _JobPartItem item) {
+  Widget _buildLineThumb(ThemeData theme, JobPartItem item) {
     final scheme = theme.colorScheme;
     final imageUrl = item.product?.imageUrl;
     if (!item.isServiceItem && imageUrl != null && imageUrl.isNotEmpty) {
@@ -18741,7 +19961,7 @@ class _PartItemRowState extends State<_PartItemRow> {
         _ => 'Sin fijar lado',
       };
 
-  String _lineMeta(_JobPartItem item) {
+  String _lineMeta(JobPartItem item) {
     final sku = item.sku;
     final parts = <String>[
       if (item.isServiceItem)
@@ -18758,7 +19978,7 @@ class _PartItemRowState extends State<_PartItemRow> {
   }
 
   List<JobLineAction> _lineActions(
-    _JobPartItem item, {
+    JobPartItem item, {
     required bool mobileLayout,
   }) {
     final prefix = mobileLayout ? 'mobile_part' : 'desktop_part';
@@ -18789,6 +20009,14 @@ class _PartItemRowState extends State<_PartItemRow> {
               : 'Cambiar por otro artículo',
           onSelected: () => _handleProductChanged(item, null),
         ),
+      for (final (index, target) in widget.assignTargets.indexed)
+        JobLineAction(
+          key: ValueKey('${prefix}_assign_bike_${item.id}_$index'),
+          icon: Icons.pedal_bike_outlined,
+          label: target.label,
+          onSelected: target.onSelected,
+          startsGroup: index == 0,
+        ),
       JobLineAction(
         key: ValueKey('${prefix}_move_up_${item.id}'),
         icon: Icons.arrow_upward,
@@ -18814,7 +20042,7 @@ class _PartItemRowState extends State<_PartItemRow> {
   }
 
   Widget _buildProductEditor(
-    _JobPartItem item, {
+    JobPartItem item, {
     required bool mobileLayout,
   }) {
     // Sin producto ni nombre, la línea es el buscador del catálogo.
@@ -18865,8 +20093,14 @@ class _PartItemRowState extends State<_PartItemRow> {
           )
         : child;
 
+    // Un repuesto que cambia la ficha pide su rueda como un servicio.
+    final partChanges = widget.partChanges;
+    final choosesWheel = item.isServiceItem || partChanges.isNotEmpty;
+    // Dos datos que no calzan por lo mismo (una maza que no se raya en la
+    // rueda) se dicen una vez.
+    final shownLabels = <String>{};
     final chips = <Widget>[
-      if (item.isServiceItem &&
+      if (choosesWheel &&
           widget.locked &&
           item.location != BikeMemoryLocation.none)
         JobLineChip(
@@ -18874,7 +20108,7 @@ class _PartItemRowState extends State<_PartItemRow> {
           label: _locationLabel(item.location),
           tone: JobLineChipTone.info,
         ),
-      if (item.isServiceItem && orderedLocations.length > 1 && !widget.locked)
+      if (choosesWheel && orderedLocations.length > 1 && !widget.locked)
         touchable(
           PopupMenuButton<BikeMemoryLocation>(
             key: ValueKey(
@@ -18882,7 +20116,10 @@ class _PartItemRowState extends State<_PartItemRow> {
             ),
             tooltip: 'Rueda o lado de la bici',
             onSelected: (location) {
-              if (location != item.location) {
+              final choosePartWheel = widget.onChoosePartWheel;
+              if (partChanges.isNotEmpty && choosePartWheel != null) {
+                choosePartWheel(location);
+              } else if (location != item.location) {
                 widget.onChanged(item.copyWith(location: location));
               }
             },
@@ -18905,6 +20142,69 @@ class _PartItemRowState extends State<_PartItemRow> {
             ),
           ),
         ),
+      // Lo que el repuesto le hace a la ficha de la bici al terminar.
+      for (final (changeIndex, partChange) in partChanges.indexed)
+        if (!(widget.locked &&
+                (partChange.status == PartBikeFactChangeStatus.chooseWheel ||
+                    partChange.status == PartBikeFactChangeStatus.chooseBike ||
+                    partChange.status ==
+                        PartBikeFactChangeStatus.unconfirmed)) &&
+            shownLabels.add(partChange.label))
+          touchable(
+            JobLineChip(
+              key: ValueKey(
+                '${mobileLayout ? 'mobile' : 'desktop'}_part_change_${item.id}'
+                '${changeIndex == 0 ? '' : '_${partChange.link?.bikeFactKey ?? changeIndex}'}',
+              ),
+              icon: switch (partChange.status) {
+                PartBikeFactChangeStatus.change => Icons.sync_alt,
+                PartBikeFactChangeStatus.confirms ||
+                PartBikeFactChangeStatus.fits =>
+                  Icons.check_circle_outline,
+                PartBikeFactChangeStatus.incompatible => Icons.error_outline,
+                PartBikeFactChangeStatus.caution => Icons.report_outlined,
+                PartBikeFactChangeStatus.pending => Icons.pending_outlined,
+                PartBikeFactChangeStatus.chooseBike =>
+                  Icons.pedal_bike_outlined,
+                PartBikeFactChangeStatus.chooseWheel =>
+                  partChange.onlyPosition == null
+                      ? Icons.place_outlined
+                      : Icons.touch_app_outlined,
+                PartBikeFactChangeStatus.unconfirmed =>
+                  Icons.touch_app_outlined,
+              },
+              label: partChange.label,
+              tone: switch (partChange.status) {
+                PartBikeFactChangeStatus.change => JobLineChipTone.info,
+                PartBikeFactChangeStatus.confirms ||
+                PartBikeFactChangeStatus.fits =>
+                  JobLineChipTone.success,
+                PartBikeFactChangeStatus.incompatible ||
+                PartBikeFactChangeStatus.caution ||
+                PartBikeFactChangeStatus.pending ||
+                PartBikeFactChangeStatus.chooseBike ||
+                PartBikeFactChangeStatus.chooseWheel =>
+                  JobLineChipTone.warning,
+                PartBikeFactChangeStatus.unconfirmed => JobLineChipTone.neutral,
+              },
+              maxLines: mobileLayout ? 3 : 2,
+              minHeight: chipVisibleHeight,
+              tooltip: partChange.tooltip,
+              // Tocarlo confirma el cambio en la rueda que ya dice la línea, o
+              // elige la única rueda en que va la pieza (un cassette, atrás).
+              onTap: widget.locked || widget.onChoosePartWheel == null
+                  ? null
+                  : switch (partChange.status) {
+                      PartBikeFactChangeStatus.unconfirmed => () =>
+                          widget.onChoosePartWheel!(item.location),
+                      PartBikeFactChangeStatus.chooseWheel
+                          when partChange.onlyPosition != null =>
+                        () =>
+                            widget.onChoosePartWheel!(partChange.onlyPosition!),
+                      _ => null,
+                    },
+            ),
+          ),
       // Una línea protegida no se configura: lo que falta ya no es una tarea,
       // y sólo queda el resumen de lo que se configuró.
       if (configStatus != null &&
@@ -19104,7 +20404,7 @@ class _PartItemRowState extends State<_PartItemRow> {
   }
 
   void _handleProductChanged(
-    _JobPartItem item,
+    JobPartItem item,
     ProductFieldSelection? selection,
   ) {
     if (selection == null) {
@@ -19198,21 +20498,22 @@ class _PartItemRowState extends State<_PartItemRow> {
 
   Widget _buildQuantityField(
     ThemeData theme,
-    _JobPartItem item, {
+    JobPartItem item, {
     required bool mobileLayout,
   }) {
     if (widget.locked) {
       return _lockedNumber(
         theme,
-        item.quantity.toString(),
+        formatJobLineQuantity(item.quantity),
         mobileLayout: mobileLayout,
         label: 'Cantidad',
       );
     }
+    // Horas de mano de obra, litros o metros llevan decimales (1,5).
     return TextFormField(
       key: mobileLayout ? ValueKey('mobile_part_quantity_${item.id}') : null,
-      initialValue: item.quantity.toString(),
-      keyboardType: TextInputType.number,
+      initialValue: formatJobLineQuantity(item.quantity),
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
       textAlign: mobileLayout ? TextAlign.start : TextAlign.right,
       style: theme.textTheme.bodyMedium,
       decoration: mobileLayout
@@ -19224,17 +20525,16 @@ class _PartItemRowState extends State<_PartItemRow> {
               border: OutlineInputBorder(),
             )
           : _kLineNumberDecoration,
-      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-      onChanged: (value) {
-        final newQty = int.tryParse(value) ?? 1;
-        widget.onChanged(item.copyWith(quantity: newQty));
-      },
+      inputFormatters: [
+        FilteringTextInputFormatter.allow(RegExp(r'^\d*[.,]?\d{0,2}')),
+      ],
+      onChanged: (value) => widget.onChanged(item.withQuantityText(value)),
     );
   }
 
   Widget _buildPriceField(
     ThemeData theme,
-    _JobPartItem item, {
+    JobPartItem item, {
     required bool mobileLayout,
   }) {
     if (widget.locked) {
@@ -19248,6 +20548,21 @@ class _PartItemRowState extends State<_PartItemRow> {
         showLock: true,
       );
     }
+    // «Cambiar por otro artículo» trae el precio del nuevo, pero un campo con
+    // `initialValue` conserva el texto que ya tenía: mostraba el precio del
+    // artículo anterior mientras el total usaba el nuevo (C1/C4 nativo,
+    // 2026-09-30). Otro artículo es otro campo.
+    return KeyedSubtree(
+      key: ValueKey('part_price_product_${item.product?.id ?? item.name}'),
+      child: _buildEditablePriceField(theme, item, mobileLayout: mobileLayout),
+    );
+  }
+
+  Widget _buildEditablePriceField(
+    ThemeData theme,
+    JobPartItem item, {
+    required bool mobileLayout,
+  }) {
     return TextFormField(
       key: mobileLayout ? ValueKey('mobile_part_price_${item.id}') : null,
       initialValue: item.unitPrice.toStringAsFixed(0),
@@ -19276,14 +20591,14 @@ class _PartItemRowState extends State<_PartItemRow> {
     );
   }
 
-  String _formattedTotal(_JobPartItem item) {
+  String _formattedTotal(JobPartItem item) {
     return NumberFormat.currency(symbol: '\$', decimalDigits: 0)
         .format(item.quantity * item.unitPrice);
   }
 
   Widget _buildTotalText(
     ThemeData theme,
-    _JobPartItem item, {
+    JobPartItem item, {
     bool mobileLayout = false,
   }) {
     return Text(
@@ -19318,89 +20633,6 @@ class _LineConfigStatus {
   final String label;
 }
 
-class _JobPartItem {
-  final String id; // Unique stable ID for widget keys
-  Product? product; // Nullable for ad-hoc items
-  String name; // For ad-hoc items
-  bool isCatalogProduct;
-  bool isServiceItem;
-  int quantity;
-  double unitPrice;
-  BikeMemoryLocation location;
-  String? notes;
-
-  /// Answers captured from the service wizard (only for service products)
-  Map<String, dynamic>? wizardAnswers;
-
-  /// Cached wizard profile for re-editing without re-fetching from DB
-  ServiceWizardProfile? wizardProfile;
-
-  _JobPartItem({
-    String? id,
-    this.product,
-    required this.name,
-    this.isCatalogProduct = true,
-    this.isServiceItem = false,
-    required this.quantity,
-    required this.unitPrice,
-    this.location = BikeMemoryLocation.none,
-    this.notes,
-    this.wizardAnswers,
-    this.wizardProfile,
-  }) : id = id ?? DateTime.now().microsecondsSinceEpoch.toString();
-
-  String get displayName => product?.name ?? name;
-  String? get sku => product?.sku;
-  bool get hasWizardAnswers =>
-      wizardAnswers != null && wizardAnswers!.isNotEmpty;
-
-  /// La misma línea con el id que le dio la base al insertarla.
-  _JobPartItem withPersistedId(String persistedId) => _JobPartItem(
-        id: persistedId,
-        product: product,
-        name: name,
-        isCatalogProduct: isCatalogProduct,
-        isServiceItem: isServiceItem,
-        quantity: quantity,
-        unitPrice: unitPrice,
-        location: location,
-        notes: notes,
-        wizardAnswers: wizardAnswers,
-        wizardProfile: wizardProfile,
-      );
-
-  /// Create a copy with the same ID (for preserving widget keys)
-  _JobPartItem copyWith({
-    Product? product,
-    String? name,
-    bool? isCatalogProduct,
-    bool? isServiceItem,
-    int? quantity,
-    double? unitPrice,
-    BikeMemoryLocation? location,
-    String? notes,
-    Map<String, dynamic>? wizardAnswers,
-    ServiceWizardProfile? wizardProfile,
-    bool clearProduct = false,
-    bool clearWizard = false,
-  }) {
-    return _JobPartItem(
-      id: id, // Keep same ID!
-      product: clearProduct ? null : (product ?? this.product),
-      name: name ?? this.name,
-      isCatalogProduct: isCatalogProduct ?? this.isCatalogProduct,
-      isServiceItem: isServiceItem ?? this.isServiceItem,
-      quantity: quantity ?? this.quantity,
-      unitPrice: unitPrice ?? this.unitPrice,
-      location: location ?? this.location,
-      notes: notes ?? this.notes,
-      wizardAnswers: clearWizard ? null : (wizardAnswers ?? this.wizardAnswers),
-      wizardProfile: clearWizard ? null : (wizardProfile ?? this.wizardProfile),
-    );
-  }
-}
-
-/// Badge shown at the top of a service line item row.
 class _JobServiceItem {
   final String id;
   final Product? serviceProduct;
@@ -20997,4 +22229,104 @@ class _ServiceLocationHydration {
   final ServiceWizardProfile? profile;
   final BikeMemoryLocation fromLocation;
   final BikeMemoryLocation toLocation;
+}
+
+/// El guardado se detuvo antes de escribir las líneas; el mensaje dice por
+/// qué y qué hacer.
+/// Un guardado de líneas enviado sin respuesta. [fromThisForm]: lo armó este
+/// formulario y trae lo necesario para adoptar su recibo (lo de «Configurar»
+/// que llevaba). Si no, se encontró en la bandeja al abrir el trabajo: las
+/// líneas a la vista no lo tienen. Las tareas de sus líneas nuevas viajan en
+/// el comando, no aquí: nacen con él en el servidor.
+class _PendingLineSave {
+  const _PendingLineSave._({
+    required this.operationKeys,
+    required this.fromThisForm,
+    this.jobId,
+    this.promotions = const {},
+    this.bikeIds = const {},
+    this.creation,
+    this.headerShown,
+  });
+
+  factory _PendingLineSave.sent({
+    required String operationKey,
+    required String jobId,
+    required Map<String, PendingBikeFactPromotion> promotions,
+    required Set<String> bikeIds,
+    PendingWorkshopCommand? creation,
+    Map<String, dynamic>? headerShown,
+  }) =>
+      _PendingLineSave._(
+        operationKeys: [operationKey],
+        fromThisForm: true,
+        jobId: jobId,
+        promotions: promotions,
+        bikeIds: bikeIds,
+        creation: creation,
+        headerShown: headerShown,
+      );
+
+  factory _PendingLineSave.restored(List<String> operationKeys) =>
+      _PendingLineSave._(operationKeys: operationKeys, fromThisForm: false);
+
+  /// Del más viejo al más nuevo.
+  final List<String> operationKeys;
+  final bool fromThisForm;
+
+  /// El trabajo del guardado de este formulario, para adoptar su recibo.
+  final String? jobId;
+  final Map<String, PendingBikeFactPromotion> promotions;
+  final Set<String> bikeIds;
+
+  /// El alta que va antes de estas líneas (un trabajo nuevo), tal como se
+  /// respaldó: se resuelve primero, y si ya salió de la bandeja su recibo se
+  /// consulta con su contenido.
+  final PendingWorkshopCommand? creation;
+
+  /// Lo que el formulario mostraba de la cabecera al enviarlas: si su recibo
+  /// se adopta en un guardado posterior, lo editado desde entonces sigue
+  /// contando como editado.
+  final Map<String, dynamic>? headerShown;
+}
+
+class _JobSaveStopped implements Exception {
+  const _JobSaveStopped(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
+}
+
+/// El guardado de las líneas quedó sin respuesta y, detrás, respaldado con
+/// él, lo que lo seguía: la decisión de garantía y quizá el cambio de estado.
+/// Salen solos cuando las líneas lleguen; nada de eso está aplicado todavía.
+class _JobLinesPendingWithFollowUps implements Exception {
+  const _JobLinesPendingWithFollowUps(this.lines, this.followUps);
+
+  final JobLineSavePendingException lines;
+  final List<PendingWorkshopCommand> followUps;
+
+  @override
+  String toString() {
+    final why = lines.busy
+        ? 'Otra pestaña abierta está enviando el guardado de las líneas'
+        : lines.queued
+            ? 'El guardado de las líneas espera detrás de uno anterior de '
+                'este trabajo que sigue sin respuesta'
+            : 'El servidor no respondió al guardar las líneas';
+    final names = [
+      for (final follower in followUps)
+        switch (follower.kind) {
+          WorkshopCommandKind.jobWarrantyDecision => 'la decisión de garantía',
+          WorkshopCommandKind.jobStatusTransition => 'el cambio de estado',
+          _ => 'otro cambio',
+        },
+    ].join(' y ');
+    return '$why. Quedaron respaldadas en este equipo y, detrás de ellas, '
+        '$names: se envían solos, en ese orden, cuando las líneas lleguen '
+        '(también al abrir este trabajo). Hasta entonces la cobertura y el '
+        'documento siguen como estaban.';
+  }
 }

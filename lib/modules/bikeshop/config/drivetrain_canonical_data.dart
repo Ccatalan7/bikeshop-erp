@@ -255,6 +255,23 @@ String? drivetrainFreehubTypeLabel(String? rawValue) {
   return kDrivetrainFreehubTypeOptions[canonicalValue];
 }
 
+/// Los piñones traseros de una transmisión de la ficha: «3x7» → 7,
+/// «singlespeed» → 1; nulo si no se lee. La misma gramática que el parche y
+/// `drivetrain_rear_cog_count` (20260928120000). Los piñones de un cassette se
+/// comparan con esto, nunca con `drivetrainSpeeds`, que es el total (3 × 7 =
+/// 21).
+int? drivetrainRearCogCount(String? config) {
+  final normalized = config?.trim().toLowerCase();
+  if (normalized == null) return null;
+  if (normalized == 'singlespeed' ||
+      normalized == 'single_speed' ||
+      normalized == 'single speed') {
+    return 1;
+  }
+  final match = RegExp(r'^[1-3]\s*x\s*([1-9]|1[0-4])$').firstMatch(normalized);
+  return match == null ? null : int.parse(match.group(1)!);
+}
+
 String? canonicalDrivetrainWheelPositionValue(String? rawValue) {
   switch (_normalizeDrivetrainText(rawValue)?.toLowerCase()) {
     case 'front':

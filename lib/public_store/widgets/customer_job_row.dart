@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../shared/utils/chilean_utils.dart';
+import '../../modules/bikeshop/widgets/workshop_asset_gallery.dart';
 import '../models/customer_portal_presentation.dart';
 import 'customer_bike_drawing.dart';
 import 'customer_portal_style.dart';
@@ -426,6 +427,10 @@ Future<void> showCustomerJobDetail(
   final total = CustomerWorkshopPresentation.total(job);
   final request = CustomerWorkshopPresentation.requestSummary(job);
   final step = customerWorkshopStep(job);
+  final files = [
+    for (final value in job['image_urls'] as List? ?? const [])
+      if (value is String && value.trim().isNotEmpty) value,
+  ];
   String? text(String key) {
     final value = (job[key] ?? '').toString().trim();
     return value.isEmpty ? null : value;
@@ -457,19 +462,31 @@ Future<void> showCustomerJobDetail(
         ],
       ],
     ),
-    body: PortalFacts(
-      facts: [
-        ('Lo que pediste', request.isEmpty ? null : request),
-        ('Diagnóstico', text('diagnosis')),
-        ('Trabajo realizado', text('work_performed')),
-        ('Ingresó', received == null ? null : portalDate(received)),
-        (
-          'Fecha estimada',
-          presentation.isActive && deadline != null
-              ? portalDate(deadline)
-              : null
+    body: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        PortalFacts(
+          facts: [
+            ('Lo que pediste', request.isEmpty ? null : request),
+            ('Diagnóstico', text('diagnosis')),
+            ('Trabajo realizado', text('work_performed')),
+            ('Ingresó', received == null ? null : portalDate(received)),
+            (
+              'Fecha estimada',
+              presentation.isActive && deadline != null
+                  ? portalDate(deadline)
+                  : null
+            ),
+            (
+              'Total',
+              total == null ? null : ChileanUtils.formatCurrency(total)
+            ),
+          ],
         ),
-        ('Total', total == null ? null : ChileanUtils.formatCurrency(total)),
+        if (files.isNotEmpty) ...[
+          const SizedBox(height: 24),
+          WorkshopAssetGallery(references: files),
+        ],
       ],
     ),
     actions: [

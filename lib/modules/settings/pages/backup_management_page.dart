@@ -8,6 +8,7 @@ import '../../../shared/models/backup.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
 import '../../../shared/utils/file_download.dart';
+import '../widgets/backup_restore_dialogs.dart';
 
 class BackupManagementPage extends StatefulWidget {
   const BackupManagementPage({super.key});
@@ -375,6 +376,7 @@ class _BackupManagementPageState extends State<BackupManagementPage> {
   }
 
   Widget _buildBackupTile(ThemeData theme, DatabaseBackup backup) {
+    final menuKey = GlobalKey<PopupMenuButtonState<String>>();
     Color statusColor;
     IconData statusIcon;
 
@@ -452,67 +454,77 @@ class _BackupManagementPageState extends State<BackupManagementPage> {
           ),
         ],
       ),
-      trailing: PopupMenuButton(
-        itemBuilder: (context) => [
-          const PopupMenuItem(
-            value: 'view',
-            child: Row(
-              children: [
-                Icon(Icons.info_outline),
-                SizedBox(width: 12),
-                Text('Ver Detalles'),
-              ],
-            ),
-          ),
-          if (backup.status == 'completed')
+      trailing: Semantics(
+        container: true,
+        excludeSemantics: true,
+        label: 'Acciones del respaldo ${backup.backupName}',
+        button: true,
+        onTap: () => menuKey.currentState?.showButtonMenu(),
+        child: PopupMenuButton<String>(
+          key: menuKey,
+          tooltip: 'Acciones del respaldo ${backup.backupName}',
+          itemBuilder: (context) => [
             const PopupMenuItem(
-              value: 'download',
+              value: 'view',
               child: Row(
                 children: [
-                  Icon(Icons.download, color: Colors.blue),
+                  Icon(Icons.info_outline),
                   SizedBox(width: 12),
-                  Text('Descargar JSON', style: TextStyle(color: Colors.blue)),
+                  Text('Ver Detalles'),
                 ],
               ),
             ),
-          if (backup.status == 'completed')
+            if (backup.status == 'completed')
+              const PopupMenuItem(
+                value: 'download',
+                child: Row(
+                  children: [
+                    Icon(Icons.download, color: Colors.blue),
+                    SizedBox(width: 12),
+                    Text('Descargar JSON',
+                        style: TextStyle(color: Colors.blue)),
+                  ],
+                ),
+              ),
+            if (backup.status == 'completed')
+              const PopupMenuItem(
+                value: 'restore',
+                child: Row(
+                  children: [
+                    Icon(Icons.restore),
+                    SizedBox(width: 12),
+                    Text('Restaurar'),
+                  ],
+                ),
+              ),
             const PopupMenuItem(
-              value: 'restore',
+              value: 'delete',
               child: Row(
                 children: [
-                  Icon(Icons.restore),
+                  Icon(Icons.delete, color: Colors.red),
                   SizedBox(width: 12),
-                  Text('Restaurar'),
+                  Text('Eliminar', style: TextStyle(color: Colors.red)),
                 ],
               ),
             ),
-          const PopupMenuItem(
-            value: 'delete',
-            child: Row(
-              children: [
-                Icon(Icons.delete, color: Colors.red),
-                SizedBox(width: 12),
-                Text('Eliminar', style: TextStyle(color: Colors.red)),
-              ],
-            ),
-          ),
-        ],
-        onSelected: (value) {
-          switch (value) {
-            case 'view':
-              _showBackupDetails(backup);
-              break;
-            case 'download':
-              _downloadBackup(backup);
-              break;
-            case 'restore':
-              _confirmRestore(backup);
-              break;
-            case 'delete':
-              _confirmDelete(backup);
-              break;
-          }
-        },
+          ],
+          onSelected: (value) {
+            switch (value) {
+              case 'view':
+                _showBackupDetails(backup);
+                break;
+              case 'download':
+                _downloadBackup(backup);
+                break;
+              case 'restore':
+                _confirmRestore(backup);
+                break;
+              case 'delete':
+                _confirmDelete(backup);
+                break;
+            }
+          },
+        ),
       ),
     );
   }
@@ -621,6 +633,27 @@ class _BackupManagementPageState extends State<BackupManagementPage> {
                   'Restaurado',
                   DateFormat('dd/MM/yyyy HH:mm').format(backup.restoredAt!),
                 ),
+              if (backup.restoreReport case final report?) ...[
+                if (report.restoresMissingOnly) ...[
+                  _buildDetailRow(theme, 'Registros que volvieron',
+                      '${report.insertedRecords}'),
+                  _buildDetailRow(theme, 'Lo que existía', 'Quedó como estaba'),
+                ] else if (report.preservesNewRecords) ...[
+                  _buildDetailRow(theme, 'Registros recuperados',
+                      '${report.updatedRecords} actualizados · ${report.insertedRecords} repuestos'),
+                  _buildDetailRow(theme, 'Registros nuevos',
+                      'Conservados con sus vínculos'),
+                ],
+                _buildDetailRow(
+                  theme,
+                  'Archivos que no volvieron',
+                  report.omittedAttachments.isEmpty
+                      ? 'Ninguno'
+                      : '${OmittedAttachment.distinctFiles(report.omittedAttachments)}',
+                ),
+                if (report.omittedAttachments.isNotEmpty)
+                  OmittedAttachmentList(omitted: report.omittedAttachments),
+              ],
               if (backup.notes != null && backup.notes!.isNotEmpty)
                 _buildDetailRow(theme, 'Notas', backup.notes!),
               const Divider(),
@@ -715,74 +748,33 @@ class _BackupManagementPageState extends State<BackupManagementPage> {
     );
   }
 
-  void _confirmRestore(DatabaseBackup backup) {
-    showDialog(
+  Future<void> _confirmRestore(DatabaseBackup backup) async {
+    final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.warning, color: Colors.orange),
-            SizedBox(width: 12),
-            Text('Confirmar Restauración'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              '⚠️ ADVERTENCIA: Esta acción eliminará TODOS los datos actuales y los reemplazará con el respaldo.',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            Text('Respaldo: ${backup.backupName}'),
-            Text(
-                'Fecha: ${DateFormat('dd/MM/yyyy HH:mm').format(backup.createdAt)}'),
-            const SizedBox(height: 8),
-            const Text('El sistema volverá a este estado:'),
-            Text('• ${backup.getSummaryCount('products')} productos'),
-            Text(
-                '• ${backup.getSummaryCount('product_categories')} categorías de productos'),
-            Text('• ${backup.getSummaryCount('customers')} clientes'),
-            Text(
-                '• ${backup.getSummaryCount('sales_invoices')} facturas de venta'),
-            Text(
-                '• ${backup.getSummaryCount('purchase_invoices')} facturas de compra'),
-            Text(
-                '• ${backup.getSummaryCount('mechanic_jobs')} trabajos mecánicos'),
-            Text('• ${backup.getSummaryCount('bikes')} bicicletas registradas'),
-            Text(
-                '• ${backup.getSummaryCount('product_brands')} marcas de productos'),
-            Text(
-                '• ${backup.getSummaryCount('bike_brands')} marcas de bicicletas'),
-            Text(
-                '• ${backup.getSummaryCount('bike_models')} modelos de bicicletas'),
-            Text('• ${backup.getSummaryCount('conversations')} conversaciones'),
-            Text('• ${backup.getSummaryCount('messages')} mensajes'),
-            Text('• ${backup.getSummaryCount('online_orders')} pedidos online'),
-            Text(
-                '• ${backup.getSummaryCount('website_banners')} banners de la tienda web'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await _restoreBackup(backup);
-            },
-            style: FilledButton.styleFrom(
-              backgroundColor: Colors.orange,
-            ),
-            child: const Text('Restaurar'),
-          ),
-        ],
+      builder: (context) => BackupRestoreConfirmDialog(
+        backup: backup,
+        loadPreflight: () => _backupService.restorePreflight(backup.id),
+        onDownload: () => _downloadBackup(backup),
       ),
     );
+    if (confirmed == true && mounted) {
+      await _restoreBackup(backup);
+    }
   }
+
+  /// Las negativas de la base que se muestran tal cual.
+  static const _restoreRefusals = {
+    'restore_would_lose_uncovered_data',
+    'restore_backup_incomplete',
+    'supplier_foundation_restore_supplier_set_changed',
+    'supplier_foundation_restore_purchase_invoice_set_changed',
+    'restore_invoice_delete_blocked',
+    'restore_backup_legacy_column_blocked',
+    'restore_merge_not_safe',
+    'restore_merge_constraint_conflict',
+    'restore_merge_busy',
+    'restore_merge_timeout',
+  };
 
   Future<void> _restoreBackup(DatabaseBackup backup) async {
     final scaffoldMessenger = ScaffoldMessenger.of(context);
@@ -792,19 +784,45 @@ class _BackupManagementPageState extends State<BackupManagementPage> {
     );
 
     final result = await _backupService.restoreBackup(backup.id);
+    if (!mounted) return;
+    scaffoldMessenger.hideCurrentSnackBar();
 
-    if (result.success) {
+    if (result.success &&
+        (result.omittedAttachments.isNotEmpty ||
+            result.restored.isNotEmpty ||
+            result.heldBack.isNotEmpty ||
+            result.droppedLinks.isNotEmpty)) {
+      // Lo que no volvió se dice registro por registro, no en un aviso que se
+      // va solo.
+      await showDialog<void>(
+        context: context,
+        builder: (context) => BackupRestoreResultDialog(
+          omitted: result.omittedAttachments,
+          restored: result.restored,
+          heldBack: result.heldBack,
+          droppedLinks: result.droppedLinks,
+        ),
+      );
+    } else if (result.success) {
       scaffoldMessenger.showSnackBar(
-        const SnackBar(
-          content: Text('Respaldo restaurado exitosamente'),
+        SnackBar(
+          content: Text(result.preservesNewRecords
+              ? result.message ??
+                  'Datos recuperados. Los registros nuevos se conservaron.'
+              : 'Respaldo restaurado exitosamente'),
           backgroundColor: Colors.green,
         ),
       );
     } else {
+      // La negativa de la base ya viene en palabras del taller («No se
+      // restauró nada: …», «Este respaldo cambia el conjunto de
+      // proveedores…»); el resto es un error técnico.
+      final refused = _restoreRefusals.contains(result.errorCode);
       scaffoldMessenger.showSnackBar(
         SnackBar(
-          content: Text('Error: ${result.error}'),
+          content: Text(refused ? '${result.error}' : 'Error: ${result.error}'),
           backgroundColor: Colors.red,
+          duration: Duration(seconds: refused ? 10 : 4),
         ),
       );
     }

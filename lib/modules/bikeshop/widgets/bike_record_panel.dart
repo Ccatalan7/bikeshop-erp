@@ -3,10 +3,13 @@ import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 
+import '../../../shared/widgets/vb_button.dart';
+import '../../../shared/themes/vinabike_theme_roles.dart';
 import '../config/bottom_bracket_canonical_data.dart';
 import '../config/brake_canonical_data.dart';
 import '../config/wheel_canonical_data.dart';
 import '../models/bikeshop_models.dart';
+import '../models/bike_fact_origin.dart';
 import '../services/bikeshop_service.dart';
 import 'bike_diagram_illustration.dart';
 import 'bike_system_controller.dart';
@@ -46,7 +49,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
     super.initState();
     _tabController = TabController(length: 3, vsync: this)
       ..addListener(_handleTabChanged);
-    _historyFuture = _loadBikeHistoryData(widget.snapshot.bike.id);
+    _reloadHistory();
   }
 
   void _handleTabChanged() {
@@ -57,8 +60,10 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
   @override
   void didUpdateWidget(covariant BikeRecordPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.snapshot, widget.snapshot)) {
+      _reloadHistory();
+    }
     if (oldWidget.snapshot.bike.id != widget.snapshot.bike.id) {
-      _historyFuture = _loadBikeHistoryData(widget.snapshot.bike.id);
       _selectedDiagnosisSystemKey = null;
       _selectedTechnicalSystemKey = null;
     }
@@ -94,32 +99,74 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
         componentLifecycles:
             (results[4] as List<BikeComponentLifecycle>?) ?? const [],
       );
-    } catch (_) {
-      return const _BikeRecordHistoryData.empty();
+    } catch (error) {
+      debugPrint('Bike record history load failed: $error');
+      rethrow;
     }
+  }
+
+  void _reloadHistory() {
+    _historyFuture = _loadBikeHistoryData(widget.snapshot.bike.id);
+    // The history tab can be offscreen when the request finishes. Observe
+    // errors now; FutureBuilder still receives them when that tab is opened.
+    _historyFuture.ignore();
+  }
+
+  Widget _buildHistoryLoadFailure(ThemeData theme) {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Semantics(
+          liveRegion: true,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.cloud_off_outlined,
+                  size: 32, color: theme.colorScheme.onSurfaceVariant),
+              const SizedBox(height: 16),
+              Text('No pudimos cargar el historial.',
+                  style: theme.textTheme.titleMedium,
+                  textAlign: TextAlign.center),
+              const SizedBox(height: 8),
+              Text('Revisa la conexión y vuelve a intentar.',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                  textAlign: TextAlign.center),
+              const SizedBox(height: 16),
+              VbButton(
+                label: 'Reintentar historial',
+                variant: VbButtonVariant.secondary,
+                icon: Icons.refresh,
+                onPressed: () => setState(_reloadHistory),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     if (widget.isLoading) {
-      return const ColoredBox(
-        color: Colors.white,
-        child: Center(
+      return ColoredBox(
+        color: theme.colorScheme.surface,
+        child: const Center(
           child: CircularProgressIndicator(),
         ),
       );
     }
 
-    final theme = Theme.of(context);
-    final showDesktopPreviewShell = MediaQuery.sizeOf(context).width >= 1100;
-
     // We generate a beautiful dynamic color profile based on the snapshot completion status
     final isComplete = widget.snapshot.isProfileComplete;
     final isStructured = widget.snapshot.hasStructuredProfile;
 
+    final roles = VinabikeThemeRoles.of(context);
     final Color statusColor = isComplete
-        ? Colors.teal
-        : (isStructured ? Colors.blue.shade600 : Colors.amber.shade700);
+        ? roles.success.accent
+        : (isStructured ? roles.info.accent : roles.warning.accent);
 
     Widget buildContentShell({required bool mobile}) {
       return Column(
@@ -131,8 +178,8 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
               physics: const NeverScrollableScrollPhysics(),
               children: [
                 _buildGeneralTab(theme),
-                _buildTechnicalSpecsTab(theme),
-                _buildTimelineTab(theme),
+                _buildTechnicalSpecsTab(theme, showInlineSystemMap: mobile),
+                _buildTimelineTab(theme, showInlineSystemMap: mobile),
               ],
             ),
           ),
@@ -142,12 +189,13 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isMobile = constraints.maxWidth < 768;
-        final showDesktopPreviewPane = !isMobile && showDesktopPreviewShell;
+        // The companion map needs enough room beside the reading pane. Narrow
+        // hosts retain the same map within the technical/history scroll.
+        final showDesktopPreviewPane = constraints.maxWidth >= 1100;
 
         if (showDesktopPreviewPane) {
           return Container(
-            color: Colors.grey.shade50,
+            color: theme.colorScheme.surfaceContainerLowest,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -169,17 +217,10 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
         }
 
         return Container(
-          color: Colors.grey.shade50,
+          color: theme.colorScheme.surfaceContainerLowest,
           child: Column(
             children: [
-              SizedBox(
-                height: 420,
-                child: _buildRecordPreviewPane(
-                  theme,
-                  statusColor: statusColor,
-                  compact: true,
-                ),
-              ),
+              _buildCompactRecordHeader(theme, statusColor: statusColor),
               Expanded(child: buildContentShell(mobile: true)),
             ],
           ),
@@ -189,6 +230,74 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
   }
 
   int get _activeTabIndex => _tabController.index;
+
+  Widget _buildCompactRecordHeader(ThemeData theme,
+      {required Color statusColor}) {
+    final bike = widget.snapshot.bike;
+    final identity = [bike.brand, bike.model]
+        .whereType<String>()
+        .where((part) => part.trim().isNotEmpty)
+        .join(' ');
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border:
+            Border(bottom: BorderSide(color: theme.colorScheme.outlineVariant)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Wrap(
+            spacing: 12,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              VbButton(
+                label: 'Volver a bicicletas',
+                variant: VbButtonVariant.text,
+                icon: Icons.arrow_back,
+                onPressed: widget.onClose,
+              ),
+              Text(
+                widget.snapshot.isProfileComplete
+                    ? 'Perfil completo'
+                    : 'Perfil incompleto',
+                style:
+                    theme.textTheme.labelMedium?.copyWith(color: statusColor),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(identity.isEmpty ? 'Bicicleta' : identity,
+              style: theme.textTheme.titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 2),
+          Text(widget.ownerName,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              VbButton(
+                  label: 'Editar bicicleta',
+                  variant: VbButtonVariant.secondary,
+                  icon: Icons.edit_outlined,
+                  onPressed: widget.onEdit),
+              VbButton(
+                  label: 'Nuevo trabajo',
+                  icon: Icons.build_outlined,
+                  onPressed: widget.onNewJob),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildRecordContentHeader(ThemeData theme, {required bool mobile}) {
     final tabs = [
@@ -274,7 +383,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
       padding: EdgeInsets.fromLTRB(mobile ? 16 : 24, mobile ? 14 : 18,
           mobile ? 16 : 24, mobile ? 10 : 14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.colorScheme.surface,
         border: Border(
           bottom: BorderSide(
             color: theme.dividerColor.withValues(alpha: 0.12),
@@ -310,7 +419,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
       case 1:
         title = 'Ficha Técnica';
         subtitle =
-            'La bicicleta sigue visible mientras cambias de sistema y lees la verdad upstream del perfil.';
+            'Elige un sistema para consultar los datos conocidos de esta bicicleta.';
         previewSurface = _buildTechnicalPreviewSurface(theme);
         break;
       case 2:
@@ -354,62 +463,69 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                FilledButton.tonalIcon(
-                  onPressed: widget.onClose,
-                  icon: const Icon(Icons.arrow_back, size: 18),
-                  label: Text(compact ? 'Volver' : 'Volver a bicicletas'),
-                ),
-                const Spacer(),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color: statusColor.withValues(alpha: 0.2),
+            SizedBox(
+              width: double.infinity,
+              child: Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  VbButton(
+                    onPressed: widget.onClose,
+                    icon: Icons.arrow_back,
+                    label: compact ? 'Volver' : 'Volver a bicicletas',
+                    variant: VbButtonVariant.secondary,
+                  ),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: statusColor.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: statusColor.withValues(alpha: 0.2),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          widget.snapshot.isProfileComplete
+                              ? Icons.verified_outlined
+                              : Icons.pending_outlined,
+                          size: 14,
+                          color: statusColor,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          widget.snapshot.isProfileComplete
+                              ? 'Perfil completo'
+                              : 'Perfil incompleto',
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: statusColor,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        widget.snapshot.isProfileComplete
-                            ? Icons.verified_outlined
-                            : Icons.pending_outlined,
-                        size: 14,
-                        color: statusColor,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        widget.snapshot.isProfileComplete
-                            ? 'Perfil completo'
-                            : 'Perfil incompleto',
-                        style: theme.textTheme.labelMedium?.copyWith(
-                          color: statusColor,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
             SizedBox(height: compact ? 14 : 18),
             Text(
               title,
               style: theme.textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.w800,
-                color: const Color(0xFF0F172A),
+                color: theme.colorScheme.onSurface,
               ),
             ),
             const SizedBox(height: 6),
             Text(
               subtitle,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: const Color(0xFF64748B),
+                color: theme.colorScheme.onSurfaceVariant,
                 height: 1.45,
               ),
             ),
@@ -418,9 +534,9 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
               width: double.infinity,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: theme.colorScheme.surface,
                 borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
+                border: Border.all(color: theme.colorScheme.outlineVariant),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.04),
@@ -439,7 +555,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                         Text(
                           (bike.brand ?? 'Sin marca').toUpperCase(),
                           style: theme.textTheme.labelLarge?.copyWith(
-                            color: const Color(0xFF64748B),
+                            color: theme.colorScheme.onSurfaceVariant,
                             letterSpacing: 0.8,
                             fontWeight: FontWeight.w700,
                           ),
@@ -449,7 +565,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                           bike.model ?? 'Modelo desconocido',
                           style: theme.textTheme.headlineSmall?.copyWith(
                             fontWeight: FontWeight.w800,
-                            color: const Color(0xFF0F172A),
+                            color: theme.colorScheme.onSurface,
                           ),
                         ),
                         if (bike.year != null || identityLine.isNotEmpty) ...[
@@ -459,7 +575,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                                 ? '${bike.year} · Propietario: ${widget.ownerName}'
                                 : 'Propietario: ${widget.ownerName}',
                             style: theme.textTheme.bodyMedium?.copyWith(
-                              color: const Color(0xFF475569),
+                              color: theme.colorScheme.onSurfaceVariant,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -560,9 +676,9 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
@@ -611,9 +727,9 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
@@ -626,44 +742,40 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Kernel Técnico Upstream',
+            'Ficha técnica por sistema',
             style: theme.textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.w800,
-              color: const Color(0xFF1E293B),
+              color: theme.colorScheme.onSurface,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             'El mismo mapa compartido del taller ahora sostiene la lectura técnica del registro.',
             style: theme.textTheme.bodySmall?.copyWith(
-              color: Colors.grey.shade500,
+              color: theme.colorScheme.onSurfaceVariant,
               height: 1.4,
             ),
           ),
           const SizedBox(height: 14),
           Expanded(
-            child: AspectRatio(
-              aspectRatio: 1,
-              child: BikeSystemController(
-                bike: widget.snapshot.bike,
-                profile: widget.snapshot.profile,
-                entries: _buildTechnicalControllerEntries(),
-                selectedSystemKey: activeSystemKey,
-                onSystemSelected: (key) {
-                  setState(() {
-                    _selectedTechnicalSystemKey = key;
-                  });
-                },
-                onClearSelection: () {
-                  setState(() {
-                    _selectedTechnicalSystemKey = null;
-                  });
-                },
-                idleHintText:
-                    'Haz clic en un sistema para leer su verdad upstream.',
-                selectedHintText:
-                    'Haz clic en otro sistema para cambiar el panel técnico.',
-              ),
+            child: BikeSystemController(
+              bike: widget.snapshot.bike,
+              profile: widget.snapshot.profile,
+              entries: _buildTechnicalControllerEntries(),
+              selectedSystemKey: activeSystemKey,
+              onSystemSelected: (key) {
+                setState(() {
+                  _selectedTechnicalSystemKey = key;
+                });
+              },
+              onClearSelection: () {
+                setState(() {
+                  _selectedTechnicalSystemKey = null;
+                });
+              },
+              idleHintText: 'Elige un sistema para consultar su ficha.',
+              selectedHintText:
+                  'Haz clic en otro sistema para cambiar el panel técnico.',
             ),
           ),
           const SizedBox(height: 12),
@@ -699,14 +811,15 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
           return Container(
             width: double.infinity,
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: theme.colorScheme.surface,
               borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
+              border: Border.all(color: theme.colorScheme.outlineVariant),
             ),
             child: const Center(child: CircularProgressIndicator()),
           );
         }
 
+        if (snapshot.hasError) return _buildHistoryLoadFailure(theme);
         final history = snapshot.data ?? const _BikeRecordHistoryData.empty();
         if (!history.hasStructuredWorkbench) {
           return _buildStaticBikePreviewSurface(theme);
@@ -720,9 +833,9 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
           width: double.infinity,
           padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: theme.colorScheme.surface,
             borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: const Color(0xFFE2E8F0)),
+            border: Border.all(color: theme.colorScheme.outlineVariant),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.04),
@@ -738,51 +851,48 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                 'Memoria Técnica',
                 style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.w800,
-                  color: const Color(0xFF1E293B),
+                  color: theme.colorScheme.onSurface,
                 ),
               ),
               const SizedBox(height: 4),
               Text(
                 'Observaciones, estados y trabajos ejecutados alrededor del mismo modelo técnico.',
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: Colors.grey.shade500,
+                  color: theme.colorScheme.onSurfaceVariant,
                   height: 1.4,
                 ),
               ),
               const SizedBox(height: 14),
               Expanded(
-                child: AspectRatio(
-                  aspectRatio: 1,
-                  child: BikeSystemController(
-                    bike: widget.snapshot.bike,
-                    profile: widget.snapshot.profile,
-                    entries: _buildHistoryControllerEntries(history),
-                    selectedSystemKey: activeSystemKey,
-                    onSystemSelected: (key) {
-                      setState(() {
-                        _selectedDiagnosisSystemKey = key;
-                      });
-                    },
-                    onClearSelection: () {
-                      setState(() {
-                        _selectedDiagnosisSystemKey = null;
-                      });
-                    },
-                    overlayBuilder: (context, entry, layout) {
-                      final hoveredSystem =
-                          history.systemFor(entry.spec.systemKey);
-                      if (hoveredSystem == null) {
-                        return null;
-                      }
-                      return _DiagnosticPopupCard(
-                        system: hoveredSystem,
-                        color: _historySystemStatusColor(
-                          hoveredSystem.overallStatus,
-                        ),
-                        layout: layout,
-                      );
-                    },
-                  ),
+                child: BikeSystemController(
+                  bike: widget.snapshot.bike,
+                  profile: widget.snapshot.profile,
+                  entries: _buildHistoryControllerEntries(history),
+                  selectedSystemKey: activeSystemKey,
+                  onSystemSelected: (key) {
+                    setState(() {
+                      _selectedDiagnosisSystemKey = key;
+                    });
+                  },
+                  onClearSelection: () {
+                    setState(() {
+                      _selectedDiagnosisSystemKey = null;
+                    });
+                  },
+                  overlayBuilder: (context, entry, layout) {
+                    final hoveredSystem =
+                        history.systemFor(entry.spec.systemKey);
+                    if (hoveredSystem == null) {
+                      return null;
+                    }
+                    return _DiagnosticPopupCard(
+                      system: hoveredSystem,
+                      color: _historySystemStatusColor(
+                        hoveredSystem.overallStatus,
+                      ),
+                      layout: layout,
+                    );
+                  },
                 ),
               ),
               const SizedBox(height: 12),
@@ -820,6 +930,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
 
   Widget _buildGeneralTab(ThemeData theme) {
     final bike = widget.snapshot.bike;
+    final roles = VinabikeThemeRoles.of(context);
 
     final baseData = [
       if (bike.bikeType != null)
@@ -848,8 +959,8 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
               title: 'Datos de la Bicicleta',
               icon: Icons.directions_bike_outlined,
               iconColor: theme.primaryColor,
-              bgColor: Colors.white,
-              borderColor: Colors.grey.shade200,
+              bgColor: theme.colorScheme.surface,
+              borderColor: theme.colorScheme.outlineVariant,
               items: baseData,
               isGrid: true,
             ),
@@ -857,9 +968,9 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
             _buildProSection(
               title: 'Advertencias / Notas Críticas',
               icon: Icons.warning_amber_rounded,
-              iconColor: Colors.deepOrange,
-              bgColor: Colors.orange.shade50,
-              borderColor: Colors.orange.shade200,
+              iconColor: roles.warning.accent,
+              bgColor: roles.warning.container,
+              borderColor: roles.warning.border,
               items: widget.snapshot.warnings,
             ),
           if (widget.snapshot.notesLines.isNotEmpty)
@@ -867,8 +978,8 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
               title: 'Notas Generales',
               icon: Icons.speaker_notes_outlined,
               iconColor: Colors.blueGrey.shade700,
-              bgColor: Colors.white,
-              borderColor: Colors.grey.shade200,
+              bgColor: theme.colorScheme.surface,
+              borderColor: theme.colorScheme.outlineVariant,
               items: widget.snapshot.notesLines,
             ),
           if (widget.snapshot.intakeLines.isNotEmpty)
@@ -876,8 +987,8 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
               title: 'Perfil de Recepción',
               icon: Icons.assignment_turned_in_outlined,
               iconColor: Colors.blue.shade700,
-              bgColor: Colors.white,
-              borderColor: Colors.grey.shade200,
+              bgColor: theme.colorScheme.surface,
+              borderColor: theme.colorScheme.outlineVariant,
               items: widget.snapshot.intakeLines,
             ),
         ],
@@ -885,7 +996,8 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
     );
   }
 
-  Widget _buildTechnicalSpecsTab(ThemeData theme) {
+  Widget _buildTechnicalSpecsTab(ThemeData theme,
+      {bool showInlineSystemMap = false}) {
     if (widget.snapshot.profile == null &&
         widget.snapshot.technicalLines.isEmpty) {
       return Center(
@@ -897,7 +1009,8 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
             const SizedBox(height: 16),
             Text(
               'Aún no hay especificaciones técnicas registradas.',
-              style: TextStyle(color: Colors.grey.shade500, fontSize: 16),
+              style: TextStyle(
+                  color: theme.colorScheme.onSurfaceVariant, fontSize: 16),
             ),
           ],
         ),
@@ -911,13 +1024,31 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (showInlineSystemMap) ...[
+            SizedBox(
+              height: 260,
+              child: BikeSystemController(
+                bike: widget.snapshot.bike,
+                profile: widget.snapshot.profile,
+                entries: _buildTechnicalControllerEntries(),
+                selectedSystemKey: activeSystemKey,
+                onSystemSelected: (key) =>
+                    setState(() => _selectedTechnicalSystemKey = key),
+                onClearSelection: () =>
+                    setState(() => _selectedTechnicalSystemKey = null),
+                idleHintText: 'Elige un sistema para ver su ficha.',
+                selectedHintText: 'Elige otro sistema para cambiar el detalle.',
+              ),
+            ),
+            const SizedBox(height: 18),
+          ],
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: theme.colorScheme.surface,
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
+              border: Border.all(color: theme.colorScheme.outlineVariant),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.04),
@@ -933,14 +1064,14 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                   'Lectura técnica por sistema',
                   style: theme.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w800,
-                    color: const Color(0xFF0F172A),
+                    color: theme.colorScheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'El mapa técnico queda fijo a la izquierda y aquí lees el detalle upstream del sistema activo sin perder la bici de vista.',
+                  'Consulta los datos confirmados y lo que falta registrar en el sistema elegido.',
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: const Color(0xFF64748B),
+                    color: theme.colorScheme.onSurfaceVariant,
                     height: 1.45,
                   ),
                 ),
@@ -957,8 +1088,8 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
               title: 'Resumen Técnico',
               icon: Icons.settings_suggest_outlined,
               iconColor: Colors.purple.shade700,
-              bgColor: Colors.white,
-              borderColor: Colors.grey.shade200,
+              bgColor: theme.colorScheme.surface,
+              borderColor: theme.colorScheme.outlineVariant,
               items: widget.snapshot.technicalLines,
               isGrid: true,
             ),
@@ -1041,13 +1172,13 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
       );
     }
 
-    _BikeRecordTechnicalFact? baseFact(String label, String? value) {
-      if (value == null || value.trim().isEmpty) {
-        return null;
-      }
-      return _BikeRecordTechnicalFact(
-          label: label, value: value, confirmed: true);
-    }
+    // El anclaje del rotor lo pone la maza (20260928130000): se muestra si
+    // la ficha lo dice, sin contarlo entre lo que falta de la rueda.
+    String? rotorMount(Object? code) => code == null
+        ? null
+        : code == 'unknown'
+            ? 'Desconocido'
+            : rotorMountLabel(code);
 
     String? brakeTypeLabel(String? raw) {
       switch (raw) {
@@ -1177,7 +1308,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
     switch (systemKey) {
       case 'suspension':
         final facts = [
-          baseFact('Plataforma', bike.bikeType?.displayName),
+          profileFact('bikeType', 'Plataforma', bike.bikeType?.displayName),
           profileFact(
             'suspensionLayout',
             'Layout de suspensión',
@@ -1193,7 +1324,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
           expectedCount: 2,
           knownCount: knownCount,
           missingText: knownCount == 0
-              ? 'Todavía no hay verdad upstream para suspensión.'
+              ? 'Aún no hay datos confirmados de la suspensión.'
               : knownCount < 2
                   ? 'Falta confirmar el layout de suspensión para que el perfil técnico no dependa solo del tipo visual de bici.'
                   : null,
@@ -1267,23 +1398,29 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
           expectedCount: 3,
           knownCount: knownCount,
           missingText: knownCount == 0
-              ? 'La transmisión sigue sin un kernel upstream usable.'
+              ? 'Aún no hay datos confirmados de la transmisión.'
               : knownCount < 3
-                  ? 'Faltan piezas del kernel de transmisión. El registro aún no es una verdad upstream completa.'
+                  ? 'Falta completar los datos de la transmisión.'
                   : null,
         );
       case 'front_wheel':
         final facts = [
-          baseFact('Aro compartido', bike.wheelSize),
+          profileFact('wheelSize', 'Aro compartido', bike.wheelSize),
           profileFact('frontAxleInterface', 'Eje delantero',
               axleInterfaceLabel(technicalValues['frontAxleInterface'])),
-          baseFact('Maza delantera', formatSpacing(bike.frontHubSpacingMm)),
+          profileFact('frontHubSpacingMm', 'Maza delantera',
+              formatSpacing(bike.frontHubSpacingMm)),
           profileFact('frontSpokeHoles', 'Rayos delanteros',
               technicalValues['frontSpokeHoles']?.toString()),
           profileFact('valveType', 'Válvula compartida',
               valveLabel(technicalValues['valveType']?.toString())),
         ].whereType<_BikeRecordTechnicalFact>().toList();
         final knownCount = facts.length;
+        if (profileFact('frontRotorMount', 'Anclaje del rotor',
+                rotorMount(technicalValues['frontRotorMount']))
+            case final mount?) {
+          facts.add(mount);
+        }
         return _BikeRecordTechnicalPanelData(
           spec: bikeSystemControllerSpecFor(systemKey)!,
           description:
@@ -1343,7 +1480,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
           expectedCount: expectedCount,
           knownCount: knownCount,
           missingText: knownCount == 0
-              ? 'Todavía no hay un kernel upstream confirmado para el pedalier.'
+              ? 'Aún no hay datos confirmados del pedalier.'
               : knownCount < expectedCount
                   ? (usesShellDiameter
                       ? 'Falta completar ancho, bore o interfaz del eje para que el pedalier no quede reducido a una familia demasiado amplia.'
@@ -1352,16 +1489,22 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
         );
       case 'rear_wheel':
         final facts = [
-          baseFact('Aro compartido', bike.wheelSize),
+          profileFact('wheelSize', 'Aro compartido', bike.wheelSize),
           profileFact('rearAxleInterface', 'Eje trasero',
               axleInterfaceLabel(technicalValues['rearAxleInterface'])),
-          baseFact('Maza trasera', formatSpacing(bike.rearHubSpacingMm)),
+          profileFact('rearHubSpacingMm', 'Maza trasera',
+              formatSpacing(bike.rearHubSpacingMm)),
           profileFact('rearSpokeHoles', 'Rayos traseros',
               technicalValues['rearSpokeHoles']?.toString()),
           profileFact('valveType', 'Válvula compartida',
               valveLabel(technicalValues['valveType']?.toString())),
         ].whereType<_BikeRecordTechnicalFact>().toList();
         final knownCount = facts.length;
+        if (profileFact('rearRotorMount', 'Anclaje del rotor',
+                rotorMount(technicalValues['rearRotorMount']))
+            case final mount?) {
+          facts.add(mount);
+        }
         return _BikeRecordTechnicalPanelData(
           spec: bikeSystemControllerSpecFor(systemKey)!,
           description:
@@ -1379,13 +1522,15 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
         );
       case 'wheels':
         final facts = [
-          baseFact('Aro', bike.wheelSize),
+          profileFact('wheelSize', 'Aro', bike.wheelSize),
           profileFact('frontAxleInterface', 'Eje delantero',
               axleInterfaceLabel(technicalValues['frontAxleInterface'])),
           profileFact('rearAxleInterface', 'Eje trasero',
               axleInterfaceLabel(technicalValues['rearAxleInterface'])),
-          baseFact('Maza delantera', formatSpacing(bike.frontHubSpacingMm)),
-          baseFact('Maza trasera', formatSpacing(bike.rearHubSpacingMm)),
+          profileFact('frontHubSpacingMm', 'Maza delantera',
+              formatSpacing(bike.frontHubSpacingMm)),
+          profileFact('rearHubSpacingMm', 'Maza trasera',
+              formatSpacing(bike.rearHubSpacingMm)),
           profileFact('frontSpokeHoles', 'Rayos delanteros',
               technicalValues['frontSpokeHoles']?.toString()),
           profileFact('rearSpokeHoles', 'Rayos traseros',
@@ -1415,12 +1560,12 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
           spec: bikeSystemControllerSpecFor(systemKey) ??
               kBikeSystemControllerSpecs.first,
           description:
-              'El shared controller ya reserva este sistema en la lectura histórica, pero el v1 kernel aún no define una ficha upstream dedicada para cockpit/dirección. Headset y steering siguen anclados aquí aunque todavía no tengan esquema propio.',
+              'La dirección, la tee, el manubrio y los controles forman este sistema.',
           facts: const [],
           expectedCount: 1,
           knownCount: 0,
           missingText:
-              'Cockpit / dirección sigue como placeholder explícito hasta que exista una capa real de esquema/editor para dirección, tee, manubrio y controles.',
+              'Los datos de dirección y controles aún no están registrados.',
         );
     }
   }
@@ -1431,13 +1576,14 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
   ) {
     final status = _technicalSystemStatus(panel.spec.systemKey);
     final statusColor = _getSystemStatusColor(status);
+    final roles = VinabikeThemeRoles.of(context);
 
     return Container(
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: const Color(0xFFE4E9F0)),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
@@ -1470,14 +1616,14 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                       panel.spec.label,
                       style: theme.textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.w800,
-                        color: const Color(0xFF1E293B),
+                        color: theme.colorScheme.onSurface,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       panel.description,
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: Colors.grey.shade500,
+                        color: theme.colorScheme.onSurfaceVariant,
                         height: 1.4,
                       ),
                     ),
@@ -1498,7 +1644,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                     BikeSystemOverallStatus.ok => 'Completo',
                     BikeSystemOverallStatus.attention => 'Parcial',
                     BikeSystemOverallStatus.critical => 'Vacío',
-                    BikeSystemOverallStatus.unknown => 'Placeholder',
+                    BikeSystemOverallStatus.unknown => 'Sin datos',
                   },
                   style: TextStyle(
                     fontSize: 12,
@@ -1522,7 +1668,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
               child: Text(
                 panel.missingText!,
                 style: theme.textTheme.bodySmall?.copyWith(
-                  color: Colors.black87,
+                  color: theme.colorScheme.onSurface,
                   fontWeight: FontWeight.w600,
                   height: 1.4,
                 ),
@@ -1534,20 +1680,22 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
             Text(
               'Todavía no hay valores técnicos que mostrar en este sistema.',
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: Colors.grey.shade500,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             )
           else
-            ...panel.facts.map(
-              (fact) => Padding(
+            ...panel.facts.map((fact) {
+              final origin =
+                  bikeFactOriginCaption(fact.source, confirmed: fact.confirmed);
+              return Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
+                    color: theme.colorScheme.surfaceContainerLow,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFE2E8F0)),
+                    border: Border.all(color: theme.colorScheme.outlineVariant),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1557,10 +1705,10 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                           Expanded(
                             child: Text(
                               fact.label,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w700,
-                                color: Color(0xFF475569),
+                                color: theme.colorScheme.onSurfaceVariant,
                               ),
                             ),
                           ),
@@ -1569,7 +1717,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
-                                color: Colors.teal.withValues(alpha: 0.12),
+                                color: roles.success.container,
                                 borderRadius: BorderRadius.circular(999),
                               ),
                               child: Text(
@@ -1577,7 +1725,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w700,
-                                  color: Colors.teal.shade700,
+                                  color: roles.success.onContainer,
                                 ),
                               ),
                             ),
@@ -1586,27 +1734,27 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                       const SizedBox(height: 6),
                       Text(
                         fact.value,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
-                          color: Color(0xFF0F172A),
+                          color: theme.colorScheme.onSurface,
                         ),
                       ),
-                      if (fact.source != null && fact.source!.isNotEmpty) ...[
+                      if (origin != null) ...[
                         const SizedBox(height: 6),
                         Text(
-                          'Fuente: ${fact.source}',
+                          origin,
                           style: TextStyle(
                             fontSize: 12,
-                            color: Colors.grey.shade500,
+                            color: theme.colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ],
                     ],
                   ),
                 ),
-              ),
-            ),
+              );
+            }),
         ],
       ),
     );
@@ -1618,7 +1766,8 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
     required String label,
     bool accent = false,
   }) {
-    final color = accent ? theme.primaryColor : const Color(0xFF64748B);
+    final color =
+        accent ? theme.primaryColor : theme.colorScheme.onSurfaceVariant;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
@@ -1649,7 +1798,8 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
     );
   }
 
-  Widget _buildTimelineTab(ThemeData theme) {
+  Widget _buildTimelineTab(ThemeData theme,
+      {bool showInlineSystemMap = false}) {
     return FutureBuilder<_BikeRecordHistoryData>(
       future: _historyFuture,
       builder: (context, snapshot) {
@@ -1658,41 +1808,35 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
         }
 
         if (snapshot.hasError) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.error_outline, size: 48, color: Colors.grey),
-                const SizedBox(height: 16),
-                Text(
-                  'Error al cargar el historial: ${snapshot.error}',
-                  style: const TextStyle(color: Colors.grey),
-                ),
-              ],
-            ),
-          );
+          return _buildHistoryLoadFailure(theme);
         }
 
         final history = snapshot.data ?? const _BikeRecordHistoryData.empty();
 
         if (history.isEmpty) {
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.history_toggle_off, size: 64, color: Colors.black26),
-                SizedBox(height: 16),
-                Text(
-                  'Aún no existen eventos en el historial.',
-                  style: TextStyle(color: Colors.black54, fontSize: 16),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  'El historial capturará automáticamente las actualizaciones del perfil y los trabajos de taller.',
-                  style: TextStyle(color: Colors.black45, fontSize: 14),
-                  textAlign: TextAlign.center,
-                ),
-              ],
+          return Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.history_toggle_off,
+                      size: 48, color: theme.colorScheme.onSurfaceVariant),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Aún no existen eventos en el historial.',
+                    style: theme.textTheme.titleMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'El historial capturará automáticamente las actualizaciones del perfil y los trabajos de taller.',
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
             ),
           );
         }
@@ -1700,6 +1844,26 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
         return ListView(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
           children: [
+            if (showInlineSystemMap && history.hasStructuredWorkbench) ...[
+              SizedBox(
+                height: 260,
+                child: BikeSystemController(
+                  bike: widget.snapshot.bike,
+                  profile: widget.snapshot.profile,
+                  entries: _buildHistoryControllerEntries(history),
+                  selectedSystemKey: history
+                      .resolveActiveSystemKey(_selectedDiagnosisSystemKey),
+                  onSystemSelected: (key) =>
+                      setState(() => _selectedDiagnosisSystemKey = key),
+                  onClearSelection: () =>
+                      setState(() => _selectedDiagnosisSystemKey = null),
+                  idleHintText: 'Elige un sistema para ver su historial.',
+                  selectedHintText:
+                      'Elige otro sistema para cambiar el historial.',
+                ),
+              ),
+              const SizedBox(height: 18),
+            ],
             if (history.hasStructuredWorkbench)
               _buildDiagnosisWorkbench(theme, history)
             else
@@ -1729,9 +1893,9 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: const Color(0xFFE4E9F0)),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
@@ -1747,14 +1911,14 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
             'Memoria técnica centralizada',
             style: theme.textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.w800,
-              color: const Color(0xFF1E293B),
+              color: theme.colorScheme.onSurface,
             ),
           ),
           const SizedBox(height: 4),
           Text(
-            'El mapa técnico permanece fijo a la izquierda y este panel concentra indicadores, detalle activo y memoria transversal.',
+            'Elige un sistema para revisar su diagnóstico, trabajos y componentes instalados.',
             style: theme.textTheme.bodySmall?.copyWith(
-              color: Colors.grey.shade500,
+              color: theme.colorScheme.onSurfaceVariant,
               height: 1.4,
             ),
           ),
@@ -1785,16 +1949,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
   }
 
   Color _historySystemStatusColor(BikeSystemOverallStatus status) {
-    switch (status) {
-      case BikeSystemOverallStatus.critical:
-        return const Color(0xFFFF4B4B);
-      case BikeSystemOverallStatus.attention:
-        return const Color(0xFFFFAB2E);
-      case BikeSystemOverallStatus.ok:
-        return const Color(0xFF3EFFD0);
-      case BikeSystemOverallStatus.unknown:
-        return const Color(0xFF94A3B8);
-    }
+    return _getSystemStatusColor(status);
   }
 
   Widget _buildTelemetrySection(
@@ -1818,6 +1973,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
     _BikeRecordHistoryData history,
     String? activeSystemKey,
   ) {
+    final roles = theme.extension<VinabikeThemeRoles>()!;
     final latestDate = history.latestMemoryDate;
     final criticalCount = history.diagnosisSystems
         .where((system) =>
@@ -1894,32 +2050,32 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                 _buildReferencePill(
                   label:
                       '${history.interventionCount} trabajo${history.interventionCount == 1 ? '' : 's'}',
-                  backgroundColor: Colors.teal.withValues(alpha: 0.15),
-                  borderColor: Colors.teal.withValues(alpha: 0.3),
-                  foregroundColor: Colors.tealAccent.shade100,
+                  backgroundColor: roles.success.container,
+                  borderColor: roles.success.border,
+                  foregroundColor: roles.success.onContainer,
                 ),
               if (history.installedLifecycleCount > 0)
                 _buildReferencePill(
                   label:
                       '${history.installedLifecycleCount} componente${history.installedLifecycleCount == 1 ? '' : 's'} activo${history.installedLifecycleCount == 1 ? '' : 's'}',
-                  backgroundColor: Colors.lightBlue.withValues(alpha: 0.15),
-                  borderColor: Colors.lightBlue.withValues(alpha: 0.3),
-                  foregroundColor: Colors.lightBlueAccent.shade100,
+                  backgroundColor: roles.info.container,
+                  borderColor: roles.info.border,
+                  foregroundColor: roles.info.onContainer,
                 ),
               if (criticalCount > 0)
                 _buildReferencePill(
                   label:
                       '$criticalCount crítico${criticalCount == 1 ? '' : 's'}',
-                  backgroundColor: Colors.red.withValues(alpha: 0.15),
-                  borderColor: Colors.red.withValues(alpha: 0.3),
-                  foregroundColor: Colors.redAccent,
+                  backgroundColor: roles.danger.container,
+                  borderColor: roles.danger.border,
+                  foregroundColor: roles.danger.onContainer,
                 ),
               if (attentionCount > 0)
                 _buildReferencePill(
                   label: '$attentionCount en atención',
-                  backgroundColor: Colors.orange.withValues(alpha: 0.15),
-                  borderColor: Colors.orange.withValues(alpha: 0.3),
-                  foregroundColor: Colors.orangeAccent,
+                  backgroundColor: roles.warning.container,
+                  borderColor: roles.warning.border,
+                  foregroundColor: roles.warning.onContainer,
                 ),
               if (selectedSystemLabel != null)
                 _buildReferencePill(
@@ -2161,9 +2317,9 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
       margin: const EdgeInsets.only(bottom: 12),
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        color: Colors.white, // Light sleek
+        color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.03),
@@ -2187,7 +2343,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                         series.title,
                         style: theme.textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.w800,
-                          color: const Color(0xFF334155),
+                          color: theme.colorScheme.onSurface,
                           letterSpacing: 0.5,
                         ),
                       ),
@@ -2195,7 +2351,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                       Text(
                         series.subtitle,
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: Colors.grey.shade600,
+                          color: theme.colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],
@@ -2373,10 +2529,13 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
     ThemeData theme,
     BikeIntervention intervention,
   ) {
-    final accentColor =
+    // Roles del tema, no tonos fijos: `tealAccent.shade100` como texto no se
+    // leía sobre la tarjeta clara del historial (Android claro, 2026-09-30).
+    final roles = theme.extension<VinabikeThemeRoles>()!;
+    final tone =
         intervention.interventionType == BikeInterventionType.replacement
-            ? Colors.tealAccent.shade100
-            : Colors.blueAccent.shade100;
+            ? roles.success
+            : roles.info;
     final jobNumber = intervention.payload['job_number']?.toString();
 
     return Container(
@@ -2407,9 +2566,9 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                 label: _formatInterventionTypeLabel(
                   intervention.interventionType,
                 ),
-                backgroundColor: accentColor.withValues(alpha: 0.15),
-                borderColor: accentColor.withValues(alpha: 0.3),
-                foregroundColor: accentColor,
+                backgroundColor: tone.container,
+                borderColor: tone.border,
+                foregroundColor: tone.onContainer,
               ),
             ],
           ),
@@ -2471,10 +2630,10 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
     ThemeData theme,
     BikeComponentLifecycle lifecycle,
   ) {
-    final accentColor =
-        lifecycle.status == BikeComponentLifecycleStatus.installed
-            ? Colors.tealAccent.shade100
-            : Colors.orangeAccent;
+    final roles = theme.extension<VinabikeThemeRoles>()!;
+    final tone = lifecycle.status == BikeComponentLifecycleStatus.installed
+        ? roles.success
+        : roles.warning;
     final jobNumber = lifecycle.payload['job_number']?.toString();
 
     return Container(
@@ -2503,9 +2662,9 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
               ),
               _buildReferencePill(
                 label: _formatLifecycleStatusLabel(lifecycle.status),
-                backgroundColor: accentColor.withValues(alpha: 0.15),
-                borderColor: accentColor.withValues(alpha: 0.3),
-                foregroundColor: accentColor,
+                backgroundColor: tone.container,
+                borderColor: tone.border,
+                foregroundColor: tone.onContainer,
               ),
             ],
           ),
@@ -2581,7 +2740,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
           tilePadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
           childrenPadding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
           title: Text(
-            expanded ? 'Historial de la bicicleta' : 'Eventos legacy',
+            expanded ? 'Historial de la bicicleta' : 'Eventos anteriores',
             style: theme.textTheme.titleSmall?.copyWith(
               fontWeight: FontWeight.w800,
               color: theme.colorScheme.onSurface,
@@ -2590,15 +2749,15 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
           subtitle: Text(
             expanded
                 ? 'Eventos de perfil, ingresos, entregas y otros hitos registrados previamente.'
-                : 'Oculta el ruido histórico y ábrelo solo cuando necesites contexto adicional.',
+                : 'Cambios de la ficha y visitas al taller.',
             style: theme.textTheme.bodySmall?.copyWith(
-              color: Colors.grey.shade600,
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
           trailing: _buildReferencePill(
             label: '${events.length}',
-            backgroundColor: const Color(0xFFF3F6FA),
-            borderColor: const Color(0xFFE1E7EF),
+            backgroundColor: theme.colorScheme.surfaceContainerLow,
+            borderColor: theme.colorScheme.outlineVariant,
             foregroundColor: Colors.blueGrey.shade700,
           ),
           children: [
@@ -2654,7 +2813,8 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                       decoration: BoxDecoration(
                         color: _getEventColor(event.eventCategory),
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
+                        border: Border.all(
+                            color: theme.colorScheme.surface, width: 2),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withValues(alpha: 0.1),
@@ -2687,7 +2847,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.bold,
-                              color: Colors.grey.shade600,
+                              color: theme.colorScheme.onSurfaceVariant,
                             ),
                           ),
                           if (event.referenceNumber != null &&
@@ -2699,7 +2859,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                                 vertical: 2,
                               ),
                               decoration: BoxDecoration(
-                                color: Colors.grey.shade200,
+                                color: theme.colorScheme.outlineVariant,
                                 borderRadius: BorderRadius.circular(4),
                                 border: Border.all(color: Colors.grey.shade300),
                               ),
@@ -2708,7 +2868,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w600,
-                                  color: Colors.grey.shade700,
+                                  color: theme.colorScheme.onSurfaceVariant,
                                 ),
                               ),
                             ),
@@ -2718,10 +2878,10 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                       const SizedBox(height: 6),
                       Text(
                         event.title,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
-                          color: Colors.black87,
+                          color: theme.colorScheme.onSurface,
                         ),
                       ),
                       if (event.summary != null &&
@@ -2731,7 +2891,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                           event.summary!,
                           style: TextStyle(
                             fontSize: 14,
-                            color: Colors.grey.shade800,
+                            color: theme.colorScheme.onSurface,
                             height: 1.4,
                           ),
                         ),
@@ -2838,43 +2998,47 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
   }
 
   Color _getSystemStatusColor(BikeSystemOverallStatus status) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
     switch (status) {
       case BikeSystemOverallStatus.ok:
-        return Colors.teal.shade700;
+        return roles.success.accent;
       case BikeSystemOverallStatus.attention:
-        return Colors.orange.shade700;
+        return roles.warning.accent;
       case BikeSystemOverallStatus.critical:
-        return Colors.red.shade700;
+        return roles.danger.accent;
       case BikeSystemOverallStatus.unknown:
-        return Colors.grey.shade600;
+        return theme.colorScheme.onSurfaceVariant;
     }
   }
 
   Color _getSeverityColor(BikeMemorySeverity? severity) {
+    final roles = VinabikeThemeRoles.of(context);
     switch (severity) {
       case BikeMemorySeverity.critical:
-        return Colors.red.shade700;
+        return roles.danger.accent;
       case BikeMemorySeverity.warning:
-        return Colors.orange.shade700;
+        return roles.warning.accent;
       case BikeMemorySeverity.info:
-        return Colors.blue.shade700;
+        return roles.info.accent;
       case null:
-        return Colors.blueGrey.shade700;
+        return Theme.of(context).colorScheme.onSurfaceVariant;
     }
   }
 
   Color _getEventColor(BikeEventCategory category) {
+    final roles = VinabikeThemeRoles.of(context);
     switch (category) {
       case BikeEventCategory.state:
-        return Colors.blue.shade600;
+        return roles.info.accent;
       case BikeEventCategory.visit:
-        return Colors.green.shade600;
+        return roles.success.accent;
       case BikeEventCategory.incident:
-        return Colors.red.shade600;
+        return roles.danger.accent;
       case BikeEventCategory.component:
-        return Colors.orange.shade600;
+        return roles.warning.accent;
       case BikeEventCategory.evidence:
-        return Colors.purple.shade600;
+        return roles.info.accent;
     }
   }
 
@@ -2887,6 +3051,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
     required List<String> items,
     bool isGrid = false,
   }) {
+    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 24.0),
       child: Column(
@@ -2903,12 +3068,12 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                 child: Icon(icon, size: 20, color: iconColor),
               ),
               const SizedBox(width: 12),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+              Expanded(
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
               ),
             ],
@@ -2948,16 +3113,16 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.bold,
-                                color: Colors.grey.shade500,
+                                color: theme.colorScheme.onSurfaceVariant,
                                 letterSpacing: 0.8,
                               ),
                             ),
                             const SizedBox(height: 4),
                             Text(
                               val.isNotEmpty ? val : line,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 15,
-                                color: Colors.black87,
+                                color: theme.colorScheme.onSurface,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -2985,7 +3150,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                                       line,
                                       style: TextStyle(
                                         fontSize: 15,
-                                        color: Colors.grey.shade800,
+                                        color: theme.colorScheme.onSurface,
                                         height: 1.5,
                                       ),
                                     ),
@@ -3622,6 +3787,7 @@ class _DiagnosticPopupCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     const cardWidth = 270.0;
     const cardHeight = 220.0;
 
@@ -3647,7 +3813,7 @@ class _DiagnosticPopupCard extends StatelessWidget {
           width: cardWidth,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: theme.colorScheme.surface,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: color.withValues(alpha: 0.25),
@@ -3709,8 +3875,8 @@ class _DiagnosticPopupCard extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 system.subheadline,
-                style: const TextStyle(
-                  color: Color(0xFF1E293B),
+                style: TextStyle(
+                  color: theme.colorScheme.onSurface,
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                 ),
@@ -3720,8 +3886,8 @@ class _DiagnosticPopupCard extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   system.primaryNarrative!,
-                  style: const TextStyle(
-                    color: Color(0xFF64748B),
+                  style: TextStyle(
+                    color: theme.colorScheme.onSurfaceVariant,
                     fontSize: 10.5,
                     height: 1.45,
                   ),
@@ -3731,7 +3897,7 @@ class _DiagnosticPopupCard extends StatelessWidget {
               ],
               if (measurements.isNotEmpty) ...[
                 const SizedBox(height: 12),
-                Container(height: 1, color: const Color(0xFFE2E8F0)),
+                Container(height: 1, color: theme.colorScheme.outlineVariant),
                 const SizedBox(height: 10),
                 ...measurements.map(
                   (measurement) => Padding(
@@ -3741,8 +3907,8 @@ class _DiagnosticPopupCard extends StatelessWidget {
                         Expanded(
                           child: Text(
                             measurement.title,
-                            style: const TextStyle(
-                              color: Color(0xFF64748B),
+                            style: TextStyle(
+                              color: theme.colorScheme.onSurfaceVariant,
                               fontSize: 10,
                             ),
                           ),

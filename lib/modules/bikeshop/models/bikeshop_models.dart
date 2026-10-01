@@ -648,6 +648,11 @@ String? _formatSpokeHighlight(dynamic frontValue, dynamic rearValue) {
   return 'Rayos traseros: $rear';
 }
 
+int? _wholeBsd(Object? value) {
+  final number = value is num ? value : num.tryParse('${value ?? ''}');
+  return number == null || number != number.truncate() ? null : number.toInt();
+}
+
 String? _buildBottomBracketHighlight(Map<String, dynamic> technicalValues) {
   final familyRaw = technicalValues['bottomBracketFamily']?.toString();
   final familyLabel = bottomBracketFamilyLabel(familyRaw);
@@ -802,6 +807,38 @@ class BikeProfileSummaryBuilder {
     final rearAxle = axleInterfaceLabel(technicalValues['rearAxleInterface']);
     if (rearAxle != null) {
       highlights.add('Eje trasero: $rearAxle');
+    }
+    // El diámetro real de cada llanta (BSD, ISO 5775; 20260928110000): lo
+    // anota el neumático que se instaló o lo mide el mecánico. Si las dos
+    // ruedas dicen lo mismo, una línea.
+    final frontBsd = _wholeBsd(technicalValues['frontWheelBsdMm']);
+    final rearBsd = _wholeBsd(technicalValues['rearWheelBsdMm']);
+    if (frontBsd != null && frontBsd == rearBsd) {
+      highlights.add('Llantas (BSD): ${isoWheelBsdLabel(frontBsd)}');
+    } else {
+      if (frontBsd != null) {
+        highlights.add('Llanta delantera (BSD): ${isoWheelBsdLabel(frontBsd)}');
+      }
+      if (rearBsd != null) {
+        highlights.add('Llanta trasera (BSD): ${isoWheelBsdLabel(rearBsd)}');
+      }
+    }
+    // El anclaje del rotor de cada rueda lo pone su maza (20260928130000):
+    // si las dos dicen lo mismo, una línea. «Desconocido» no se resume.
+    String? mount(Object? code) => kBikeRotorMountOptions.containsKey('$code')
+        ? rotorMountLabel(code)
+        : null;
+    final frontMount = mount(technicalValues['frontRotorMount']);
+    final rearMount = mount(technicalValues['rearRotorMount']);
+    if (frontMount != null && frontMount == rearMount) {
+      highlights.add('Anclaje de rotores: $frontMount');
+    } else {
+      if (frontMount != null) {
+        highlights.add('Anclaje del rotor delantero: $frontMount');
+      }
+      if (rearMount != null) {
+        highlights.add('Anclaje del rotor trasero: $rearMount');
+      }
     }
     // Cada freno es su propio sistema: si los dos dicen lo mismo, una línea.
     final frontFluid = technicalValues['frontBrakeFluidType'];
@@ -3050,6 +3087,57 @@ class MechanicJobTimeMetrics {
       source == 'legacy_timeline' || source == 'legacy_current_state';
 }
 
+/// Lo que el formulario del trabajo escribe de cada bici del trabajo
+/// (`save_mechanic_job_lines_v1`, `p_job_bikes`): de una que ya estaba, sólo
+/// lo que cambió y con el valor que vio. El estado, las fotos, la fecha de
+/// aprobación y los costos tienen su propio dueño.
+const mechanicJobBikeFormColumns = <String>{
+  'bike_id',
+  'order_index',
+  'diagnosis',
+  'work_requested',
+  'work_performed',
+  'technician_notes',
+  'diagnosis_sheet_key',
+  'diagnosis_sheet_data',
+  'diagnosis_sheet_updated_at',
+  'is_warranty_work',
+  'requires_approval',
+  'approved_by_customer',
+};
+
+/// Lo que el formulario del trabajo edita de la cabecera. El guardado manda
+/// sólo los que cambió, cada uno con el valor que vio
+/// (`save_mechanic_job_lines_v1`, `p_header`); los costos, la factura, el
+/// estado y los tiempos del ciclo tienen su propio dueño.
+const mechanicJobFormHeaderColumns = <String>{
+  'customer_id',
+  'bike_id',
+  'job_type',
+  'workflow_kind',
+  'intake_kind',
+  'mode_needs_review',
+  'mode_review_reason',
+  'subject_id',
+  'subject_notes',
+  'warranty_outcome',
+  'quotation_status',
+  'quotation_valid_until',
+  'priority',
+  'arrival_date',
+  'deadline',
+  'client_request',
+  'diagnosis',
+  'work_performed',
+  'notes',
+  'estimated_duration_hours',
+  'actual_labor_hours',
+  'is_warranty_job',
+  'requires_approval',
+  'image_urls',
+  'discount_amount',
+};
+
 class MechanicJob {
   final String? id;
   final String tenantId;
@@ -3121,6 +3209,12 @@ class MechanicJob {
   final String? archiveReason;
   final String? archiveOperationId;
 
+  /// Los campos de [mechanicJobFormHeaderColumns] tal como los mandó el
+  /// servidor en la misma lectura, sin pasar por los tipos de Dart: son el
+  /// valor visto que el guardado manda para cada campo que cambia (una fecha
+  /// en web pierde los microsegundos y chocaría consigo misma).
+  final Map<String, dynamic>? persistedHeader;
+
   MechanicJob({
     this.id,
     required this.tenantId,
@@ -3186,6 +3280,7 @@ class MechanicJob {
     this.deletedBy,
     this.archiveReason,
     this.archiveOperationId,
+    this.persistedHeader,
   })  : workflowKind =
             workflowKind ?? JobWorkflowKind.fromLegacyJobType(jobType),
         intakeKind = intakeKind ??
@@ -3358,6 +3453,10 @@ class MechanicJob {
       deletedBy: json['deleted_by']?.toString(),
       archiveReason: json['archive_reason']?.toString(),
       archiveOperationId: json['archive_operation_id']?.toString(),
+      persistedHeader: {
+        for (final column in mechanicJobFormHeaderColumns)
+          if (json.containsKey(column)) column: json[column],
+      },
     );
   }
 
@@ -3611,6 +3710,7 @@ class MechanicJob {
       archiveOperationId: archiveOperationId == _sentinel
           ? this.archiveOperationId
           : archiveOperationId as String?,
+      persistedHeader: persistedHeader,
     );
   }
 
@@ -3861,6 +3961,11 @@ class MechanicJobBike {
   // Runtime: loaded bike data (not persisted)
   Bike? bike;
 
+  /// Los campos de [mechanicJobBikeFormColumns] tal como los mandó el
+  /// servidor en la misma lectura: el valor visto de cada campo que el
+  /// guardado cambia (como [MechanicJob.persistedHeader]).
+  final Map<String, dynamic>? persisted;
+
   MechanicJobBike({
     this.id,
     required this.tenantId,
@@ -3885,6 +3990,7 @@ class MechanicJobBike {
     this.approvedAt,
     this.imageUrls = const [],
     this.bike,
+    this.persisted,
     DateTime? createdAt,
     DateTime? updatedAt,
   })  : createdAt = createdAt ?? DateTime.now(),
@@ -3935,6 +4041,10 @@ class MechanicJobBike {
           ? List<String>.from(json['image_urls'] as List)
           : [],
       bike: bike,
+      persisted: {
+        for (final column in mechanicJobBikeFormColumns)
+          if (json.containsKey(column)) column: json[column],
+      },
       createdAt: _parseDate(json['created_at']),
       updatedAt: _parseDate(json['updated_at']),
     );
@@ -4028,6 +4138,7 @@ class MechanicJobBike {
       approvedAt: approvedAt ?? this.approvedAt,
       imageUrls: imageUrls ?? this.imageUrls,
       bike: bike ?? this.bike,
+      persisted: persisted,
     );
   }
 
@@ -4697,6 +4808,13 @@ class MechanicJobItem {
   final bool createsLifecycle;
   final DateTime createdAt;
 
+  /// La versión de la línea en el servidor al leerla: su `updated_at` tal
+  /// como llegó, en texto. El guardado del trabajo la manda de vuelta y, si
+  /// cambió, otra persona tocó la línea (`save_mechanic_job_lines_v1`). No es
+  /// un `DateTime`: en web pierde los microsegundos y la versión no volvería
+  /// igual.
+  final String? version;
+
   MechanicJobItem({
     this.id,
     required this.tenantId,
@@ -4718,6 +4836,7 @@ class MechanicJobItem {
     this.interventionType,
     this.createsLifecycle = false,
     DateTime? createdAt,
+    this.version,
   }) : createdAt = createdAt ?? DateTime.now();
 
   factory MechanicJobItem.fromJson(Map<String, dynamic> json) {
@@ -4753,6 +4872,7 @@ class MechanicJobItem {
           : null,
       createsLifecycle: json['creates_lifecycle'] as bool? ?? false,
       createdAt: _parseDate(json['created_at']),
+      version: json['updated_at']?.toString(),
     );
   }
 
@@ -4823,6 +4943,7 @@ class MechanicJobItem {
       location: location ?? this.location,
       interventionType: interventionType ?? this.interventionType,
       createsLifecycle: createsLifecycle ?? this.createsLifecycle,
+      version: version,
     );
   }
 

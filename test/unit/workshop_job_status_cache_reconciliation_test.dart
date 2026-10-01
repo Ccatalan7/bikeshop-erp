@@ -240,11 +240,21 @@ void main() {
       source.indexOf('Future<bool> _updateJobToCustomStatus('),
       source.indexOf('/// Show status menu for a specific bike'),
     );
-    final success = method.substring(0, method.indexOf('} catch (e) {'));
+    final pendingStart =
+        method.indexOf('} on MechanicJobStatusTransitionPending');
+    final success = method.substring(0, pendingStart);
+    final pending =
+        method.substring(pendingStart, method.indexOf('} catch (e) {'));
     final failure = method.substring(method.indexOf('} catch (e) {'));
 
     expect(success, contains('_applyAuthoritativeJobUpdate(updatedJob);'));
     expect(success, isNot(contains('_loadData(')));
+    expect(
+      pending,
+      contains('await _loadData('),
+      reason: 'pendiente en la bandeja: la fila vuelve a lo que dice el '
+          'servidor hasta que se aplique',
+    );
     expect(
       failure,
       contains('await _loadData('),

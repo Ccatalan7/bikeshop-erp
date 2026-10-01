@@ -8,6 +8,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/semantics.dart';
 
+import '../modules/bikeshop/services/workshop_command_outbox.dart';
+
 /// Debug-only input channel so an agent can drive the app **without touching
 /// the owner's cursor**.
 ///
@@ -35,6 +37,7 @@ void registerAgentInputExtensions() {
   if (!kDebugMode) return;
   if (_registered) return;
   _registered = true;
+  WorkshopCommandOutbox.registerDebugExtension();
 
   developer.registerExtension('ext.vinabike.input.info', (_, __) async {
     final view = WidgetsBinding.instance.platformDispatcher.implicitView;

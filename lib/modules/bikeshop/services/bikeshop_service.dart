@@ -1,13 +1,18 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../shared/services/authority_scoped_cache.dart';
 import '../../../shared/services/database_service.dart';
+import '../../../shared/services/image_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../models/bikeshop_models.dart';
 import 'bike_technical_fact_patch.dart';
+import 'job_attachments.dart';
+import 'job_line_save.dart';
+import 'job_completion_blocked.dart';
+import 'workshop_command_outbox.dart';
 import 'wheel_service_facts.dart';
 import 'mechanic_job_form_persistence_policy.dart';
 import 'mechanic_job_cache_reconciler.dart';
@@ -210,7 +215,175 @@ class BikeshopService extends ChangeNotifier {
   BikeshopService(
     this._db, {
     TenantService? tenantService,
-  }) : _tenantService = tenantService ?? TenantService();
+  }) : _tenantService = tenantService ?? TenantService() {
+    // Lo que la bandeja escribe al reanudar (otra pantalla, otra sesión) deja
+    // viejas las bicis en caché.
+    _outboxRunsSubscription = WorkshopCommandOutbox.shared.runs.listen((run) {
+      if (!run.outcome.wrote || run.trigger != WorkshopCommandTrigger.resume) {
+        return;
+      }
+      invalidateBikesCache();
+      if (run.command.kind == WorkshopCommandKind.jobLineSave ||
+          run.command.kind == WorkshopCommandKind.jobInvoiceContinuation ||
+          run.command.kind == WorkshopCommandKind.jobStatusTransition ||
+          run.command.kind == WorkshopCommandKind.jobWarrantyDecision ||
+          run.command.kind == WorkshopCommandKind.jobCreate ||
+          run.command.kind == WorkshopCommandKind.jobWarrantyRegistration) {
+        invalidateJobsCache();
+      }
+      if (run.command.kind == WorkshopCommandKind.jobWarrantyDecision ||
+          run.command.kind == WorkshopCommandKind.jobWarrantyRegistration) {
+        // La decisión escribe también las bicis del trabajo (el registro) y
+        // su documento.
+        invalidateJobBikesCache();
+      }
+      if (run.command.kind == WorkshopCommandKind.jobStatusTransition) {
+        unawaited(_afterResumedStatusTransition(run));
+      }
+      if (!_isDisposed) notifyListeners();
+    });
+  }
+
+  /// Un cambio de estado que la bandeja aplicó sin la pantalla que lo pidió
+  /// (otra sesión, después de cerrar la app): lo que el servicio hace después
+  /// de una transición —la historia de la bici al terminar y la memoria de
+  /// piezas— también corre, como si se hubiera aplicado con ella abierta.
+  Future<void> _afterResumedStatusTransition(WorkshopCommandRun run) async {
+    try {
+      final receipt = run.response;
+      if (receipt == null) return;
+      final nested = receipt['response_snapshot'];
+      final response = nested is Map ? nested : receipt;
+      final job = response['job'];
+      if (job is! Map) return;
+      final updatedJob = MechanicJob.fromJson(Map<String, dynamic>.from(job));
+      if (response['changed'] == true) {
+        final from = receipt['from_legacy_status']?.toString();
+        await _logJobCompletionBikeEvent(
+          previousJob: null,
+          previousStatus: from == null ? null : JobStatus.fromDbValue(from),
+          updatedJob: updatedJob,
+        );
+      }
+      if ({JobStatus.finalizado, JobStatus.entregado}
+          .contains(updatedJob.status)) {
+        await _safeSyncBikeMemoryForJob(
+          updatedJob.id,
+          applyInstalledFacts: response['installed_bike_facts'] == null,
+        );
+      }
+    } catch (error) {
+      debugPrint('Lo posterior al cambio de estado reanudado falló: $error');
+    }
+  }
+
+  StreamSubscription<WorkshopCommandRun>? _outboxRunsSubscription;
+
+  /// La bandeja de este equipo para el taller y la persona de la sesión.
+  Future<WorkshopCommandScope> workshopCommandScope() async {
+    final tenantId = await _tenantService.getTenantId();
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (tenantId == null ||
+        tenantId.isEmpty ||
+        userId == null ||
+        userId.isEmpty) {
+      throw const WorkshopOutboxPersistenceException(
+        'La sesión no tiene taller y persona para respaldar el cambio.',
+      );
+    }
+    return WorkshopCommandScope(tenantId: tenantId, userId: userId);
+  }
+
+  /// Reenvía lo que quedó pendiente de una bici o un trabajo (una sesión
+  /// anterior sin red, la app cerrada a mitad de camino). El servidor escribe
+  /// lo que no llegó y devuelve el recibo de lo que sí.
+  Future<List<WorkshopCommandRun>> resumePendingBikeCommands({
+    String? bikeId,
+    String? jobId,
+  }) async {
+    final runs = await WorkshopCommandOutbox.shared.resume(
+      await workshopCommandScope(),
+      bikeId: bikeId,
+      jobId: jobId,
+    );
+    if (runs.any((run) => run.outcome.wrote)) {
+      invalidateBikesCache();
+      if (!_isDisposed) notifyListeners();
+    }
+    return runs;
+  }
+
+  /// Reenvía un comando pendiente tal como se respaldó (un guardado que otra
+  /// sesión dejó sin respuesta).
+  Future<WorkshopCommandRun> retryPendingBikeCommand(
+      String operationKey) async {
+    final run = await WorkshopCommandOutbox.shared.run(
+      await workshopCommandScope(),
+      operationKey,
+      trigger: WorkshopCommandTrigger.retry,
+    );
+    if (run.outcome.wrote) {
+      invalidateBikesCache();
+      if (!_isDisposed) notifyListeners();
+    }
+    return run;
+  }
+
+  /// Bicis nuevas de [customerId] que siguen en la bandeja del equipo (un alta
+  /// sin respuesta): el alta siguiente pide decidir si es otra bici.
+  Future<
+      ({
+        List<({String bikeId, String label})> creations,
+        bool unreadable,
+      })> pendingBikeCreations(String customerId) async {
+    final state = await WorkshopCommandOutbox.shared
+        .pendingCreationsFor(await workshopCommandScope(), customerId);
+    return (
+      creations: [
+        for (final command in state.creations)
+          (bikeId: command.bikeId!, label: command.label ?? 'sin nombre'),
+      ],
+      unreadable: state.unreadable,
+    );
+  }
+
+  /// Lo que la bandeja guarda de [bikeId] después de reanudar: la llave de un
+  /// guardado suyo todavía sin respuesta, y si hay un comando de esa bici que
+  /// esta versión no sabe leer. Se lee de la bandeja, no de los intentos: uno
+  /// que no se alcanzó a reenviar también cuenta.
+  Future<({String? pendingSaveKey, bool unreadable})> pendingBikeSaveState(
+    String bikeId,
+  ) async {
+    final scope = await workshopCommandScope();
+    final outbox = WorkshopCommandOutbox.shared;
+    final pending = await outbox.pending(scope, bikeId: bikeId);
+    return (
+      pendingSaveKey: pending
+          .where((command) =>
+              command.kind == WorkshopCommandKind.bikeAggregateSave)
+          .map((command) => command.operationKey)
+          .firstOrNull,
+      unreadable: await outbox.hasUnreadableFor(scope, bikeId),
+    );
+  }
+
+  static String? _bikeCommandLabel(Bike bike) {
+    final label = '${bike.brand} ${bike.model}'.trim();
+    return label.isEmpty ? null : label;
+  }
+
+  /// Lo que devolvió el servidor, o el error del intento tal cual: rechazo y
+  /// ficha cambiada como `PostgrestException`, sin red como el error de
+  /// transporte (el comando sigue en la bandeja con su llave).
+  static T _wroteOrThrow<T>(
+    WorkshopCommandRun run,
+    T Function(Map<String, dynamic>) parse,
+  ) {
+    final response = run.response;
+    if (run.outcome.wrote && response != null) return parse(response);
+    throw run.error ??
+        StateError('El comando ${run.command.operationKey} no escribió.');
+  }
 
   void bindAuthorityScope({
     required String? userId,
@@ -412,12 +585,18 @@ class BikeshopService extends ChangeNotifier {
   /// transaction. The operation key must be reused after an uncertain network
   /// outcome; the server will replay the committed aggregate instead of
   /// creating a duplicate or applying a partial save.
+  ///
+  /// El comando pasa por la bandeja del equipo (ítem 3): se respalda antes de
+  /// enviarse, y si la respuesta se pierde queda pendiente con su llave aunque
+  /// la app se cierre; una respuesta perdida con recibo vuelve como escrita.
   Future<BikeAggregateSaveResult> saveBikeAggregate({
     required Bike bike,
     required BikeProfile? profile,
     required String operationKey,
     DateTime? expectedBikeUpdatedAt,
     DateTime? expectedProfileUpdatedAt,
+    WorkshopCommandTrigger trigger = WorkshopCommandTrigger.save,
+    Set<String>? acknowledgedPendingCreations,
   }) async {
     try {
       final bikeId = bike.id;
@@ -439,27 +618,38 @@ class BikeshopService extends ChangeNotifier {
             ..remove('created_at')
             ..remove('updated_at'));
 
-      final data = await Supabase.instance.client.rpc(
-        'save_bike_aggregate',
-        params: {
-          'p_operation_key': operationKey,
-          'p_bike_id': bikeId,
-          'p_customer_id': bike.customerId,
-          'p_expected_bike_updated_at':
-              expectedBikeUpdatedAt?.toUtc().toIso8601String(),
-          'p_expected_profile_updated_at':
-              expectedProfileUpdatedAt?.toUtc().toIso8601String(),
-          'p_bike_payload': bikePayload,
-          'p_profile_payload': profilePayload,
-        },
+      final run = await WorkshopCommandOutbox.shared.submit(
+        await workshopCommandScope(),
+        PendingWorkshopCommand(
+          operationKey: operationKey,
+          kind: WorkshopCommandKind.bikeAggregateSave,
+          params: {
+            'p_operation_key': operationKey,
+            'p_bike_id': bikeId,
+            'p_customer_id': bike.customerId,
+            'p_expected_bike_updated_at':
+                expectedBikeUpdatedAt?.toUtc().toIso8601String(),
+            'p_expected_profile_updated_at':
+                expectedProfileUpdatedAt?.toUtc().toIso8601String(),
+            'p_bike_payload': bikePayload,
+            'p_profile_payload': profilePayload,
+          },
+          createdAt: DateTime.now().toUtc(),
+          bikeId: bikeId,
+          label: _bikeCommandLabel(bike),
+        ),
+        trigger: trigger,
+        // Un alta lleva la decisión de quien la crea: la bandeja no la
+        // respalda si apareció otra alta de ese cliente que no vio.
+        creationGuard: acknowledgedPendingCreations == null
+            ? null
+            : WorkshopCreationGuard(
+                customerId: bike.customerId,
+                acknowledgedBikeIds: acknowledgedPendingCreations,
+              ),
       );
-      if (data is! Map) {
-        throw const FormatException('Invalid bicycle save response');
-      }
 
-      final result = BikeAggregateSaveResult.fromJson(
-        Map<String, dynamic>.from(data),
-      );
+      final result = _wroteOrThrow(run, BikeAggregateSaveResult.fromJson);
       invalidateBikesCache();
       notifyListeners();
       return result;
@@ -469,63 +659,248 @@ class BikeshopService extends ChangeNotifier {
     }
   }
 
-  /// Escribe en la ficha sólo los datos que un servicio del trabajo confirmó,
-  /// cambió o borró. Cada dato lleva el valor que la app vio; si la ficha ya
-  /// no dice eso, el servidor no aplica nada y se lanza
-  /// [BikeTechnicalFactConflict]. La [operationKey] se reutiliza tras una
-  /// respuesta perdida: el servidor devuelve lo que ya confirmó.
-  Future<BikeAggregateSaveResult> patchBikeTechnicalFacts({
+  /// Los parámetros de `save_mechanic_job_lines_v1` para la cabecera que
+  /// cambió ([header], de [jobHeaderPatch]), las líneas del trabajo [jobId]
+  /// y lo que «Configurar» confirmó de cada bici, sin la llave. Cada línea
+  /// lleva su sistema y posición resueltos, como al escribirla suelta.
+  Map<String, dynamic> buildJobLineSaveParams({
+    required String jobId,
+    required List<JobLineVersion>? seenLines,
+    required List<JobLineToSave>? lines,
+    required Map<String, List<BikeTechnicalFact>> bikeFacts,
+    Map<String, Map<String, dynamic>> header = const {},
+    List<JobBikeToSave>? jobBikes,
+    bool invoice = false,
+  }) =>
+      jobLineSaveParams(
+        jobId: jobId,
+        header: header,
+        invoice: invoice,
+        seenLines: seenLines,
+        lines: lines
+            ?.map((line) => JobLineToSave(
+                  clientKey: line.clientKey,
+                  item: _withResolvedTargetMetadata(line.item),
+                  persisted: line.persisted,
+                  jobBikeKey: line.jobBikeKey,
+                ))
+            .toList(),
+        bikeFacts: bikeFacts,
+        jobBikes: jobBikes,
+      );
+
+  /// Guarda las líneas del trabajo y lo que «Configurar» confirmó de la bici
+  /// en una sola transacción, con recibo por [operationKey]: un corte a mitad
+  /// no deja líneas sin su ficha, un reintento con la misma llave devuelve el
+  /// recibo y un cambio ajeno a las líneas se rechaza
+  /// ([JobLinesChangedException]). Si la ficha no toma el dato, las líneas
+  /// tampoco se guardan ([JobLineSaveBikeFactException]). Desde la app sólo
+  /// escribe la ficha «Configurar»: lo que instala un trabajo terminado lo
+  /// escribe el servidor (ítem 4).
+  ///
+  /// El comando completo y su llave se respaldan en la bandeja del equipo
+  /// (por taller y cuenta) **antes** de enviarse, igual que el guardado de la
+  /// bici: sin respaldo no se envía. Sin respuesta queda ahí aunque la app se
+  /// cierre ([JobLineSavePendingException]); la reanudación o
+  /// [settleJobLineSave] lo reenvía tal cual, y una respuesta perdida se
+  /// resuelve con su recibo (`get_mechanic_job_line_save_v1`).
+  ///
+  /// [followUps] (la decisión de garantía y el cambio de estado de este
+  /// guardado, de [warrantyDecisionCommand] y [statusTransitionCommand]) se
+  /// respaldan en la misma escritura, detrás del guardado: si la app se
+  /// cierra después de escribir las líneas, siguen en la bandeja y salen
+  /// solos; si el guardado no se escribe, salen con él sin enviarse (punto 2
+  /// del cierre, 2026-09-29).
+  Future<JobLineSaveResult> saveJobLines({
     required String operationKey,
-    required String bikeId,
-    required String? jobId,
-    required List<BikeTechnicalFact> facts,
-    String source = 'service_wizard',
+    required Map<String, dynamic> params,
+    String? label,
+    List<PendingWorkshopCommand> followUps = const [],
   }) async {
-    if (facts.isEmpty) {
-      throw ArgumentError.value(facts, 'facts', 'Must not be empty');
-    }
-    try {
-      final data = await Supabase.instance.client.rpc(
-        'patch_bike_technical_facts_v1',
-        params: {
-          'p_operation_key': operationKey,
-          'p_bike_id': bikeId,
-          'p_job_id': jobId,
-          'p_source': source,
-          'p_facts': facts.map((fact) => fact.toJson()).toList(),
-        },
-      );
-      if (data is! Map) {
-        throw const FormatException('Invalid bicycle fact patch response');
-      }
-      final result = BikeAggregateSaveResult.fromJson(
-        Map<String, dynamic>.from(data),
-      );
-      invalidateBikesCache();
-      notifyListeners();
-      return result;
-    } on PostgrestException catch (error) {
-      if (error.code == '40001') {
-        throw BikeTechnicalFactConflict(_conflictKeys(error.details));
-      }
-      rethrow;
-    }
+    final run = await WorkshopCommandOutbox.shared.submit(
+      await workshopCommandScope(),
+      PendingWorkshopCommand(
+        operationKey: operationKey,
+        kind: WorkshopCommandKind.jobLineSave,
+        params: {...params, 'p_operation_key': operationKey},
+        createdAt: DateTime.now().toUtc(),
+        jobId: params['p_job_id'] as String,
+        label: label,
+      ),
+      followUps: followUps,
+    );
+    return _jobLineSaveResult(run);
   }
 
-  static List<String> _conflictKeys(Object? details) {
+  /// Respalda [first] y, detrás, [followUps] en la bandeja del equipo sin
+  /// enviarlos: la decisión de garantía y el cambio de estado de un guardado
+  /// que no tiene líneas que mandar. Salen cuando quien los pidió los envía
+  /// ([decideWarrantyClaim], [transitionJobStatus]) o con la reanudación.
+  Future<void> stageJobCommands(
+    PendingWorkshopCommand first, {
+    List<PendingWorkshopCommand> followUps = const [],
+  }) async {
+    await WorkshopCommandOutbox.shared.enqueue(
+      await workshopCommandScope(),
+      first,
+      followUps: followUps,
+    );
+  }
+
+  /// Sube un adjunto del trabajo [jobId] (también el de un alta, con el id que
+  /// el formulario ya eligió) y devuelve su URL. Se anota en la bandeja del
+  /// equipo antes de subirse, a nombre de [ownerForm]: si ningún guardado se
+  /// lo lleva, lo borra el formulario al cerrarse o el barrido de la próxima
+  /// sesión, y nunca uno que algún trabajo muestra. Lanza
+  /// [JobAttachmentNotAcceptedException] si no es una foto ni un PDF.
+  Future<String> uploadJobAttachment({
+    required String jobId,
+    required Uint8List bytes,
+    required String fileName,
+    required String ownerForm,
+  }) async {
+    final extension = jobAttachmentExtension(fileName);
+    if (extension == null) throw JobAttachmentNotAcceptedException(fileName);
+    final scope = await workshopCommandScope();
+    final objectPath =
+        '${scope.tenantId}/$jobId/${const Uuid().v4()}$extension';
+    await WorkshopCommandOutbox.shared.recordImageIntent(
+      scope,
+      PendingBikeImage(
+        bucket: jobAttachmentsBucket,
+        objectPath: objectPath,
+        publicUrl: ImageService.publicUrlFor(jobAttachmentsBucket, objectPath),
+        jobId: jobId,
+        createdAt: DateTime.now().toUtc(),
+        ownerForm: ownerForm,
+      ),
+    );
+    final upload = await ImageService.uploadBytesToPath(
+      bytes: bytes,
+      bucket: jobAttachmentsBucket,
+      objectPath: objectPath,
+    );
+    await WorkshopCommandOutbox.shared.markImageUploaded(scope, objectPath);
+    return upload.publicUrl;
+  }
+
+  /// Agrega [urls] (ya subidos con [uploadJobAttachment]) a los adjuntos del
+  /// trabajo por el mismo comando que el formulario, sólo con la cabecera:
+  /// `image_urls` con lo que tenía recién leído como lo visto. Antes la tabla
+  /// reescribía la fila completa del trabajo desde su caché, también lo que
+  /// otra persona había cambiado mientras tanto. Si otro cambió los adjuntos
+  /// en ese instante, el servidor lo rechaza ([JobHeaderChangedException]) y
+  /// no se pisa nada.
+  Future<JobLineSaveResult> addJobAttachments({
+    required String jobId,
+    required List<String> urls,
+    String? label,
+  }) async {
+    final scope = await workshopCommandScope();
+    final row = await Supabase.instance.client
+        .from('mechanic_jobs')
+        .select('image_urls')
+        .eq('id', jobId)
+        .eq('tenant_id', scope.tenantId)
+        .maybeSingle();
+    if (row == null) throw StateError('Trabajo no encontrado.');
+    final seen = row['image_urls'];
+    final current = seen is List ? seen.map((url) => '$url').toList() : [];
+    return saveJobLines(
+      operationKey: const Uuid().v4(),
+      params: {
+        'p_job_id': jobId,
+        'p_seen_lines': null,
+        'p_lines': null,
+        'p_bike_facts': const [],
+        'p_header': {
+          'image_urls': {
+            'value': [...current, ...urls],
+            'expected': seen,
+          },
+        },
+        'p_job_bikes': null,
+        'p_invoice': false,
+      },
+      label: label,
+    );
+  }
+
+  /// El guardado de líneas [operationKey] que quedó sin respuesta: si sigue
+  /// en la bandeja, lo reenvía tal como se respaldó; si ya salió (lo resolvió
+  /// la reanudación), su recibo dice si se escribió. Devuelve el recibo, o
+  /// null si no se escribió y ya no está pendiente. Lanza
+  /// [JobLineSavePendingException] si sigue sin respuesta, y lo que el
+  /// servidor rechazó igual que [saveJobLines].
+  Future<JobLineSaveResult?> settleJobLineSave(String operationKey) async {
+    final scope = await workshopCommandScope();
+    final WorkshopCommandRun run;
     try {
-      final decoded = details is String ? jsonDecode(details) : details;
-      if (decoded is List) {
-        return [
-          for (final entry in decoded)
-            if (entry is Map && entry['key'] != null) entry['key'].toString(),
-        ];
+      run = await WorkshopCommandOutbox.shared.run(
+        scope,
+        operationKey,
+        trigger: WorkshopCommandTrigger.retry,
+      );
+    } on StateError {
+      final Object? receipt;
+      try {
+        receipt = await Supabase.instance.client.rpc(
+          'get_mechanic_job_line_save_v1',
+          params: {'p_operation_key': operationKey},
+        );
+      } catch (error) {
+        if (classifyWorkshopCommandError(error) ==
+            WorkshopCommandOutcome.offline) {
+          throw const JobLineSavePendingException();
+        }
+        rethrow;
       }
-    } catch (_) {
-      // El detalle es sólo para nombrar las claves; sin él, el conflicto
-      // igual se informa.
+      if (receipt is! Map) return null;
+      final result =
+          JobLineSaveResult.fromJson(Map<String, dynamic>.from(receipt));
+      _afterJobLineWrite();
+      return result;
     }
-    return const <String>[];
+    return _jobLineSaveResult(run);
+  }
+
+  /// Los guardados de líneas de [jobId] que siguen en la bandeja del equipo,
+  /// del más viejo al más nuevo (llamar después de reanudar).
+  Future<List<String>> pendingJobLineSaves(String jobId) async {
+    final pending = await WorkshopCommandOutbox.shared
+        .pending(await workshopCommandScope(), jobId: jobId);
+    return [
+      for (final command in pending)
+        if (command.kind == WorkshopCommandKind.jobLineSave)
+          command.operationKey,
+    ];
+  }
+
+  JobLineSaveResult _jobLineSaveResult(WorkshopCommandRun run) {
+    final response = run.response;
+    if (run.outcome.wrote && response != null) {
+      final result = JobLineSaveResult.fromJson(response);
+      _afterJobLineWrite();
+      return result;
+    }
+    if (run.outcome == WorkshopCommandOutcome.offline) {
+      throw JobLineSavePendingException(
+        queued: run.error is WorkshopCommandQueuedException,
+        busy: run.error is WorkshopCommandBusyException,
+      );
+    }
+    throw classifyJobLineSaveError(
+      run.error ??
+          StateError('El comando ${run.command.operationKey} no escribió.'),
+    );
+  }
+
+  void _afterJobLineWrite() {
+    invalidateBikesCache();
+    invalidateJobsCache();
+    // El comando también escribe las bicis del trabajo.
+    invalidateJobBikesCache();
+    if (!_isDisposed) notifyListeners();
   }
 
   Future<BikeAggregateSaveResult?> getBikeAggregateSaveOperation(
@@ -839,9 +1214,13 @@ class BikeshopService extends ChangeNotifier {
 
   /// Devuelve, en palabras de taller, lo instalado que la ficha no tomó; la
   /// próxima sincronización del trabajo lo reintenta. Vacío si no hubo nada.
+  /// Lo instalado lo escribe el servidor (`sync_job_installed_bike_facts_v1`);
+  /// sin [applyInstalledFacts] no se pide, porque la transición que terminó
+  /// el trabajo ya lo escribió en su misma transacción (ítem 4).
   Future<List<String>> syncBikeMemoryFromJob(
     String jobId, {
     bool swallowErrors = true,
+    bool applyInstalledFacts = true,
   }) async {
     final installedProblems = <String>[];
     var completedJob = false;
@@ -852,6 +1231,9 @@ class BikeshopService extends ChangeNotifier {
       if (job == null || job.id == null) return installedProblems;
       completedJob =
           {JobStatus.finalizado, JobStatus.entregado}.contains(job.status);
+      if (completedJob && applyInstalledFacts) {
+        installedProblems.addAll(await _syncInstalledBikeFacts(job));
+      }
 
       final jobBikes = await getJobBikes(jobId);
       final staleTargets = await _clearDerivedBikeMemoryForJob(jobId);
@@ -883,11 +1265,6 @@ class BikeshopService extends ChangeNotifier {
             jobBike: jobBike,
             items: bikeItems,
           );
-          installedProblems.addAll(await _applyInstalledFactsFromCompletedJob(
-            job: job,
-            jobBike: jobBike,
-            items: bikeItems,
-          ));
         }
       }
 
@@ -900,14 +1277,6 @@ class BikeshopService extends ChangeNotifier {
             items: orphanItems,
             sourceOverride: 'job_general_item_sync',
           );
-          // Una línea de General en un trabajo de una sola bici también
-          // instala en esa bici (revisión de Codex, 2026-09-27): antes sólo
-          // quedaba en la memoria y sus perforaciones nunca llegaban.
-          installedProblems.addAll(await _applyInstalledFactsFromCompletedJob(
-            job: job,
-            jobBike: jobBikes.first,
-            items: orphanItems,
-          ));
         }
       }
 
@@ -931,86 +1300,42 @@ class BikeshopService extends ChangeNotifier {
   }
 
   /// Lo que un servicio terminado dejó instalado cambia la ficha (hoy, las
-  /// perforaciones de la rueda que armó el Enrayado). Una vez por cada cosa
-  /// que la línea instala (`nextJobCompletionOperationKey`): si alguien
-  /// corrige la ficha después, no se le pisa. Configurar o presupuestar no
-  /// llega aquí: sólo un trabajo FINALIZADO o ENTREGADO, que el servidor
-  /// exige. Devuelve lo que no se pudo escribir; antes sólo se imprimía en
-  /// debug, y el 2026-09-27 la consulta del recibo falló en producción
-  /// (42501) sin que nadie lo viera.
-  Future<List<String>> _applyInstalledFactsFromCompletedJob({
-    required MechanicJob job,
-    required MechanicJobBike jobBike,
-    required List<MechanicJobItem> items,
-  }) async {
-    final problems = <String>[];
-    for (final item in items) {
-      final answers = item.serviceConfigurationData;
-      final itemId = item.id;
-      if (answers == null || answers.isEmpty || itemId == null) continue;
-      final installed = wheelInstalledFacts(
-        positions: serviceWheelPositions(item.location, answers),
-        answers: answers,
+  /// perforaciones de la rueda que armó el Enrayado). La regla y la escritura
+  /// son del servidor (ítem 4, 2026-09-28): la app ya no calcula lo instalado
+  /// ni busca recibos, sólo pide reaplicarlo y cuenta lo que no entró. Una
+  /// línea de General de un trabajo de una sola bici instala en esa bici.
+  Future<List<String>> _syncInstalledBikeFacts(MechanicJob job) async {
+    final jobId = job.id;
+    if (jobId == null) return const [];
+    try {
+      final result = await _db.rpc(
+        'sync_job_installed_bike_facts_v1',
+        params: {'p_job_id': jobId},
       );
-      if (installed.isEmpty) continue;
-
-      final factKeys = installed.keys.toList()..sort();
-      try {
-        final receipts = await Supabase.instance.client
-            .from('bike_technical_fact_patches')
-            .select('operation_key')
-            .eq('tenant_id', job.tenantId)
-            .like('operation_key', 'job_completion:$itemId:%');
-        final operationKey = nextJobCompletionOperationKey(
-          itemId: itemId,
-          installed: installed,
-          existingKeys: [
-            for (final row in receipts) row['operation_key'].toString(),
-          ],
-        );
-        if (operationKey == null) continue;
-
-        final profile = (await getBikeAggregate(jobBike.bikeId)).profile;
-        final values = profile?.technicalValues ?? const <String, dynamic>{};
-        final confirmed =
-            profile?.technicalConfirmed ?? const <String, dynamic>{};
-        await patchBikeTechnicalFacts(
-          operationKey: operationKey,
-          bikeId: jobBike.bikeId,
-          jobId: job.id,
-          source: 'job_completion',
-          facts: [
-            for (final key in factKeys)
-              BikeTechnicalFact.set(
-                key: key,
-                value: installed[key]!,
-                expected: values[key],
-                expectedConfirmed: confirmed[key] == true,
-              ),
-          ],
-        );
-      } catch (e) {
-        // Sin recibo, la próxima sincronización del trabajo lo reintenta.
-        if (kDebugMode) {
-          print('⚠️ [BikeshopService] Installed facts of $itemId pending: $e');
-        }
-        final what = factKeys
-            .map((key) => wheelInstalledFactLabel(key, installed[key]))
-            .join(', ');
-        problems.add(
-          'La ficha no tomó $what de ${job.jobNumber ?? 'este trabajo'}; '
-          'se reintenta al guardar el trabajo o volver a cambiar su estado.',
-        );
+      return installedBikeFactProblemMessages(result);
+    } catch (e) {
+      if (kDebugMode) {
+        print('⚠️ [BikeshopService] Installed facts of $jobId pending: $e');
       }
+      return [
+        'La ficha de la bici no se revisó contra lo instalado en '
+            '${job.jobNumber ?? 'este trabajo'}; se reintenta al guardarlo o '
+            'volver a cambiar su estado.',
+      ];
     }
-    return problems;
   }
 
-  Future<List<String>> _safeSyncBikeMemoryForJob(String? jobId) async {
+  Future<List<String>> _safeSyncBikeMemoryForJob(
+    String? jobId, {
+    bool applyInstalledFacts = true,
+  }) async {
     if (jobId == null || jobId.isEmpty) return const [];
 
     try {
-      return await syncBikeMemoryFromJob(jobId);
+      return await syncBikeMemoryFromJob(
+        jobId,
+        applyInstalledFacts: applyInstalledFacts,
+      );
     } catch (e) {
       if (kDebugMode) {
         print('⚠️ [BikeshopService] Could not sync bike memory for $jobId: $e');
@@ -2523,13 +2848,36 @@ class BikeshopService extends ChangeNotifier {
       ];
     }
 
-    final haystack = _normalizeText('${item.productName} ${item.notes ?? ''}');
+    final fullText = _normalizeText('${item.productName} ${item.notes ?? ''}');
     final location = item.location != BikeMemoryLocation.none
         ? item.location
-        : _inferLocationFromText(haystack);
+        : _inferLocationFromText(fullText);
     final isServiceItem =
         item.itemType == 'service' || item.serviceProductId != null;
 
+    // El nombre de la línea dice qué se hizo. Las notas de un servicio con
+    // asistente son sus respuestas, que describen la bici: «Tipo de freno:
+    // Disco hidráulico» llevaba un Enrayado de rueda al freno trasero
+    // (recorrido C1/C4 nativo, 2026-09-30). Las notas cuentan sólo si el
+    // nombre no dice nada.
+    final byName = _inferTargetsFromHaystack(
+      _normalizeText(item.productName),
+      location: location,
+      isServiceItem: isServiceItem,
+    );
+    if (byName.isNotEmpty) return byName;
+    return _inferTargetsFromHaystack(
+      fullText,
+      location: location,
+      isServiceItem: isServiceItem,
+    );
+  }
+
+  List<_BikeMemoryTarget> _inferTargetsFromHaystack(
+    String haystack, {
+    required BikeMemoryLocation location,
+    required bool isServiceItem,
+  }) {
     if (_containsAny(haystack, ['cadena', 'chain'])) {
       return [
         _BikeMemoryTarget(
@@ -3349,19 +3697,145 @@ class BikeshopService extends ChangeNotifier {
     return _executeWarrantyCommand(request);
   }
 
-  Future<Map<String, dynamic>> decideWarrantyClaim({
+  /// La decisión de garantía como comando de la bandeja
+  /// (`decide_mechanic_job_warranty_claim`), con los mismos parámetros que
+  /// el RPC. [label] nombra el trabajo en los avisos.
+  PendingWorkshopCommand warrantyDecisionCommand({
     required String warrantyJobId,
     required WarrantyOutcome outcome,
     required String operationKey,
     String? reason,
-  }) async {
+    String? label,
+  }) {
     final request = MechanicJobWarrantyCommandRequest.decision(
       warrantyJobId: warrantyJobId,
       outcome: outcome.dbValue,
       reason: reason,
       operationKey: operationKey,
     );
-    return _executeWarrantyCommand(request);
+    return PendingWorkshopCommand(
+      operationKey: request.operationKey,
+      kind: WorkshopCommandKind.jobWarrantyDecision,
+      params: request.toRpcParams(),
+      createdAt: DateTime.now().toUtc(),
+      jobId: request.warrantyJobId,
+      label: label ?? _cachedJobLabel(request.warrantyJobId),
+    );
+  }
+
+  /// El cambio de estado como comando de la bandeja, con los mismos
+  /// parámetros que arma [transitionJobStatus].
+  PendingWorkshopCommand statusTransitionCommand({
+    required String jobId,
+    required String statusId,
+    required String operationKey,
+    String? label,
+  }) {
+    final request = MechanicJobStatusTransitionRequest(
+      jobId: jobId,
+      statusId: statusId,
+      operationKey: operationKey,
+    );
+    return PendingWorkshopCommand(
+      operationKey: request.operationKey,
+      kind: WorkshopCommandKind.jobStatusTransition,
+      params: request.toRpcParams(),
+      createdAt: DateTime.now().toUtc(),
+      jobId: request.jobId,
+      label: label ?? _cachedJobLabel(request.jobId),
+    );
+  }
+
+  String? _cachedJobLabel(String jobId) {
+    final number = _cachedJobById(jobId)?.jobNumber;
+    return number == null ? null : 'Trabajo $number';
+  }
+
+  /// Decide la garantía de [warrantyJobId] por la bandeja del equipo, en la
+  /// cola del trabajo: el comando y su llave se respaldan antes de enviarse,
+  /// va detrás de un guardado del mismo trabajo que siga sin respuesta, una
+  /// respuesta perdida la cierra el evento inmutable de la decisión (por
+  /// taller, trabajo y llave) y sólo sale el evento que dice esta decisión.
+  /// Reusa el RPC, su seguridad y sus eventos.
+  ///
+  /// Si la última decisión pendiente de ese trabajo en la bandeja es la misma
+  /// (resultado y motivo), se reusa su llave: volver a elegirla, también
+  /// después de reiniciar la app, no hace otra decisión. Sin respuesta lanza
+  /// [MechanicJobWarrantyDecisionPending] con la llave que quedó: la decisión
+  /// no está aplicada.
+  Future<Map<String, dynamic>> decideWarrantyClaim({
+    required String warrantyJobId,
+    required WarrantyOutcome outcome,
+    required String operationKey,
+    String? reason,
+    String? label,
+  }) async {
+    final scope = await workshopCommandScope();
+    final outbox = WorkshopCommandOutbox.shared;
+    // Si ya había una igual pendiente en ese trabajo, la bandeja la reusa con
+    // su llave (bajo su candado): la llave que vale es la de la corrida.
+    final command = warrantyDecisionCommand(
+      warrantyJobId: warrantyJobId,
+      outcome: outcome,
+      reason: reason,
+      operationKey: operationKey,
+      label: label,
+    );
+    final WorkshopCommandRun run;
+    try {
+      run = await outbox.submit(scope, command);
+    } finally {
+      // Una respuesta pudo perderse después de escribir: la lista no queda
+      // como verdad hasta releerla.
+      invalidateJobsCache();
+      invalidateJobBikesCache();
+      _debouncedNotify();
+    }
+    final response = run.response;
+    if (run.outcome.wrote && response != null) return response;
+    if (run.outcome == WorkshopCommandOutcome.offline) {
+      throw MechanicJobWarrantyDecisionPending(
+        operationKey: run.command.operationKey,
+        queued: run.error is WorkshopCommandQueuedException,
+        busy: run.error is WorkshopCommandBusyException,
+      );
+    }
+    throw run.error ??
+        StateError('El servidor no aplicó la decisión de garantía.');
+  }
+
+  /// La última decisión de garantía de cada trabajo que sigue en la bandeja
+  /// del equipo, para que la tabla la muestre como pendiente.
+  Future<Map<String, WarrantyOutcome>> pendingWarrantyDecisions() async {
+    final pending = await WorkshopCommandOutbox.shared
+        .pending(await workshopCommandScope());
+    return {
+      for (final command in pending)
+        if (command.kind == WorkshopCommandKind.jobWarrantyDecision &&
+            command.jobId != null)
+          command.jobId!:
+              WarrantyOutcome.fromDbValue('${command.params['p_outcome']}'),
+    };
+  }
+
+  /// La última decisión de garantía de [jobId] que sigue en la bandeja del
+  /// equipo (llamar después de reanudar): quien muestra la cobertura la dice
+  /// como pendiente, no como aplicada.
+  Future<({WarrantyOutcome outcome, String? reason, String operationKey})?>
+      pendingWarrantyDecision(String jobId) async {
+    final pending = await WorkshopCommandOutbox.shared
+        .pending(await workshopCommandScope(), jobId: jobId);
+    final command = pending
+        .where((command) =>
+            command.kind == WorkshopCommandKind.jobWarrantyDecision)
+        .lastOrNull;
+    if (command == null) return null;
+    final reason = '${command.params['p_reason'] ?? ''}'.trim();
+    return (
+      outcome: WarrantyOutcome.fromDbValue('${command.params['p_outcome']}'),
+      reason: reason.isEmpty ? null : reason,
+      operationKey: command.operationKey,
+    );
   }
 
   Future<Map<String, dynamic>> _executeWarrantyCommand(
@@ -3391,48 +3865,218 @@ class BikeshopService extends ChangeNotifier {
   Future<Map<String, dynamic>?> _getWarrantyCommandEvent(
     String operationKey,
   ) async {
+    // Por taller: la llave es única dentro de cada taller, no entre talleres.
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null || tenantId.isEmpty) return null;
     final data = await Supabase.instance.client
         .from('mechanic_job_warranty_claim_events')
         .select()
+        .eq('tenant_id', tenantId)
         .eq('operation_key', operationKey)
         .maybeSingle();
     return data == null ? null : Map<String, dynamic>.from(data);
   }
 
-  Future<MechanicJob> createJob(MechanicJob job) async {
-    try {
-      final jobData = job.toJson();
-
-      // 🔍 DEBUG: Log what we're sending to database
-      if (kDebugMode) {
-        print('📤 [CREATE JOB] Sending data to database:');
-        print(
-            '   job_number in data: ${jobData.containsKey('job_number') ? jobData['job_number'] : 'NOT INCLUDED (DB will generate)'}');
-        print('   Full data: $jobData');
-      }
-
-      final data = await _db.insert('mechanic_jobs', jobData);
-
-      if (kDebugMode) {
-        print(
-            '✅ [CREATE JOB] Database returned: job_number=${data['job_number']}');
-      }
-
-      final createdJob = MechanicJob.fromJson(data);
-      await _logJobCreatedBikeEvent(createdJob);
-
-      invalidateJobsCache();
-      notifyListeners();
-      return createdJob;
-    } catch (e) {
-      if (kDebugMode) {
-        print('❌ [CREATE JOB ERROR] $e');
-        print('   jobNumber field value: ${job.jobNumber}');
-        print('   jobNumber is null: ${job.jobNumber == null}');
-        print('   jobNumber is empty: ${job.jobNumber?.isEmpty}');
-      }
-      rethrow;
+  /// El alta de [job] como comando de la bandeja (`create_mechanic_job_v1`):
+  /// su llave es el id que el formulario eligió una vez, así que el reenvío
+  /// de la misma alta —otra pestaña, la reanudación, otro Guardar— no crea
+  /// otro trabajo, y la misma llave nunca lleva otro contenido. La hora de
+  /// creación y de cambio las pone el servidor.
+  PendingWorkshopCommand jobCreationCommand(MechanicJob job, {String? label}) {
+    final jobId = job.id;
+    if (jobId == null || jobId.isEmpty) {
+      throw ArgumentError.value(job.id, 'job.id', 'El alta lleva su id');
     }
+    final row = job.toJson()
+      ..remove('created_at')
+      ..remove('updated_at');
+    return PendingWorkshopCommand(
+      operationKey: jobId,
+      kind: WorkshopCommandKind.jobCreate,
+      params: {'p_operation_key': jobId, 'p_job': row},
+      createdAt: DateTime.now().toUtc(),
+      jobId: jobId,
+      label: label,
+    );
+  }
+
+  /// El registro de la garantía de un trabajo nuevo como comando de la
+  /// bandeja, con los mismos parámetros que el RPC.
+  PendingWorkshopCommand warrantyRegistrationCommand({
+    required String warrantyJobId,
+    required String sourceJobId,
+    required String operationKey,
+    String? label,
+  }) {
+    final request = MechanicJobWarrantyCommandRequest.registration(
+      warrantyJobId: warrantyJobId,
+      sourceJobId: sourceJobId,
+      operationKey: operationKey,
+    );
+    return PendingWorkshopCommand(
+      operationKey: request.operationKey,
+      kind: WorkshopCommandKind.jobWarrantyRegistration,
+      params: request.toRpcParams(),
+      createdAt: DateTime.now().toUtc(),
+      jobId: request.warrantyJobId,
+      label: label,
+    );
+  }
+
+  /// Crea el trabajo de [creation] y guarda sus líneas ([lineParams], como
+  /// [saveJobLines]). Los dos, y [followUps] detrás (el registro de una
+  /// garantía nueva, su decisión, su estado), se respaldan en la bandeja del
+  /// equipo en una escritura, antes del primer envío: un cierre entre el
+  /// alta y su respuesta, o entre el alta y las líneas, no deja un trabajo
+  /// sin líneas; al volver salen en orden, una vez cada uno. [onCreated] se
+  /// llama con el trabajo apenas su alta tiene recibo, antes de las líneas.
+  ///
+  /// Lanza [JobCreationPendingException] si el alta sigue sin respuesta (el
+  /// trabajo no está creado), [JobCreationRejectedException] si el servidor
+  /// no la aceptó (lo que la seguía sale sin enviarse), y lo mismo que
+  /// [saveJobLines] si el alta llegó y las líneas no.
+  Future<({MechanicJob job, JobLineSaveResult lines})> createJobWithLines({
+    required PendingWorkshopCommand creation,
+    required String lineOperationKey,
+    required Map<String, dynamic> lineParams,
+    String? label,
+    List<PendingWorkshopCommand> followUps = const [],
+    void Function(MechanicJob job)? onCreated,
+  }) async {
+    final scope = await workshopCommandScope();
+    final lines = PendingWorkshopCommand(
+      operationKey: lineOperationKey,
+      kind: WorkshopCommandKind.jobLineSave,
+      params: {...lineParams, 'p_operation_key': lineOperationKey},
+      createdAt: DateTime.now().toUtc(),
+      jobId: creation.jobId,
+      label: label,
+    );
+    final WorkshopCommandRun created;
+    try {
+      created = await WorkshopCommandOutbox.shared.submit(
+        scope,
+        creation,
+        followUps: [lines, ...followUps],
+      );
+    } finally {
+      invalidateJobsCache();
+    }
+    final job = _createdJobOf(created);
+    onCreated?.call(job);
+    final result = await settleJobLineSave(lineOperationKey);
+    if (result == null) {
+      throw StateError(
+        'Las líneas del trabajo ${job.jobNumber} no se guardaron.',
+      );
+    }
+    return (job: job, lines: result);
+  }
+
+  /// El alta [creation] que quedó sin respuesta: si sigue en la bandeja, la
+  /// reenvía tal como se respaldó; si ya salió (la resolvió la reanudación u
+  /// otra pestaña), su recibo —consultado con su contenido— dice si se
+  /// escribió. Devuelve el trabajo creado, o null si no se creó y ya no está
+  /// pendiente.
+  Future<MechanicJob?> settleJobCreation(
+    PendingWorkshopCommand creation,
+  ) async {
+    final scope = await workshopCommandScope();
+    final run = await WorkshopCommandOutbox.shared.runOrReconcile(
+      scope,
+      creation,
+      trigger: WorkshopCommandTrigger.retry,
+    );
+    if (run.outcome == WorkshopCommandOutcome.discarded &&
+        run.error is WorkshopCommandNotPendingError) {
+      return null;
+    }
+    return _createdJobOf(run);
+  }
+
+  /// Envía el registro de garantía [operationKey] que quedó en la bandeja
+  /// detrás de las líneas de un trabajo nuevo. Lanza
+  /// [MechanicJobWarrantyRegistrationPending] si sigue sin respuesta, y el
+  /// error del servidor si no lo aceptó. Si ya salió (lo resolvió la
+  /// reanudación), su evento dice si se escribió.
+  Future<void> settleWarrantyRegistration(String operationKey) async {
+    final scope = await workshopCommandScope();
+    final WorkshopCommandRun run;
+    try {
+      run = await WorkshopCommandOutbox.shared.run(
+        scope,
+        operationKey,
+        trigger: WorkshopCommandTrigger.save,
+      );
+    } on StateError {
+      final Map<String, dynamic>? event;
+      try {
+        event = await _getWarrantyCommandEvent(operationKey);
+      } catch (error) {
+        if (classifyWorkshopCommandError(error) ==
+            WorkshopCommandOutcome.offline) {
+          throw const MechanicJobWarrantyRegistrationPending();
+        }
+        rethrow;
+      }
+      if (event == null || event['event_type'] != 'registration') {
+        throw StateError('El registro de la garantía no se aplicó.');
+      }
+      return;
+    } finally {
+      invalidateJobsCache();
+      invalidateJobBikesCache();
+    }
+    if (run.outcome.wrote) return;
+    if (run.outcome == WorkshopCommandOutcome.offline) {
+      throw MechanicJobWarrantyRegistrationPending(
+        busy: run.error is WorkshopCommandBusyException,
+      );
+    }
+    throw run.error ?? StateError('El servidor no registró la garantía.');
+  }
+
+  MechanicJob _createdJobOf(WorkshopCommandRun run) {
+    final response = run.response;
+    final job = response?['job'];
+    if (run.outcome.wrote && job is Map) {
+      invalidateJobsCache();
+      if (!_isDisposed) notifyListeners();
+      return MechanicJob.fromJson(Map<String, dynamic>.from(job));
+    }
+    if (run.outcome == WorkshopCommandOutcome.offline) {
+      throw JobCreationPendingException(
+        queued: run.error is WorkshopCommandQueuedException,
+        busy: run.error is WorkshopCommandBusyException,
+      );
+    }
+    throw JobCreationRejectedException(
+      run.error is WorkshopCommandNotPendingError
+          ? StateError('lo envió otra ventana de este equipo y el servidor no '
+              'lo creó; su aviso dice por qué')
+          : run.error ?? StateError('El servidor no creó el trabajo.'),
+    );
+  }
+
+  /// Crea [job] sin pasar por la bandeja, con el mismo comando del alta
+  /// (el arnés «Prueba rápida» de depuración). «Trabajo creado» lo anota el
+  /// servidor.
+  Future<MechanicJob> createJob(MechanicJob job) async {
+    final withId = job.id == null || job.id!.isEmpty
+        ? job.copyWith(id: const Uuid().v4())
+        : job;
+    final command = jobCreationCommand(withId);
+    final data = await Supabase.instance.client.rpc(
+      'create_mechanic_job_v1',
+      params: command.params,
+    );
+    final created = data is Map ? data['job'] : null;
+    if (created is! Map) {
+      throw const FormatException('Respuesta inválida del alta del trabajo');
+    }
+    invalidateJobsCache();
+    notifyListeners();
+    return MechanicJob.fromJson(Map<String, dynamic>.from(created));
   }
 
   Future<MechanicJob> updateJob(
@@ -3527,32 +4171,6 @@ class BikeshopService extends ChangeNotifier {
     );
   }
 
-  Future<void> _logJobCreatedBikeEvent(MechanicJob job) async {
-    final bikeId = job.bikeId;
-    if (bikeId == null || bikeId.isEmpty) return;
-
-    await _safeCreateBikeEvent(
-      BikeEvent(
-        tenantId: job.tenantId,
-        bikeId: bikeId,
-        jobId: job.id,
-        eventType: BikeEventType.jobCreated,
-        eventCategory: BikeEventCategory.visit,
-        eventDate: job.arrivalDate,
-        title: 'Trabajo creado',
-        summary: job.clientRequest?.trim().isNotEmpty == true
-            ? job.clientRequest!.trim()
-            : 'Se abrió la orden ${job.jobNumber}.',
-        source: 'job_lifecycle',
-        referenceNumber: job.jobNumber,
-        payload: {
-          'status': job.status.name,
-          'priority': job.priority.name,
-        },
-      ),
-    );
-  }
-
   Future<void> _logJobCompletionBikeEvent({
     required MechanicJob? previousJob,
     required MechanicJob updatedJob,
@@ -3627,17 +4245,40 @@ class BikeshopService extends ChangeNotifier {
     );
     final cacheLease = _cacheScope.capture();
     final cachedPreviousJob = _cachedJobById(request.jobId);
-    final coordinator = MechanicJobStatusTransitionCoordinator(
-      send: (params) => _db.rpc(
-        'transition_mechanic_job_status',
-        params: params,
-      ),
-      readback: _getJobStatusTransitionReceipt,
-      isOutcomeAmbiguous: _isWorkshopCommandOutcomeAmbiguous,
-    );
 
     try {
-      final result = await coordinator.execute(request);
+      // Por la bandeja del equipo, en la cola del trabajo: el comando y su
+      // llave se respaldan antes de enviarse, un guardado del mismo trabajo
+      // sin respuesta va primero, y una respuesta perdida se resuelve con el
+      // comprobante (`mechanic_job_status_transition_events`). Sin respuesta,
+      // queda ahí y se aplica solo, también después de cerrar la app
+      // (checkpoint del cierre, 2026-09-28).
+      final run = await WorkshopCommandOutbox.shared.submit(
+        await workshopCommandScope(),
+        statusTransitionCommand(
+          jobId: request.jobId,
+          statusId: request.statusId,
+          operationKey: request.operationKey,
+        ),
+      );
+      if (!run.outcome.wrote) {
+        if (run.outcome == WorkshopCommandOutcome.offline) {
+          throw MechanicJobStatusTransitionPending(
+            queued: run.error is WorkshopCommandQueuedException,
+          );
+        }
+        throw jobCompletionBlockFrom(run.error) ??
+            run.error ??
+            StateError('El servidor no aplicó el cambio de estado.');
+      }
+      final result = MechanicJobStatusTransitionResult(
+        request: request,
+        receipt: run.response!,
+        confirmation: run.outcome == WorkshopCommandOutcome.reconciled
+            ? MechanicJobStatusTransitionConfirmation.reconciledFromReadback
+            : MechanicJobStatusTransitionConfirmation.acknowledged,
+        replayAttempted: false,
+      );
       final authoritativeJob = MechanicJob.fromJson(
         result.authoritativeJobSnapshot,
       );
@@ -3678,16 +4319,23 @@ class BikeshopService extends ChangeNotifier {
           updatedJob: updatedJob,
         );
       }
-      // Terminar un trabajo desde cualquier pantalla deja en la bici las
-      // piezas y lo instalado; antes sólo pasaba al guardar el formulario.
-      // También al repetir el mismo estado: es el reintento de lo instalado
-      // que no llegó, y lo que no llega se le dice a quien cambió el estado.
+      // Lo instalado lo escribió el servidor en esta misma transición (ítem
+      // 4); lo que no entró se le dice a quien cambió el estado. Terminar un
+      // trabajo desde cualquier pantalla deja además en la memoria de la bici
+      // las piezas. Un servidor sin el ítem 4 no devuelve
+      // `installed_bike_facts`: entonces se pide aparte.
+      final problems = [
+        ...installedBikeFactProblemMessages(result.installedBikeFacts),
+      ];
       if (syncBikeMemoryOnCompletion &&
           {JobStatus.finalizado, JobStatus.entregado}
               .contains(updatedJob.status)) {
-        final problems = await _safeSyncBikeMemoryForJob(updatedJob.id);
-        if (problems.isNotEmpty) onBikeFactProblems?.call(problems);
+        problems.addAll(await _safeSyncBikeMemoryForJob(
+          updatedJob.id,
+          applyInstalledFacts: result.installedBikeFacts == null,
+        ));
       }
+      if (problems.isNotEmpty) onBikeFactProblems?.call(problems);
       return updatedJob;
     } catch (_) {
       // The server may have committed even when the acknowledgement was lost.
@@ -3699,16 +4347,9 @@ class BikeshopService extends ChangeNotifier {
     }
   }
 
-  /// Compatibility adapter for the remaining detail widgets that still expose
-  /// the legacy enum. It resolves the tenant's active custom status first and
-  /// then delegates to the same canonical transition command.
-  Future<MechanicJob> transitionJobStatusByLegacyStatus(
-    String jobId,
-    JobStatus status, {
-    required String operationKey,
-    bool syncBikeMemoryOnCompletion = true,
-    void Function(List<String> problems)? onBikeFactProblems,
-  }) async {
+  /// El estado activo del taller para [status] (el que usa
+  /// [transitionJobStatusByLegacyStatus]). Lanza si el taller no lo tiene.
+  Future<JobStatusCustom> activeStatusForLegacyStatus(JobStatus status) async {
     final tenantId = await _tenantService.getTenantId();
     if (tenantId == null || tenantId.isEmpty) {
       throw StateError('No tenant context for job status transition');
@@ -3722,11 +4363,26 @@ class BikeshopService extends ChangeNotifier {
         .maybeSingle();
     final targetStatus = row == null ? null : JobStatusCustom.fromJson(row);
     final statusId = targetStatus?.id;
-    if (statusId == null || statusId.isEmpty) {
+    if (targetStatus == null || statusId == null || statusId.isEmpty) {
       throw StateError(
         'No existe un estado activo para ${status.displayName}.',
       );
     }
+    return targetStatus;
+  }
+
+  /// Compatibility adapter for the remaining detail widgets that still expose
+  /// the legacy enum. It resolves the tenant's active custom status first and
+  /// then delegates to the same canonical transition command.
+  Future<MechanicJob> transitionJobStatusByLegacyStatus(
+    String jobId,
+    JobStatus status, {
+    required String operationKey,
+    bool syncBikeMemoryOnCompletion = true,
+    void Function(List<String> problems)? onBikeFactProblems,
+  }) async {
+    final targetStatus = await activeStatusForLegacyStatus(status);
+    final statusId = targetStatus.id!;
     return transitionJobStatus(
       jobId,
       statusId,
@@ -3735,24 +4391,6 @@ class BikeshopService extends ChangeNotifier {
       syncBikeMemoryOnCompletion: syncBikeMemoryOnCompletion,
       onBikeFactProblems: onBikeFactProblems,
     );
-  }
-
-  Future<Map<String, dynamic>?> _getJobStatusTransitionReceipt(
-    String operationKey,
-    String jobId,
-  ) async {
-    final tenantId = await _tenantService.getTenantId();
-    if (tenantId == null || tenantId.isEmpty) {
-      throw StateError('No tenant context for status receipt readback');
-    }
-    final row = await Supabase.instance.client
-        .from('mechanic_job_status_transition_events')
-        .select()
-        .eq('tenant_id', tenantId)
-        .eq('job_id', jobId)
-        .eq('operation_key', operationKey)
-        .maybeSingle();
-    return row == null ? null : Map<String, dynamic>.from(row);
   }
 
   // ============================================================
@@ -5314,6 +5952,7 @@ class BikeshopService extends ChangeNotifier {
   @override
   void dispose() {
     _isDisposed = true;
+    _outboxRunsSubscription?.cancel();
     _detachRealtimeChannels();
     super.dispose();
   }

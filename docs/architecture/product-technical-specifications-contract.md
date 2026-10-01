@@ -136,6 +136,62 @@ Los conteos y archivos reproducibles están en
 | Validación servidor inspeccionada | Forma, cardinalidad y rechazo de etiquetas amplias en dos campos; no evalúa el conjunto de reglas de plantilla | El servidor necesita resolver plantilla, identidad y restricciones, también para OCR/importaciones/API |
 | Cliente | Inferencia y restricciones de transmisión en `drivetrain_canonical_data.dart`; reglas JSON en `SpecTemplateField` | Sustituir duplicación gradual por un contrato versionado común |
 
+**Una regla del servidor lee la ficha con el lector de la app (2026-09-28).**
+Lo que la app muestra sale de `get_product_spec_contexts_v1`, que resuelve la
+plantilla vigente del producto (`product_spec_bindings_internal_v1`, activa) y
+lee sus hechos con `spec_active_product_values_internal_v1`: los de `spec_facts`
+de esa plantilla, sin los campos `legacy`. Una regla SQL que decide con la
+ficha de un producto usa ese mismo camino, no `product_spec_values`. El primer
+consumidor es el cambio de partes (`product_bike_fact_spec_value_internal`,
+`20260928100000`): en producción da 180 para el RT56 de 180 y coincide con el
+espejo en los 16 rotores con diámetro; el diámetro retirado
+`rotor_diameter_mm` (guarda pares como 180/160) no entra. La base local no trae
+ese motor: el pgTAP reemplaza el lector dentro de su transacción y el lector
+real se prueba con el read-back contra producción.
+
+Desde `20260928110000` (local) el lector es
+`product_bike_fact_spec_internal`: además del valor da la familia del producto
+(`template_key` de su plantilla) y si ese hecho está **verificado**
+(`spec_facts.confirmed`). Un dato sin verificar —hoy los 4.604 hechos de
+productos: texto de proveedor, importación, investigación o lectura del
+nombre— entra a la ficha de la bici **declarado**, nunca confirmado. La
+familia decide qué fila de la relación usa el producto: un neumático y una
+llanta dicen los dos `bead_seat_diameter_mm`, y sólo el neumático proyecta el
+BSD de su rueda. `get_product_spec_contexts_v1` no entrega la verificación; la
+app muestra la regla, no el caso.
+
+Desde `20260928120000` (local) una fila de la relación también traduce un
+valor de opción a un código de la ficha de la bici (`value_map`: las estrías
+del cassette → el driver), dice lo que asegura la familia del producto
+(`spec_key = '_family'`, `constant_value`: un piñón de rosca es rueda libre)
+sólo si el producto cumple una condición (`product_condition`: dos o más
+coronas), o sólo revisa (`on_mismatch = 'check'`: los piñones contra la
+transmisión). Lo que dice la familia nunca es un dato verificado. Hueco del
+catálogo que esto deja a la vista: la plantilla `freewheel` no tiene un campo
+de interfaz, y sus piñones de una corona (8 de 29) no dicen si son libres o
+fijos; tampoco lo dicen 13 de 32 cassettes sin estrías.
+
+Desde `20260928130000` (local) `product_condition` también puede pedir que un
+campo de opción diga uno de ciertos textos, con o sin permiso para que no lo
+diga (`{spec_key, values, missing_ok}`: una maza «Trasera», «Universal» o sin
+posición). La maza usa `hub_package_position`, `hub_drive_receiver_kind`
+(sólo rueda libre, driver BMX y rosca de fijo tienen código; «Núcleo de
+cassette» no dice su estriado), `rotor_mount_type` y `spoke_hole_count` (sólo
+se revisa). `hub_old_mm` y el eje de la maza no pasan a la ficha: son del
+cuadro. Huecos que deja a la vista: 1 de 52 mazas dice su anclaje, 9 su
+núcleo, ninguna está verificada; ningún rotor guarda el material de su
+araña (el SM-RTAD05 depende de él).
+
+Desde `20260928140000` (local) la llanta (plantilla `rim`) usa
+`spoke_hole_count` (las 44 llantas lo dicen: 28, 32 o 36) y
+`bead_seat_diameter_mm` sólo cuando su ficha técnica lo dice (9 de 44 el
+2026-09-28: 559, 584, 622); el `wheel_size` de la plantilla y la pulgada del
+nombre («29x32H», «26x1,75») nunca se leen como BSD. El campo `spoke_holes`
+(opción 24–40) duplica `spoke_hole_count` y ningún producto lo usa: no entra
+en la relación. Huecos que deja a la vista: 35 llantas sin BSD, 5 con ETRTO
+(`rim_etrto`, que ya dice el BSD: «622x19TC»), ninguna posición (la rueda la
+elige el mecánico) y ninguna verificada.
+
 La sonda local del resolvedor reprodujo un estado internamente contradictorio:
 con 11/128 y ancho externo 7,1, ofrece 6/7/8; conserva Campagnolo como única
 opción de perfil y a la vez excluye 7,1 de los anchos ofrecidos. Es evidencia

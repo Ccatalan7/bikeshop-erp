@@ -111,6 +111,15 @@ class MechanicJobStatusTransitionResult {
         : Map<String, dynamic>.from(receipt);
     return response['changed'] as bool;
   }
+
+  /// Lo que el servidor escribió en la ficha al terminar el trabajo, y lo que
+  /// no pudo (`{applied, problems}`); null si el trabajo no quedó terminado o
+  /// el servidor aún no lo hace (ítem 4).
+  Object? get installedBikeFacts {
+    final nested = receipt['response_snapshot'];
+    final response = nested is Map ? nested : receipt;
+    return response['installed_bike_facts'];
+  }
 }
 
 class MechanicJobStatusTransitionReceiptMismatch implements Exception {
@@ -141,6 +150,24 @@ class MechanicJobStatusTransitionOutcomeUnknown implements Exception {
   String toString() =>
       'No se pudo confirmar el cambio de estado. La ficha se recargará desde '
       'el servidor; cualquier reintento debe conservar la misma operación.';
+}
+
+/// El cambio de estado quedó en la bandeja del equipo, con su llave: sin
+/// respuesta del servidor, o detrás de un guardado del mismo trabajo que
+/// sigue sin respuesta ([queued]). Se aplica solo, en ese orden, también
+/// después de cerrar la app.
+class MechanicJobStatusTransitionPending implements Exception {
+  const MechanicJobStatusTransitionPending({this.queued = false});
+
+  final bool queued;
+
+  @override
+  String toString() => queued
+      ? 'El cambio de estado quedó en este equipo detrás de otro cambio del '
+          'mismo trabajo que sigue sin respuesta (un guardado o la decisión de '
+          'garantía); se aplica solo cuando ése se resuelva.'
+      : 'El cambio de estado quedó sin respuesta del servidor. Está '
+          'respaldado en este equipo con su llave y se aplica solo.';
 }
 
 class MechanicJobStatusTransitionCoordinator {

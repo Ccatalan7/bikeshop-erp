@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:vinabike_erp/shared/services/window_zoom_service.dart';
 import 'package:vinabike_erp/shared/services/workspace_manager.dart';
+import 'package:vinabike_erp/shared/themes/app_theme.dart';
+import 'package:vinabike_erp/shared/themes/appearance_preset.dart';
 import 'package:vinabike_erp/shared/widgets/vb_anchored_popover.dart';
 import 'package:vinabike_erp/shared/widgets/vb_shell_icon_button.dart';
+import 'package:vinabike_erp/shared/widgets/vb_surface_icon_button.dart';
 import 'package:vinabike_erp/shared/widgets/workspace_shell_scope.dart';
 import 'package:vinabike_erp/shared/widgets/window_zoom_scope.dart';
 import 'package:vinabike_erp/shared/widgets/workspace_tab_bar.dart';
@@ -224,6 +228,8 @@ void main() {
         findsOneWidget,
         reason: '$label perdió su etiqueta accesible',
       );
+      expect(tester.getSemantics(find.bySemanticsLabel(label)).label, label,
+          reason: '$label se anuncia una vez, sin duplicarlo con el tooltip');
     }
     // Y el contador N/10 sigue ahí.
     expect(find.text('1/10'), findsOneWidget);
@@ -246,6 +252,31 @@ void main() {
         reason: '$key no usa el owner A-02 sobre shell',
       );
       expect(size.height, VbShellIconButton.box, reason: '$key no mide 32');
+    }
+    handle.dispose();
+  });
+
+  testWidgets(
+      'los iconos compartidos tienen una sola etiqueta y acción accesible',
+      (tester) async {
+    final handle = tester.ensureSemantics();
+    await tester.pumpWidget(MaterialApp(
+      theme: AppTheme.resolve(
+          preset: AppearancePresets.vinabike, brightness: Brightness.light),
+      home: Scaffold(
+        body: Row(children: [
+          VbShellIconButton(
+              icon: Icons.settings, tooltip: 'Ajustar', onPressed: () {}),
+          VbSurfaceIconButton(
+              icon: Icons.close, tooltip: 'Cerrar panel', onPressed: () {}),
+        ]),
+      ),
+    ));
+    for (final label in ['Ajustar', 'Cerrar panel']) {
+      final node = tester.getSemantics(find.bySemanticsLabel(label));
+      expect(node.label, label);
+      expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isTrue,
+          reason: 'el lector de pantalla puede activar $label');
     }
     handle.dispose();
   });

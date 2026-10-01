@@ -75,17 +75,29 @@ void main() {
     );
     expect(form, contains('getServiceWarrantySourceByJobId('));
     expect(form, contains('_existingJobLoadError'));
+    // Un trabajo guardado relee su agregado después de registrar la garantía
+    // (el registro pudo crear su bici). Uno nuevo no tiene nada que releer:
+    // su registro va detrás de sus líneas, en la cadena del alta, y acepta la
+    // bici que ellas dejaron (create_mechanic_job.sql; cierre del Master
+    // Schema, 2026-09-29).
+    expect(form, contains('await bikeshopService.getJobItems(jobId)'));
     expect(
       form,
-      contains(
-        'final existingItemsForSave = await bikeshopService.getJobItems(jobId);',
-      ),
+      contains('final existingItemsForSave = savedJobId == null'),
       reason:
-          'A new bike warranty must re-read the canonical job-bike row created by registration before saving its aggregate.',
+          'Only a job without its creation receipt skips the re-read; a saved job always re-reads after registration.',
     );
     expect(
       form,
       isNot(contains('final existingItemsForSave = widget.jobId == null')),
+      reason:
+          'A new job whose creation already landed is a saved job and must re-read.',
+    );
+    expect(
+      form,
+      contains('if (chainedRegistration != null) chainedRegistration,'),
+      reason:
+          'A new warranty registers after its lines and before its decision.',
     );
     expect(
       form,
@@ -96,10 +108,10 @@ void main() {
     final exactWarrantyGuard = form.indexOf(
       'if (!_warrantySourceObjectMatchesForm(warrantySource))',
     );
-    // Desde 2026-09-27 la ficha se escribe al final del guardado, después del
-    // trabajo y sus líneas; la guardia de garantía sigue antes de todo eso.
+    // Desde 2026-09-28 la ficha se escribe con las líneas, en un solo
+    // comando; la guardia de garantía sigue antes de todo eso.
     final firstPersistence = form.indexOf(
-      'await _persistPendingBikeProfileOverrides(bikeshopService, jobId);',
+      'await _saveLinesWithBikeFacts(',
     );
     expect(exactWarrantyGuard, greaterThanOrEqualTo(0));
     expect(firstPersistence, greaterThan(exactWarrantyGuard));
@@ -135,7 +147,9 @@ void main() {
       form,
       contains('discountAmount: protectPaymentCommercialSnapshot'),
     );
-    expect(form, contains('bikeshopService.updateJobDiscount('));
+    // El descuento viaja en el comando del guardado y se aplica al final,
+    // con el subtotal de las líneas ya nuevas (2026-09-28).
+    expect(form, contains("'discount_amount': requestedDiscountAmount"));
     expect(form, contains('El descuento no puede superar el subtotal.'));
     expect(form, contains('bikeshopService.createInvoiceFromJob(jobId)'));
     expect(form, isNot(contains('Aprobar Presupuesto')));
@@ -211,10 +225,12 @@ void main() {
     expect(
       form,
       contains(
-        'protectCommercialSnapshot: protectPaymentCommercialSnapshot',
+        'mechanicJobPaymentProtectedUpdatePayload(\n              job.toJson(forUpdate: true),',
       ),
       reason:
-          'A protected form save must ask the service for a narrow diagnosis-only update.',
+          'A protected form save only sends the non-commercial header fields '
+          'it changed (the header travels in the job save command since '
+          '2026-09-28).',
     );
     expect(service, contains('bool protectCommercialSnapshot = false'));
     expect(
@@ -336,7 +352,8 @@ void main() {
     expect(form, contains('bool get _isStatusTransitionLocked'));
     expect(
       form,
-      contains('widget.jobId != null && !_isStatusTransitionLocked'),
+      contains('if (_savedJobId == null || _isStatusTransitionLocked) '
+          'return null;'),
     );
     expect(
       table,
@@ -411,7 +428,13 @@ void main() {
     expect(table, contains('bool rethrowErrors = false'));
     expect(table, contains('if (rethrowErrors) rethrow;'));
     expect(table, contains('forceInvoiceRefresh: true'));
-    expect(table, contains('if (outcome == currentOutcome) return;'));
+    // La decisión pendiente en la bandeja es la actual: volver a elegirla la
+    // reenvía con su llave (punto 2 del cierre, 2026-09-29).
+    expect(
+      table,
+      contains('if (outcome == currentOutcome && pendingDecision == null) '
+          'return;'),
+    );
     expect(table, contains('_hasWarrantyPaymentEvidence(job)'));
     expect(table, contains('warrantyPaymentReviewRequired:'));
     expect(
@@ -424,9 +447,14 @@ void main() {
     );
     expect(
       table,
-      contains('MechanicJobWarrantyCommandOutcomeUnknown'),
+      contains('on MechanicJobWarrantyDecisionPending catch (pending)'),
       reason:
           'Lost acknowledgements must retain the exact warranty operation key.',
+    );
+    expect(
+      table,
+      contains('operationKey: pending.operationKey,'),
+      reason: 'The retry reuses the key the device outbox kept.',
     );
     expect(table, contains("'Cotizado: "));
     expect(table, contains('JobIntakeKind.bike'));

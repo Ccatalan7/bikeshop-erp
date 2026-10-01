@@ -37,7 +37,9 @@ set -e
 if [[ "$test_status" -eq 0 ]]; then
   if [[ -z "$shard_total" || "$shard_index" == "0" ]]; then
     printf '\n[flutter-test-gate] Running browser-only Web Locks tests in Chrome\n'
-    "$flutter_bin" test --platform chrome test/unit/cart_lock_web_test.dart
+    "$flutter_bin" test --platform chrome \
+      test/unit/cart_lock_web_test.dart \
+      test/unit/workshop_outbox_web_lock_test.dart
   fi
   echo '[flutter-test-gate] All Flutter and browser-only tests passed.'
   exit 0

@@ -164,6 +164,15 @@ Every ordinary pgTAP rerun reuses the already prepared local database. It does
 not copy production and does not rebuild from scratch unless the local fixture
 inputs actually changed.
 
+**Includes pgTAP fuera de `supabase/tests` (2026-09-30).** El runner del CLI
+ejecuta los archivos seleccionados dentro de su contenedor. Un `\ir` hacia
+`../manual_checks/probes/...sql` falló con `No such file or directory`, aunque
+el archivo existía en el Mac: ese archivo hermano no había sido copiado. Para
+un prototipo `pg_temp` y su regresión local, usar un test autocontenido con
+`BEGIN`/`ROLLBACK`; no dejar una suite que dependa de un include inaccesible.
+`restore_diff_plan_local.sql` pasó 20/20 con esa forma. La primera ejecución
+no llegó a correr ninguna afirmación, por lo que no era un resultado de lógica.
+
 **Trampa del seed de tenant en fixtures pgTAP (2026-08-26).** El seed de
 inicialización que corre al insertar una fila en `tenants` deja
 `request.jwt.claim.sub` apuntando **al id del tenant** y no lo restaura. Desde
@@ -326,6 +335,23 @@ measurement found it in minutes:
   the identical transaction can succeed. A receipt stamped with a superseded
   version can never be accepted; that is class 23 or `P0001`, with `detail`
   and `hint` telling the client what to reload.
+- **Corrección 2026-09-28: quien reintenta es PostgREST, no el cliente.**
+  PostgREST 14 (producción corre 14.5) trata un `40001` lanzado por una
+  función como transitorio y **reejecuta la transacción él mismo, sin tope**;
+  Supabase lo documenta («SQLSTATE 40001 in an RPC function causes infinite
+  retries», corregido en PostgREST 16). Se vio con la bandeja del ítem 3: un
+  `save_bike_aggregate` con versión vieja de la bici fixture de «Test Taller»
+  salió **una** vez de la app de debug (la bandeja anota cada envío) y dejó
+  tres conexiones de PostgREST ejecutándolo sin pausa —`query_start`
+  renovado cada pocos milisegundos, `idle in transaction (aborted)` entre
+  medio—; la app recibió un **504** del gateway, no el conflicto.
+  `pg_cancel_backend` no lo para (cancela esa vuelta y PostgREST empieza
+  otra); lo paró `pg_terminate_backend` de esas conexiones. Así que los ~900
+  por segundo del 15-09 eran, casi seguro, este bucle interno detrás de una
+  sola petición, no una app reintentando: la conclusión de arriba sobre el
+  «cliente desbocado» no está probada. La regla queda igual y se endurece:
+  **ninguna función llamada por PostgREST lanza `40001` para un conflicto de
+  negocio**; `PT409` (HTTP 409, `code` = `PT409`) o clase 23, con `detail`.
 
 The measured secondary loads, in order, once the storm was gone: Realtime
 `list_changes` (~11% of one core continuously, 21 published tables, ~19 live
@@ -381,6 +407,18 @@ después con `just db-cpu production` y `pg_stat_statements`:
    '40001'`, líneas 263–1200): revisar cada uno con la regla de arriba
    —`40001` sólo cuando repetir la misma transacción puede tener éxito— y
    reclasificar los que sean rechazos de negocio.
+   **Ampliado 2026-09-28:** no son siete. En producción, 79 funciones de
+   `public` y `private` contienen `serialization_failure` o `'40001'`
+   (`transition_mechanic_job_status`, `sync_job_to_invoice`, los comandos de
+   compras y proveedores, `smart_task_apply_command`, pedidos en línea…);
+   cualquiera de sus conflictos abre el bucle de PostgREST descrito arriba.
+   La lista sale de `pg_get_functiondef` (consulta en
+   `docs/development/AGENT_DATABASE_CONTRACT.md`). La ficha de la bici
+   (`save_bike_aggregate_internal`, `patch_bike_technical_facts_v1`) pasa a
+   `PT409` en `20260928052000_bike_conflicts_without_postgrest_retry.sql`, y
+   `transition_mechanic_job_status` («el vínculo financiero cambió») en
+   `20260928060000_job_installed_bike_facts.sql`: con ambas desplegadas quedan
+   76.
 
 ### Bloque 1 — higiene de RLS e índices (2026-09-16)
 

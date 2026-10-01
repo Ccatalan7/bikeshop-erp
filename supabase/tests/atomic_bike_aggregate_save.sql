@@ -569,7 +569,7 @@ select throws_ok(
     '{"color":"Morado"}',
     '{"technical_profile":{"values":{"brakeType":"mechanical_disc"}}}'
   ),
-  '40001',
+  'PT409',
   'Bicycle profile changed since it was loaded; reload before saving',
   'a current bike version cannot bypass a stale profile version'
 );
@@ -632,7 +632,7 @@ select throws_ok(
     '{"color":"Verde"}',
     '{"technical_profile":{"values":{"brakeType":"mechanical_disc"}}}'
   ),
-  '40001',
+  'PT409',
   'Bicycle changed since it was loaded; reload before saving',
   'a stale editor cannot overwrite newer bicycle/profile truth'
 );

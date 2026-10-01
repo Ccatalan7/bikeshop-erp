@@ -146,6 +146,19 @@ Los cassettes también tienen excepciones de retención y espaciadores; registra
 el cuerpo concreto, no sólo «Shimano» o «SRAM».
 [Park Tool: Cassette Removal and Installation](https://www.parktool.com/en-us/blog/repair-help/cassette-removal-and-installation).
 
+**Con datos del taller (2026-09-28).** En el catálogo «piñón» nombra las tres
+ramas: «Piñón Shimano Cs-Hg200-7» es un cassette, y la familia `freewheel`
+guarda ruedas libres de 6 a 8 coronas junto a piñones de una corona, uno de
+ellos fijo («PIÑON 15T FIJO MOD. PMA7-15T»). Sólo un piñón de rosca de dos o
+más coronas es por construcción una rueda libre roscada; uno de una corona
+no dice si es libre o fijo y no se deduce del nombre. El cuerpo del cassette
+se lee de sus estrías (HG S y M → núcleo Shimano HG; L → HG Road 11; L2, XD
+SLIM y los cassettes sin estrías no tienen código en la ficha de la bici).
+Las «velocidades» de la ficha de la bici son el total platos × piñones: los
+piñones de un cassette se comparan con la transmisión («3x7» → 7), nunca con
+ese total. Regla en `20260928120000_part_change_rear_cogs.sql` y
+`part_bike_fact_change.dart`.
+
 ### K09 — Los adaptadores hacen que la relación sea direccional
 
 SRAM permite un cassette XD sobre cuerpo XDR con espaciador de 1,85 mm; un
@@ -200,6 +213,22 @@ incompatibles; 700C y 29 suelen nombrar BSD 622, pero eso no decide ancho,
 holgura ni tubeless. Mantener el código nominal como alias contextual.
 [Sheldon Brown: Tire Sizing Systems](https://www.sheldonbrown.com/tire-sizing.html).
 
+**Con datos del taller (2026-09-28).** Refutar exige un rótulo de un solo
+BSD: 29″/700c → 622 y 27,5″/650b → 584. Los demás rótulos nombran familias
+que no se pueden dar por completas, así que no refutan: 26″ es 559, 571,
+584 (el 650B se vendió como «26 × 1 1/2»), 590, 597 y 599; 24″ es 507, 520,
+534, 540 y 547; 20″ es 406, 419, 428, 438 y 451; 16″ es 305, 317, 335, 337
+y 349 (Sheldon Brown, «Tire Sizing»; Schwalbe agrega 340, 428 y 541 en su
+tabla). La primera versión refutaba con listas más cortas y habría
+rechazado neumáticos reales (revisión de Codex). `28`, dos aros en un campo
+(`27.5" - 26"`), `2 9` o `14''` no se leen y no refutan nada. En producción el
+mismo 29″ estaba escrito de seis maneras (`29"`, `29''`, `29`, `700`,
+`700c`, `700''`). El ancho de neumático del catálogo es la pulgada nominal
+convertida (2,25″ → 57,1 mm), no el ETRTO: no sirve para K16. La tabla vive
+en `iso_bsd_candidates_for_wheel_size` y `kIsoBsdCandidatesByWheelLabel`; la
+matriz de compatibilidad tiene otra, sin 584 en 26″, porque sugiere lo
+probable en vez de refutar lo imposible.
+
 ### K15 — Tubeless se evalúa como conjunto
 
 Neumático, llanta, cinta, válvula y sellante deben formar una combinación
@@ -228,7 +257,31 @@ La coincidencia del número de agujeros corresponde al armado convencional;
 existen armados especiales documentados. No confundirlos con montaje directo.
 [Sheldon Brown: Special Spoking](https://www.sheldonbrown.com/special-spoking.html).
 
+**Con datos del taller (2026-09-28).** Cuántos rayos lleva una rueda lo
+decide la llanta: una maza con más perforaciones se raya en una llanta con
+menos saltando agujeros de la maza (Sheldon Brown, «Spoking patterns for large
+hubs»: 40/24, 32/24, 48/36, 36/24, 48/32, 40/32, 36/28, 48/24, 28/24, 32/28,
+36/32 y 40/36), y la rueda queda con las de la llanta; con menos
+perforaciones en la maza no se puede. Por eso una maza instalada no escribe
+las perforaciones de la ficha: se revisa contra la rueda que queda (el
+Enrayado del mismo trabajo, si no la llanta nueva, si no la ficha). En
+producción ninguna de las 52 mazas está verificada y las 29 líneas de maza
+llegan con un «Enrayado + Centrado». Regla en `hub_lacing_fits`
+(`20260928130000_part_change_hub.sql`) y `hubLacingFits`
+(`part_bike_fact_change.dart`).
+
 ## Pedalier, dirección y puntos de contacto
+
+**La llanta que cambia (2026-09-28, `20260928140000`).** Una llanta nueva
+cambia las perforaciones de la rueda, pero se raya en una maza: la del mismo
+trabajo, o la que queda, cuyo número es el que la ficha decía **antes** de ese
+trabajo (su Enrayado ya escribió la cuenta nueva). La misma cantidad o una
+maza con más en un patrón de Sheldon Brown; con menos, no. Y lleva un
+neumático de su mismo BSD: el del trabajo o el que queda. Una llanta es una
+pieza: si no calza por un dato, no se anota ninguno. Una pieza que no dice
+su medida no esconde a otra que sí (revisión de Codex, 2026-09-29), y el aro
+escrito de la bici no refuta cuando la ficha sabe un BSD que ese aro no
+admite: el que quedó viejo es el aro.
 
 ### K18 — El pedalier conecta dos interfaces independientes
 
@@ -292,6 +345,18 @@ Diámetro, espesor, pista de frenado, interfaz de maza y posición del cáliper
 deben concordar. El lockring también puede tener restricciones por eje. No
 usar un límite de desgaste genérico como espesor nominal del producto nuevo.
 [Park Tool: Disc Rotor Removal and Installation](https://www.parktool.com/en-us/blog/repair-help/disc-brake-rotor-removal-installation).
+
+**Con datos del taller (2026-09-28).** La interfaz de maza del rotor (6
+pernos o Center Lock) es un dato de cada rueda de la bici, y lo pone la maza
+instalada (`frontRotorMount` / `rearRotorMount`). La relación es direccional
+(K09): un rotor de 6 pernos entra en una maza Center Lock con el adaptador
+Shimano SM-RTAD05, que Shimano no admite con rotores de araña de aluminio
+(SM-RT86 y SM-RT76; K47); un rotor Center Lock no tiene adaptador Shimano
+para una maza de 6 pernos. El catálogo no guarda la araña: se lee de
+`rotor_floating` (los flotantes la tienen); un rotor de araña de aluminio
+que no lo diga pasaría. En producción sólo 3 rotores y 1 maza (HB-RM66)
+dicen su anclaje.
+[Shimano SM-RTAD05 (bike-components, ficha del distribuidor)](https://www.bike-components.de/en/Shimano/SM-RTAD05-6-bolt-to-Center-Lock-Brake-Rotor-Adapter-p34131/).
 
 ### K25 — La pastilla se identifica por forma/interfaz, no por marca de freno
 

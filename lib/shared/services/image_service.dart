@@ -144,6 +144,45 @@ class ImageService {
     }
   }
 
+  /// La URL pública de un objeto, antes o después de subirlo.
+  static String publicUrlFor(String bucket, String objectPath) =>
+      _client.storage.from(bucket).getPublicUrl(objectPath);
+
+  /// Sube a una ruta exacta, sin reemplazar lo que haya. Quien sube eligió y
+  /// anotó la ruta antes (la bandeja del taller, para borrar después lo que
+  /// ningún guardado se llevó).
+  static Future<ImageUploadResult> uploadBytesToPath({
+    required Uint8List bytes,
+    required String bucket,
+    required String objectPath,
+    String? contentType,
+    String cacheControl = '3600',
+  }) async {
+    try {
+      final storageFile = _client.storage.from(bucket);
+      final detectedContentType =
+          contentType ?? _inferContentType(bytes, objectPath);
+      await storageFile.uploadBinary(
+        objectPath,
+        bytes,
+        fileOptions: FileOptions(
+          cacheControl: cacheControl,
+          upsert: false,
+          contentType: detectedContentType,
+        ),
+      );
+      return ImageUploadResult(
+        publicUrl: storageFile.getPublicUrl(objectPath),
+        objectPath: objectPath,
+        contentType: detectedContentType,
+        byteLength: bytes.length,
+      );
+    } catch (e, stackTrace) {
+      ErrorReportingService.report('Image upload failed: $e', stackTrace);
+      rethrow;
+    }
+  }
+
   // ============================================================
   // IMAGE OPTIMIZATION - Auto-create WebP versions
   // ============================================================

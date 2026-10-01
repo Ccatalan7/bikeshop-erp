@@ -57,6 +57,7 @@ import 'modules/sales/services/sales_service.dart';
 import 'modules/settings/services/appearance_service.dart';
 import 'modules/bikeshop/services/bikeshop_service.dart';
 import 'modules/bikeshop/services/wheel_building_service.dart';
+import 'modules/bikeshop/services/workshop_outbox_resumer.dart';
 import 'modules/bikeshop/services/smart_task_service.dart';
 import 'modules/tasks/services/task_service.dart';
 import 'modules/bikeshop/services/job_status_service.dart';
@@ -1025,6 +1026,7 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
   bool _erpNotificationsRefreshInFlight = false;
   int _notificationLifecycleEpoch = 0;
   String? _notificationUserId;
+  final WorkshopOutboxResumer _workshopOutbox = WorkshopOutboxResumer();
 
   @override
   void initState() {
@@ -1063,6 +1065,7 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
 
   @override
   void dispose() {
+    _workshopOutbox.stop();
     _notificationLifecycleEpoch++;
     _notificationUserId = null;
     _erpNotificationsRefreshInFlight = false;
@@ -1100,6 +1103,7 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _isWorkspaceForeground = true;
+      unawaited(_workshopOutbox.resumeNow());
       context.read<ChatProvider>().setApplicationForeground(true);
       context
           .read<FinancialProjectionRefreshCoordinator>()
@@ -1164,12 +1168,57 @@ class _WorkspaceDeepLinkBridgeState extends State<_WorkspaceDeepLinkBridge>
     MailNotificationGate.shared.clearScope();
     ErpNotificationGate.shared.clearScope();
     NotificationService().clearNotificationScope();
+    _workshopOutbox.stop();
 
     if (userId == null) {
       unawaited(MailAccountManager.instance.reset());
       return;
     }
     unawaited(_initializeNotificationLifecycle(userId, epoch));
+    unawaited(_startWorkshopOutbox(userId, epoch));
+  }
+
+  /// Lo que la bandeja del taller dejó pendiente en este equipo (una sesión
+  /// sin red, la app cerrada a mitad de un guardado) se reenvía al abrir la
+  /// sesión, sin esperar a que alguien abra esa bici o ese trabajo.
+  Future<void> _startWorkshopOutbox(String userId, int epoch) async {
+    try {
+      // Al arrancar, el taller a veces no se resuelve en la primera consulta;
+      // sin él la bandeja no arrancaba hasta el próximo inicio de sesión.
+      String? tenantId;
+      for (final wait in const [
+        Duration.zero,
+        Duration(seconds: 3),
+        Duration(seconds: 10),
+      ]) {
+        await Future<void>.delayed(wait);
+        if (!_isCurrentNotificationLifecycle(userId, epoch)) return;
+        tenantId = await TenantService().getTenantId();
+        if (tenantId != null && tenantId.isNotEmpty) break;
+      }
+      if (!_isCurrentNotificationLifecycle(userId, epoch) ||
+          tenantId == null ||
+          tenantId.isEmpty) {
+        debugPrint('🧰 [WorkspaceShell] Workshop outbox: sin taller');
+        return;
+      }
+      debugPrint('🧰 [WorkspaceShell] Workshop outbox resuming');
+      _workshopOutbox.start(
+        tenantId: tenantId,
+        userId: userId,
+        notify: (message) {
+          if (!mounted) return;
+          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+            SnackBar(
+              content: Text(message),
+              duration: const Duration(seconds: 8),
+            ),
+          );
+        },
+      );
+    } catch (error) {
+      debugPrint('🧰 [WorkspaceShell] Workshop outbox start failed: $error');
+    }
   }
 
   Future<void> _initializeNotificationLifecycle(

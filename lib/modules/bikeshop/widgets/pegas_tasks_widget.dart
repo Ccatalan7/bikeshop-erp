@@ -2,14 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
+import '../../tasks/models/task_assignment_principal.dart';
 import '../../tasks/models/task_model.dart';
 import '../../tasks/services/task_service.dart';
-import '../../../shared/services/user_management_service.dart';
-import '../../../shared/services/tenant_service.dart';
+import '../../../shared/services/global_search/quick_task_draft.dart'
+    show quickTaskPeople;
+import '../../../shared/widgets/vb_searchable_select.dart';
 import '../../../shared/widgets/vb_segmented.dart';
 import 'task_form_dialog.dart';
 import 'package:go_router/go_router.dart';
-import 'package:file_picker/file_picker.dart';
 
 /// Parent-owned compact task browsing context.
 ///
@@ -75,17 +76,59 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
   String? _savingTitleTaskId;
   late TextEditingController _titleController;
 
-  // Users cache for assignee menu
-  List<Map<String, dynamic>>? _users;
-  bool _usersLoading = false;
+  // Directorio de asignación de la bandeja (el mismo del rail y del
+  // formulario). `get_tenant_users` es de administración: a un mecánico le
+  // fallaba y el menú quedaba en «Cargando usuarios...», y además sus filas
+  // traen `id`, no `user_id`, así que ninguna opción asignaba (2026-09-30).
+  List<TaskAssignmentPrincipal>? _people;
+  Future<void>? _peopleLoad;
 
-  // Nombres canónicos por user_id (directorio de asignación): la fila del
-  // RPC trae assigned_to sin assignee_name, y sin esto una asignación
-  // recién hecha se seguía viendo «Sin asignar».
+  // Nombres canónicos por cuenta y por trabajador: la fila del RPC trae
+  // assigned_to sin assignee_name, y sin esto una asignación recién hecha se
+  // seguía viendo «Sin asignar». Las dos claves son uuid y no chocan.
   Map<String, String> _principalNames = const {};
+  final Map<String, ({DateTime expiresAt, Future<String> url})> _previewUrls =
+      {};
+  String? _previewAuthorityKey;
+
+  Future<String> _privatePreviewUrl(String path) {
+    final service = context.read<TaskService>();
+    final scope = service.authorityScope;
+    if (scope == null || scope.userId != service.currentUserId) {
+      return Future.error(
+          StateError('No hay una sesión para abrir el archivo'));
+    }
+    final authorityKey = '${scope.userId}/${scope.tenantId}';
+    if (_previewAuthorityKey != authorityKey) {
+      _previewUrls.clear();
+      _previewAuthorityKey = authorityKey;
+    }
+    final now = DateTime.now();
+    final cached = _previewUrls[path];
+    if (cached != null && cached.expiresAt.isAfter(now)) return cached.url;
+    final expiresAt = now.add(const Duration(minutes: 4));
+    final url = () async {
+      try {
+        return await service.createSignedAttachmentUrl(path);
+      } catch (_) {
+        // A transient signing failure must not stay cached for four minutes.
+        if (_previewAuthorityKey == authorityKey &&
+            _previewUrls[path]?.expiresAt == expiresAt) {
+          _previewUrls.remove(path);
+        }
+        rethrow;
+      }
+    }();
+    _previewUrls[path] = (
+      expiresAt: expiresAt,
+      url: url,
+    );
+    return url;
+  }
 
   String? _assigneeDisplayName(TaskModel task) =>
       task.assigneeName ??
+      (task.assigneeKey == null ? null : _principalNames[task.assigneeKey!]) ??
       (task.assignedTo == null ? null : _principalNames[task.assignedTo!]);
 
   @override
@@ -101,8 +144,7 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
       initialScrollOffset: _session.scrollOffset,
     )..addListener(_rememberCompactScroll);
     _titleController = TextEditingController();
-    _loadUsers();
-    _loadPrincipalNames();
+    _peopleLoad = _loadPeople();
   }
 
   @override
@@ -136,38 +178,31 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
     _persistSession();
   }
 
-  Future<void> _loadPrincipalNames() async {
+  Future<void> _loadPeople() async {
     try {
       final directory =
           await context.read<TaskService>().fetchAssignmentDirectory();
       if (!mounted) return;
       setState(() {
+        _people = quickTaskPeople(
+          directory,
+          currentUserId: context.read<TaskService>().currentUserId,
+        );
         _principalNames = {
-          for (final principal in directory)
+          for (final principal in directory) ...{
             if (principal.userId != null)
               principal.userId!: principal.displayName,
+            if (principal.employeeId != null)
+              principal.employeeId!: principal.displayName,
+          },
         };
       });
-    } catch (_) {
-      // El nombre denormalizado sigue siendo el fallback.
+    } catch (error) {
+      // El nombre denormalizado sigue siendo el fallback; el menú reintenta.
+      debugPrint('Task list assignment directory failed: $error');
+    } finally {
+      _peopleLoad = null;
     }
-  }
-
-  Future<void> _loadUsers() async {
-    if (_usersLoading) return;
-    _usersLoading = true;
-    try {
-      final userService = UserManagementService(
-        Provider.of<TenantService>(context, listen: false),
-      );
-      final users = await userService.getTenantUsers();
-      if (mounted) {
-        setState(() => _users = users);
-      }
-    } catch (e) {
-      debugPrint('❌ Error loading users for tasks: $e');
-    }
-    _usersLoading = false;
   }
 
   @override
@@ -1281,7 +1316,7 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
               value: task.attachments.isEmpty
                   ? 'Agregar archivos'
                   : '${task.attachments.length} archivo${task.attachments.length == 1 ? '' : 's'}',
-              onTap: () => _pickFilesForTask(task),
+              onTap: () => _openTaskForm(task, focusAttachments: true),
             ),
             second: _buildCompactTaskMoreAction(task, taskKey),
           ),
@@ -1958,11 +1993,28 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
     );
   }
 
-  // ── Assignee cell (click → user menu) ──
+  // ── Assignee cell (click → picker anclado a la celda) ──
   Widget _buildAssigneeCell(TaskModel task, ThemeData theme) {
     final assigneeName = _assigneeDisplayName(task);
+    return Builder(
+      builder: (anchorContext) => _assigneeCellBody(
+        task,
+        theme,
+        assigneeName,
+        onTap: () => _showAssigneeMenu(task, anchorContext: anchorContext),
+      ),
+    );
+  }
+
+  Widget _assigneeCellBody(
+    TaskModel task,
+    ThemeData theme,
+    String? assigneeName, {
+    required VoidCallback onTap,
+  }) {
     return InkWell(
-      onTap: () => _showAssigneeMenu(task),
+      key: ValueKey('workshop-task-assignee-${task.id}'),
+      onTap: onTap,
       borderRadius: BorderRadius.circular(6),
       child: assigneeName != null
           ? Row(
@@ -2010,7 +2062,7 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
     );
   }
 
-  // ── Attachment cell: thumbnails + count + add button ──
+  // ── Attachment cell: thumbnails + count + attachment editor ──
   Widget _buildAttachmentCell(TaskModel task) {
     final attachments = task.attachments;
     final count = attachments.length;
@@ -2019,20 +2071,32 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
       // Empty state: small + button, left-aligned
       return Align(
         alignment: Alignment.centerLeft,
-        child: InkWell(
-          onTap: () => _pickFilesForTask(task),
-          borderRadius: BorderRadius.circular(4),
-          child: Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              border: Border.all(
-                  color: Colors.grey.shade300, style: BorderStyle.solid),
-              borderRadius: BorderRadius.circular(4),
-              color: Colors.grey.shade50,
-            ),
-            child: Center(
-              child: Icon(Icons.add, size: 16, color: Colors.grey.shade400),
+        child: Semantics(
+          button: true,
+          label: 'Agregar archivo a ${task.title}',
+          child: InkWell(
+            key: ValueKey('workshop-task-add-attachment-${task.id}'),
+            onTap: () => _openTaskForm(task, focusAttachments: true),
+            borderRadius: BorderRadius.circular(4),
+            child: SizedBox(
+              width: 48,
+              height: 48,
+              child: Center(
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                        color: Colors.grey.shade300, style: BorderStyle.solid),
+                    borderRadius: BorderRadius.circular(4),
+                    color: Colors.grey.shade50,
+                  ),
+                  child: Center(
+                    child:
+                        Icon(Icons.add, size: 16, color: Colors.grey.shade400),
+                  ),
+                ),
+              ),
             ),
           ),
         ),
@@ -2043,69 +2107,103 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
     final firstUrl = first['url'] as String? ?? '';
     final firstType = first['type'] as String? ?? '';
     final isImg = _isImageType(firstType);
+    final privatePath = first['storage_bucket'] == 'task-attachments'
+        ? first['storage_path']?.toString()
+        : null;
 
     return InkWell(
-      onTap: () => _pickFilesForTask(task),
+      onTap: () => _openTaskForm(task, focusAttachments: true),
       borderRadius: BorderRadius.circular(4),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // First attachment thumbnail or icon
-          if (isImg)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: Image.network(
-                firstUrl,
+      child: Tooltip(
+        message: 'Ver ${count == 1 ? 'adjunto' : '$count adjuntos'}',
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // First attachment thumbnail or icon
+            if (isImg)
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: privatePath == null
+                    ? Image.network(firstUrl,
+                        width: 32,
+                        height: 32,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) =>
+                            const Icon(Icons.broken_image_outlined, size: 32))
+                    : FutureBuilder<String>(
+                        future: _privatePreviewUrl(privatePath),
+                        builder: (context, snapshot) => snapshot.hasError
+                            ? const Tooltip(
+                                message:
+                                    'Vista previa no disponible; abrir adjuntos',
+                                child: SizedBox(
+                                  width: 32,
+                                  height: 32,
+                                  child: Icon(Icons.broken_image_outlined,
+                                      size: 20),
+                                ),
+                              )
+                            : snapshot.hasData
+                                ? Image.network(snapshot.data!,
+                                    width: 32,
+                                    height: 32,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => const Icon(
+                                        Icons.broken_image_outlined,
+                                        size: 32))
+                                : const SizedBox(
+                                    width: 32,
+                                    height: 32,
+                                    child:
+                                        Icon(Icons.image_outlined, size: 20)),
+                      ),
+              )
+            else
+              Container(
                 width: 32,
                 height: 32,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade200,
-                    borderRadius: BorderRadius.circular(4),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: Icon(
+                  _fileIcon(firstType),
+                  size: 16,
+                  color: Colors.blueGrey,
+                ),
+              ),
+            // Additional count badge
+            if (count > 1) ...[
+              const SizedBox(width: 4),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  '+${count - 1}',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey.shade700,
                   ),
-                  child: const Icon(Icons.broken_image,
-                      size: 16, color: Colors.grey),
                 ),
               ),
-            )
-          else
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade200,
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: Icon(
-                _fileIcon(firstType),
-                size: 16,
-                color: Colors.blueGrey,
-              ),
-            ),
-          // Additional count badge
-          if (count > 1) ...[
-            const SizedBox(width: 4),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade200,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                '+${count - 1}',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey.shade700,
-                ),
-              ),
-            ),
+            ],
           ],
-        ],
+        ),
+      ),
+    );
+  }
+
+  void _openTaskForm(TaskModel task, {bool focusAttachments = false}) {
+    showDialog(
+      context: context,
+      builder: (context) => TaskFormDialog(
+        taskToEdit: task,
+        openAttachments: focusAttachments,
       ),
     );
   }
@@ -2124,75 +2222,6 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
     }
     if (mimeType.startsWith('video/')) return Icons.videocam_outlined;
     return Icons.insert_drive_file_outlined;
-  }
-
-  Future<void> _pickFilesForTask(TaskModel task) async {
-    if (task.id == null) return;
-
-    final taskService = context.read<TaskService>();
-    final messenger = ScaffoldMessenger.of(context);
-
-    final result = await FilePicker.platform.pickFiles(
-      allowMultiple: true,
-      type: FileType.any,
-      withData: true,
-    );
-
-    if (result == null || result.files.isEmpty) return;
-
-    int uploaded = 0;
-    for (final file in result.files) {
-      if (file.bytes == null) continue;
-      try {
-        final ext = file.name.split('.').last.toLowerCase();
-        String mimeType;
-        switch (ext) {
-          case 'jpg':
-          case 'jpeg':
-            mimeType = 'image/jpeg';
-            break;
-          case 'png':
-            mimeType = 'image/png';
-            break;
-          case 'gif':
-            mimeType = 'image/gif';
-            break;
-          case 'webp':
-            mimeType = 'image/webp';
-            break;
-          case 'pdf':
-            mimeType = 'application/pdf';
-            break;
-          case 'mp4':
-            mimeType = 'video/mp4';
-            break;
-          case 'mov':
-            mimeType = 'video/quicktime';
-            break;
-          default:
-            mimeType = 'application/octet-stream';
-        }
-
-        await taskService.addAttachment(
-          taskId: task.id!,
-          fileName: file.name,
-          bytes: file.bytes!,
-          mimeType: mimeType,
-        );
-        uploaded++;
-      } catch (e) {
-        debugPrint('Error uploading ${file.name}: $e');
-      }
-    }
-
-    if (uploaded > 0 && mounted) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-              '$uploaded archivo${uploaded > 1 ? 's' : ''} subido${uploaded > 1 ? 's' : ''}'),
-        ),
-      );
-    }
   }
 
   Widget _buildLinkBadge({
@@ -2408,123 +2437,74 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
     }
   }
 
-  void _showAssigneeMenu(
+  static const _unassignValue = '__sin_asignar__';
+
+  /// Asigna desde la lista con el mismo contrato que «Reasignar» del rail:
+  /// directorio de la bandeja, un trabajador como trabajador, y sobre un
+  /// trabajo del taller sólo quien tiene ficha (`assignee_not_worker_linked`).
+  Future<void> _showAssigneeMenu(
     TaskModel task, {
     BuildContext? anchorContext,
-  }) {
+  }) async {
     // Una nota no tiene responsable; el servidor lo rechaza y la UI no lo
     // ofrece.
-    if (task.kind == TaskKind.note) return;
-    final menuContext = anchorContext ?? context;
-    final RenderBox button = menuContext.findRenderObject() as RenderBox;
-    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
-
-    final items = <PopupMenuEntry<String?>>[];
-
-    // "Unassign" option
-    items.add(PopupMenuItem<String?>(
-      value: '__none__',
-      child: Row(
-        children: [
-          Icon(Icons.person_off_outlined,
-              size: 16, color: Colors.grey.shade600),
-          const SizedBox(width: 10),
-          Text('Sin asignar',
-              style: TextStyle(
-                  fontStyle: FontStyle.italic, color: Colors.grey.shade600)),
-          if (task.assignedTo == null) ...[
-            const Spacer(),
-            const Icon(Icons.check, size: 16),
-          ],
-        ],
-      ),
-    ));
-    items.add(const PopupMenuDivider());
-
-    // User list
-    if (_users != null) {
-      for (final user in _users!) {
-        final userId = user['user_id']?.toString();
-        final fullName =
-            user['full_name'] as String? ?? user['email'] as String? ?? '?';
-        final isSelected = task.assignedTo == userId;
-        items.add(PopupMenuItem<String?>(
-          value: userId,
-          child: Row(
-            children: [
-              CircleAvatar(
-                radius: 10,
-                child: Text(fullName.substring(0, 1).toUpperCase(),
-                    style: const TextStyle(fontSize: 10)),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                fullName,
-                style: TextStyle(
-                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                ),
-              ),
-              if (isSelected) ...[
-                const Spacer(),
-                const Icon(Icons.check, size: 16),
-              ],
-            ],
+    if (task.kind == TaskKind.note || task.id == null) return;
+    final service = context.read<TaskService>();
+    final messenger = ScaffoldMessenger.of(context);
+    if (_people == null) await (_peopleLoad ??= _loadPeople());
+    if (!mounted) return;
+    final people = _people;
+    if (people == null) {
+      messenger.showSnackBar(const SnackBar(
+        content: Text('No se pudo cargar a quién asignar. Revisa la conexión '
+            'e inténtalo de nuevo.'),
+      ));
+      return;
+    }
+    final onJob = task.linkedJobId != null;
+    final assignables = people
+        .where((person) => !onJob || person.employeeId != null)
+        .toList(growable: false);
+    final anchor = anchorContext ?? context;
+    if (!anchor.mounted) return;
+    final selected = await showVbSearchableOptionPicker<String>(
+      anchorContext: anchor,
+      title: 'Asignar a',
+      options: [
+        if (task.hasAssignee)
+          const VbSearchableSelectOption(
+            value: _unassignValue,
+            label: 'Sin asignar',
           ),
+        for (final person in assignables)
+          VbSearchableSelectOption(
+            value: person.assignmentKey,
+            label: person.displayName,
+            context: person.assignmentKey == task.assigneeKey
+                ? 'Responsable actual'
+                : person.assignmentContextLabel,
+          ),
+      ],
+    );
+    if (selected == null || !mounted || selected == task.assigneeKey) return;
+    final assignee = selected == _unassignValue
+        ? null
+        : assignables
+            .where((person) => person.assignmentKey == selected)
+            .firstOrNull;
+    if (selected != _unassignValue && assignee == null) return;
+    try {
+      await service.assignTaskToPrincipal(task.id!, assignee,
+          expectedVersion: task.version);
+    } catch (error) {
+      debugPrint('Task list assignment failed: $error');
+      if (mounted) {
+        messenger.showSnackBar(const SnackBar(
+          content: Text('No se pudo cambiar la asignación. Revisa la conexión '
+              'e inténtalo de nuevo.'),
         ));
       }
-    } else {
-      items.add(const PopupMenuItem<String?>(
-        enabled: false,
-        value: null,
-        child: Text('Cargando usuarios...'),
-      ));
     }
-
-    final taskServiceForAssign = context.read<TaskService>();
-    final messengerForAssign = ScaffoldMessenger.of(context);
-    showMenu<String?>(
-      context: context,
-      position: RelativeRect.fromRect(
-        button.localToGlobal(Offset.zero) & button.size,
-        Offset.zero & overlay.size,
-      ),
-      items: items,
-    ).then((selectedUserId) {
-      if (selectedUserId == null) return; // dismissed
-
-      if (selectedUserId == '__none__') {
-        if (task.id != null) {
-          taskServiceForAssign.assignTask(task.id!, null).catchError(
-            (Object error) {
-              if (mounted) {
-                messengerForAssign
-                    .showSnackBar(SnackBar(content: Text('Error: $error')));
-              }
-              return task;
-            },
-          );
-        }
-        return;
-      }
-
-      // Find user name
-      final user = _users?.firstWhere(
-          (u) => u['user_id']?.toString() == selectedUserId,
-          orElse: () => {});
-      final name =
-          user?['full_name'] as String? ?? user?['email'] as String? ?? '';
-
-      if (task.id != null) {
-        final service = taskServiceForAssign;
-        final messenger = messengerForAssign;
-        service.assignTask(task.id!, selectedUserId).catchError((Object error) {
-          if (mounted) {
-            messenger.showSnackBar(SnackBar(content: Text('Error: $error')));
-          }
-          return task.copyWith(assigneeName: name);
-        });
-      }
-    });
   }
 
   // ══════════════════════════════════════════════════════════════════
@@ -2567,10 +2547,7 @@ class _PegasTasksWidgetState extends State<PegasTasksWidget> {
   /// Update a single field directly (for nullable fields like due_date)
   void _handleMenuAction(String value, TaskModel task) async {
     if (value == 'edit') {
-      showDialog(
-        context: context,
-        builder: (context) => TaskFormDialog(taskToEdit: task),
-      );
+      _openTaskForm(task);
       return;
     }
 

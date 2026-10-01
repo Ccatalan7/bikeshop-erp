@@ -13,6 +13,95 @@ lo demás cuelga de acá. **Si un proceso descrito acá resulta equivocado o
 mejorable, se corrige acá** — no se rodea, no se documenta la excepción en otro
 archivo, no se deja "para después".
 
+### Decisiones de producto delegadas para el Master Schema (dueño, 2026-09-29)
+
+El dueño delega a Codex y Claude las decisiones de funcionalidades, flujo y uso
+de sistemas para cerrar `BIKE_WORKSHOP_MASTER_SCHEMA.md`. No se detiene el
+trabajo para pedirle que elija entre opciones técnicas o de experiencia de uso:
+los agentes contrastan código, datos y operación, deciden entre ellos y dejan
+el motivo en el documento dueño. La medida de una decisión es que el frontend,
+la navegación, las herramientas y las funciones visibles faciliten el trabajo
+de los empleados y hagan la experiencia del cliente simple y usable, para
+captar clientes, atenderlos mejor y vender más. La base de datos y sus
+relaciones pueden tener la complejidad necesaria para sostener esa sencillez
+con datos íntegros y procesos seguros; no se simplifica el modelo a costa del
+trabajo de las personas. Si la evidencia cambia, se corrige la decisión sin
+transferirle al dueño una disyuntiva que los agentes pueden resolver. Esta
+delegación de producto no autoriza por sí sola commits, pushes, despliegues ni
+escrituras en producción.
+
+La matriz de compatibilidad es el backbone complejo de esta arquitectura y
+puede necesitar muchas relaciones, fuentes y comprobaciones. La superficie
+del taller y la del cliente traducen ese trabajo a la siguiente acción útil:
+qué pieza calza, con qué bicicleta y evidencia, o qué dato concreto falta para
+decidir. Una persona no debe tener que entender tablas, estados internos ni
+rellenar de nuevo hechos ya confirmados para completar su trabajo. La interfaz
+expone incertidumbre y conflictos de forma accionable, sin inventar certeza ni
+ocultar las reglas de seguridad que sostienen la decisión.
+
+**2026-09-30 — mantener el rumbo del Master.** El dueño corrigió que una
+cadena de sondas y pruebas auxiliares estaba desplazando los resultados
+usables. Toda ronda de este trabajo, incluida una reanudación o heartbeat,
+lee primero `PLANS.md`: entregable actual, condición de cierre, responsable y
+acción siguiente. El Master conserva la definición de arquitectura; el plan
+controla su ejecución. Antes de ampliar o repetir pruebas, identificar el
+criterio pendiente o defecto concreto que deciden y por qué la evidencia
+existente no basta. Cuando basta, integrar y avanzar. Los defectos encontrados
+se corrigen y se vuelve al entregable; una sonda sólo se abre con salida hacia
+implementación. No convertir documentación, conteos repetidos ni prototipos
+en resultados entregados. Esta regla no omite gates necesarios ni reduce los
+siete criterios de terminado. Las asignaciones a Claude siguen el mismo plan,
+con archivos exclusivos y revisión al terminar. La última instrucción directa
+del dueño conserva prioridad sobre resúmenes automáticos antiguos.
+
+**Autonomía de Claude, pedido directo del dueño 2026-09-30:** en este cierre
+Claude tiene libertad para implementar su corte, ejecutar consultas guardadas
+y elegir/correr pruebas focales con criterio. No es sólo un proponente ni
+espera permisos rutinarios de Codex o del humano. Codex coordina integración,
+archivos exclusivos y turnos DB; ambos usan los entregables de `PLANS.md`.
+Una descarga dirigida desde el registro oficial necesaria para un recorrido
+local autorizado no es una descarga rutinaria. Mantener los límites de datos,
+producción y publicación; autorización técnica Full access no los revoca.
+
+**2026-09-30 — explicar la ampliación del alcance del Master.** El dueño
+reclamó que los agentes habían desplazado la matriz de compatibilidad y el
+backbone con respaldos y archivos. La cadena empezó en adjuntos del guardado
+del trabajo; una incompatibilidad de restauración abrió un motor completo, y
+un inventario de URLs públicas abrió migración de archivos heredados. Esos
+hallazgos fueron convertidos por los agentes en C2/C3 de `PLANS.md`, incluso
+en su «Resultado que quiere el dueño». Eso no era evidencia de un pedido del
+dueño. **Clarificación posterior del mismo dueño:** «si ya empezaron con eso
+termínenlo» y «mantén el plan que habían generado». Su reclamo no cancelaba
+C2/C3: Codex interpretó mal la pregunta y debe mantener C1–C5. Se conservan
+despliegues/fuentes y se integra la recuperación completa y los consumidores
+privados ya iniciados, sin más cadenas de prototipos. La ficha → diagnóstico
+→ asistentes → compatibilidad → ejecución → memoria → historial sigue siendo
+el núcleo del objetivo. Un defecto lateral se informa por su relación
+concreta; no abre por sí solo otro entregable obligatorio. El costo fue días
+de trabajo lateral y una cancelación errónea que el dueño tuvo que corregir.
+
+Desde el 2026-09-29, un cierre FINALIZADO/ENTREGADO con un repuesto marcado
+incompatible o sin bici/rueda inequívoca se rechaza de forma atómica y señala
+las líneas a corregir; el trabajador no debe ver un trabajo terminado con una
+ficha silenciosamente incompleta. El diálogo de una línea bloqueada lleva a
+Productos y Servicios del mismo trabajo; en compacto abre el espacio inline
+y en un formulario abierto selecciona esa pestaña. En lote, los trabajos
+fallidos quedan seleccionados y el diálogo abre el primero para corregirlo.
+Un fallo transitorio
+conserva la llave del comando para reintento seguro. El contrato concreto y su
+estado de despliegue están en `BIKE_WORKSHOP_MASTER_SCHEMA.md`.
+Para adjuntos internos de tareas, el plan de
+`docs/development/VINABIKE_ASSETS_SECURITY_PLAN_2026-09-29.md` prevé destino
+privado por taller y vínculo estable; una URL temporal se resuelve sólo al
+mostrar o descargar. El arreglo de adjuntos se modifica con un comando
+atómico/versionado para no perder altas concurrentes.
+El retiro oculta primero el vínculo; un fallo posterior de Storage o del acuse
+de limpieza se muestra como limpieza pendiente, sin volver a enseñar el archivo
+como activo. La sesión reintenta el retiro físico desde la cola autorizada.
+En un reintento de alta, la misma ruta y el mismo tamaño no bastan para
+reutilizar bytes: el cliente coteja el contenido descargado antes de registrar
+el vínculo. Un conflicto de contenido queda pendiente de nueva selección.
+
 ## Cada iteración que descubre algo, lo escribe
 
 Cuando una ronda de trabajo produce un aprendizaje que le habría ahorrado
@@ -2289,6 +2378,8 @@ It is the primary ordered ledger for bike workshop work: what already landed, wh
 For any substantive bike workshop continuation:
 
 1. Read `BIKE_WORKSHOP_MASTER_SCHEMA.md` first and treat its queue as the default ordered worklist.
+   Desde el 2026-09-29 manda «Cola operativa vigente» al comienzo; la cola
+   A–G de agosto se conserva como historia y no ordena trabajo nuevo.
 2. Reconcile the current task against that queue before proposing or continuing a next step.
 3. Update the master schema in the same task so it records the new current reality and the reordered next queue.
 4. If this file's continuity snapshot or immediate queue drifts from the master schema, the master schema wins and this file must be updated in the same task.
@@ -3355,6 +3446,8 @@ Use a protected restore workflow:
 7. Commit only the intentional change set. Do not commit `.copilot-backups`, `.agent/tmp`, `.tmp`, generated diagnostic probes, screenshots, or recovery artifacts.
 
 Important terminal gotcha: in zsh, do not use a shell variable named `path`; it can shadow the command lookup path and make commands like `git`, `mkdir`, or `dirname` appear missing. Use names such as `file_path` instead.
+
+zsh does not word-split an unquoted variable (2026-09-29): `flutter test $files` with a newline-separated list passes ONE argument and reports a misleading load failure on the last file (`+0 -1`, `[E]`), which looks like a broken test. It cost one test round. Pass file lists from Python (`subprocess.run([... , *files])`) or expand explicitly with `${=files}`.
 
 This protocol is the preferred way to get back to a trusted app baseline while preserving known-good website work.
 

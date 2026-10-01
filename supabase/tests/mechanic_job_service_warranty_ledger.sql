@@ -250,13 +250,21 @@ select ok(
     'select job.* into v_job'
     in pg_get_functiondef('public.sync_job_to_invoice(uuid)'::regprocedure)
   )
+  -- Desde 2026-09-28 los pagos, la factura confirmada y las notas de crédito
+  -- los mira una sola regla (`mechanic_job_invoice_lock_internal`), también
+  -- después de tomar factura y trabajo.
   and position(
-    'from public.sales_payments payment'
+    'mechanic_job_invoice_lock_internal'
     in pg_get_functiondef('public.sync_job_to_invoice(uuid)'::regprocedure)
   ) > position(
     'select job.* into v_job'
     in pg_get_functiondef('public.sync_job_to_invoice(uuid)'::regprocedure)
-  ),
+  )
+  and position(
+    'from public.sales_payments payment'
+    in pg_get_functiondef(
+      'public.mechanic_job_invoice_lock_internal(uuid,uuid)'::regprocedure)
+  ) > 0,
   'direct job sync locks invoice before job and protects financial history'
 );
 select ok(
@@ -1157,10 +1165,16 @@ where id = (
   where id = '99773000-0000-4000-8000-000000000050'
 );
 
+-- Desde 2026-09-28 una escritura directa ya no puede desalinear un trabajo
+-- de su factura confirmada (`guard_paid_workshop_child_mutation` con
+-- `mechanic_job_invoice_lock_internal`). La desalineación se siembra como la
+-- dejaría un dato heredado, para seguir probando la red del pago.
+select set_config('app.syncing_invoice_to_job', 'true', true);
 update public.mechanic_job_items
 set unit_price = 4000,
     total_price = 4000
 where id = '99773000-0000-4000-8000-000000000060';
+select set_config('app.syncing_invoice_to_job', 'false', true);
 
 select throws_ok(
   $$insert into public.sales_payments(
@@ -1197,10 +1211,13 @@ select is(
   'stale workshop rejection leaves no payment row'
 );
 
+-- Y se deshace igual que se sembró.
+select set_config('app.syncing_invoice_to_job', 'true', true);
 update public.mechanic_job_items
 set unit_price = 5000,
     total_price = 5000
 where id = '99773000-0000-4000-8000-000000000060';
+select set_config('app.syncing_invoice_to_job', 'false', true);
 
 select is(
   public.workshop_job_commercial_snapshot(
@@ -1221,6 +1238,10 @@ select throws_ok(
     v_job public.mechanic_jobs%rowtype;
     v_method_id uuid;
   begin
+    -- Desde 2026-09-28 mover la línea o borrar la bici de un trabajo con la
+    -- factura confirmada se rechaza antes (55000); el estado que deja la
+    -- carrera se siembra como dato heredado y el pago lo sigue rechazando.
+    perform set_config('app.syncing_invoice_to_job', 'true', true);
     update public.mechanic_job_items
     set job_bike_id = (
       select job_bike.id
@@ -1236,6 +1257,7 @@ select throws_ok(
 
     delete from public.mechanic_job_bikes
     where job_id = '99773000-0000-4000-8000-000000000050';
+    perform set_config('app.syncing_invoice_to_job', 'false', true);
 
     select job.* into v_job
     from public.mechanic_jobs job

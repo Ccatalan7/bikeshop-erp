@@ -59,7 +59,7 @@ void main() {
     final adaptiveLine = _section(
       source,
       'class _PartItemRowState',
-      'class _JobPartItem',
+      'class _LineConfigStatus',
     );
     expect(adaptiveLine, contains('_buildDesktopRow(theme, item)'));
     expect(adaptiveLine, contains('_buildMobileCard(theme, item)'));

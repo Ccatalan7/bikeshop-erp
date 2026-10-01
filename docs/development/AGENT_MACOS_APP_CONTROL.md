@@ -50,6 +50,11 @@ una lista de configuración que alimenta un índice así, el `restart` es el
 camino corto; después del reinicio las coordenadas de antes ya no sirven
 (`shot` nuevo antes de cualquier `click`): reutilizar una del frame anterior
 abrió la ficha de un producto en vez del buscador del trabajo.
+Reincidencia el 2026-09-28: `kIsoWheelBsdOptions` era un `final` derivado de
+un mapa y el editor siguió mostrando la lista vieja de 15 BSD tras el reload
+(una ronda de verificación). Si la lista la escribes tú, hazla `const`
+explícita en vez de derivarla: el reload sí la actualiza y no hay que
+reiniciar ni rehacer la navegación.
 
 ## The three surfaces, and when to use each
 
@@ -743,6 +748,28 @@ pasting again or the message goes out twice.
 
 ## 4. iOS Simulator — phone verification
 
+**Bloqueo medido 2026-09-30, Xcode 27 + runtime iOS 26.5 en este Mac:** el
+proyecto Runner todavía declaraba iOS 14 aunque el Podfile exigía 16. Se
+alinearon `Runner.xcodeproj` y `AppFrameworkInfo.plist` a 16 y el build
+genérico del simulador terminó. Aun así, los Pods de MLKit excluyen arm64 del
+simulador, por lo que el ejecutable resultó sólo x86_64. Instalarlo en el
+iPhone 17e estándar arrancado como arm64 funcionó, pero `launchd_sim` negó
+el arranque con `EBADARCH` (Bad CPU type). Arrancar ese dispositivo con
+`simctl boot --arch=x86_64` tampoco dio una sesión utilizable en esta ronda;
+se apagó. El viejo dispositivo `Vinabike iPhone 17 Pro x86` no es un atajo:
+su falta de display está documentada en
+`PAYROLL_5N_TRANSITION_MATRIX_2026-08-02.md`. **No calificar una pantalla de
+teléfono por un build o instalación exitosos.** Antes de repetir este smoke,
+verificar soporte real de un conjunto de dependencias para arm64-simulator o
+un runtime x86 con display. La [lista oficial de problemas conocidos de
+ML Kit](https://developers.google.com/ml-kit/known-issues) todavía indica
+(actualizada el 2026-09-24) que sus simuladores en Mac M1 no son compatibles;
+no asumir que un cambio de `EXCLUDED_ARCHS` o una subida de versión de Pods
+lo resuelve. Un arnés iOS sin ML Kit puede verificar el widget y los insets,
+pero no califica el binario completo ni su ruta autenticada. La prueba sin
+Auth/Storage para ese arnés ya está en
+`integration_test/workshop_completion_ios_smoke_test.dart`.
+
 Use the `mcp__Claude_Code_iOS_Simulator__control` tool. Order matters:
 
 1. `attach` **first** — it opens the live panel instantly on a booted device
@@ -830,8 +857,9 @@ ancho de la captura.
 El Mac tiene el AVD `Medium_Phone_API_36.1`; se arranca sin ventana
 (`emulator -avd Medium_Phone_API_36.1 -no-window -no-audio -no-boot-anim`
 en segundo plano) y se maneja con `adb`. La app corre contra producción y un
-agente no escribe contraseñas reales, así que en el emulador **no hay sesión**.
-Se prueba en dos capas:
+agente no escribe contraseñas reales, así que contra producción el emulador
+**no tiene sesión** (desde el 2026-09-30 sí la tiene contra el stack local: ver
+«Con sesión, contra el stack local» abajo). Sin sesión se prueba en dos capas:
 
 - **Lo nativo, de verdad.** Intents, copias, permisos y el ciclo de las
   actividades no necesitan sesión: `run-as com.vinabike.erp ls -lR <carpeta>`
@@ -877,6 +905,187 @@ Trampas que costaron una vuelta cada una:
 - **El gate corre en Linux**: `Platform.isMacOS` en una prueba pasa en el Mac y
   falla en CI. Lo que dependa del sistema anfitrión se fija en la prueba
   (`debugCanShareFilesOverride`).
+
+### Con sesión, contra el stack local (2026-09-30)
+
+`scripts/e2e/run_android_local_journey.sh --journey task-form|workshop` es el
+lanzador común (`run_task_form_android_local.sh` quedó como atajo): un APK debug de
+`lib/main.dart` con los defines **públicos** del stack local (JSON privado que
+se borra al compilar), sellado con la URL y la huella de la llave; nunca se
+instala uno sin sello. `adb reverse tcp:54321 tcp:54321` deja al emulador usar
+`http://127.0.0.1:54321` igual que el Mac: no hace falta tocar el bootstrap por
+`10.0.2.2`, porque `network_security_config` ya admite HTTP local. Las cuentas
+sintéticas las crea la API de administración y cada recorrido es un driver
+Python sin dependencias sobre `scripts/e2e/android_ui.py` (árbol, gestos,
+frames, selector del sistema, login y tema), que toca por nombre leyendo
+`uiautomator dump`. Un recorrido nuevo agrega su driver, su fixture y un
+caso en el lanzador; no copia el lanzador. La primera compilación bajó ~7 GB a
+`~/.gradle/caches` en 519 s; las siguientes, 27 s. `--reuse-apk` reusa un APK
+sellado para el mismo stack. Si el emulador ya está arriba, el lanzador lo
+reusa y no lo apaga: arrancarlo a mano ahorra ~1,5 min por corrida al iterar.
+
+**`--hold` y `--release` (2026-09-30).** Con `--hold`, si el driver falla, la
+app queda con su sesión y el taller sintético como quedaron: se sigue desde ahí
+con las funciones de `android_ui.py` (un `python3 -` que importa el módulo con
+`ANDROID_E2E_SERIAL`/`_ADB`/`_PACKAGE`/`_FRAMES_DIR` en el entorno) en vez de
+rehacer login, cliente, bici y líneas en cada vuelta. `--release` retira lo
+retenido (app, archivos, reverse y fixture). El recorrido del taller se
+descubrió así, paso a paso, en una sola sesión retenida; después se escribió el
+driver con los nombres reales. `--surface web` corre el mismo recorrido, con
+las mismas cuentas, fixture, readback y retirada, en Chrome de escritorio
+(`e2e/workshop_local.spec.ts`; trampas en `WEB_PREVIEW.md`): el escritorio
+nativo de macOS no se usa mientras su sesión debug sea del dueño.
+
+Lo que costó una corrida cada uno:
+
+- **Cómo nombra Flutter los nodos en Android 9+.** Un `IconButton` con sólo
+  `tooltip` recibe el tooltip como `content-desc` (el embedding lo copia cuando
+  no hay etiqueta); con etiqueta y tooltip, sólo la etiqueta. Un campo con valor
+  se llama «valor + pista» (la pista va en `hint`): se busca la pista al final.
+  Un botón suma el texto de sus hijos: «Ver detalles de X X Detalles».
+- **Nunca «el nodo más chico que contiene el título».** En la lista de tareas
+  es el `CheckBox` «Marcar X como completada», y tocarlo completó la tarea. Se
+  toca la acción propia de la fila («Ver detalles de X»).
+- **El fondo modal también se llama «Cerrar»** y cubre toda la pantalla: tocar
+  su centro cae sobre el diálogo. Se filtra por `class=Button`.
+- **Lo que está fuera de la vista no está en el árbol.** En teléfono el
+  formulario de tarea mide 700 px lógicos: «Guardar» y los adjuntos quedan bajo
+  el borde, y al reabrir con `focusAttachments` el título «Editar Tarea» queda
+  arriba; se reconoce por «Actualizar». Contar «Pendiente» sin desplazar da 0, y
+  «Pendiente» a secas debe ser exacto (existe «Estado Pendiente»).
+- **Diálogos del sistema.** Con 2 GB el AVD avisa «System UI isn't responding»
+  al arrancar («Wait»); la primera apertura pide notificaciones («Don’t
+  allow»). Con la pantalla apagada `uiautomator` devuelve `null root node`:
+  `input keyevent 224` y `wm dismiss-keyguard` tras el arranque.
+- **Atrás cierra la app en el panel.** El tema en teléfono está en menú
+  principal → «Apariencia» (una hoja); atrás sólo mientras la hoja está abierta
+  y el menú con «Cerrar menú». Atrás sin teclado cierra el diálogo o sale de la
+  página, así que «hay teclado» se lee bien: `mImeWindowVis` (bit 2) o
+  `mInputShown=true` en `dumpsys input_method`. **`mIsInputViewShown` miente**:
+  en Android 16 queda en `true` con el teclado ya oculto (2026-09-30), y con él
+  «bajar el teclado» mandó atrás y salió de la ficha de la bici.
+- **Un teclado que se está cerrando sigue «arriba» un instante.** Al elegir un
+  resultado del buscador de ítems el teclado baja solo; el atrás mandado en ese
+  medio segundo cae en la página y abre «¿Descartar cambios?» (dos veces el
+  2026-09-30). `hide_keyboard()` vuelve a mirar tras 0,7 s antes de mandarlo.
+- **Un gesto sobre el teclado escribe.** Gboard desliza letras: un `input
+  swipe` para desplazar con el teclado arriba metió una «o» en el título de la
+  tarea. `scroll_into_view()` baja el teclado antes de cada gesto.
+- **Los buscadores con panel pierden lo tecleado antes del panel.** El campo
+  «Agregar repuesto o parte» abre su panel («Motor de compatibilidad») después
+  del primer toque; lo que `input text` mandó antes no llega. Se toca, se
+  espera el panel y recién se teclea.
+- **Un menú emergente entra al árbol al terminar de abrirse**: un `dump`
+  inmediato no lo ve. Se espera por su opción, no por el tiempo.
+- **El «Cerrar» de una hoja inferior es su asa de arrastre**: cierra con la
+  acción semántica (TalkBack), no con un toque; `input tap` no hace nada. La
+  hoja se cierra tocando el «Sombreado» o eligiendo una opción.
+- **Un panel a pantalla completa no saca del árbol lo que tapa.** Con «Ver la
+  tarea» abierto (panel de herramientas) la lista del taller sigue en el
+  `dump` con sus coordenadas: esperar «Vista:» dio por cerrado el panel y el
+  toque cayó sobre él. Se espera a que desaparezca el panel mismo
+  («Tareas, herramienta…»).
+- **Un gesto para apartar un aviso empieza sobre el aviso**: desde más arriba
+  desplaza la lista y el aviso queda.
+- **Un aviso con acción queda fijo en Flutter 3.38** (`SnackBar.persist` vale
+  `true` cuando hay `action`) y en teléfono tapa la hoja «Cambiar vista» y la
+  lista hasta tocarlo. No es una trampa del driver: se corrige en el aviso con
+  `persist: false` (el de «Presupuesto aprobado», 2026-09-30), y el recorrido
+  anota si se fue solo.
+- **El primer `cmd uimode night yes` tarda más de 2 s en pintarse**: la captura
+  «oscura» salió clara. Se espera a que el `screencap` difiera del claro y quede
+  quieto.
+- **DocumentsUI multiselección**: los archivos copiados con `adb push` y
+  `content call --uri content://media --method scan_file --arg <ruta>` salen en
+  «Recent»; mantener el primero, tocar el segundo, esperar «2 selected» y
+  «Select».
+
+El gate focal C3/C4 (2026-09-30, `.tmp/e2e/android-workshop-20260930-143342`)
+agregó:
+
+- **Una tarjeta sin semántica por fila es un solo nodo.** La memoria técnica de
+  la bici publica todo su texto en un nodo: `scroll_into_view` lo da por visto
+  en cuanto asoma su borde superior y la fila buscada (el servicio, última de
+  la tarjeta) queda bajo la pantalla; así salió el frame 16 del 095345.
+  `reveal_end()` desplaza hasta que el borde inferior del nodo quede dentro
+  de su área. **Recortado, el nodo informa el borde del área, no el suyo**, y
+  si es más alto que el área conserva los mismos bordes aunque el contenido
+  se mueva: el avance se mide comparando `screencap`, no bordes.
+- **El historial de la bici desplaza su propia área, bajo las pestañas** (en
+  1080×2400 empieza en y≈1234). Un `swipe_down()` genérico empieza en y≈912,
+  sobre las pestañas, y no mueve nada; los gestos van dentro del área.
+- **El mapa con pines animados no deja asentar el oscuro** («la app no cambió
+  a oscuro»): la captura se toma con el mapa fuera de la pantalla.
+- **`input text /tarea` de una vez perdió dos teclas** («/taa»): la primera
+  tecla abre el buscador global y lo que llega mientras se abre se pierde en
+  ocasiones. `open_action()` manda «/», espera el campo con foco, escribe el
+  resto y comprueba su valor.
+- **La ficha del trabajo en teléfono** dice «Ficha del trabajo» en su
+  cabecera (en escritorio, «Editar Trabajo»), y su sección «Adjuntos» muestra
+  las miniaturas como `ImageView` sin botón «Adjuntar archivo».
+
+**El recorrido del taller necesita más que el esquema de referencia
+(2026-09-30).** `workshop_journey_local_fixture.sql` en modo `preflight` lo
+exige por nombre y el lanzador no sigue sin eso:
+
+- **El motor de fichas.** La base local nace sin `spec_facts` ni los lectores
+  (`spec_active_product_values_internal_v1`, `product_spec_bindings_internal_v1`,
+  `get_product_spec_contexts_v1`), aunque sí trae las funciones de cambio de
+  partes que los llaman: sus pgTAP reemplazan el lector dentro de la
+  transacción, así que pasan igual. Sin el motor, un repuesto no dice su medida
+  y el cierre no revisa nada. Se instala con el replay de
+  `docs/development/product-specs-research-2026-09-05/local-engine-restore-2026-09-16.md`
+  (sección del 2026-09-30).
+- **El BSD del neumático.** Las publicaciones de familias no pueden aplicarse en
+  local (exigen los ids de producción); `supabase/tests/fixtures/part_change_tire_bsd_local_seed.sql`
+  agrega la definición de producción y su campo en la plantilla `tire`.
+- **El cierre como en producción.** El `handle_mechanic_job_change` de la base
+  de referencia descuenta stock y asienta al terminar un trabajo; el de
+  producción no. `supabase/tests/fixtures/job_lifecycle_production_local_seed.sql`
+  pone los tres cuerpos de producción (el preflight compara el del cierre por
+  md5).
+
+Antes de compilar, el lado del servidor se ensaya sin la app: la misma historia
+con el rol de mecánico, en una transacción que se revierte (cierre rechazado
+por el neumático que no calza, corregido, encargo a la compañera). Costó
+minutos y encontró lo que una corrida nativa habría encontrado en horas.
+
+La retirada no nombra tablas ni decide su orden: borra las filas del taller
+sintético tabla por tabla (toda tabla con `tenant_id`), suspendiendo sólo
+para ese borrado el disparador de inmutabilidad de la tabla (anota cuál y
+cuántas filas) y reactivándolo enseguida. Un borrado que choca con una llave o
+una guardia porque otra tabla todavía apunta a sus filas se deshace entero,
+disparador incluido, y se reintenta en la pasada siguiente; si una pasada no
+avanza, falla con el último error. Después recorre todas las tablas con
+`tenant_id` y exige cero filas. Una ficha de empleado con acceso al ERP no se
+borra mientras siga ligada (`employee_erp_unlink_required`): primero
+`user_profiles` y `user_id`. Historia: la primera versión nombraba cuatro
+tablas de eventos y el libro de estados la detuvo; la segunda suspendía
+disparadores en un orden cualquiera y, cuando el recorrido empezó a facturar
+(2026-09-30), la detuvieron tres veces seguidas `inventory_accounting_checkpoints`
+(que nombra la operación de inventario), la guardia de la bandeja al soltar la
+bici de una tarea (23514) y la traza de inventario al anular el cliente de la
+factura (P0001). Ninguna era un defecto: era el orden.
+
+**El recorrido del taller en teléfono, como es (2026-09-30).** Lo que un driver
+escrito desde el código suponía y la app no hace:
+
+- La bici nueva no se guarda sin familia de pedalier: «Guardar» devuelve a la
+  sección 3 (`Sistema técnico` → `Pedalier / BB` → «Familia pedalier / BB»).
+- Un trabajo nuevo nace «Presupuestar primero»; el presupuesto aprobado es de
+  sólo lectura hasta facturarlo («Más» → «Facturar presupuesto» → «Crear
+  factura»). Un cierre rechazado sobre un presupuesto sin facturar lleva a
+  líneas que no se pueden corregir: se factura antes.
+- El estado se cambia desde el chip de la fila («Cambiar o abrir estado»).
+- «Solo compatibles» esconde el neumático que no calza; «Mostrar todo» lo
+  muestra como «No compatible». Elegir la rueda de la línea («Sin fijar lado» →
+  «Delantero»/«Trasero», `CheckBox`) es lo que deja la marca que la ficha
+  aplica al terminar.
+- «Cambiar por otro artículo» deja la línea sin lado: se vuelve a elegir.
+- /tarea en la lista: los cuatro pasos (persona, trabajo, qué hacer, revisar) y
+  «Ver la tarea» abre el panel de herramientas con dos «Volver».
+- La ficha de la bici se lee desde la clienta («Abrir cliente …» → «Abrir
+  bicicleta …»); «Abrir Bicicleta: …» en la fila abre el editor.
 
 ## 5. Cost discipline
 
@@ -1006,3 +1215,84 @@ Dos trampas más de esa misma ronda, ambas al verificar un panel **nativo**:
   `cmd+a`, el nombre, `return`. El nombre de la ventana (`Guardar archivo`) sí
   se ve, y sirve para confirmar que está abierto; recuerda apuntar al PID de
   debug, porque el Release instalado comparte el nombre del proceso.
+
+## Probar la bandeja del taller sin cortar la red ni escribir bicis reales (2026-09-28)
+
+Lo que costó una ronda al dar evidencia del ítem 3 contra producción:
+
+- **`evaluate` de la VM no funciona en esta sesión.** Devuelve «No compilation
+  service available; cannot evaluate from source»: el servicio que compila
+  expresiones es del `flutter run` y no se alcanza por la URL del log. Lo que
+  haya que accionar desde afuera va como extensión de depuración registrada en
+  `registerAgentInputExtensions()` (`lib/dev/agent_input.dart`), que sí se
+  llama por la misma URL (`GET <vm>/ext.nombre?isolateId=…&param=…`). La de la
+  bandeja: `ext.vinabike.outbox.armFault?fault=offlineBeforeSend&times=2`
+  (o `loseResponseAfterCommit`: escribe y pierde la respuesta y el recibo).
+  Una extensión nueva entra con `restart`, no con `reload`.
+- **Las preferencias de la app de debug viven en su contenedor.** Se leen con
+  `defaults export ~/Library/Containers/com.vinabike.vinabikeErp.debug/Data/Library/Preferences/com.vinabike.vinabikeErp.debug -`;
+  el `.plist` en disco va atrasado (cfprefsd lo baja cuando quiere) y leerlo
+  directo mostró una bandeja vieja. Un `defaults write` a esa ruta lo ve la
+  bandeja **en su próxima lectura, sin reiniciar** (relee las preferencias
+  cada vez); así se siembra un estado —por ejemplo el que deja un guardado
+  sin red— para probar la reanudación contra el RPC real.
+- **Corrección 2026-09-28: un `restart` envía lo sembrado antes de que
+  alcances a armar la falla.** El reinicio borra la falla armada (vive en
+  memoria) y la reanudación del inicio de sesión corre en seguida, sin espera:
+  lo sembrado sale a producción. Para probar lo pendiente sin enviarlo: arma
+  la falla, después siembra, y no reinicies; si hace falta cargar código
+  nuevo con `restart`, borra antes la siembra (`defaults delete`) y vuelve a
+  sembrarla después de armar. Como red de seguridad, un alta sembrada lleva un
+  campo que `save_bike_aggregate` rechaza antes de escribir
+  («unsupported or server-owned fields»). Costó una vuelta de siembra al
+  probar el aviso de alta pendiente.
+- **Para reanudar lo sembrado sin `restart`, saca la app del frente y
+  vuélvela a traer** (2026-09-28): `osascript -e 'tell application "Finder"
+  to activate'` y después `set frontmost` del PID de debug. El
+  `AppLifecycleState.resumed` llama `resumeNow()` y la bandeja relee lo
+  sembrado; el log muestra `🧰 Bandeja del taller: <tipo>:<resultado>`. El
+  aviso de la reanudación dura 8 s: captura con `shot` a los 2–3 s, no
+  después de revisar el log (la primera captura del descarte llegó tarde).
+  Borra después los intentos `…:a:` de tus llaves de prueba: sin
+  `20260928051000` en producción no se vacían solos y subirían al desplegarla.
+- **Un comando que el servidor de producción todavía no tiene no se prueba en
+  esta sesión** (2026-09-28): la app de debug corre contra producción, así
+  que `save_mechanic_job_lines_v1` sin desplegar hace fallar cualquier
+  guardado de trabajo. Su prueba es el pgTAP local más el contrato: el pedido
+  que arma Dart, pasado por la función local dentro de una transacción que
+  se deshace. Abrir un trabajo sí se prueba: reanuda antes lo que la bandeja
+  tenga de ese trabajo (con la bandeja vacía no envía nada) y el log muestra
+  `Loading job` después; no guardes. Si un guardado de prueba llegó a
+  respaldarse, producción lo rechaza al tiro (`PGRST202`, la función no
+  existe) y sale de la bandeja; queda sólo su intento `…:a:`.
+- **Un cambio de forma en la bandeja pide `restart`, no `reload`.** Un campo
+  `final` nuevo que se asigna en el constructor de `WorkshopCommandOutbox`
+  queda sin valor en la instancia viva después de un `reload`: el singleton se
+  creó antes.
+- **Sólo la bici fixture.** La de «Test Taller»
+  (`DBG-DRIVETRAIN-NO-PROFILE-…`, del arnés «Prueba rápida») acepta escrituras
+  de prueba; su marca y modelo son texto libre, así que el formulario no la
+  deja guardar sin elegirlos del catálogo, y crear una marca para eso sería
+  ensuciar el catálogo real: se siembra el comando en vez de guardarlo desde
+  el formulario.
+- **Un conflicto no se prueba contra producción** mientras la función lance
+  `40001`: abre un bucle en PostgREST (ver
+  `docs/development/AGENT_DATABASE_CONTRACT.md`). Se prueba con pgTAP local.
+- **Una decisión de garantía pendiente sí se ve en la app real (2026-09-29).**
+  Casi la di por imposible («se enviaría a producción») sin haber leído esta
+  sección; el orden que funcionó, sin reiniciar:
+  1. Arma `offlineBeforeSend` con `times=20`, el tope.
+  2. Siembra el `c:` con `defaults write`, bajo cada `<taller>:<persona>` que
+     muestre `vinabike_appearance_v2`; la persona que no está en sesión no se
+     lee ni se envía.
+  3. Pon `p_operation_key` vacío en `params`. Si la falla se agotara, el RPC lo
+     rechaza antes de escribir («requiere una clave de operación»). La llave
+     del comando va aparte, en `operation_key`.
+  4. Pulsa **Actualizar** en la tabla y la tabla relee lo pendiente. Abrir el
+     trabajo gasta una falla y deja un `a:` `offline`.
+  5. Al terminar, borra los `c:` y `a:` de tu llave y desarma con
+     `fault=none` (queda `×0`).
+  6. Confirma en producción que `operation_key like 'dbg-…'` da 0.
+
+  `scroll` sube con positivo y **baja con negativo**; con positivo la ficha no
+  se mueve y parece que el scroll no llega.
