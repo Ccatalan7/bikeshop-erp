@@ -265,6 +265,25 @@ Los booleanos nuevos admiten desconocido. `false`, `0`, vacío, desconocido y
 no aplica tienen significados diferentes. Un `is_set` no acepta «desconocido»
 como prerrequisito confirmado.
 
+**La fuente del dato no es prerrequisito (dueño, 2026-10-01; migración
+20261002090000).** «Fuente del dato» (`spec_evidence_source`) es una nota
+privada: el envase, manual o enlace que se revisó. Los compiladores de
+catálogos de investigación (`scripts/inventory/compile_*.py`, 2026-09-07→16)
+la pusieron como prerrequisito de casi cada campo, y 57 de las 107 fichas
+activas la heredaron. El editor deshabilitaba entonces las velocidades, el
+ancho o los eslabones de una cadena hasta llenar un texto que se pide al
+final, y los valores leídos del nombre quedaban congelados. El dueño no pudo
+entender la ficha («what the fuck is "se desbloquea cuando llenes la fuente
+del dato"?»). La procedencia ya vive en cada hecho (`spec_facts.source` y
+`confirmed`). Por eso la nota no habilita ni bloquea nada: se quitó de los
+contratos, `SpecTemplate.prerequisitesFor` la ignora y el disparador
+`spec_template_source_not_prerequisite_guard` rechaza con `23514` la ficha que
+vuelva a publicarla. Esos compiladores siguen escribiendo la arista: el que
+publique otra vez con ellos debe quitarla, porque la base la rechaza. Un
+prerrequisito real sí se conserva, por ejemplo la medida que necesita su
+referencia de medición o la pieza que depende de su presentación (45 aristas en
+20 fichas ese día).
+
 **Precisión de comparación, 2026-09-08:** compartir unidad no autoriza una
 desigualdad. El volumen vendido de un envase y la dosis de una aplicación son
 dos cantidades distintas: una aplicación puede consumir varios envases.
@@ -468,9 +487,40 @@ reintentar; no habilita guardar un vacío ficticio.
 Desktop puede usar filas compactas y contexto lateral. Tablet y teléfono
 recomponen las mismas decisiones, sin perder datos, foco ni acceso a conflictos.
 Aplican las [reglas de formulario](../../.github/GUI_DESIGN_PRINCIPLES.md) y
-[guía móvil](../../.github/GUI_MOBILE_DESIGN_PRINCIPLES.md). No se especifican
-colores, radios o medidas visuales aquí: una implementación debe leer sus
-valores de DesignSync y verificar los hosts de `canonical-ui-surfaces.md`.
+[guía móvil](../../.github/GUI_MOBILE_DESIGN_PRINCIPLES.md) como contrato de
+funcionamiento. El aspecto lo decide quien hace el trabajo (diseño abierto,
+2026-09-27); ya no se lee de DesignSync.
+
+**Cómo se lee la ficha (2026-10-01, tras «no entiendo nada» del dueño).**
+La ficha anterior era ilegible por cuatro causas:
+
+- cada control llevaba su etiqueta de 11 px y un párrafo de ayuda;
+- todo iba a ancho completo, así que el paso de una cadena tenía una caja de
+  1.300 px;
+- las secciones tenían nombres de la base de datos;
+- un aviso amarillo con todas las faltas quedaba lejos de los campos.
+
+Lo que se conserva:
+
+- **Una fila por dato** (`ProductSpecFieldRow`). El nombre del dato es el texto
+  más fuerte de la fila y va en su propia columna, o arriba del control bajo
+  560 px. La explicación va detrás del ícono de información. Bajo el control
+  sólo se escribe una nota corta cuando falta algo («Se habilita cuando
+  completes «Referencia de medida».») o cuando algo bloquea el guardado. Un valor corto
+  (número, opción, sí/no) conserva una caja corta.
+- **Secciones por pregunta del operador, en este orden:**
+  1. Identificación: nombre, familia y marca, modelo, código y referencia del
+     fabricante, y dónde se revisó.
+  2. Tipo y construcción.
+  3. Medidas.
+  4. Qué incluye.
+  5. Lo que declara el fabricante.
+  6. Datos anteriores por revisar, plegada.
+- **Las dependencias se ven.** Un campo que espera a otro va después de él y
+  cuelga de él con sangría. Su nota nombra el dato que falta.
+- **Un resumen arriba, no un muro.** «Faltan N datos» va con un chip por campo,
+  y el chip lleva al campo. Un conflicto que bloquea el guardado es el único
+  aviso de peligro.
 
 ## 7. Persistencia y proyecciones
 

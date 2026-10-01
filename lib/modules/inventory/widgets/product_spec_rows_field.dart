@@ -25,6 +25,7 @@ class ProductSpecRowsField extends StatefulWidget {
       required this.onChanged,
       this.itemLabel = 'Configuración',
       this.helperText,
+      this.showLabel = true,
       this.conditions,
       Map<String, Map<String, String>> tokenLabels = const {},
       Map<String, ProductSpecRowLinkOptions> referenceOptions = const {}})
@@ -35,6 +36,10 @@ class ProductSpecRowsField extends StatefulWidget {
   final String label;
   final String itemLabel;
   final String? helperText;
+
+  /// A host that names the datum itself (the technical sheet's row) hides
+  /// the title here.
+  final bool showLabel;
   final ProductSpecRowSchema schema;
   final ProductSpecRowFieldConditions? conditions;
   final Object? value;
@@ -136,7 +141,8 @@ class _ProductSpecRowsFieldState extends State<ProductSpecRowsField> {
         Map<String, dynamic>.from(selected?['values'] as Map? ?? const {});
     final enabled = widget.onChanged != null;
     final children = <Widget>[
-      Text(widget.label, style: Theme.of(context).textTheme.labelMedium),
+      if (widget.showLabel)
+        Text(widget.label, style: Theme.of(context).textTheme.labelMedium),
       if (widget.helperText != null)
         Text(widget.helperText!, style: Theme.of(context).textTheme.bodySmall),
       if (rows.isNotEmpty)

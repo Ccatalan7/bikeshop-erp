@@ -187,8 +187,18 @@ class SpecTemplate {
   })  : _formContract = formContract,
         _contractVersion = contractVersion;
 
-  List<String> prerequisitesFor(String key) => List<String>.from(
-      (formContract['prerequisites'] as Map?)?[key] as List? ?? []);
+  /// The data a field waits on. «Fuente del dato» (`spec_evidence_source`)
+  /// is a private note of where the facts were read, never a condition of
+  /// another datum: every fact already carries its own source (owner,
+  /// 2026-10-01; 20261002090000 removes it from the contracts, and this keeps
+  /// a contract published before that migration from gating the editor).
+  List<String> prerequisitesFor(String key) => [
+        for (final dependency
+            in (formContract['prerequisites'] as Map?)?[key] as List? ?? [])
+          if (dependency != specEvidenceSourceKey) dependency as String,
+      ];
+
+  static const specEvidenceSourceKey = 'spec_evidence_source';
 
   ProductSpecRowConditions get rowConditions =>
       ProductSpecRowConditions.fromContract(formContract, {

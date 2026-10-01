@@ -14,6 +14,7 @@ class ProductSpecBooleanField extends StatelessWidget {
     this.helperText,
     this.errorText,
     this.allowedValues,
+    this.showLabel = true,
   });
 
   final String label;
@@ -23,6 +24,10 @@ class ProductSpecBooleanField extends StatelessWidget {
   final String? errorText;
   final Set<bool>? allowedValues;
 
+  /// A host that names the datum itself (the technical sheet's row) hides
+  /// this one; the group keeps the label for screen readers.
+  final bool showLabel;
+
   @override
   Widget build(BuildContext context) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -30,7 +35,7 @@ class ProductSpecBooleanField extends StatelessWidget {
           IntrinsicWidth(
               child: VbShortSelect.labelled(
             context,
-            label,
+            showLabel ? label : null,
             VbSegmented<bool?>(
               value: value,
               groupLabel: label,
@@ -51,7 +56,8 @@ class ProductSpecBooleanField extends StatelessWidget {
               ],
               onChanged: onChanged,
               groupDisabledReason: onChanged == null
-                  ? helperText ?? 'Se habilita cuando completes los datos anteriores.'
+                  ? helperText ??
+                      'Se habilita cuando completes los datos de arriba.'
                   : null,
             ),
           )),

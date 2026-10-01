@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "inventory",
+  "id": "inventory-spec-sheet-reads-top-down",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "La ficha técnica del producto se lee de arriba abajo",
+  "summary": "«Fuente del dato» ya no bloquea los demás datos: es una nota opcional. Cada dato lleva su nombre al lado, una caja del tamaño de su valor y, si espera otro, dice cuál.",
+  "items": [
+    "Las secciones se llaman Identificación, Tipo y construcción, Medidas, Qué incluye y Lo que declara el fabricante, y arriba «Faltan N datos» lleva a cada uno."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/inventory/pages/product_form_page.dart",
+      "sha256": "1f3d70a20dcfdabfaaffa3296a1195b0dd40fabffeeb3276296144b7f9791f38"
+    },
+    {
+      "path": "lib/modules/inventory/widgets/product_spec_field_row.dart",
+      "sha256": "c953b9ed2cdf750b6e7fd0b89bf9667e55b46da93e33b2859bc37683cbb3d0d1"
+    },
+    {
+      "path": "lib/modules/inventory/services/spec_engine_service.dart",
+      "sha256": "dabb147932808da16be01ec4fddd322be0128566fc2cef38a223c519680a0118"
+    },
+    {
+      "path": "lib/modules/inventory/widgets/product_spec_boolean_field.dart",
+      "sha256": "701395e04402f3cf5994df06152ba475cdc3a555f09e30eff5dfee395fd799ff"
+    },
+    {
+      "path": "lib/modules/inventory/widgets/product_spec_rows_field.dart",
+      "sha256": "b36131f6c8a2280794c65a963614cb575480f5273c45a2108c79331f95ac6c9c"
+    },
+    {
+      "path": "lib/shared/widgets/vb_form_section.dart",
+      "sha256": "d818c843fe41542d0f71b8929366e08d93d0f37df3b3d07015305513262f22cc"
+    }
+  ]
+}

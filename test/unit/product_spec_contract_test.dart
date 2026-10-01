@@ -309,6 +309,37 @@ void main() {
             issue.code == 'unsupported_declaration' && issue.blocking),
         isTrue);
   });
+  test('the source note never gates another field (owner, 2026-10-01)', () {
+    // A contract published before 20261002090000 still lists it: the editor
+    // must not disable the chain's speeds until a note at the bottom is
+    // filled, nor report them as waiting on it.
+    final template = SpecTemplate(
+        id: 'chain',
+        key: 'chain',
+        name: 'Cadena',
+        technicalFamily: 'chain',
+        formContract: {
+          'prerequisites': {
+            'chain_speeds': ['spec_evidence_source'],
+            'chain_outer_width_mm': ['spec_evidence_source', 'link_count'],
+          },
+          'roles': {'spec_evidence_source': 'declaration'}
+        },
+        fields: [
+          fact('spec_evidence_source', 'text'),
+          fact('chain_speeds', 'multi_select', options: ['6', '7', '8']),
+          fact('chain_outer_width_mm', 'number'),
+          fact('link_count', 'number'),
+        ]);
+    expect(template.prerequisitesFor('chain_speeds'), isEmpty);
+    expect(template.prerequisitesFor('chain_outer_width_mm'), ['link_count']);
+    expect(
+        validateProductSpecDraft(template: template, values: {
+          'chain_speeds': ['6'],
+        }),
+        isEmpty);
+  });
+
   test('missing prerequisites are pending knowledge, not contradictions', () {
     final issues = validateProductSpecDraft(template: chainTemplate(), values: {
       'chain_speeds': ['8']
