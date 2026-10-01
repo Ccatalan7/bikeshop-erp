@@ -187,7 +187,16 @@ es `spec_definitions.label` (global, por `key`; el mismo rótulo sale en la
 tienda, el taller y los mensajes «X: falta confirmar…» que arma el SQL), la
 ayuda es `spec_templates.form_contract->'helpers'` de esa plantilla, y la frase
 de espera la arma el formulario (`_specPrerequisiteSentence`: «Se habilita
-cuando completes A y B», no «Completa primero A, B»). Una medida se explica
+cuando completes A y B», no «Completa primero A, B»).
+**Antes de reescribir una frase de espera, revisa si la espera tiene sentido
+(2026-10-01).** En 2026-09-19 se reescribió la frase, pero «Fuente de la
+declaración» siguió bloqueando casi cada campo de 57 fichas. Es una nota
+privada que se pide al final. Doce días después el dueño volvió a no entender
+la ficha («what the fuck is "se desbloquea cuando llenes la fuente del
+dato"?»). Cuando un mensaje de espera no se entiende, primero se pregunta si
+el campo de verdad depende de lo que nombra y si ese dato está arriba. Si la
+respuesta es no, se arregla la dependencia (20261002090000), no la frase.
+Una medida se explica
 como la mide el mecánico, con los valores usuales de ejemplo («entre los
 apoyos: 100 delante, 135 atrás con cierre rápido»), y cuando el dato es una
 cota, el formulario la muestra en un dibujo técnico que se enciende al tocar
