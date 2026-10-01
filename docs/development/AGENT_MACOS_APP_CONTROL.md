@@ -1183,6 +1183,33 @@ guarda los bytes UTF-8 como MacRoman: «está» llegó a la app como «est√°�
 dos notas de prueba con el texto roto en producción (retiradas, pero el ledger
 las conserva).
 
+### 4. Cuando las teclas «dejan de funcionar»: mirar el respondedor nativo (2026-09-30)
+
+El dueño reportó que el buscador «funciona con 2 búsquedas, después ya no».
+No era el buscador: después de cerrar su panel **ninguna** tecla llegaba a
+Flutter —ni a `HardwareKeyboard`, ni a un campo—, sin un solo error en el log.
+La pregunta que lo resuelve en una ronda es quién es el primer respondedor de
+macOS:
+
+```bash
+osascript -e 'tell application "System Events" to tell (first process whose unix id is <PID_DEBUG>) to get role of (value of attribute "AXFocusedUIElement")'
+```
+
+`AXGroup` es la vista de Flutter (sano); `AXWindow` es la ventana, y con eso
+las teclas se pierden antes del framework. Con un campo enfocado la consulta
+falla, y es normal. La causa fue que el campo del panel usaba como controlador
+el buffer del atajo, que se vaciaba al cerrar con el campo todavía montado: ver
+el comentario de `_GlobalSearchPanelState._text`. Regla: **un `TextField` no
+usa un controlador que otro vacía o reemplaza después de cerrarlo**; si hay
+que traspasar texto, se copia.
+
+**Trampa de la medición:** entre una llamada y la siguiente, la app de Claude
+vuelve al frente, y un ciclo de teclas sin `set frontmost` antes de **cada**
+`keystroke` mide teclas que nunca llegaron a la app. Costó dos rondas creer
+que el arreglo no servía. El A/B que discriminó: seis ciclos abrir-cerrar con
+el buffer compartido → `AXWindow` desde el primer cierre; sin él → `AXGroup`
+los seis.
+
 ## Un cambio de entitlements no entra por reload ni por restart (2026-09-17)
 
 **Costo real: una ronda entera creyendo que el código nuevo no se había

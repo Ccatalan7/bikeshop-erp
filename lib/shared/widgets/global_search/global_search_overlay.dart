@@ -54,10 +54,12 @@ class GlobalSearchOverlay {
   /// buscador arriba es «cerrar», no «abrir otro».
   ///
   /// [sharedText] es el buffer de quien lo abrió —`GlobalSearchShortcut`, que
-  /// está montado siempre—. El panel lo adopta sin destruirlo, y por eso una
-  /// tecla escrita durante los 200 ms de la transición no se pierde: cae en ese
-  /// mismo texto aunque el campo todavía no exista. Sin él, escribir «felipe»
-  /// de corrido llegaba como «feli» (medido en la app, 2026-09-17).
+  /// está montado siempre—. Una tecla escrita durante los 200 ms de la
+  /// transición cae ahí aunque el campo todavía no exista, y el panel la copia
+  /// a su propio texto mientras el campo no tenga el foco. Sin el buffer,
+  /// escribir «felipe» de corrido llegaba como «feli» (medido en la app,
+  /// 2026-09-17). El campo **nunca** usa el buffer como su controlador: ver
+  /// `_GlobalSearchPanelState._text`.
   static Future<void> open(
     BuildContext context, {
     TextEditingController? sharedText,
@@ -148,7 +150,7 @@ class _GlobalSearchRoute extends PopupRoute<void> {
 class _GlobalSearchPanel extends StatefulWidget {
   const _GlobalSearchPanel({required this.sharedText});
 
-  /// El buffer de quien abrió. El panel lo adopta; no lo crea ni lo destruye.
+  /// El buffer de quien abrió. El panel lo lee; no lo usa como su campo.
   final TextEditingController? sharedText;
 
   @override
@@ -176,8 +178,22 @@ class _GlobalSearchPanelState extends State<_GlobalSearchPanel> {
   /// fila de título + contexto, y se reemplaza cuando Design publique `O-01`.
   static const double _desktopWidth = 640;
 
+  /// El texto del campo. Es **del panel**, nunca el buffer del atajo.
+  ///
+  /// **Causa medida (2026-09-30, reportada por el dueño: «funciona con 2
+  /// búsquedas, después ya no»):** el campo usaba directamente el buffer de
+  /// `GlobalSearchShortcut`. Al cerrar, el atajo lo vaciaba con el campo
+  /// todavía montado durante la salida, y en macOS eso dejaba como primer
+  /// respondedor a la **ventana** en vez de la vista de Flutter: desde ahí
+  /// ninguna tecla volvía a llegar al framework —ni al atajo, ni a ningún
+  /// campo— hasta un clic. Medido con accesibilidad: foco nativo `AXWindow`
+  /// tras el primer cierre con el buffer compartido, `AXGroup` (la vista)
+  /// en seis ciclos seguidos sin él.
+  ///
+  /// El buffer sigue existiendo para lo que se inventó —que no se pierdan las
+  /// teclas de los 200 ms de entrada—, pero sólo se **copia** al campo mientras
+  /// éste todavía no tiene el foco.
   late final TextEditingController _text;
-  late final bool _ownsText;
 
   /// El manejo de teclas cuelga del nodo **del campo**, no de un `Focus`
   /// ancestro.
@@ -220,8 +236,14 @@ class _GlobalSearchPanelState extends State<_GlobalSearchPanel> {
   @override
   void initState() {
     super.initState();
-    _ownsText = widget.sharedText == null;
-    _text = widget.sharedText ?? TextEditingController();
+    final initial = widget.sharedText?.text ?? '';
+    _text = TextEditingController.fromValue(
+      TextEditingValue(
+        text: initial,
+        selection: TextSelection.collapsed(offset: initial.length),
+      ),
+    );
+    widget.sharedText?.addListener(_adoptBufferedKeys);
     _controller = GlobalSearchController();
     _controller.addListener(_onControllerChanged);
     if (_text.text.isNotEmpty) _controller.updateText(_searchText);
@@ -323,14 +345,27 @@ class _GlobalSearchPanelState extends State<_GlobalSearchPanel> {
     _openCommand(command, argument: _commandInput?.argument ?? '');
   }
 
+  /// Lo que el atajo sigue escribiendo en su buffer mientras el campo entra.
+  /// Cuando el campo ya tiene el foco las teclas llegan solas y el atajo deja
+  /// de capturar, así que no hay nada más que copiar.
+  void _adoptBufferedKeys() {
+    final buffered = widget.sharedText?.text ?? '';
+    if (_fieldFocus.hasFocus || buffered.isEmpty || buffered == _text.text) {
+      return;
+    }
+    _text.value = TextEditingValue(
+      text: buffered,
+      selection: TextSelection.collapsed(offset: buffered.length),
+    );
+  }
+
   @override
   void dispose() {
+    widget.sharedText?.removeListener(_adoptBufferedKeys);
     _controller.removeListener(_onControllerChanged);
     _text.removeListener(_onTextChanged);
     _controller.dispose();
-    // Un buffer prestado se devuelve, no se destruye: su dueño sigue montado y
-    // lo va a necesitar en la próxima tecla.
-    if (_ownsText) _text.dispose();
+    _text.dispose();
     _fieldFocus.dispose();
     _scroll.dispose();
     _previews.clear();
