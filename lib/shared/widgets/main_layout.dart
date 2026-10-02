@@ -1937,6 +1937,12 @@ class _MainLayoutState extends State<MainLayout> {
           iconTheme: IconThemeData(
             color: compactChrome.foreground,
           ),
+          // En Material 3 el AppBar sólo tiñe los IconButton de las acciones
+          // con `actionsIconTheme`; sin él toman el gris del tema de la
+          // página y en oscuro casi desaparecen sobre la barra.
+          actionsIconTheme: IconThemeData(
+            color: compactChrome.foreground,
+          ),
           actions: [
             ...?widget.compactHeader?.actions,
             _CompactShellActions(

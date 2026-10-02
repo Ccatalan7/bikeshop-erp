@@ -27,6 +27,7 @@ import 'erp_routes_barrel.dart' deferred as erp
         AppearanceSettingsPage,
         AttendancesPage,
         BackupManagementPage,
+        BikeRecordPage,
         BalanceSheetPage,
         BankReconciliationPage,
         BikeBrandsPage,
@@ -1800,6 +1801,14 @@ class AppRouter {
             context,
             state,
             () => erp.CustomerBikeDirectoryPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/taller/bicicletas/:bikeId',
+          pageBuilder: (context, state) => _buildDeferredPageWithNoTransition(
+            context,
+            state,
+            () => erp.BikeRecordPage(bikeId: state.pathParameters['bikeId']!),
           ),
         ),
         GoRoute(

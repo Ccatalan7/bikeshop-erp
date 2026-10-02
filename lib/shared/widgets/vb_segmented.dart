@@ -128,6 +128,13 @@ class VbSegmentedOption<T> {
 /// Colour comes only from [VinabikeThemeRoles] and [ColorScheme]; the control
 /// declares no literal hex and no local shadow — `F-05` is explicit that a
 /// surface inside a surface earns `surfaceSunken` or a hairline, not a shadow.
+///
+/// The segments are equal `Expanded` children, so the control needs a bounded
+/// width. Inside a `Row` give it a `SizedBox(width: …)`, `Expanded` or
+/// `Flexible`. Unbounded, the flex error blanks the whole page body and leaves
+/// `!semantics.parentDataDirty` assertions until a hot restart (the bicycle
+/// directory, 2026-10-02). It is not solved here with a `LayoutBuilder`
+/// because hosts that measure the control with `IntrinsicWidth` would break.
 class VbSegmented<T> extends StatefulWidget {
   const VbSegmented({
     super.key,

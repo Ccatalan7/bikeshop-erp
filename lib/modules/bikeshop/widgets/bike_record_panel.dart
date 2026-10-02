@@ -1,20 +1,37 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 
-import '../../../shared/widgets/vb_button.dart';
 import '../../../shared/themes/vinabike_theme_roles.dart';
+import '../../../shared/widgets/vb_button.dart';
+import '../../../shared/widgets/vb_segmented.dart' show VbDensity;
+import '../../../shared/widgets/vb_sub_tabs.dart';
 import '../config/bottom_bracket_canonical_data.dart';
 import '../config/brake_canonical_data.dart';
 import '../config/wheel_canonical_data.dart';
-import '../models/bikeshop_models.dart';
 import '../models/bike_fact_origin.dart';
+import '../models/bikeshop_models.dart';
+import '../services/bike_directory_entries.dart';
+import '../services/bike_visit_history.dart';
 import '../services/bikeshop_service.dart';
-import 'bike_diagram_illustration.dart';
-import 'bike_system_controller.dart';
+import '../services/job_line_systems.dart';
 import 'bike_measurement_timeline.dart';
+import 'bike_module_style.dart';
+import 'bike_silhouette.dart';
+import 'bike_system_controller.dart';
 
+/// La ficha de una bicicleta: quién es, qué se le ha hecho y qué se sabe de
+/// ella.
+///
+/// Rediseño aprobado por el dueño el 2026-10-02 (lienzo «Bicicletas —
+/// rediseño»). Abre en el historial, armado desde los trabajos de la bici:
+/// cada visita con lo que pidió el cliente y lo que se le hizo, por sistema.
+/// La ficha técnica muestra todos los sistemas a la vez sobre el dibujo de la
+/// bici; ya no hay que elegir un sistema para ver algo.
+///
+/// La sirven la página propia de la bici (`/taller/bicicletas/:id`) y la
+/// pestaña Bicicletas del cliente.
 class BikeRecordPanel extends StatefulWidget {
   final BikeRecordSnapshot snapshot;
   final String ownerName;
@@ -22,6 +39,23 @@ class BikeRecordPanel extends StatefulWidget {
   final VoidCallback onEdit;
   final VoidCallback onNewJob;
   final VoidCallback onClose;
+
+  /// Abre al dueño. Sin él (la ficha ya está dentro del cliente) el nombre
+  /// no es un enlace.
+  final VoidCallback? onOpenOwner;
+
+  /// Abre un trabajo. Por defecto, su página.
+  final void Function(String jobId)? onOpenJob;
+
+  /// El texto del regreso: «Bicicletas» o «Volver a bicicletas».
+  final String closeLabel;
+
+  /// Para pruebas: el día con que se cuentan los días en el taller.
+  final DateTime? today;
+
+  /// Falso cuando el anfitrión ya dibuja el regreso (la barra del teléfono
+  /// de la página propia de la bici, que además lleva «Editar»).
+  final bool showBackRow;
 
   const BikeRecordPanel({
     super.key,
@@ -31,30 +65,100 @@ class BikeRecordPanel extends StatefulWidget {
     required this.onEdit,
     required this.onNewJob,
     required this.onClose,
+    this.onOpenOwner,
+    this.onOpenJob,
+    this.closeLabel = 'Volver a bicicletas',
+    this.today,
+    this.showBackRow = true,
   });
 
   @override
   State<BikeRecordPanel> createState() => _BikeRecordPanelState();
 }
 
-class _BikeRecordPanelState extends State<BikeRecordPanel>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  late Future<_BikeRecordHistoryData> _historyFuture;
-  String? _selectedDiagnosisSystemKey;
-  String? _selectedTechnicalSystemKey;
+enum _RecordTab { history, technical, notes }
+
+final NumberFormat _money =
+    NumberFormat.currency(symbol: r'$', decimalDigits: 0);
+
+bool _isCancelledJob(MechanicJob job) =>
+    job.status == JobStatus.cancelado ||
+    job.customStatus?.code.trim().toUpperCase() == 'CANCELADO';
+
+/// Lo que lee el historial: la memoria técnica de la bici y sus visitas.
+class _RecordHistory {
+  const _RecordHistory({required this.memory, required this.visits});
+
+  const _RecordHistory.empty()
+      : memory = const _BikeRecordHistoryData.empty(),
+        visits = const [];
+
+  final _BikeRecordHistoryData memory;
+  final List<BikeVisit> visits;
+
+  int get visitCount =>
+      visits.where((visit) => !_isCancelledJob(visit.job)).length;
+
+  BikeVisit? get workshopVisit {
+    for (final visit in visits) {
+      if (visit.inWorkshop) return visit;
+    }
+    return null;
+  }
+
+  DateTime? get lastVisitAt => visits.isEmpty
+      ? null
+      : visits
+          .map((visit) => visit.date)
+          .reduce((a, b) => a.isAfter(b) ? a : b);
+
+  bool get isEmpty => visits.isEmpty && memory.isEmpty;
+}
+
+/// Un sistema en «Por sistema»: cuándo se tocó y qué dejó montado el taller.
+class _SystemSummary {
+  _SystemSummary(this.system);
+
+  final JobLineSystem system;
+  DateTime? lastDate;
+  final List<BikeComponentLifecycle> installed = [];
+}
+
+/// Un grupo de la ficha técnica sobre el dibujo.
+class _SpecGroup {
+  const _SpecGroup({
+    required this.number,
+    required this.title,
+    required this.anchor,
+    required this.facts,
+    required this.knownCount,
+    required this.expectedCount,
+    this.missingText,
+  });
+
+  final int number;
+  final String title;
+  final BikeSilhouetteAnchor anchor;
+  final List<_BikeRecordTechnicalFact> facts;
+
+  /// Lo que la ficha sabe, contado como lo cuenta su sistema: un líquido
+  /// igual en los dos frenos se muestra una vez pero son dos datos.
+  final int knownCount;
+  final int expectedCount;
+  final String? missingText;
+}
+
+class _BikeRecordPanelState extends State<BikeRecordPanel> {
+  _RecordTab _tab = _RecordTab.history;
+  late Future<_RecordHistory> _historyFuture;
+  JobLineSystem? _systemFilter;
+
+  DateTime get _today => widget.today ?? DateTime.now();
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this)
-      ..addListener(_handleTabChanged);
     _reloadHistory();
-  }
-
-  void _handleTabChanged() {
-    if (!mounted) return;
-    setState(() {});
   }
 
   @override
@@ -64,40 +168,34 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
       _reloadHistory();
     }
     if (oldWidget.snapshot.bike.id != widget.snapshot.bike.id) {
-      _selectedDiagnosisSystemKey = null;
-      _selectedTechnicalSystemKey = null;
+      _systemFilter = null;
     }
   }
 
-  @override
-  void dispose() {
-    _tabController.removeListener(_handleTabChanged);
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  Future<_BikeRecordHistoryData> _loadBikeHistoryData(String? bikeId) async {
+  Future<_RecordHistory> _loadHistory(String? bikeId) async {
     if (bikeId == null || bikeId.isEmpty) {
-      return const _BikeRecordHistoryData.empty();
+      return const _RecordHistory.empty();
     }
-
     try {
-      final bikeshopService = context.read<BikeshopService>();
+      final bikeshop = context.read<BikeshopService>();
       final results = await Future.wait<Object?>([
-        bikeshopService.getBikeEvents(bikeId),
-        bikeshopService.getBikeObservations(bikeId),
-        bikeshopService.getBikeSystemStates(bikeId),
-        bikeshopService.getBikeInterventions(bikeId),
-        bikeshopService.getBikeComponentLifecycles(bikeId),
+        bikeshop.getBikeEvents(bikeId),
+        bikeshop.getBikeObservations(bikeId),
+        bikeshop.getBikeSystemStates(bikeId),
+        bikeshop.getBikeInterventions(bikeId),
+        bikeshop.getBikeComponentLifecycles(bikeId),
+        loadBikeVisits(context, bikeId),
       ]);
-
-      return _BikeRecordHistoryData.fromRaw(
-        events: (results[0] as List<BikeEvent>?) ?? const [],
-        observations: (results[1] as List<BikeObservation>?) ?? const [],
-        systemStates: (results[2] as List<BikeSystemState>?) ?? const [],
-        interventions: (results[3] as List<BikeIntervention>?) ?? const [],
-        componentLifecycles:
-            (results[4] as List<BikeComponentLifecycle>?) ?? const [],
+      return _RecordHistory(
+        memory: _BikeRecordHistoryData.fromRaw(
+          events: (results[0] as List<BikeEvent>?) ?? const [],
+          observations: (results[1] as List<BikeObservation>?) ?? const [],
+          systemStates: (results[2] as List<BikeSystemState>?) ?? const [],
+          interventions: (results[3] as List<BikeIntervention>?) ?? const [],
+          componentLifecycles:
+              (results[4] as List<BikeComponentLifecycle>?) ?? const [],
+        ),
+        visits: (results[5] as List<BikeVisit>?) ?? const [],
       );
     } catch (error) {
       debugPrint('Bike record history load failed: $error');
@@ -106,45 +204,20 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
   }
 
   void _reloadHistory() {
-    _historyFuture = _loadBikeHistoryData(widget.snapshot.bike.id);
-    // The history tab can be offscreen when the request finishes. Observe
-    // errors now; FutureBuilder still receives them when that tab is opened.
+    _historyFuture = _loadHistory(widget.snapshot.bike.id);
+    // El historial puede no estar a la vista cuando falla la lectura: se
+    // observa ahora y el FutureBuilder igual recibe el error.
     _historyFuture.ignore();
   }
 
-  Widget _buildHistoryLoadFailure(ThemeData theme) {
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Semantics(
-          liveRegion: true,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.cloud_off_outlined,
-                  size: 32, color: theme.colorScheme.onSurfaceVariant),
-              const SizedBox(height: 16),
-              Text('No pudimos cargar el historial.',
-                  style: theme.textTheme.titleMedium,
-                  textAlign: TextAlign.center),
-              const SizedBox(height: 8),
-              Text('Revisa la conexión y vuelve a intentar.',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                  textAlign: TextAlign.center),
-              const SizedBox(height: 16),
-              VbButton(
-                label: 'Reintentar historial',
-                variant: VbButtonVariant.secondary,
-                icon: Icons.refresh,
-                onPressed: () => setState(_reloadHistory),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+  void _openJob(String? jobId) {
+    if (jobId == null || jobId.isEmpty) return;
+    final open = widget.onOpenJob;
+    if (open != null) {
+      open(jobId);
+    } else {
+      context.push('/taller/pegas/$jobId');
+    }
   }
 
   @override
@@ -152,998 +225,1993 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
     final theme = Theme.of(context);
     if (widget.isLoading) {
       return ColoredBox(
+        color: theme.colorScheme.surfaceContainer,
+        child: const Center(child: CircularProgressIndicator()),
+      );
+    }
+    return BikeModuleTheme(
+      child: ColoredBox(
+        color: theme.colorScheme.surfaceContainer,
+        child: FutureBuilder<_RecordHistory>(
+          future: _historyFuture,
+          builder: (context, snapshot) {
+            final loading = snapshot.connectionState == ConnectionState.waiting;
+            final failed = !loading && snapshot.hasError;
+            final history = (loading || failed) ? null : snapshot.data;
+            return LayoutBuilder(
+              builder: (context, constraints) {
+                final narrow = constraints.maxWidth < 680;
+                final gutter = narrow ? 16.0 : 28.0;
+                final contentWidth =
+                    (constraints.maxWidth - gutter * 2).clamp(0.0, 1180.0);
+                // Algunos anfitriones dan un alto holgado: la ficha igual
+                // ocupa todo el alto, para que su fondo no termine a media
+                // pantalla (se notaba en oscuro).
+                return SizedBox(
+                  width: constraints.maxWidth,
+                  height: constraints.maxHeight.isFinite
+                      ? constraints.maxHeight
+                      : null,
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.fromLTRB(
+                        gutter, narrow ? 4 : 14, gutter, 48),
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: SizedBox(
+                        width: contentWidth,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (widget.showBackRow) ...[
+                              _buildBackRow(context, narrow: narrow),
+                              SizedBox(height: narrow ? 4 : 8),
+                            ] else
+                              const SizedBox(height: 12),
+                            if (narrow)
+                              _buildPhoneHeader(context, history)
+                            else
+                              _buildWideHeader(context, history,
+                                  width: contentWidth),
+                            const SizedBox(height: 18),
+                            VbSubTabs<_RecordTab>(
+                              density: VbSubTabsDensity.comfortable,
+                              value: _tab,
+                              onChanged: (tab) => setState(() => _tab = tab),
+                              tabs: [
+                                VbSubTab(
+                                  value: _RecordTab.history,
+                                  label:
+                                      history == null || history.visitCount == 0
+                                          ? 'Historial'
+                                          : 'Historial · ${history.visitCount}',
+                                ),
+                                const VbSubTab(
+                                  value: _RecordTab.technical,
+                                  label: 'Ficha técnica',
+                                ),
+                                const VbSubTab(
+                                  value: _RecordTab.notes,
+                                  label: 'Notas',
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 20),
+                            switch (_tab) {
+                              _RecordTab.history => _buildHistoryTab(
+                                  context,
+                                  loading: loading,
+                                  failed: failed,
+                                  history: history,
+                                  width: contentWidth,
+                                ),
+                              _RecordTab.technical => _buildTechnicalTab(
+                                  context,
+                                  width: contentWidth),
+                              _RecordTab.notes => _buildNotesTab(context),
+                            },
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  // ── Cabecera ─────────────────────────────────────────────────────────────
+
+  Widget _buildBackRow(BuildContext context, {required bool narrow}) {
+    final theme = Theme.of(context);
+    final back = TextButton.icon(
+      onPressed: widget.onClose,
+      icon: const Icon(Icons.chevron_left, size: 22),
+      label: Text(
+        widget.closeLabel,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+      ),
+      style: TextButton.styleFrom(
+        foregroundColor: theme.colorScheme.primary,
+        minimumSize: const Size(44, 44),
+        padding: const EdgeInsets.only(left: 2, right: 10),
+      ),
+    );
+    if (!narrow) return Align(alignment: Alignment.centerLeft, child: back);
+    return Row(
+      children: [
+        Expanded(
+          child: Align(alignment: Alignment.centerLeft, child: back),
+        ),
+        const SizedBox(width: 8),
+        IconButton.outlined(
+          tooltip: 'Editar bicicleta',
+          onPressed: widget.onEdit,
+          icon: const Icon(Icons.edit_outlined, size: 20),
+          style: IconButton.styleFrom(minimumSize: const Size(44, 44)),
+        ),
+      ],
+    );
+  }
+
+  String get _brand => widget.snapshot.bike.brand?.trim() ?? '';
+  String get _model => widget.snapshot.bike.model?.trim() ?? '';
+
+  String get _bikeLabel {
+    final parts = [_brand, _model].where((part) => part.isNotEmpty);
+    return parts.isEmpty ? 'Bicicleta sin nombre' : parts.join(' ');
+  }
+
+  String _drawingLabel() {
+    final bike = widget.snapshot.bike;
+    final type = bike.bikeType?.displayName ?? 'bicicleta';
+    final color = bike.color?.trim();
+    return color == null || color.isEmpty
+        ? 'Dibujo de $type'
+        : 'Dibujo de $type, ${color.toLowerCase()}';
+  }
+
+  Widget _bikeDrawing(
+    BuildContext context, {
+    required double width,
+    required double height,
+    List<BikeSilhouetteMarker> markers = const [],
+  }) {
+    final bike = widget.snapshot.bike;
+    final photo = bike.imageUrl?.trim().isNotEmpty == true
+        ? bike.imageUrl!.trim()
+        : (bike.imageUrls.isNotEmpty ? bike.imageUrls.first : null);
+    final drawing = BikeSilhouette(
+      bikeType: bike.bikeType,
+      colorText: bike.color,
+      markers: markers,
+      semanticLabel: _drawingLabel(),
+    );
+    return Container(
+      width: width,
+      height: height,
+      padding: EdgeInsets.symmetric(
+          horizontal: width * 0.06, vertical: height * 0.07),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      clipBehavior: Clip.antiAlias,
+      alignment: Alignment.center,
+      child: photo != null && markers.isEmpty
+          ? Image.network(
+              photo,
+              fit: BoxFit.contain,
+              semanticLabel: 'Foto de $_bikeLabel',
+              errorBuilder: (_, __, ___) => drawing,
+            )
+          : drawing,
+    );
+  }
+
+  Widget _buildTitle(BuildContext context, {required bool narrow}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (_brand.isNotEmpty && _model.isNotEmpty)
+          Text(
+            _brand.toUpperCase(),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: BikeModuleText.eyebrow(context, size: narrow ? 13 : 15),
+          ),
+        Semantics(
+          header: true,
+          label: _bikeLabel,
+          excludeSemantics: true,
+          child: Text(
+            _model.isNotEmpty
+                ? _model
+                : (_brand.isNotEmpty ? _brand : 'Bicicleta sin nombre'),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: BikeModuleText.title(context, size: narrow ? 32 : 44),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildOwner(BuildContext context, {required bool narrow}) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final name = widget.ownerName.trim().isEmpty
+        ? 'Sin dueño registrado'
+        : widget.ownerName.trim();
+    final open = widget.onOpenOwner;
+    if (narrow) {
+      return Material(
         color: theme.colorScheme.surface,
-        child: const Center(
-          child: CircularProgressIndicator(),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: theme.colorScheme.outlineVariant),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: open,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 52),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('Dueño',
+                            style: TextStyle(
+                                fontSize: 12, color: roles.faintForeground)),
+                        Text(
+                          name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: open == null
+                                ? theme.colorScheme.onSurface
+                                : theme.colorScheme.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (open != null)
+                    Icon(Icons.chevron_right, color: roles.faintForeground),
+                ],
+              ),
+            ),
+          ),
         ),
       );
     }
+    final label = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('Dueño',
+            style: TextStyle(fontSize: 14, color: roles.faintForeground)),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: open == null
+                  ? theme.colorScheme.onSurface
+                  : theme.colorScheme.primary,
+            ),
+          ),
+        ),
+        if (open != null) ...[
+          const SizedBox(width: 2),
+          Icon(Icons.chevron_right, size: 18, color: theme.colorScheme.primary),
+        ],
+      ],
+    );
+    if (open == null) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: label,
+      );
+    }
+    return Tooltip(
+      message: 'Abrir cliente',
+      child: InkWell(
+        onTap: open,
+        borderRadius: BorderRadius.circular(8),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: Align(alignment: Alignment.centerLeft, child: label),
+          ),
+        ),
+      ),
+    );
+  }
 
-    // We generate a beautiful dynamic color profile based on the snapshot completion status
-    final isComplete = widget.snapshot.isProfileComplete;
-    final isStructured = widget.snapshot.hasStructuredProfile;
+  List<({String label, String? value})> _facts(_RecordHistory? history) {
+    final bike = widget.snapshot.bike;
+    String? clean(String? value) =>
+        value == null || value.trim().isEmpty ? null : value.trim();
+    final color = clean(bike.color);
+    return [
+      (
+        label: 'Color',
+        value:
+            color == null ? null : color[0].toUpperCase() + color.substring(1),
+      ),
+      (label: 'Aro', value: clean(bike.wheelSize)),
+      (label: 'Tipo', value: bike.bikeType?.displayName),
+      (label: 'Año', value: bike.year?.toString()),
+      (label: 'N° de serie', value: clean(bike.serialNumber)),
+      (
+        label: 'Visitas',
+        value: history == null ? null : '${history.visitCount}',
+      ),
+      (
+        label: 'Última visita',
+        value: history?.lastVisitAt == null
+            ? null
+            : bikeFullDate(history!.lastVisitAt!),
+      ),
+    ];
+  }
 
+  Widget _factCell(BuildContext context, ({String label, String? value}) fact) {
+    final theme = Theme.of(context);
     final roles = VinabikeThemeRoles.of(context);
-    final Color statusColor = isComplete
-        ? roles.success.accent
-        : (isStructured ? roles.info.accent : roles.warning.accent);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(fact.label.toUpperCase(), style: BikeModuleText.label(context)),
+        const SizedBox(height: 3),
+        Text(
+          fact.value ?? '—',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: fact.value == null ? FontWeight.w500 : FontWeight.w600,
+            fontFeatures: const [FontFeature.tabularFigures()],
+            color: fact.value == null
+                ? roles.faintForeground
+                : theme.colorScheme.onSurface,
+          ),
+        ),
+      ],
+    );
+  }
 
-    Widget buildContentShell({required bool mobile}) {
-      return Column(
+  Widget _buildWideHeader(
+    BuildContext context,
+    _RecordHistory? history, {
+    required double width,
+  }) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final roomy = width >= 900;
+    final facts = _facts(history);
+    final workshopVisit = history?.workshopVisit;
+    final columns = width >= 980 ? facts.length : 4;
+    final cellWidth = (width - 2) / columns;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildRecordContentHeader(theme, mobile: mobile),
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              physics: const NeverScrollableScrollPhysics(),
+          Padding(
+            padding: const EdgeInsets.all(24),
+            child: Row(
               children: [
-                _buildGeneralTab(theme),
-                _buildTechnicalSpecsTab(theme, showInlineSystemMap: mobile),
-                _buildTimelineTab(theme, showInlineSystemMap: mobile),
+                _bikeDrawing(
+                  context,
+                  width: roomy ? 236 : 176,
+                  height: roomy ? 150 : 112,
+                ),
+                const SizedBox(width: 28),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildTitle(context, narrow: false),
+                      const SizedBox(height: 4),
+                      _buildOwner(context, narrow: false),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  alignment: WrapAlignment.end,
+                  children: [
+                    VbButton(
+                      label: 'Editar',
+                      icon: Icons.edit_outlined,
+                      variant: VbButtonVariant.secondary,
+                      density: VbDensity.comfortable,
+                      semanticLabel: 'Editar bicicleta',
+                      onPressed: widget.onEdit,
+                    ),
+                    VbButton(
+                      label: 'Nuevo trabajo',
+                      icon: Icons.add,
+                      density: VbDensity.comfortable,
+                      onPressed: widget.onNewJob,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          if (workshopVisit != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+              child: _buildWorkshopBand(context, workshopVisit, narrow: false),
+            ),
+          Container(
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: roles.hairline)),
+            ),
+            child: Wrap(
+              children: [
+                for (var index = 0; index < facts.length; index++)
+                  Container(
+                    width: cellWidth,
+                    padding: const EdgeInsets.fromLTRB(24, 14, 16, 14),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        right: (index + 1) % columns == 0
+                            ? BorderSide.none
+                            : BorderSide(color: roles.hairline),
+                        top: index >= columns
+                            ? BorderSide(color: roles.hairline)
+                            : BorderSide.none,
+                      ),
+                    ),
+                    child: _factCell(context, facts[index]),
+                  ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildPhoneHeader(BuildContext context, _RecordHistory? history) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final facts = _facts(history)
+        .where((fact) => fact.label != 'N° de serie' || fact.value != null)
+        .toList();
+    final workshopVisit = history?.workshopVisit;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            _bikeDrawing(context, width: 132, height: 88),
+            const SizedBox(width: 16),
+            Expanded(child: _buildTitle(context, narrow: true)),
+          ],
+        ),
+        const SizedBox(height: 16),
+        _buildOwner(context, narrow: true),
+        const SizedBox(height: 12),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: theme.colorScheme.outlineVariant),
+          ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final half = (constraints.maxWidth - 2) / 2;
+              return Wrap(
+                children: [
+                  for (var index = 0; index < facts.length; index++)
+                    Container(
+                      width: half,
+                      padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+                      decoration: BoxDecoration(
+                        border: Border(
+                          right: index.isEven
+                              ? BorderSide(color: roles.hairline)
+                              : BorderSide.none,
+                          top: index >= 2
+                              ? BorderSide(color: roles.hairline)
+                              : BorderSide.none,
+                        ),
+                      ),
+                      child: _factCell(context, facts[index]),
+                    ),
+                ],
+              );
+            },
+          ),
+        ),
+        if (workshopVisit != null) ...[
+          const SizedBox(height: 12),
+          _buildWorkshopBand(context, workshopVisit, narrow: true),
+        ],
+        const SizedBox(height: 14),
+        VbButton(
+          label: 'Nuevo trabajo',
+          icon: Icons.add,
+          expand: true,
+          onPressed: widget.onNewJob,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWorkshopBand(
+    BuildContext context,
+    BikeVisit visit, {
+    required bool narrow,
+  }) {
+    final roles = VinabikeThemeRoles.of(context);
+    final job = visit.job;
+    final days = calendarDaysBetween(job.arrivalDate, _today);
+    final since = days == 0
+        ? 'En el taller desde hoy'
+        : 'En el taller hace ${days == 1 ? '1 día' : '$days días'}';
+    final details = Wrap(
+      spacing: 14,
+      runSpacing: 6,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Text(
+          since,
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            color: roles.onSelectionContainer,
+          ),
+        ),
+        if (job.jobNumber != null)
+          Text(job.jobNumber!, style: BikeModuleText.code(context)),
+        BikeJobStatusDot(
+          label: jobStatusLabel(job),
+          color: jobStatusColor(job),
+          fontSize: 14,
+        ),
+        if (visit.amount > 0)
+          Text(
+            _money.format(visit.amount),
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              fontFeatures: [FontFeature.tabularFigures()],
+            ),
+          ),
+      ],
+    );
+    final open = VbButton(
+      label: 'Abrir trabajo',
+      icon: Icons.arrow_forward,
+      variant: VbButtonVariant.secondary,
+      density: narrow ? null : VbDensity.comfortable,
+      expand: narrow,
+      onPressed: job.id == null ? null : () => _openJob(job.id),
+      disabledReason:
+          job.id == null ? 'El trabajo todavía no se guarda.' : null,
+    );
+    return Semantics(
+      container: true,
+      child: Container(
+        padding: EdgeInsets.fromLTRB(16, 12, 12, narrow ? 12 : 12),
+        decoration: BoxDecoration(
+          color: roles.selectionContainer,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: roles.accentBorder),
+        ),
+        child: narrow
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [details, const SizedBox(height: 10), open],
+              )
+            : Row(
+                children: [
+                  Expanded(child: details),
+                  const SizedBox(width: 12),
+                  open,
+                ],
+              ),
+      ),
+    );
+  }
+
+  // ── Historial ────────────────────────────────────────────────────────────
+
+  Widget _buildHistoryLoadFailure(ThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 32),
+      child: Semantics(
+        liveRegion: true,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.cloud_off_outlined,
+                size: 32, color: theme.colorScheme.onSurfaceVariant),
+            const SizedBox(height: 16),
+            Text('No pudimos cargar el historial.',
+                style: theme.textTheme.titleMedium,
+                textAlign: TextAlign.center),
+            const SizedBox(height: 8),
+            Text('Revisa la conexión y vuelve a intentar.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            VbButton(
+              label: 'Reintentar historial',
+              variant: VbButtonVariant.secondary,
+              icon: Icons.refresh,
+              onPressed: () => setState(_reloadHistory),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHistoryTab(
+    BuildContext context, {
+    required bool loading,
+    required bool failed,
+    required _RecordHistory? history,
+    required double width,
+  }) {
+    final theme = Theme.of(context);
+    if (loading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 40),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (failed || history == null) return _buildHistoryLoadFailure(theme);
+    if (history.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 32),
+        child: Column(
+          children: [
+            Text(
+              'Esta bici todavía no tiene trabajos.',
+              style: theme.textTheme.titleMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Cada trabajo del taller queda aquí, con lo que se le hizo.',
+              style: theme.textTheme.bodyMedium
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       );
     }
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // The companion map needs enough room beside the reading pane. Narrow
-        // hosts retain the same map within the technical/history scroll.
-        final showDesktopPreviewPane = constraints.maxWidth >= 1100;
+    final systems = _systemSummaries(history);
+    final filter = systems.any((summary) => summary.system == _systemFilter)
+        ? _systemFilter
+        : null;
+    final wide = width >= 960;
+    final narrow = width < 640;
+    final visits = filter == null
+        ? history.visits
+        : history.visits
+            .where((visit) => visit.systems.contains(filter))
+            .toList();
 
-        if (showDesktopPreviewPane) {
-          return Container(
-            color: theme.colorScheme.surfaceContainerLowest,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  flex: 4,
-                  child: _buildRecordPreviewPane(
-                    theme,
-                    statusColor: statusColor,
-                    compact: false,
+    final timeline = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (filter != null) ...[
+          _buildSystemMemory(context, history, filter),
+        ],
+        for (final visit in visits)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 18),
+            child: _buildVisit(context, visit, filter: filter, narrow: narrow),
+          ),
+        if (visits.isEmpty && history.visits.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              'Ningún trabajo tocó este sistema.',
+              style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+            ),
+          ),
+        if (history.memory.events.isNotEmpty)
+          _buildEventsSection(context, history.memory.events),
+      ],
+    );
+
+    if (!wide) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (systems.isNotEmpty) ...[
+            _buildSystemChips(context, systems, filter),
+            const SizedBox(height: 16),
+          ],
+          timeline,
+        ],
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: timeline),
+        if (systems.isNotEmpty) ...[
+          const SizedBox(width: 28),
+          SizedBox(
+            width: 300,
+            child: _buildSystemRail(context, history, systems, filter),
+          ),
+        ],
+      ],
+    );
+  }
+
+  List<_SystemSummary> _systemSummaries(_RecordHistory history) {
+    final bySystem = <JobLineSystem, _SystemSummary>{};
+    for (final visit in history.visits) {
+      if (_isCancelledJob(visit.job)) continue;
+      for (final group in visit.groups) {
+        final summary = bySystem.putIfAbsent(
+            group.system, () => _SystemSummary(group.system));
+        if (summary.lastDate == null || visit.date.isAfter(summary.lastDate!)) {
+          summary.lastDate = visit.date;
+        }
+      }
+    }
+    for (final lifecycle in history.memory.componentLifecycles) {
+      if (lifecycle.status != BikeComponentLifecycleStatus.installed) continue;
+      final system = jobLineSystemFromKey(lifecycle.systemKey);
+      if (system == null) continue;
+      final summary =
+          bySystem.putIfAbsent(system, () => _SystemSummary(system));
+      summary.installed.add(lifecycle);
+      if (summary.lastDate == null ||
+          lifecycle.installedAt.isAfter(summary.lastDate!)) {
+        summary.lastDate = lifecycle.installedAt;
+      }
+    }
+    final summaries = bySystem.values.toList()
+      ..sort((a, b) =>
+          (b.lastDate ?? DateTime(0)).compareTo(a.lastDate ?? DateTime(0)));
+    return summaries;
+  }
+
+  Widget _buildSystemRail(
+    BuildContext context,
+    _RecordHistory history,
+    List<_SystemSummary> systems,
+    JobLineSystem? filter,
+  ) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    Widget option({
+      required bool selected,
+      required VoidCallback onTap,
+      required Widget child,
+      bool divider = true,
+    }) {
+      return Semantics(
+        button: true,
+        selected: selected,
+        child: Material(
+          color: selected ? roles.selectionContainer : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 44),
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+              decoration: BoxDecoration(
+                border: divider && !selected
+                    ? Border(top: BorderSide(color: roles.hairline))
+                    : null,
+              ),
+              child: child,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
+              child: Semantics(
+                header: true,
+                child:
+                    Text('POR SISTEMA', style: BikeModuleText.label(context)),
+              ),
+            ),
+            option(
+              selected: filter == null,
+              divider: false,
+              onTap: () => setState(() => _systemFilter = null),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Todo el historial',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: filter == null
+                            ? roles.onSelectionContainer
+                            : theme.colorScheme.onSurface,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    history.visitCount == 1
+                        ? '1 visita'
+                        : '${history.visitCount} visitas',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: filter == null
+                          ? roles.onSelectionContainer
+                          : theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            for (final summary in systems)
+              option(
+                selected: filter == summary.system,
+                onTap: () => setState(() => _systemFilter =
+                    filter == summary.system ? null : summary.system),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            summary.system.label,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: filter == summary.system
+                                  ? roles.onSelectionContainer
+                                  : theme.colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                        if (summary.lastDate != null)
+                          Text(
+                            bikeShortDate(summary.lastDate!, today: _today),
+                            style: TextStyle(
+                                fontSize: 13, color: roles.faintForeground),
+                          ),
+                      ],
+                    ),
+                    for (final part in summary.installed.take(4))
+                      Padding(
+                        padding: const EdgeInsets.only(top: 5),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              width: 5,
+                              height: 5,
+                              margin: const EdgeInsets.only(top: 6, right: 8),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.primary,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            Expanded(
+                              child: Text(
+                                part.componentLabel,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSystemChips(
+    BuildContext context,
+    List<_SystemSummary> systems,
+    JobLineSystem? filter,
+  ) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    Widget chip(String label, bool selected, VoidCallback onTap) {
+      return Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: Semantics(
+          button: true,
+          selected: selected,
+          child: Material(
+            color:
+                selected ? roles.selectionContainer : theme.colorScheme.surface,
+            shape: StadiumBorder(
+              side: BorderSide(
+                color: selected
+                    ? roles.accentBorder
+                    : theme.colorScheme.outlineVariant,
+              ),
+            ),
+            child: InkWell(
+              onTap: onTap,
+              customBorder: const StadiumBorder(),
+              child: Container(
+                height: 44,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                alignment: Alignment.center,
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: selected
+                        ? roles.onSelectionContainer
+                        : theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
-                Expanded(
-                  flex: 6,
-                  child: buildContentShell(mobile: false),
-                ),
-              ],
+              ),
             ),
-          );
-        }
+          ),
+        ),
+      );
+    }
 
-        return Container(
-          color: theme.colorScheme.surfaceContainerLowest,
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          chip('Todo', filter == null,
+              () => setState(() => _systemFilter = null)),
+          for (final summary in systems)
+            chip(
+              summary.system.label,
+              filter == summary.system,
+              () => setState(() => _systemFilter =
+                  filter == summary.system ? null : summary.system),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Lo que la memoria de la bici sabe del sistema elegido.
+  Widget _buildSystemMemory(
+    BuildContext context,
+    _RecordHistory history,
+    JobLineSystem system,
+  ) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final views = history.memory.diagnosisSystems
+        .where((view) => jobLineSystemFromKey(view.systemKey) == system)
+        .toList();
+    final installed = [
+      for (final lifecycle in history.memory.componentLifecycles)
+        if (lifecycle.status == BikeComponentLifecycleStatus.installed &&
+            jobLineSystemFromKey(lifecycle.systemKey) == system)
+          lifecycle,
+    ];
+    final notes = <String>[
+      for (final view in views)
+        if (view.state?.statusNote?.trim() case final note?
+            when note.isNotEmpty)
+          note,
+    ];
+    final series = [for (final view in views) ...view.measurementSeries];
+    final observations = [
+      for (final view in views) ...view.contextEntries,
+    ]..sort((a, b) => b.observedAt.compareTo(a.observedAt));
+    if (installed.isEmpty &&
+        notes.isEmpty &&
+        series.isEmpty &&
+        observations.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    Widget section(String title, List<Widget> children) => Padding(
+          padding: const EdgeInsets.only(top: 14),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _buildCompactRecordHeader(theme, statusColor: statusColor),
-              Expanded(child: buildContentShell(mobile: true)),
+              Text(title.toUpperCase(), style: BikeModuleText.label(context)),
+              const SizedBox(height: 6),
+              ...children,
             ],
           ),
         );
-      },
-    );
-  }
 
-  int get _activeTabIndex => _tabController.index;
-
-  Widget _buildCompactRecordHeader(ThemeData theme,
-      {required Color statusColor}) {
-    final bike = widget.snapshot.bike;
-    final identity = [bike.brand, bike.model]
-        .whereType<String>()
-        .where((part) => part.trim().isNotEmpty)
-        .join(' ');
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
+      margin: const EdgeInsets.only(bottom: 18),
+      padding: const EdgeInsets.fromLTRB(18, 6, 18, 18),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
-        border:
-            Border(bottom: BorderSide(color: theme.colorScheme.outlineVariant)),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Wrap(
-            spacing: 12,
-            runSpacing: 6,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              VbButton(
-                label: 'Volver a bicicletas',
-                variant: VbButtonVariant.text,
-                icon: Icons.arrow_back,
-                onPressed: widget.onClose,
-              ),
-              Text(
-                widget.snapshot.isProfileComplete
-                    ? 'Perfil completo'
-                    : 'Perfil incompleto',
-                style:
-                    theme.textTheme.labelMedium?.copyWith(color: statusColor),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(identity.isEmpty ? 'Bicicleta' : identity,
-              style: theme.textTheme.titleLarge
-                  ?.copyWith(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 2),
-          Text(widget.ownerName,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              VbButton(
-                  label: 'Editar bicicleta',
-                  variant: VbButtonVariant.secondary,
-                  icon: Icons.edit_outlined,
-                  onPressed: widget.onEdit),
-              VbButton(
-                  label: 'Nuevo trabajo',
-                  icon: Icons.build_outlined,
-                  onPressed: widget.onNewJob),
-            ],
-          ),
+          if (installed.isNotEmpty)
+            section('Montado por el taller', [
+              for (final part in installed)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text.rich(
+                    TextSpan(children: [
+                      TextSpan(
+                        text: part.componentLabel,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      TextSpan(
+                        text: '  desde ${bikeFullDate(part.installedAt)}'
+                            '${part.payload['job_number'] != null ? ' · ${part.payload['job_number']}' : ''}',
+                        style: TextStyle(color: roles.faintForeground),
+                      ),
+                    ]),
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                ),
+            ]),
+          if (notes.isNotEmpty)
+            section('Estado', [
+              for (final note in notes)
+                Text(note, style: const TextStyle(fontSize: 14, height: 1.4)),
+            ]),
+          if (series.isNotEmpty)
+            section('Mediciones', [
+              for (final item in series)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(
+                        '${item.title} · ${item.latestValueLabel}',
+                        style: const TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w600),
+                      ),
+                      BikeMeasurementTimeline(
+                        title: item.title,
+                        unit: item.unit,
+                        points: item.points,
+                        accentColor: theme.colorScheme.primary,
+                      ),
+                    ],
+                  ),
+                ),
+            ]),
+          if (observations.isNotEmpty)
+            section('Diagnósticos', [
+              for (final observation in observations.take(3))
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Text.rich(
+                    TextSpan(children: [
+                      TextSpan(
+                        text: '${bikeFullDate(observation.observedAt)}  ',
+                        style: TextStyle(color: roles.faintForeground),
+                      ),
+                      TextSpan(
+                        text: observation.summary?.trim().isNotEmpty == true
+                            ? observation.summary!.trim()
+                            : observation.title,
+                      ),
+                    ]),
+                    style: const TextStyle(fontSize: 14, height: 1.4),
+                  ),
+                ),
+            ]),
         ],
       ),
     );
   }
 
-  Widget _buildRecordContentHeader(ThemeData theme, {required bool mobile}) {
-    final tabs = [
-      (title: 'General y Notas', icon: Icons.notes_outlined),
-      (title: 'Ficha Técnica', icon: Icons.tune),
-      (title: 'Historial', icon: Icons.timeline_outlined),
-    ];
+  Widget _buildVisit(
+    BuildContext context,
+    BikeVisit visit, {
+    required JobLineSystem? filter,
+    required bool narrow,
+  }) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final job = visit.job;
+    final groups = filter == null
+        ? visit.groups
+        : visit.groups.where((group) => group.system == filter).toList();
+    final days = visit.daysInWorkshop(_today);
+    final arrival = bikeShortDate(job.arrivalDate, today: _today);
+    final daysText = days == 1 ? '1 día' : '$days días';
+    final meta = switch ((visit.inWorkshop, days)) {
+      (true, 0) => 'Ingresó hoy',
+      (true, _) => 'Ingresó el $arrival · lleva $daysText',
+      (false, 0) => 'Ingresó el $arrival · salió el mismo día',
+      (false, _) => 'Ingresó el $arrival · $daysText en el taller',
+    };
+    final cancelled = _isCancelledJob(job);
 
-    Widget buildTabs({required bool desktop}) {
-      return Container(
-        height: desktop ? 72 : 64,
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerLowest,
-          borderRadius: BorderRadius.circular(desktop ? 24 : 18),
-          border: Border.all(
-            color: theme.dividerColor.withValues(alpha: 0.16),
-          ),
-        ),
-        child: ListView.builder(
-          scrollDirection: Axis.horizontal,
-          itemCount: tabs.length,
-          itemBuilder: (context, index) {
-            final isActive = _activeTabIndex == index;
-            final tab = tabs[index];
-            return InkWell(
-              borderRadius: BorderRadius.circular(desktop ? 22 : 16),
-              onTap: () => _tabController.animateTo(index),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 180),
-                curve: Curves.easeOut,
-                padding: EdgeInsets.symmetric(
-                  horizontal: desktop ? 22 : 18,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(desktop ? 22 : 16),
-                  color: isActive
-                      ? theme.colorScheme.primary.withValues(alpha: 0.08)
-                      : Colors.transparent,
-                  border: Border(
-                    bottom: BorderSide(
-                      color: isActive
-                          ? theme.colorScheme.primary
-                          : Colors.transparent,
-                      width: 3,
+    final header = Padding(
+      padding: const EdgeInsets.fromLTRB(18, 14, 18, 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (narrow)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(
+                      bikeFullDate(visit.date),
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w700),
                     ),
                   ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Icon(
-                      tab.icon,
-                      size: 18,
-                      color: isActive
-                          ? theme.colorScheme.primary
-                          : theme.colorScheme.onSurfaceVariant,
+                    if (job.jobNumber != null)
+                      InkWell(
+                        onTap: job.id == null ? null : () => _openJob(job.id),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Text(
+                            job.jobNumber!,
+                            style: BikeModuleText.code(context,
+                                color: theme.colorScheme.primary),
+                          ),
+                        ),
+                      ),
+                    BikeJobStatusDot(
+                      label: jobStatusLabel(job),
+                      color: jobStatusColor(job),
+                      muted: cancelled,
                     ),
-                    const SizedBox(width: 8),
-                    Text(
-                      tab.title,
-                      style: (desktop
-                              ? theme.textTheme.titleMedium
-                              : theme.textTheme.titleSmall)
-                          ?.copyWith(
-                        fontWeight:
-                            isActive ? FontWeight.w700 : FontWeight.w500,
-                        color: isActive
-                            ? theme.colorScheme.primary
-                            : theme.colorScheme.onSurfaceVariant,
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  meta,
+                  style: TextStyle(
+                      fontSize: 13, color: theme.colorScheme.onSurfaceVariant),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            visit.amount > 0 ? _money.format(visit.amount) : '—',
+            style:
+                BikeModuleText.figure(context, size: narrow ? 19 : 22).copyWith(
+              color: cancelled
+                  ? theme.colorScheme.onSurfaceVariant
+                  : theme.colorScheme.onSurface,
+              decoration: cancelled ? TextDecoration.lineThrough : null,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    final request = visit.request?.trim();
+    final card = DecoratedBox(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          header,
+          if (request != null && request.isNotEmpty && filter == null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
+              child: Text.rich(
+                TextSpan(children: [
+                  const TextSpan(
+                    text: 'Pidió: ',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  TextSpan(
+                    text: _requestAsSentence(request),
+                    style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                ]),
+                maxLines: 4,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 14, height: 1.4),
+              ),
+            ),
+          if (groups.isEmpty)
+            Container(
+              padding: const EdgeInsets.fromLTRB(18, 12, 18, 14),
+              decoration: BoxDecoration(
+                border: Border(top: BorderSide(color: roles.hairline)),
+              ),
+              child: Text(
+                'Sin líneas registradas para esta bici.',
+                style: TextStyle(fontSize: 14, color: roles.faintForeground),
+              ),
+            ),
+          for (final group in groups)
+            Container(
+              padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
+              decoration: BoxDecoration(
+                border: Border(top: BorderSide(color: roles.hairline)),
+              ),
+              child: narrow
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(group.system.label.toUpperCase(),
+                            style: BikeModuleText.label(context)),
+                        const SizedBox(height: 6),
+                        for (final line in group.lines)
+                          _buildLine(context, line, narrow: true),
+                      ],
+                    )
+                  : Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          width: 128,
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: 1),
+                            child: Text(
+                              group.system.label,
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              for (final line in group.lines)
+                                _buildLine(context, line, narrow: false),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+          if (visit.separatePurchaseAmount > 0 && filter == null)
+            Container(
+              padding: const EdgeInsets.fromLTRB(18, 10, 18, 12),
+              decoration: BoxDecoration(
+                border: Border(top: BorderSide(color: roles.hairline)),
+              ),
+              child: Text(
+                'Además, ${_money.format(visit.separatePurchaseAmount)} en '
+                'compras aparte en este trabajo.',
+                style: TextStyle(fontSize: 13, color: roles.faintForeground),
+              ),
+            ),
+        ],
+      ),
+    );
+
+    if (narrow) return card;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 72,
+          child: Padding(
+            padding: const EdgeInsets.only(top: 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  visit.date.toLocal().day.toString().padLeft(2, '0'),
+                  style: BikeModuleText.figure(context, size: 32)
+                      .copyWith(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  bikeMonthYear(visit.date).toUpperCase(),
+                  style: BikeModuleText.label(context),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 18),
+        Expanded(child: card),
+      ],
+    );
+  }
+
+  /// Lo que pidió el cliente en una línea: sin las viñetas con que se
+  /// escribió («+Diagnóstico…») y sin puntos repetidos al unir renglones.
+  String _requestAsSentence(String raw) {
+    final lines = raw
+        .split(RegExp(r'\n+'))
+        .map((line) => line.trim().replaceFirst(RegExp(r'^[+\-•*·]+\s*'), ''))
+        .map((line) => line.replaceAll(RegExp(r'\.{2,}'), '.').trim())
+        .where((line) => line.isNotEmpty)
+        .toList();
+    final buffer = StringBuffer();
+    for (final line in lines) {
+      if (buffer.isNotEmpty) {
+        final text = buffer.toString();
+        buffer.write(RegExp(r'[.:;!?]$').hasMatch(text) ? ' ' : '. ');
+      }
+      buffer.write(line);
+    }
+    return buffer.toString();
+  }
+
+  Widget _buildLine(BuildContext context, BikeVisitLine line,
+      {required bool narrow}) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final quantity = line.quantity == 1
+        ? ''
+        : ' × ${line.quantity == line.quantity.roundToDouble() ? line.quantity.toInt() : line.quantity}';
+    final amount = Text(
+      line.amount > 0 ? _money.format(line.amount) : '—',
+      textAlign: TextAlign.end,
+      style: TextStyle(
+        fontSize: 14,
+        fontFeatures: const [FontFeature.tabularFigures()],
+        color: theme.colorScheme.onSurfaceVariant,
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Text.rich(
+              TextSpan(children: [
+                TextSpan(text: '${line.name}$quantity'),
+                if (line.isService && narrow)
+                  TextSpan(
+                    text: ' · servicio',
+                    style:
+                        TextStyle(fontSize: 12, color: roles.faintForeground),
+                  ),
+              ]),
+              style: const TextStyle(fontSize: 14, height: 1.35),
+            ),
+          ),
+          if (!narrow)
+            SizedBox(
+              width: 72,
+              child: Text(
+                line.isService ? 'Servicio' : 'Repuesto',
+                style: TextStyle(fontSize: 12, color: roles.faintForeground),
+              ),
+            ),
+          SizedBox(width: narrow ? 78 : 90, child: amount),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEventsSection(BuildContext context, List<BikeEvent> events) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Theme(
+        data: theme.copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 2),
+          childrenPadding: const EdgeInsets.fromLTRB(18, 0, 18, 14),
+          title: const Text(
+            'Cambios de la ficha',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+          ),
+          subtitle: Text(
+            '${events.length} registro${events.length == 1 ? '' : 's'}',
+            style: TextStyle(fontSize: 13, color: roles.faintForeground),
+          ),
+          children: [
+            for (final event in events)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 96,
+                      child: Text(
+                        bikeFullDate(event.eventDate),
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: roles.faintForeground,
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            event.referenceNumber?.isNotEmpty == true
+                                ? '${event.title} · ${event.referenceNumber}'
+                                : event.title,
+                            style: const TextStyle(
+                                fontSize: 14, fontWeight: FontWeight.w600),
+                          ),
+                          if (event.summary?.isNotEmpty == true)
+                            Text(
+                              event.summary!,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: theme.colorScheme.onSurfaceVariant,
+                                height: 1.4,
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   ],
                 ),
               ),
-            );
-          },
-        ),
-      );
-    }
-
-    return Container(
-      padding: EdgeInsets.fromLTRB(mobile ? 16 : 24, mobile ? 14 : 18,
-          mobile ? 16 : 24, mobile ? 10 : 14),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        border: Border(
-          bottom: BorderSide(
-            color: theme.dividerColor.withValues(alpha: 0.12),
-          ),
-        ),
-      ),
-      child: Column(
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: buildTabs(desktop: !mobile)),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRecordPreviewPane(
-    ThemeData theme, {
-    required Color statusColor,
-    required bool compact,
-  }) {
-    final bike = widget.snapshot.bike;
-    final activeTab = _activeTabIndex;
-
-    String title;
-    String subtitle;
-    Widget previewSurface;
-
-    switch (activeTab) {
-      case 1:
-        title = 'Ficha Técnica';
-        subtitle =
-            'Elige un sistema para consultar los datos conocidos de esta bicicleta.';
-        previewSurface = _buildTechnicalPreviewSurface(theme);
-        break;
-      case 2:
-        title = 'Historial técnico';
-        subtitle =
-            'La memoria, los trabajos y las observaciones viven alrededor del mismo mapa técnico de la bicicleta.';
-        previewSurface = _buildHistoryPreviewSurface(theme);
-        break;
-      default:
-        title = 'Registro de bicicleta';
-        subtitle =
-            'La bici queda siempre a la vista para navegar datos, ficha técnica e historial sin perder contexto.';
-        previewSurface = _buildStaticBikePreviewSurface(theme);
-        break;
-    }
-
-    final identityLine = [
-      if (bike.brand?.isNotEmpty == true) bike.brand,
-      if (bike.model?.isNotEmpty == true) bike.model,
-    ].whereType<String>().join(' ');
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLowest,
-        border: Border(
-          right: BorderSide(
-            color: theme.dividerColor.withValues(alpha: compact ? 0.0 : 0.12),
-          ),
-          bottom: BorderSide(
-            color: theme.dividerColor.withValues(alpha: compact ? 0.12 : 0.0),
-          ),
-        ),
-      ),
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          compact ? 18 : 22,
-          compact ? 16 : 24,
-          compact ? 18 : 22,
-          compact ? 16 : 24,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: double.infinity,
-              child: Wrap(
-                spacing: 12,
-                runSpacing: 8,
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  VbButton(
-                    onPressed: widget.onClose,
-                    icon: Icons.arrow_back,
-                    label: compact ? 'Volver' : 'Volver a bicicletas',
-                    variant: VbButtonVariant.secondary,
-                  ),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: statusColor.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(
-                        color: statusColor.withValues(alpha: 0.2),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          widget.snapshot.isProfileComplete
-                              ? Icons.verified_outlined
-                              : Icons.pending_outlined,
-                          size: 14,
-                          color: statusColor,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          widget.snapshot.isProfileComplete
-                              ? 'Perfil completo'
-                              : 'Perfil incompleto',
-                          style: theme.textTheme.labelMedium?.copyWith(
-                            color: statusColor,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(height: compact ? 14 : 18),
-            Text(
-              title,
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-                color: theme.colorScheme.onSurface,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              subtitle,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-                height: 1.45,
-              ),
-            ),
-            SizedBox(height: compact ? 14 : 18),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surface,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: theme.colorScheme.outlineVariant),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
-                    blurRadius: 18,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          (bike.brand ?? 'Sin marca').toUpperCase(),
-                          style: theme.textTheme.labelLarge?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                            letterSpacing: 0.8,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          bike.model ?? 'Modelo desconocido',
-                          style: theme.textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: theme.colorScheme.onSurface,
-                          ),
-                        ),
-                        if (bike.year != null || identityLine.isNotEmpty) ...[
-                          const SizedBox(height: 6),
-                          Text(
-                            bike.year != null
-                                ? '${bike.year} · Propietario: ${widget.ownerName}'
-                                : 'Propietario: ${widget.ownerName}',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  IconButton.outlined(
-                    tooltip: 'Editar bicicleta',
-                    onPressed: widget.onEdit,
-                    icon: const Icon(Icons.edit_outlined, size: 18),
-                    style: IconButton.styleFrom(
-                      padding: const EdgeInsets.all(6),
-                      minimumSize: const Size(32, 32),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  IconButton.outlined(
-                    tooltip: 'Nuevo trabajo',
-                    onPressed: widget.onNewJob,
-                    icon: const Icon(Icons.build_outlined, size: 18),
-                    style: IconButton.styleFrom(
-                      padding: const EdgeInsets.all(6),
-                      minimumSize: const Size(32, 32),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            SizedBox(height: compact ? 12 : 16),
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 220),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
-                child: KeyedSubtree(
-                  key: ValueKey<int>(activeTab),
-                  child: previewSurface,
-                ),
-              ),
-            ),
-            SizedBox(height: compact ? 10 : 14),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                if (bike.bikeType != null)
-                  _buildTechnicalMetaChip(
-                    theme,
-                    icon: Icons.directions_bike_outlined,
-                    label: bike.bikeType!.displayName,
-                  ),
-                if (bike.wheelSize?.isNotEmpty == true)
-                  _buildTechnicalMetaChip(
-                    theme,
-                    icon: Icons.circle_outlined,
-                    label: 'Aro ${bike.wheelSize}',
-                  ),
-                _buildTechnicalMetaChip(
-                  theme,
-                  icon: activeTab == 2
-                      ? Icons.timeline_outlined
-                      : activeTab == 1
-                          ? Icons.tune
-                          : Icons.visibility_outlined,
-                  label: activeTab == 2
-                      ? 'Vista historial'
-                      : activeTab == 1
-                          ? 'Vista técnica'
-                          : 'Vista general',
-                  accent: true,
-                ),
-              ],
-            ),
           ],
         ),
       ),
     );
   }
 
-  String? _recordMainImageUrl() {
+  // ── Ficha técnica ────────────────────────────────────────────────────────
+
+  List<_SpecGroup> _specGroups() {
     final bike = widget.snapshot.bike;
-    if (bike.imageUrl?.isNotEmpty == true) {
-      return bike.imageUrl;
+    final suspension = _buildTechnicalPanelData('suspension');
+    final drivetrain = _buildTechnicalPanelData('drivetrain');
+    final bottomBracket = _buildTechnicalPanelData('bottom_bracket');
+    final front = _buildTechnicalPanelData('front_brake');
+    final rear = _buildTechnicalPanelData('rear_brake');
+    final wheels = _buildTechnicalPanelData('wheels');
+    final frontWheel = _buildTechnicalPanelData('front_wheel');
+    final rearWheel = _buildTechnicalPanelData('rear_wheel');
+
+    String? missing(int known, int expected, String empty, String partial) =>
+        known == 0 ? empty : (known < expected ? partial : null);
+
+    // Cuadro: la plataforma y la suspensión de la ficha, más la talla.
+    final frameFacts = [
+      ...suspension.facts,
+      if (bike.frameSize?.trim().isNotEmpty == true)
+        _BikeRecordTechnicalFact(label: 'Talla', value: bike.frameSize!.trim()),
+    ];
+
+    // Frenos: los dos frenos en un grupo; lo que comparten se dice una vez.
+    final brakeFacts = <_BikeRecordTechnicalFact>[];
+    final platform = front.facts.isNotEmpty ? front.facts.first : null;
+    if (platform != null) brakeFacts.add(platform);
+    _BikeRecordTechnicalFact? fluidOf(_BikeRecordTechnicalPanelData panel) {
+      for (final fact in panel.facts) {
+        if (fact.label == 'Fluido') return fact;
+      }
+      return null;
     }
-    if (bike.imageUrls.isNotEmpty) {
-      return bike.imageUrls.first;
+
+    final frontFluid = fluidOf(front);
+    final rearFluid = fluidOf(rear);
+    for (final fact in front.facts.skip(1)) {
+      if (fact.label != 'Fluido') brakeFacts.add(fact);
     }
-    return null;
+    for (final fact in rear.facts.skip(1)) {
+      if (fact.label != 'Fluido') brakeFacts.add(fact);
+    }
+    if (frontFluid != null &&
+        rearFluid != null &&
+        frontFluid.value == rearFluid.value) {
+      brakeFacts.add(frontFluid);
+    } else {
+      if (frontFluid != null) {
+        brakeFacts.add(_relabel(frontFluid, 'Fluido delantero'));
+      }
+      if (rearFluid != null) {
+        brakeFacts.add(_relabel(rearFluid, 'Fluido trasero'));
+      }
+    }
+    final brakeExpected = front.expectedCount + rear.expectedCount - 1;
+    final brakeKnown =
+        front.knownCount + rear.knownCount - (rear.facts.isNotEmpty ? 1 : 0);
+
+    // Ruedas: lo de las dos y, si la ficha lo dice, el anclaje de cada rotor.
+    final wheelFacts = [
+      ...wheels.facts,
+      for (final fact in frontWheel.facts)
+        if (fact.label == 'Anclaje del rotor')
+          _relabel(fact, 'Anclaje rotor delantero'),
+      for (final fact in rearWheel.facts)
+        if (fact.label == 'Anclaje del rotor')
+          _relabel(fact, 'Anclaje rotor trasero'),
+    ];
+
+    return [
+      _SpecGroup(
+        number: 1,
+        title: 'Cuadro y suspensión',
+        anchor: BikeSilhouetteAnchor.frame,
+        facts: frameFacts,
+        knownCount: suspension.knownCount,
+        expectedCount: suspension.expectedCount,
+        missingText: suspension.missingText,
+      ),
+      _SpecGroup(
+        number: 2,
+        title: 'Transmisión',
+        anchor: BikeSilhouetteAnchor.drivetrain,
+        facts: drivetrain.facts,
+        knownCount: drivetrain.knownCount,
+        expectedCount: drivetrain.expectedCount,
+        missingText: drivetrain.missingText,
+      ),
+      _SpecGroup(
+        number: 3,
+        title: 'Pedalier',
+        anchor: BikeSilhouetteAnchor.bottomBracket,
+        facts: bottomBracket.facts,
+        knownCount: bottomBracket.knownCount,
+        expectedCount: bottomBracket.expectedCount,
+        missingText: bottomBracket.missingText,
+      ),
+      _SpecGroup(
+        number: 4,
+        title: 'Frenos',
+        anchor: BikeSilhouetteAnchor.brakes,
+        facts: brakeFacts,
+        knownCount: brakeKnown,
+        expectedCount: brakeExpected,
+        missingText: missing(
+          brakeKnown,
+          brakeExpected,
+          'La ficha todavía no dice qué frenos tiene.',
+          'Faltan datos de los frenos; el próximo servicio los pregunta.',
+        ),
+      ),
+      _SpecGroup(
+        number: 5,
+        title: 'Ruedas',
+        anchor: BikeSilhouetteAnchor.wheels,
+        facts: wheelFacts,
+        knownCount: wheels.knownCount,
+        expectedCount: wheels.expectedCount,
+        missingText: wheels.missingText,
+      ),
+      const _SpecGroup(
+        number: 6,
+        title: 'Dirección y cockpit',
+        anchor: BikeSilhouetteAnchor.cockpit,
+        facts: [],
+        knownCount: 0,
+        expectedCount: 1,
+        missingText: null,
+      ),
+    ];
   }
 
-  Widget _buildStaticBikePreviewSurface(ThemeData theme) {
-    final bike = widget.snapshot.bike;
-    final previewImageUrl = _recordMainImageUrl();
-    final variant = resolveBikeDiagramVariant(bike: bike);
+  _BikeRecordTechnicalFact _relabel(
+          _BikeRecordTechnicalFact fact, String label) =>
+      _BikeRecordTechnicalFact(
+        label: label,
+        value: fact.value,
+        source: fact.source,
+        confirmed: fact.confirmed,
+      );
 
-    return Container(
-      width: double.infinity,
+  Widget _buildTechnicalTab(BuildContext context, {required double width}) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final groups = _specGroups();
+    final markers = [
+      for (final group in groups)
+        BikeSilhouetteMarker(anchor: group.anchor, label: '${group.number}'),
+    ];
+    final wide = width >= 900;
+    final confirmedAt = widget.snapshot.lastConfirmedAt;
+
+    final mapCard = DecoratedBox(
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: theme.colorScheme.outlineVariant),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 24,
-            offset: const Offset(0, 10),
-          ),
-        ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: AspectRatio(
-          aspectRatio: 1,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(22),
-            child: ColoredBox(
-              color: theme.colorScheme.surfaceContainerLowest,
-              child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-                child: previewImageUrl != null
-                    ? Transform.scale(
-                        scale: 1.12,
-                        child: CachedNetworkImage(
-                          imageUrl: previewImageUrl,
-                          fit: BoxFit.contain,
-                        ),
-                      )
-                    : Transform.scale(
-                        scale: 1.08,
-                        child: BikeDiagramIllustration(variant: variant),
-                      ),
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            LayoutBuilder(
+              builder: (context, constraints) => _bikeDrawing(
+                context,
+                width: constraints.maxWidth,
+                height: constraints.maxWidth * 0.62,
+                markers: markers,
               ),
             ),
-          ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Icon(
+                  confirmedAt != null ? Icons.check : Icons.info_outline,
+                  size: 18,
+                  color: confirmedAt != null
+                      ? theme.colorScheme.primary
+                      : roles.faintForeground,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    confirmedAt != null
+                        ? 'Confirmada en el taller el ${bikeFullDate(confirmedAt)}'
+                        : 'Todavía nadie la confirma en el taller.',
+                    style: TextStyle(
+                        fontSize: 14,
+                        color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            VbButton(
+              label: 'Editar ficha',
+              icon: Icons.edit_outlined,
+              variant: VbButtonVariant.secondary,
+              expand: true,
+              onPressed: widget.onEdit,
+            ),
+          ],
         ),
       ),
     );
-  }
 
-  Widget _buildTechnicalPreviewSurface(ThemeData theme) {
-    final activeSystemKey = _resolveTechnicalSystemKey();
-    final activeSpec = bikeSystemControllerSpecFor(activeSystemKey) ??
-        kBikeSystemControllerSpecs.first;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: theme.colorScheme.outlineVariant),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 24,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Ficha técnica por sistema',
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: theme.colorScheme.onSurface,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'El mismo mapa compartido del taller ahora sostiene la lectura técnica del registro.',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-              height: 1.4,
-            ),
-          ),
-          const SizedBox(height: 14),
-          Expanded(
-            child: BikeSystemController(
-              bike: widget.snapshot.bike,
-              profile: widget.snapshot.profile,
-              entries: _buildTechnicalControllerEntries(),
-              selectedSystemKey: activeSystemKey,
-              onSystemSelected: (key) {
-                setState(() {
-                  _selectedTechnicalSystemKey = key;
-                });
-              },
-              onClearSelection: () {
-                setState(() {
-                  _selectedTechnicalSystemKey = null;
-                });
-              },
-              idleHintText: 'Elige un sistema para consultar su ficha.',
-              selectedHintText:
-                  'Haz clic en otro sistema para cambiar el panel técnico.',
-            ),
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _buildTechnicalMetaChip(
-                theme,
-                icon: activeSpec.icon,
-                label: 'Sistema activo: ${activeSpec.label}',
-                accent: true,
-              ),
-              if (widget.snapshot.lastConfirmedAt != null)
-                _buildTechnicalMetaChip(
-                  theme,
-                  icon: Icons.verified_outlined,
-                  label:
-                      'Confirmado ${DateFormat('dd/MM/yyyy').format(widget.snapshot.lastConfirmedAt!)}',
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHistoryPreviewSurface(ThemeData theme) {
-    return FutureBuilder<_BikeRecordHistoryData>(
-      future: _historyFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Container(
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: theme.colorScheme.outlineVariant),
-            ),
-            child: const Center(child: CircularProgressIndicator()),
-          );
-        }
-
-        if (snapshot.hasError) return _buildHistoryLoadFailure(theme);
-        final history = snapshot.data ?? const _BikeRecordHistoryData.empty();
-        if (!history.hasStructuredWorkbench) {
-          return _buildStaticBikePreviewSurface(theme);
-        }
-
-        final activeSystemKey =
-            history.resolveActiveSystemKey(_selectedDiagnosisSystemKey);
-        final activeSystem = history.systemFor(activeSystemKey);
-
-        return Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surface,
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: theme.colorScheme.outlineVariant),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.04),
-                blurRadius: 24,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Memoria Técnica',
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: theme.colorScheme.onSurface,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Observaciones, estados y trabajos ejecutados alrededor del mismo modelo técnico.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                  height: 1.4,
-                ),
-              ),
-              const SizedBox(height: 14),
-              Expanded(
-                child: BikeSystemController(
-                  bike: widget.snapshot.bike,
-                  profile: widget.snapshot.profile,
-                  entries: _buildHistoryControllerEntries(history),
-                  selectedSystemKey: activeSystemKey,
-                  onSystemSelected: (key) {
-                    setState(() {
-                      _selectedDiagnosisSystemKey = key;
-                    });
-                  },
-                  onClearSelection: () {
-                    setState(() {
-                      _selectedDiagnosisSystemKey = null;
-                    });
-                  },
-                  overlayBuilder: (context, entry, layout) {
-                    final hoveredSystem =
-                        history.systemFor(entry.spec.systemKey);
-                    if (hoveredSystem == null) {
-                      return null;
-                    }
-                    return _DiagnosticPopupCard(
-                      system: hoveredSystem,
-                      color: _historySystemStatusColor(
-                        hoveredSystem.overallStatus,
-                      ),
-                      layout: layout,
-                    );
-                  },
-                ),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _buildTechnicalMetaChip(
-                    theme,
-                    icon: Icons.memory_outlined,
-                    label: '${history.diagnosisSystems.length} sistemas',
-                  ),
-                  if (history.latestMemoryDate != null)
-                    _buildTechnicalMetaChip(
-                      theme,
-                      icon: Icons.event_outlined,
-                      label:
-                          'Actualizado ${DateFormat('dd/MM/yyyy').format(history.latestMemoryDate!)}',
-                    ),
-                  if (activeSystem != null)
-                    _buildTechnicalMetaChip(
-                      theme,
-                      icon: Icons.radar_outlined,
-                      label: 'Activo: ${activeSystem.displayName}',
-                      accent: true,
-                    ),
-                ],
-              ),
-            ],
-          ),
+    final cards = LayoutBuilder(
+      builder: (context, constraints) {
+        final twoColumns = constraints.maxWidth >= 620;
+        final cardWidth =
+            twoColumns ? (constraints.maxWidth - 16) / 2 : constraints.maxWidth;
+        return Wrap(
+          spacing: 16,
+          runSpacing: 16,
+          children: [
+            for (final group in groups)
+              SizedBox(width: cardWidth, child: _buildSpecCard(context, group)),
+          ],
         );
       },
     );
+
+    if (!wide) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: mapCard,
+          ),
+          const SizedBox(height: 16),
+          cards,
+        ],
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(width: 360, child: mapCard),
+        const SizedBox(width: 24),
+        Expanded(child: cards),
+      ],
+    );
   }
 
-  Widget _buildGeneralTab(ThemeData theme) {
-    final bike = widget.snapshot.bike;
+  Widget _buildSpecCard(BuildContext context, _SpecGroup group) {
+    final theme = Theme.of(context);
     final roles = VinabikeThemeRoles.of(context);
-
-    final baseData = [
-      if (bike.bikeType != null)
-        'Tipo de Bicicleta: ${bike.bikeType!.displayName}',
-      if (bike.year != null) 'Año: ${bike.year}',
-      if (bike.serialNumber != null && bike.serialNumber!.isNotEmpty)
-        'Número de Serie: ${bike.serialNumber}',
-      if (bike.color != null && bike.color!.isNotEmpty) 'Color: ${bike.color}',
-      if (bike.frameSize != null && bike.frameSize!.isNotEmpty)
-        'Talla de Cuadro: ${bike.frameSize}',
-      if (bike.wheelSize != null && bike.wheelSize!.isNotEmpty)
-        'Tamaño de Rueda: ${bike.wheelSize}',
-      if (bike.purchaseDate != null)
-        'Fecha de Compra: ${DateFormat('dd/MM/yyyy').format(bike.purchaseDate!)}',
-      if (bike.warrantyUntil != null)
-        'Garantía Hasta: ${DateFormat('dd/MM/yyyy').format(bike.warrantyUntil!)}',
-    ];
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (baseData.isNotEmpty)
-            _buildProSection(
-              title: 'Datos de la Bicicleta',
-              icon: Icons.directions_bike_outlined,
-              iconColor: theme.primaryColor,
-              bgColor: theme.colorScheme.surface,
-              borderColor: theme.colorScheme.outlineVariant,
-              items: baseData,
-              isGrid: true,
+    final known = group.knownCount;
+    final status = known == 0
+        ? 'Sin datos'
+        : (known < group.expectedCount ? 'Faltan datos' : 'Completo');
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 24,
+                  height: 24,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(
+                    '${group.number}',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: theme.colorScheme.onPrimary,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Semantics(
+                    header: true,
+                    child: Text(
+                      group.title,
+                      style: const TextStyle(
+                          fontSize: 15, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
+                Text(
+                  status,
+                  style:
+                      TextStyle(fontSize: 12.5, color: roles.faintForeground),
+                ),
+              ],
             ),
-          if (widget.snapshot.warnings.isNotEmpty)
-            _buildProSection(
-              title: 'Advertencias / Notas Críticas',
-              icon: Icons.warning_amber_rounded,
-              iconColor: roles.warning.accent,
-              bgColor: roles.warning.container,
-              borderColor: roles.warning.border,
-              items: widget.snapshot.warnings,
-            ),
-          if (widget.snapshot.notesLines.isNotEmpty)
-            _buildProSection(
-              title: 'Notas Generales',
-              icon: Icons.speaker_notes_outlined,
-              iconColor: Colors.blueGrey.shade700,
-              bgColor: theme.colorScheme.surface,
-              borderColor: theme.colorScheme.outlineVariant,
-              items: widget.snapshot.notesLines,
-            ),
-          if (widget.snapshot.intakeLines.isNotEmpty)
-            _buildProSection(
-              title: 'Perfil de Recepción',
-              icon: Icons.assignment_turned_in_outlined,
-              iconColor: Colors.blue.shade700,
-              bgColor: theme.colorScheme.surface,
-              borderColor: theme.colorScheme.outlineVariant,
-              items: widget.snapshot.intakeLines,
-            ),
-        ],
+            const SizedBox(height: 10),
+            if (group.facts.isEmpty)
+              Text(
+                group.missingText ?? 'Sin datos todavía.',
+                style: TextStyle(fontSize: 14, color: roles.faintForeground),
+              )
+            else ...[
+              for (final fact in group.facts) _buildSpecRow(context, fact),
+              if (group.missingText != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    group.missingText!,
+                    style:
+                        TextStyle(fontSize: 13, color: roles.faintForeground),
+                  ),
+                ),
+            ],
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildTechnicalSpecsTab(ThemeData theme,
-      {bool showInlineSystemMap = false}) {
-    if (widget.snapshot.profile == null &&
-        widget.snapshot.technicalLines.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.build_circle_outlined,
-                size: 64, color: Colors.grey.shade300),
-            const SizedBox(height: 16),
-            Text(
-              'Aún no hay especificaciones técnicas registradas.',
-              style: TextStyle(
-                  color: theme.colorScheme.onSurfaceVariant, fontSize: 16),
-            ),
-          ],
-        ),
-      );
-    }
-
-    final activeSystemKey = _resolveTechnicalSystemKey();
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
+  Widget _buildSpecRow(BuildContext context, _BikeRecordTechnicalFact fact) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final origin =
+        bikeFactOriginCaption(fact.source, confirmed: fact.confirmed);
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: roles.hairline)),
+      ),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (showInlineSystemMap) ...[
-            SizedBox(
-              height: 260,
-              child: BikeSystemController(
-                bike: widget.snapshot.bike,
-                profile: widget.snapshot.profile,
-                entries: _buildTechnicalControllerEntries(),
-                selectedSystemKey: activeSystemKey,
-                onSystemSelected: (key) =>
-                    setState(() => _selectedTechnicalSystemKey = key),
-                onClearSelection: () =>
-                    setState(() => _selectedTechnicalSystemKey = null),
-                idleHintText: 'Elige un sistema para ver su ficha.',
-                selectedHintText: 'Elige otro sistema para cambiar el detalle.',
-              ),
+          SizedBox(
+            width: 128,
+            child: Text(
+              fact.label,
+              style: TextStyle(
+                  fontSize: 14, color: theme.colorScheme.onSurfaceVariant),
             ),
-            const SizedBox(height: 18),
-          ],
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: theme.colorScheme.outlineVariant),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
-                  blurRadius: 20,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Lectura técnica por sistema',
-                  style: theme.textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: theme.colorScheme.onSurface,
-                  ),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        fact.value,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          fontFeatures: [FontFeature.tabularFigures()],
+                        ),
+                      ),
+                    ),
+                    if (fact.confirmed) ...[
+                      const SizedBox(width: 6),
+                      Tooltip(
+                        message: 'Confirmado en el taller',
+                        child: Icon(Icons.check_circle,
+                            size: 15, color: roles.success.accent),
+                      ),
+                    ],
+                  ],
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  'Consulta los datos confirmados y lo que falta registrar en el sistema elegido.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                    height: 1.45,
+                if (origin != null)
+                  Text(
+                    origin,
+                    style:
+                        TextStyle(fontSize: 12, color: roles.faintForeground),
                   ),
-                ),
               ],
             ),
           ),
-          const SizedBox(height: 18),
-          _buildTechnicalSystemCard(
-            theme,
-            _buildTechnicalPanelData(activeSystemKey),
-          ),
-          if (widget.snapshot.technicalLines.isNotEmpty)
-            _buildProSection(
-              title: 'Resumen Técnico',
-              icon: Icons.settings_suggest_outlined,
-              iconColor: Colors.purple.shade700,
-              bgColor: theme.colorScheme.surface,
-              borderColor: theme.colorScheme.outlineVariant,
-              items: widget.snapshot.technicalLines,
-              isGrid: true,
-            ),
         ],
       ),
     );
   }
 
-  String _resolveTechnicalSystemKey() {
-    final preferred = _selectedTechnicalSystemKey;
-    if (preferred != null && bikeSystemControllerSpecFor(preferred) != null) {
-      return preferred;
-    }
+  // ── Notas ────────────────────────────────────────────────────────────────
 
-    const preferredOrder = <String>[
-      'suspension',
-      'front_brake',
-      'front_wheel',
-      'drivetrain',
-      'bottom_bracket',
-      'rear_wheel',
-      'rear_brake',
-      'cockpit',
+  Widget _buildNotesTab(BuildContext context) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final bike = widget.snapshot.bike;
+    final purchase = <String>[
+      if (bike.purchaseDate != null)
+        'Comprada el ${bikeFullDate(bike.purchaseDate!)}',
+      if (bike.purchasePrice != null && bike.purchasePrice! > 0)
+        'Precio de compra ${_money.format(bike.purchasePrice)}',
+      if (bike.warrantyUntil != null)
+        'Garantía hasta el ${bikeFullDate(bike.warrantyUntil!)}',
     ];
-
-    for (final key in preferredOrder) {
-      if (_technicalSystemStatus(key) != BikeSystemOverallStatus.ok) {
-        return key;
-      }
+    final sections = <({String title, List<String> lines, bool warn})>[
+      if (widget.snapshot.warnings.isNotEmpty)
+        (title: 'Advertencias', lines: widget.snapshot.warnings, warn: true),
+      if (widget.snapshot.notesLines.isNotEmpty)
+        (title: 'Notas', lines: widget.snapshot.notesLines, warn: false),
+      if (widget.snapshot.intakeLines.isNotEmpty)
+        (title: 'Recepción', lines: widget.snapshot.intakeLines, warn: false),
+      if (purchase.isNotEmpty)
+        (title: 'Compra y garantía', lines: purchase, warn: false),
+      if (widget.snapshot.technicalLines.isNotEmpty)
+        (
+          title: 'Resumen técnico anterior',
+          lines: widget.snapshot.technicalLines,
+          warn: false,
+        ),
+    ];
+    if (sections.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 32),
+        child: Text(
+          'Sin notas para esta bici.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+              fontSize: 15, color: theme.colorScheme.onSurfaceVariant),
+        ),
+      );
     }
-
-    return 'drivetrain';
-  }
-
-  List<BikeSystemControllerEntry> _buildTechnicalControllerEntries() {
-    return kBikeSystemControllerSpecs
-        .map(
-          (spec) => BikeSystemControllerEntry(
-            spec: spec,
-            status: _technicalSystemStatus(spec.systemKey),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final section in sections)
+          Container(
+            margin: const EdgeInsets.only(bottom: 14),
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
+            decoration: BoxDecoration(
+              color: section.warn
+                  ? roles.warning.container
+                  : theme.colorScheme.surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: section.warn
+                    ? roles.warning.border
+                    : theme.colorScheme.outlineVariant,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Semantics(
+                  header: true,
+                  child: Text(
+                    section.title,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: section.warn
+                          ? roles.warning.onContainer
+                          : theme.colorScheme.onSurface,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                for (final line in section.lines)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(
+                      line,
+                      style: TextStyle(
+                        fontSize: 14,
+                        height: 1.4,
+                        color: section.warn
+                            ? roles.warning.onContainer
+                            : theme.colorScheme.onSurface,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
-        )
-        .toList();
-  }
-
-  BikeSystemOverallStatus _technicalSystemStatus(String systemKey) {
-    final panel = _buildTechnicalPanelData(systemKey);
-    if (panel.knownCount <= 0) {
-      return BikeSystemOverallStatus.critical;
-    }
-    if (panel.knownCount < panel.expectedCount) {
-      return BikeSystemOverallStatus.attention;
-    }
-    return BikeSystemOverallStatus.ok;
+      ],
+    );
   }
 
   _BikeRecordTechnicalPanelData _buildTechnicalPanelData(String systemKey) {
@@ -1540,7 +2608,9 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
         ].whereType<_BikeRecordTechnicalFact>().toList();
         final knownCount = facts.length;
         return _BikeRecordTechnicalPanelData(
-          spec: bikeSystemControllerSpecFor(systemKey)!,
+          // `wheels` no es un sistema del mapa antiguo: se presta el de la
+          // rueda delantera, que la ficha de grupos no muestra.
+          spec: bikeSystemControllerSpecFor('front_wheel')!,
           description:
               'Aro, ejes, mazas, rayos y válvula: con esto se eligen los '
               'repuestos de rueda que calzan.',
@@ -1568,1602 +2638,6 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
               'Los datos de dirección y controles aún no están registrados.',
         );
     }
-  }
-
-  Widget _buildTechnicalSystemCard(
-    ThemeData theme,
-    _BikeRecordTechnicalPanelData panel,
-  ) {
-    final status = _technicalSystemStatus(panel.spec.systemKey);
-    final statusColor = _getSystemStatusColor(status);
-    final roles = VinabikeThemeRoles.of(context);
-
-    return Container(
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: theme.colorScheme.outlineVariant),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 24,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 46,
-                height: 46,
-                decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(panel.spec.icon, color: statusColor),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      panel.spec.label,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: theme.colorScheme.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      panel.description,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                        height: 1.4,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: statusColor.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(999),
-                  border:
-                      Border.all(color: statusColor.withValues(alpha: 0.25)),
-                ),
-                child: Text(
-                  switch (status) {
-                    BikeSystemOverallStatus.ok => 'Completo',
-                    BikeSystemOverallStatus.attention => 'Parcial',
-                    BikeSystemOverallStatus.critical => 'Vacío',
-                    BikeSystemOverallStatus.unknown => 'Sin datos',
-                  },
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: statusColor,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          if (panel.missingText != null) ...[
-            const SizedBox(height: 16),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: statusColor.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: statusColor.withValues(alpha: 0.18)),
-              ),
-              child: Text(
-                panel.missingText!,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurface,
-                  fontWeight: FontWeight.w600,
-                  height: 1.4,
-                ),
-              ),
-            ),
-          ],
-          const SizedBox(height: 18),
-          if (panel.facts.isEmpty)
-            Text(
-              'Todavía no hay valores técnicos que mostrar en este sistema.',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            )
-          else
-            ...panel.facts.map((fact) {
-              final origin =
-                  bikeFactOriginCaption(fact.source, confirmed: fact.confirmed);
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surfaceContainerLow,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: theme.colorScheme.outlineVariant),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              fact.label,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ),
-                          if (fact.confirmed)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: roles.success.container,
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              child: Text(
-                                'Confirmado',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  color: roles.success.onContainer,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        fact.value,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: theme.colorScheme.onSurface,
-                        ),
-                      ),
-                      if (origin != null) ...[
-                        const SizedBox(height: 6),
-                        Text(
-                          origin,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              );
-            }),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTechnicalMetaChip(
-    ThemeData theme, {
-    required IconData icon,
-    required String label,
-    bool accent = false,
-  }) {
-    final color =
-        accent ? theme.primaryColor : theme.colorScheme.onSurfaceVariant;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: accent
-            ? theme.primaryColor.withValues(alpha: 0.08)
-            : theme.colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: accent
-              ? theme.primaryColor.withValues(alpha: 0.2)
-              : theme.colorScheme.outlineVariant,
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 15, color: color),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTimelineTab(ThemeData theme,
-      {bool showInlineSystemMap = false}) {
-    return FutureBuilder<_BikeRecordHistoryData>(
-      future: _historyFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        if (snapshot.hasError) {
-          return _buildHistoryLoadFailure(theme);
-        }
-
-        final history = snapshot.data ?? const _BikeRecordHistoryData.empty();
-
-        if (history.isEmpty) {
-          return Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.history_toggle_off,
-                      size: 48, color: theme.colorScheme.onSurfaceVariant),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Aún no existen eventos en el historial.',
-                    style: theme.textTheme.titleMedium,
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'El historial capturará automáticamente las actualizaciones del perfil y los trabajos de taller.',
-                    style: theme.textTheme.bodyMedium
-                        ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            ),
-          );
-        }
-
-        return ListView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
-          children: [
-            if (showInlineSystemMap && history.hasStructuredWorkbench) ...[
-              SizedBox(
-                height: 260,
-                child: BikeSystemController(
-                  bike: widget.snapshot.bike,
-                  profile: widget.snapshot.profile,
-                  entries: _buildHistoryControllerEntries(history),
-                  selectedSystemKey: history
-                      .resolveActiveSystemKey(_selectedDiagnosisSystemKey),
-                  onSystemSelected: (key) =>
-                      setState(() => _selectedDiagnosisSystemKey = key),
-                  onClearSelection: () =>
-                      setState(() => _selectedDiagnosisSystemKey = null),
-                  idleHintText: 'Elige un sistema para ver su historial.',
-                  selectedHintText:
-                      'Elige otro sistema para cambiar el historial.',
-                ),
-              ),
-              const SizedBox(height: 18),
-            ],
-            if (history.hasStructuredWorkbench)
-              _buildDiagnosisWorkbench(theme, history)
-            else
-              _buildLegacyEventsSection(
-                theme,
-                history.events,
-                expanded: true,
-              ),
-            if (history.hasStructuredWorkbench &&
-                history.events.isNotEmpty) ...[
-              const SizedBox(height: 18),
-              _buildLegacyEventsSection(theme, history.events),
-            ],
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildDiagnosisWorkbench(
-    ThemeData theme,
-    _BikeRecordHistoryData history,
-  ) {
-    final activeSystemKey =
-        history.resolveActiveSystemKey(_selectedDiagnosisSystemKey);
-    final activeSystem = history.systemFor(activeSystemKey);
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: theme.colorScheme.outlineVariant),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 24,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Memoria técnica centralizada',
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: theme.colorScheme.onSurface,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Elige un sistema para revisar su diagnóstico, trabajos y componentes instalados.',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-              height: 1.4,
-            ),
-          ),
-          const SizedBox(height: 20),
-          _buildTelemetrySection(
-            theme,
-            history,
-            activeSystemKey,
-            activeSystem,
-          ),
-        ],
-      ),
-    );
-  }
-
-  List<BikeSystemControllerEntry> _buildHistoryControllerEntries(
-    _BikeRecordHistoryData history,
-  ) {
-    return kBikeSystemControllerSpecs
-        .map(
-          (spec) => BikeSystemControllerEntry(
-            spec: spec,
-            status: history.systemFor(spec.systemKey)?.overallStatus ??
-                BikeSystemOverallStatus.unknown,
-          ),
-        )
-        .toList();
-  }
-
-  Color _historySystemStatusColor(BikeSystemOverallStatus status) {
-    return _getSystemStatusColor(status);
-  }
-
-  Widget _buildTelemetrySection(
-    ThemeData theme,
-    _BikeRecordHistoryData history,
-    String? activeSystemKey,
-    _BikeDiagnosisSystemView? activeSystem,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSystemExplorerCard(theme, history, activeSystemKey),
-        const SizedBox(height: 16),
-        _buildSystemDetailCard(theme, history, activeSystemKey, activeSystem),
-      ],
-    );
-  }
-
-  Widget _buildSystemExplorerCard(
-    ThemeData theme,
-    _BikeRecordHistoryData history,
-    String? activeSystemKey,
-  ) {
-    final roles = theme.extension<VinabikeThemeRoles>()!;
-    final latestDate = history.latestMemoryDate;
-    final criticalCount = history.diagnosisSystems
-        .where((system) =>
-            system.overallStatus == BikeSystemOverallStatus.critical)
-        .length;
-    final attentionCount = history.diagnosisSystems
-        .where((system) =>
-            system.overallStatus == BikeSystemOverallStatus.attention)
-        .length;
-    final selectedSystem = history.systemFor(activeSystemKey);
-    final selectedSystemLabel = activeSystemKey == null
-        ? null
-        : bikeSystemControllerSpecFor(activeSystemKey)?.label ??
-            selectedSystem?.displayName;
-
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Memoria técnica',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: theme.colorScheme.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      latestDate != null
-                          ? 'Última actualización: ${DateFormat('dd/MM/yyyy').format(latestDate)}'
-                          : 'Sin actualizaciones registradas.',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (history.latestMemoryJobNumber != null)
-                _buildReferencePill(
-                  label: history.latestMemoryJobNumber!,
-                  backgroundColor: theme.colorScheme.primaryContainer,
-                  borderColor: theme.colorScheme.primary.withValues(alpha: 0.3),
-                  foregroundColor: theme.colorScheme.primary,
-                ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _buildReferencePill(
-                label: '${history.diagnosisSystems.length} sistemas',
-                backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                borderColor: theme.colorScheme.outlineVariant,
-                foregroundColor: theme.colorScheme.onSurfaceVariant,
-              ),
-              if (history.interventionCount > 0)
-                _buildReferencePill(
-                  label:
-                      '${history.interventionCount} trabajo${history.interventionCount == 1 ? '' : 's'}',
-                  backgroundColor: roles.success.container,
-                  borderColor: roles.success.border,
-                  foregroundColor: roles.success.onContainer,
-                ),
-              if (history.installedLifecycleCount > 0)
-                _buildReferencePill(
-                  label:
-                      '${history.installedLifecycleCount} componente${history.installedLifecycleCount == 1 ? '' : 's'} activo${history.installedLifecycleCount == 1 ? '' : 's'}',
-                  backgroundColor: roles.info.container,
-                  borderColor: roles.info.border,
-                  foregroundColor: roles.info.onContainer,
-                ),
-              if (criticalCount > 0)
-                _buildReferencePill(
-                  label:
-                      '$criticalCount crítico${criticalCount == 1 ? '' : 's'}',
-                  backgroundColor: roles.danger.container,
-                  borderColor: roles.danger.border,
-                  foregroundColor: roles.danger.onContainer,
-                ),
-              if (attentionCount > 0)
-                _buildReferencePill(
-                  label: '$attentionCount en atención',
-                  backgroundColor: roles.warning.container,
-                  borderColor: roles.warning.border,
-                  foregroundColor: roles.warning.onContainer,
-                ),
-              if (selectedSystemLabel != null)
-                _buildReferencePill(
-                  label: 'Activo: $selectedSystemLabel',
-                  backgroundColor: theme.colorScheme.primaryContainer,
-                  borderColor: theme.colorScheme.primary.withValues(alpha: 0.3),
-                  foregroundColor: theme.colorScheme.primary,
-                ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          if (history.overviewNarrativeObservation?.summary != null &&
-              history.overviewNarrativeObservation!.summary!
-                  .trim()
-                  .isNotEmpty) ...[
-            const SizedBox(height: 18),
-            Text(
-              'Narrativa original de la orden',
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest
-                    .withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                    color: theme.colorScheme.outlineVariant
-                        .withValues(alpha: 0.5)),
-              ),
-              child: Text(
-                history.overviewNarrativeObservation!.summary!,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                  height: 1.45,
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSystemDetailCard(
-    ThemeData theme,
-    _BikeRecordHistoryData history,
-    String? activeSystemKey,
-    _BikeDiagnosisSystemView? system,
-  ) {
-    if (system == null) {
-      final selectedLabel = activeSystemKey == null
-          ? null
-          : bikeSystemControllerSpecFor(activeSystemKey)?.label;
-      final selectedSpec = bikeSystemControllerSpecFor(activeSystemKey);
-
-      return Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(
-              color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              selectedLabel ?? 'Selecciona un sistema',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w800,
-                color: theme.colorScheme.onSurface,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              selectedLabel == null
-                  ? 'Haz clic sobre un sistema del esquema para ver diagnóstico, trabajos realizados y componentes que quedaron instalados.'
-                  : '${selectedSpec?.diagnosisSubtitle ?? 'Sistema sin detalle estructurado.'} Aún no existen observaciones, intervenciones ni memoria técnica suficiente para este sistema en el historial de esta bicicleta.',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-                height: 1.45,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    final accentColor = _getSystemStatusColor(system.overallStatus);
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: accentColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(
-                  _systemIconFor(system.systemKey),
-                  color: accentColor,
-                ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            system.displayName,
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w800,
-                              color: theme.colorScheme.onSurface,
-                            ),
-                          ),
-                        ),
-                        _buildReferencePill(
-                          label: system.overallStatus.displayName,
-                          backgroundColor: accentColor.withValues(alpha: 0.15),
-                          borderColor: accentColor.withValues(alpha: 0.3),
-                          foregroundColor: accentColor,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      system.subheadline,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          if (system.primaryNarrative != null &&
-              system.primaryNarrative!.trim().isNotEmpty) ...[
-            const SizedBox(height: 18),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest
-                    .withValues(alpha: 0.5),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                    color: theme.colorScheme.outlineVariant
-                        .withValues(alpha: 0.5)),
-              ),
-              child: Text(
-                system.primaryNarrative!,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                  height: 1.5,
-                ),
-              ),
-            ),
-          ],
-          if (system.currentStateSummary != null) ...[
-            const SizedBox(height: 20),
-            _buildMiniSectionLabel(theme, 'Estado actual'),
-            const SizedBox(height: 10),
-            _buildCurrentStateCard(theme, system, accentColor),
-          ],
-          if (system.installedComponents.isNotEmpty) ...[
-            const SizedBox(height: 20),
-            _buildMiniSectionLabel(theme, 'Componentes instalados'),
-            const SizedBox(height: 10),
-            ...system.installedComponents
-                .take(4)
-                .map((lifecycle) => _buildLifecycleCard(theme, lifecycle)),
-          ],
-          if (system.recentInterventions.isNotEmpty) ...[
-            const SizedBox(height: 20),
-            _buildMiniSectionLabel(theme, 'Trabajos aplicados'),
-            const SizedBox(height: 10),
-            ...system.recentInterventions.take(4).map(
-                (intervention) => _buildInterventionCard(theme, intervention)),
-          ],
-          if (system.measurementSeries.isNotEmpty) ...[
-            const SizedBox(height: 20),
-            _buildMiniSectionLabel(theme, 'Mediciones'),
-            const SizedBox(height: 10),
-            ...system.measurementSeries
-                .map((series) => _buildMeasurementTimelineRow(theme, series)),
-          ],
-          if (system.contextEntries.isNotEmpty) ...[
-            const SizedBox(height: 20),
-            _buildMiniSectionLabel(theme, 'Diagnósticos y observaciones'),
-            const SizedBox(height: 10),
-            ...system.contextEntries
-                .map((entry) => _buildRelatedDiagnosisCard(theme, entry)),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMiniSectionLabel(ThemeData theme, String label) {
-    return Text(
-      label,
-      style: theme.textTheme.titleSmall?.copyWith(
-        fontWeight: FontWeight.w700,
-        color: theme.colorScheme.onSurfaceVariant,
-      ),
-    );
-  }
-
-  Widget _buildMeasurementTimelineRow(
-    ThemeData theme,
-    _BikeMeasurementSeries series,
-  ) {
-    final accentColor = _getSeverityColor(series.latestSeverity);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: theme.colorScheme.outlineVariant),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        series.title,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: theme.colorScheme.onSurface,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        series.subtitle,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                _buildReferencePill(
-                  label: series.latestValueLabel,
-                  backgroundColor: accentColor.withValues(alpha: 0.15),
-                  borderColor: accentColor.withValues(alpha: 0.3),
-                  foregroundColor: accentColor,
-                ),
-              ],
-            ),
-          ),
-          BikeMeasurementTimeline(
-            title: series.title,
-            unit: series.unit,
-            points: series.points,
-            accentColor: accentColor,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRelatedDiagnosisCard(
-    ThemeData theme,
-    BikeObservation observation,
-  ) {
-    final accentColor = _getSeverityColor(observation.severity);
-    final jobNumber = observation.payload['job_number']?.toString();
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  observation.title,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: theme.colorScheme.onSurface,
-                  ),
-                ),
-              ),
-              if (jobNumber != null && jobNumber.isNotEmpty)
-                _buildReferencePill(
-                  label: jobNumber,
-                  backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                  borderColor: theme.colorScheme.outlineVariant,
-                  foregroundColor: theme.colorScheme.onSurfaceVariant,
-                ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            observation.summary?.trim().isNotEmpty == true
-                ? observation.summary!
-                : observation.statusValue ?? 'Sin resumen detallado.',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-              height: 1.45,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Text(
-                DateFormat('dd/MM/yyyy').format(observation.observedAt),
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              if (observation.severity != null) ...[
-                const SizedBox(width: 8),
-                _buildReferencePill(
-                  label: _formatSeverityLabel(observation.severity),
-                  backgroundColor: accentColor.withValues(alpha: 0.15),
-                  borderColor: accentColor.withValues(alpha: 0.3),
-                  foregroundColor: accentColor,
-                ),
-              ],
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCurrentStateCard(
-    ThemeData theme,
-    _BikeDiagnosisSystemView system,
-    Color accentColor,
-  ) {
-    final updatedAt = system.currentStateUpdatedAt;
-    final location = system.primaryLocation;
-    final sourceLabel = system.currentStateSourceLabel;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _buildReferencePill(
-                label: system.overallStatus.displayName,
-                backgroundColor: accentColor.withValues(alpha: 0.15),
-                borderColor: accentColor.withValues(alpha: 0.3),
-                foregroundColor: accentColor,
-              ),
-              if (location != BikeMemoryLocation.none)
-                _buildReferencePill(
-                  label: location.displayName,
-                  backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                  borderColor: theme.colorScheme.outlineVariant,
-                  foregroundColor: theme.colorScheme.onSurfaceVariant,
-                ),
-              if (sourceLabel != null && sourceLabel.isNotEmpty)
-                _buildReferencePill(
-                  label: sourceLabel,
-                  backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                  borderColor: theme.colorScheme.outlineVariant,
-                  foregroundColor: theme.colorScheme.onSurfaceVariant,
-                ),
-            ],
-          ),
-          if (system.currentStateSummary != null &&
-              system.currentStateSummary!.trim().isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Text(
-              system.currentStateSummary!,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurface,
-                height: 1.45,
-              ),
-            ),
-          ],
-          if (updatedAt != null) ...[
-            const SizedBox(height: 10),
-            Text(
-              'Actualizado el ${DateFormat('dd/MM/yyyy').format(updatedAt)}',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInterventionCard(
-    ThemeData theme,
-    BikeIntervention intervention,
-  ) {
-    // Roles del tema, no tonos fijos: `tealAccent.shade100` como texto no se
-    // leía sobre la tarjeta clara del historial (Android claro, 2026-09-30).
-    final roles = theme.extension<VinabikeThemeRoles>()!;
-    final tone =
-        intervention.interventionType == BikeInterventionType.replacement
-            ? roles.success
-            : roles.info;
-    final jobNumber = intervention.payload['job_number']?.toString();
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(
-                  intervention.title,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: theme.colorScheme.onSurface,
-                  ),
-                ),
-              ),
-              _buildReferencePill(
-                label: _formatInterventionTypeLabel(
-                  intervention.interventionType,
-                ),
-                backgroundColor: tone.container,
-                borderColor: tone.border,
-                foregroundColor: tone.onContainer,
-              ),
-            ],
-          ),
-          if (intervention.summary != null &&
-              intervention.summary!.trim().isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text(
-              intervention.summary!,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-                height: 1.45,
-              ),
-            ),
-          ],
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _buildReferencePill(
-                label:
-                    DateFormat('dd/MM/yyyy').format(intervention.performedAt),
-                backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                borderColor: theme.colorScheme.outlineVariant,
-                foregroundColor: theme.colorScheme.onSurfaceVariant,
-              ),
-              if (intervention.location != BikeMemoryLocation.none)
-                _buildReferencePill(
-                  label: intervention.location.displayName,
-                  backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                  borderColor: theme.colorScheme.outlineVariant,
-                  foregroundColor: theme.colorScheme.onSurfaceVariant,
-                ),
-              if (intervention.componentSlotKey != null &&
-                  intervention.componentSlotKey!.isNotEmpty)
-                _buildReferencePill(
-                  label: _formatComponentSlotLabel(
-                    intervention.componentSlotKey,
-                  ),
-                  backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                  borderColor: theme.colorScheme.outlineVariant,
-                  foregroundColor: theme.colorScheme.onSurfaceVariant,
-                ),
-              if (jobNumber != null && jobNumber.isNotEmpty)
-                _buildReferencePill(
-                  label: jobNumber,
-                  backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                  borderColor: theme.colorScheme.outlineVariant,
-                  foregroundColor: theme.colorScheme.onSurfaceVariant,
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLifecycleCard(
-    ThemeData theme,
-    BikeComponentLifecycle lifecycle,
-  ) {
-    final roles = theme.extension<VinabikeThemeRoles>()!;
-    final tone = lifecycle.status == BikeComponentLifecycleStatus.installed
-        ? roles.success
-        : roles.warning;
-    final jobNumber = lifecycle.payload['job_number']?.toString();
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(
-                  lifecycle.componentLabel,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: theme.colorScheme.onSurface,
-                  ),
-                ),
-              ),
-              _buildReferencePill(
-                label: _formatLifecycleStatusLabel(lifecycle.status),
-                backgroundColor: tone.container,
-                borderColor: tone.border,
-                foregroundColor: tone.onContainer,
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              if (lifecycle.componentSlotKey.isNotEmpty)
-                _buildReferencePill(
-                  label: _formatComponentSlotLabel(lifecycle.componentSlotKey),
-                  backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                  borderColor: theme.colorScheme.outlineVariant,
-                  foregroundColor: theme.colorScheme.onSurfaceVariant,
-                ),
-              if (lifecycle.location != BikeMemoryLocation.none)
-                _buildReferencePill(
-                  label: lifecycle.location.displayName,
-                  backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                  borderColor: theme.colorScheme.outlineVariant,
-                  foregroundColor: theme.colorScheme.onSurfaceVariant,
-                ),
-              _buildReferencePill(
-                label:
-                    'Instalado ${DateFormat('dd/MM/yyyy').format(lifecycle.installedAt)}',
-                backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                borderColor: theme.colorScheme.outlineVariant,
-                foregroundColor: theme.colorScheme.onSurfaceVariant,
-              ),
-              if (jobNumber != null && jobNumber.isNotEmpty)
-                _buildReferencePill(
-                  label: jobNumber,
-                  backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                  borderColor: theme.colorScheme.outlineVariant,
-                  foregroundColor: theme.colorScheme.onSurfaceVariant,
-                ),
-            ],
-          ),
-          if (lifecycle.notes != null &&
-              lifecycle.notes!.trim().isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              lifecycle.notes!,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-                height: 1.45,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLegacyEventsSection(
-    ThemeData theme,
-    List<BikeEvent> events, {
-    bool expanded = false,
-  }) {
-    if (events.isEmpty) return const SizedBox.shrink();
-
-    return Container(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.5)),
-      ),
-      child: Theme(
-        data: theme.copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          initiallyExpanded: expanded,
-          tilePadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
-          childrenPadding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-          title: Text(
-            expanded ? 'Historial de la bicicleta' : 'Eventos anteriores',
-            style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: theme.colorScheme.onSurface,
-            ),
-          ),
-          subtitle: Text(
-            expanded
-                ? 'Eventos de perfil, ingresos, entregas y otros hitos registrados previamente.'
-                : 'Cambios de la ficha y visitas al taller.',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          trailing: _buildReferencePill(
-            label: '${events.length}',
-            backgroundColor: theme.colorScheme.surfaceContainerLow,
-            borderColor: theme.colorScheme.outlineVariant,
-            foregroundColor: Colors.blueGrey.shade700,
-          ),
-          children: [
-            _buildEventTimelineList(theme, events),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildReferencePill({
-    required String label,
-    required Color backgroundColor,
-    required Color borderColor,
-    required Color foregroundColor,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: borderColor),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          color: foregroundColor,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEventTimelineList(ThemeData theme, List<BikeEvent> events) {
-    return Column(
-      children: List.generate(events.length, (index) {
-        final event = events[index];
-        final isLast = index == events.length - 1;
-
-        return IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SizedBox(
-                width: 32,
-                child: Column(
-                  children: [
-                    Container(
-                      width: 16,
-                      height: 16,
-                      margin: const EdgeInsets.only(top: 4),
-                      decoration: BoxDecoration(
-                        color: _getEventColor(event.eventCategory),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                            color: theme.colorScheme.surface, width: 2),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.1),
-                            blurRadius: 2,
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (!isLast)
-                      Expanded(
-                        child: Container(
-                          width: 2,
-                          color: Colors.grey.shade300,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 32),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Text(
-                            DateFormat('dd/MM/yyyy').format(event.eventDate),
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                          if (event.referenceNumber != null &&
-                              event.referenceNumber!.isNotEmpty) ...[
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.outlineVariant,
-                                borderRadius: BorderRadius.circular(4),
-                                border: Border.all(color: Colors.grey.shade300),
-                              ),
-                              child: Text(
-                                event.referenceNumber!,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        event.title,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: theme.colorScheme.onSurface,
-                        ),
-                      ),
-                      if (event.summary != null &&
-                          event.summary!.isNotEmpty) ...[
-                        const SizedBox(height: 6),
-                        Text(
-                          event.summary!,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: theme.colorScheme.onSurface,
-                            height: 1.4,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      }),
-    );
-  }
-
-  String _formatSeverityLabel(BikeMemorySeverity? severity) {
-    switch (severity) {
-      case BikeMemorySeverity.critical:
-        return 'Crítico';
-      case BikeMemorySeverity.warning:
-        return 'Atención';
-      case BikeMemorySeverity.info:
-        return 'Info';
-      case null:
-        return 'Dato';
-    }
-  }
-
-  String _formatInterventionTypeLabel(BikeInterventionType type) {
-    switch (type) {
-      case BikeInterventionType.replacement:
-        return 'Reemplazo';
-      case BikeInterventionType.service:
-        return 'Servicio';
-      case BikeInterventionType.adjustment:
-        return 'Ajuste';
-      case BikeInterventionType.installation:
-        return 'Instalación';
-      case BikeInterventionType.removal:
-        return 'Retiro';
-      case BikeInterventionType.inspection:
-        return 'Inspección';
-    }
-  }
-
-  String _formatLifecycleStatusLabel(BikeComponentLifecycleStatus status) {
-    switch (status) {
-      case BikeComponentLifecycleStatus.installed:
-        return 'Activo';
-      case BikeComponentLifecycleStatus.removed:
-        return 'Retirado';
-      case BikeComponentLifecycleStatus.superseded:
-        return 'Reemplazado';
-    }
-  }
-
-  String _formatComponentSlotLabel(String? slotKey) {
-    if (slotKey == null || slotKey.isEmpty) return 'Sistema';
-    const labels = {
-      'chain': 'Cadena',
-      'cassette': 'Cassette',
-      'chainring': 'Plato',
-      'derailleur_hanger': 'Postiza de cambio',
-      'front_rotor': 'Rotor delantero',
-      'rear_rotor': 'Rotor trasero',
-      'rotor': 'Rotor',
-      'front_pads': 'Pastillas delanteras',
-      'rear_pads': 'Pastillas traseras',
-      'pads': 'Pastillas',
-      'brake_pad': 'Pastillas',
-      'front_tire': 'Neumático delantero',
-      'rear_tire': 'Neumático trasero',
-      'tire': 'Neumático',
-    };
-
-    final mapped = labels[slotKey];
-    if (mapped != null) return mapped;
-
-    return slotKey
-        .split('_')
-        .where((segment) => segment.isNotEmpty)
-        .map((segment) =>
-            '${segment[0].toUpperCase()}${segment.substring(1).toLowerCase()}')
-        .join(' ');
-  }
-
-  IconData _systemIconFor(String systemKey) {
-    switch (systemKey) {
-      case 'front_brake':
-      case 'rear_brake':
-      case 'brakes':
-        return Icons.album_outlined;
-      case 'drivetrain':
-        return Icons.settings_outlined;
-      case 'bottom_bracket':
-        return Icons.hub_outlined;
-      case 'front_wheel':
-      case 'rear_wheel':
-      case 'wheels':
-        return Icons.trip_origin;
-      default:
-        return Icons.tune;
-    }
-  }
-
-  Color _getSystemStatusColor(BikeSystemOverallStatus status) {
-    final theme = Theme.of(context);
-    final roles = VinabikeThemeRoles.of(context);
-    switch (status) {
-      case BikeSystemOverallStatus.ok:
-        return roles.success.accent;
-      case BikeSystemOverallStatus.attention:
-        return roles.warning.accent;
-      case BikeSystemOverallStatus.critical:
-        return roles.danger.accent;
-      case BikeSystemOverallStatus.unknown:
-        return theme.colorScheme.onSurfaceVariant;
-    }
-  }
-
-  Color _getSeverityColor(BikeMemorySeverity? severity) {
-    final roles = VinabikeThemeRoles.of(context);
-    switch (severity) {
-      case BikeMemorySeverity.critical:
-        return roles.danger.accent;
-      case BikeMemorySeverity.warning:
-        return roles.warning.accent;
-      case BikeMemorySeverity.info:
-        return roles.info.accent;
-      case null:
-        return Theme.of(context).colorScheme.onSurfaceVariant;
-    }
-  }
-
-  Color _getEventColor(BikeEventCategory category) {
-    final roles = VinabikeThemeRoles.of(context);
-    switch (category) {
-      case BikeEventCategory.state:
-        return roles.info.accent;
-      case BikeEventCategory.visit:
-        return roles.success.accent;
-      case BikeEventCategory.incident:
-        return roles.danger.accent;
-      case BikeEventCategory.component:
-        return roles.warning.accent;
-      case BikeEventCategory.evidence:
-        return roles.info.accent;
-    }
-  }
-
-  Widget _buildProSection({
-    required String title,
-    required IconData icon,
-    required Color iconColor,
-    required Color bgColor,
-    required Color borderColor,
-    required List<String> items,
-    bool isGrid = false,
-  }) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 24.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: iconColor.withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, size: 20, color: iconColor),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-                color: bgColor,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: borderColor),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.02),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  )
-                ]),
-            child: isGrid
-                ? Wrap(
-                    spacing: 24,
-                    runSpacing: 16,
-                    children: items.map((line) {
-                      final parts = line.split(':');
-                      final key = parts.first;
-                      final val = parts.length > 1
-                          ? parts.sublist(1).join(':').trim()
-                          : '';
-                      return SizedBox(
-                        width: 250,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              key.toUpperCase(),
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                color: theme.colorScheme.onSurfaceVariant,
-                                letterSpacing: 0.8,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              val.isNotEmpty ? val : line,
-                              style: TextStyle(
-                                fontSize: 15,
-                                color: theme.colorScheme.onSurface,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: items
-                        .map((line) => Padding(
-                              padding: const EdgeInsets.only(bottom: 12.0),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Padding(
-                                    padding: const EdgeInsets.only(
-                                        top: 6.0, right: 12.0),
-                                    child: Icon(Icons.check_rounded,
-                                        size: 14, color: iconColor),
-                                  ),
-                                  Expanded(
-                                    child: Text(
-                                      line,
-                                      style: TextStyle(
-                                        fontSize: 15,
-                                        color: theme.colorScheme.onSurface,
-                                        height: 1.5,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ))
-                        .toList(),
-                  ),
-          ),
-        ],
-      ),
-    );
   }
 }
 
@@ -3771,177 +3245,6 @@ class _BikeDiagnosisSystemView {
           b.points.last.observedAt.compareTo(a.points.last.observedAt));
 
     return series;
-  }
-}
-
-class _DiagnosticPopupCard extends StatelessWidget {
-  final _BikeDiagnosisSystemView system;
-  final Color color;
-  final BikeSystemControllerOverlayLayout layout;
-
-  const _DiagnosticPopupCard({
-    required this.system,
-    required this.color,
-    required this.layout,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    const cardWidth = 270.0;
-    const cardHeight = 220.0;
-
-    final pinX =
-        layout.imageOffsetX + layout.placement.position.dx * layout.imageSize;
-    final pinY =
-        layout.imageOffsetY + layout.placement.position.dy * layout.imageSize;
-
-    double left =
-        layout.placement.labelRight ? pinX + 32 : pinX - cardWidth - 32;
-    double top = pinY - 60;
-
-    left = left.clamp(8.0, layout.constraints.maxWidth - cardWidth - 8);
-    top = top.clamp(8.0, layout.constraints.maxHeight - cardHeight - 8);
-
-    final measurements = system.measurementSeries.take(2).toList();
-
-    return Positioned(
-      left: left,
-      top: top,
-      child: IgnorePointer(
-        child: Container(
-          width: cardWidth,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: color.withValues(alpha: 0.25),
-              width: 1,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: color.withValues(alpha: 0.10),
-                blurRadius: 24,
-                offset: const Offset(0, 4),
-              ),
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.08),
-                blurRadius: 16,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  Text(
-                    system.displayName.toUpperCase(),
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1.2,
-                    ),
-                  ),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 7,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.10),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: color.withValues(alpha: 0.35),
-                      ),
-                    ),
-                    child: Text(
-                      system.overallStatus.displayName,
-                      style: TextStyle(
-                        color: color,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Text(
-                system.subheadline,
-                style: TextStyle(
-                  color: theme.colorScheme.onSurface,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              if (system.primaryNarrative != null &&
-                  system.primaryNarrative!.trim().isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  system.primaryNarrative!,
-                  style: TextStyle(
-                    color: theme.colorScheme.onSurfaceVariant,
-                    fontSize: 10.5,
-                    height: 1.45,
-                  ),
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-              if (measurements.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Container(height: 1, color: theme.colorScheme.outlineVariant),
-                const SizedBox(height: 10),
-                ...measurements.map(
-                  (measurement) => Padding(
-                    padding: const EdgeInsets.only(bottom: 6),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            measurement.title,
-                            style: TextStyle(
-                              color: theme.colorScheme.onSurfaceVariant,
-                              fontSize: 10,
-                            ),
-                          ),
-                        ),
-                        Text(
-                          measurement.latestValueLabel,
-                          style: TextStyle(
-                            color: color,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-              if (system.contextEntries.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  'Última: ${system.contextEntries.first.jobId ?? '—'}',
-                  style: const TextStyle(
-                    color: Color(0xFF94A3B8),
-                    fontSize: 10,
-                    letterSpacing: 0.2,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }
 

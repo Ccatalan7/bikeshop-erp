@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "general",
+  "id": "general-compact-header-actions-dark",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Botones de la barra superior visibles en oscuro",
+  "summary": "En el teléfono, en modo oscuro, los botones propios de cada pantalla en la barra superior se ven claros, igual que la campana y los mensajes.",
+  "items": [
+    "En modo oscuro, botones como «Editar bicicleta» quedaban azul oscuro sobre la barra superior del teléfono y casi no se veían."
+  ],
+  "evidence": [
+    {
+      "path": "lib/shared/widgets/main_layout.dart",
+      "sha256": "4c4e6d51784c056baccefe346d343e29461c7ab84fb9e820c510b32364c501db"
+    }
+  ]
+}

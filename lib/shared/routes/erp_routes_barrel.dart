@@ -25,6 +25,7 @@ export '../../modules/tax_reports/pages/f29_dashboard_page.dart';
 export '../../modules/crm/pages/customer_list_page.dart';
 export '../../modules/crm/pages/customer_form_page.dart';
 export '../../modules/crm/pages/customer_bike_directory_page.dart';
+export '../../modules/bikeshop/pages/bike_record_page.dart';
 export '../../modules/bikeshop/pages/client_logbook_page.dart';
 export '../../modules/bikeshop/pages/pegas_table_page.dart';
 export '../../modules/bikeshop/pages/job_statuses_page.dart';

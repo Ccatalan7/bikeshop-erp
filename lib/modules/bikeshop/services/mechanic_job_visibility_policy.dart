@@ -111,8 +111,36 @@ bool isMechanicJobBikeInWorkshop(
   String? bikeSerialNumber,
 }) {
   final bikeId = job.bikeId?.trim();
-  if (bikeId == null || bikeId.isEmpty || !job.isBikeIntake) return false;
+  if (bikeId == null || bikeId.isEmpty) return false;
+  return isMechanicJobIntakeInWorkshop(
+    job,
+    customerName: customerName,
+    bikeName: bikeName,
+    bikeBrand: bikeBrand,
+    bikeModel: bikeModel,
+    bikeSerialNumber: bikeSerialNumber,
+  );
+}
+
+/// La misma regla que [isMechanicJobBikeInWorkshop] cuando la bici se sabe por
+/// `mechanic_job_bikes` y no por `mechanic_jobs.bike_id`.
+///
+/// En producción (2026-10-02) 15 trabajos no tienen `bike_id` y 50 tienen uno
+/// que no está entre sus bicis: los de varias bicis guardan una sola en la
+/// cabecera, y otros (de diciembre de 2025 a mayo de 2026) no tienen filas por
+/// bici. El directorio de bicicletas une las dos fuentes y juzga el trabajo
+/// con esto.
+bool isMechanicJobIntakeInWorkshop(
+  MechanicJob job, {
+  String? customerName,
+  String? bikeName,
+  String? bikeBrand,
+  String? bikeModel,
+  String? bikeSerialNumber,
+}) {
+  if (job.deletedAt != null || !job.isBikeIntake) return false;
   if (job.status == JobStatus.cancelado ||
+      job.customStatus?.code.trim().toUpperCase() == 'CANCELADO' ||
       isMechanicJobCurrentlyDelivered(job)) {
     return false;
   }

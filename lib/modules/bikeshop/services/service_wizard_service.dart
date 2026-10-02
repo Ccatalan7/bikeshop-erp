@@ -122,6 +122,45 @@ class ServiceWizardService {
     return profiles[productId];
   }
 
+  /// Sólo la familia de cada servicio (`brakes`, `drivetrain`…), en una
+  /// consulta. El historial de la bici la usa para agrupar por sistema las
+  /// líneas de trabajos ya hechos (`job_line_systems.dart`) sin cargar las
+  /// preguntas del asistente. Un servicio con más de un perfil activo queda
+  /// fuera, igual que en [getProfilesForProducts].
+  Future<Map<String, String>> getServiceFamiliesForProducts(
+    Iterable<String> productIds, {
+    required String tenantId,
+  }) async {
+    final ids = productIds
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (ids.isEmpty || tenantId.trim().isEmpty) return const {};
+    final rows = await _client
+        .from('service_product_profile_mappings')
+        .select('product_id, service_profiles(service_family)')
+        .eq('tenant_id', tenantId)
+        .inFilter('product_id', ids)
+        .eq('status', 'active');
+    final families = <String, Set<String>>{};
+    for (final raw in rows as List) {
+      final row = Map<String, dynamic>.from(raw as Map);
+      final productId = row['product_id']?.toString();
+      final profile = row['service_profiles'];
+      final family =
+          profile is Map ? profile['service_family']?.toString() : null;
+      if (productId == null || family == null || family.trim().isEmpty) {
+        continue;
+      }
+      families.putIfAbsent(productId, () => <String>{}).add(family.trim());
+    }
+    return {
+      for (final entry in families.entries)
+        if (entry.value.length == 1) entry.key: entry.value.single,
+    };
+  }
+
   /// Loads wizard metadata for a set of catalog rows without a per-line
   /// mapping -> target -> questions waterfall.
   ///

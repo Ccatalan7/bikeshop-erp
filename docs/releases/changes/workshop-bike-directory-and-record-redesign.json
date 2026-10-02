@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "workshop",
+  "id": "workshop-bike-directory-and-record-redesign",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "Bicicletas registradas, rediseñadas",
+  "summary": "La lista muestra cada bicicleta con un dibujo de su tipo y color, su dueño y su último trabajo, y cada bici abre su propia página con el historial de visitas, la ficha técnica y las notas.",
+  "items": [
+    "«Todas» muestra cada bici con su dueño y su último trabajo; «En el taller» las agrupa por etapa y marca las que llevan 14 días o más.",
+    "El historial lista cada visita con lo que pidió el cliente y sus repuestos y servicios por sistema; las compras aparte ya no se mezclan con la bici.",
+    "La ficha técnica se lee en seis grupos, de cuadro a cockpit, y dice qué dato falta en cada uno."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/bikeshop/pages/bike_record_page.dart",
+      "sha256": "71f602e422b4313a08573068caccd59f74bbfbd2b6444a7bfa07040bb50d41ab"
+    },
+    {
+      "path": "lib/modules/bikeshop/widgets/bike_record_panel.dart",
+      "sha256": "fb3cc9583938fd2fce947d26d8ec12caf04889ce78042921c3d77ff42498595a"
+    },
+    {
+      "path": "lib/modules/bikeshop/widgets/bike_silhouette.dart",
+      "sha256": "f83701125c0a5a2f52811417be8b79831e82d417f462e73cbc039ce4344df185"
+    },
+    {
+      "path": "lib/modules/bikeshop/widgets/bike_module_style.dart",
+      "sha256": "f8496eceaa0bd76da6d24522efd059cec014ff6d071710419c8fe41ab8936845"
+    },
+    {
+      "path": "lib/modules/bikeshop/services/bike_directory_entries.dart",
+      "sha256": "872d22ab10a8b9d74e8623bd1c550771f516619611980a3ef304fa2aa1dc18f9"
+    },
+    {
+      "path": "lib/modules/bikeshop/services/bike_visit_history.dart",
+      "sha256": "30f20c99746a2467f5fefd90545583142d9cc255230541350acdb57ccb53909b"
+    },
+    {
+      "path": "lib/modules/bikeshop/services/mechanic_job_visibility_policy.dart",
+      "sha256": "548cf3a5838db2f9fc6453f22356bd918844f592e047df3d46734db6cd7df297"
+    },
+    {
+      "path": "lib/modules/bikeshop/services/bikeshop_service.dart",
+      "sha256": "1eeb0aa463abfa5b343b404b1d9c2dbea4f9a39d2c4c149b4cb879a65c856884"
+    },
+    {
+      "path": "lib/modules/bikeshop/services/service_wizard_service.dart",
+      "sha256": "ec77cd131559d0c590ad01cf8c2a10b5104601914754948201056039d1c5c86c"
+    },
+    {
+      "path": "lib/modules/crm/pages/customer_bike_directory_page.dart",
+      "sha256": "8df6f51cb5fedaa7dd123576149a2dd34a4b9876e2e0743056d62d192f41b672"
+    },
+    {
+      "path": "lib/shared/routes/app_router.dart",
+      "sha256": "1ea1b00353956e220942fe4d48f0a5e6a6e3766a8dc41087f15056d8c761edaa"
+    },
+    {
+      "path": "lib/shared/routes/erp_routes_barrel.dart",
+      "sha256": "6ddc929c42f65da447323687ffed0926455f1e01d06dbf0f25591473808a4fe6"
+    }
+  ]
+}

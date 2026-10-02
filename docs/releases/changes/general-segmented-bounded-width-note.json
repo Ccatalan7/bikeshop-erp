@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "general",
+  "id": "general-segmented-bounded-width-note",
+  "scope": "internal",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "lib/shared/widgets/vb_segmented.dart",
+      "sha256": "6ae499a0bee582fc5e0d66fa922b2cce40ad6a177ca5c9fc312a7469853d23e9"
+    }
+  ]
+}

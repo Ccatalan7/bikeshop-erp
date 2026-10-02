@@ -4419,10 +4419,17 @@ class BikeshopService extends ChangeNotifier {
     if (ids.isEmpty) return const <String, List<MechanicJobItem>>{};
 
     try {
-      final data = await Supabase.instance.client
+      var query = Supabase.instance.client
           .from('mechanic_job_items')
           .select()
           .inFilter('job_id', ids.toList());
+      // Las líneas son del tenant del trabajo; se filtra igual cuando hay
+      // autoridad, sin romper a quien llame antes de tenerla.
+      final tenantId = _cacheScope.capture()?.scope.tenantId;
+      if (tenantId != null && tenantId.isNotEmpty) {
+        query = query.eq('tenant_id', tenantId);
+      }
+      final data = await query;
       final result = <String, List<MechanicJobItem>>{};
       for (final json in data as List) {
         final item = MechanicJobItem.fromJson(json);

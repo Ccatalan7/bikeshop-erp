@@ -2864,6 +2864,13 @@ Boundary rule:
 - downstream customer documents such as the sales-invoice PDF appendix may render `mechanic_job_bikes.diagnosis`, but only as presentation text; they must not treat it as structured diagnosis input or a second workflow truth layer
 - long-term cross-visit technical truth does not
 
+Which bike a job belongs to (2026-10-02, bicycle directory and record redesign):
+
+- `mechanic_job_bikes` is the link. A job belongs to every bike in its job-bike rows; the header `mechanic_jobs.bike_id` counts only for a job that has no job-bike rows (the legacy jobs, Dec 2025–May 2026). Production on 2026-10-02 had 15 bike jobs with a null header and 50 whose header named a bike outside their own job-bike rows, so a reader that trusts the header loses or misattributes visits.
+- A line belongs to the bike of its `job_bike_id`. A null `job_bike_id` is «General» — a separate purchase, never any bike's history — except on a legacy job without job-bike rows, where every line is the header bike's.
+- «In the workshop» is one rule, `isMechanicJobIntakeInWorkshop` in `mechanic_job_visibility_policy.dart`: live, bike intake, not a test fixture, not cancelled (enum or custom status `CANCELADO`), not delivered. The directory, the record and the quick finder share it (the finder through `isMechanicJobBikeInWorkshop`, which adds the bike match); the stage comes from the custom status phase, because the text status can disagree with it.
+- These read models are `bike_directory_entries.dart` and `bike_visit_history.dart`; they read jobs, job bikes and lines with the tenant filter and change nothing.
+
 ## Structured Diagnosis Layer
 
 Current Dart model:

@@ -196,6 +196,30 @@ sesión recién levantada y sin nadie mirando. Cuando necesites ver un cambio co
 certeza, `stop && start` cuesta ~1 min y nunca miente. Es una limitación real
 del proyecto, no un error de operación: no la escondas en el reporte.
 
+### Tras un `restart`, el primer `shot` puede ser el frame de antes (2026-10-02)
+
+Un `shot` tomado 6 s después de `restart` devolvió la ficha de la bici que
+estaba abierta, con el defecto que se estaba arreglando; la app en realidad
+había vuelto al Dashboard. Se leyó como «el arreglo no funcionó» y se buscó la
+causa en otro lado durante una ronda. Antes de juzgar lo que un `restart`
+cambió, confirma con `read` en qué pantalla está la app; si no es la que
+esperabas, el `shot` era viejo.
+
+### Un color que se ve mal se mide en una prueba, no a ojo (2026-10-02)
+
+El lápiz de «Editar bicicleta» salía azul marino sobre la cabecera azul marino
+del teléfono en oscuro. Tres rondas de reload y captura no dijeron por qué. Una
+prueba de widget de diez líneas que monta `MainLayout` y lee el color del
+`RichText` del ícono lo dijo en una corrida (`#082230` contra el
+`chrome.foreground` esperado) y quedó como regresión
+(`test/widgets/main_layout_compact_actions_test.dart`). Si un color no calza,
+escribe la prueba que lo lee antes de la segunda captura.
+
+Un `IconButton` que sólo tiene `tooltip` —atrás, menú, las acciones de la
+cabecera compacta— no aparece con texto en `read` ni lo encuentra
+`find --label`: sale como `[botón]` sin etiqueta. Se toca por coordenada del
+`shot` actual (regla 3).
+
 ---
 
 ## 2. Interactuar con la app como un usuario
