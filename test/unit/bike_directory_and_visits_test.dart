@@ -383,6 +383,18 @@ void main() {
         systemOf: systemOf,
       ).single;
       expect(single.request, 'Cambiar pastillas');
+
+      // One row, but the header names another bike: the request is not hers.
+      final staleHeader = buildBikeVisits(
+        bikeId: 'c',
+        jobs: [job],
+        jobBikesByJobId: {
+          '2': [_jobBike('jb2c', '2', 'c')],
+        },
+        itemsByJobId: const {},
+        systemOf: systemOf,
+      ).single;
+      expect(staleHeader.request, isNull);
     });
 
     test('a finished bike still in the shop counts its days until today', () {

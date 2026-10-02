@@ -175,8 +175,15 @@ List<BikeVisit> buildBikeVisits({
     final ownRequest =
         ownRows.isEmpty ? null : ownRows.first.workRequested?.trim();
     // La cabecera guarda el pedido de la primera bici: sólo es de esta bici
-    // si el trabajo no tiene filas o tiene sólo la suya.
-    final headerRequest = onlyThisBike ? job.clientRequest?.trim() : null;
+    // si el trabajo no tiene filas, o tiene sólo la suya y la cabecera no
+    // nombra otra bici.
+    final headerBikeId = job.bikeId?.trim();
+    final headerIsThisBike = legacy ||
+        (jobBikes.length == 1 &&
+            (headerBikeId == null ||
+                headerBikeId.isEmpty ||
+                headerBikeId == bikeId));
+    final headerRequest = headerIsThisBike ? job.clientRequest?.trim() : null;
 
     visits.add(
       BikeVisit(

@@ -303,8 +303,18 @@ void main() {
     await _pump(tester, service, _snapshot(), Brightness.light);
     final link = find.bySemanticsLabel('Abrir trabajo PG-00257');
     await tester.ensureVisible(link);
+    await tester.pumpAndSettle();
     expect(link, findsOneWidget);
     expect(tester.getSize(link).height, greaterThanOrEqualTo(48));
+    expect(
+      tester.getSemantics(link),
+      containsSemantics(
+        label: 'Abrir trabajo PG-00257',
+        isButton: true,
+        hasTapAction: true,
+      ),
+      reason: 'a screen reader can open the job too',
+    );
     expect(tester.takeException(), isNull);
   });
 

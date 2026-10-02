@@ -1419,6 +1419,8 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
                       Semantics(
                         button: job.id != null,
                         label: 'Abrir trabajo ${job.jobNumber}',
+                        // Sin el hijo en la semántica, la acción va aquí.
+                        onTap: job.id == null ? null : () => _openJob(job.id),
                         excludeSemantics: true,
                         child: InkWell(
                           onTap: job.id == null ? null : () => _openJob(job.id),

@@ -24,7 +24,7 @@
     },
     {
       "path": "lib/modules/bikeshop/widgets/bike_record_panel.dart",
-      "sha256": "a14eeae2613e784c067fb20f8528c59868f82afe6407fe24420c2cadabd3f788"
+      "sha256": "30c2690b9d963ca534f3acb4208b25a5c41567c86f953798a7c29172ee385565"
     },
     {
       "path": "lib/modules/bikeshop/widgets/bike_silhouette.dart",
@@ -40,7 +40,7 @@
     },
     {
       "path": "lib/modules/bikeshop/services/bike_visit_history.dart",
-      "sha256": "c718a77f87353e12c507be5616a645939e2f032d4839c501eb99b5701fdf8ce9"
+      "sha256": "b5297e962b0ebd91fffaf02f30a91c8415b87e83a902ad0b388764ce43cf69da"
     },
     {
       "path": "lib/modules/bikeshop/services/mechanic_job_visibility_policy.dart",
