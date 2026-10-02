@@ -1670,142 +1670,162 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
     );
 
     final request = visit.request?.trim();
-    final card = DecoratedBox(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: theme.colorScheme.outlineVariant),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          header,
-          if (request != null && request.isNotEmpty && filter == null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
-              child: Text.rich(
-                TextSpan(children: [
-                  const TextSpan(
-                    text: 'Pidió: ',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  TextSpan(
-                    text: bikeRequestAsSentence(request),
-                    style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
-                  ),
-                ]),
-                maxLines: 4,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 14, height: 1.4),
-              ),
+    final content = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        header,
+        if (request != null && request.isNotEmpty && filter == null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
+            child: Text.rich(
+              TextSpan(children: [
+                const TextSpan(
+                  text: 'Pidió: ',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                TextSpan(
+                  text: bikeRequestAsSentence(request),
+                  style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+                ),
+              ]),
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 14, height: 1.4),
             ),
-          if (groups.isEmpty)
-            Container(
-              padding: const EdgeInsets.fromLTRB(18, 12, 18, 14),
-              decoration: BoxDecoration(
-                border: Border(top: BorderSide(color: roles.hairline)),
-              ),
-              child: Text(
-                'Sin líneas registradas para esta bici.',
-                style: TextStyle(fontSize: 14, color: roles.faintForeground),
-              ),
+          ),
+        if (groups.isEmpty)
+          Container(
+            padding: const EdgeInsets.fromLTRB(18, 12, 18, 14),
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: roles.hairline)),
             ),
-          for (final group in groups)
-            Container(
-              padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
-              decoration: BoxDecoration(
-                border: Border(top: BorderSide(color: roles.hairline)),
-              ),
-              child: narrow
-                  ? Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(group.system.label.toUpperCase(),
-                            style: BikeModuleText.label(context)),
-                        const SizedBox(height: 6),
-                        for (final line in group.lines)
-                          _buildLine(context, line, narrow: true),
-                      ],
-                    )
-                  : Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(
-                          width: 128,
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 1),
-                            child: Text(
-                              group.system.label,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
+            child: Text(
+              'Sin líneas registradas para esta bici.',
+              style: TextStyle(fontSize: 14, color: roles.faintForeground),
+            ),
+          ),
+        for (final group in groups)
+          Container(
+            padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: roles.hairline)),
+            ),
+            child: narrow
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(group.system.label.toUpperCase(),
+                          style: BikeModuleText.label(context)),
+                      const SizedBox(height: 6),
+                      for (final line in group.lines)
+                        _buildLine(context, line, narrow: true),
+                    ],
+                  )
+                : Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: 128,
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 1),
+                          child: Text(
+                            group.system.label,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: theme.colorScheme.onSurfaceVariant,
                             ),
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              for (final line in group.lines)
-                                _buildLine(context, line, narrow: false),
-                            ],
-                          ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            for (final line in group.lines)
+                              _buildLine(context, line, narrow: false),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
+                  ),
+          ),
+        if (visit.separatePurchaseAmount > 0 && filter == null)
+          Container(
+            padding: const EdgeInsets.fromLTRB(18, 10, 18, 12),
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: roles.hairline)),
             ),
-          if (visit.separatePurchaseAmount > 0 && filter == null)
-            Container(
-              padding: const EdgeInsets.fromLTRB(18, 10, 18, 12),
+            child: Text(
+              'Además, ${_money.format(visit.separatePurchaseAmount)} en '
+              'compras aparte en este trabajo.',
+              style: TextStyle(fontSize: 13, color: roles.faintForeground),
+            ),
+          ),
+      ],
+    );
+
+    final decoration = BoxDecoration(
+      color: theme.colorScheme.surface,
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: theme.colorScheme.outlineVariant),
+    );
+    if (narrow) return DecoratedBox(decoration: decoration, child: content);
+
+    // La fecha va dentro de la tarjeta, en una franja a la izquierda: todos
+    // los bloques blancos del historial empiezan en el mismo borde (dueño,
+    // 2026-10-02: la fecha suelta dejaba «en el aire» a la tarjeta de abajo).
+    const stubWidth = 92.0;
+    return Container(
+      decoration: decoration,
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        children: [
+          Positioned(
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: stubWidth,
+            child: DecoratedBox(
               decoration: BoxDecoration(
-                border: Border(top: BorderSide(color: roles.hairline)),
-              ),
-              child: Text(
-                'Además, ${_money.format(visit.separatePurchaseAmount)} en '
-                'compras aparte en este trabajo.',
-                style: TextStyle(fontSize: 13, color: roles.faintForeground),
+                color: theme.colorScheme.surfaceContainerLow,
+                border: Border(right: BorderSide(color: roles.hairline)),
               ),
             ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: stubWidth),
+            child: content,
+          ),
+          Positioned(
+            left: 0,
+            top: 14,
+            width: stubWidth,
+            child: Semantics(
+              label: bikeFullDate(visit.date),
+              excludeSemantics: true,
+              child: Column(
+                children: [
+                  Text(
+                    visit.date.toLocal().day.toString().padLeft(2, '0'),
+                    style: BikeModuleText.figure(context, size: 32)
+                        .copyWith(fontWeight: FontWeight.w600, height: 1.05),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    bikeMonthYear(visit.date).toUpperCase(),
+                    style: BikeModuleText.label(context),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
-
-    if (narrow) return card;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 72,
-          child: Padding(
-            padding: const EdgeInsets.only(top: 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  visit.date.toLocal().day.toString().padLeft(2, '0'),
-                  style: BikeModuleText.figure(context, size: 32)
-                      .copyWith(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  bikeMonthYear(visit.date).toUpperCase(),
-                  style: BikeModuleText.label(context),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(width: 18),
-        Expanded(child: card),
-      ],
-    );
   }
 
-  /// Lo que pidió el cliente en una línea: sin las viñetas con que se
-  /// escribió («+Diagnóstico…») y sin puntos repetidos al unir renglones.
   Widget _buildLine(BuildContext context, BikeVisitLine line,
       {required bool narrow}) {
     final theme = Theme.of(context);
