@@ -595,7 +595,17 @@ def validate_contract(name, contract, definitions, keys):
     for target, deps in contract['prerequisites'].items():
         if target not in keys or any(dep not in keys or contract['roles'][dep] == 'legacy' for dep in deps):
             raise ValueError(f'{name}: foreign or legacy prerequisite')
+        # Free text cannot be checked: as a gate it only makes the operator
+        # type something to go on. «Fuente del dato» gated almost every field
+        # of 57 templates this way (owner, 2026-10-01); the database rejects it
+        # too (spec_template_note_prerequisite_guard).
+        written = [dep for dep in deps
+                   if dep == 'spec_evidence_source' or definitions[dep]['data_type'] == 'text']
+        if written:
+            raise ValueError(f'{name}/{target}: free text cannot gate a field ({", ".join(written)})')
         edges[target].update(deps)
+    if contract['required_when'].get('spec_evidence_source', {'kind': 'never'})['kind'] != 'never':
+        raise ValueError(f'{name}: the source note is optional')
     for k, options in contract['allowed_options'].items():
         allowed = ['true', 'false'] if definitions[k]['data_type'] == 'boolean' else definitions[k]['allowed_values']
         if not set(options) <= set(allowed):

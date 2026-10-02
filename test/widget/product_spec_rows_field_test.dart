@@ -50,6 +50,45 @@ Widget host(Widget child, {Brightness brightness = Brightness.light}) =>
     );
 
 void main() {
+  testWidgets('every item is listed with what it holds; one opens at a time',
+      (tester) async {
+    // Before 2026-10-01 one item showed at a time behind a «Configuración 1»
+    // dropdown, as a column of full-width boxes.
+    tester.view.physicalSize = const Size(1280, 1100);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    Map<String, dynamic>? value = observations();
+    await tester.pumpWidget(host(StatefulBuilder(
+        builder: (context, setState) => ProductSpecRowsField(
+            fieldKey: 'fits',
+            label: 'Medidas admitidas',
+            schema: schema,
+            value: value,
+            showLabel: false,
+            onChanged: (next) => setState(() => value = next)))));
+    Finder inRow(String id, String text) => find.descendant(
+        of: find.byKey(ValueKey('fits-row-$id')), matching: find.text(text));
+    expect(inRow('a', '622 mm · 28 mm · 47 mm · Incluye adaptador: No'),
+        findsOneWidget);
+    expect(inRow('b', '584 mm · 40 mm · 62 mm'), findsOneWidget);
+    // The first item is open, with its data side by side.
+    expect(find.byKey(const ValueKey('fits-a-min')), findsOneWidget);
+    expect(find.byKey(const ValueKey('fits-b-min')), findsNothing);
+    expect(tester.getTopLeft(find.byKey(const ValueKey('fits-a-max'))).dy,
+        tester.getTopLeft(find.byKey(const ValueKey('fits-a-min'))).dy);
+    await tester.tap(find.byKey(const ValueKey('fits-row-b')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('fits-a-min')), findsNothing);
+    expect(find.byKey(const ValueKey('fits-b-min')), findsOneWidget);
+    // And it closes.
+    await tester.tap(find.byKey(const ValueKey('fits-row-b')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('fits-b-min')), findsNothing);
+    expect(value, observations(), reason: 'opening and closing edits nothing');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('missing family names never remove an allowed or stored choice',
       (tester) async {
     final rowSchema = ProductSpecRowSchema.fromJson({
@@ -90,15 +129,19 @@ void main() {
     expect(control.value, 'pump');
     expect(control.options.map((o) => o.value), ['pump', 'accessory_mount']);
     expect(control.options.first.label, 'Nombre no disponible · pump');
-    final selector = tester.widget<VbSearchableSelect<String>>(
-        find.byKey(const ValueKey('kit_members-row-selector')));
-    expect(selector.options.first.context,
-        'Familia técnica: Nombre no disponible · pump');
-    await tester.tap(field);
+    // Every item is listed with what it holds.
+    expect(
+        find.descendant(
+            of: find.byKey(const ValueKey('kit_members-row-piece-a')),
+            matching: find.text('Nombre no disponible · pump')),
+        findsOneWidget);
+    // Inside the box, as a person taps it: the line under it is help text.
+    final box = tester.getTopLeft(field) + const Offset(24, 20);
+    await tester.tapAt(box);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Soporte de accesorio').last);
     await tester.pumpAndSettle();
-    await tester.tap(field);
+    await tester.tapAt(box);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Nombre no disponible · pump').last);
     await tester.pumpAndSettle();
@@ -174,10 +217,17 @@ void main() {
         control.options.map((o) => o.label), ['Soporte de accesorio', 'Casco']);
     expect(control.options.map((o) => o.value), ['accessory_mount', 'helmet']);
     expect(find.text('accessory_mount'), findsNothing);
-    final selector = tester.widget<VbSearchableSelect<String>>(
-        find.byKey(const ValueKey('kit_members-row-selector')));
-    expect(selector.options.first.context,
-        'Familia técnica: Soporte de accesorio');
+    expect(
+        find.descendant(
+            of: find.byKey(const ValueKey('kit_members-row-piece-a')),
+            matching: find.text('Soporte de accesorio')),
+        findsOneWidget);
+    // The closed item still says what it holds.
+    expect(
+        find.descendant(
+            of: find.byKey(const ValueKey('kit_members-row-piece-b')),
+            matching: find.text('Casco')),
+        findsOneWidget);
     await tester.tap(field);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Casco').last);
@@ -415,7 +465,9 @@ void main() {
             .tap(find.descendant(of: boolean, matching: find.text('Sin dato')));
         await tester.pumpAndSettle();
         expect(tester.widget<TextFormField>(model).enabled, false);
-        expect(find.textContaining('Define primero Requiere adaptador'),
+        expect(
+            find.textContaining(
+                'Se habilita cuando completes «Requiere adaptador»'),
             findsOneWidget);
         await tester
             .tap(find.descendant(of: boolean, matching: find.text('Sí')));
@@ -490,7 +542,9 @@ void main() {
             findsWidgets);
         expect(jsonEncode(values['allocations']), before);
         expect(coherence.validate(values).any((i) => i.blocking), true);
-        await tester.tap(select);
+        // The box, not the error line under it.
+        await tester.tap(find.descendant(
+            of: select, matching: find.text('Vínculo sin resolver')));
         await tester.pumpAndSettle();
         await tester.tap(find.text('USB-C 2').last);
         await tester.pumpAndSettle();
@@ -522,12 +576,15 @@ void main() {
     expect(rows[0].sources, ['https://example.test/a']);
     expect(rows[1].values, {'bsd': '584', 'min': '40', 'max': '62'});
     expect(rows[1].sources, ['https://example.test/b']);
-    await tester.tap(find.byKey(const ValueKey('fits-row-selector')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Configuración 2').last);
+    await tester.tap(find.byKey(const ValueKey('fits-row-b')));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('fits-b-min')), findsOneWidget);
-    expect(find.text('Sin dato'), findsOneWidget,
+    expect(
+        tester
+            .widget<ProductSpecBooleanField>(
+                find.byKey(const ValueKey('fits-b-adapter')))
+            .value,
+        isNull,
         reason: 'an absent boolean in the second row does not inherit false');
     expect(value!['rows'][1]['values'].containsKey('adapter'), false);
     expect(tester.takeException(), isNull);
@@ -586,9 +643,9 @@ void main() {
                     find.byKey(const ValueKey('reference-a-min')))
                 .enabled,
             false);
-        await tester.tap(find.byKey(const ValueKey('reference-row-selector')));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Configuración 2').last);
+        await tester
+            .ensureVisible(find.byKey(const ValueKey('reference-row-b')));
+        await tester.tap(find.byKey(const ValueKey('reference-row-b')));
         await tester.pumpAndSettle();
         expect(find.byKey(const ValueKey('reference-b-min')), findsOneWidget);
         expect(value, observations());

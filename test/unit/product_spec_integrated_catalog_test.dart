@@ -100,6 +100,20 @@ void main() {
                 })
             .toList();
         for (final expectedIssue in fixture['expected_issue_subset'] as List) {
+          // These 2026-09-07 cases expect a field to wait on a written note
+          // («Documento OEM de cotas» before a seatpost length). Since
+          // 2026-10-01 free text never gates a field (owner; 20261002090000):
+          // a wait whose every parent is a note is no longer expected. The
+          // research artifact keeps its recorded hash and wording.
+          final template = templates[fixture['template']]!;
+          final waited = ((template.formContract['prerequisites']
+                  as Map?)?[expectedIssue['field']] as List?) ??
+              const [];
+          if (expectedIssue['code'] == 'prerequisite' &&
+              waited.isNotEmpty &&
+              waited.every((parent) => template.isNote(parent as String))) {
+            continue;
+          }
           expect(normalized, contains(equals(expectedIssue)));
         }
       }

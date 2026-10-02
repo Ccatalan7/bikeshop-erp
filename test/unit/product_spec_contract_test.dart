@@ -340,6 +340,84 @@ void main() {
         isEmpty);
   });
 
+  test('a free-text measuring note never gates its measurement', () {
+    // The rim's ERD waited on «Cómo se midió el ERD», a text box: the
+    // operator had to type something before the number.
+    final template = SpecTemplate(
+        id: 'rim',
+        key: 'rim',
+        name: 'Aro',
+        technicalFamily: 'rim',
+        formContract: {
+          'prerequisites': {
+            'rim_erd_mm': ['rim_erd_datum'],
+            'rim_inner_width_mm': ['rim_wall_type'],
+          },
+        },
+        fields: [
+          fact('rim_erd_datum', 'text'),
+          fact('rim_erd_mm', 'number'),
+          fact('rim_wall_type', 'single_select', options: ['Simple', 'Doble']),
+          fact('rim_inner_width_mm', 'number'),
+        ]);
+    expect(template.isNote('rim_erd_datum'), isTrue);
+    expect(template.prerequisitesFor('rim_erd_mm'), isEmpty);
+    // And the source note is optional even where a contract requires it.
+    final required = SpecTemplate(
+        id: 'hub',
+        key: 'hub',
+        name: 'Maza',
+        technicalFamily: 'hub',
+        formContract: {
+          'required_when': {
+            'spec_evidence_source': {'kind': 'always'}
+          }
+        },
+        fields: [
+          fact('spec_evidence_source', 'text')
+        ]);
+    expect(
+        required.requiredFor(required.fields.single, const {}), SpecTruth.no);
+    // A typed decision still gates.
+    expect(template.prerequisitesFor('rim_inner_width_mm'), ['rim_wall_type']);
+  });
+
+  test('a field is drawn no lower than the fields waiting on it', () {
+    // A bag's capacity waited on «La capacidad incluye», drawn three
+    // sections below it. The qualifier goes up to the capacity's section;
+    // what nobody waits on, and retired data, keep their role.
+    final template = SpecTemplate(
+        id: 'bag',
+        key: 'bike_bag',
+        name: 'Bolso',
+        technicalFamily: 'bike_bag',
+        formContract: {
+          'prerequisites': {
+            'volume_l': ['volume_scope'],
+          },
+          'roles': {
+            'volume_l': 'primary',
+            'volume_scope': 'declaration',
+            'waterproof': 'declaration',
+            'old_volume': 'legacy',
+          },
+        },
+        fields: [
+          fact('volume_l', 'number'),
+          fact('volume_scope', 'single_select',
+              options: ['Total', 'Principal']),
+          fact('waterproof', 'boolean'),
+          fact('old_volume', 'number'),
+        ]);
+    String sectionOf(String key) => template.sectionFor(
+        template.fields.firstWhere((f) => f.definition!.key == key));
+    expect(sectionOf('volume_scope'), 'primary');
+    expect(sectionOf('volume_l'), 'primary');
+    expect(sectionOf('waterproof'), 'declaration');
+    expect(sectionOf('old_volume'), 'legacy');
+    expect(template.sections, ['primary', 'declaration', 'legacy']);
+  });
+
   test('missing prerequisites are pending knowledge, not contradictions', () {
     final issues = validateProductSpecDraft(template: chainTemplate(), values: {
       'chain_speeds': ['8']

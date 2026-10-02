@@ -25,6 +25,13 @@ class SpecDefinition {
   final Map<String, String>? _optionIds;
   Map<String, String> get optionIds => _optionIds ?? const {};
 
+  /// What the operator reads for an option whose label —its identity in
+  /// rules, workshop code and name readings— is not shop Spanish:
+  /// «Derailleur» reads «Con cambio trasero» (20261002100000).
+  final Map<String, String>? _optionDisplayLabels;
+  String optionDisplay(String option) =>
+      _optionDisplayLabels?[option] ?? option;
+
   ProductSpecRowSchema? get rowSchema => validationRules['rows_schema'] is Map
       ? ProductSpecRowSchema.fromJson(
           Map<String, dynamic>.from(validationRules['rows_schema'] as Map))
@@ -37,11 +44,13 @@ class SpecDefinition {
     required this.dataType,
     required this.options,
     Map<String, String> optionIds = const {},
+    Map<String, String> optionDisplayLabels = const {},
     this.unit,
     this.helpText,
     this.validationRules = const <String, dynamic>{},
     required this.sortOrder,
-  }) : _optionIds = optionIds;
+  })  : _optionIds = optionIds,
+        _optionDisplayLabels = optionDisplayLabels;
 
   factory SpecDefinition.fromJson(Map<String, dynamic> j) {
     final raw = j['allowed_values'];
@@ -63,6 +72,13 @@ class SpecDefinition {
         for (final value
             in (j['spec_definition_values'] as List? ?? []).whereType<Map>())
           value['label'] as String: value['id'] as String
+      },
+      optionDisplayLabels: {
+        for (final value
+            in (j['spec_definition_values'] as List? ?? []).whereType<Map>())
+          if (value['display_label'] case final String display
+              when display.trim().isNotEmpty)
+            value['label'] as String: display
       },
       unit: j['unit'] as String?,
       helpText: j['description'] as String?,
@@ -187,18 +203,26 @@ class SpecTemplate {
   })  : _formContract = formContract,
         _contractVersion = contractVersion;
 
-  /// The data a field waits on. «Fuente del dato» (`spec_evidence_source`)
-  /// is a private note of where the facts were read, never a condition of
-  /// another datum: every fact already carries its own source (owner,
-  /// 2026-10-01; 20261002090000 removes it from the contracts, and this keeps
-  /// a contract published before that migration from gating the editor).
+  /// The data a field waits on. A written note —«Fuente del dato»
+  /// (`spec_evidence_source`) or any free-text field such as «Cómo se midió
+  /// el ERD»— is never a condition of another datum: it cannot be checked, so
+  /// as a gate it only makes the operator type something to go on, and every
+  /// fact already carries its own source (owner, 2026-10-01; 20261002090000
+  /// removes those edges and rejects them, and this keeps a contract published
+  /// before that migration from gating the editor).
   List<String> prerequisitesFor(String key) => [
         for (final dependency
             in (formContract['prerequisites'] as Map?)?[key] as List? ?? [])
-          if (dependency != specEvidenceSourceKey) dependency as String,
+          if (!isNote(dependency as String)) dependency,
       ];
 
   static const specEvidenceSourceKey = 'spec_evidence_source';
+
+  /// The source note and the template's free-text fields.
+  bool isNote(String key) =>
+      key == specEvidenceSourceKey ||
+      fields.any((field) =>
+          field.definition?.key == key && field.definition?.dataType == 'text');
 
   ProductSpecRowConditions get rowConditions =>
       ProductSpecRowConditions.fromContract(formContract, {
@@ -248,6 +272,9 @@ class SpecTemplate {
   }
 
   SpecTruth requiredFor(SpecTemplateField field, Map<String, dynamic> values) {
+    // The source is an optional note: six contracts published before
+    // 20261002090000 still require it, which listed it as missing.
+    if (field.definition?.key == specEvidenceSourceKey) return SpecTruth.no;
     final expression =
         (formContract['required_when'] as Map?)?[field.definition?.key];
     return expression == null
@@ -303,9 +330,43 @@ class SpecTemplate {
           ?.label ??
       key;
 
+  /// The section a field is drawn in: its role, except that a field another
+  /// one waits on is drawn in the earliest section of the fields waiting on
+  /// it. Otherwise a datum would wait on something drawn below it — the
+  /// 2026-10-01 audit found 23 such waits (a bag's capacity waiting on what
+  /// it includes, a grip's length on how it is sold). Retired fields stay put.
   String sectionFor(SpecTemplateField field) => formContract.isEmpty
       ? field.sectionKey
-      : roleFor(field.definition?.key ?? '');
+      : _displaySection(field.definition?.key ?? '', <String>{});
+
+  static const sectionOrder = [
+    'primary',
+    'measurement',
+    'contents',
+    'declaration',
+    'legacy'
+  ];
+
+  String _displaySection(String key, Set<String> visiting) {
+    var section = roleFor(key);
+    if (section == 'legacy' || !visiting.add(key)) return section;
+    for (final child in fields) {
+      final childKey = child.definition?.key;
+      if (childKey == null ||
+          childKey == key ||
+          roleFor(childKey) == 'legacy' ||
+          !{...prerequisitesFor(childKey), ...applicabilityDependencies(child)}
+              .contains(key)) {
+        continue;
+      }
+      final childSection = _displaySection(childKey, visiting);
+      if (sectionOrder.indexOf(childSection) < sectionOrder.indexOf(section)) {
+        section = childSection;
+      }
+    }
+    visiting.remove(key);
+    return section;
+  }
 
   String? helperFor(String key) =>
       (formContract['helpers'] as Map?)?[key] as String?;
@@ -316,9 +377,7 @@ class SpecTemplate {
   List<String> get sections {
     if (formContract.isNotEmpty) {
       final used = fields.map(sectionFor).toSet();
-      return ['primary', 'measurement', 'contents', 'declaration', 'legacy']
-          .where(used.contains)
-          .toList(growable: false);
+      return sectionOrder.where(used.contains).toList(growable: false);
     }
     final seen = <String>{};
     return fields

@@ -524,6 +524,25 @@ esa identificación. En esta misma sesión, los clics AX movían el foco sin
 activar `Añadir configuración`; el backend `app` del wrapper sí produjo el
 cambio comprobado en la semántica y en un frame actual.
 
+**2026-10-01 — recorrer varias fichas de producto seguidas.** Hay dos trampas, y
+costaron cuatro rondas:
+
+- **«Atrás» no vuelve a la lista.** El «Atrás» de la barra superior
+  (`Semantics` «Atrás», 1524,16) recorre la historia de espacios de trabajo y
+  puede llevar a otro módulo (de un formulario de producto a Taller →
+  Trabajos).
+- **La flecha del formulario deja la pestaña abierta.** La flecha propia del
+  formulario (sin etiqueta semántica, a la izquierda de «Editar producto»)
+  vuelve a la lista, pero deja abierta la pestaña «Espacio de trabajo Editar
+  Producto». Desde entonces `tap --label "Editar producto"` encuentra dos
+  coincidencias y se niega en silencio dentro de un script.
+
+Para entrar a otra ficha: `enter-text --key inventory-search-field`, tocar la
+fila, y luego `tap --label "Editar producto" --index 0` sólo después de
+comprobar con `find` que el índice 0 es el botón (1472,896) y no la pestaña.
+Para el menú lateral, una búsqueda de `Productos` también coincide con
+«Ver productos y servicios…» del taller.
+
 ### Text fields: update Flutter, not only the macOS AX proxy (2026-08-03)
 
 Computer Use can focus a Flutter macOS `TextField` and report it as settable,

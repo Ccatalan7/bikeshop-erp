@@ -265,24 +265,43 @@ Los booleanos nuevos admiten desconocido. `false`, `0`, vacío, desconocido y
 no aplica tienen significados diferentes. Un `is_set` no acepta «desconocido»
 como prerrequisito confirmado.
 
-**La fuente del dato no es prerrequisito (dueño, 2026-10-01; migración
-20261002090000).** «Fuente del dato» (`spec_evidence_source`) es una nota
-privada: el envase, manual o enlace que se revisó. Los compiladores de
+**Un texto libre no habilita ni bloquea otro dato (dueño, 2026-10-01;
+migración 20261002090000).** «Fuente del dato» (`spec_evidence_source`) es una
+nota privada: el envase, manual o enlace que se revisó. Los compiladores de
 catálogos de investigación (`scripts/inventory/compile_*.py`, 2026-09-07→16)
 la pusieron como prerrequisito de casi cada campo, y 57 de las 107 fichas
 activas la heredaron. El editor deshabilitaba entonces las velocidades, el
 ancho o los eslabones de una cadena hasta llenar un texto que se pide al
 final, y los valores leídos del nombre quedaban congelados. El dueño no pudo
 entender la ficha («what the fuck is "se desbloquea cuando llenes la fuente
-del dato"?»). La procedencia ya vive en cada hecho (`spec_facts.source` y
-`confirmed`). Por eso la nota no habilita ni bloquea nada: se quitó de los
-contratos, `SpecTemplate.prerequisitesFor` la ignora y el disparador
-`spec_template_source_not_prerequisite_guard` rechaza con `23514` la ficha que
-vuelva a publicarla. Esos compiladores siguen escribiendo la arista: el que
-publique otra vez con ellos debe quitarla, porque la base la rechaza. Un
-prerrequisito real sí se conserva, por ejemplo la medida que necesita su
-referencia de medición o la pieza que depende de su presentación (45 aristas en
-20 fichas ese día).
+del dato"?»).
+
+La auditoría de las 107 fichas encontró la misma forma en ocho más: un texto
+libre sobre cómo se midió bloqueaba la medida misma. «Cómo se midió el ERD»
+bloqueaba el ERD de un aro, y «Documento OEM de cotas» bloqueaba el largo de
+un poste. Además, seis fichas exigían la fuente. La regla es una:
+
+- un campo de texto libre (la fuente, una nota, un código) nunca es
+  prerrequisito, porque no se puede comprobar y como condición sólo obliga a
+  escribir algo;
+- la fuente es opcional;
+- un prerrequisito tipado se conserva: la presentación de un freno, el tipo de
+  conector, la rosca de un perno (30 aristas en 11 fichas ese día).
+
+Quién la hace cumplir:
+
+- la migración quitó 222 aristas de la fuente y 15 de notas de medición;
+- `SpecTemplate.prerequisitesFor` ignora los textos libres y `requiredFor`
+  trata la fuente como opcional, así que una app nueva funciona contra un
+  contrato viejo;
+- el disparador diferido `spec_template_note_prerequisite_guard`, sobre fichas
+  y sus campos, rechaza con `23514` la ficha que vuelva a publicarlo;
+- `validate_contract`, el validador común de los compiladores, también lo
+  rechaza.
+
+Los compiladores históricos siguen escribiendo la arista y no se reescriben:
+son generadores de un solo uso cuyas migraciones ya corrieron. Uno que se
+vuelva a correr falla en el validador con el nombre del campo.
 
 **Precisión de comparación, 2026-09-08:** compartir unidad no autoriza una
 desigualdad. El volumen vendido de un envase y la dosis de una aplicación son
@@ -448,6 +467,43 @@ La disponibilidad del catálogo no es una restricción física: si no tenemos un
 variante cargada, el operador puede documentarla como desconocida/en revisión.
 No presentar la lista actual como inventario de todo lo que existe en bicicleta.
 
+**La etiqueta de una opción es su identidad; el operador lee
+`display_label` (2026-10-01, migración 20261002100000).** Este documento ya
+decía que las etiquetas son presentación. En la base no lo eran del todo:
+
+- las reglas de cada ficha citan la etiqueta;
+- el código del taller la compara: «Derailleur», «Single speed / BMX / IGH»,
+  «Braze-on» y «One-piece / americano» son constantes de
+  `drivetrain_canonical_data.dart`, compartidas con las fichas de bicicleta;
+- una app instalada sin actualizar seguiría comparando el texto viejo;
+- el recibo de cada lectura del nombre está atado a ese vocabulario.
+
+Por eso cada opción tiene `spec_definition_values.display_label`, el nombre en
+español de taller. Lo muestran el editor y la tienda
+(`spec_option_display_internal_v1`). La etiqueta, el código, las reglas y los
+hechos no cambian. 25 opciones lo recibieron ese día: inglés llano y
+etiquetas con códigos de documentos de investigación («… sólo según filas
+C-731»). Los nombres de oficio que el taller dice así se quedan («Post
+Mount», «Tapered», «Lock-on»).
+
+Cada tabla nombra también sus filas en `validation_rules.row_label`:
+«Componente 1», «Circuito 2». Antes 152 de 159 decían «Configuración» para
+todo, incluso para los componentes de un freno.
+
+**Un cambio de vocabulario vuelve a juzgar las lecturas del nombre
+(2026-10-01, migración 20261002120000).** Una lectura del nombre deja de contar
+cuando cambia el vocabulario con que se juzgó su cita: el rótulo del campo, su
+descripción, sus opciones o sus términos de lectura (20260906160000). Nadie
+las volvía a juzgar. Las pasadas de vocabulario del 2026-09-16→19 dejaron
+mudas 292 de 1.709 lecturas, entre ellas 80 cantidades de hoyos de maza y las
+20 de «Tipo de transmisión». El editor las mostraba, pero la búsqueda técnica
+del asistente de inventario las ignoraba. La función
+`spec_rejudge_name_readings_internal_v1()` vuelve a juzgarlas con el mismo
+juez del servidor, y 268 volvieron a contar. Las 24 que el juez rechaza siguen
+mudas, y está bien: «Trasera» no dice «tiene montaje para piñón». **Toda
+pasada de vocabulario la llama al final.** `display_label` no es parte del
+vocabulario y no la necesita.
+
 ### 5.3 Qué ocurre al cambiar un prerrequisito
 
 Primero se calcula un delta sin guardar: derivaciones caducas, observaciones que
@@ -521,6 +577,20 @@ Lo que se conserva:
 - **Un resumen arriba, no un muro.** «Faltan N datos» va con un chip por campo,
   y el chip lleva al campo. Un conflicto que bloquea el guardado es el único
   aviso de peligro.
+- **Nada espera algo que está más abajo.** Un campo del que otro depende se
+  dibuja en la primera sección de quienes lo esperan (`SpecTemplate.sectionFor`).
+  Así «Se vende por» de un puño sube a «Medidas», antes de los largos que
+  dependen de él. Antes había 23 esperas así.
+- **Cada valor dice de dónde salió**, mientras sigue siendo el guardado.
+  Ejemplos: «Leído del nombre del producto», «Del texto del proveedor», «De la
+  investigación del catálogo». Lo envía `value_sources` en la misma lectura que
+  los valores (20261002110000). De 4.604 hechos, sólo uno lo escribió una
+  persona.
+- **Una tabla es una lista.** Cada fila se ve en una línea con lo que contiene,
+  y la abierta muestra sus datos en grilla: tres por línea en escritorio, dos
+  en tableta, uno en teléfono. Antes era una fila a la vez, detrás de un
+  desplegable «Configuración 1», con una columna de cajas a ancho completo.
+  Hay 159 tablas en las fichas.
 
 ## 7. Persistencia y proyecciones
 

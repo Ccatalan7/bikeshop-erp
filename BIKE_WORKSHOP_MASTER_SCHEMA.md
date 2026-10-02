@@ -1624,17 +1624,37 @@ records production read-back and UI proof. The owner also assigned catalogue
 research/filling to Codex and Claude; the [prepared queue and execution plan](docs/development/product-specs-research-2026-09-05/catalog-fill-execution-plan-2026-09-06.md)
 cover all physical product categories, with no bulk product writes yet.
 
-**2026-10-01, the source is not a prerequisite (corrects the «source
-prerequisites» above):** «Fuente del dato» (`spec_evidence_source`) is a
-private note and gates no field. Research compilers had placed it in front of
-almost every field of 57 of the 107 active templates. The editor therefore
-froze a chain's speeds, width and links, read from the product name, until a
-text box shown at the bottom was filled. Provenance is per fact
-(`spec_facts.source`, `confirmed`). Migration `20261002090000` removes the
-edge, and a trigger rejects any template that publishes it again. The client
-ignores it in `prerequisitesFor`. Real prerequisites stay, such as a
-measurement and its reference, or a part and its presentation. The ficha's
-reading order is in the contract's §6.
+**2026-10-01, free text gates nothing (corrects the «source prerequisites»
+above):**
+
+- «Fuente del dato» (`spec_evidence_source`) is a private, optional note. Research
+  compilers had placed it in front of almost every field of 57 of the 107
+  active templates. The editor therefore froze a chain's speeds, width and
+  links, read from the product name, until a text box shown at the bottom was
+  filled.
+- Eight more templates gated a measurement on a free-text measuring note: the
+  rim ERD on «Cómo se midió el ERD», the seatpost lengths on an OEM document id.
+- Six templates required the source.
+
+The rule: no free-text field is a prerequisite, and the source is optional.
+Provenance is per fact (`spec_facts.source`).
+
+- Migration `20261002090000` removes 237 edges.
+- A commit-time trigger and the compilers' shared `validate_contract` reject
+  them again.
+- The client ignores them in `prerequisitesFor`.
+- Typed prerequisites stay (30 edges).
+
+**Option labels are identities:** the four drivetrain constants in
+`drivetrain_canonical_data.dart` compare them on bike facts too. The Spanish
+wording therefore lives in `spec_definition_values.display_label`
+(`20261002100000`), never in a relabel.
+
+A vocabulary change silences name readings: 292 had gone mute since the
+2026-09-16→19 passes. `spec_rejudge_name_readings_internal_v1()`
+(`20261002120000`) re-judges them, and every vocabulary pass calls it.
+
+The ficha's reading order is in the contract's §6.
 
 **2026-09-06, global catalogue audit:** the audit includes 1,664 records,
 1,605 physical products, 59 services and all 136 definitions/280 template-field

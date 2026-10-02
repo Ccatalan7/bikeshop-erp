@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "inventory",
+  "id": "inventory-spec-compilers-reject-note-gates",
+  "scope": "internal",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "scripts/inventory/compile_product_spec_catalog.py",
+      "sha256": "84358777815e361ee20048eec276f0b1766e84704507ec9dc24ae620ded6d63c"
+    }
+  ]
+}

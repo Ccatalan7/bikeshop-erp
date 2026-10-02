@@ -305,7 +305,7 @@ class _ProductSpecMemberEditorState extends State<ProductSpecMemberEditor> {
       VbFormSection(title: draft.template.name, children: [
         Text(_title(draft.identity)),
         const Text(
-            'La identificación y sus fuentes corresponden a la pieza registrada en Contenido.'),
+            'La identificación y sus fuentes corresponden a la pieza registrada en «Qué incluye».'),
         for (final source in draft.identitySources) _source(source),
         const SizedBox(height: 16),
         VbShortSelect.labelled(
@@ -524,7 +524,7 @@ class _ProductSpecMemberEditorState extends State<ProductSpecMemberEditor> {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       VbFormSection(title: 'Fichas de las piezas incluidas', children: [
         const Text(
-            'Cada pieza conserva su identificación y sus propios datos. Completa primero las piezas incluidas en Contenido; sus fichas se guardan junto al producto.'),
+            'Cada pieza conserva su identificación y sus propios datos. Completa primero las piezas incluidas en «Qué incluye»; sus fichas se guardan junto al producto.'),
         if (issues.isNotEmpty)
           VbNotice(
               title: 'Revisa las piezas antes de guardar',
@@ -558,7 +558,7 @@ class _ProductSpecMemberEditorState extends State<ProductSpecMemberEditor> {
         if (newRow != null) ...[
           if (!familyReady)
             const Text(
-                'Confirma la familia de esta pieza en Contenido antes de crear su ficha.'),
+                'Confirma la familia de esta pieza en «Qué incluye» antes de crear su ficha.'),
           TextButton(
               key: ValueKey('member-create-${newRow.key}'),
               onPressed: !_enabled || !familyReady || _loadingRow != null

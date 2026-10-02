@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../shared/themes/vinabike_theme_roles.dart';
 import '../../../shared/widgets/vb_button.dart';
 import '../../../shared/widgets/vb_notice.dart';
 import '../../../shared/widgets/vb_searchable_select.dart';
-import '../../../shared/widgets/vb_short_select.dart';
 import '../models/product_spec_rows.dart';
 import '../models/product_spec_coherence.dart';
 import '../models/product_spec_row_conditions.dart';
@@ -12,9 +12,9 @@ import '../models/product_spec_template_rules.dart';
 import '../utils/spec_rule_evaluator.dart';
 import 'product_spec_boolean_field.dart';
 
-/// Edits one configuration at a time inside the existing form section.
-/// S-06, I-01, S-04 and A-01 own the controls. The 16 px separation is the
-/// F-02/F-04 form stack already sourced in the ficha implementation plan.
+/// A table datum of the technical sheet: every item listed with what it
+/// holds, the open one edited in a grid (2026-10-01). Item ids, sources and
+/// absent cells are preserved exactly; this widget only arranges them.
 class ProductSpecRowsField extends StatefulWidget {
   const ProductSpecRowsField(
       {super.key,
@@ -133,128 +133,241 @@ class _ProductSpecRowsFieldState extends State<ProductSpecRowsField> {
           body:
               'Estos datos necesitan revisión de formato. Se conservan completos.');
     }
-    final selected =
-        rows.where((row) => row['id'] == _selectedId).firstOrNull ??
-            rows.firstOrNull;
-    final id = selected?['id'] as String?;
-    final cells =
-        Map<String, dynamic>.from(selected?['values'] as Map? ?? const {});
+    final theme = Theme.of(context);
+    // Nothing chosen yet opens the first item; an empty id means the
+    // operator closed them all.
+    final selectedId = _selectedId == ''
+        ? null
+        : (rows.where((row) => row['id'] == _selectedId).firstOrNull ??
+            rows.firstOrNull)?['id'] as String?;
     final enabled = widget.onChanged != null;
     final children = <Widget>[
       if (widget.showLabel)
-        Text(widget.label, style: Theme.of(context).textTheme.labelMedium),
+        Text(widget.label,
+            style: theme.textTheme.bodyMedium
+                ?.copyWith(fontWeight: FontWeight.w600)),
       if (widget.helperText != null)
-        Text(widget.helperText!, style: Theme.of(context).textTheme.bodySmall),
-      if (rows.isNotEmpty)
-        VbSearchableSelect<String>(
-            key: ValueKey('${widget.fieldKey}-row-selector'),
-            value: id,
-            label: widget.itemLabel,
-            sheetTitle: 'Elegir ${widget.itemLabel.toLowerCase()}',
-            options: [
-              for (var index = 0; index < rows.length; index++)
-                VbSearchableSelectOption(
-                    value: rows[index]['id'] as String,
-                    label: '${widget.itemLabel} ${index + 1}',
-                    context: _summary(rows[index]['values'] as Map)),
-            ],
-            onChanged: (next) => setState(() => _selectedId = next)),
-      if (selected != null) ...[
-        for (final column in widget.schema.columns)
-          if (widget.conditions?.applicabilityFor(column.key, cells) !=
-                  SpecTruth.no ||
-              cells.containsKey(column.key))
-            _conditionedCell(context, id!, column, cells, enabled),
-        VbShortSelect.labelled(
-            context,
-            'Fuentes de esta configuración',
-            TextFormField(
-                key: ValueKey('${widget.fieldKey}-$id-sources'),
-                enabled: enabled,
-                controller: _textController('${widget.fieldKey}-$id-sources',
-                    (selected['sources'] as List).join('\n')),
-                minLines: 1,
-                maxLines: null,
-                decoration: const InputDecoration(
-                    helperText:
-                        'Una URL por línea. Cada fuente acompaña sólo a esta configuración.'),
-                onChanged: enabled
-                    ? (text) {
-                        final updated = _rows!;
-                        final index =
-                            updated.indexWhere((row) => row['id'] == id);
-                        final sources = text
-                            .split('\n')
-                            .map((source) => source.trim())
-                            .where((source) => source.isNotEmpty)
-                            .toList();
-                        _lastTextValues['${widget.fieldKey}-$id-sources'] =
-                            sources.join('\n');
-                        updated[index] = {
-                          ...updated[index],
-                          'sources': sources
-                        };
-                        _emit(updated);
-                      }
-                    : null)),
-      ],
+        Text(widget.helperText!, style: theme.textTheme.bodySmall),
+      if (rows.isEmpty)
+        Text('Sin ${widget.itemLabel.toLowerCase()} todavía.',
+            style: theme.textTheme.bodyMedium
+                ?.copyWith(color: theme.colorScheme.onSurfaceVariant)),
+      for (var index = 0; index < rows.length; index++)
+        _rowTile(context, rows, index,
+            open: rows[index]['id'] == selectedId, enabled: enabled),
       if (enabled)
-        Wrap(children: [
-          VbButton(
+        Align(
+          alignment: Alignment.centerLeft,
+          child: VbButton(
               key: ValueKey('${widget.fieldKey}-add-row'),
               label: 'Añadir ${widget.itemLabel.toLowerCase()}',
               icon: Icons.add,
               variant: VbButtonVariant.text,
-              onPressed: enabled
-                  ? () {
-                      final next = const Uuid().v4();
-                      setState(() => _selectedId = next);
-                      _emit([
-                        ...rows,
-                        {
-                          'id': next,
-                          'values': <String, dynamic>{},
-                          'sources': <String>[]
-                        }
-                      ]);
-                    }
-                  : null),
-          if (selected != null)
-            VbButton(
-                key: ValueKey('${widget.fieldKey}-remove-row'),
-                label: 'Retirar ${widget.itemLabel.toLowerCase()}',
-                variant: VbButtonVariant.text,
-                icon: Icons.remove_circle_outline,
-                onPressed: enabled
-                    ? () {
-                        setState(() => _selectedId = null);
-                        _emit(rows.where((row) => row['id'] != id).toList());
-                      }
-                    : null),
-        ]),
+              onPressed: () {
+                final next = const Uuid().v4();
+                setState(() => _selectedId = next);
+                _emit([
+                  ...rows,
+                  {
+                    'id': next,
+                    'values': <String, dynamic>{},
+                    'sources': <String>[]
+                  }
+                ]);
+              }),
+        ),
     ];
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
       for (var index = 0; index < children.length; index++) ...[
-        if (index > 0) const SizedBox(height: 16),
+        if (index > 0) const SizedBox(height: 10),
         children[index],
       ],
     ]);
   }
 
+  /// One item of the table: its number and what it holds on one line, and,
+  /// when open, its data in a grid. Every item stays visible; the old editor
+  /// showed one at a time behind a «Configuración 1» dropdown, as a column of
+  /// full-width boxes (owner, 2026-10-01: «está todo mal organizado»).
+  Widget _rowTile(
+      BuildContext context, List<Map<String, dynamic>> rows, int index,
+      {required bool open, required bool enabled}) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final hairline = VinabikeThemeRoles.of(context).hairline;
+    final row = rows[index];
+    final id = row['id'] as String;
+    final cells = Map<String, dynamic>.from(row['values'] as Map);
+    final title = '${widget.itemLabel} ${index + 1}';
+    final summary = _summary(cells);
+    final header = Semantics(
+      button: true,
+      expanded: open,
+      label: '$title: ${summary.isEmpty ? 'sin datos' : summary}',
+      excludeSemantics: true,
+      child: InkWell(
+        key: ValueKey('${widget.fieldKey}-row-$id'),
+        borderRadius: BorderRadius.circular(10),
+        onTap: () => setState(() => _selectedId = open ? '' : id),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          child: Row(children: [
+            Text(title,
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(fontWeight: FontWeight.w600)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(summary.isEmpty ? 'Sin datos todavía' : summary,
+                  maxLines: open ? 3 : 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium
+                      ?.copyWith(color: scheme.onSurfaceVariant)),
+            ),
+            Icon(open ? Icons.expand_less : Icons.expand_more,
+                size: 20, color: scheme.onSurfaceVariant),
+          ]),
+        ),
+      ),
+    );
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: open ? scheme.outline : hairline),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        header,
+        if (open)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 4, 14, 12),
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _cellGrid(context, [
+                    for (final column in widget.schema.columns)
+                      if (widget.conditions
+                                  ?.applicabilityFor(column.key, cells) !=
+                              SpecTruth.no ||
+                          cells.containsKey(column.key))
+                        _labelled(
+                            context,
+                            column.label,
+                            _conditionedCell(
+                                context, id, column, cells, enabled)),
+                  ]),
+                  const SizedBox(height: 14),
+                  _labelled(
+                      context,
+                      'Fuentes',
+                      TextFormField(
+                          key: ValueKey('${widget.fieldKey}-$id-sources'),
+                          enabled: enabled,
+                          controller: _textController(
+                              '${widget.fieldKey}-$id-sources',
+                              (row['sources'] as List).join('\n')),
+                          minLines: 1,
+                          maxLines: null,
+                          style: theme.textTheme.bodyMedium,
+                          decoration: const InputDecoration(
+                              isDense: true,
+                              hintText: 'Una URL por línea (opcional)'),
+                          onChanged: enabled
+                              ? (text) {
+                                  final updated = _rows!;
+                                  final at = updated
+                                      .indexWhere((row) => row['id'] == id);
+                                  final sources = text
+                                      .split('\n')
+                                      .map((source) => source.trim())
+                                      .where((source) => source.isNotEmpty)
+                                      .toList();
+                                  _lastTextValues[
+                                          '${widget.fieldKey}-$id-sources'] =
+                                      sources.join('\n');
+                                  updated[at] = {
+                                    ...updated[at],
+                                    'sources': sources
+                                  };
+                                  _emit(updated);
+                                }
+                              : null)),
+                  if (enabled)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: VbButton(
+                          key: ValueKey('${widget.fieldKey}-remove-row'),
+                          label: 'Retirar ${widget.itemLabel.toLowerCase()}',
+                          variant: VbButtonVariant.text,
+                          icon: Icons.remove_circle_outline,
+                          onPressed: () {
+                            setState(() => _selectedId = null);
+                            _emit(
+                                rows.where((row) => row['id'] != id).toList());
+                          }),
+                    ),
+                ]),
+          ),
+      ]),
+    );
+  }
+
+  /// The open item's data side by side: three to a line on a desktop, two on
+  /// a tablet, one on a phone.
+  Widget _cellGrid(BuildContext context, List<Widget> cells) =>
+      LayoutBuilder(builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final perLine = width >= 840
+            ? 3
+            : width >= 520
+                ? 2
+                : 1;
+        const gap = 16.0;
+        final cellWidth = (width - gap * (perLine - 1)) / perLine;
+        return Wrap(spacing: gap, runSpacing: 14, children: [
+          for (final cell in cells) SizedBox(width: cellWidth, child: cell),
+        ]);
+      });
+
+  Widget _labelled(BuildContext context, String label, Widget control) {
+    final theme = Theme.of(context);
+    return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label,
+              style: theme.textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: theme.colorScheme.onSurface)),
+          const SizedBox(height: 6),
+          control,
+        ]);
+  }
+
+  /// What an item holds, on one line: its values in column order, a yes/no
+  /// with the name of what it answers.
   String _summary(Map values) => widget.schema.columns
           .where((column) => values.containsKey(column.key))
-          .take(3)
+          .take(4)
           .map((column) {
         final reference = widget.referenceOptions[column.key];
         final labels = widget.tokenLabels[column.key];
         final value = reference == null
             ? labels == null
-                ? values[column.key]
+                ? (column.type == 'token' && values[column.key] is String
+                    ? _tokenText(values[column.key] as String)
+                    : values[column.key])
                 : labels[values[column.key]] ??
                     'Nombre no disponible · ${values[column.key]}'
             : reference.choices[values[column.key]] ?? 'Vínculo sin resolver';
-        return '${column.label}: ${value is bool ? (value ? 'Sí' : 'No') : value}${column.unit == null ? '' : ' ${column.unit}'}';
+        if (value is bool) return '${column.label}: ${value ? 'Sí' : 'No'}';
+        return '$value${column.unit == null ? '' : ' ${column.unit}'}';
       }).join(' · ');
+
+  /// A stored token written as plain lowercase words («manilla», «cáliper»)
+  /// reads with its first letter up; codes and names keep their spelling.
+  static String _tokenText(String token) =>
+      RegExp(r'^[a-záéíóúñü][a-záéíóúñü ]*$').hasMatch(token)
+          ? '${token[0].toUpperCase()}${token.substring(1)}'
+          : token;
 
   Widget _conditionedCell(BuildContext context, String id,
       ProductSpecRowColumn column, Map<String, dynamic> cells, bool enabled) {
@@ -294,14 +407,14 @@ class _ProductSpecRowsFieldState extends State<ProductSpecRowsField> {
     final dependencies = widget.conditions!
         .dependenciesFor(column.key)
         .map((key) =>
-            widget.schema.columns.firstWhere((c) => c.key == key).label)
+            '«${widget.schema.columns.firstWhere((c) => c.key == key).label}»')
         .join(', ');
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       control,
       Text(
           allowed == SpecTruth.no
               ? 'Este dato no corresponde a los requisitos elegidos. Se conserva para revisarlo.'
-              : 'Define primero $dependencies en esta configuración.',
+              : 'Se habilita cuando completes $dependencies.',
           style: Theme.of(context).textTheme.bodySmall),
       if (enabled && value != null)
         VbButton(
@@ -332,6 +445,8 @@ class _ProductSpecRowsFieldState extends State<ProductSpecRowsField> {
       return VbSearchableSelect<String>(
           key: key,
           label: column.label,
+          showLabel: false,
+          semanticLabel: column.label,
           value: value as String?,
           sheetTitle: 'Elegir de ${reference.label}',
           placeholder: unresolved ? 'Vínculo sin resolver' : 'Sin dato',
@@ -360,6 +475,7 @@ class _ProductSpecRowsFieldState extends State<ProductSpecRowsField> {
       return ProductSpecBooleanField(
           key: key,
           label: column.label,
+          showLabel: false,
           value: value is bool ? value : null,
           allowedValues: conditionalChoices?.cast<bool>(),
           helperText: helperText,
@@ -384,6 +500,8 @@ class _ProductSpecRowsFieldState extends State<ProductSpecRowsField> {
       return VbSearchableSelect<String>(
           key: key,
           label: column.label,
+          showLabel: false,
+          semanticLabel: column.label,
           value: value as String?,
           sheetTitle: column.label,
           allowClear: true,
@@ -404,17 +522,16 @@ class _ProductSpecRowsFieldState extends State<ProductSpecRowsField> {
               .map((option) => VbSearchableSelectOption(
                   value: option,
                   label: labels == null
-                      ? option
+                      ? _tokenText(option)
                       : labels[option] ?? 'Nombre no disponible · $option'))
               .toList(),
           onChanged:
               enabled ? (next) => _changeCell(id, column.key, next) : null);
     }
     final numeric = column.type == 'decimal' || column.type == 'integer';
-    return VbShortSelect.labelled(
-        context,
-        column.label,
-        TextFormField(
+    return Semantics(
+        label: column.label,
+        child: TextFormField(
             key: key,
             enabled: enabled,
             controller: _textController(key.value, value?.toString() ?? ''),
@@ -423,9 +540,13 @@ class _ProductSpecRowsFieldState extends State<ProductSpecRowsField> {
                     decimal: true, signed: true)
                 : TextInputType.text,
             decoration: InputDecoration(
+                isDense: true,
+                hintText: 'Sin dato',
                 suffixText: column.unit,
                 errorText: errorText,
-                helperText: helperText),
+                helperText: helperText,
+                helperMaxLines: 3,
+                errorMaxLines: 4),
             autovalidateMode: AutovalidateMode.onUserInteraction,
             validator: (text) {
               if (text == null || text.trim().isEmpty) return null;

@@ -46,6 +46,7 @@ import '../models/product_spec_rows.dart';
 import '../models/product_spec_number.dart';
 import '../models/product_spec_member_draft.dart';
 import '../models/product_spec_member_profile.dart';
+import '../models/product_spec_value_origin.dart';
 import '../widgets/product_spec_rows_field.dart';
 import '../widgets/product_spec_member_editor.dart';
 import '../utils/spec_rule_evaluator.dart';
@@ -434,6 +435,10 @@ class _ProductFormPageState extends State<ProductFormPage>
   final ValueNotifier<String?> _hubGuideHoverKey = ValueNotifier<String?>(null);
   final Map<String, GlobalKey> _specFieldAnchors = <String, GlobalKey>{};
   final Set<String> _openSpecSections = <String>{};
+  // Where each stored value came from, and the values as stored: the origin
+  // is shown only while the draft still holds that value.
+  Map<String, ProductSpecValueOrigin> _specValueOrigins = const {};
+  Map<String, dynamic> _specStoredValues = const {};
 
   List<_ServiceWorkflowProfile> _serviceProfiles = [];
   bool _isLoadingServiceProfiles = false;
@@ -1410,6 +1415,11 @@ class _ProductFormPageState extends State<ProductFormPage>
         _specMemberDrafts ??= ProductSpecMemberDrafts(context.members);
         _specMemberCollections = context.members.collections;
         _specValues = resolution.values;
+        _specValueOrigins = ProductSpecValueOrigin.fromSnapshot(snapshot);
+        _specStoredValues = {
+          for (final entry in storedValues.entries)
+            if (activeKeys.contains(entry.key)) entry.key: entry.value,
+        };
         _manualSpecOverrideKeys
           ..clear()
           ..addAll(resolution.manualKeys);
@@ -7570,13 +7580,19 @@ class _ProductFormPageState extends State<ProductFormPage>
 
   // ── Ficha Técnica tab ──────────────────────────────────────────────────
 
-  String _specValueText(dynamic value) => value is List
-      ? value.join(', ')
-      : value == true
-          ? 'Sí'
-          : value == false
-              ? 'No'
-              : value?.toString() ?? 'Sin confirmar';
+  String _specValueText(dynamic value, [SpecDefinition? definition]) {
+    String shown(Object option) =>
+        definition?.optionDisplay(option.toString()) ?? option.toString();
+    return value is List
+        ? value.map((option) => shown(option as Object)).join(', ')
+        : value == true
+            ? 'Sí'
+            : value == false
+                ? 'No'
+                : value == null
+                    ? 'Sin confirmar'
+                    : shown(value as Object);
+  }
 
   /// What the sheet is about and where its facts come from: the part, its
   /// model and code, the manufacturer's reference, and the private note of
@@ -7806,6 +7822,7 @@ class _ProductFormPageState extends State<ProductFormPage>
       {ProductSpecRowSchema? schema,
       String? unit,
       String? definitionKey,
+      SpecDefinition? definition,
       bool showLabel = true}) {
     if (schema != null) {
       return ProductSpecRowsField(
@@ -7824,7 +7841,8 @@ class _ProductFormPageState extends State<ProductFormPage>
           tone: VbNoticeTone.warning,
           body: 'Estos datos se conservan. Falta su esquema para mostrarlos.');
     }
-    final text = '${_specValueText(value)}${unit == null ? '' : ' $unit'}';
+    final text =
+        '${_specValueText(value, definition)}${unit == null ? '' : ' $unit'}';
     return Text(showLabel ? '$label: $text' : text);
   }
 
@@ -7853,6 +7871,10 @@ class _ProductFormPageState extends State<ProductFormPage>
         _buildSpecReadOnlyValue('reference-${reference.id}-${entry.key}',
             _specTemplate!.labelFor(entry.key), entry.value,
             definitionKey: entry.key,
+            definition: _specTemplate!.fields
+                .where((field) => field.definition?.key == entry.key)
+                .firstOrNull
+                ?.definition,
             schema: _specTemplate!.fields
                 .where((field) => field.definition?.key == entry.key)
                 .firstOrNull
@@ -8402,7 +8424,12 @@ class _ProductFormPageState extends State<ProductFormPage>
       note = _specIssueNote(issue, label);
       noteTone = ProductSpecFieldNoteTone.pending;
     } else {
-      note = null;
+      // Nothing to finish: say where the value came from, while it is still
+      // the stored one.
+      note = member == null
+          ? ProductSpecValueOrigin.noteFor(_specValueOrigins[def.key],
+              currentValue, _specStoredValues[def.key])
+          : null;
       noteTone = ProductSpecFieldNoteTone.neutral;
     }
 
@@ -8426,6 +8453,7 @@ class _ProductFormPageState extends State<ProductFormPage>
               schema: def.rowSchema,
               unit: def.unit,
               definitionKey: def.key,
+              definition: def,
               showLabel: false),
           compact: false,
           rowNote:
@@ -8442,7 +8470,7 @@ class _ProductFormPageState extends State<ProductFormPage>
             spacing: 12,
             children: [
               Text(
-                  '${_specValueText(currentValue)}${def.unit == null ? '' : ' ${def.unit}'}',
+                  '${_specValueText(currentValue, def)}${def.unit == null ? '' : ' ${def.unit}'}',
                   style: theme.textTheme.bodyLarge),
               TextButton(
                   onPressed: _isSaving || isAutoLocked
@@ -8514,7 +8542,8 @@ class _ProductFormPageState extends State<ProductFormPage>
                 error: null,
                 onChanged:
                     isEnabled ? (value) => change(def.key, value) : null),
-            compact: !_specSelectNeedsSearch(options));
+            compact: !_specSelectNeedsSearch(
+                options.map(def.optionDisplay).toList()));
 
       case 'multi_select':
         final selected = (currentValue is List)
@@ -8537,6 +8566,7 @@ class _ProductFormPageState extends State<ProductFormPage>
                 isEnabled: isEnabled,
                 placeholderText: 'Seleccionar declaraciones...',
                 showLabel: false,
+                display: def.optionDisplay,
               ),
               compact: false);
         }
@@ -8550,7 +8580,7 @@ class _ProductFormPageState extends State<ProductFormPage>
                   final isSelected = selected.contains(o);
                   return FilterChip(
                     key: ValueKey('product-spec-$scope${def.key}-option-$o'),
-                    label: Text(o),
+                    label: Text(def.optionDisplay(o)),
                     selected: isSelected,
                     onSelected: (!isAutoLocked && (isEnabled || isSelected))
                         ? (v) {
@@ -8585,7 +8615,8 @@ class _ProductFormPageState extends State<ProductFormPage>
                       ? (value) => change(def.key,
                           value == null ? null : _parsedSpecNumberValue(value))
                       : null),
-              compact: !_specSelectNeedsSearch(options));
+              compact: !_specSelectNeedsSearch(
+                  options.map(def.optionDisplay).toList()));
         }
 
         return row(Semantics(
@@ -8659,7 +8690,9 @@ class _ProductFormPageState extends State<ProductFormPage>
       required String? helper,
       required String? error,
       required ValueChanged<String?>? onChanged}) {
-    if (_specSelectNeedsSearch(options)) {
+    final definition = field.definition;
+    String shown(String option) => definition?.optionDisplay(option) ?? option;
+    if (_specSelectNeedsSearch(options.map(shown).toList())) {
       return VbSearchableSelect<String>(
           key: ValueKey('product-spec-$scope${field.definition?.key}'),
           value: value.isEmpty ? null : value,
@@ -8673,7 +8706,7 @@ class _ProductFormPageState extends State<ProductFormPage>
           clearLabel: 'Sin confirmar',
           options: [
             for (final option in options)
-              VbSearchableSelectOption(value: option, label: option)
+              VbSearchableSelectOption(value: option, label: shown(option))
           ],
           onChanged: onChanged);
     }
@@ -8686,7 +8719,7 @@ class _ProductFormPageState extends State<ProductFormPage>
         placeholder: 'Sin dato',
         options: [
           for (final option in options)
-            VbShortSelectOption(value: option, label: option)
+            VbShortSelectOption(value: option, label: shown(option))
         ],
         onChanged: onChanged);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -8721,17 +8754,12 @@ class _ProductFormPageState extends State<ProductFormPage>
     if (def.key == SpecTemplate.specEvidenceSourceKey) {
       return 'Dónde lo revisaste';
     }
-    final baseLabel = template.displayLabelFor(def.key) ??
-        switch (def.key) {
-          'drivetrain_mode' => 'Modo transmisión',
-          'drivetrain_primary_ecosystem' =>
-            'Familia tecnica / ecosistema principal',
-          'drivetrain_declared_compatible_ecosystems' =>
-            'Ecosistemas compatibles declarados',
-          _ => def.label,
-        };
-    return baseLabel;
+    // The database owns the name; three names written here once («Modo
+    // transmisión», «Familia tecnica / ecosistema principal») overrode it.
+    return template.displayLabelFor(def.key) ?? def.label;
   }
+
+  static String _identityOption(String option) => option;
 
   Widget _buildDropdownMultiSelectSpecField({
     required ThemeData theme,
@@ -8745,8 +8773,9 @@ class _ProductFormPageState extends State<ProductFormPage>
     required String placeholderText,
     required ValueChanged<List<String>> onChanged,
     bool showLabel = true,
+    String Function(String option) display = _identityOption,
   }) {
-    final summaryText = selected.join(' / ');
+    final summaryText = selected.map(display).join(' / ');
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -8793,7 +8822,7 @@ class _ProductFormPageState extends State<ProductFormPage>
                                   dense: true,
                                   visualDensity: VisualDensity.compact,
                                   contentPadding: EdgeInsets.zero,
-                                  title: Text(option),
+                                  title: Text(display(option)),
                                   onChanged: !isEnabled
                                       ? null
                                       : (checked) {
@@ -8874,7 +8903,7 @@ class _ProductFormPageState extends State<ProductFormPage>
                     children: selected
                         .map(
                           (option) => Chip(
-                            label: Text(option),
+                            label: Text(display(option)),
                             onDeleted: isEnabled
                                 ? () {
                                     final next = Set<String>.from(selected)

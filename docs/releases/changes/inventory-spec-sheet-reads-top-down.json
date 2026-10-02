@@ -11,14 +11,15 @@
     "web"
   ],
   "title": "La ficha técnica del producto se lee de arriba abajo",
-  "summary": "«Fuente del dato» ya no bloquea los demás datos: es una nota opcional. Cada dato lleva su nombre al lado, una caja del tamaño de su valor y, si espera otro, dice cuál.",
+  "summary": "Ningún texto libre, como «Fuente del dato», bloquea otro dato; nada espera algo que está más abajo, y cada dato lleva su nombre al lado y una caja del tamaño de su valor.",
   "items": [
-    "Las secciones se llaman Identificación, Tipo y construcción, Medidas, Qué incluye y Lo que declara el fabricante, y arriba «Faltan N datos» lleva a cada uno."
+    "Las tablas de la ficha (componentes, circuitos, puertos) muestran cada fila en una línea con lo que contiene, y la abierta en grilla.",
+    "Cada valor dice de dónde salió (leído del nombre, del proveedor o de la investigación) y las opciones en inglés se leen en español de taller."
   ],
   "evidence": [
     {
       "path": "lib/modules/inventory/pages/product_form_page.dart",
-      "sha256": "1f3d70a20dcfdabfaaffa3296a1195b0dd40fabffeeb3276296144b7f9791f38"
+      "sha256": "9bd268ee07c745bdbc21f010d99d5f31bda745f615194d115040b0e0f88c4de5"
     },
     {
       "path": "lib/modules/inventory/widgets/product_spec_field_row.dart",
@@ -26,7 +27,7 @@
     },
     {
       "path": "lib/modules/inventory/services/spec_engine_service.dart",
-      "sha256": "dabb147932808da16be01ec4fddd322be0128566fc2cef38a223c519680a0118"
+      "sha256": "3ad6020a91bb50ac3eb9053b0c498884c181af3e4e6afe97e9eff841f6d772b6"
     },
     {
       "path": "lib/modules/inventory/widgets/product_spec_boolean_field.dart",
@@ -34,7 +35,15 @@
     },
     {
       "path": "lib/modules/inventory/widgets/product_spec_rows_field.dart",
-      "sha256": "b36131f6c8a2280794c65a963614cb575480f5273c45a2108c79331f95ac6c9c"
+      "sha256": "28d0d6fd994731d1984a5b08fdfce9ca5713267d57cd5338562b2c2bac628580"
+    },
+    {
+      "path": "lib/modules/inventory/widgets/product_spec_member_editor.dart",
+      "sha256": "d752036db24a7c239992bd2ea5b94004c66db7019d146cc4b0cad2d89b511d3b"
+    },
+    {
+      "path": "lib/modules/inventory/models/product_spec_value_origin.dart",
+      "sha256": "f71e7da0d640e6151818f2b233a264b4085263667e13bd795644676392054e47"
     },
     {
       "path": "lib/shared/widgets/vb_form_section.dart",
