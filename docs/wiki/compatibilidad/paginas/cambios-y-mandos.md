@@ -3,7 +3,7 @@ titulo: Cambios traseros, mandos y tiro de cable
 resumen: por qué un mando y un cambio indexados tienen que ser de la misma familia, capacidad, piñón máximo y montaje
 fuentes: [sheldon-brown, park-tool, bike-matrix]
 k: [K05, K10, K13, K49]
-claves_bici: [drivetrainSpeeds, drivetrainConfig]
+claves_bici: [drivetrainSpeeds, drivetrainConfig, drivetrainPlatform, drivetrainPlatformFamily, shiftActuationFamily, largestCogTeeth, rearLargestCogTeeth]
 claves_producto: [shift_actuation_family, rear_derailleur_actuation_ratio_declaration, shifter_actuation_mode, shifter_indexed_positions, rear_derailleur_total_capacity_teeth, rear_derailleur_max_teeth, rear_derailleur_min_teeth, derailleur_cage_length, rear_derailleur_mount_type, rear_derailleur_hanger_interface, rear_derailleur_application_configurations, rear_derailleur_compatibility_claims, shifter_compatibility_claims, derailleur_clutch]
 revisado: 2026-10-02
 ---
@@ -76,6 +76,13 @@ ShiftMate) que cambian la relación; funcionan mejor las que reducen [SB].
 - **Bici:** `drivetrainConfig` (1x11, 2x10, una velocidad) y `drivetrainSpeeds`
   (marchas **totales**: 21 en una 3×7); el mando y el cambio se juzgan por los
   piñones de atrás, que salen de la configuración ([cadenas.md](cadenas.md)).
+  Además: `drivetrainPlatform`/`drivetrainPlatformFamily` (el ecosistema:
+  `shimano_hg_plus`, `shimano_dynasys_10`, `shimano_dynasys_11_12`,
+  `shimano_linkglide`, `cues`, `sram_eagle`, `sram_flattop`, `sram_t_type`,
+  `sram_x_actuation`, `sram_axs_road`, `campagnolo`, `microshift_advent`,
+  `friction_universal`, `unknown`), `shiftActuationFamily` (la familia de tiro de
+  la bici) y `largestCogTeeth`/`rearLargestCogTeeth` (piñón mayor instalado, que
+  el cambio debe poder subir).
 - **Producto:** `shift_actuation_family` (la familia de tiro canónica),
   `rear_derailleur_actuation_ratio_declaration`, `shifter_actuation_mode`,
   `shifter_indexed_positions`, `rear_derailleur_total_capacity_teeth`,
@@ -83,8 +90,9 @@ ShiftMate) que cambian la relación; funcionan mejor las que reducen [SB].
   `rear_derailleur_mount_type`, y las tablas del fabricante
   `rear_derailleur_application_configurations` (velocidades; la tienda las
   muestra) y `*_compatibility_claims` (con qué cadena o cambio declara calzar).
-- **Motor:** `_assessShifterFamilyCompatibility` y
-  `_assessRearDerailleurFamilyCompatibility`; arma el conjunto de familias de tiro
+- **Motor:** `_assessShifterFamilyCompatibility`,
+  `_assessRearDerailleurFamilyCompatibility` y `_assessDrivetrainKitCompatibility`
+  (grupos o kits de transmisión completos); arma el conjunto de familias de tiro
   de cada lado con `_shiftActuationsFromSpecs` y las que el fabricante rechaza con
   `_refusedShiftActuationsFromSpecs`.
 

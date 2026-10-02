@@ -1,6 +1,6 @@
 ---
 name: compatibilidad
-description: Experto en compatibilidad de partes de bicicleta y en cómo Vinabike la guarda (ficha de la bici, ficha técnica, motor, Master Schema). Úsala para cualquier pregunta de «¿calza?», para elegir repuestos, para cambiar campos de ficha, opciones o reglas del motor de compatibilidad, y para ingerir una fuente nueva (Sheldon Brown, Park Tool, fabricante) en el wiki.
+description: Experto en compatibilidad de partes de bicicleta y en cómo Vinabike la guarda (ficha de la bici, ficha técnica, motor, Master Schema). Úsala siempre que la tarea toque si una pieza calza o es compatible (cassette, núcleo, cadena, cambio, mando, biela, plato, pedalier, dirección, rueda, llanta, neumático, cámara, válvula, maza, eje, freno, rotor, adaptador, líquido, horquilla, amortiguador, tija, manubrio, pedal), cuando se eligen o compran repuestos para una bici, cuando se cambian campos, opciones, plantillas o reglas de spec_definitions/spec_templates, la ficha de la bici (bike_profiles) o bike_product_compatibility_service, y para ingerir una fuente nueva (Sheldon Brown, Park Tool, fabricante) en el wiki.
 disable-model-invocation: false
 ---
 

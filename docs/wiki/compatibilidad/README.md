@@ -88,6 +88,30 @@ revisado: 2026-10-02
 `claves_producto` son `spec_definitions.key` globales. El lint comprueba que
 existan.
 
+## Cómo se asegura que se use (2026-10-02)
+
+El dueño preguntó cómo evitar que esto quede «como una carpeta paralela que será
+olvidada». Hay cuatro capas, de la más suave a la que no se puede saltar:
+
+1. **Al empezar cada sesión de Claude**, `.claude/hooks/session-context.sh` dice
+   que la compatibilidad pasa por la skill `compatibilidad`. Codex lo lee en
+   `AGENTS.md`; los dos lo tienen en la tabla de rutas de `CLAUDE.md` y en el
+   protocolo de investigación del Master Schema.
+2. **Cuando el pedido trata de compatibilidad**, el hook
+   `.claude/hooks/compat_wiki_router.py` (UserPromptSubmit) le recuerda a Claude
+   usar la skill, una vez por sesión. La skill misma se invoca sola por su
+   descripción (cassette, núcleo, pedalier, rotor, ficha de la bici…).
+3. **Cuando se edita el motor, la ficha de la bici, las fichas o el Master
+   Schema**, el mismo hook (PostToolUse) recuerda actualizar la página y correr el
+   lint, una vez por sesión.
+4. **En cada publicación** (gate de CI, para Claude y Codex por igual),
+   `test/unit/compatibility_wiki_contract_test.dart` falla si el motor juzga una
+   familia o lee un campo de la bici que el wiki no nombra, o si una página no
+   está en el índice. Ésta es la que no depende de la memoria de nadie.
+
+El lint con `--db production` revisa además que las claves de ficha citadas sigan
+existiendo en la base.
+
 ## Las tres operaciones
 
 **Consultar.** Leer [index.md](index.md), abrir las páginas del tema, seguir

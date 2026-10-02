@@ -3,6 +3,12 @@
 Una línea por operación, la más nueva arriba: `fecha — operación — qué cambió`.
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint), **corrección**.
 
+- 2026-10-02 — corrección — la prueba de contrato encontró lo que el wiki no
+  nombraba: 6 campos de la bici que el motor lee (`drivetrainPlatform`,
+  `drivetrainPlatformFamily`, `shiftActuationFamily`, `largestCogTeeth`,
+  `rearLargestCogTeeth`, `chainWidthFamily`) y 2 familias (fondo de llanta y kit
+  de transmisión). Agregados al mapa, cadenas, cambios y ruedas. Nacen el hook
+  `compat_wiki_router.py` y la prueba `compatibility_wiki_contract_test.dart`.
 - 2026-10-02 — consulta archivada — probando el wiki con bicis reales: la bici
   guarda en `drivetrainSpeeds` las marchas totales (21 en 3×7) y el motor saca los
   piñones de `drivetrainConfig`; y `shimano_hg` no distingue el núcleo de 7 del de

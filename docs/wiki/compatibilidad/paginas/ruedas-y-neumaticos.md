@@ -105,8 +105,9 @@ y del neumático [Fab][Taller].
 - **La tienda** muestra el BSD como el cliente lo pide («29" / 700c») con
   `wheelSizeLabelForBsd` y el ancho en pulgadas y milímetros con
   `tireWidthLabel` (`lib/public_store/utils/public_spec_display.dart`).
-- **Motor:** `_assessRimFamilyCompatibility` y las familias de neumático, cámara
-  y tubeless comparan BSD; el ancho llanta↔neumático se juzga sólo cuando las dos
+- **Motor:** `_assessRimFamilyCompatibility`, `_assessRimStripFamilyCompatibility`
+  (fondo o cinta de llanta: mismo BSD y ancho para el ancho interior de la llanta)
+  y las familias de neumático, cámara y tubeless comparan BSD; el ancho llanta↔neumático se juzga sólo cuando las dos
   fichas tienen el dato.
 - **Falta:** un juicio de ancho de neumático contra el espacio del cuadro de la
   bici (la ficha de la bici no guarda el neumático más ancho que admite).

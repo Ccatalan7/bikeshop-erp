@@ -3,7 +3,7 @@ titulo: Cómo guarda y juzga Vinabike la compatibilidad
 resumen: el mapa entre el oficio y el sistema — ficha de la bici, ficha técnica del producto, motor, reglas en la base y el Master Schema
 fuentes: [bike-matrix]
 k: [K36, K51]
-claves_bici: [bikeType, wheelSize, brakeType, rimBrakeFamily, suspensionLayout, frontHubSpacingMm, rearHubSpacingMm, freehubType, drivetrainSpeeds, drivetrainConfig, frontSpokeHoles, rearSpokeHoles, valveType, bottomBracketFamily, bbShellWidthMm, bbShellDiameterMm, spindleInterface, frontAxleInterface, rearAxleInterface, frontBrakeFluidType, rearBrakeFluidType, frontRotorSizeMm, rearRotorSizeMm]
+claves_bici: [drivetrainPlatform, drivetrainPlatformFamily, shiftActuationFamily, largestCogTeeth, rearLargestCogTeeth, chainWidthFamily, bikeType, wheelSize, brakeType, rimBrakeFamily, suspensionLayout, frontHubSpacingMm, rearHubSpacingMm, freehubType, drivetrainSpeeds, drivetrainConfig, frontSpokeHoles, rearSpokeHoles, valveType, bottomBracketFamily, bbShellWidthMm, bbShellDiameterMm, spindleInterface, frontAxleInterface, rearAxleInterface, frontBrakeFluidType, rearBrakeFluidType, frontRotorSizeMm, rearRotorSizeMm]
 claves_producto: [bead_seat_diameter_mm, hub_old_mm, axle_type, spoke_hole_count, freehub_type, cassette_spline_standard, chain_speeds, shift_actuation_family, bb_shell_standard, crank_axle_interface_declarations, brake_type, rotor_diameter_mm, fluid_type, valve_type]
 revisado: 2026-10-02
 ---
@@ -38,7 +38,10 @@ manda el código y la base viva; se corrige la que esté atrasada.
 | Rayos | `frontSpokeHoles`, `rearSpokeHoles` | `spoke_hole_count` | [mazas](mazas-ejes-y-espaciado.md) |
 | Núcleo | `freehubType` | `freehub_type`, `cassette_spline_standard`, `rear_drive_interface`, `freehub_bodies_accepted` | [núcleos](nucleos-y-cassettes.md) |
 | Velocidades y configuración | `drivetrainConfig` (piñones de atrás = segundo número), `drivetrainSpeeds` (marchas totales) | `chain_speeds`, `sprocket_count`, `*_application_configurations` | [cadenas](cadenas.md), [cambios](cambios-y-mandos.md) |
-| Familia de tiro | (se deriva de las piezas) | `shift_actuation_family`, `rear_derailleur_actuation_ratio_declaration` | [cambios](cambios-y-mandos.md) |
+| Plataforma de transmisión | `drivetrainPlatform`, `drivetrainPlatformFamily` (Eagle, T-Type, Flattop, LINKGLIDE, CUES, Dyna-Sys…) | `chain_profile_family`, `rear_derailleur_compatibility_claims` | [cambios](cambios-y-mandos.md), [cadenas](cadenas.md) |
+| Familia de tiro | `shiftActuationFamily` | `shift_actuation_family`, `rear_derailleur_actuation_ratio_declaration` | [cambios](cambios-y-mandos.md) |
+| Piñón mayor instalado | `largestCogTeeth`, `rearLargestCogTeeth` | `largest_cog_teeth`, `rear_derailleur_max_teeth` | [cambios](cambios-y-mandos.md) |
+| Ancho de cadena | `chainWidthFamily` | `chain_width_family` | [cadenas](cadenas.md) |
 | Pedalier | `bottomBracketFamily`, `bbShellWidthMm`, `bbShellDiameterMm`, `spindleInterface` | `bb_shell_standard`, `bb_accepted_spindles`, `crank_axle_interface_declarations` | [pedalier](pedalier.md), [bielas](bielas-y-platos.md) |
 | Freno | `brakeType`, `rimBrakeFamily` | `brake_type`, `caliper_mount`, `lever_cable_pull` | [disco](frenos-de-disco.md), [llanta](frenos-de-llanta.md) |
 | Rotor | `frontRotorSizeMm`, `rearRotorSizeMm` | `rotor_diameter_mm`, `max_rotor_mm`, `rotor_adapter_fitments` | [disco](frenos-de-disco.md) |

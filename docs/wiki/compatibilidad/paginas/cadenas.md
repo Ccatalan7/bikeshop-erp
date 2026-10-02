@@ -3,7 +3,7 @@ titulo: Cadenas y uniones
 resumen: anchos por velocidad, qué cadena sirve en qué transmisión, uniones rápidas y desgaste
 fuentes: [sheldon-brown, park-tool, bike-matrix]
 k: [K01, K02, K03, K04, K05, K06]
-claves_bici: [drivetrainSpeeds, drivetrainConfig]
+claves_bici: [drivetrainSpeeds, drivetrainConfig, chainWidthFamily, drivetrainPlatform]
 claves_producto: [chain_speeds, chain_width_family, chain_outer_width_mm, chain_pitch_mm, chain_profile_family, chain_directional, quick_link_included, chain_quick_links_supplied, chain_application_declarations, chain_connector_type, chain_connector_target, chain_link_reusable, link_count, chain_ebike_rated]
 revisado: 2026-10-02
 ---
@@ -77,7 +77,9 @@ revisado: 2026-10-02
   producción 2026-10-02); los piñones de atrás, que deciden la cadena, salen de
   `drivetrainConfig`. El motor lo hace así (`_chainSpeedFromContext`: primero el
   segundo número de la configuración y sólo si no hay, `drivetrainSpeeds` cuando
-  es una cantidad plausible de piñones).
+  es una cantidad plausible de piñones). La bici guarda además `chainWidthFamily`
+  (1/8, 3/32, 11/128…) y su plataforma (`drivetrainPlatform`: Flattop, T-Type,
+  LINKGLIDE y Eagle no se cruzan).
 - **Producto:** `chain_speeds` (opciones), `chain_width_family` (1/8, 3/32,
   11/128…), `chain_outer_width_mm`, `chain_profile_family` (Flattop, LINKGLIDE…),
   `chain_directional`, `quick_link_included` y `chain_quick_links_supplied`
