@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
+import '../config/bike_sheet_options.dart';
 import '../config/brake_canonical_data.dart';
 import '../config/bottom_bracket_canonical_data.dart';
 import '../config/drivetrain_canonical_data.dart';
@@ -39,37 +40,8 @@ enum _BikeMobileAction {
   delete,
 }
 
-const Map<String, String> _suspensionLayoutOptions = {
-  'rigid': 'Rigida',
-  'front_suspension': 'Suspension delantera',
-  'full_suspension': 'Doble suspension',
-  'unknown': 'Desconocido',
-};
-
-/// El eje de cada rueda con «Desconocido / sin confirmar» del registro, que
-/// se guarda como revisado y nunca como confirmado.
-const Map<String, String> _axleInterfaceOptions = {
-  ...kAxleInterfaceLabels,
-  kRegistryUnknownCode: 'Desconocido / sin confirmar',
-};
-
-/// El anclaje del rotor con «Desconocido»: revisado, nunca confirmado, y no
-/// refuta ningún rotor.
-const Map<String, String> _rotorMountOptions = {
-  ...kBikeRotorMountOptions,
-  'unknown': 'Desconocido',
-};
-
 bool _isKnownAxleInterface(String? value) =>
     value != null && kAxleInterfaceLabels.containsKey(value);
-
-const Map<String, String> _valveTypeOptions = {
-  'presta': 'Presta',
-  'schrader': 'Schrader',
-  'dunlop': 'Dunlop',
-  'other': 'Otra',
-  'unknown': 'Desconocido',
-};
 
 const Map<String, String> _acquisitionConditionOptions = {
   'new': 'Nueva',
@@ -134,70 +106,10 @@ const Map<String, String> _transportMethodOptions = {
   'unknown': 'Desconocido',
 };
 
-const List<String> _frameSizeOptions = [
-  'XXS',
-  'XS',
-  'S',
-  'M',
-  'L',
-  'XL',
-  'XXL',
-  '48cm',
-  '50cm',
-  '52cm',
-  '54cm',
-  '56cm',
-  '58cm',
-  '60cm',
-  'Otra'
-];
-
-const List<String> _wheelSizeOptions = [
-  '12"',
-  '16"',
-  '20"',
-  '24"',
-  '26"',
-  '27.5"',
-  '29"',
-  '700c',
-  '650b',
-  'Otra'
-];
-
-const List<int> _rotorSizeOptions = [140, 160, 180, 203, 220];
-const List<int> _frontChainringCountOptions = [1, 2, 3];
-const List<int> _rearCogCountOptions = [
-  1,
-  3,
-  5,
-  6,
-  7,
-  8,
-  9,
-  10,
-  11,
-  12,
-  13,
-  14
-];
-const List<int> _frontHubSpacingOptions = [74, 100, 110, 135, 150];
-const List<int> _rearHubSpacingOptions = [
-  110,
-  120,
-  126,
-  130,
-  135,
-  142,
-  148,
-  150,
-  157,
-  170,
-  177,
-  190,
-  197,
-];
-const List<int> _spokeHoleOptions = [20, 24, 28, 32, 36, 40, 48];
+const List<int> kBikeRotorSizeOptions = [140, 160, 180, 203, 220];
+const List<int> kBikeFrontChainringCountOptions = [1, 2, 3];
+const List<int> kBikeFrontHubSpacingOptions = [74, 100, 110, 135, 150];
+const List<int> kBikeSpokeHoleOptions = [20, 24, 28, 32, 36, 40, 48];
 
 class _DrivetrainBreakdown {
   final int frontChainringCount;
@@ -1100,7 +1012,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       case BikeType.mountainHardtail:
         return const _BikeTypeKernelDefaults(
           suspensionLayout: 'front_suspension',
-          allowedSuspensionLayouts: ['front_suspension', 'rigid'],
+          allowedSuspensionLayouts: kHardtailSuspensionLayouts,
         );
       case BikeType.road:
       case BikeType.gravel:
@@ -1114,7 +1026,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       case BikeType.bmx:
         return const _BikeTypeKernelDefaults(
           suspensionLayout: 'rigid',
-          allowedSuspensionLayouts: ['rigid'],
+          allowedSuspensionLayouts: kBmxSuspensionLayouts,
           drivetrainConfig: 'singlespeed',
           freehubType: 'bmx_driver',
         );
@@ -1134,11 +1046,11 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   Map<String, String> _suspensionLayoutOptionsForBikeType(BikeType type) {
     final allowed = _kernelDefaultsForBikeType(type).allowedSuspensionLayouts;
     if (allowed == null || allowed.isEmpty) {
-      return _suspensionLayoutOptions;
+      return kBikeSuspensionLayoutOptions;
     }
 
     return Map.fromEntries(
-      _suspensionLayoutOptions.entries.where(
+      kBikeSuspensionLayoutOptions.entries.where(
         (entry) => allowed.contains(entry.key),
       ),
     );
@@ -1457,7 +1369,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   }
 
   List<int> _resolvedRotorSizeOptions(int? currentValue) {
-    return _resolvedIntOptions(_rotorSizeOptions, currentValue);
+    return _resolvedIntOptions(kBikeRotorSizeOptions, currentValue);
   }
 
   List<int> _resolvedIntOptions(List<int> defaults, int? currentValue) {
@@ -3403,9 +3315,9 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       initialValue: TextEditingValue(text: _frameSizeController.text),
       optionsBuilder: (TextEditingValue textEditingValue) {
         if (textEditingValue.text.isEmpty) {
-          return _frameSizeOptions;
+          return kBikeFrameSizeOptions;
         }
-        return _frameSizeOptions.where((String option) {
+        return kBikeFrameSizeOptions.where((String option) {
           return option
               .toLowerCase()
               .contains(textEditingValue.text.toLowerCase());
@@ -3436,7 +3348,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
   Widget _buildWheelSizeField() {
     final currentValue = _wheelSizeController.text.trim();
     final resolvedOptions = {
-      ..._wheelSizeOptions,
+      ...kBikeWheelSizeOptions,
       if (currentValue.isNotEmpty) currentValue,
     }.toList();
 
@@ -4702,7 +4614,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       label: 'Platos delanteros',
       icon: Icons.tune_outlined,
       originKeys: const ['drivetrainConfig', 'drivetrainSpeeds'],
-      options: _frontChainringCountOptions,
+      options: kBikeFrontChainringCountOptions,
       onChanged: _handleFrontChainringCountChanged,
     );
 
@@ -4711,7 +4623,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       label: 'Piñones traseros',
       icon: Icons.linear_scale_outlined,
       originKeys: const ['drivetrainConfig', 'drivetrainSpeeds'],
-      options: _rearCogCountOptions,
+      options: kBikeRearCogCountOptions,
       onChanged: _handleRearCogCountChanged,
     );
 
@@ -4828,7 +4740,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       unit: 'mm',
       originKeys: const ['frontHubSpacingMm'],
       options: _resolvedIntOptions(
-        _frontHubSpacingOptions,
+        kBikeFrontHubSpacingOptions,
         _parseNullableWholeNumberText(_frontHubSpacingController.text),
       ),
       onChanged: (value) {
@@ -4846,7 +4758,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       unit: 'mm',
       originKeys: const ['rearHubSpacingMm'],
       options: _resolvedIntOptions(
-        _rearHubSpacingOptions,
+        kBikeRearHubSpacingOptions,
         _parseNullableWholeNumberText(_rearHubSpacingController.text),
       ),
       onChanged: (value) {
@@ -4863,7 +4775,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       icon: Icons.blur_on_outlined,
       originKeys: const ['frontSpokeHoles'],
       options: _resolvedIntOptions(
-        _spokeHoleOptions,
+        kBikeSpokeHoleOptions,
         _parseNullableIntText(_frontSpokeHolesController.text),
       ),
       onChanged: (value) {
@@ -4880,7 +4792,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       icon: Icons.blur_on_outlined,
       originKeys: const ['rearSpokeHoles'],
       options: _resolvedIntOptions(
-        _spokeHoleOptions,
+        kBikeSpokeHoleOptions,
         _parseNullableIntText(_rearSpokeHolesController.text),
       ),
       onChanged: (value) {
@@ -4931,7 +4843,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
       value: _valveType,
       label: 'Tipo de valvula',
       originKeys: const ['valveType'],
-      options: _valveTypeOptions,
+      options: kBikeValveTypeOptions,
       icon: Icons.radio_button_checked,
       onChanged: (value) {
         setState(() {
@@ -4973,7 +4885,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         value: value,
         label: isFront ? 'Eje delantero' : 'Eje trasero',
         originKeys: [isFront ? 'frontAxleInterface' : 'rearAxleInterface'],
-        options: _resolvedLabeledOptions(_axleInterfaceOptions, value),
+        options: _resolvedLabeledOptions(kBikeAxleInterfaceOptions, value),
         icon: Icons.settings_ethernet_outlined,
         onChanged: (selected) {
           setState(() {
@@ -5004,7 +4916,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         // La tarjeta ya dice la rueda: el rótulo corto cabe sin cortarse.
         label: 'Anclaje del rotor',
         originKeys: [isFront ? 'frontRotorMount' : 'rearRotorMount'],
-        options: _resolvedLabeledOptions(_rotorMountOptions, value),
+        options: _resolvedLabeledOptions(kBikeRotorMountChoiceOptions, value),
         icon: Icons.settings_outlined,
         onChanged: (selected) {
           setState(() {

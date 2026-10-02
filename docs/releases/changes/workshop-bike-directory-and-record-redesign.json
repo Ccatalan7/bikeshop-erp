@@ -15,16 +15,16 @@
   "items": [
     "«Todas» muestra cada bici con su dibujo, dueño, teléfono y último trabajo; «En el taller» es un tablero por etapa que marca las que llevan 14 días o más.",
     "Cada bici tiene su página: en escritorio queda fija a la izquierda y el historial muestra cada visita con lo pedido y lo hecho, por sistema.",
-    "La ficha técnica se lee en seis grupos, de cuadro a cockpit, y dice qué dato falta; las compras aparte ya no se mezclan con la bici."
+    "La ficha técnica se lee en seis grupos, de cuadro a cockpit, dice qué dato falta y se completa ahí mismo, sin abrir el formulario de la bici; las compras aparte ya no se mezclan con la bici."
   ],
   "evidence": [
     {
       "path": "lib/modules/bikeshop/pages/bike_record_page.dart",
-      "sha256": "e0545c8fddfd19db72a004b825725a21fe8e1cec95d1c3a085907a718e58786c"
+      "sha256": "98b9f088402040ad3f9c340b30f96e77924f8a433bcd92ce7d5b7daf8f442a12"
     },
     {
       "path": "lib/modules/bikeshop/widgets/bike_record_panel.dart",
-      "sha256": "5c4780525430cfb0d961d13223bbf91fe344852b5851f1d1e874a3b2759c6146"
+      "sha256": "2f4274245056186582daa4c5d91b264c9aa5cc3535e821252a6e416d4b99034b"
     },
     {
       "path": "lib/modules/bikeshop/widgets/bike_silhouette.dart",
@@ -69,6 +69,30 @@
     {
       "path": "lib/shared/utils/chilean_utils.dart",
       "sha256": "6ada6875089f085f91bb89b674b3abcebf1bb55d174ce3cc4245325b3a6828b2"
+    },
+    {
+      "path": "lib/modules/bikeshop/services/bike_spec_draft.dart",
+      "sha256": "2723bef07864e02c1fe13650168e83438a37c942ab8a8bd712c194ecea436610"
+    },
+    {
+      "path": "lib/modules/bikeshop/config/bike_sheet_options.dart",
+      "sha256": "b7e2dbbefb5e4b8c4d0f2a43312f091cf403146a1573946ab7564a03d3d27e7c"
+    },
+    {
+      "path": "lib/modules/bikeshop/pages/client_logbook_page.dart",
+      "sha256": "5d753e4cf56b1aa49e2703093d562da16b86064607d9ee63bc2358147c791a40"
+    },
+    {
+      "path": "lib/shared/widgets/vb_searchable_select.dart",
+      "sha256": "dca544795759c97f934f36dd3e0a292ccf6ef918cbf727a75a29951c71a2eaa0"
+    },
+    {
+      "path": "lib/modules/bikeshop/pages/bike_form_dialog.dart",
+      "sha256": "4b498457367954b3870e2fe8b8f32e5f207e5f6ad09723dc232019d9c85cf5f5"
+    },
+    {
+      "path": "lib/modules/bikeshop/config/drivetrain_canonical_data.dart",
+      "sha256": "71a378eb152014ece07046405be5716dc41476d8967877105c07060607c7d858"
     }
   ]
 }

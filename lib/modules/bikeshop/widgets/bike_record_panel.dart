@@ -1,11 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
+import 'package:uuid/uuid.dart';
 
 import '../../../shared/themes/vinabike_theme_roles.dart';
+import '../../../shared/utils/responsive_breakpoints.dart';
 import '../../../shared/widgets/vb_button.dart';
+import '../../../shared/widgets/vb_searchable_select.dart';
 import '../../../shared/widgets/vb_segmented.dart' show VbDensity;
+import '../../../shared/widgets/vb_short_select.dart' show VbShortSelect;
 import '../../../shared/widgets/vb_sub_tabs.dart';
 import '../config/bottom_bracket_canonical_data.dart';
 import '../config/brake_canonical_data.dart';
@@ -13,9 +20,12 @@ import '../config/wheel_canonical_data.dart';
 import '../models/bike_fact_origin.dart';
 import '../models/bikeshop_models.dart';
 import '../services/bike_directory_entries.dart';
+import '../services/bike_spec_draft.dart';
 import '../services/bike_visit_history.dart';
 import '../services/bikeshop_service.dart';
 import '../services/job_line_systems.dart';
+import '../services/workshop_command_notices.dart';
+import '../services/workshop_command_outbox.dart';
 import 'bike_measurement_timeline.dart';
 import 'bike_module_style.dart';
 import 'bike_silhouette.dart';
@@ -57,6 +67,10 @@ class BikeRecordPanel extends StatefulWidget {
   /// de la página propia de la bici, que además lleva «Editar»).
   final bool showBackRow;
 
+  /// Vuelve a leer la bici después de guardar la ficha técnica. Con él,
+  /// «Editar ficha» edita la misma hoja en su lugar; sin él abre [onEdit].
+  final Future<void> Function()? onSpecSaved;
+
   const BikeRecordPanel({
     super.key,
     required this.snapshot,
@@ -70,6 +84,7 @@ class BikeRecordPanel extends StatefulWidget {
     this.closeLabel = 'Volver a bicicletas',
     this.today,
     this.showBackRow = true,
+    this.onSpecSaved,
   });
 
   @override
@@ -169,6 +184,9 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
     }
     if (oldWidget.snapshot.bike.id != widget.snapshot.bike.id) {
       _systemFilter = null;
+      _specDraft = null;
+      _specNotice = null;
+      _resetSpecOperation();
     }
   }
 
@@ -225,6 +243,329 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
     }
   }
 
+  // ── Ficha técnica en su lugar ────────────────────────────────────────────
+
+  /// La ficha mientras se edita en la misma hoja; nula fuera de la edición.
+  BikeSpecDraft? _specDraft;
+
+  /// Abriendo o guardando la ficha.
+  bool _specBusy = false;
+
+  /// Lo que la hoja le dice al mecánico mientras edita (un guardado
+  /// rechazado, platos sin piñones).
+  String? _specNotice;
+
+  /// La llave del guardado y la firma de lo que lleva: un reintento del
+  /// mismo contenido usa la misma llave, como el formulario de la bici.
+  String? _specOperationKey;
+  String? _specSignature;
+  DateTime? _specConfirmedAt;
+
+  bool get _specDirty => _specDraft?.hasChanges ?? false;
+
+  /// Al abrir la edición se resolvió un guardado pendiente o se leyó una
+  /// versión más nueva: la ficha de atrás se vuelve a leer al salir. No
+  /// antes, porque un anfitrión que recarga desmonta la hoja en edición.
+  bool _specHostStale = false;
+
+  void _leaveSpecEdit() {
+    _specDraft = null;
+    _specNotice = null;
+    _resetSpecOperation();
+    if (_specHostStale) {
+      _specHostStale = false;
+      unawaited(widget.onSpecSaved?.call());
+    }
+  }
+
+  void _resetSpecOperation() {
+    _specOperationKey = null;
+    _specSignature = null;
+    _specConfirmedAt = null;
+  }
+
+  void _showSpecMessage(String message, {bool error = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(message),
+      backgroundColor: error ? Theme.of(context).colorScheme.error : null,
+      duration: const Duration(seconds: 8),
+    ));
+  }
+
+  /// Abre la hoja para editar con lo último del servidor. Antes resuelve lo
+  /// que un guardado anterior dejó en la bandeja del equipo: editar encima de
+  /// un guardado sin respuesta podría pisarlo.
+  Future<void> _startSpecEdit() async {
+    final bikeId = widget.snapshot.bike.id;
+    if (widget.onSpecSaved == null || bikeId == null || bikeId.isEmpty) {
+      widget.onEdit();
+      return;
+    }
+    final service = context.read<BikeshopService>();
+    setState(() {
+      _specBusy = true;
+      _specNotice = null;
+    });
+    final notices = <String>[];
+    try {
+      final runs = await service.resumePendingBikeCommands(bikeId: bikeId);
+      for (final run in runs) {
+        final notice = workshopCommandNotice(run, includeOffline: true);
+        if (notice != null) notices.add(notice);
+      }
+      final pending = await service.pendingBikeSaveState(bikeId);
+      if (pending.unreadable) {
+        throw StateError(
+          'Esta bici tiene un cambio pendiente que esta versión de la app no '
+          'sabe leer. Actualiza la app o ábrela donde se hizo el cambio.',
+        );
+      }
+      final pendingKey = pending.pendingSaveKey;
+      if (pendingKey != null) {
+        if (!mounted) return;
+        setState(() => _specBusy = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: const Text(
+            'Esta bici tiene un guardado sin respuesta del servidor en este '
+            'equipo. Reenvíalo antes de editar la ficha, para no guardar '
+            'encima de él.',
+          ),
+          duration: const Duration(seconds: 12),
+          action: SnackBarAction(
+            label: 'Reenviar',
+            onPressed: () => unawaited(_retryPendingSpecSave(pendingKey)),
+          ),
+        ));
+        return;
+      }
+      final aggregate = await service.getBikeAggregate(bikeId);
+      if (!mounted) return;
+      setState(() {
+        _specDraft = BikeSpecDraft.fromRecord(
+          bike: aggregate.bike,
+          profile: aggregate.profile,
+        );
+        _specBusy = false;
+        _tab = _RecordTab.technical;
+        _resetSpecOperation();
+      });
+      if (notices.isNotEmpty) _showSpecMessage(notices.join('\n'));
+      if (runs.any((run) => run.outcome.wrote)) _specHostStale = true;
+    } catch (error) {
+      debugPrint('Bike spec edit could not open: $error');
+      if (!mounted) return;
+      setState(() => _specBusy = false);
+      _showSpecMessage(
+        error is StateError
+            ? error.message
+            : 'No se pudo abrir la ficha para editarla. Revisa la conexión '
+                'y vuelve a intentar.',
+        error: true,
+      );
+    }
+  }
+
+  Future<void> _retryPendingSpecSave(String operationKey) async {
+    final service = context.read<BikeshopService>();
+    WorkshopCommandRun? run;
+    Object? failure;
+    try {
+      run = await service.retryPendingBikeCommand(operationKey);
+    } catch (error) {
+      failure = error;
+    }
+    if (!mounted) return;
+    if (run != null && run.outcome.wrote) {
+      await widget.onSpecSaved?.call();
+    }
+    final notice = run == null
+        ? 'No se pudo reenviar el guardado pendiente; sigue en este equipo. '
+            '$failure'
+        : workshopCommandNotice(run, includeOffline: true);
+    if (notice != null) _showSpecMessage(notice);
+  }
+
+  void _setSpecValue(String key, String? value) {
+    final draft = _specDraft;
+    if (draft == null) return;
+    setState(() {
+      draft.set(key, value);
+      _specNotice = null;
+    });
+  }
+
+  void _revertSpecValue(String key) {
+    final draft = _specDraft;
+    if (draft == null) return;
+    setState(() {
+      draft.revert(key);
+      _specNotice = null;
+    });
+  }
+
+  Future<bool> _confirmDiscardSpecs() async {
+    final count = _specDraft?.changeCount ?? 0;
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('¿Descartar los cambios?'),
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Text(
+            count == 1
+                ? 'Hay un cambio en la ficha técnica que no se ha guardado.'
+                : 'Hay $count cambios en la ficha técnica que no se han '
+                    'guardado.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Seguir editando'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Descartar'),
+          ),
+        ],
+      ),
+    );
+    return discard == true;
+  }
+
+  Future<void> _cancelSpecEdit() async {
+    if (_specBusy) return;
+    if (_specDirty && !await _confirmDiscardSpecs()) return;
+    if (!mounted) return;
+    setState(_leaveSpecEdit);
+  }
+
+  /// El regreso de la ficha no se lleva cambios sin guardar en silencio.
+  Future<void> _closeGuarded() async {
+    if (_specDirty && !await _confirmDiscardSpecs()) return;
+    if (!mounted) return;
+    if (_specDraft != null) {
+      setState(() {
+        _specHostStale = false;
+        _leaveSpecEdit();
+      });
+    }
+    widget.onClose();
+  }
+
+  Future<void> _saveSpecs() async {
+    final draft = _specDraft;
+    if (draft == null || _specBusy) return;
+    final blocking = draft.blockingMessage;
+    if (blocking != null) {
+      setState(() => _specNotice = blocking);
+      return;
+    }
+    if (!draft.hasChanges) {
+      setState(_leaveSpecEdit);
+      return;
+    }
+    final service = context.read<BikeshopService>();
+    var built = draft.build(confirmedAt: DateTime.now().toUtc());
+    final signature = draft.contentSignature(built.bike, built.profile);
+    if (_specOperationKey == null || _specSignature != signature) {
+      _specOperationKey = const Uuid().v4();
+      _specSignature = signature;
+      _specConfirmedAt = built.profile?.lastConfirmedAt;
+    } else if (_specConfirmedAt != null) {
+      // Un reintento manda lo mismo, con la misma hora de confirmación.
+      built = draft.build(confirmedAt: _specConfirmedAt!);
+    }
+    setState(() {
+      _specBusy = true;
+      _specNotice = null;
+    });
+    try {
+      await service.saveBikeAggregate(
+        bike: built.bike,
+        profile: built.profile,
+        operationKey: _specOperationKey!,
+        expectedBikeUpdatedAt: draft.bike.updatedAt,
+        expectedProfileUpdatedAt: draft.profile?.updatedAt,
+      );
+      if (!mounted) return;
+      setState(() {
+        _specBusy = false;
+        _specHostStale = true;
+        _leaveSpecEdit();
+      });
+      _showSpecMessage('Ficha técnica guardada.');
+    } catch (error) {
+      debugPrint('Bike spec save failed: $error');
+      if (!mounted) return;
+      final outcome = classifyWorkshopCommandError(error);
+      if (error is PostgrestException &&
+          outcome == WorkshopCommandOutcome.stale) {
+        await _rebaseSpecDraft(draft);
+        return;
+      }
+      if (error is! WorkshopOutboxPersistenceException &&
+          outcome == WorkshopCommandOutcome.offline) {
+        // Quedó respaldado en la bandeja con su llave y se reintenta solo;
+        // seguir editando encima de él podría pisarlo.
+        setState(() {
+          _specBusy = false;
+          _leaveSpecEdit();
+        });
+        _showSpecMessage(
+          'No se pudo confirmar el guardado de la ficha. Quedó respaldado '
+          'en este equipo y se reintenta solo; la ficha se actualiza cuando '
+          'llegue.',
+        );
+        return;
+      }
+      setState(() {
+        _specBusy = false;
+        _specNotice = error is PostgrestException
+            ? 'El servidor rechazó el guardado y no cambió nada. '
+                '${error.message}'
+            : error is WorkshopOutboxPersistenceException
+                ? 'No se pudo respaldar el guardado en este equipo; no se '
+                    'envió nada. Vuelve a intentar.'
+                : 'No se pudo guardar la ficha. $error';
+      });
+    }
+  }
+
+  /// Otro guardó esta bici mientras se editaba: se lee lo último y los
+  /// cambios del mecánico se vuelven a poner encima, marcados, para que los
+  /// revise y guarde de nuevo.
+  Future<void> _rebaseSpecDraft(BikeSpecDraft draft) async {
+    final bikeId = draft.bike.id;
+    try {
+      final aggregate =
+          await context.read<BikeshopService>().getBikeAggregate(bikeId!);
+      if (!mounted) return;
+      setState(() {
+        _specDraft = draft.rebasedOn(
+          bike: aggregate.bike,
+          profile: aggregate.profile,
+        );
+        _specBusy = false;
+        _resetSpecOperation();
+        _specNotice = 'Alguien guardó esta bici mientras editabas. Se cargó '
+            'lo último y tus cambios siguen marcados: revísalos y guarda de '
+            'nuevo.';
+        _specHostStale = true;
+      });
+    } catch (error) {
+      debugPrint('Bike spec reload after conflict failed: $error');
+      if (!mounted) return;
+      setState(() {
+        _specBusy = false;
+        _specNotice = 'Alguien guardó esta bici mientras editabas y no se '
+            'pudo leer lo último. No se guardó nada: cancela y vuelve a '
+            'abrir la ficha.';
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -234,105 +575,124 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
         child: const Center(child: CircularProgressIndicator()),
       );
     }
-    return BikeModuleTheme(
-      child: ColoredBox(
-        color: theme.colorScheme.surfaceContainer,
-        child: FutureBuilder<_RecordHistory>(
-          future: _historyFuture,
-          builder: (context, snapshot) {
-            final loading = snapshot.connectionState == ConnectionState.waiting;
-            final failed = !loading && snapshot.hasError;
-            final history = (loading || failed) ? null : snapshot.data;
-            return LayoutBuilder(
-              builder: (context, constraints) {
-                if (constraints.maxWidth >= _studioMinWidth &&
-                    constraints.maxHeight.isFinite) {
-                  return _buildStudio(
-                    context,
-                    constraints,
-                    loading: loading,
-                    failed: failed,
-                    history: history,
-                  );
-                }
-                final narrow = constraints.maxWidth < 680;
-                final gutter = narrow ? 16.0 : 28.0;
-                final contentWidth =
-                    (constraints.maxWidth - gutter * 2).clamp(0.0, 1180.0);
-                // Algunos anfitriones dan un alto holgado: la ficha igual
-                // ocupa todo el alto, para que su fondo no termine a media
-                // pantalla (se notaba en oscuro).
-                return SizedBox(
-                  width: constraints.maxWidth,
-                  height: constraints.maxHeight.isFinite
-                      ? constraints.maxHeight
-                      : null,
-                  child: SingleChildScrollView(
-                    padding: EdgeInsets.fromLTRB(
-                        gutter, narrow ? 4 : 14, gutter, 48),
-                    child: Align(
-                      alignment: Alignment.topCenter,
-                      child: SizedBox(
-                        width: contentWidth,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            if (widget.showBackRow) ...[
-                              _buildBackRow(context, narrow: narrow),
-                              SizedBox(height: narrow ? 4 : 8),
-                            ] else
-                              const SizedBox(height: 12),
-                            if (narrow)
-                              _buildPhoneHeader(context, history)
-                            else
-                              _buildWideHeader(context, history,
-                                  width: contentWidth),
-                            const SizedBox(height: 18),
-                            VbSubTabs<_RecordTab>(
-                              density: VbSubTabsDensity.comfortable,
-                              value: _tab,
-                              onChanged: (tab) => setState(() => _tab = tab),
-                              tabs: [
-                                VbSubTab(
-                                  value: _RecordTab.history,
-                                  label:
-                                      history == null || history.visitCount == 0
+    return PopScope(
+      // Un regreso del sistema no se lleva la ficha a medio editar.
+      canPop: !_specDirty,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop || !await _confirmDiscardSpecs() || !mounted) return;
+        setState(() {
+          _specHostStale = false;
+          _leaveSpecEdit();
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) Navigator.of(context).maybePop();
+        });
+      },
+      child: BikeModuleTheme(
+        child: ColoredBox(
+          color: theme.colorScheme.surfaceContainer,
+          child: FutureBuilder<_RecordHistory>(
+            future: _historyFuture,
+            builder: (context, snapshot) {
+              final loading =
+                  snapshot.connectionState == ConnectionState.waiting;
+              final failed = !loading && snapshot.hasError;
+              final history = (loading || failed) ? null : snapshot.data;
+              return LayoutBuilder(
+                builder: (context, constraints) {
+                  if (constraints.maxWidth >= _studioMinWidth &&
+                      constraints.maxHeight.isFinite) {
+                    return _buildStudio(
+                      context,
+                      constraints,
+                      loading: loading,
+                      failed: failed,
+                      history: history,
+                    );
+                  }
+                  final narrow = constraints.maxWidth < 680;
+                  final gutter = narrow ? 16.0 : 28.0;
+                  final contentWidth =
+                      (constraints.maxWidth - gutter * 2).clamp(0.0, 1180.0);
+                  // Algunos anfitriones dan un alto holgado: la ficha igual
+                  // ocupa todo el alto, para que su fondo no termine a media
+                  // pantalla (se notaba en oscuro).
+                  return SizedBox(
+                    width: constraints.maxWidth,
+                    height: constraints.maxHeight.isFinite
+                        ? constraints.maxHeight
+                        : null,
+                    child: _withSpecDock(
+                      context,
+                      SingleChildScrollView(
+                        padding: EdgeInsets.fromLTRB(gutter, narrow ? 4 : 14,
+                            gutter, _specDraft != null ? 120 : 48),
+                        child: Align(
+                          alignment: Alignment.topCenter,
+                          child: SizedBox(
+                            width: contentWidth,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                if (widget.showBackRow) ...[
+                                  _buildBackRow(context, narrow: narrow),
+                                  SizedBox(height: narrow ? 4 : 8),
+                                ] else
+                                  const SizedBox(height: 12),
+                                if (narrow)
+                                  _buildPhoneHeader(context, history)
+                                else
+                                  _buildWideHeader(context, history,
+                                      width: contentWidth),
+                                const SizedBox(height: 18),
+                                VbSubTabs<_RecordTab>(
+                                  density: VbSubTabsDensity.comfortable,
+                                  value: _tab,
+                                  onChanged: (tab) =>
+                                      setState(() => _tab = tab),
+                                  tabs: [
+                                    VbSubTab(
+                                      value: _RecordTab.history,
+                                      label: history == null ||
+                                              history.visitCount == 0
                                           ? 'Historial'
                                           : 'Historial · ${history.visitCount}',
+                                    ),
+                                    const VbSubTab(
+                                      value: _RecordTab.technical,
+                                      label: 'Ficha técnica',
+                                    ),
+                                    const VbSubTab(
+                                      value: _RecordTab.notes,
+                                      label: 'Notas',
+                                    ),
+                                  ],
                                 ),
-                                const VbSubTab(
-                                  value: _RecordTab.technical,
-                                  label: 'Ficha técnica',
-                                ),
-                                const VbSubTab(
-                                  value: _RecordTab.notes,
-                                  label: 'Notas',
-                                ),
+                                const SizedBox(height: 20),
+                                switch (_tab) {
+                                  _RecordTab.history => _buildHistoryTab(
+                                      context,
+                                      loading: loading,
+                                      failed: failed,
+                                      history: history,
+                                      width: contentWidth,
+                                    ),
+                                  _RecordTab.technical => _buildTechnicalTab(
+                                      context,
+                                      width: contentWidth),
+                                  _RecordTab.notes => _buildNotesTab(context),
+                                },
                               ],
                             ),
-                            const SizedBox(height: 20),
-                            switch (_tab) {
-                              _RecordTab.history => _buildHistoryTab(
-                                  context,
-                                  loading: loading,
-                                  failed: failed,
-                                  history: history,
-                                  width: contentWidth,
-                                ),
-                              _RecordTab.technical => _buildTechnicalTab(
-                                  context,
-                                  width: contentWidth),
-                              _RecordTab.notes => _buildNotesTab(context),
-                            },
-                          ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                );
-              },
-            );
-          },
+                  );
+                },
+              );
+            },
+          ),
         ),
       ),
     );
@@ -448,26 +808,30 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
         children: [
           identity,
           Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(pad, 20, pad, 48),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _buildTabs(history),
-                  const SizedBox(height: 22),
-                  switch (_tab) {
-                    _RecordTab.history => _buildHistoryTab(
-                        context,
-                        loading: loading,
-                        failed: failed,
-                        history: history,
-                        width: contentWidth,
-                      ),
-                    _RecordTab.technical =>
-                      _buildTechnicalTab(context, width: contentWidth),
-                    _RecordTab.notes => _buildNotesTab(context),
-                  },
-                ],
+            child: _withSpecDock(
+              context,
+              SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(
+                    pad, 20, pad, _specDraft != null ? 120 : 48),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildTabs(history),
+                    const SizedBox(height: 22),
+                    switch (_tab) {
+                      _RecordTab.history => _buildHistoryTab(
+                          context,
+                          loading: loading,
+                          failed: failed,
+                          history: history,
+                          width: contentWidth,
+                        ),
+                      _RecordTab.technical =>
+                        _buildTechnicalTab(context, width: contentWidth),
+                      _RecordTab.notes => _buildNotesTab(context),
+                    },
+                  ],
+                ),
               ),
             ),
           ),
@@ -531,7 +895,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
   Widget _buildBackRow(BuildContext context, {required bool narrow}) {
     final theme = Theme.of(context);
     final back = TextButton.icon(
-      onPressed: widget.onClose,
+      onPressed: _closeGuarded,
       icon: const Icon(Icons.chevron_left, size: 22),
       label: Text(
         widget.closeLabel,
@@ -2108,6 +2472,8 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
     // (dueño, 2026-10-02: el dibujo repetido y las tarjetas disparejas se
     // veían mal).
     if (width >= 680) return _buildSpecSheet(context, groups);
+    final draft = _specDraft;
+    if (draft != null) return _buildSpecCardsEditor(context, draft);
     final markers = _specMarkers(groups);
     final confirmedAt = widget.snapshot.lastConfirmedAt;
 
@@ -2159,7 +2525,8 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
               icon: Icons.edit_outlined,
               variant: VbButtonVariant.secondary,
               expand: true,
-              onPressed: widget.onEdit,
+              busy: _specBusy,
+              onPressed: _specBusy ? null : _startSpecEdit,
             ),
           ],
         ),
@@ -2199,6 +2566,8 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
   /// La ficha técnica en escritorio: una hoja continua, un sistema por
   /// franja, con sus datos repartidos en columnas.
   Widget _buildSpecSheet(BuildContext context, List<_SpecGroup> groups) {
+    final draft = _specDraft;
+    if (draft != null) return _buildSpecSheetEditor(context, draft);
     final theme = Theme.of(context);
     final roles = VinabikeThemeRoles.of(context);
     final confirmedAt = widget.snapshot.lastConfirmedAt;
@@ -2243,7 +2612,8 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
               icon: Icons.edit_outlined,
               variant: VbButtonVariant.secondary,
               density: VbDensity.comfortable,
-              onPressed: widget.onEdit,
+              busy: _specBusy,
+              onPressed: _specBusy ? null : _startSpecEdit,
             ),
           ],
         ),
@@ -2468,6 +2838,579 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
                   fontSize: 12.5, color: theme.colorScheme.onSurfaceVariant),
             ),
           ),
+      ],
+    );
+  }
+
+  // ── Ficha técnica: edición en la misma hoja ─────────────────────────────
+
+  /// La hoja mientras se edita: los mismos sistemas, ahora con todos sus
+  /// datos —los que tienen valor y los que faltan— listos para elegir.
+  Widget _buildSpecSheetEditor(BuildContext context, BikeSpecDraft draft) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildSpecEditorHeader(context),
+        const SizedBox(height: 16),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: roles.focusRing.withValues(alpha: 0.55)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final section in BikeSpecDraft.sections)
+                Container(
+                  decoration: BoxDecoration(
+                    border: section.number == 1
+                        ? null
+                        : Border(top: BorderSide(color: roles.hairline)),
+                  ),
+                  child: _buildSpecSectionEditor(context, draft, section),
+                ),
+              Container(
+                decoration: BoxDecoration(
+                  border: Border(top: BorderSide(color: roles.hairline)),
+                ),
+                child: _buildSpecSectionEditor(context, draft, null),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// En el teléfono: una tarjeta por sistema, con sus datos uno bajo otro.
+  Widget _buildSpecCardsEditor(BuildContext context, BikeSpecDraft draft) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildSpecEditorHeader(context),
+        for (final section in [...BikeSpecDraft.sections, null]) ...[
+          const SizedBox(height: 14),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: theme.colorScheme.outlineVariant),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildSpecEditorTitle(context, draft, section),
+                  const SizedBox(height: 14),
+                  if (section == null)
+                    _buildSpecCockpitNote(context)
+                  else
+                    _buildSpecEditorFields(context, draft, section),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildSpecEditorHeader(BuildContext context) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final notice = _specNotice;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: roles.selectionContainer,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.edit_outlined,
+                  size: 18, color: theme.colorScheme.primary),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Semantics(
+                    header: true,
+                    child: const Text(
+                      'Editando la ficha técnica',
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Elige lo que sabes; lo que no, déjalo «Sin dato». Cada '
+                    'cambio queda marcado y se puede deshacer.',
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        if (notice != null) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            decoration: BoxDecoration(
+              color: roles.warning.container,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: roles.warning.border),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.info_outline,
+                    size: 18, color: roles.warning.onContainer),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    notice,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: roles.warning.onContainer,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// Número y nombre del sistema, y cuántos de sus datos tienen valor. Sin
+  /// sección es «Dirección y cockpit», que la ficha todavía no guarda.
+  Widget _buildSpecEditorTitle(
+    BuildContext context,
+    BikeSpecDraft draft,
+    BikeSpecSection? section,
+  ) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final fields = section == null
+        ? const <BikeSpecField>[]
+        : draft.visibleFields(section);
+    final filled = fields.where((f) => draft.value(f.key) != null).length;
+    final changed = fields.where((f) => draft.isChanged(f.key)).length;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 26,
+              height: 26,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary,
+                shape: BoxShape.circle,
+              ),
+              child: Text(
+                '${section?.number ?? 6}',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: theme.colorScheme.onPrimary,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Flexible(
+              child: Semantics(
+                header: true,
+                child: Text(
+                  section?.title ?? 'Dirección y cockpit',
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (section != null) ...[
+          const SizedBox(height: 6),
+          Padding(
+            padding: const EdgeInsets.only(left: 38),
+            child: Text(
+              [
+                '$filled de ${fields.length} con dato',
+                if (changed > 0) changed == 1 ? '1 cambio' : '$changed cambios',
+              ].join(' · '),
+              style: TextStyle(fontSize: 13, color: roles.faintForeground),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildSpecSectionEditor(
+    BuildContext context,
+    BikeSpecDraft draft,
+    BikeSpecSection? section,
+  ) {
+    final title = _buildSpecEditorTitle(context, draft, section);
+    final body = section == null
+        ? _buildSpecCockpitNote(context)
+        : _buildSpecEditorFields(context, draft, section);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 20, 22, 22),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < 760) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [title, const SizedBox(height: 14), body],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(width: 250, child: title),
+              const SizedBox(width: 24),
+              Expanded(child: body),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSpecCockpitNote(BuildContext context) {
+    final roles = VinabikeThemeRoles.of(context);
+    return Text(
+      'La ficha todavía no tiene datos de dirección ni de cockpit para '
+      'anotar.',
+      style: TextStyle(fontSize: 14, color: roles.faintForeground),
+    );
+  }
+
+  /// Los datos de un sistema en columnas, con lo que la hoja tiene que decir
+  /// debajo: la transmisión que queda, o qué elegir para ver el resto.
+  Widget _buildSpecEditorFields(
+    BuildContext context,
+    BikeSpecDraft draft,
+    BikeSpecSection section,
+  ) {
+    final roles = VinabikeThemeRoles.of(context);
+    final fields = draft.visibleFields(section);
+    final notes = <(IconData, String, bool)>[
+      if (section.number == 2 && draft.blockingMessage != null)
+        (Icons.warning_amber_rounded, draft.blockingMessage!, true)
+      else if (section.number == 2 && draft.drivetrainSummary != null)
+        (Icons.settings_outlined, 'Queda: ${draft.drivetrainSummary}', false),
+      if (section.number == 3 && !draft.isVisible('bbShellWidthMm'))
+        (
+          Icons.info_outline,
+          'Elige el tipo de caja para ver su ancho y su eje.',
+          false
+        ),
+      if (section.number == 4 && draft.value('brakeType') == null)
+        (
+          Icons.info_outline,
+          'Elige el tipo de freno para ver rotores y fluido.',
+          false
+        ),
+    ];
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = (constraints.maxWidth / 240).floor().clamp(1, 4);
+        final cellWidth = (constraints.maxWidth - 20 * (columns - 1)) / columns;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Wrap(
+              spacing: 20,
+              runSpacing: 6,
+              children: [
+                for (final field in fields)
+                  SizedBox(
+                    width: cellWidth,
+                    child: _buildSpecFieldEditor(context, draft, field),
+                  ),
+              ],
+            ),
+            for (final (icon, text, warning) in notes)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 1),
+                      child: Icon(
+                        icon,
+                        size: 16,
+                        color: warning
+                            ? roles.warning.accent
+                            : roles.faintForeground,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        text,
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          color: warning
+                              ? roles.warning.onContainer
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// De dónde salió un dato que nadie cambió en esta edición, si eso dice
+  /// algo que revisar («Del catálogo · sin confirmar»).
+  String? _specOriginCaption(BikeSpecDraft draft, String key) {
+    final sourceKey = switch (key) {
+      'chainrings' || 'rearCogs' => 'drivetrainConfig',
+      _ => key,
+    };
+    final profile = draft.profile;
+    final source = profile?.technicalSources[sourceKey]?.toString();
+    final confirmed = profile?.technicalConfirmed[sourceKey] == true;
+    final caption = bikeFactOriginCaption(source, confirmed: confirmed);
+    if (caption == null || (confirmed && caption == 'Anotado en el taller')) {
+      return null;
+    }
+    return caption;
+  }
+
+  Widget _buildSpecFieldEditor(
+    BuildContext context,
+    BikeSpecDraft draft,
+    BikeSpecField field,
+  ) {
+    final theme = Theme.of(context);
+    final options = draft.options(field.key);
+    final value = draft.value(field.key);
+    final changed = draft.isChanged(field.key);
+    final before = draft.originalValue(field.key);
+    final touch =
+        MediaQuery.sizeOf(context).width < ResponsiveBreakpoints.desktopMin;
+    final origin =
+        changed || value == null ? null : _specOriginCaption(draft, field.key);
+
+    // En escritorio la línea de debajo existe siempre: marcar un cambio no
+    // mueve la grilla. En el teléfono, una columna, sólo cuando dice algo:
+    // reservar el objetivo táctil del deshacer abría huecos de 44 px.
+    final Widget caption;
+    if (changed) {
+      caption = Row(
+        children: [
+          Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 7),
+          Expanded(
+            child: Text(
+              before == null
+                  ? 'Nuevo'
+                  : 'Antes: ${draft.labelFor(field.key, before)}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: theme.colorScheme.primary,
+              ),
+            ),
+          ),
+          IconButton(
+            tooltip: 'Deshacer este cambio',
+            onPressed: _specBusy ? null : () => _revertSpecValue(field.key),
+            icon: const Icon(Icons.undo),
+            iconSize: 16,
+            padding: EdgeInsets.zero,
+            constraints: BoxConstraints.tightFor(
+              width: touch ? 44 : 24,
+              height: touch ? 44 : 24,
+            ),
+          ),
+        ],
+      );
+    } else {
+      caption = Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          origin ?? '',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 12.5,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        VbSearchableSelect<String>(
+          value: value,
+          options: [
+            for (final option in options)
+              VbSearchableSelectOption<String>(
+                value: option.value,
+                label: option.label,
+                context: option.context,
+              ),
+          ],
+          onChanged: _specBusy
+              ? null
+              : (selected) => _setSpecValue(field.key, selected),
+          sheetTitle: field.label,
+          label: field.label,
+          semanticLabel: field.label,
+          placeholder: 'Sin dato',
+          allowClear: true,
+          clearLabel: 'Sin dato',
+          density: VbDensity.comfortable,
+          showSearch: options.length > VbShortSelect.maxOptions,
+        ),
+        if (!touch)
+          SizedBox(height: 24, child: caption)
+        else if (changed)
+          SizedBox(height: 44, child: caption)
+        else if (origin != null)
+          Padding(padding: const EdgeInsets.only(top: 2), child: caption)
+        else
+          const SizedBox(height: 4),
+      ],
+    );
+  }
+
+  /// La barra que flota al pie mientras se edita: cuántos cambios hay y
+  /// cómo guardarlos o descartarlos, sin volver arriba de la hoja.
+  Widget _buildSpecDock(BuildContext context) {
+    final theme = Theme.of(context);
+    final draft = _specDraft!;
+    final count = draft.changeCount;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 520;
+        final status = count == 0
+            ? (compact ? 'Sin cambios' : 'Sin cambios todavía')
+            : count == 1
+                ? (compact ? '1 cambio' : '1 cambio sin guardar')
+                : (compact ? '$count cambios' : '$count cambios sin guardar');
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: theme.colorScheme.outlineVariant),
+            boxShadow: [
+              BoxShadow(
+                color: theme.shadowColor.withValues(alpha: 0.16),
+                blurRadius: 28,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(compact ? 14 : 18, 10, 10, 10),
+            child: Row(
+              children: [
+                if (!compact) ...[
+                  Icon(Icons.edit_note,
+                      size: 22, color: theme.colorScheme.primary),
+                  const SizedBox(width: 10),
+                ],
+                Expanded(
+                  child: Semantics(
+                    liveRegion: true,
+                    child: Text(
+                      status,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                VbButton(
+                  label: 'Cancelar',
+                  variant: VbButtonVariant.secondary,
+                  density: VbDensity.comfortable,
+                  onPressed: _specBusy ? null : _cancelSpecEdit,
+                ),
+                const SizedBox(width: 8),
+                VbButton(
+                  label: compact ? 'Guardar' : 'Guardar ficha',
+                  icon: Icons.check,
+                  density: VbDensity.comfortable,
+                  busy: _specBusy,
+                  semanticLabel: 'Guardar ficha técnica',
+                  onPressed: count == 0 || _specBusy ? null : _saveSpecs,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// La vista con desplazamiento y, mientras se edita la ficha, su barra de
+  /// guardar flotando al pie.
+  Widget _withSpecDock(BuildContext context, Widget scrollable) {
+    if (_specDraft == null) return scrollable;
+    return Stack(
+      fit: StackFit.passthrough,
+      children: [
+        scrollable,
+        Positioned(
+          left: 16,
+          right: 16,
+          bottom: 16,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 640),
+              child: _buildSpecDock(context),
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -2912,10 +3855,10 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
     switch (systemKey) {
       case 'suspension':
         final facts = [
-          profileFact('bikeType', 'Plataforma', bike.bikeType?.displayName),
+          profileFact('bikeType', 'Tipo de bici', bike.bikeType?.displayName),
           profileFact(
             'suspensionLayout',
-            'Layout de suspensión',
+            'Suspensión',
             suspensionLabel(technicalValues['suspensionLayout']?.toString()),
           ),
         ].whereType<_BikeRecordTechnicalFact>().toList();
@@ -2943,10 +3886,9 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
             ? 'frontBrakeFluidType'
             : 'rearBrakeFluidType';
         final facts = [
-          profileFact(
-              'brakeType', 'Plataforma de freno', brakeTypeLabel(brakeType)),
+          profileFact('brakeType', 'Tipo de freno', brakeTypeLabel(brakeType)),
           if (brakeType == 'rim')
-            profileFact('rimBrakeFamily', 'Familia llanta',
+            profileFact('rimBrakeFamily', 'Freno de llanta',
                 rimBrakeFamilyLabel(rimFamily)),
           if (brakeType == 'mechanical_disc' || brakeType == 'hydraulic_disc')
             profileFact(
@@ -3046,11 +3988,11 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
         final usesShellDiameter =
             bottomBracketFamilyUsesShellDiameter(bottomBracketFamily);
         final facts = [
-          profileFact('bottomBracketFamily', 'Familia pedalier / BB',
+          profileFact('bottomBracketFamily', 'Tipo de caja',
               bottomBracketLabel(bottomBracketFamily)),
           profileFact(
             'bbShellWidthMm',
-            'Ancho caja',
+            'Ancho de caja',
             formatBottomBracketMeasurement(
               technicalValues['bbShellWidthMm'] ??
                   technicalValues['bb_shell_width_mm'],
@@ -3059,7 +4001,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
           if (usesShellDiameter)
             profileFact(
               'bbShellDiameterMm',
-              'Diametro shell / bore',
+              'Diámetro de caja',
               formatBottomBracketMeasurement(
                 technicalValues['bbShellDiameterMm'] ??
                     technicalValues['bb_shell_diameter_mm'],
@@ -3143,6 +4085,19 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
               valveLabel(technicalValues['valveType']?.toString())),
         ].whereType<_BikeRecordTechnicalFact>().toList();
         final knownCount = facts.length;
+        // El diámetro de cada llanta se muestra si la ficha lo dice, sin
+        // contarlo entre lo que falta (lo pide la hoja en edición).
+        for (final (key, label) in const [
+          ('frontWheelBsdMm', 'Llanta delantera (BSD)'),
+          ('rearWheelBsdMm', 'Llanta trasera (BSD)'),
+        ]) {
+          final bsd = num.tryParse('${technicalValues[key]}')?.round();
+          if (profileFact(
+                  key, label, bsd == null ? null : isoWheelBsdLabel(bsd))
+              case final fact?) {
+            facts.add(fact);
+          }
+        }
         return _BikeRecordTechnicalPanelData(
           // `wheels` no es un sistema del mapa antiguo: se presta el de la
           // rueda delantera, que la ficha de grupos no muestra.

@@ -64,6 +64,35 @@ escritorio la pantalla ocupa el ancho disponible y lo usa para algo:
 El teléfono no cambia. Un lienzo de Design que proponga escritorio se dibuja
 a 1600 px o más, para que se vea si la página llena el ancho.
 
+### Un dato se edita donde se lee (dueño, 2026-10-02)
+
+«when I click on editar la ficha, it opens the same fucking floating block to
+create a new bike when creating a new job. this is not designed very well. it
+should expand the same detailed tech specs sheet with the rest of the unfilled
+fields» — el dueño, sobre la ficha técnica de la bici.
+
+Completar o corregir lo que una página ya muestra no abre el formulario de
+crear: la misma superficie pasa a modo edición. Lo que funcionó en
+`BikeRecordPanel`:
+
+- **Todos los campos, también los vacíos** («Sin dato»), en el mismo orden y
+  agrupación que la lectura; lo que una regla esconde (rotores sin disco) no
+  aparece y tampoco se guarda.
+- **Cada cambio se marca** donde está («Nuevo», «Antes: …») con su deshacer, y
+  una **barra flotante al pie** dice cuántos cambios hay con «Cancelar» y
+  «Guardar»: no hay que volver arriba para guardar.
+- **Salir con cambios pregunta** (cancelar, el regreso de la página y el del
+  sistema).
+- **La grilla no salta** al marcar un cambio: en escritorio la línea de
+  debajo de cada campo se reserva siempre. En el teléfono, una columna, no
+  se reserva: el objetivo de 44 px del deshacer abría huecos entre campos.
+- La regla y el comando son los del formulario (un modelo puro que ambos
+  comparten las opciones); la superficie nueva no inventa otra forma de
+  guardar.
+
+El formulario completo sigue para lo que la página no muestra (identidad y
+fotos de la bici).
+
 ### El sitio público no pasa por Design (dueño, 2026-09-24)
 
 «the designs on the website can be open to the agent criteria» — el dueño, al

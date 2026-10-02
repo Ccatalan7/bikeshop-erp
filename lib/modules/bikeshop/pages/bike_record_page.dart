@@ -207,6 +207,7 @@ class _BikeRecordPageState extends State<BikeRecordPage> {
       onOpenOwner: _openOwner,
       closeLabel: 'Bicicletas',
       showBackRow: !compact,
+      onSpecSaved: _load,
     );
     final error = _error;
     if (error == null) return panel;

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../themes/vinabike_theme_roles.dart';
 import '../utils/responsive_breakpoints.dart';
 import 'vb_anchored_popover.dart';
+import 'vb_segmented.dart' show VbDensity;
 import 'vb_short_select.dart';
 
 /// **S-06 · `VbSearchableSelect<T>`** — the searchable selector of the shared
@@ -80,6 +81,8 @@ class VbSearchableSelect<T> extends StatefulWidget {
     this.allowClear = false,
     this.clearLabel = 'Sin especificar',
     this.useTouchLayout,
+    this.density,
+    this.showSearch = true,
   });
 
   final T? value;
@@ -110,6 +113,17 @@ class VbSearchableSelect<T> extends StatefulWidget {
   /// Null preserves the ordinary full-route responsive behavior.
   final bool? useTouchLayout;
 
+  /// [VbDensity.comfortable] draws the closed field at the comfortable
+  /// control height (38) with body-size text, for a page that reads at that
+  /// size — the bike's technical sheet edited in place (2026-10-02). Null
+  /// keeps the compact field every other screen uses.
+  final VbDensity? density;
+
+  /// False drops the search field for a short, known list, where typing is
+  /// slower than looking (two to seven values). Arrow keys and Enter still
+  /// pick from the list.
+  final bool showSearch;
+
   /// Height of one result row on desktop.
   static const double optionHeight = 34;
 
@@ -139,6 +153,8 @@ class _VbSearchableSelectState<T> extends State<VbSearchableSelect<T>> {
       widget.useTouchLayout ??
       (MediaQuery.sizeOf(context).width < ResponsiveBreakpoints.desktopMin);
 
+  bool get _comfortable => widget.density == VbDensity.comfortable;
+
   Future<void> _open_() async {
     if (!_enabled || widget.options.isEmpty) return;
     final useSheet = _isTouchHost(context);
@@ -163,6 +179,8 @@ class _VbSearchableSelectState<T> extends State<VbSearchableSelect<T>> {
         emptyLabel: widget.emptyLabel,
         allowClear: widget.allowClear,
         clearLabel: widget.clearLabel,
+        showSearch: widget.showSearch,
+        comfortable: _comfortable,
       ),
     );
   }
@@ -183,6 +201,7 @@ class _VbSearchableSelectState<T> extends State<VbSearchableSelect<T>> {
         emptyLabel: widget.emptyLabel,
         allowClear: widget.allowClear,
         clearLabel: widget.clearLabel,
+        showSearch: widget.showSearch,
       ),
     );
   }
@@ -206,9 +225,13 @@ class _VbSearchableSelectState<T> extends State<VbSearchableSelect<T>> {
         ? roles.disabledForeground
         : (selected == null ? scheme.onSurfaceVariant : scheme.onSurface);
 
-    final double target = _isTouchHost(context)
-        ? VbShortSelect.touchTargetHeight
+    final double box = _comfortable
+        ? VbDensity.comfortable.controlHeight
         : VbShortSelect.fieldHeight;
+    final double target =
+        _isTouchHost(context) ? VbShortSelect.touchTargetHeight : box;
+    final valueStyle =
+        _comfortable ? theme.textTheme.bodyMedium : theme.textTheme.bodySmall;
 
     final field = Semantics(
       button: true,
@@ -233,8 +256,9 @@ class _VbSearchableSelectState<T> extends State<VbSearchableSelect<T>> {
             height: target,
             child: Center(
               child: Container(
-                height: VbShortSelect.fieldHeight,
-                padding: const EdgeInsets.only(left: 11, right: 9),
+                height: box,
+                padding:
+                    EdgeInsets.only(left: _comfortable ? 12 : 11, right: 9),
                 decoration: BoxDecoration(
                   color: background,
                   borderRadius: BorderRadius.circular(_fieldRadius),
@@ -257,7 +281,7 @@ class _VbSearchableSelectState<T> extends State<VbSearchableSelect<T>> {
                         selected?.label ?? widget.placeholder ?? '',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
+                        style: valueStyle?.copyWith(
                           color: foreground,
                           fontWeight: selected == null
                               ? FontWeight.w400
@@ -268,7 +292,7 @@ class _VbSearchableSelectState<T> extends State<VbSearchableSelect<T>> {
                     const SizedBox(width: 8),
                     Icon(
                       Icons.unfold_more,
-                      size: 14,
+                      size: _comfortable ? 16 : 14,
                       color: _enabled
                           ? scheme.onSurfaceVariant
                           : roles.disabledForeground,
@@ -292,12 +316,15 @@ class _VbSearchableSelectState<T> extends State<VbSearchableSelect<T>> {
         if (widget.showLabel && (widget.label ?? '').isNotEmpty) ...[
           Text(
             widget.label!,
-            style: theme.textTheme.labelSmall?.copyWith(
+            style: (_comfortable
+                    ? theme.textTheme.labelMedium
+                    : theme.textTheme.labelSmall)
+                ?.copyWith(
               color: scheme.onSurfaceVariant,
               fontWeight: FontWeight.w500,
             ),
           ),
-          const SizedBox(height: 5),
+          SizedBox(height: _comfortable ? 6 : 5),
         ],
         field,
         if (helper != null) ...[
@@ -344,6 +371,8 @@ class _VbSearchableMenu<T> extends StatefulWidget {
     required this.emptyLabel,
     required this.allowClear,
     this.clearLabel = 'Sin especificar',
+    this.showSearch = true,
+    this.comfortable = false,
   });
 
   final List<VbSearchableSelectOption<T>> options;
@@ -352,6 +381,8 @@ class _VbSearchableMenu<T> extends StatefulWidget {
   final String emptyLabel;
   final bool allowClear;
   final String clearLabel;
+  final bool showSearch;
+  final bool comfortable;
 
   @override
   State<_VbSearchableMenu<T>> createState() => _VbSearchableMenuState<T>();
@@ -361,7 +392,16 @@ class _VbSearchableMenuState<T> extends State<_VbSearchableMenu<T>> {
   final TextEditingController _query = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
   final ScrollController _scroll = ScrollController();
-  int _highlighted = 0;
+  late int _highlighted = _initialHighlight();
+
+  /// Without a search field the list opens on the current value, so the
+  /// arrows move from what is chosen.
+  int _initialHighlight() {
+    if (widget.showSearch) return 0;
+    final index =
+        widget.options.indexWhere((option) => option.value == widget.value);
+    return index < 0 ? 0 : index;
+  }
 
   @override
   void initState() {
@@ -426,25 +466,30 @@ class _VbSearchableMenuState<T> extends State<_VbSearchableMenu<T>> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(5, 5, 5, 0),
-                child: TextField(
-                  controller: _query,
-                  focusNode: _searchFocus,
-                  autofocus: true,
-                  style: theme.textTheme.bodySmall,
-                  decoration: InputDecoration(
-                    isDense: true,
-                    hintText: widget.searchHint,
-                    prefixIcon: const Icon(Icons.search, size: 15),
-                    prefixIconConstraints:
-                        const BoxConstraints(minWidth: 30, minHeight: 30),
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              // Sin campo de búsqueda el foco va a la lista, para que las
+              // flechas y Enter sigan eligiendo.
+              if (!widget.showSearch)
+                Focus(focusNode: _searchFocus, child: const SizedBox.shrink())
+              else
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(5, 5, 5, 0),
+                  child: TextField(
+                    controller: _query,
+                    focusNode: _searchFocus,
+                    autofocus: true,
+                    style: theme.textTheme.bodySmall,
+                    decoration: InputDecoration(
+                      isDense: true,
+                      hintText: widget.searchHint,
+                      prefixIcon: const Icon(Icons.search, size: 15),
+                      prefixIconConstraints:
+                          const BoxConstraints(minWidth: 30, minHeight: 30),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 8),
+                    ),
+                    onChanged: (_) => setState(() => _highlighted = 0),
                   ),
-                  onChanged: (_) => setState(() => _highlighted = 0),
                 ),
-              ),
               Flexible(
                 child: results.isEmpty
                     ? Padding(
@@ -468,6 +513,7 @@ class _VbSearchableMenuState<T> extends State<_VbSearchableMenu<T>> {
                               context: null,
                               selected: widget.value == null,
                               highlighted: false,
+                              comfortable: widget.comfortable,
                               onTap: () => Navigator.of(context)
                                   .pop(const _VbSearchableChoice<Never>(null)),
                             );
@@ -480,6 +526,7 @@ class _VbSearchableMenuState<T> extends State<_VbSearchableMenu<T>> {
                             selected: option.value == widget.value,
                             highlighted: index - (widget.allowClear ? 1 : 0) ==
                                 _highlighted,
+                            comfortable: widget.comfortable,
                             onTap: () => Navigator.of(context)
                                 .pop(_VbSearchableChoice<T>(option.value)),
                           );
@@ -503,6 +550,7 @@ class _VbSearchableSheet<T> extends StatefulWidget {
     required this.emptyLabel,
     required this.allowClear,
     this.clearLabel = 'Sin especificar',
+    this.showSearch = true,
   });
 
   final String title;
@@ -512,6 +560,7 @@ class _VbSearchableSheet<T> extends StatefulWidget {
   final String emptyLabel;
   final bool allowClear;
   final String clearLabel;
+  final bool showSearch;
 
   @override
   State<_VbSearchableSheet<T>> createState() => _VbSearchableSheetState<T>();
@@ -572,18 +621,19 @@ class _VbSearchableSheetState<T> extends State<_VbSearchableSheet<T>> {
                   ],
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: TextField(
-                  controller: _query,
-                  decoration: InputDecoration(
-                    hintText: widget.searchHint,
-                    prefixIcon: const Icon(Icons.search),
-                    isDense: true,
+              if (widget.showSearch)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: TextField(
+                    controller: _query,
+                    decoration: InputDecoration(
+                      hintText: widget.searchHint,
+                      prefixIcon: const Icon(Icons.search),
+                      isDense: true,
+                    ),
+                    onChanged: (_) => setState(() {}),
                   ),
-                  onChanged: (_) => setState(() {}),
                 ),
-              ),
               const SizedBox(height: 8),
               Flexible(
                 child: results.isEmpty
@@ -647,6 +697,7 @@ class _OptionRow extends StatelessWidget {
     required this.selected,
     required this.highlighted,
     required this.onTap,
+    this.comfortable = false,
   });
 
   final String label;
@@ -655,6 +706,7 @@ class _OptionRow extends StatelessWidget {
   final bool selected;
   final bool highlighted;
   final VoidCallback onTap;
+  final bool comfortable;
 
   @override
   Widget build(BuildContext buildContext) {
@@ -689,7 +741,10 @@ class _OptionRow extends StatelessWidget {
                     label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodySmall?.copyWith(
+                    style: (comfortable
+                            ? theme.textTheme.bodyMedium
+                            : theme.textTheme.bodySmall)
+                        ?.copyWith(
                       fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                     ),
                   ),

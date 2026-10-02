@@ -1,0 +1,697 @@
+import 'dart:convert';
+
+import '../config/bike_sheet_options.dart';
+import '../config/bottom_bracket_canonical_data.dart';
+import '../config/brake_canonical_data.dart';
+import '../config/drivetrain_canonical_data.dart';
+import '../config/wheel_canonical_data.dart';
+import '../models/bikeshop_models.dart';
+
+/// Una opción de un dato de la ficha: el código que se guarda, cómo lo dice
+/// el taller y, si hace falta, a qué se refiere («Shimano, Tektro, Magura»).
+class BikeSpecOption {
+  const BikeSpecOption(this.value, this.label, {this.context});
+
+  final String value;
+  final String label;
+  final String? context;
+}
+
+/// Un dato de la ficha técnica que la hoja deja editar en su lugar.
+class BikeSpecField {
+  const BikeSpecField(this.key, this.label);
+
+  final String key;
+  final String label;
+}
+
+/// Un sistema de la hoja con todos sus datos, tenga valor o no.
+class BikeSpecSection {
+  const BikeSpecSection(this.number, this.title, this.fields);
+
+  final int number;
+  final String title;
+  final List<BikeSpecField> fields;
+}
+
+/// La ficha técnica de una bici mientras se edita en la misma hoja que la
+/// muestra (dueño, 2026-10-02: «Editar ficha» abría el formulario flotante de
+/// crear una bici; tenía que abrirse la misma hoja con lo que falta).
+///
+/// Aplica las reglas del formulario de la bici (`bike_form_dialog.dart`):
+/// lo que el mecánico elige queda con origen `mechanic` y confirmado,
+/// «Desconocido» se guarda revisado pero nunca confirmado, los datos que la
+/// regla esconde (familia de llanta sin freno de llanta, rotores sin disco,
+/// medidas que la caja del pedalier no tiene) no se guardan, y el resto del
+/// perfil —ingreso, catálogo, claves que la hoja no conoce— queda igual.
+class BikeSpecDraft {
+  BikeSpecDraft._({
+    required this.bike,
+    required this.profile,
+    required Map<String, String?> original,
+    required this.legacyDrivetrainConfig,
+    required this.legacyDrivetrainSpeeds,
+  })  : _original = Map.unmodifiable(original),
+        _values = Map.of(original);
+
+  factory BikeSpecDraft.fromRecord({
+    required Bike bike,
+    BikeProfile? profile,
+  }) {
+    final values = profile?.technicalValues ?? const <String, dynamic>{};
+    String? text(Object? raw) {
+      final value = raw?.toString().trim();
+      return value == null || value.isEmpty ? null : value;
+    }
+
+    String? number(Object? raw) => _formatNumber(_parseDouble(raw));
+
+    final drivetrain = _parseDrivetrain(
+      text(values['drivetrainConfig']),
+      _parseDouble(values['drivetrainSpeeds'])?.round(),
+    );
+    final legacyConfig =
+        drivetrain == null ? text(values['drivetrainConfig']) : null;
+    final legacySpeeds = drivetrain == null
+        ? _parseDouble(values['drivetrainSpeeds'])?.round()
+        : null;
+    final wheelSize = text(bike.wheelSize);
+    final spokeFallback = bike.spokeCount?.toString();
+
+    return BikeSpecDraft._(
+      bike: bike,
+      profile: profile,
+      legacyDrivetrainConfig: legacyConfig,
+      legacyDrivetrainSpeeds: legacySpeeds,
+      original: {
+        'bikeType': bike.bikeType?.dbValue,
+        'suspensionLayout': text(values['suspensionLayout']),
+        'frameSize': text(bike.frameSize),
+        'chainrings': drivetrain?.$1.toString(),
+        'rearCogs': drivetrain?.$2.toString(),
+        'freehubType': text(values['freehubType']),
+        'bottomBracketFamily': canonicalBottomBracketFamilyValue(
+                text(values['bottomBracketFamily'])) ??
+            text(values['bottomBracketFamily']),
+        'bbShellWidthMm':
+            number(values['bbShellWidthMm'] ?? values['bb_shell_width_mm']),
+        'bbShellDiameterMm': number(
+            values['bbShellDiameterMm'] ?? values['bb_shell_diameter_mm']),
+        'spindleInterface': () {
+          final raw = text(values['spindleInterface']) ??
+              text(values['spindle_interface']);
+          return canonicalBottomBracketSpindleInterfaceValue(raw) ?? raw;
+        }(),
+        'brakeType': text(values['brakeType']),
+        'rimBrakeFamily': text(values['rimBrakeFamily']),
+        'frontRotorSizeMm': number(values['frontRotorSizeMm']),
+        'rearRotorSizeMm': number(values['rearRotorSizeMm']),
+        'frontBrakeFluidType':
+            canonicalBrakeFluidTypeValue(text(values['frontBrakeFluidType'])),
+        'rearBrakeFluidType':
+            canonicalBrakeFluidTypeValue(text(values['rearBrakeFluidType'])),
+        // El aro se muestra como lo dice la ficha («29″» y no «29''»); si
+        // nadie lo cambia, la bici guarda lo que tenía escrito.
+        'wheelSize': canonicalBikeWheelSizeLabel(wheelSize) ?? wheelSize,
+        'frontWheelBsdMm': number(values['frontWheelBsdMm']),
+        'rearWheelBsdMm': number(values['rearWheelBsdMm']),
+        'frontAxleInterface': text(values['frontAxleInterface']),
+        'rearAxleInterface': text(values['rearAxleInterface']),
+        'frontHubSpacingMm': _formatNumber(bike.frontHubSpacingMm),
+        'rearHubSpacingMm': _formatNumber(bike.rearHubSpacingMm),
+        // Como el formulario: sin dato por rueda, los rayos de la bici.
+        'frontSpokeHoles': number(values['frontSpokeHoles']) ?? spokeFallback,
+        'rearSpokeHoles': number(values['rearSpokeHoles']) ?? spokeFallback,
+        'valveType': text(values['valveType']),
+        'frontRotorMount': text(values['frontRotorMount']),
+        'rearRotorMount': text(values['rearRotorMount']),
+      },
+    );
+  }
+
+  final Bike bike;
+  final BikeProfile? profile;
+
+  /// Una transmisión anotada que no se lee como platos × piñones
+  /// («interna 3v»): se conserva mientras nadie elija platos y piñones.
+  final String? legacyDrivetrainConfig;
+  final int? legacyDrivetrainSpeeds;
+
+  final Map<String, String?> _original;
+  final Map<String, String?> _values;
+
+  /// Lo que la regla del tipo de bici fijó (una BMX es rígida): se guarda
+  /// como sugerencia del tipo, sin confirmar, igual que en el formulario.
+  final Set<String> _setByRule = {};
+
+  static const List<BikeSpecSection> sections = [
+    BikeSpecSection(1, 'Cuadro y suspensión', [
+      BikeSpecField('bikeType', 'Tipo de bici'),
+      BikeSpecField('suspensionLayout', 'Suspensión'),
+      BikeSpecField('frameSize', 'Talla'),
+    ]),
+    BikeSpecSection(2, 'Transmisión', [
+      BikeSpecField('chainrings', 'Platos'),
+      BikeSpecField('rearCogs', 'Piñones'),
+      BikeSpecField('freehubType', 'Driver / freehub'),
+    ]),
+    BikeSpecSection(3, 'Pedalier', [
+      BikeSpecField('bottomBracketFamily', 'Tipo de caja'),
+      BikeSpecField('bbShellWidthMm', 'Ancho de caja'),
+      BikeSpecField('bbShellDiameterMm', 'Diámetro de caja'),
+      BikeSpecField('spindleInterface', 'Interfaz del eje'),
+    ]),
+    BikeSpecSection(4, 'Frenos', [
+      BikeSpecField('brakeType', 'Tipo de freno'),
+      BikeSpecField('rimBrakeFamily', 'Freno de llanta'),
+      BikeSpecField('frontRotorSizeMm', 'Rotor delantero'),
+      BikeSpecField('rearRotorSizeMm', 'Rotor trasero'),
+      BikeSpecField('frontBrakeFluidType', 'Fluido delantero'),
+      BikeSpecField('rearBrakeFluidType', 'Fluido trasero'),
+    ]),
+    BikeSpecSection(5, 'Ruedas', [
+      BikeSpecField('wheelSize', 'Aro'),
+      BikeSpecField('frontWheelBsdMm', 'Llanta delantera (BSD)'),
+      BikeSpecField('rearWheelBsdMm', 'Llanta trasera (BSD)'),
+      BikeSpecField('frontAxleInterface', 'Eje delantero'),
+      BikeSpecField('rearAxleInterface', 'Eje trasero'),
+      BikeSpecField('frontHubSpacingMm', 'Maza delantera'),
+      BikeSpecField('rearHubSpacingMm', 'Maza trasera'),
+      BikeSpecField('frontSpokeHoles', 'Rayos delanteros'),
+      BikeSpecField('rearSpokeHoles', 'Rayos traseros'),
+      BikeSpecField('valveType', 'Válvula'),
+      BikeSpecField('frontRotorMount', 'Anclaje rotor delantero'),
+      BikeSpecField('rearRotorMount', 'Anclaje rotor trasero'),
+    ]),
+  ];
+
+  /// Las claves del perfil que esta hoja escribe; las mismas que el
+  /// formulario de la bici, con los alias antiguos del pedalier.
+  static const Set<String> managedTechnicalKeys = {
+    'suspensionLayout',
+    'brakeType',
+    'rimBrakeFamily',
+    'freehubType',
+    'valveType',
+    'bottomBracketFamily',
+    'bbShellWidthMm',
+    'bb_shell_width_mm',
+    'bbShellDiameterMm',
+    'bb_shell_diameter_mm',
+    'spindleInterface',
+    'spindle_interface',
+    'frontSpokeHoles',
+    'rearSpokeHoles',
+    'frontRotorSizeMm',
+    'rearRotorSizeMm',
+    'frontWheelBsdMm',
+    'rearWheelBsdMm',
+    'frontBrakeFluidType',
+    'rearBrakeFluidType',
+    'frontAxleInterface',
+    'rearAxleInterface',
+    'frontRotorMount',
+    'rearRotorMount',
+    'drivetrainSpeeds',
+    'drivetrainConfig',
+  };
+
+  /// Los datos base que viven en `bikes` y cuyo origen va en la ficha.
+  static const Set<String> baseFactKeys = {
+    'wheelSize',
+    'bikeType',
+    'frontHubSpacingMm',
+    'rearHubSpacingMm',
+  };
+
+  String? value(String key) => _values[key];
+  String? originalValue(String key) => _original[key];
+
+  bool isChanged(String key) => _values[key] != _original[key];
+
+  Set<String> get changedKeys => {
+        for (final key in _values.keys)
+          if (isChanged(key)) key,
+      };
+
+  int get changeCount => changedKeys.length;
+
+  bool get hasChanges => changeCount > 0;
+
+  bool get _isDisc =>
+      _values['brakeType'] == 'mechanical_disc' ||
+      _values['brakeType'] == 'hydraulic_disc';
+
+  /// Si la hoja muestra [key] con lo que ya está elegido. Lo que se esconde
+  /// tampoco se guarda.
+  bool isVisible(String key) {
+    final family = _values['bottomBracketFamily'];
+    return switch (key) {
+      'rimBrakeFamily' => _values['brakeType'] == 'rim',
+      'frontRotorSizeMm' || 'rearRotorSizeMm' => _isDisc,
+      // El fluido es de cada freno; con otro freno se muestra si la ficha
+      // ya lo dice (los hay de llanta hidráulicos).
+      'frontBrakeFluidType' ||
+      'rearBrakeFluidType' =>
+        _values['brakeType'] == 'hydraulic_disc' ||
+            _values[key] != null ||
+            _original[key] != null,
+      'bbShellWidthMm' ||
+      'spindleInterface' =>
+        isKnownBottomBracketFamily(family),
+      'bbShellDiameterMm' => bottomBracketFamilyUsesShellDiameter(family),
+      'frontRotorMount' ||
+      'rearRotorMount' =>
+        _isDisc || _values[key] != null || _original[key] != null,
+      _ => true,
+    };
+  }
+
+  /// Los datos de [section] que la hoja muestra con lo que ya está elegido.
+  List<BikeSpecField> visibleFields(BikeSpecSection section) => [
+        for (final field in section.fields)
+          if (isVisible(field.key)) field,
+      ];
+
+  /// Las opciones de [key], con lo que ya tiene la bici aunque no esté en la
+  /// lista (un dato antiguo no desaparece por abrir la hoja).
+  List<BikeSpecOption> options(String key) {
+    final base = _baseOptions(key);
+    final current = _values[key];
+    if (current == null || base.any((option) => option.value == current)) {
+      return base;
+    }
+    return [...base, BikeSpecOption(current, labelFor(key, current))];
+  }
+
+  List<BikeSpecOption> _baseOptions(String key) {
+    List<BikeSpecOption> fromMap(Map<String, String> map) => [
+          for (final entry in map.entries)
+            BikeSpecOption(entry.key, entry.value),
+        ];
+    List<BikeSpecOption> millimeters(List<int> values) => [
+          for (final value in values) BikeSpecOption('$value', '$value mm'),
+        ];
+    return switch (key) {
+      'bikeType' => [
+          for (final type in BikeType.values)
+            BikeSpecOption(type.dbValue, type.displayName),
+        ],
+      'suspensionLayout' => () {
+          final allowed = allowedSuspensionLayoutsForBikeType(
+              BikeType.fromDbValue(_values['bikeType']));
+          return [
+            for (final entry in kBikeSuspensionLayoutOptions.entries)
+              if (allowed == null || allowed.contains(entry.key))
+                BikeSpecOption(entry.key, entry.value),
+          ];
+        }(),
+      'frameSize' => [
+          for (final size in kBikeFrameSizeOptions)
+            if (size != 'Otra') BikeSpecOption(size, size),
+        ],
+      'chainrings' => fromMap(kDrivetrainFrontChainringCountOptions),
+      'rearCogs' => fromMap(kDrivetrainRearCogCountOptions),
+      'freehubType' => fromMap(kDrivetrainFreehubTypeOptions),
+      'bottomBracketFamily' => fromMap(kBottomBracketFamilyOptions),
+      'bbShellWidthMm' => fromMap(bottomBracketShellWidthOptionsForFamily(
+          _values['bottomBracketFamily'])),
+      'bbShellDiameterMm' => fromMap(bottomBracketShellDiameterOptionsForFamily(
+          _values['bottomBracketFamily'])),
+      'spindleInterface' => fromMap(
+          bottomBracketSpindleInterfaceOptionsForFamily(
+              _values['bottomBracketFamily'])),
+      'brakeType' => fromMap(kBikeProfileBrakeTypeOptions),
+      'rimBrakeFamily' => fromMap(kRimBrakeFamilyOptions),
+      'frontRotorSizeMm' ||
+      'rearRotorSizeMm' =>
+        millimeters(kBikeRotorSizeOptions),
+      'frontBrakeFluidType' || 'rearBrakeFluidType' => [
+          for (final entry in kBrakeFluidTypeLabels.entries)
+            BikeSpecOption(
+              entry.key,
+              entry.value,
+              context: _fluidBrands[entry.key],
+            ),
+        ],
+      'wheelSize' => [
+          for (final size in kBikeWheelSizeOptions)
+            if (size != 'Otra') BikeSpecOption(size, size),
+        ],
+      'frontWheelBsdMm' || 'rearWheelBsdMm' => [
+          for (final bsd in kIsoWheelBsdOptions)
+            BikeSpecOption('$bsd', isoWheelBsdLabel(bsd)),
+        ],
+      'frontAxleInterface' ||
+      'rearAxleInterface' =>
+        fromMap(kBikeAxleInterfaceOptions),
+      'frontHubSpacingMm' => millimeters(kBikeFrontHubSpacingOptions),
+      'rearHubSpacingMm' => millimeters(kBikeRearHubSpacingOptions),
+      'frontSpokeHoles' || 'rearSpokeHoles' => [
+          for (final holes in kBikeSpokeHoleOptions)
+            BikeSpecOption('$holes', '$holes'),
+        ],
+      'valveType' => fromMap(kBikeValveTypeOptions),
+      'frontRotorMount' ||
+      'rearRotorMount' =>
+        fromMap(kBikeRotorMountChoiceOptions),
+      _ => const [],
+    };
+  }
+
+  static const Map<String, String> _fluidBrands = {
+    'aceite_mineral': 'Shimano, Tektro, Magura',
+    'dot_5_1': 'SRAM, Hayes, Hope',
+  };
+
+  /// Cómo se dice [value] de [key] en el taller.
+  String labelFor(String key, String value) {
+    for (final option in _baseOptions(key)) {
+      if (option.value == value) return option.label;
+    }
+    return switch (key) {
+      'frontHubSpacingMm' ||
+      'rearHubSpacingMm' ||
+      'bbShellWidthMm' ||
+      'bbShellDiameterMm' ||
+      'frontRotorSizeMm' ||
+      'rearRotorSizeMm' =>
+        '$value mm',
+      'frontWheelBsdMm' || 'rearWheelBsdMm' => int.tryParse(value) == null
+          ? value
+          : isoWheelBsdLabel(int.parse(value)),
+      _ => value,
+    };
+  }
+
+  /// Cambia [key]. Lo que depende de él se ajusta como en el formulario.
+  void set(String key, String? value) {
+    _values[key] = value;
+    _setByRule.remove(key);
+    switch (key) {
+      case 'bikeType':
+        final allowed =
+            allowedSuspensionLayoutsForBikeType(BikeType.fromDbValue(value));
+        final suspension = _values['suspensionLayout'];
+        if (allowed != null &&
+            suspension != null &&
+            !allowed.contains(suspension)) {
+          if (allowed.length == 1) {
+            _values['suspensionLayout'] = allowed.single;
+            _setByRule.add('suspensionLayout');
+          } else {
+            _values['suspensionLayout'] = null;
+          }
+        }
+      case 'brakeType':
+        if (value != 'rim') _values['rimBrakeFamily'] = null;
+        if (!_isDisc) {
+          _values['frontRotorSizeMm'] = null;
+          _values['rearRotorSizeMm'] = null;
+        }
+      case 'bottomBracketFamily':
+        for (final dependent in const [
+          'bbShellWidthMm',
+          'bbShellDiameterMm',
+          'spindleInterface',
+        ]) {
+          final current = _values[dependent];
+          if (current == null) continue;
+          if (!isVisible(dependent) ||
+              !_baseOptions(dependent).any((o) => o.value == current)) {
+            _values[dependent] = null;
+          }
+        }
+    }
+  }
+
+  /// Vuelve [key] a lo que tenía la ficha.
+  void revert(String key) => set(key, _original[key]);
+
+  /// Lo que impide guardar, dicho para el mecánico; `null` si se puede.
+  String? get blockingMessage {
+    final chainrings = _values['chainrings'];
+    final cogs = _values['rearCogs'];
+    if ((chainrings == null) != (cogs == null) &&
+        (isChanged('chainrings') || isChanged('rearCogs'))) {
+      return 'Elige platos y piñones juntos: la transmisión se guarda '
+          'entera (por ejemplo 2×10).';
+    }
+    return null;
+  }
+
+  /// La transmisión que queda: «2×10 · 20 velocidades», o lo anotado si no
+  /// se lee como platos × piñones.
+  String? get drivetrainSummary {
+    final chainrings = int.tryParse(_values['chainrings'] ?? '');
+    final cogs = int.tryParse(_values['rearCogs'] ?? '');
+    if (chainrings != null && cogs != null) {
+      if (chainrings == 1 && cogs == 1) return 'Una velocidad';
+      return '$chainrings×$cogs · ${chainrings * cogs} velocidades';
+    }
+    if (chainrings == null && cogs == null) {
+      final legacy = legacyDrivetrainConfig;
+      final speeds = legacyDrivetrainSpeeds;
+      if (legacy != null || speeds != null) {
+        return [
+          if (legacy != null) 'Anotado «$legacy»',
+          if (speeds != null) '$speeds velocidades',
+        ].join(' · ');
+      }
+    }
+    return null;
+  }
+
+  /// La bici y el perfil como quedan, para `saveBikeAggregate`.
+  ({Bike bike, BikeProfile? profile}) build({required DateTime confirmedAt}) {
+    final bikeJson = bike.toJson();
+    void base(String key, String column, Object? Function(String?) convert) {
+      if (isChanged(key)) bikeJson[column] = convert(_values[key]);
+    }
+
+    base('bikeType', 'bike_type', (value) => value);
+    base('frameSize', 'frame_size', (value) => value);
+    base('wheelSize', 'wheel_size', (value) => value);
+    base('frontHubSpacingMm', 'front_hub_spacing_mm', _parseDouble);
+    base('rearHubSpacingMm', 'rear_hub_spacing_mm', _parseDouble);
+    if (isChanged('frontSpokeHoles') || isChanged('rearSpokeHoles')) {
+      final front = int.tryParse(_values['frontSpokeHoles'] ?? '');
+      final rear = int.tryParse(_values['rearSpokeHoles'] ?? '');
+      bikeJson['spoke_count'] = front ?? rear;
+    }
+    final savedBike = Bike.fromJson(bikeJson);
+
+    final technicalValues =
+        Map<String, dynamic>.from(profile?.technicalValues ?? const {})
+          ..removeWhere((key, _) => managedTechnicalKeys.contains(key));
+    String? shown(String key) => isVisible(key) ? _values[key] : null;
+    int? whole(String key) => _parseDouble(shown(key))?.round();
+    double? measure(String key) => _parseDouble(shown(key));
+    final chainrings = int.tryParse(_values['chainrings'] ?? '');
+    final cogs = int.tryParse(_values['rearCogs'] ?? '');
+    final drivetrainConfig = chainrings != null && cogs != null
+        ? (chainrings == 1 && cogs == 1 ? 'singlespeed' : '${chainrings}x$cogs')
+        : (chainrings == null && cogs == null ? legacyDrivetrainConfig : null);
+    final drivetrainSpeeds = chainrings != null && cogs != null
+        ? chainrings * cogs
+        : (chainrings == null && cogs == null ? legacyDrivetrainSpeeds : null);
+    technicalValues.addAll(<String, dynamic>{
+      for (final key in const [
+        'suspensionLayout',
+        'brakeType',
+        'rimBrakeFamily',
+        'freehubType',
+        'valveType',
+        'bottomBracketFamily',
+        'spindleInterface',
+        'frontBrakeFluidType',
+        'rearBrakeFluidType',
+        'frontAxleInterface',
+        'rearAxleInterface',
+        'frontRotorMount',
+        'rearRotorMount',
+      ])
+        if (shown(key) != null) key: shown(key),
+      for (final key in const ['bbShellWidthMm', 'bbShellDiameterMm'])
+        if (measure(key) != null) key: measure(key),
+      for (final key in const [
+        'frontSpokeHoles',
+        'rearSpokeHoles',
+        'frontRotorSizeMm',
+        'rearRotorSizeMm',
+        'frontWheelBsdMm',
+        'rearWheelBsdMm',
+      ])
+        if (whole(key) != null) key: whole(key),
+      if (drivetrainSpeeds != null) 'drivetrainSpeeds': drivetrainSpeeds,
+      if (drivetrainConfig != null && drivetrainConfig.isNotEmpty)
+        'drivetrainConfig': drivetrainConfig,
+    });
+
+    final existing = profile;
+    if (existing == null &&
+        technicalValues.isEmpty &&
+        !changedKeys.any(baseFactKeys.contains)) {
+      return (bike: savedBike, profile: null);
+    }
+
+    final sources = Map<String, dynamic>.from(existing?.technicalSources ?? {});
+    final confirmed =
+        Map<String, dynamic>.from(existing?.technicalConfirmed ?? {});
+    void mark(String key, {required bool byRule}) {
+      sources[key] = byRule ? 'bike_type' : 'mechanic';
+      confirmed[key] = !byRule;
+    }
+
+    for (final key in changedKeys) {
+      switch (key) {
+        case 'chainrings' || 'rearCogs':
+          mark('drivetrainConfig', byRule: false);
+          mark('drivetrainSpeeds', byRule: false);
+        case 'frameSize':
+          break;
+        default:
+          mark(key, byRule: _setByRule.contains(key));
+      }
+    }
+
+    final baseFactPresent = <String, bool>{
+      'wheelSize': savedBike.wheelSize?.trim().isNotEmpty ?? false,
+      'bikeType': savedBike.bikeType != null,
+      'frontHubSpacingMm': savedBike.frontHubSpacingMm != null,
+      'rearHubSpacingMm': savedBike.rearHubSpacingMm != null,
+    };
+    bool baseFactGone(String key) =>
+        baseFactKeys.contains(key) && baseFactPresent[key] != true;
+    sources.removeWhere((key, _) =>
+        (managedTechnicalKeys.contains(key) &&
+            !technicalValues.containsKey(key)) ||
+        baseFactGone(key));
+    // «Desconocido» queda revisado por el mecánico, nunca confirmado.
+    confirmed.removeWhere((key, _) =>
+        (managedTechnicalKeys.contains(key) &&
+            (!technicalValues.containsKey(key) ||
+                technicalValues[key] == 'unknown' ||
+                technicalValues[key] == kRegistryUnknownCode)) ||
+        baseFactGone(key));
+
+    final intakeProfile =
+        Map<String, dynamic>.from(existing?.intakeProfile ?? const {});
+    final technicalProfile =
+        Map<String, dynamic>.from(existing?.technicalProfile ?? const {})
+          ..['values'] = technicalValues
+          ..['sources'] = sources
+          ..['confirmed'] = confirmed;
+    return (
+      bike: savedBike,
+      profile: BikeProfile(
+        id: existing?.id,
+        tenantId: savedBike.tenantId,
+        bikeId: savedBike.id!,
+        catalogBikeId: existing?.catalogBikeId,
+        intakeProfile: intakeProfile,
+        technicalProfile: technicalProfile,
+        summarySnapshot: {
+          ...?existing?.summarySnapshot,
+          ...BikeProfileSummaryBuilder.buildSummarySnapshot(
+            bike: savedBike,
+            intakeProfile: intakeProfile,
+            technicalValues: technicalValues,
+            lastConfirmedAt: confirmedAt,
+          ),
+        },
+        lastConfirmedAt: confirmedAt,
+        createdAt: existing?.createdAt,
+        updatedAt: existing?.updatedAt,
+      ),
+    );
+  }
+
+  /// La firma de lo que se manda: con la misma firma, un reintento usa la
+  /// misma llave de operación y el servidor no lo aplica dos veces.
+  String contentSignature(Bike saved, BikeProfile? savedProfile) {
+    final payload = Map<String, dynamic>.from(saved.toJson())
+      ..remove('id')
+      ..remove('tenant_id')
+      ..remove('customer_id')
+      ..remove('created_at')
+      ..remove('updated_at');
+    return jsonEncode(<String, dynamic>{
+      'bike_id': saved.id,
+      'customer_id': saved.customerId,
+      'expected_bike_updated_at': bike.updatedAt.toUtc().toIso8601String(),
+      'expected_profile_updated_at':
+          profile?.updatedAt.toUtc().toIso8601String(),
+      'bike': payload,
+      'profile': savedProfile == null
+          ? null
+          : <String, dynamic>{
+              'id': savedProfile.id,
+              'catalog_bike_id': savedProfile.catalogBikeId,
+              'intake_profile': savedProfile.intakeProfile,
+              'technical_profile': savedProfile.technicalProfile,
+            },
+    });
+  }
+
+  /// La misma ficha sobre una versión más nueva de la bici: lo que el
+  /// mecánico cambió se vuelve a aplicar encima (un guardado rechazado por un
+  /// cambio ajeno no le hace repetir su trabajo).
+  BikeSpecDraft rebasedOn({required Bike bike, BikeProfile? profile}) {
+    final fresh = BikeSpecDraft.fromRecord(bike: bike, profile: profile);
+    for (final key in _orderedKeys) {
+      if (isChanged(key)) fresh.set(key, _values[key]);
+    }
+    fresh._setByRule.addAll(_setByRule.where(fresh.isChanged));
+    return fresh;
+  }
+
+  /// Los que mandan sobre otros primero, para que una regla no borre lo que
+  /// el mecánico eligió después.
+  static final List<String> _orderedKeys = [
+    'bikeType',
+    'brakeType',
+    'bottomBracketFamily',
+    for (final section in sections)
+      for (final field in section.fields)
+        if (!const {'bikeType', 'brakeType', 'bottomBracketFamily'}
+            .contains(field.key))
+          field.key,
+  ];
+}
+
+double? _parseDouble(Object? raw) {
+  if (raw == null) return null;
+  if (raw is num) return raw.toDouble();
+  return double.tryParse(raw.toString().trim().replaceAll(',', '.'));
+}
+
+String? _formatNumber(double? value) {
+  if (value == null) return null;
+  return value == value.roundToDouble()
+      ? value.toInt().toString()
+      : value.toStringAsFixed(1);
+}
+
+/// Platos y piñones de lo anotado: «2x10», «singlespeed» o «2x» con las
+/// velocidades. La misma lectura que el formulario de la bici.
+(int, int)? _parseDrivetrain(String? config, int? speeds) {
+  final normalized = config?.toLowerCase().replaceAll(' ', '');
+  if (normalized == null || normalized.isEmpty) return null;
+  if (normalized == 'singlespeed' ||
+      normalized == 'single_speed' ||
+      normalized == 'single-speed' ||
+      normalized.contains('fixie')) {
+    return (1, 1);
+  }
+  final full = RegExp(r'^(\d+)x(\d+)$').firstMatch(normalized);
+  if (full != null) {
+    return (int.parse(full.group(1)!), int.parse(full.group(2)!));
+  }
+  final partial = RegExp(r'^(\d+)x$').firstMatch(normalized);
+  if (partial != null && speeds != null) {
+    final front = int.parse(partial.group(1)!);
+    if (front > 0 && speeds % front == 0) return (front, speeds ~/ front);
+  }
+  return null;
+}

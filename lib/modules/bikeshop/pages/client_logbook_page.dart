@@ -5314,7 +5314,10 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
     }
 
     setState(() {
-      _isLoadingSelectedBikeRecordSnapshot = true;
+      // Releer la misma bici (después de guardar su ficha) deja la vista que
+      // hay mientras llega la nueva, en vez de cambiarla por un cargando.
+      _isLoadingSelectedBikeRecordSnapshot =
+          _selectedBikeRecordSnapshot?.bike.id != bikeId;
       _bikeRecordLoadError = null;
     });
 
@@ -5419,6 +5422,8 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
           }
         },
         onClose: _closeBikePane,
+        onSpecSaved: () =>
+            _loadSelectedBikeRecordSnapshot(recordSnapshot.bike.id),
       );
     }
 

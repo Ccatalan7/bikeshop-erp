@@ -22,18 +22,18 @@ const Map<String, String> kDrivetrainFrontChainringCountOptions = {
 };
 
 const Map<String, String> kDrivetrainRearCogCountOptions = {
-  '1': '1 pinon',
-  '3': '3 pinones',
-  '5': '5 pinones',
-  '6': '6 pinones',
-  '7': '7 pinones',
-  '8': '8 pinones',
-  '9': '9 pinones',
-  '10': '10 pinones',
-  '11': '11 pinones',
-  '12': '12 pinones',
-  '13': '13 pinones',
-  '14': '14 pinones',
+  '1': '1 piñón',
+  '3': '3 piñones',
+  '5': '5 piñones',
+  '6': '6 piñones',
+  '7': '7 piñones',
+  '8': '8 piñones',
+  '9': '9 piñones',
+  '10': '10 piñones',
+  '11': '11 piñones',
+  '12': '12 piñones',
+  '13': '13 piñones',
+  '14': '14 piñones',
 };
 
 const Map<String, String> kDrivetrainFreehubTypeOptions = {

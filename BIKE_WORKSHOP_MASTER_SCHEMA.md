@@ -1986,6 +1986,25 @@ Canonical command/read contract:
 - full-profile editors must preserve technical/intake keys they do not render.
   Narrow downstream promotion without an authoritative profile id must merge
   into current truth instead of replacing the whole ficha.
+- **Second editor of the same ficha (2026-10-02).** «Editar ficha» in the
+  bike record (`BikeRecordPanel`) edits the technical sheet in place instead
+  of opening the bike form (owner: the floating new-bike form was the wrong
+  surface for completing a sheet). It writes through the same
+  `save_bike_aggregate` command with a stable operation key and the read
+  `updated_at`s, and its model, `lib/modules/bikeshop/services/bike_spec_draft.dart`,
+  applies the form's rules: one option catalog for both
+  (`config/bike_sheet_options.dart`), suspension limited by bike type (a BMX
+  rule-set `rigid` is saved as `bike_type`, unconfirmed), brake- and
+  bottom-bracket-dependent facts hidden and dropped with their origin,
+  `unknown`/registry-unknown reviewed but never confirmed, platos × piñones
+  saved together as `drivetrainConfig` + `drivetrainSpeeds`, an unreadable
+  legacy drivetrain kept until replaced, only changed `bikes` columns
+  written (a `29''` nobody touched stays `29''`), and intake, catalog link
+  and unknown technical keys untouched. Before editing it resumes the bike's
+  outbox and refuses to edit over a save still pending on that device; a
+  stale rejection re-reads the aggregate and re-applies the mechanic's
+  changes for review. Direction/cockpit has no sheet keys yet (see
+  `docs/wiki/compatibilidad/paginas/direccion.md`).
 - **Corrección 2026-09-27.** La promoción desde un servicio ya no pasa por el
   cliente. Antes llamaba a `BikeshopService.upsertBikeProfile`, que reescribía
   la fila completa sin comparar versiones cuando traía id. Ahora la escribe
