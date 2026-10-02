@@ -112,6 +112,12 @@
   `docs/architecture/product-identity-matching-contract.md` first. It owns the
   eliminate-then-rank order, the identity/fitment split, and why a measurement
   is never a model.
+- For part compatibility («¿calza?»), bicycle standards, spec option sets or the
+  compatibility engine, start at `docs/wiki/compatibilidad/index.md` (a Karpathy
+  «LLM wiki» from Sheldon Brown, Park Tool and Bike Matrix research, with a map to
+  the bike sheet, spec keys and engine). Its `README.md` says how to query, ingest
+  and lint it (`scripts/knowledge/lint_compat_wiki.py`); what you learn goes back
+  into it in the same task.
 - For bike workshop architecture work, read `BIKE_WORKSHOP_MASTER_SCHEMA.md` first and update it in the same task when behavior/schema/data-flow changes.
 - For an implementation that will ship, author its reviewed release change in
   `docs/releases/changes/` alongside the verified source. Follow

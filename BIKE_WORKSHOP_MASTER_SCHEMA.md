@@ -1181,6 +1181,11 @@ Required external sources:
 - Sheldon Brown
 - Park Tool
 
+Start with `docs/wiki/compatibilidad/index.md` (2026-10-02): it already holds what
+was learned from both sites, the Bike Matrix comparison and the map from each
+concept to the bike-profile key, the product spec keys and the engine family.
+New research is ingested there (its `README.md`), not left in a task note.
+
 Required method:
 
 - inspect the relevant pages with browser tools, not only memory or guesswork

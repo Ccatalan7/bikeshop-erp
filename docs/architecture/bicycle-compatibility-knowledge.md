@@ -7,6 +7,14 @@ las reglas efectivamente desplegadas. Fuentes base elegidas por el dueño:
 **Sheldon Brown y Park Tool**. Fabricantes complementan los modelos y generaciones.
 Contrato consumidor: [arquitectura de fichas](product-technical-specifications-contract.md).
 
+**Desde el 2026-10-02 la entrada de lectura es el
+[wiki de compatibilidad](../wiki/compatibilidad/index.md)**: páginas por tema escritas
+desde Sheldon Brown, Park Tool y la investigación de Bike Matrix, con el mapa a la
+ficha de la bici, las claves de ficha y el motor. Este archivo sigue siendo el
+**registro de evidencia**: las afirmaciones K con su modelo, mercado y fuente exactos,
+que las páginas del wiki citan como `[K14]`. Una afirmación nueva de un modelo
+concreto se agrega aquí con el número siguiente y se resume en su página.
+
 ## Cómo conservar y utilizar este conocimiento
 
 Cada afirmación siguiente tiene un ámbito y una fuente. Es una síntesis propia,

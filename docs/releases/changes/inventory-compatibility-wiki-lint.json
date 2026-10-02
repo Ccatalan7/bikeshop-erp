@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "inventory",
+  "id": "inventory-compatibility-wiki-lint",
+  "scope": "internal",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "scripts/knowledge/lint_compat_wiki.py",
+      "sha256": "1f1cec88bbcc66926cd3051ab98c6354ccb41462fcd354d02f36d4fa718e74cd"
+    }
+  ]
+}

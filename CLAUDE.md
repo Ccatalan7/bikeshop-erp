@@ -22,6 +22,7 @@ before the first command of a task, not to restate it.
 | Palettes, light/dark, semantic roles | `docs/architecture/appearance-palette-contract.md` |
 | **Cómo se ve el ERP** (colores, medidas, componentes) | la sección «El diseño del ERP es abierto» de abajo |
 | Duplicados, matching de catálogo, «¿ya existe este producto?» | `docs/architecture/product-identity-matching-contract.md` |
+| **Compatibilidad de partes** («¿calza?», estándares de bicicleta, fichas y motor de compatibilidad) | `docs/wiki/compatibilidad/index.md` y la skill `compatibilidad` |
 | Bike workshop architecture | `BIKE_WORKSHOP_MASTER_SCHEMA.md`, updated in the same task when behavior/schema/data-flow changes |
 
 ## El diseño del ERP es abierto (dueño, 2026-09-27)
