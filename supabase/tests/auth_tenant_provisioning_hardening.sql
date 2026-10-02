@@ -971,6 +971,7 @@ select ok(
         'public.get_public_products_faceted_v1(uuid,uuid[],text,text,boolean,uuid[],numeric,numeric,text,integer,integer)'::regprocedure,
         'public.get_public_product_facets_v1(uuid,uuid[],text,text,boolean,uuid[],numeric,numeric)'::regprocedure,
         'public.get_public_product_technical_specs(uuid,uuid)'::regprocedure,
+        'public.get_public_spec_option_labels_v1(uuid)'::regprocedure,
         'public.create_public_online_order_with_access(jsonb,jsonb)'::regprocedure,
         'public.get_public_online_order_by_access_token(text)'::regprocedure,
         'public.get_public_checkout_capabilities(uuid)'::regprocedure,

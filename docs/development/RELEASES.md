@@ -243,7 +243,11 @@ se revisa todo su rango real; nunca se corta el historial para ocultar cambios.
 
 El ensamblador valida evidencia, cobertura, alcance, plataforma, módulo dueño,
 texto plano y límites: título 80, resumen 280, 1–5 módulos, hasta 3 ítems de 160
-caracteres por módulo y hasta 12 rutas en el manifiesto. El registro conserva
+caracteres por módulo y hasta 12 rutas en el manifiesto. Con más de una novedad
+visible, el resumen de la plataforma es la unión de sus títulos con «. », y
+también tiene el tope de 280: el 2026-10-01 cinco títulos sumaron 281 y la
+validación falló. Un título nuevo se escribe corto (unas 45 letras) y se mide
+la unión antes de dar el registro por bueno. El registro conserva
 la evidencia completa; no se recortan afirmaciones para cumplir los límites.
 
 ```bash

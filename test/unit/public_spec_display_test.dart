@@ -112,4 +112,108 @@ void main() {
       );
     });
   });
+
+  group('chileanNumber', () {
+    test('decimal comma, thousands point, no trailing zeros', () {
+      expect(chileanNumber('57.1'), '57,1');
+      expect(chileanNumber('24.0'), '24');
+      expect(chileanNumber('563.55'), '563,55');
+      expect(chileanNumber('1000'), '1.000');
+      expect(chileanNumber('10000'), '10.000');
+      expect(chileanNumber('12.7'), '12,7');
+      expect(chileanNumber('2,3'), '2,3');
+    });
+
+    test('leaves what is not a number alone', () {
+      expect(chileanNumber('58-584'), '58-584');
+      expect(chileanNumber('14G'), '14G');
+    });
+  });
+
+  group('publicSpecSheetValue', () {
+    test('the wheel size reads as the shop sells it, the ISO as a detail', () {
+      expect(
+        publicSpecSheetValue(
+          specKey: 'bead_seat_diameter_mm',
+          value: '584',
+          dataType: 'number',
+          unit: 'mm',
+        ),
+        const PublicSpecDisplayValue('27.5" / 650b', detail: 'ISO 584'),
+      );
+    });
+
+    test('numbers in Chilean, units in words', () {
+      String text(String key, String value, String? unit,
+              [String type = 'number']) =>
+          publicSpecSheetValue(
+            specKey: key,
+            value: value,
+            dataType: type,
+            unit: unit,
+          ).text;
+      expect(text('rim_internal_width_mm', '27.4', 'mm'), '27,4 mm');
+      expect(text('rim_external_width_mm', '32.0', 'mm'), '32 mm');
+      expect(text('largest_cog_teeth', '34', 'T'), '34 dientes');
+      expect(text('pack_quantity', '1', 'unidades'), '1 unidad');
+      expect(text('lumens_claimed', '1000', 'lm'), '1.000 lúmenes');
+      expect(text('stem_angle_deg', '22', '°'), '22°');
+      expect(text('ball_diameter_in', '1/4', 'in', 'single_select'), '1/4"');
+      expect(text('tire_etrto', '58-584', null, 'text'), '58-584',
+          reason: 'Until 2026-10-01 the store title-cased text and the '
+              'ETRTO «58-584» was printed «58 584».');
+    });
+
+    test('a list reads as Spanish', () {
+      expect(
+        publicSpecSheetValue(
+          specKey: 'chain_speeds',
+          value: '6, 7, 8',
+          dataType: 'multi_select',
+        ).text,
+        '6, 7 y 8',
+      );
+      expect(naturalSpanishList(['9']), '9');
+    });
+
+    test('a tube says which tyres it fits, in the units they are sold in', () {
+      expect(
+        tubeFitLabel('Diámetro de asiento (BSD): 622 mm · Ancho mínimo: '
+            '44.4 mm · Ancho máximo: 59.7 mm'),
+        '29" / 700c · 1.75" a 2.35"',
+      );
+      expect(
+        tubeFitLabel('Diámetro de asiento (BSD): 622 mm · Ancho mínimo: '
+            '18 mm · Ancho máximo: 25 mm | Diámetro de asiento (BSD): 559 mm '
+            '· Ancho mínimo: 49.5 mm · Ancho máximo: 54 mm'),
+        '700c · 18 a 25 mm\n26" · 1.95" a 2.125"',
+      );
+      expect(tubeFitLabel('sin diámetro'), isNull);
+    });
+  });
+
+  group('publicSpecValueLabel with option names', () {
+    test('a filter keeps the label and shows the visible name', () {
+      expect(
+        publicSpecValueLabel(
+          specKey: 'chain_connector_type',
+          value: 'Missing link',
+          dataType: 'single_select',
+          optionDisplay: const {
+            'Missing link': 'Eslabón rápido (missing link)'
+          },
+        ),
+        'Eslabón rápido (missing link)',
+      );
+      expect(
+        publicSpecValueLabel(
+          specKey: 'rotor_diameter_mm_value',
+          value: '203',
+          dataType: 'number',
+          unit: 'mm',
+        ),
+        '203 mm',
+      );
+    });
+  });
 }

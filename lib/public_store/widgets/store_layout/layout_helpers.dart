@@ -47,22 +47,7 @@ String? normalizeSocialUrl(
   return '$baseUrl${keepAtPrefix ? '@$withoutAt' : withoutAt}';
 }
 
-String _sanitizePhone(String input) {
-  final digits = input.replaceAll(RegExp(r'[^0-9]'), '');
-  if (digits.isEmpty) {
-    return '';
-  }
-  if (digits.startsWith('56')) {
-    return digits;
-  }
-  if (digits.length == 9 && digits.startsWith('9')) {
-    return '56$digits';
-  }
-  if (digits.length == 8) {
-    return '56$digits';
-  }
-  return digits;
-}
+String _sanitizePhone(String input) => whatsappDigits(input);
 
 Color _resolveColor(String raw, Color fallback) {
   final value = raw.trim();

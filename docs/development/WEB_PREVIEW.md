@@ -271,6 +271,31 @@ A Storage outage is the real container:
 and routes again after `docker start` once `/storage/v1/status` is below 500.
 The launcher always leaves it started.
 
+## Ver la tienda con una respuesta de la base aún no publicada (2026-10-01)
+
+La tienda del preview lee producción. Cuando el cambio de cliente depende de
+una migración que todavía no se publica (columnas nuevas de una RPC), la
+captura real con producción sólo muestra el cliente con la respuesta vieja.
+Para ver el resultado final sin publicar nada:
+
+1. Simular la respuesta nueva con una lectura de producción y los datos de la
+   migración, guardarla como JSON y copiarla a
+   `build/web_store_preview_versions/current/__spec_override.json` (el servidor
+   release la sirve como `application/json`; un `build` nuevo la deja fuera).
+2. Abrir la ruta, y **justo después** del `navigate` reemplazar `window.fetch`
+   con `javascript_tool` para responder esa RPC desde el JSON: `http`
+   (`BrowserClient`) llama al `fetch` global en cada pedido, y Flutter tarda
+   ~8 s en arrancar, así que el reemplazo gana la carrera.
+3. Navegar dentro de la app (`history.pushState` + `popstate`): recargar pierde
+   el reemplazo.
+
+Trampas: el catálogo guarda por sesión la foto de filtros de cada categoría,
+así que una categoría ya visitada antes del reemplazo sigue con la respuesta
+vieja; y un producto publicado puede responder «Producto no encontrado» por la
+política pública de visibilidad (el cassette AE0190 sin stock lo hizo; el
+neumático sin stock no): elegir productos que la tienda real muestra. Decirle al dueño qué parte de la captura es simulada; la captura
+sin reemplazo prueba el cliente contra la base de hoy.
+
 ## Preview a pull request from any device (iPad, phone)
 
 Every pull request that touches app code gets its own ERP web build on a

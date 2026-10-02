@@ -2431,6 +2431,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
       value: value,
       dataType: facet?.dataType,
       unit: facet?.unit,
+      optionDisplay: facet?.optionDisplay,
     );
   }
 

@@ -219,8 +219,22 @@ void main() {
 }
 
 Future<void> _serveOriginRequest(HttpRequest request) async {
-  await request.drain<void>();
+  try {
+    await request.drain<void>();
+  } on HttpException {
+    // The page asks for its technical sheet as soon as the product loads
+    // (2026-10-01); tearDownAll may close the origin while that request is
+    // still arriving. A dropped request is not this suite's subject.
+    return;
+  }
   request.response.headers.set(HttpHeaders.connectionHeader, 'close');
+  if (request.uri.path.endsWith('/rpc/get_public_product_technical_specs')) {
+    request.response.statusCode = HttpStatus.ok;
+    request.response.headers.contentType = ContentType.json;
+    request.response.write('[]');
+    await request.response.close();
+    return;
+  }
   if (request.uri.path.startsWith('/images/')) {
     final bytes = base64Decode(_transparentPng);
     request.response.headers.contentType = ContentType('image', 'png');

@@ -36,6 +36,7 @@ import '../../shared/models/public_product_visibility_policy.dart';
 import '../models/public_checkout_capabilities.dart';
 import '../models/storefront_logo_source.dart';
 import '../services/public_checkout_capability_service.dart';
+import '../utils/whatsapp_link.dart';
 import 'floating_whatsapp_button.dart';
 import 'customer_account_menu.dart';
 import '../../modules/website/services/website_service.dart';

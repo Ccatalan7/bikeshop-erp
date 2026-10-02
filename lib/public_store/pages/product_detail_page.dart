@@ -5,11 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../theme/public_store_theme.dart';
 import '../models/product_purchase_authority.dart';
 import '../utils/category_trail.dart';
 import '../theme/public_store_surface_theme.dart';
 import '../models/public_commerce_product_projection.dart';
+import '../models/public_product_spec_sheet.dart';
 import '../models/public_product_seo_copy.dart';
 import '../providers/cart_provider.dart';
 import '../providers/public_store_tenant_provider.dart';
@@ -18,6 +20,7 @@ import '../services/public_inventory_service.dart';
 import '../utils/public_store_tenant_resolver.dart';
 import '../widgets/full_page_loading.dart';
 import '../widgets/public_link_semantics.dart';
+import '../widgets/product_spec_sheet_view.dart';
 import '../widgets/public_store_layout.dart';
 import '../../shared/models/product.dart';
 import '../../shared/models/public_product_visibility_policy.dart';
@@ -33,7 +36,7 @@ import 'package:vinabike_erp/public_store/utils/structured_data.dart';
 import 'package:vinabike_erp/shared/widgets/safe_layout_builder.dart';
 import 'package:vinabike_erp/public_store/services/ga4_commerce_events.dart';
 import 'package:vinabike_erp/public_store/services/meta_pixel_service.dart';
-import '../utils/public_spec_display.dart';
+import '../utils/whatsapp_link.dart';
 import '../utils/instant_page_release.dart';
 
 void _productDetailDebugLog(String message) {
@@ -78,14 +81,17 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   DateTime? _lastValidatedAt;
   bool _isLoadingRelated = false;
   bool _isLoadingTechnicalSpecs = false;
-  bool _technicalSpecsRequested = false;
+
+  /// The product whose sheet was requested: one request per product, not per
+  /// load, since the freshness pulse reloads the product every ~30 s.
+  String? _technicalSpecsProductId;
   String? _validatedTenantId;
-  int _selectedDetailsTab = 0;
   int _quantity = 1;
   int _selectedImageIndex = 0;
   int _loadToken = 0;
   int _relatedRequestGeneration = 0;
-  List<_PublicProductTechnicalSpec> _technicalSpecs = const [];
+  List<PublicProductSpecRow> _technicalSpecs = const [];
+  final GlobalKey _specSheetKey = GlobalKey();
   OverlayEntry? _productFeedbackOverlay;
   Timer? _productFeedbackTimer;
   Timer? _productFeedbackRemovalTimer;
@@ -157,7 +163,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       _productValidationFailed = false;
       _lastValidatedAt = null;
       _isLoadingTechnicalSpecs = false;
-      _technicalSpecsRequested = false;
+      _technicalSpecsProductId = null;
       _validatedTenantId = null;
       _seededRouteKey = null;
       _seedProductFromSessionSnapshot(
@@ -188,7 +194,6 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     _justAddedResetTimer = null;
     _justAddedToCart = false;
     _hideProductFeedbackBanner(animated: false);
-    _selectedDetailsTab = 0;
     _quantity = 1;
     _selectedImageIndex = 0;
     _trackedProductIdForRoute = null;
@@ -245,7 +250,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       _validatedTenantId = null;
       _isLoadingRelated = false;
       _isLoadingTechnicalSpecs = false;
-      _technicalSpecsRequested = false;
+      _technicalSpecsProductId = null;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) unawaited(_loadProduct());
       });
@@ -299,7 +304,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       if (!hadVisibleProduct) {
         _isLoadingRelated = false;
         _isLoadingTechnicalSpecs = false;
-        _technicalSpecsRequested = false;
+        _technicalSpecsProductId = null;
         _relatedProducts = [];
         _technicalSpecs = const [];
       }
@@ -459,6 +464,9 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         setState(() => _isLoading = false);
         _updateSeo(token);
         _updateStructuredData();
+        unawaited(
+          _loadTechnicalSpecs(tenantId: tenantId, productId: _product!.id),
+        );
         unawaited(
           _loadCategoryTrail(
             token: token,
@@ -637,14 +645,19 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     });
   }
 
+  /// The sheet loads with the product, not behind a tab: what decides the
+  /// purchase is shown next to the price (2026-10-01).
   Future<void> _loadTechnicalSpecs({
-    required int token,
     required String tenantId,
     required String productId,
   }) async {
-    if (productId.isEmpty || _technicalSpecsRequested) return;
-    _technicalSpecsRequested = true;
+    if (productId.isEmpty || _technicalSpecsProductId == productId) return;
+    _technicalSpecsProductId = productId;
     setState(() => _isLoadingTechnicalSpecs = true);
+    bool current() =>
+        mounted &&
+        _technicalSpecsProductId == productId &&
+        _product?.id == productId;
     try {
       final response = await Supabase.instance.client.rpc(
         'get_public_product_technical_specs',
@@ -653,12 +666,12 @@ class _ProductDetailPageState extends State<ProductDetailPage>
           'p_product_id': productId,
         },
       );
-      if (!mounted || token != _loadToken) return;
+      if (!current()) return;
       final specs = (response as List)
-          .map((row) => _PublicProductTechnicalSpec.fromJson(
+          .map((row) => PublicProductSpecRow.fromJson(
                 Map<String, dynamic>.from(row as Map),
               ))
-          .where((spec) => spec.displayValue.trim().isNotEmpty)
+          .where((spec) => spec.value.isNotEmpty)
           .toList(growable: false);
       setState(() {
         _technicalSpecs = specs;
@@ -666,12 +679,63 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       });
     } catch (e) {
       debugPrint('[ProductDetailPage] Error loading technical specs: $e');
-      if (!mounted || token != _loadToken) return;
+      if (!current()) return;
       setState(() {
         _technicalSpecs = const [];
         _isLoadingTechnicalSpecs = false;
+        // A transport failure is retried by the next freshness pulse.
+        _technicalSpecsProductId = null;
       });
     }
+  }
+
+  PublicProductSpecSheet _specSheet() {
+    final product = _product!;
+    return PublicProductSpecSheet.build(
+      rows: _technicalSpecs,
+      identity: PublicSpecIdentity(
+        brand: product.brand,
+        model: product.model,
+        manufacturerSku: product.manufacturerSku,
+        gtin: product.gtin,
+        color: product.color,
+        size: product.size,
+        material: product.material,
+        weightKg: product.weight,
+      ),
+    );
+  }
+
+  void _scrollToSpecSheet() {
+    final target = _specSheetKey.currentContext;
+    if (target == null) return;
+    Scrollable.ensureVisible(
+      target,
+      duration: const Duration(milliseconds: 420),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  /// A WhatsApp chat about this product when the owner configured the number
+  /// in the website editor; otherwise the contact page.
+  VoidCallback? _askAboutProductAction() {
+    final product = _product;
+    if (product == null) return null;
+    final websiteService = context.read<WebsiteService>();
+    final title = _commerceProjection(product).title;
+    final sku = product.sku.trim();
+    final chat = whatsappChatUri(
+      websiteService.getSetting('whatsapp', ''),
+      text: 'Hola, quiero saber si este producto le sirve a mi bicicleta: '
+          '$title${sku.isEmpty ? '' : ' (SKU $sku)'}.',
+    );
+    if (chat == null) {
+      return () => PublicStoreLayout.navigateToHref(context, '/contacto');
+    }
+    return () {
+      Ga4CommerceEvents.instance.contactFromUrl(chat.toString());
+      unawaited(launchUrl(chat, mode: LaunchMode.externalApplication));
+    };
   }
 
   Future<void> _loadRelatedProducts({
@@ -1724,6 +1788,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     final inStock = commerce.availability == PublicCommerceAvailability.inStock;
     final canIncrease =
         !isStockTracked || _quantity < _product!.availableStockQuantity;
+    final highlights = _specSheet().highlights;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1758,7 +1823,15 @@ class _ProductDetailPageState extends State<ProductDetailPage>
             color: _storeTheme.commerceTextSecondary,
           ),
         ),
-        SizedBox(height: isMobile ? 20 : 24),
+        if (highlights.isNotEmpty) ...[
+          SizedBox(height: isMobile ? 20 : 24),
+          ProductSpecHighlights(
+            items: highlights,
+            onSeeAll: _scrollToSpecSheet,
+          ),
+          const SizedBox(height: 6),
+        ] else
+          SizedBox(height: isMobile ? 20 : 24),
         Divider(height: 1, color: _storeTheme.commerceLine),
         SizedBox(height: isMobile ? 18 : 22),
         _buildStockSkuRow(inStock: inStock),
@@ -1923,6 +1996,9 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   }) {
     final description =
         _cleanSeoText(_commerceProjection(_product!).description);
+    final hasWhatsApp = whatsappDigits(
+      context.read<WebsiteService>().getSetting('whatsapp', ''),
+    ).isNotEmpty;
 
     return Container(
       width: double.infinity,
@@ -1936,607 +2012,37 @@ class _ProductDetailPageState extends State<ProductDetailPage>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildSectionHeading(
-                'Detalles del producto',
-                foreground: _storeTheme.commerceAccent,
-                lineColor: _storeTheme.commerceAccent,
+              // «Ver ficha técnica completa» lands here. The store header
+              // floats over the page, so the anchor sits above the heading by
+              // the header's height plus air; on a phone the heading was left
+              // under the header.
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  _buildSectionHeading(
+                    'Ficha técnica',
+                    foreground: _storeTheme.commerceAccent,
+                    lineColor: _storeTheme.commerceAccent,
+                  ),
+                  Positioned(
+                    top: -96,
+                    left: 0,
+                    child: SizedBox(key: _specSheetKey, width: 1, height: 1),
+                  ),
+                ],
               ),
-              SizedBox(height: isMobile ? 22 : 28),
-              _buildDetailsTabs(),
-              SizedBox(height: isMobile ? 24 : 30),
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 180),
-                child: _selectedDetailsTab == 0
-                    ? _buildDescriptionTab(description, isMobile: isMobile)
-                    : _buildTechnicalFichaTab(isMobile: isMobile),
+              SizedBox(height: isMobile ? 24 : 32),
+              ProductSpecSheetView(
+                sheet: _specSheet(),
+                isLoading: _isLoadingTechnicalSpecs,
+                isMobile: isMobile,
+                description: description,
+                onAsk: _askAboutProductAction(),
+                askLabel: hasWhatsApp ? 'Preguntar por WhatsApp' : 'Escríbenos',
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildDetailsTabs() {
-    return Container(
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: _storeTheme.commerceLine),
-        ),
-      ),
-      child: Row(
-        children: [
-          _buildDetailsTabButton('Descripción', 0),
-          const SizedBox(width: 22),
-          _buildDetailsTabButton('Ficha técnica', 1),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDetailsTabButton(String label, int index) {
-    final selected = _selectedDetailsTab == index;
-    return InkWell(
-      onTap: () {
-        setState(() => _selectedDetailsTab = index);
-        final product = _product;
-        final tenantId = _validatedTenantId;
-        if (index == 1 &&
-            _isProductValidated &&
-            product != null &&
-            tenantId != null) {
-          unawaited(
-            _loadTechnicalSpecs(
-              token: _loadToken,
-              tenantId: tenantId,
-              productId: product.id,
-            ),
-          );
-        }
-      },
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color:
-                    selected ? _storeTheme.commerceAccent : Colors.transparent,
-                width: 2,
-              ),
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 9),
-            child: Text(
-              label.toUpperCase(),
-              style: _storeTheme.text.labelSmall?.copyWith(
-                fontSize: 12,
-                fontWeight: FontWeight.w800,
-                color: selected
-                    ? _storeTheme.commerceAccent
-                    : _storeTheme.commerceTextSecondary,
-                letterSpacing: 0.9,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDescriptionTab(String description, {required bool isMobile}) {
-    return ConstrainedBox(
-      key: const ValueKey('product_description_tab'),
-      constraints: BoxConstraints(maxWidth: isMobile ? double.infinity : 820),
-      child: Text(
-        description.isNotEmpty
-            ? description
-            : 'Estamos actualizando la descripción extendida de este producto.',
-        style: _storeTheme.text.bodyMedium?.copyWith(
-          fontSize: 15,
-          color: _storeTheme.commerceTextPrimary,
-          height: 1.7,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTechnicalFichaTab({required bool isMobile}) {
-    if (_isLoadingTechnicalSpecs) {
-      return SizedBox(
-        key: const ValueKey('product_technical_specs_loading'),
-        height: 96,
-        child: Center(
-          child: SizedBox(
-            width: 26,
-            height: 26,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: _storeTheme.commerceAccent,
-            ),
-          ),
-        ),
-      );
-    }
-
-    final groups = _buildTechnicalFichaGroups();
-    if (groups.isEmpty) {
-      return Text(
-        key: const ValueKey('product_technical_specs_empty'),
-        'La ficha técnica de este producto está en actualización.',
-        style: _storeTheme.text.bodyMedium?.copyWith(
-          fontSize: 15,
-          color: _storeTheme.commerceTextSecondary,
-          height: 1.6,
-        ),
-      );
-    }
-
-    return Column(
-      key: const ValueKey('product_technical_specs_tab'),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (var index = 0; index < groups.length; index++) ...[
-          if (index > 0) SizedBox(height: isMobile ? 26 : 30),
-          _buildTechnicalFichaGroup(groups[index], isMobile: isMobile),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildTechnicalFichaGroup(
-    _TechnicalFichaGroup group, {
-    required bool isMobile,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          group.title.toUpperCase(),
-          style: _storeTheme.text.labelSmall?.copyWith(
-            fontSize: 12,
-            fontWeight: FontWeight.w800,
-            color: _storeTheme.commerceAccent,
-            letterSpacing: 1.0,
-          ),
-        ),
-        const SizedBox(height: 14),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final itemWidth = isMobile
-                ? constraints.maxWidth
-                : constraints.maxWidth >= 1120
-                    ? (constraints.maxWidth - 48) / 3
-                    : (constraints.maxWidth - 24) / 2;
-            return Wrap(
-              spacing: 24,
-              runSpacing: 14,
-              children: [
-                for (final item in group.items)
-                  SizedBox(
-                    width: itemWidth,
-                    child: _buildDetailBandItem(
-                      label: item.key,
-                      value: item.value,
-                    ),
-                  ),
-              ],
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  List<_TechnicalFichaGroup> _buildTechnicalFichaGroups() {
-    final groups = <String, List<MapEntry<String, String>>>{};
-    final seenLabels = <String>{};
-
-    void addItem(String section, String label, String value) {
-      final cleanLabel = label.trim();
-      final cleanValue = value.trim();
-      if (cleanLabel.isEmpty || cleanValue.isEmpty) return;
-      final seenKey = _normalizeTechnicalToken(cleanLabel);
-      if (seenLabels.contains(seenKey)) return;
-      seenLabels.add(seenKey);
-      groups.putIfAbsent(section, () => <MapEntry<String, String>>[]).add(
-            MapEntry(cleanLabel, cleanValue),
-          );
-    }
-
-    addItem('Identificación', 'SKU', _product!.sku);
-    addItem('Identificación', 'Categoría', _product!.categoryName ?? '');
-    addItem('Identificación', 'Marca', _product!.brand ?? '');
-    addItem('Identificación', 'Modelo', _product!.model ?? '');
-    addItem('Identificación', 'Fabricante', _product!.manufacturer ?? '');
-    addItem(
-        'Identificación', 'Código fabricante', _product!.manufacturerSku ?? '');
-    addItem('Identificación', 'GTIN', _product!.gtin ?? '');
-
-    addItem('Características', 'Color', _product!.color ?? '');
-    addItem('Características', 'Talla / medida', _product!.size ?? '');
-    addItem('Características', 'Material', _product!.material ?? '');
-    if (_product!.weight > 0) {
-      addItem('Características', 'Peso',
-          '${_product!.weight.toStringAsFixed(2)} kg');
-    }
-
-    for (final spec in _technicalSpecs) {
-      addItem(
-        _sectionTitleForTechnicalSpec(spec.sectionKey),
-        _labelForTechnicalSpec(spec.specKey, spec.specLabel),
-        _valueForTechnicalSpec(spec),
-      );
-    }
-
-    for (final entry in _product!.specifications.entries) {
-      addItem('Especificaciones', entry.key, entry.value);
-    }
-
-    return groups.entries
-        .where((entry) => entry.value.isNotEmpty)
-        .map((entry) => _TechnicalFichaGroup(entry.key, entry.value))
-        .toList(growable: false);
-  }
-
-  String _sectionTitleForTechnicalSpec(String sectionKey) {
-    switch (_normalizeTechnicalToken(sectionKey)) {
-      case 'identification':
-      case 'identificacion':
-      case 'general':
-        return 'Características';
-      // Section keys of the 2026-09 template contracts (`form_contract`
-      // roles). Without these the storefront printed the raw key in English.
-      // `primary` joins the identification block: for the customer both are
-      // the product's characteristics.
-      case 'primary':
-        return 'Características';
-      case 'measurement':
-        return 'Medidas';
-      case 'contents':
-        return 'Qué incluye';
-      case 'declaration':
-        return 'Según el fabricante';
-      case 'compatibility':
-      case 'compatibilidad':
-        return 'Compatibilidad';
-      case 'drivetrain':
-      case 'transmission':
-      case 'transmision':
-        return 'Transmisión';
-      case 'brake':
-      case 'brakes':
-      case 'frenos':
-        return 'Frenos';
-      case 'wheel':
-      case 'wheels':
-      case 'ruedas':
-        return 'Ruedas';
-      case 'hub':
-      case 'hubs':
-      case 'mazas':
-        return 'Mazas';
-      case 'rim':
-      case 'rims':
-      case 'llantas':
-        return 'Llantas';
-      case 'tire':
-      case 'tires':
-      case 'neumaticos':
-        return 'Neumáticos';
-      case 'bottombracket':
-      case 'bottom_bracket':
-      case 'pedalier':
-        return 'Pedalier';
-      case 'construction':
-      case 'construccion':
-        return 'Construcción';
-      case 'dimensions':
-      case 'medidas':
-        return 'Medidas';
-      default:
-        return _titleCaseTechnical(sectionKey.replaceAll('_', ' '));
-    }
-  }
-
-  String _labelForTechnicalSpec(String key, String label) {
-    final normalizedKey = _normalizeTechnicalToken(key);
-    const labelByKey = <String, String>{
-      'wheelsize': 'Medida de rueda',
-      'wheel_size': 'Medida de rueda',
-      'braketype': 'Tipo de freno',
-      'brake_type': 'Tipo de freno',
-      'rimbrakefamily': 'Familia de freno de llanta',
-      'rim_brake_family': 'Familia de freno de llanta',
-      'rotorsize': 'Diámetro de rotor',
-      'rotor_size': 'Diámetro de rotor',
-      'freehubtype': 'Núcleo / driver trasero',
-      'freehub_type': 'Núcleo / driver trasero',
-      'drivetrainspeeds': 'Velocidades',
-      'drivetrain_speeds': 'Velocidades',
-      'drivetrainconfig': 'Configuración de transmisión',
-      'drivetrain_config': 'Configuración de transmisión',
-      'frontchainringcount': 'Platos delanteros',
-      'front_chainring_count': 'Platos delanteros',
-      'rearcogcount': 'Coronas traseras',
-      'rear_cog_count': 'Coronas traseras',
-      'valvetype': 'Tipo de válvula',
-      'valve_type': 'Tipo de válvula',
-      'spokeholes': 'Perforaciones de rayos',
-      'spoke_holes': 'Perforaciones de rayos',
-      'hubspacingmm': 'Espaciado de maza',
-      'hub_spacing_mm': 'Espaciado de maza',
-      'bottombracketfamily': 'Familia de motor / pedalier',
-      'bottom_bracket_family': 'Familia de motor / pedalier',
-      'bbshellwidthmm': 'Ancho de caja',
-      'bb_shell_width_mm': 'Ancho de caja',
-      'bbshelldiametermm': 'Diámetro de caja',
-      'bb_shell_diameter_mm': 'Diámetro de caja',
-      'spindleinterface': 'Interfaz de eje',
-      'spindle_interface': 'Interfaz de eje',
-      'chainouterwidthmm': 'Ancho externo de cadena',
-      'chain_outer_width_mm': 'Ancho externo de cadena',
-      'largestcogteeth': 'Corona mayor',
-      'largest_cog_teeth': 'Corona mayor',
-      'smallestcogteeth': 'Corona menor',
-      'smallest_cog_teeth': 'Corona menor',
-      'riminternalwidthmm': 'Ancho interno de llanta',
-      'rim_internal_width_mm': 'Ancho interno de llanta',
-      'rimexternalwidthmm': 'Ancho externo de llanta',
-      'rim_external_width_mm': 'Ancho externo de llanta',
-      'erdmm': 'ERD',
-      'erd_mm': 'ERD',
-      'etrto': 'ETRTO',
-    };
-    final mapped = labelByKey[normalizedKey] ?? labelByKey[key];
-    if (mapped != null) return mapped;
-
-    final cleanLabel = label.trim();
-    if (cleanLabel.isNotEmpty && !cleanLabel.contains('_')) {
-      return cleanLabel;
-    }
-    return _titleCaseTechnical(key.replaceAll('_', ' '));
-  }
-
-  String _valueForTechnicalSpec(_PublicProductTechnicalSpec spec) {
-    final raw = spec.displayValue.trim();
-    if (raw.isEmpty) return raw;
-
-    // El diámetro ISO es la medida exacta del aro, pero el cliente compra por
-    // rodado: «29"», «700c», «26"». Se muestra el rodado y el ISO entre
-    // paréntesis, sin repetir la unidad.
-    if (spec.specKey == 'bead_seat_diameter_mm') {
-      final rodado = wheelSizeLabelForBsd(raw);
-      if (rodado != null) return rodado;
-    }
-    // El ancho de un neumático MTB se compra en pulgadas («2.1"»); el de
-    // ruta, en milímetros. El milímetro guardado acompaña siempre.
-    if (spec.specKey == 'tire_width_mm') {
-      final ancho = tireWidthLabel(raw);
-      if (ancho != null) return ancho;
-    }
-    // Las filas de ajuste de una cámara llegan ya redactadas por el servidor
-    // («Diámetro de asiento (BSD): 559 mm · Ancho mínimo: 38.1 mm · Ancho
-    // máximo: 44.4 mm»). El cliente compra por aro y ancho.
-    if (spec.specKey == 'tube_fit_rows') {
-      final rodado = _tubeFitLabel(raw);
-      if (rodado != null) return rodado;
-    }
-
-    // La coma sólo separa elementos cuando el campo es multi-valor: el RPC une
-    // ahí un `value_json` con «, ». En cualquier otro tipo la coma es parte del
-    // valor — un decimal escrito a la chilena — y partirlo lo corrompe:
-    // «34,8 mm» salía como «34, 8 Mm». Rompía toda medida con decimal.
-    final esMultivalor = spec.dataType == 'multi_select';
-
-    // Un valor de lista controlada ya viene redactado desde el ERP, con sus
-    // mayúsculas puestas. Title-case sobre eso sólo lo estropea: «x 24» se
-    // volvía «X 24» y «caja inglesa» perdía su forma.
-    final vieneDeVocabulario =
-        spec.dataType == 'single_select' || spec.dataType == 'multi_select';
-
-    final partes = esMultivalor ? raw.split(',') : <String>[raw];
-    final values = partes
-        .map((value) => vieneDeVocabulario
-            ? value.trim()
-            : _spanishTechnicalValue(spec.specKey, value.trim()))
-        .where((value) => value.isNotEmpty)
-        .toList(growable: false);
-    var display = values.isEmpty ? raw : values.join(', ');
-    final unit = spec.unit?.trim();
-    if (unit != null &&
-        unit.isNotEmpty &&
-        !_valueAlreadyHasUnit(display, unit)) {
-      display = '$display $unit';
-    }
-    return display;
-  }
-
-  /// «29" / 700c (ISO 622), neumático 19-25 mm» a partir del texto que el
-  /// servidor redacta para cada fila de ajuste; null si el texto no trae el
-  /// diámetro.
-  String? _tubeFitLabel(String raw) {
-    final rows = <String>[];
-    for (final row in raw.split(RegExp(r'\s*\|\s*|\n'))) {
-      final bsd = RegExp(r'BSD\)?\s*:\s*([0-9]+)').firstMatch(row);
-      if (bsd == null) continue;
-      final rodado =
-          wheelSizeLabelForBsd(bsd.group(1)!) ?? 'ISO ${bsd.group(1)}';
-      final min = RegExp(r'm[ií]nimo\s*:\s*([0-9]+(?:[.,][0-9]+)?)',
-              caseSensitive: false)
-          .firstMatch(row)
-          ?.group(1);
-      final max = RegExp(r'm[aá]ximo\s*:\s*([0-9]+(?:[.,][0-9]+)?)',
-              caseSensitive: false)
-          .firstMatch(row)
-          ?.group(1);
-      final ancho = min != null && max != null
-          ? ', neumático $min-$max mm'
-          : min != null
-              ? ', neumático desde $min mm'
-              : max != null
-                  ? ', neumático hasta $max mm'
-                  : '';
-      rows.add('$rodado$ancho');
-    }
-    return rows.isEmpty ? null : rows.join(' · ');
-  }
-
-  bool _valueAlreadyHasUnit(String value, String unit) {
-    return RegExp('(^|\\s)${RegExp.escape(unit)}\\.?\$', caseSensitive: false)
-        .hasMatch(value.trim());
-  }
-
-  String _spanishTechnicalValue(String key, String value) {
-    final normalized = _normalizeTechnicalToken(value);
-    const valueMap = <String, String>{
-      'true': 'Sí',
-      'false': 'No',
-      'yes': 'Sí',
-      'no': 'No',
-      'unknown': 'No confirmado',
-      'disc': 'Disco',
-      'dischydraulic': 'Disco hidráulico',
-      'disc_hydraulic': 'Disco hidráulico',
-      'discmechanical': 'Disco mecánico',
-      'disc_mechanical': 'Disco mecánico',
-      'rim': 'Freno de llanta',
-      'vbrake': 'V-Brake',
-      'v_brake': 'V-Brake',
-      'cantilever': 'Cantilever',
-      'roadcaliper': 'Caliper de ruta',
-      'road_caliper': 'Caliper de ruta',
-      'rollerbrake': 'Roller brake',
-      'roller_brake': 'Roller brake',
-      'drumbrake': 'Freno de tambor',
-      'drum_brake': 'Freno de tambor',
-      'coasterbrake': 'Contrapedal',
-      'coaster_brake': 'Contrapedal',
-      'presta': 'Presta',
-      'schrader': 'Schrader / americana',
-      'dunlop': 'Dunlop',
-      'shimanohg': 'Shimano HG',
-      'shimano_hg': 'Shimano HG',
-      'shimanohgroad11': 'Shimano HG Road 11',
-      'shimano_hg_road_11': 'Shimano HG Road 11',
-      'microspline': 'Micro Spline',
-      'micro_spline': 'Micro Spline',
-      'sramxd': 'SRAM XD',
-      'sram_xd': 'SRAM XD',
-      'sramxdr': 'SRAM XDR',
-      'sram_xdr': 'SRAM XDR',
-      'campagnolo': 'Campagnolo',
-      'campagnolon3w': 'Campagnolo N3W',
-      'campagnolo_n3w': 'Campagnolo N3W',
-      'threadedfreewheel': 'Rueda libre roscada',
-      'threaded_freewheel': 'Rueda libre roscada',
-      'fixedthreaded': 'Piñón fijo roscado',
-      'fixed_threaded': 'Piñón fijo roscado',
-      'bmxdriver': 'Driver BMX',
-      'bmx_driver': 'Driver BMX',
-      'single_speed': 'Single speed',
-      'singlespeed': 'Single speed',
-      'derailleur': 'Con cambios',
-      'externalcup': 'Cazoletas externas',
-      'external_cup': 'Cazoletas externas',
-      'threadedbsa': 'Rosca BSA',
-      'threaded_bsa': 'Rosca BSA',
-      'squaretaper': 'Cuadradillo',
-      'square_taper': 'Cuadradillo',
-      'hollowtech24mm': 'Hollowtech / 24 mm externo',
-      'hollowtech_24mm': 'Hollowtech / 24 mm externo',
-      'bb30': 'BB30',
-      'pf30': 'PF30',
-      'dub': 'DUB',
-      'jis': 'JIS',
-      'iso': 'ISO',
-      'front': 'Delantero',
-      'rear': 'Trasero',
-      'pair': 'Par',
-      'universal': 'Universal',
-      'aluminum': 'Aluminio',
-      'aluminium': 'Aluminio',
-      'steel': 'Acero',
-      'carbon': 'Carbono',
-      'alloy': 'Aleación',
-      'tubeless': 'Tubeless',
-      'tubelessready': 'Tubeless ready',
-      'tubeless_ready': 'Tubeless ready',
-      'clincher': 'Clincher',
-      'folding': 'Plegable',
-      'wire': 'Aro rígido',
-    };
-    final mapped = valueMap[normalized] ?? valueMap[value];
-    if (mapped != null) return mapped;
-    if (RegExp(r'^[0-9]+(\.[0-9]+)?$').hasMatch(value)) return value;
-    return _titleCaseTechnical(value.replaceAll('_', ' ').replaceAll('-', ' '));
-  }
-
-  String _titleCaseTechnical(String value) {
-    final clean = value.trim().replaceAll(RegExp(r'\s+'), ' ');
-    if (clean.isEmpty) return clean;
-    const preserveUpper = {
-      'hg',
-      'xd',
-      'xdr',
-      'bsa',
-      'bb30',
-      'pf30',
-      'dub',
-      'jis',
-      'iso',
-      'erd',
-      'etrto',
-      'n3w',
-      'bmx',
-    };
-    return clean.split(' ').map((word) {
-      final lower = word.toLowerCase();
-      if (preserveUpper.contains(lower)) return lower.toUpperCase();
-      if (lower == 'mm' || lower == 'kg') return lower;
-      return lower.isEmpty
-          ? lower
-          : '${lower[0].toUpperCase()}${lower.substring(1)}';
-    }).join(' ');
-  }
-
-  Widget _buildDetailBandItem({
-    required String label,
-    required String value,
-  }) {
-    return Container(
-      padding: const EdgeInsets.only(top: 14, bottom: 12),
-      decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(
-            color: _storeTheme.commerceLine,
-          ),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label.toUpperCase(),
-            style: _storeTheme.text.labelSmall?.copyWith(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: _storeTheme.commerceTextSecondary,
-              letterSpacing: 0.8,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            value,
-            style: _storeTheme.text.bodyMedium?.copyWith(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: _storeTheme.commerceTextPrimary,
-              height: 1.45,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -3128,56 +2634,4 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       ],
     );
   }
-}
-
-class _PublicProductTechnicalSpec {
-  const _PublicProductTechnicalSpec({
-    required this.sectionKey,
-    required this.fieldSortOrder,
-    required this.specKey,
-    required this.specLabel,
-    required this.displayValue,
-    required this.unit,
-    required this.dataType,
-  });
-
-  final String sectionKey;
-  final int fieldSortOrder;
-  final String specKey;
-  final String specLabel;
-  final String displayValue;
-  final String? unit;
-  final String dataType;
-
-  factory _PublicProductTechnicalSpec.fromJson(Map<String, dynamic> json) {
-    return _PublicProductTechnicalSpec(
-      sectionKey: json['section_key']?.toString() ?? 'general',
-      fieldSortOrder: (json['field_sort_order'] as num?)?.toInt() ?? 0,
-      specKey: json['spec_key']?.toString() ?? '',
-      specLabel: json['spec_label']?.toString() ?? '',
-      displayValue: json['display_value']?.toString() ?? '',
-      unit: json['unit']?.toString(),
-      dataType: json['data_type']?.toString() ?? 'text',
-    );
-  }
-}
-
-class _TechnicalFichaGroup {
-  const _TechnicalFichaGroup(this.title, this.items);
-
-  final String title;
-  final List<MapEntry<String, String>> items;
-}
-
-String _normalizeTechnicalToken(String value) {
-  return value
-      .toLowerCase()
-      .replaceAll('á', 'a')
-      .replaceAll('é', 'e')
-      .replaceAll('í', 'i')
-      .replaceAll('ó', 'o')
-      .replaceAll('ú', 'u')
-      .replaceAll('ñ', 'n')
-      .replaceAll(RegExp(r'[^a-z0-9]+'), '')
-      .trim();
 }

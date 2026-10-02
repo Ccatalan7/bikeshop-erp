@@ -657,7 +657,63 @@ de la pieza; una edición posterior del producto no reescribe automáticamente
 una bicicleta ni una visita. Mantener posiciones y scopes y el contrato de
 [workshop](../../BIKE_WORKSHOP_MASTER_SCHEMA.md). PDF/tienda/feeds sólo publican
 afirmaciones aceptadas y sus límites, con proyecciones que no filtren evidencia
-privada del tenant.
+privada del tenant. **Corrección 2026-10-01:** ningún hecho está confirmado
+(`confirmed` es falso en los 4.604 de productos); «aceptada» significa hoy
+cualquier origen salvo una inferencia sin confirmar. La tienda lo dice una vez
+y no promete verificación (§7.4).
+
+### 7.4 La ficha pública habla con palabras de cliente (2026-10-01, migración 20261002130000)
+
+La tienda lee los mismos hechos que el editor
+(`get_public_product_technical_specs`), pero no usaba sus palabras de cliente
+porque no existían: mostraba el rótulo del operador («Talón (alambre o
+plegable)», «Velocidades declaradas del modelo», «Variante (rango
+publicado)»), etiquetas de opción en inglés, el número con punto decimal y la
+unidad del motor («34 T»), y lo compensaba con un mapa propio de claves de
+2026-05 que ya no calzaba con ninguna ficha; el ETRTO «58-584» salía «58 584».
+La ficha estaba detrás de una pestaña que abría en una descripción vacía, en
+cajas iguales, encabezada por el SKU.
+
+- **La base es dueña de las palabras de la tienda.**
+  `spec_definitions.store_label` nombra el dato para el cliente;
+  `spec_template_fields.store_label` lo cambia en una ficha («Velocidades de la
+  cadena» en un eslabón rápido, «Para manubrio de» en un tee).
+  `spec_definitions.store_hint` explica en una línea un término técnico (TPI,
+  ETRTO, OLD, BCD…) y nunca afirma nada del producto. La tienda no tiene
+  nombres propios. Ninguna de estas columnas entra al recibo de una lectura del
+  nombre.
+- **Lo esencial va junto al precio.** `spec_template_fields.store_highlight`
+  ordena lo que decide la compra (45 fichas); la tienda muestra hasta cuatro.
+  Sin orden toma los primeros de la ficha. Un «No» nunca es esencial, uno solo
+  no se destaca, y los extremos de un cassette se leen «11-34 dientes».
+- **Los grupos son de tienda:** Medidas, Características (incluye lo declarado
+  por el fabricante: «Según el fabricante» era el rol de la ficha, no un título
+  de tienda), Qué incluye y Marca y modelo. El SKU queda junto al stock.
+- **El número se escribe a la chilena** (57,1 mm; 1.000 lúmenes), la unidad en
+  palabras (dientes, unidad/unidades) y una talla comercial en pulgadas
+  conserva su punto, como viene impresa: 27.5", 2.3".
+- **Los filtros del catálogo** usan el mismo nombre de la definición y el
+  nombre visible de cada opción (`get_public_spec_option_labels_v1`). El filtro
+  sigue guardando la etiqueta, que es lo que citan los enlaces compartidos
+  (`spec.drivetrain_mode=Derailleur` se lee «Con cambio trasero»).
+- **El origen se dice una vez:** «Datos informados por el fabricante y el
+  proveedor.» bajo la ficha, con una forma de preguntar (el WhatsApp del sitio)
+  al lado.
+
+**Regla:** un dato visible al cliente con valor en un producto publicado lleva
+`store_label`; el read-back de 130000 lo exige, y una pasada de catálogo que
+publique campos nuevos los nombra en la misma migración. Un campo que sólo
+trae texto de proveedor o notas de conciliación no es visible al cliente
+(`published_variant_label` «12-32T (br)», `rear_derailleur_supplied_adapter_reference`
+«Riveted adapter (ROAD type)», `rim_joint_designation` «Sleeve»).
+
+Lo que la tienda todavía no muestra (2026-10-01, 1.600 publicados): 347 sin
+ningún dato público y 810 con uno o dos; 1.059 valores en campos retirados de
+su ficha (`legacy`), entre ellos el rodado de 252 productos; la horquilla sin
+aro fuera de una tabla oculta (`fork_tire_clearance_configurations`); tablas
+ocultas al cliente con datos útiles (presión máxima del neumático, dientes de
+cada plato, núcleos aceptados). Es falta de datos o de presentación de tablas,
+no de palabras.
 
 ## 8. Resultado de compatibilidad
 

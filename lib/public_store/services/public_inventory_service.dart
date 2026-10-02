@@ -124,6 +124,10 @@ class PublicCatalogSpecFacet {
   final String? unit;
   final List<PublicCatalogSpecFacetValue> values;
 
+  /// The visible name of an option value («Eslabón rápido (missing link)»),
+  /// keyed by the label the filter keeps (`Missing link`, cited by links).
+  final Map<String, String> optionDisplay;
+
   /// Products of the collection that carry this spec at all.
   final int productCount;
 
@@ -138,6 +142,7 @@ class PublicCatalogSpecFacet {
     required this.values,
     required this.productCount,
     required this.scopeCount,
+    this.optionDisplay = const {},
   });
 
   /// Share of the collection this spec describes, 0..1.
@@ -744,6 +749,7 @@ class PublicInventoryService extends ChangeNotifier {
     double? minPrice,
     double? maxPrice,
   }) async {
+    final optionLabels = _specOptionLabelsForTenant(tenantId);
     try {
       final response = await _supabase.rpc(
         'get_public_product_facets_v2',
@@ -806,6 +812,7 @@ class PublicInventoryService extends ChangeNotifier {
             b.label.toLowerCase(),
           ));
       final specFacets = <PublicCatalogSpecFacet>[];
+      final optionDisplayByKey = await optionLabels;
       for (final entry in specRows.entries) {
         final parts = entry.key.split(':');
         if (parts.length < 3) continue;
@@ -836,6 +843,7 @@ class PublicInventoryService extends ChangeNotifier {
           values: List.unmodifiable(values),
           productCount: (first['range_min'] as num?)?.toInt() ?? 0,
           scopeCount: (first['range_max'] as num?)?.toInt() ?? 0,
+          optionDisplay: optionDisplayByKey[key] ?? const {},
         ));
       }
       // The facets that describe most of the collection come first.
@@ -859,6 +867,42 @@ class PublicInventoryService extends ChangeNotifier {
       return const PublicCatalogFacetSnapshot.unavailable();
     }
   }
+
+  final Map<String, Future<Map<String, Map<String, String>>>>
+      _specOptionLabels = {};
+
+  /// Visible names of option values by spec key and option label
+  /// (`get_public_spec_option_labels_v1`, 20261002130000). A filter keeps the
+  /// option's label, which shared links cite; the visitor reads its name.
+  /// Empty from a server without the function: the label is shown.
+  Future<Map<String, Map<String, String>>> _specOptionLabelsForTenant(
+    String tenantId,
+  ) =>
+      _specOptionLabels.putIfAbsent(tenantId, () async {
+        try {
+          final response = await _supabase.rpc(
+            'get_public_spec_option_labels_v1',
+            params: {'p_tenant_id': tenantId},
+          );
+          final byKey = <String, Map<String, String>>{};
+          for (final raw in response as List) {
+            final row = Map<String, dynamic>.from(raw as Map);
+            final key = row['spec_key']?.toString().trim() ?? '';
+            final label = row['value_label']?.toString().trim() ?? '';
+            final display = row['display_label']?.toString().trim() ?? '';
+            if (key.isEmpty || label.isEmpty || display.isEmpty) continue;
+            byKey.putIfAbsent(key, () => <String, String>{})[label] = display;
+          }
+          return byKey;
+        } catch (error) {
+          debugPrint(
+            '⚠️ PublicInventoryService: option names unavailable: $error',
+          );
+          // A failure is not an answer: the next facet load asks again.
+          _specOptionLabels.remove(tenantId);
+          return const {};
+        }
+      });
 
   Future<PublicCategoryCountSnapshot> getCategoryCountsForTenant({
     required String tenantId,

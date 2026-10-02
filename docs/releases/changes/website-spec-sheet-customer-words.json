@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-spec-sheet-customer-words",
+  "scope": "release",
+  "platforms": [
+    "web",
+    "macos",
+    "windows",
+    "android"
+  ],
+  "title": "La ficha de la tienda habla como el cliente",
+  "summary": "Junto al precio aparece lo que decide la compra (aro, ancho, velocidades, recorrido) y la ficha completa se ve sin pestañas, en medidas y características, con números a la chilena y una explicación para cada término técnico.",
+  "items": [
+    "Cada dato y cada opción se nombra en español de taller: «Talón», «Con cambio trasero», «3/32\"», «11 dientes», y ya no «Derailleur» ni «(alambre o plegable)».",
+    "Los filtros del catálogo muestran el nombre en español de cada opción, y los enlaces con filtros que ya circulan siguen funcionando.",
+    "Bajo la ficha se dice de dónde vienen los datos y un botón abre WhatsApp para preguntar si el producto le sirve a tu bicicleta."
+  ],
+  "evidence": [
+    {
+      "path": "lib/public_store/pages/product_detail_page.dart",
+      "sha256": "eb54ce1cada36a39ad20f60ab002ccae1e62913b5db55bd25216bf8dd2c7c4dc"
+    },
+    {
+      "path": "lib/public_store/widgets/product_spec_sheet_view.dart",
+      "sha256": "102bf14f15f74862ea711e97cf578cc2715c94d9fd44fdb8a916689c048bde5a"
+    },
+    {
+      "path": "lib/public_store/models/public_product_spec_sheet.dart",
+      "sha256": "64ca653845a8a4185cfc61d6316f83256cdbd7a55a3e1f1c5227208c26137036"
+    },
+    {
+      "path": "lib/public_store/utils/public_spec_display.dart",
+      "sha256": "88a67f86950c238e6c3263eff2485d47dceb94e0d6c7a4275a4866ebd32e4016"
+    },
+    {
+      "path": "lib/public_store/pages/product_catalog_page.dart",
+      "sha256": "1df4becb1e031e8fc53791af2bbb48d053e710993f2a3bd0702f101fa14fe976"
+    },
+    {
+      "path": "lib/public_store/services/public_inventory_service.dart",
+      "sha256": "c0070a021e9e5527f86a28ffb2babc5d27840a41f56488871306ebad6d3eb1ff"
+    },
+    {
+      "path": "lib/public_store/utils/whatsapp_link.dart",
+      "sha256": "61cc5baa66aee62c8ec36fe2f8089a7f6ad9b5484a51bf9838bf488e3879f049"
+    },
+    {
+      "path": "lib/public_store/widgets/public_store_layout.dart",
+      "sha256": "27cb3aeceffa762803b2a6699ee627d213b3880cd09dcddbd555508a9edcd867"
+    },
+    {
+      "path": "lib/public_store/widgets/store_layout/layout_helpers.dart",
+      "sha256": "d96692ca9b4f2f238ba0f989377ce1b659d7fd4827f7ccf90541ad09a8523722"
+    }
+  ]
+}

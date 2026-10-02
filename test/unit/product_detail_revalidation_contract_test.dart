@@ -145,7 +145,8 @@ void main() {
         '_justAddedResetTimer?.cancel()',
         '_justAddedToCart = false',
         '_hideProductFeedbackBanner(animated: false)',
-        '_selectedDetailsTab = 0',
+        // The Descripción/Ficha técnica tabs left on 2026-10-01: the sheet is
+        // always visible, so no selected tab can cross products.
         '_quantity = 1',
         '_selectedImageIndex = 0',
         '_trackedProductIdForRoute = null',
