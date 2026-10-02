@@ -164,6 +164,20 @@ class ChileanUtils {
     return emailRegex.hasMatch(email);
   }
 
+  /// Un teléfono chileno como se lee: «+56 9 8121 0019». Lo que no se
+  /// reconoce como chileno se devuelve tal como se escribió.
+  static String formatPhone(String? phone) {
+    final raw = phone?.trim() ?? '';
+    if (raw.isEmpty) return '';
+    var digits = raw.replaceAll(RegExp(r'\D'), '');
+    if (digits.length == 11 && digits.startsWith('56')) {
+      digits = digits.substring(2);
+    }
+    if (digits.length != 9) return raw;
+    final area = digits.substring(0, 1);
+    return '+56 $area ${digits.substring(1, 5)} ${digits.substring(5)}';
+  }
+
   // Chilean phone number validation
   static bool isValidChileanPhone(String phone) {
     // Remove spaces, hyphens, and parentheses

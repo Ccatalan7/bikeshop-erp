@@ -245,6 +245,16 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
             final history = (loading || failed) ? null : snapshot.data;
             return LayoutBuilder(
               builder: (context, constraints) {
+                if (constraints.maxWidth >= _studioMinWidth &&
+                    constraints.maxHeight.isFinite) {
+                  return _buildStudio(
+                    context,
+                    constraints,
+                    loading: loading,
+                    failed: failed,
+                    history: history,
+                  );
+                }
                 final narrow = constraints.maxWidth < 680;
                 final gutter = narrow ? 16.0 : 28.0;
                 final contentWidth =
@@ -325,6 +335,191 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
           },
         ),
       ),
+    );
+  }
+
+  // ── Escritorio ancho ─────────────────────────────────────────────────────
+
+  /// Desde este ancho la ficha ocupa toda la página: la bici queda fija a la
+  /// izquierda y el historial usa el resto (dueño, 2026-10-02: «no me gustan
+  /// esas tablas en desktop que no cubren todo el ancho de la página»).
+  static const double _studioMinWidth = 1180;
+  static const double _identityWidth = 380;
+
+  Widget _buildTabs(_RecordHistory? history) {
+    return VbSubTabs<_RecordTab>(
+      density: VbSubTabsDensity.comfortable,
+      value: _tab,
+      onChanged: (tab) => setState(() => _tab = tab),
+      tabs: [
+        VbSubTab(
+          value: _RecordTab.history,
+          label: history == null || history.visitCount == 0
+              ? 'Historial'
+              : 'Historial · ${history.visitCount}',
+        ),
+        const VbSubTab(value: _RecordTab.technical, label: 'Ficha técnica'),
+        const VbSubTab(value: _RecordTab.notes, label: 'Notas'),
+      ],
+    );
+  }
+
+  Widget _buildStudio(
+    BuildContext context,
+    BoxConstraints constraints, {
+    required bool loading,
+    required bool failed,
+    required _RecordHistory? history,
+  }) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final workshopVisit = history?.workshopVisit;
+    const pad = 28.0;
+    final contentWidth = constraints.maxWidth - _identityWidth - pad * 2 - 1;
+    final identity = Container(
+      width: _identityWidth,
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border: Border(right: BorderSide(color: roles.hairline)),
+      ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (widget.showBackRow) ...[
+              _buildBackRow(context, narrow: false),
+              const SizedBox(height: 8),
+            ] else
+              const SizedBox(height: 16),
+            _bikeDrawing(
+              context,
+              width: _identityWidth - 48,
+              height: (_identityWidth - 48) * 0.62,
+            ),
+            const SizedBox(height: 20),
+            _buildTitle(context, narrow: false),
+            const SizedBox(height: 2),
+            _buildOwner(context, narrow: false),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: VbButton(
+                    label: 'Editar',
+                    icon: Icons.edit_outlined,
+                    variant: VbButtonVariant.secondary,
+                    density: VbDensity.comfortable,
+                    semanticLabel: 'Editar bicicleta',
+                    expand: true,
+                    onPressed: widget.onEdit,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: VbButton(
+                    label: 'Nuevo trabajo',
+                    icon: Icons.add,
+                    density: VbDensity.comfortable,
+                    expand: true,
+                    onPressed: widget.onNewJob,
+                  ),
+                ),
+              ],
+            ),
+            if (workshopVisit != null) ...[
+              const SizedBox(height: 18),
+              _buildWorkshopBand(context, workshopVisit, narrow: true),
+            ],
+            const SizedBox(height: 22),
+            _buildFactList(context, _facts(history)),
+          ],
+        ),
+      ),
+    );
+    return SizedBox(
+      width: constraints.maxWidth,
+      height: constraints.maxHeight,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          identity,
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(pad, 20, pad, 48),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildTabs(history),
+                  const SizedBox(height: 22),
+                  switch (_tab) {
+                    _RecordTab.history => _buildHistoryTab(
+                        context,
+                        loading: loading,
+                        failed: failed,
+                        history: history,
+                        width: contentWidth,
+                      ),
+                    _RecordTab.technical =>
+                      _buildTechnicalTab(context, width: contentWidth),
+                    _RecordTab.notes => _buildNotesTab(context),
+                  },
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Los datos de la bici, uno por línea, en la columna de identidad.
+  Widget _buildFactList(
+    BuildContext context,
+    List<({String label, String? value})> facts,
+  ) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var index = 0; index < facts.length; index++)
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 11),
+            decoration: BoxDecoration(
+              border: index == 0
+                  ? null
+                  : Border(top: BorderSide(color: roles.hairline)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                SizedBox(
+                  width: 128,
+                  child: Text(facts[index].label.toUpperCase(),
+                      style: BikeModuleText.label(context)),
+                ),
+                Expanded(
+                  child: Text(
+                    facts[index].value ?? '—',
+                    textAlign: TextAlign.end,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: facts[index].value == null
+                          ? FontWeight.w500
+                          : FontWeight.w600,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                      color: facts[index].value == null
+                          ? roles.faintForeground
+                          : theme.colorScheme.onSurface,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 
@@ -1495,7 +1690,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
                     style: TextStyle(fontWeight: FontWeight.w600),
                   ),
                   TextSpan(
-                    text: _requestAsSentence(request),
+                    text: bikeRequestAsSentence(request),
                     style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
                   ),
                 ]),
@@ -1611,24 +1806,6 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
 
   /// Lo que pidió el cliente en una línea: sin las viñetas con que se
   /// escribió («+Diagnóstico…») y sin puntos repetidos al unir renglones.
-  String _requestAsSentence(String raw) {
-    final lines = raw
-        .split(RegExp(r'\n+'))
-        .map((line) => line.trim().replaceFirst(RegExp(r'^[+\-•*·]+\s*'), ''))
-        .map((line) => line.replaceAll(RegExp(r'\.{2,}'), '.').trim())
-        .where((line) => line.isNotEmpty)
-        .toList();
-    final buffer = StringBuffer();
-    for (final line in lines) {
-      if (buffer.isNotEmpty) {
-        final text = buffer.toString();
-        buffer.write(RegExp(r'[.:;!?]$').hasMatch(text) ? ' ' : '. ');
-      }
-      buffer.write(line);
-    }
-    return buffer.toString();
-  }
-
   Widget _buildLine(BuildContext context, BikeVisitLine line,
       {required bool narrow}) {
     final theme = Theme.of(context);
@@ -1959,9 +2136,10 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
 
     final cards = LayoutBuilder(
       builder: (context, constraints) {
-        final twoColumns = constraints.maxWidth >= 620;
-        final cardWidth =
-            twoColumns ? (constraints.maxWidth - 16) / 2 : constraints.maxWidth;
+        final columns = constraints.maxWidth >= 1080
+            ? 3
+            : (constraints.maxWidth >= 620 ? 2 : 1);
+        final cardWidth = (constraints.maxWidth - 16 * (columns - 1)) / columns;
         return Wrap(
           spacing: 16,
           runSpacing: 16,
@@ -2178,59 +2356,99 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
         ),
       );
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (final section in sections)
-          Container(
-            margin: const EdgeInsets.only(bottom: 14),
-            padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
-            decoration: BoxDecoration(
-              color: section.warn
-                  ? roles.warning.container
-                  : theme.colorScheme.surface,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: section.warn
-                    ? roles.warning.border
-                    : theme.colorScheme.outlineVariant,
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Semantics(
-                  header: true,
-                  child: Text(
-                    section.title,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: section.warn
-                          ? roles.warning.onContainer
-                          : theme.colorScheme.onSurface,
-                    ),
-                  ),
+    Widget lineOf(String line, bool warn) {
+      final color =
+          warn ? roles.warning.onContainer : theme.colorScheme.onSurface;
+      final split = line.indexOf(': ');
+      // «Plataforma: MTB hardtail» se lee como dato y valor.
+      if (!warn && split > 0 && split < 32) {
+        return Container(
+          padding: const EdgeInsets.symmetric(vertical: 7),
+          decoration: BoxDecoration(
+            border: Border(top: BorderSide(color: roles.hairline)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 2,
+                child: Text(
+                  line.substring(0, split),
+                  style:
+                      TextStyle(fontSize: 13.5, color: roles.faintForeground),
                 ),
-                const SizedBox(height: 8),
-                for (final line in section.lines)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Text(
-                      line,
-                      style: TextStyle(
-                        fontSize: 14,
-                        height: 1.4,
-                        color: section.warn
-                            ? roles.warning.onContainer
-                            : theme.colorScheme.onSurface,
-                      ),
-                    ),
-                  ),
-              ],
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 3,
+                child: Text(
+                  line.substring(split + 2),
+                  style: TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.w600, color: color),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 4),
+        child: Text(line,
+            style: TextStyle(fontSize: 14, height: 1.4, color: color)),
+      );
+    }
+
+    Widget card(({String title, List<String> lines, bool warn}) section) =>
+        Container(
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 12),
+          decoration: BoxDecoration(
+            color: section.warn
+                ? roles.warning.container
+                : theme.colorScheme.surface,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: section.warn
+                  ? roles.warning.border
+                  : theme.colorScheme.outlineVariant,
             ),
           ),
-      ],
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Semantics(
+                header: true,
+                child: Text(
+                  section.title,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: section.warn
+                        ? roles.warning.onContainer
+                        : theme.colorScheme.onSurface,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              for (final line in section.lines) lineOf(line, section.warn),
+            ],
+          ),
+        );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 1000
+            ? 3
+            : (constraints.maxWidth >= 620 ? 2 : 1);
+        final width = (constraints.maxWidth - 16 * (columns - 1)) / columns;
+        return Wrap(
+          spacing: 16,
+          runSpacing: 16,
+          children: [
+            for (final section in sections)
+              SizedBox(width: width, child: card(section)),
+          ],
+        );
+      },
     );
   }
 

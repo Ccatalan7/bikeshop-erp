@@ -11,11 +11,11 @@
     "web"
   ],
   "title": "Bicicletas registradas, rediseñadas",
-  "summary": "La lista muestra cada bicicleta con un dibujo de su tipo y color, su dueño y su último trabajo, y cada bici abre su propia página con el historial de visitas, la ficha técnica y las notas.",
+  "summary": "La lista muestra cada bicicleta con un dibujo de su tipo y color, su dueño y su último trabajo, y cada bici abre su propia página con el historial, la ficha técnica y las notas; en escritorio todo usa el ancho completo.",
   "items": [
-    "«Todas» muestra cada bici con su dueño y su último trabajo; «En el taller» las agrupa por etapa y marca las que llevan 14 días o más.",
-    "El historial lista cada visita con lo que pidió el cliente y sus repuestos y servicios por sistema; las compras aparte ya no se mezclan con la bici.",
-    "La ficha técnica se lee en seis grupos, de cuadro a cockpit, y dice qué dato falta en cada uno."
+    "«Todas» muestra cada bici con su dibujo, dueño, teléfono y último trabajo; «En el taller» es un tablero por etapa que marca las que llevan 14 días o más.",
+    "Cada bici tiene su página: en escritorio queda fija a la izquierda y el historial muestra cada visita con lo pedido y lo hecho, por sistema.",
+    "La ficha técnica se lee en seis grupos, de cuadro a cockpit, y dice qué dato falta; las compras aparte ya no se mezclan con la bici."
   ],
   "evidence": [
     {
@@ -24,7 +24,7 @@
     },
     {
       "path": "lib/modules/bikeshop/widgets/bike_record_panel.dart",
-      "sha256": "30c2690b9d963ca534f3acb4208b25a5c41567c86f953798a7c29172ee385565"
+      "sha256": "109098751662dcc2c54b4ad06ff1a4b4dac472ebe91e8421a89474d2afa5d94a"
     },
     {
       "path": "lib/modules/bikeshop/widgets/bike_silhouette.dart",
@@ -32,7 +32,7 @@
     },
     {
       "path": "lib/modules/bikeshop/widgets/bike_module_style.dart",
-      "sha256": "f8496eceaa0bd76da6d24522efd059cec014ff6d071710419c8fe41ab8936845"
+      "sha256": "5254467aa72df56b83be6cc4acfa0de7fec40f7fb352c8cbde16b578acaf249b"
     },
     {
       "path": "lib/modules/bikeshop/services/bike_directory_entries.dart",
@@ -56,7 +56,7 @@
     },
     {
       "path": "lib/modules/crm/pages/customer_bike_directory_page.dart",
-      "sha256": "9b5fe263d8d7a71cd8160fbfb1cd34cd7c60401be887325392c6d0e1989165fb"
+      "sha256": "2328cb8335579f6e506ea3f36089aff1d1b25246a9b7ed3adf570d6df7e5d21a"
     },
     {
       "path": "lib/shared/routes/app_router.dart",
@@ -65,6 +65,10 @@
     {
       "path": "lib/shared/routes/erp_routes_barrel.dart",
       "sha256": "6ddc929c42f65da447323687ffed0926455f1e01d06dbf0f25591473808a4fe6"
+    },
+    {
+      "path": "lib/shared/utils/chilean_utils.dart",
+      "sha256": "6ada6875089f085f91bb89b674b3abcebf1bb55d174ce3cc4245325b3a6828b2"
     }
   ]
 }

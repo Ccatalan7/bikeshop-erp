@@ -92,6 +92,26 @@ String bikeFullDate(DateTime date) {
 }
 
 /// «mar 2026»: la cabecera de una visita.
+/// Lo que pidió el cliente como una frase: el taller lo escribe en líneas,
+/// a veces con «+» o «-» al inicio y con puntos repetidos.
+String bikeRequestAsSentence(String raw) {
+  final lines = raw
+      .split(RegExp(r'\n+'))
+      .map((line) => line.trim().replaceFirst(RegExp(r'^[+\-•*·]+\s*'), ''))
+      .map((line) => line.replaceAll(RegExp(r'\.{2,}'), '.').trim())
+      .where((line) => line.isNotEmpty)
+      .toList();
+  final buffer = StringBuffer();
+  for (final line in lines) {
+    if (buffer.isNotEmpty) {
+      final text = buffer.toString();
+      buffer.write(RegExp(r'[.:;!?]$').hasMatch(text) ? ' ' : '. ');
+    }
+    buffer.write(line);
+  }
+  return buffer.toString();
+}
+
 String bikeMonthYear(DateTime date) {
   final local = date.toLocal();
   return '${_monthAbbr[local.month - 1]} ${local.year}';

@@ -318,6 +318,30 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('on a wide desktop the record fills the page beside the bike',
+      (tester) async {
+    _setSize(tester, const Size(1920, 1080));
+    final service = _HistoryService()..hasJobs = true;
+    addTearDown(service.dispose);
+    await _pump(tester, service, _snapshot(), Brightness.light);
+    // The bike stays docked at the left; the history uses the rest.
+    final action = tester.getTopLeft(find.text('Nuevo trabajo'));
+    final visit = tester.getTopLeft(find.text('PG-00257'));
+    expect(action.dx, lessThan(400));
+    expect(visit.dx, greaterThan(400));
+    expect(find.text('ÚLTIMA VISITA'), findsOneWidget);
+    expect(find.text('POR SISTEMA'), findsOneWidget);
+    expect(tester.getTopRight(find.text('POR SISTEMA')).dx, greaterThan(1500),
+        reason: 'the system rail reaches the right edge');
+    expect(tester.takeException(), isNull);
+
+    // A narrower host keeps the header above the history.
+    _setSize(tester, const Size(1100, 900));
+    await tester.pumpAndSettle();
+    expect(tester.getTopLeft(find.text('Nuevo trabajo')).dx, greaterThan(600));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('a catalog value is confirmed only by its explicit fact state',
       (tester) async {
     _setSize(tester, const Size(1400, 1100));

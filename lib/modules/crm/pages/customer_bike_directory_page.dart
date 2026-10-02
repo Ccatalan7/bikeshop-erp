@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../../shared/themes/vinabike_theme_roles.dart';
+import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/utils/responsive_viewport.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
@@ -224,63 +225,82 @@ class _CustomerBikeDirectoryPageState extends State<CustomerBikeDirectoryPage> {
 
   Widget _buildWide(BuildContext context, String summary) {
     final theme = Theme.of(context);
+    final groups = groupInWorkshop(_rows);
+    // Ocupa todo el ancho de la página (dueño, 2026-10-02: «no me gustan esas
+    // tablas en desktop que no cubren todo el ancho»).
     return Padding(
-      padding: const EdgeInsets.fromLTRB(32, 28, 32, 24),
-      child: Align(
-        alignment: Alignment.topCenter,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1320),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+      padding: const EdgeInsets.fromLTRB(28, 22, 28, 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Semantics(
-                          header: true,
-                          child: Text('Bicicletas',
-                              style: BikeModuleText.title(context)),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          summary,
-                          style: TextStyle(
-                            fontSize: 15,
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Semantics(
+                      header: true,
+                      child: Text('Bicicletas',
+                          style: BikeModuleText.title(context)),
                     ),
-                  ),
-                  IconButton(
-                    tooltip: 'Actualizar',
-                    onPressed: () => _load(forceRefresh: true),
-                    icon: const Icon(Icons.refresh),
-                  ),
-                ],
+                    const SizedBox(height: 4),
+                    Text(
+                      summary,
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Expanded(child: _buildSearchField(context)),
-                  const SizedBox(width: 12),
-                  // VbSegmented reparte el ancho entre sus segmentos.
-                  SizedBox(width: 320, child: _buildViewSelector()),
-                ],
-              ),
-              if (_error != null) ...[
-                const SizedBox(height: 12),
-                _buildErrorBanner(context),
+              for (final stage in BikeWorkshopStage.values) ...[
+                const SizedBox(width: 10),
+                _StageCounter(
+                  stage: stage,
+                  rows: [
+                    for (final group in groups)
+                      if (group.stage == stage) ...group.rows,
+                  ],
+                  today: _today,
+                  selected: _view == _DirectoryView.workshop,
+                  onTap: () => setState(() {
+                    _view = _DirectoryView.workshop;
+                    _visibleCount = _pageSize;
+                  }),
+                ),
               ],
-              const SizedBox(height: 16),
-              Expanded(child: _buildWideList(context)),
+              const SizedBox(width: 10),
+              IconButton(
+                tooltip: 'Actualizar',
+                onPressed: () => _load(forceRefresh: true),
+                icon: const Icon(Icons.refresh),
+              ),
             ],
           ),
-        ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(child: _buildSearchField(context)),
+              const SizedBox(width: 12),
+              // VbSegmented reparte el ancho entre sus segmentos.
+              SizedBox(width: 340, child: _buildViewSelector()),
+            ],
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 12),
+            _buildErrorBanner(context),
+          ],
+          const SizedBox(height: 16),
+          Expanded(
+            child: LayoutBuilder(
+              builder: (context, constraints) =>
+                  _buildWideList(context, width: constraints.maxWidth),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -373,11 +393,19 @@ class _CustomerBikeDirectoryPageState extends State<CustomerBikeDirectoryPage> {
 
   // ── Escritorio ─────────────────────────────────────────────────────────
 
-  Widget _buildWideList(BuildContext context) {
+  Widget _buildWideList(BuildContext context, {required double width}) {
     final theme = Theme.of(context);
     if (_isLoading && _rows.isEmpty) {
       return const Center(child: BrandedLoading());
     }
+    _WideRow rowFor(BikeDirectoryEntry row, {required bool workshopView}) =>
+        _WideRow(
+          row: row,
+          workshopView: workshopView,
+          today: _today,
+          onOpen: () => _openBike(row.bike),
+          onOpenOwner: row.owner == null ? null : () => _openOwner(row.owner!),
+        );
     final children = <Widget>[];
     if (_query.isNotEmpty) {
       final base = _view == _DirectoryView.workshop
@@ -385,18 +413,20 @@ class _CustomerBikeDirectoryPageState extends State<CustomerBikeDirectoryPage> {
           : _rows;
       final found = _searchResults(base);
       if (found.isEmpty) return _buildNoMatches(context);
-      children.addAll(found.take(80).map((row) => _WideRow(
-            row: row,
-            workshopView: _view == _DirectoryView.workshop,
-            today: _today,
-            onOpen: () => _openBike(row.bike),
-            onOpenOwner:
-                row.owner == null ? null : () => _openOwner(row.owner!),
-          )));
+      children.addAll(found.take(80).map((row) =>
+          rowFor(row, workshopView: _view == _DirectoryView.workshop)));
     } else if (_view == _DirectoryView.workshop) {
       final groups = groupInWorkshop(_rows);
       if (groups.isEmpty) {
         return _buildEmpty(context, 'No hay bicis en el taller ahora.');
+      }
+      // Con ancho, cada etapa es una columna: el taller se ve de un vistazo.
+      if (width >= 1000) {
+        return _WorkshopBoard(
+          groups: groups,
+          today: _today,
+          onOpen: _openBike,
+        );
       }
       for (final group in groups) {
         children.add(_GroupHeader(
@@ -404,28 +434,17 @@ class _CustomerBikeDirectoryPageState extends State<CustomerBikeDirectoryPage> {
           count: group.rows.length,
           hint: group.stage.hint,
         ));
-        children.addAll(group.rows.map((row) => _WideRow(
-              row: row,
-              workshopView: true,
-              today: _today,
-              onOpen: () => _openBike(row.bike),
-              onOpenOwner:
-                  row.owner == null ? null : () => _openOwner(row.owner!),
-            )));
+        children
+            .addAll(group.rows.map((row) => rowFor(row, workshopView: true)));
       }
     } else {
       final all = sortByRecentVisit(_rows.where((row) => row.bike.isActive));
       if (all.isEmpty) {
         return _buildEmpty(context, 'Todavía no hay bicicletas registradas.');
       }
-      children.addAll(all.take(_visibleCount).map((row) => _WideRow(
-            row: row,
-            workshopView: false,
-            today: _today,
-            onOpen: () => _openBike(row.bike),
-            onOpenOwner:
-                row.owner == null ? null : () => _openOwner(row.owner!),
-          )));
+      children.addAll(all
+          .take(_visibleCount)
+          .map((row) => rowFor(row, workshopView: false)));
       children.add(
           _buildMoreFooter(context, shown: _visibleCount, total: all.length));
     }
@@ -645,7 +664,7 @@ class _WideHeaderRow extends StatelessWidget {
         Text(text.toUpperCase(), style: style, textAlign: align);
     return ExcludeSemantics(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+        padding: const EdgeInsets.fromLTRB(24, 13, 24, 13),
         child: _WideGrid(
           tile: const SizedBox.shrink(),
           bike: label('Bicicleta'),
@@ -660,7 +679,8 @@ class _WideHeaderRow extends StatelessWidget {
   }
 }
 
-/// Las mismas columnas para la cabecera y cada fila.
+/// Las mismas columnas para la cabecera y cada fila, repartidas en todo el
+/// ancho: lo que crece es el texto (bici, dueño y lo que se pidió).
 class _WideGrid extends StatelessWidget {
   const _WideGrid({
     required this.tile,
@@ -684,17 +704,17 @@ class _WideGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        SizedBox(width: 72, child: tile),
+        SizedBox(width: 96, child: tile),
+        const SizedBox(width: 20),
+        Expanded(flex: 20, child: bike),
+        const SizedBox(width: 20),
+        Expanded(flex: 15, child: owner),
+        const SizedBox(width: 20),
+        Expanded(flex: 30, child: job),
+        const SizedBox(width: 20),
+        SizedBox(width: 128, child: when),
         const SizedBox(width: 16),
-        Expanded(flex: 21, child: bike),
-        const SizedBox(width: 16),
-        Expanded(flex: 14, child: owner),
-        const SizedBox(width: 16),
-        Expanded(flex: 16, child: job),
-        const SizedBox(width: 16),
-        SizedBox(width: 104, child: when),
-        const SizedBox(width: 16),
-        SizedBox(width: 92, child: last),
+        SizedBox(width: 84, child: last),
         const SizedBox(width: 12),
         SizedBox(width: 20, child: trailing),
       ],
@@ -856,6 +876,7 @@ class _WideRow extends StatelessWidget {
     final roles = VinabikeThemeRoles.of(context);
     final job = workshopView ? row.workshopJob : row.latestJob;
     final days = row.waitingDays(today);
+    final faint = TextStyle(fontSize: 13, color: roles.faintForeground);
 
     final Widget whenCell;
     final Widget lastCell;
@@ -864,7 +885,7 @@ class _WideRow extends StatelessWidget {
       whenCell = Text(
         days == null ? '—' : _waitLabel(days),
         style: TextStyle(
-          fontSize: 13.5,
+          fontSize: 14,
           fontWeight: late ? FontWeight.w700 : FontWeight.w500,
           fontFeatures: const [FontFeature.tabularFigures()],
           color:
@@ -885,21 +906,40 @@ class _WideRow extends StatelessWidget {
       );
     } else {
       final last = row.lastVisitAt;
-      whenCell = Text(
-        last == null ? 'Sin visitas' : _shortDate(last, today),
-        style: TextStyle(
-          fontSize: 14,
-          fontFeatures: const [FontFeature.tabularFigures()],
-          color: last == null
-              ? roles.faintForeground
-              : theme.colorScheme.onSurfaceVariant,
-        ),
+      final ago = last == null ? null : calendarDaysBetween(last, today);
+      whenCell = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            last == null ? 'Sin visitas' : _shortDate(last, today),
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+              fontFeatures: const [FontFeature.tabularFigures()],
+              color: last == null
+                  ? roles.faintForeground
+                  : theme.colorScheme.onSurface,
+            ),
+          ),
+          if (ago != null)
+            Text(
+              switch (ago) {
+                0 => 'hoy',
+                1 => 'ayer',
+                < 60 => 'hace $ago días',
+                < 730 => 'hace ${ago ~/ 30} meses',
+                _ => 'hace ${ago ~/ 365} años',
+              },
+              style: faint,
+            ),
+        ],
       );
       lastCell = Text(
         row.visits == 0 ? '—' : '${row.visits}',
         textAlign: TextAlign.end,
         style: TextStyle(
-          fontSize: 14,
+          fontSize: 15,
           fontWeight: FontWeight.w600,
           fontFeatures: const [FontFeature.tabularFigures()],
           color: row.visits == 0
@@ -909,66 +949,408 @@ class _WideRow extends StatelessWidget {
       );
     }
 
+    final request = job?.clientRequest?.trim();
+    final phone = ChileanUtils.formatPhone(row.owner?.phone);
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onOpen,
         child: Container(
-          constraints: const BoxConstraints(minHeight: 66),
-          padding: const EdgeInsets.fromLTRB(20, 9, 20, 9),
+          constraints: const BoxConstraints(minHeight: 78),
+          padding: const EdgeInsets.fromLTRB(24, 10, 24, 10),
           decoration: BoxDecoration(
             border: Border(top: BorderSide(color: roles.hairline)),
           ),
           child: _WideGrid(
-            tile: _BikeTile(bike: row.bike, width: 72, height: 46),
+            tile: _BikeTile(bike: row.bike, width: 96, height: 60),
             bike: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                _bikeName(context, row.bike),
+                _bikeName(context, row.bike, size: 16),
                 if (_bikeSubtitle(row.bike) case final sub when sub.isNotEmpty)
                   Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Text(
-                      sub,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style:
-                          TextStyle(fontSize: 13, color: roles.faintForeground),
-                    ),
+                    padding: const EdgeInsets.only(top: 3),
+                    child: Text(sub,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: faint),
                   ),
               ],
             ),
-            owner: Align(
-              alignment: Alignment.centerLeft,
-              child: onOpenOwner == null
-                  ? Text('Sin dueño',
+            owner: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (onOpenOwner == null)
+                  Text('Sin dueño',
                       style:
                           TextStyle(fontSize: 14, color: roles.faintForeground))
-                  : _OwnerLink(name: row.owner!.name, onTap: onOpenOwner!),
+                else
+                  _OwnerLink(name: row.owner!.name, onTap: onOpenOwner!),
+                if (phone.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 2),
+                    child: Text(
+                      phone,
+                      maxLines: 1,
+                      style: faint.copyWith(
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ),
+              ],
             ),
             job: job == null
                 ? Text('Sin trabajos',
                     style:
                         TextStyle(fontSize: 13.5, color: roles.faintForeground))
-                : Row(
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(job.jobNumber ?? '—',
-                          style: BikeModuleText.code(context)),
-                      const SizedBox(width: 12),
-                      Flexible(
-                        child: BikeJobStatusDot(
-                          label: jobStatusLabel(job),
-                          color: jobStatusColor(job),
-                          muted: _isClosed(job),
-                        ),
+                      Row(
+                        children: [
+                          Text(job.jobNumber ?? '—',
+                              style: BikeModuleText.code(context)),
+                          const SizedBox(width: 12),
+                          Flexible(
+                            child: BikeJobStatusDot(
+                              label: jobStatusLabel(job),
+                              color: jobStatusColor(job),
+                              muted: _isClosed(job),
+                            ),
+                          ),
+                        ],
                       ),
+                      if (request != null && request.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 3),
+                          child: Text(
+                            bikeRequestAsSentence(request),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
                     ],
                   ),
             when: whenCell,
             last: lastCell,
             trailing: Icon(Icons.chevron_right,
                 size: 20, color: roles.faintForeground),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Una etapa del taller en la cabecera: cuántas bicis hay y cuántas llevan
+/// demasiado. Lleva a «En el taller».
+class _StageCounter extends StatelessWidget {
+  const _StageCounter({
+    required this.stage,
+    required this.rows,
+    required this.today,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final BikeWorkshopStage stage;
+  final List<BikeDirectoryEntry> rows;
+  final DateTime today;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final late =
+        rows.where((row) => (row.waitingDays(today) ?? 0) >= _longWaitDays);
+    final lateCount = late.length;
+    return Semantics(
+      button: true,
+      label: '${stage.label}: ${rows.length}'
+          '${lateCount > 0 ? ', $lateCount con $_longWaitDays días o más' : ''}',
+      excludeSemantics: true,
+      onTap: onTap,
+      child: Material(
+        color: theme.colorScheme.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(
+            color: selected
+                ? roles.accentBorder
+                : theme.colorScheme.outlineVariant,
+          ),
+        ),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            constraints: const BoxConstraints(minWidth: 132, minHeight: 60),
+            padding: const EdgeInsets.fromLTRB(14, 8, 16, 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '${rows.length}',
+                  style: BikeModuleText.figure(context, size: 30),
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      stage.label,
+                      style: const TextStyle(
+                          fontSize: 14, fontWeight: FontWeight.w600),
+                    ),
+                    Text(
+                      lateCount > 0
+                          ? '$lateCount con $_longWaitDays+ días'
+                          : 'Al día',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight:
+                            lateCount > 0 ? FontWeight.w700 : FontWeight.w500,
+                        color: lateCount > 0
+                            ? roles.warning.accent
+                            : roles.faintForeground,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// «En el taller» en escritorio: una columna por etapa, como un tablero.
+class _WorkshopBoard extends StatelessWidget {
+  const _WorkshopBoard({
+    required this.groups,
+    required this.today,
+    required this.onOpen,
+  });
+
+  final List<({BikeWorkshopStage stage, List<BikeDirectoryEntry> rows})> groups;
+  final DateTime today;
+  final void Function(Bike bike) onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final stage in BikeWorkshopStage.values) ...[
+          if (stage != BikeWorkshopStage.values.first)
+            const SizedBox(width: 16),
+          Expanded(
+            child: Builder(builder: (context) {
+              final rows = [
+                for (final group in groups)
+                  if (group.stage == stage) ...group.rows,
+              ];
+              return DecoratedBox(
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: roles.hairline),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+                      child: Semantics(
+                        header: true,
+                        child: Row(
+                          children: [
+                            Text(stage.label,
+                                style: const TextStyle(
+                                    fontSize: 16, fontWeight: FontWeight.w700)),
+                            const SizedBox(width: 8),
+                            Text(
+                              '${rows.length}',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                stage.hint,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.end,
+                                style: TextStyle(
+                                    fontSize: 12.5,
+                                    color: roles.faintForeground),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: rows.isEmpty
+                          ? Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Text('Ninguna por ahora.',
+                                  style: TextStyle(
+                                      fontSize: 14,
+                                      color: roles.faintForeground)),
+                            )
+                          : ListView.separated(
+                              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                              itemCount: rows.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(height: 10),
+                              itemBuilder: (context, index) => _BoardCard(
+                                row: rows[index],
+                                today: today,
+                                onOpen: () => onOpen(rows[index].bike),
+                              ),
+                            ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _BoardCard extends StatelessWidget {
+  const _BoardCard({
+    required this.row,
+    required this.today,
+    required this.onOpen,
+  });
+
+  final BikeDirectoryEntry row;
+  final DateTime today;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final job = row.workshopJob!;
+    final days = row.waitingDays(today) ?? 0;
+    final late = days >= _longWaitDays;
+    final request = job.clientRequest?.trim();
+    final owner = row.owner?.name.trim();
+    return Material(
+      color: theme.colorScheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(
+          color: late ? roles.warning.border : theme.colorScheme.outlineVariant,
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onOpen,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  _BikeTile(bike: row.bike, width: 84, height: 54),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _bikeName(context, row.bike),
+                        const SizedBox(height: 2),
+                        Text(
+                          owner == null || owner.isEmpty ? 'Sin dueño' : owner,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              if (request != null && request.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  bikeRequestAsSentence(request),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    height: 1.35,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Text(job.jobNumber ?? '—',
+                      style: BikeModuleText.code(context)),
+                  const SizedBox(width: 10),
+                  Flexible(
+                    child: BikeJobStatusDot(
+                      label: jobStatusLabel(job),
+                      color: jobStatusColor(job),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: late
+                          ? roles.warning.container
+                          : theme.colorScheme.surfaceContainerHigh,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      _waitLabel(days),
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                        color: late
+                            ? roles.warning.onContainer
+                            : theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ),

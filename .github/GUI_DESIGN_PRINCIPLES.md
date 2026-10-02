@@ -40,6 +40,30 @@ Desde ese día, en todo el ERP (y en el sitio público, que ya lo tenía):
 `docs/development/DESIGN_HANDOFF_SYNC_CONTRACT.md` sigue explicando cómo
 leer un archivo de Design si alguna vez se quiere consultar uno.
 
+### En escritorio la página ocupa todo el ancho (dueño, 2026-10-02)
+
+«en celular se ve espectacular, pero no me gustan esas tablas en desktop que
+no cubren todo el ancho de la página. busca una solución vistosa» — el
+dueño, al ver el directorio y la ficha de bicicletas con una columna central
+de 1180–1320 px y dos franjas vacías a los lados en una ventana de 1833 px.
+
+Una columna centrada con ancho máximo es diseño de teléfono estirado. En
+escritorio la pantalla ocupa el ancho disponible y lo usa para algo:
+
+- **Listas:** la tabla llega a los bordes (solo un margen de ~28 px); lo que
+  crece son las columnas de texto, y la fila gana la información que en el
+  teléfono no cabe (teléfono del dueño, lo que se pidió, «hace 3 días»).
+- **Una ficha:** la identidad queda fija en una columna a la izquierda
+  (dibujo, nombre, acciones, estado, datos) y el resto es el contenido, con
+  su riel a la derecha. Ejemplo: `BikeRecordPanel` desde 1180 px.
+- **Un estado con etapas:** columnas por etapa, como un tablero (el «En el
+  taller» de bicicletas desde 1000 px), y contadores por etapa en la cabecera.
+- Las tarjetas de una pestaña se reparten en 2–3 columnas, no en una tarjeta
+  estirada.
+
+El teléfono no cambia. Un lienzo de Design que proponga escritorio se dibuja
+a 1600 px o más, para que se vea si la página llena el ancho.
+
 ### El sitio público no pasa por Design (dueño, 2026-09-24)
 
 «the designs on the website can be open to the agent criteria» — el dueño, al
