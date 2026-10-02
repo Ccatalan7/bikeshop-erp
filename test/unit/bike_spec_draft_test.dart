@@ -355,6 +355,52 @@ void codexReviewRegressions() {
     expect(draft.hasChanges, isFalse);
   });
 
+  test('a fact under an old pedalier name keeps its marks and confirms', () {
+    BikeSpecDraft legacy() => BikeSpecDraft.fromRecord(
+          bike: _bike(),
+          profile: _profile(
+            {'bottomBracketFamily': 'bsa_threaded', 'bb_shell_width_mm': 68},
+            sources: {'bbShellWidthMm': 'catalog'},
+            confirmed: {'bbShellWidthMm': false},
+          ),
+        );
+    final untouched = legacy()..set('valveType', 'presta');
+    var profile = untouched.build(confirmedAt: _now).profile!;
+    expect(profile.technicalValues['bb_shell_width_mm'], 68);
+    expect(profile.technicalSources['bbShellWidthMm'], 'catalog');
+    expect(profile.technicalConfirmed['bbShellWidthMm'], isFalse);
+
+    final confirmedNow = legacy()..set('bbShellWidthMm', '68');
+    expect(confirmedNow.isReviewed('bbShellWidthMm'), isTrue);
+    profile = confirmedNow.build(confirmedAt: _now).profile!;
+    expect(profile.technicalValues['bbShellWidthMm'], 68);
+    expect(profile.technicalValues.containsKey('bb_shell_width_mm'), isFalse);
+    expect(profile.technicalSources['bbShellWidthMm'], 'mechanic');
+    expect(profile.technicalConfirmed['bbShellWidthMm'], isTrue);
+  });
+
+  test('confirming spokes read from the bike writes them', () {
+    final draft = BikeSpecDraft.fromRecord(bike: _bike(), profile: null)
+      ..set('frontSpokeHoles', '32');
+    expect(draft.isReviewed('frontSpokeHoles'), isTrue);
+    final profile = draft.build(confirmedAt: _now).profile!;
+    expect(profile.technicalValues['frontSpokeHoles'], 32);
+    expect(profile.technicalValues['rearSpokeHoles'], 32);
+    expect(profile.technicalConfirmed['frontSpokeHoles'], isTrue);
+  });
+
+  test('a measure is shown whole, so confirming it confirms that number', () {
+    final draft = BikeSpecDraft.fromRecord(
+      bike: _bike(),
+      profile: _profile({
+        'bottomBracketFamily': 'pressfit',
+        'bbShellDiameterMm': 41.9614,
+      }),
+    );
+    expect(draft.value('bbShellDiameterMm'), '41.9614');
+    expect(draft.labelFor('bbShellDiameterMm', '41.9614'), '41.9614 mm');
+  });
+
   test('changing one wheel keeps the other wheel spoke count', () {
     final draft = BikeSpecDraft.fromRecord(bike: _bike(), profile: null)
       ..set('frontSpokeHoles', '28');

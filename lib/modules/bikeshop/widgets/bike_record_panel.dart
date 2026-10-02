@@ -194,6 +194,8 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
       _systemFilter = null;
       _specDraft = null;
       _specNotice = null;
+      _specBusy = false;
+      _specRequest++;
       _resetSpecOperation();
     }
   }
@@ -271,6 +273,18 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
 
   bool get _specDirty => _specDraft?.hasChanges ?? false;
 
+  /// Cada lectura de la ficha lleva su número: una respuesta que llega
+  /// después de otra pedida más tarde (A → B → A) no se instala.
+  int _specRequest = 0;
+
+  /// Mientras se guarda no se sale ni se descarta: el comando ya va en la
+  /// bandeja y «Descartar» terminaría guardando igual (Codex, 2026-10-02).
+  bool _blockWhileSaving() {
+    if (!_specBusy || _specDraft == null) return false;
+    _showSpecMessage('Espera a que termine de guardarse la ficha.');
+    return true;
+  }
+
   /// Al abrir la edición se resolvió un guardado pendiente o se leyó una
   /// versión más nueva: la ficha de atrás se vuelve a leer al salir. No
   /// antes, porque un anfitrión que recarga desmonta la hoja en edición.
@@ -311,6 +325,11 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
       return;
     }
     final service = context.read<BikeshopService>();
+    final request = ++_specRequest;
+    bool stale() =>
+        !mounted ||
+        request != _specRequest ||
+        widget.snapshot.bike.id != bikeId;
     setState(() {
       _specBusy = true;
       _specNotice = null;
@@ -348,10 +367,12 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
         return;
       }
       final aggregate = await service.getBikeAggregate(bikeId);
-      // Si el anfitrión pasó a otra bici mientras se leía, no se instala la
-      // ficha de la anterior.
-      if (!mounted || widget.snapshot.bike.id != bikeId) {
-        if (mounted) setState(() => _specBusy = false);
+      // Si el anfitrión pasó a otra bici, o se pidió otra lectura, mientras
+      // ésta llegaba, no se instala.
+      if (stale()) {
+        if (mounted && request == _specRequest) {
+          setState(() => _specBusy = false);
+        }
         return;
       }
       setState(() {
@@ -465,6 +486,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
 
   @override
   Future<bool> confirmLeave() async {
+    if (_blockWhileSaving()) return false;
     if (_specDirty && !await _confirmDiscardSpecs()) return false;
     if (mounted && _specDraft != null) {
       setState(() {
@@ -477,6 +499,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
 
   /// El regreso de la ficha no se lleva cambios sin guardar en silencio.
   Future<void> _closeGuarded() async {
+    if (_blockWhileSaving()) return;
     if (_specDirty && !await _confirmDiscardSpecs()) return;
     if (!mounted) return;
     if (_specDraft != null) {
@@ -572,10 +595,11 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
   /// revise y guarde de nuevo.
   Future<void> _rebaseSpecDraft(BikeSpecDraft draft) async {
     final bikeId = draft.bike.id;
+    final request = ++_specRequest;
     try {
       final aggregate =
           await context.read<BikeshopService>().getBikeAggregate(bikeId!);
-      if (!mounted) return;
+      if (!mounted || request != _specRequest) return;
       if (widget.snapshot.bike.id != bikeId) {
         setState(() => _specBusy = false);
         return;
@@ -617,7 +641,8 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
       // Un regreso del sistema no se lleva la ficha a medio editar.
       canPop: !_specDirty,
       onPopInvokedWithResult: (didPop, _) async {
-        if (didPop || !await _confirmDiscardSpecs() || !mounted) return;
+        if (didPop || _blockWhileSaving()) return;
+        if (!await _confirmDiscardSpecs() || !mounted) return;
         setState(() {
           _specHostStale = false;
           _leaveSpecEdit();

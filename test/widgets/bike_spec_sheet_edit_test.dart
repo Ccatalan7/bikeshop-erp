@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -39,6 +41,7 @@ BikeProfile _profile({String brakeType = 'rim'}) => BikeProfile(
 class _SpecService extends ChangeNotifier implements BikeshopService {
   BikeProfile profile = _profile();
   Object? failSaveWith;
+  Completer<void>? holdSave;
   int saves = 0;
   Bike? savedBike;
   BikeProfile? savedProfile;
@@ -133,6 +136,7 @@ class _SpecService extends ChangeNotifier implements BikeshopService {
     this.operationKey = operationKey;
     expectedBike = expectedBikeUpdatedAt;
     expectedProfile = expectedProfileUpdatedAt;
+    await holdSave?.future;
     final failure = failSaveWith;
     if (failure != null) {
       failSaveWith = null;
@@ -370,5 +374,20 @@ void main() {
     expect(find.text('Editando la ficha técnica'), findsNothing);
     expect(await guard.confirmLeave(), isTrue);
     expect(service.saves, 0);
+
+    // Con un guardado en camino no se ofrece descartar: ya va en la bandeja.
+    await _openEditor(tester);
+    await _choose(tester, 'Válvula', 'Schrader');
+    final hold = service.holdSave = Completer<void>();
+    await tester.tap(find.bySemanticsLabel('Guardar ficha técnica'));
+    await tester.pump();
+    final leave = guard.confirmLeave();
+    await tester.pump();
+    expect(find.text('¿Descartar los cambios?'), findsNothing);
+    expect(await leave, isFalse);
+    hold.complete();
+    await tester.pumpAndSettle();
+    expect(service.saves, 1);
+    expect(find.text('Editando la ficha técnica'), findsNothing);
   });
 }

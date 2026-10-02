@@ -2004,7 +2004,12 @@ Canonical command/read contract:
   today's visibility rule hides it—, and so do the `bikes` columns (a `29''`
   nobody touched stays `29''`), intake, catalog link and unknown technical
   keys. Confirming an unconfirmed fact without changing it («Confirmar», or
-  picking the same value) marks it `mechanic`/confirmed. Touching one wheel's
+  picking the same value) marks it `mechanic`/confirmed; if the sheet showed
+  it from a legacy pedalier key (`bb_shell_width_mm`…) or from the bike's
+  `spoke_count`, the confirmed value is written under its own key, because
+  confirming affirms that value. Marks of a value still stored under a legacy
+  key are kept, and measures are shown whole (`41.9614`, not rounded) so a
+  confirmation affirms the stored number. Touching one wheel's
   spokes writes both wheels, because a wheel without its own count reads the
   bike's `spoke_count`, which moves with it. The bike form still rebuilds its
   managed keys (it drops hidden ones and rounds to one decimal); production

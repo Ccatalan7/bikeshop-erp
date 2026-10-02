@@ -225,6 +225,13 @@ class BikeSpecDraft {
     'drivetrainConfig',
   };
 
+  /// Los nombres antiguos de tres datos del pedalier, que todavía se leen.
+  static const Map<String, String> _legacyAliases = {
+    'bbShellWidthMm': 'bb_shell_width_mm',
+    'bbShellDiameterMm': 'bb_shell_diameter_mm',
+    'spindleInterface': 'spindle_interface',
+  };
+
   /// Los datos base que viven en `bikes` y cuyo origen va en la ficha.
   static const Set<String> baseFactKeys = {
     'wheelSize',
@@ -548,6 +555,14 @@ class BikeSpecDraft {
     }
 
     String? shown(String key) => isVisible(key) ? _values[key] : null;
+    // Se escribe lo cambiado, y lo confirmado que la ficha no guarda con su
+    // propia clave (venía de un nombre antiguo o de los rayos de la bici):
+    // confirmar es afirmar ese valor, que tiene que quedar escrito.
+    bool writes(String key) =>
+        isChanged(key) ||
+        (isReviewed(key) &&
+            !(profile?.technicalValues.containsKey(sourceKeyFor(key)) ??
+                false));
     for (final key in const [
       'suspensionLayout',
       'brakeType',
@@ -562,17 +577,17 @@ class BikeSpecDraft {
       'frontRotorMount',
       'rearRotorMount',
     ]) {
-      if (isChanged(key)) put(key, shown(key));
+      if (writes(key)) put(key, shown(key));
     }
-    if (isChanged('spindleInterface')) {
+    if (writes('spindleInterface')) {
       put('spindleInterface', shown('spindleInterface'),
           aliases: const ['spindle_interface']);
     }
-    if (isChanged('bbShellWidthMm')) {
+    if (writes('bbShellWidthMm')) {
       put('bbShellWidthMm', _parseDouble(shown('bbShellWidthMm')),
           aliases: const ['bb_shell_width_mm']);
     }
-    if (isChanged('bbShellDiameterMm')) {
+    if (writes('bbShellDiameterMm')) {
       put('bbShellDiameterMm', _parseDouble(shown('bbShellDiameterMm')),
           aliases: const ['bb_shell_diameter_mm']);
     }
@@ -582,17 +597,17 @@ class BikeSpecDraft {
       'frontWheelBsdMm',
       'rearWheelBsdMm',
     ]) {
-      if (isChanged(key)) put(key, _parseDouble(shown(key))?.round());
+      if (writes(key)) put(key, _parseDouble(shown(key))?.round());
     }
     // Los rayos de una rueda sin dato propio se leen de los de la bici, que
     // cambian con éstos: al tocar una se escriben las dos, como el
     // formulario, para que la otra no pase a leer el número nuevo.
-    if (isChanged('frontSpokeHoles') || isChanged('rearSpokeHoles')) {
+    if (writes('frontSpokeHoles') || writes('rearSpokeHoles')) {
       for (final key in const ['frontSpokeHoles', 'rearSpokeHoles']) {
         put(key, _parseDouble(shown(key))?.round());
       }
     }
-    if (isChanged('chainrings') || isChanged('rearCogs')) {
+    if (writes('chainrings') || writes('rearCogs')) {
       final chainrings = int.tryParse(_values['chainrings'] ?? '');
       final cogs = int.tryParse(_values['rearCogs'] ?? '');
       final complete = chainrings != null && cogs != null;
@@ -622,8 +637,16 @@ class BikeSpecDraft {
       confirmed[key] = !byRule;
     }
 
+    // Un valor guardado con un nombre antiguo del pedalier sigue siendo ese
+    // dato: sus marcas no se borran porque falte la clave nueva.
+    String? storedKeyOf(String key) {
+      if (technicalValues.containsKey(key)) return key;
+      final alias = _legacyAliases[key];
+      return alias != null && technicalValues.containsKey(alias) ? alias : null;
+    }
+
     for (final key in changedKeys) {
-      if (!technicalValues.containsKey(sourceKeyFor(key)) &&
+      if (storedKeyOf(sourceKeyFor(key)) == null &&
           !baseFactKeys.contains(key)) {
         continue;
       }
@@ -647,16 +670,17 @@ class BikeSpecDraft {
     bool baseFactGone(String key) =>
         baseFactKeys.contains(key) && baseFactPresent[key] != true;
     sources.removeWhere((key, _) =>
-        (managedTechnicalKeys.contains(key) &&
-            !technicalValues.containsKey(key)) ||
+        (managedTechnicalKeys.contains(key) && storedKeyOf(key) == null) ||
         baseFactGone(key));
     // «Desconocido» queda revisado por el mecánico, nunca confirmado.
-    confirmed.removeWhere((key, _) =>
-        (managedTechnicalKeys.contains(key) &&
-            (!technicalValues.containsKey(key) ||
-                technicalValues[key] == 'unknown' ||
-                technicalValues[key] == kRegistryUnknownCode)) ||
-        baseFactGone(key));
+    confirmed.removeWhere((key, _) {
+      if (baseFactGone(key)) return true;
+      if (!managedTechnicalKeys.contains(key)) return false;
+      final stored = storedKeyOf(key);
+      return stored == null ||
+          technicalValues[stored] == 'unknown' ||
+          technicalValues[stored] == kRegistryUnknownCode;
+    });
 
     final intakeProfile =
         Map<String, dynamic>.from(existing?.intakeProfile ?? const {});
@@ -752,14 +776,12 @@ double? _parseDouble(Object? raw) {
   return double.tryParse(raw.toString().trim().replaceAll(',', '.'));
 }
 
-/// «68», «86.5», «41.96»: el número como está guardado, sin ceros de más.
+/// «68», «86.5», «41.9614»: el número entero como está guardado. Se muestra
+/// completo porque confirmarlo afirma ese valor, no uno redondeado.
 String? _formatNumber(double? value) {
   if (value == null) return null;
   if (value == value.roundToDouble()) return value.toInt().toString();
-  return value
-      .toStringAsFixed(3)
-      .replaceFirst(RegExp(r'0+$'), '')
-      .replaceFirst(RegExp(r'\.$'), '');
+  return value.toString();
 }
 
 /// Platos y piñones de lo anotado: «2x10», «singlespeed» o «2x» con las
