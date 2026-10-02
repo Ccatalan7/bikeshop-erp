@@ -1998,9 +1998,17 @@ Canonical command/read contract:
   bottom-bracket-dependent facts hidden and dropped with their origin,
   `unknown`/registry-unknown reviewed but never confirmed, platos × piñones
   saved together as `drivetrainConfig` + `drivetrainSpeeds`, an unreadable
-  legacy drivetrain kept until replaced, only changed `bikes` columns
-  written (a `29''` nobody touched stays `29''`), and intake, catalog link
-  and unknown technical keys untouched. Before editing it resumes the bike's
+  legacy drivetrain kept until replaced. **It writes only what changed**
+  (Codex review, 2026-10-02): an untouched fact keeps its stored value,
+  origin and confirmation —no rounding (`41.96` stays), not dropped because
+  today's visibility rule hides it—, and so do the `bikes` columns (a `29''`
+  nobody touched stays `29''`), intake, catalog link and unknown technical
+  keys. Confirming an unconfirmed fact without changing it («Confirmar», or
+  picking the same value) marks it `mechanic`/confirmed. Touching one wheel's
+  spokes writes both wheels, because a wheel without its own count reads the
+  bike's `spoke_count`, which moves with it. The bike form still rebuilds its
+  managed keys (it drops hidden ones and rounds to one decimal); production
+  had 0 of 196 profiles exposed to that on 2026-10-02. Before editing it resumes the bike's
   outbox and refuses to edit over a save still pending on that device; a
   stale rejection re-reads the aggregate and re-applies the mechanic's
   changes for review. Direction/cockpit has no sheet keys yet (see

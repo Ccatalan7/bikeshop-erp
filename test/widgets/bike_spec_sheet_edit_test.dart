@@ -153,8 +153,9 @@ class _SpecService extends ChangeNotifier implements BikeshopService {
 Future<int Function()> _pump(
   WidgetTester tester,
   _SpecService service,
-  Brightness brightness,
-) async {
+  Brightness brightness, {
+  Key? panelKey,
+}) async {
   var reloads = 0;
   await tester.pumpWidget(
     ChangeNotifierProvider<BikeshopService>.value(
@@ -166,6 +167,7 @@ Future<int Function()> _pump(
         ),
         home: Scaffold(
           body: BikeRecordPanel(
+            key: panelKey,
             snapshot: BikeRecordSnapshot.fromBikeAndProfile(
               bike: _bike(),
               profile: _profile(),
@@ -271,6 +273,30 @@ void main() {
     });
   }
 
+  testWidgets('a catalog fact is confirmed in place without changing it',
+      (tester) async {
+    _setSize(tester, const Size(1920, 1080));
+    final service = _SpecService();
+    addTearDown(service.dispose);
+    await _pump(tester, service, Brightness.light);
+    await _openEditor(tester);
+
+    expect(find.textContaining('sin confirmar'), findsWidgets);
+    await tester.tap(find.bySemanticsLabel('Confirmar Tipo de freno'));
+    await tester.pumpAndSettle();
+    expect(find.text('Confirmado'), findsOneWidget);
+    expect(find.text('1 cambio sin guardar'), findsOneWidget);
+    expect(find.byTooltip('Deshacer cambio de Tipo de freno'), findsOneWidget);
+
+    await tester.tap(find.bySemanticsLabel('Guardar ficha técnica'));
+    await tester.pumpAndSettle();
+    final profile = service.savedProfile!;
+    expect(profile.technicalValues['brakeType'], 'rim');
+    expect(profile.technicalValues['rimBrakeFamily'], 'v_brake');
+    expect(profile.technicalSources['brakeType'], 'mechanic');
+    expect(profile.technicalConfirmed['brakeType'], isTrue);
+  });
+
   testWidgets('a save rejected by a newer version keeps the changes on top',
       (tester) async {
     _setSize(tester, const Size(1920, 1080));
@@ -309,7 +335,8 @@ void main() {
     _setSize(tester, const Size(390, 844));
     final service = _SpecService();
     addTearDown(service.dispose);
-    await _pump(tester, service, Brightness.dark);
+    final panelKey = GlobalKey();
+    await _pump(tester, service, Brightness.dark, panelKey: panelKey);
     await _openEditor(tester);
     expect(tester.takeException(), isNull);
     expect(find.text('Editando la ficha técnica'), findsOneWidget);
@@ -327,11 +354,21 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Editando la ficha técnica'), findsOneWidget);
 
+    // El regreso de la página (la barra del teléfono) también pregunta.
+    final guard = panelKey.currentState! as BikeRecordPanelLeaveGuard;
+    final stay = guard.confirmLeave();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Seguir editando'));
+    await tester.pumpAndSettle();
+    expect(await stay, isFalse);
+    expect(find.text('Editando la ficha técnica'), findsOneWidget);
+
     await tester.tap(find.text('Cancelar'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Descartar'));
     await tester.pumpAndSettle();
     expect(find.text('Editando la ficha técnica'), findsNothing);
+    expect(await guard.confirmLeave(), isTrue);
     expect(service.saves, 0);
   });
 }

@@ -86,8 +86,17 @@ class _BikeRecordPageState extends State<BikeRecordPage> {
     }
   }
 
-  void _close() =>
-      ReturnNavigation.close(context, fallbackRoute: _fallbackRoute);
+  /// La ficha, para preguntarle antes de salir si quedó a medio editar.
+  final GlobalKey _panelKey = GlobalKey();
+
+  Future<void> _close() async {
+    final Object? guard = _panelKey.currentState;
+    if (guard is BikeRecordPanelLeaveGuard && !await guard.confirmLeave()) {
+      return;
+    }
+    if (!mounted) return;
+    ReturnNavigation.close(context, fallbackRoute: _fallbackRoute);
+  }
 
   Future<void> _edit() async {
     final snapshot = _snapshot;
@@ -199,6 +208,7 @@ class _BikeRecordPageState extends State<BikeRecordPage> {
       );
     }
     final panel = BikeRecordPanel(
+      key: _panelKey,
       snapshot: snapshot,
       ownerName: _ownerName,
       onEdit: _edit,

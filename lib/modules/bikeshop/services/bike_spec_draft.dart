@@ -39,11 +39,16 @@ class BikeSpecSection {
 /// crear una bici; tenía que abrirse la misma hoja con lo que falta).
 ///
 /// Aplica las reglas del formulario de la bici (`bike_form_dialog.dart`):
-/// lo que el mecánico elige queda con origen `mechanic` y confirmado,
-/// «Desconocido» se guarda revisado pero nunca confirmado, los datos que la
-/// regla esconde (familia de llanta sin freno de llanta, rotores sin disco,
-/// medidas que la caja del pedalier no tiene) no se guardan, y el resto del
-/// perfil —ingreso, catálogo, claves que la hoja no conoce— queda igual.
+/// lo que el mecánico elige —o confirma eligiendo el mismo valor— queda con
+/// origen `mechanic` y confirmado, «Desconocido» se guarda revisado pero
+/// nunca confirmado, y lo que un cambio deja sin sentido (la familia de
+/// llanta al pasar a disco, los rotores al dejar el disco, las medidas que
+/// la nueva caja del pedalier no tiene) se borra con su origen.
+///
+/// **Sólo se escribe lo que cambió** (revisión de Codex, 2026-10-02): un
+/// dato que nadie tocó queda tal como estaba guardado —sin redondear, aunque
+/// la regla de hoy lo esconda—, igual que el resto del perfil: ingreso,
+/// catálogo y claves que la hoja no conoce.
 class BikeSpecDraft {
   BikeSpecDraft._({
     required this.bike,
@@ -144,6 +149,10 @@ class BikeSpecDraft {
   /// como sugerencia del tipo, sin confirmar, igual que en el formulario.
   final Set<String> _setByRule = {};
 
+  /// Lo que el mecánico confirmó sin cambiarlo: eligió el mismo valor de un
+  /// dato que venía del catálogo o de una sugerencia.
+  final Set<String> _reviewed = {};
+
   static const List<BikeSpecSection> sections = [
     BikeSpecSection(1, 'Cuadro y suspensión', [
       BikeSpecField('bikeType', 'Tipo de bici'),
@@ -229,14 +238,47 @@ class BikeSpecDraft {
 
   bool isChanged(String key) => _values[key] != _original[key];
 
+  /// Confirmado en esta edición sin cambiar su valor.
+  bool isReviewed(String key) => !isChanged(key) && _reviewed.contains(key);
+
+  /// Lo que se guarda: lo cambiado y lo confirmado sin cambiar.
   Set<String> get changedKeys => {
         for (final key in _values.keys)
-          if (isChanged(key)) key,
+          if (isChanged(key) || isReviewed(key)) key,
       };
 
   int get changeCount => changedKeys.length;
 
   bool get hasChanges => changeCount > 0;
+
+  /// La clave de la ficha que guarda el origen de [key].
+  static String sourceKeyFor(String key) => switch (key) {
+        'chainrings' || 'rearCogs' => 'drivetrainConfig',
+        _ => key,
+      };
+
+  /// Si la ficha ya tiene [key] confirmado (antes de esta edición).
+  bool isConfirmedOnRecord(String key) =>
+      profile?.technicalConfirmed[sourceKeyFor(key)] == true;
+
+  /// Si tiene sentido ofrecer «Confirmar» para [key]: tiene un valor que
+  /// nadie confirmó y que no es «Desconocido» (eso nunca se confirma).
+  bool canReview(String key) {
+    final value = _values[key];
+    return key != 'frameSize' &&
+        value != null &&
+        value != 'unknown' &&
+        value != kRegistryUnknownCode &&
+        !isChanged(key) &&
+        !isReviewed(key) &&
+        !isConfirmedOnRecord(key);
+  }
+
+  /// Confirma [key] tal como está.
+  void review(String key) {
+    if (_values[key] == null) return;
+    _reviewed.add(key);
+  }
 
   bool get _isDisc =>
       _values['brakeType'] == 'mechanical_disc' ||
@@ -385,8 +427,14 @@ class BikeSpecDraft {
   }
 
   /// Cambia [key]. Lo que depende de él se ajusta como en el formulario.
+  /// Elegir el mismo valor que tenía lo confirma, como en el formulario.
   void set(String key, String? value) {
+    if (value != null && value == _values[key]) {
+      if (!isChanged(key) && !isConfirmedOnRecord(key)) review(key);
+      return;
+    }
     _values[key] = value;
+    _reviewed.remove(key);
     _setByRule.remove(key);
     switch (key) {
       case 'bikeType':
@@ -425,8 +473,11 @@ class BikeSpecDraft {
     }
   }
 
-  /// Vuelve [key] a lo que tenía la ficha.
-  void revert(String key) => set(key, _original[key]);
+  /// Vuelve [key] a lo que tenía la ficha, sin confirmarlo.
+  void revert(String key) {
+    set(key, _original[key]);
+    _reviewed.remove(key);
+  }
 
   /// Lo que impide guardar, dicho para el mecánico; `null` si se puede.
   String? get blockingMessage {
@@ -482,51 +533,79 @@ class BikeSpecDraft {
     final savedBike = Bike.fromJson(bikeJson);
 
     final technicalValues =
-        Map<String, dynamic>.from(profile?.technicalValues ?? const {})
-          ..removeWhere((key, _) => managedTechnicalKeys.contains(key));
+        Map<String, dynamic>.from(profile?.technicalValues ?? const {});
+    // Un cambio escribe su valor (o lo borra); lo que nadie cambió queda
+    // como estaba. `set` ya vació lo que un cambio dejó sin sentido.
+    void put(String key, Object? value, {List<String> aliases = const []}) {
+      for (final alias in aliases) {
+        technicalValues.remove(alias);
+      }
+      if (value == null) {
+        technicalValues.remove(key);
+      } else {
+        technicalValues[key] = value;
+      }
+    }
+
     String? shown(String key) => isVisible(key) ? _values[key] : null;
-    int? whole(String key) => _parseDouble(shown(key))?.round();
-    double? measure(String key) => _parseDouble(shown(key));
-    final chainrings = int.tryParse(_values['chainrings'] ?? '');
-    final cogs = int.tryParse(_values['rearCogs'] ?? '');
-    final drivetrainConfig = chainrings != null && cogs != null
-        ? (chainrings == 1 && cogs == 1 ? 'singlespeed' : '${chainrings}x$cogs')
-        : (chainrings == null && cogs == null ? legacyDrivetrainConfig : null);
-    final drivetrainSpeeds = chainrings != null && cogs != null
-        ? chainrings * cogs
-        : (chainrings == null && cogs == null ? legacyDrivetrainSpeeds : null);
-    technicalValues.addAll(<String, dynamic>{
-      for (final key in const [
-        'suspensionLayout',
-        'brakeType',
-        'rimBrakeFamily',
-        'freehubType',
-        'valveType',
-        'bottomBracketFamily',
-        'spindleInterface',
-        'frontBrakeFluidType',
-        'rearBrakeFluidType',
-        'frontAxleInterface',
-        'rearAxleInterface',
-        'frontRotorMount',
-        'rearRotorMount',
-      ])
-        if (shown(key) != null) key: shown(key),
-      for (final key in const ['bbShellWidthMm', 'bbShellDiameterMm'])
-        if (measure(key) != null) key: measure(key),
-      for (final key in const [
-        'frontSpokeHoles',
-        'rearSpokeHoles',
-        'frontRotorSizeMm',
-        'rearRotorSizeMm',
-        'frontWheelBsdMm',
-        'rearWheelBsdMm',
-      ])
-        if (whole(key) != null) key: whole(key),
-      if (drivetrainSpeeds != null) 'drivetrainSpeeds': drivetrainSpeeds,
-      if (drivetrainConfig != null && drivetrainConfig.isNotEmpty)
-        'drivetrainConfig': drivetrainConfig,
-    });
+    for (final key in const [
+      'suspensionLayout',
+      'brakeType',
+      'rimBrakeFamily',
+      'freehubType',
+      'valveType',
+      'bottomBracketFamily',
+      'frontBrakeFluidType',
+      'rearBrakeFluidType',
+      'frontAxleInterface',
+      'rearAxleInterface',
+      'frontRotorMount',
+      'rearRotorMount',
+    ]) {
+      if (isChanged(key)) put(key, shown(key));
+    }
+    if (isChanged('spindleInterface')) {
+      put('spindleInterface', shown('spindleInterface'),
+          aliases: const ['spindle_interface']);
+    }
+    if (isChanged('bbShellWidthMm')) {
+      put('bbShellWidthMm', _parseDouble(shown('bbShellWidthMm')),
+          aliases: const ['bb_shell_width_mm']);
+    }
+    if (isChanged('bbShellDiameterMm')) {
+      put('bbShellDiameterMm', _parseDouble(shown('bbShellDiameterMm')),
+          aliases: const ['bb_shell_diameter_mm']);
+    }
+    for (final key in const [
+      'frontRotorSizeMm',
+      'rearRotorSizeMm',
+      'frontWheelBsdMm',
+      'rearWheelBsdMm',
+    ]) {
+      if (isChanged(key)) put(key, _parseDouble(shown(key))?.round());
+    }
+    // Los rayos de una rueda sin dato propio se leen de los de la bici, que
+    // cambian con éstos: al tocar una se escriben las dos, como el
+    // formulario, para que la otra no pase a leer el número nuevo.
+    if (isChanged('frontSpokeHoles') || isChanged('rearSpokeHoles')) {
+      for (final key in const ['frontSpokeHoles', 'rearSpokeHoles']) {
+        put(key, _parseDouble(shown(key))?.round());
+      }
+    }
+    if (isChanged('chainrings') || isChanged('rearCogs')) {
+      final chainrings = int.tryParse(_values['chainrings'] ?? '');
+      final cogs = int.tryParse(_values['rearCogs'] ?? '');
+      final complete = chainrings != null && cogs != null;
+      put(
+        'drivetrainConfig',
+        !complete
+            ? null
+            : (chainrings == 1 && cogs == 1
+                ? 'singlespeed'
+                : '${chainrings}x$cogs'),
+      );
+      put('drivetrainSpeeds', complete ? chainrings * cogs : null);
+    }
 
     final existing = profile;
     if (existing == null &&
@@ -544,6 +623,10 @@ class BikeSpecDraft {
     }
 
     for (final key in changedKeys) {
+      if (!technicalValues.containsKey(sourceKeyFor(key)) &&
+          !baseFactKeys.contains(key)) {
+        continue;
+      }
       switch (key) {
         case 'chainrings' || 'rearCogs':
           mark('drivetrainConfig', byRule: false);
@@ -643,6 +726,9 @@ class BikeSpecDraft {
       if (isChanged(key)) fresh.set(key, _values[key]);
     }
     fresh._setByRule.addAll(_setByRule.where(fresh.isChanged));
+    for (final key in _reviewed) {
+      if (fresh.value(key) == _values[key]) fresh.review(key);
+    }
     return fresh;
   }
 
@@ -666,11 +752,14 @@ double? _parseDouble(Object? raw) {
   return double.tryParse(raw.toString().trim().replaceAll(',', '.'));
 }
 
+/// «68», «86.5», «41.96»: el número como está guardado, sin ceros de más.
 String? _formatNumber(double? value) {
   if (value == null) return null;
-  return value == value.roundToDouble()
-      ? value.toInt().toString()
-      : value.toStringAsFixed(1);
+  if (value == value.roundToDouble()) return value.toInt().toString();
+  return value
+      .toStringAsFixed(3)
+      .replaceFirst(RegExp(r'0+$'), '')
+      .replaceFirst(RegExp(r'\.$'), '');
 }
 
 /// Platos y piñones de lo anotado: «2x10», «singlespeed» o «2x» con las

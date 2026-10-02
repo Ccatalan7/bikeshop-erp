@@ -51,6 +51,8 @@ BikeProfile _profile(Map<String, dynamic> values,
 final _now = DateTime.utc(2026, 10, 2, 15);
 
 void main() {
+  codexReviewRegressions();
+
   test('opening and saving without changes keeps what the bike had', () {
     final draft = BikeSpecDraft.fromRecord(
       bike: _bike(),
@@ -299,5 +301,67 @@ void main() {
       draft.contentSignature(c.bike, c.profile),
       isNot(draft.contentSignature(a.bike, a.profile)),
     );
+  });
+}
+
+void codexReviewRegressions() {
+  test('a fact nobody touched is kept as saved, even if hidden today', () {
+    final draft = BikeSpecDraft.fromRecord(
+      bike: _bike(),
+      profile: _profile(
+        {
+          'frontRotorSizeMm': 180,
+          'bottomBracketFamily': 'pressfit',
+          'bbShellDiameterMm': 41.96,
+        },
+        sources: {'frontRotorSizeMm': 'job_completion'},
+        confirmed: {'frontRotorSizeMm': true, 'bbShellDiameterMm': true},
+      ),
+    );
+    // Sin tipo de freno el rotor no se muestra, pero no se borra.
+    expect(draft.isVisible('frontRotorSizeMm'), isFalse);
+    expect(draft.value('bbShellDiameterMm'), '41.96');
+
+    draft.set('valveType', 'presta');
+    final profile = draft.build(confirmedAt: _now).profile!;
+    expect(profile.technicalValues['frontRotorSizeMm'], 180);
+    expect(profile.technicalValues['bbShellDiameterMm'], 41.96);
+    expect(profile.technicalSources['frontRotorSizeMm'], 'job_completion');
+    expect(profile.technicalConfirmed['bbShellDiameterMm'], isTrue);
+  });
+
+  test('picking the same catalog value confirms it', () {
+    final draft = BikeSpecDraft.fromRecord(
+      bike: _bike(),
+      profile: _profile(
+        {'freehubType': 'shimano_hg', 'valveType': 'unknown'},
+        sources: {'freehubType': 'catalog'},
+        confirmed: {'freehubType': false},
+      ),
+    );
+    expect(draft.canReview('freehubType'), isTrue);
+    // «Desconocido» no se confirma.
+    expect(draft.canReview('valveType'), isFalse);
+
+    draft.set('freehubType', 'shimano_hg');
+    expect(draft.isReviewed('freehubType'), isTrue);
+    expect(draft.changeCount, 1);
+    final profile = draft.build(confirmedAt: _now).profile!;
+    expect(profile.technicalValues['freehubType'], 'shimano_hg');
+    expect(profile.technicalSources['freehubType'], 'mechanic');
+    expect(profile.technicalConfirmed['freehubType'], isTrue);
+
+    draft.revert('freehubType');
+    expect(draft.hasChanges, isFalse);
+  });
+
+  test('changing one wheel keeps the other wheel spoke count', () {
+    final draft = BikeSpecDraft.fromRecord(bike: _bike(), profile: null)
+      ..set('frontSpokeHoles', '28');
+    final saved = draft.build(confirmedAt: _now);
+    expect(saved.bike.spokeCount, 28);
+    expect(saved.profile!.technicalValues['frontSpokeHoles'], 28);
+    // La trasera leía los 32 de la bici; queda escrita para no leer 28.
+    expect(saved.profile!.technicalValues['rearSpokeHoles'], 32);
   });
 }

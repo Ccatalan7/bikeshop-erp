@@ -86,8 +86,11 @@ crear: la misma superficie pasa a modo edición. Lo que funcionó en
 - **La grilla no salta** al marcar un cambio: en escritorio la línea de
   debajo de cada campo se reserva siempre. En el teléfono, una columna, no
   se reserva: el objetivo de 44 px del deshacer abría huecos entre campos.
-- La regla y el comando son los del formulario (un modelo puro que ambos
-  comparten las opciones); la superficie nueva no inventa otra forma de
+- **Se guarda sólo lo que cambió.** Un dato que nadie tocó queda tal como
+  estaba, aunque la regla de hoy lo esconda; y un dato sugerido se puede
+  **confirmar sin cambiarlo** («Confirmar» junto a «· sin confirmar»).
+- La regla y el comando son los del formulario (las opciones viven en un
+  solo archivo para los dos); la superficie nueva no inventa otra forma de
   guardar.
 
 El formulario completo sigue para lo que la página no muestra (identidad y

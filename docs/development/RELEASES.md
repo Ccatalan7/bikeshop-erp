@@ -250,6 +250,12 @@ validación falló. Un título nuevo se escribe corto (unas 45 letras) y se mide
 la unión antes de dar el registro por bueno. El registro conserva
 la evidencia completa; no se recortan afirmaciones para cumplir los límites.
 
+`--check-index` valida lo que está **en el índice de git**, no el árbol de
+trabajo: hay que hacer `git add` del registro y de sus fuentes antes de
+correrlo. Sin eso valida la versión anterior y dice «verified» igual; el
+2026-10-02 un ítem de 186 letras pasó así y se commiteó, y el error recién
+apareció al volver a validar después del commit.
+
 ```bash
 node scripts/releases/generate_release_notes.mjs \
   --check-index --from-commit <base-publicada-exacta>

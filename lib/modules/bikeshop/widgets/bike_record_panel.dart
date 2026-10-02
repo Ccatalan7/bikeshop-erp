@@ -91,6 +91,13 @@ class BikeRecordPanel extends StatefulWidget {
   State<BikeRecordPanel> createState() => _BikeRecordPanelState();
 }
 
+/// Lo que un anfitrión pregunta antes de salir por su propio regreso (la
+/// barra del teléfono): la ficha a medio editar no se pierde en silencio.
+abstract interface class BikeRecordPanelLeaveGuard {
+  /// Verdadero si se puede salir: no hay cambios o se descartaron.
+  Future<bool> confirmLeave();
+}
+
 enum _RecordTab { history, technical, notes }
 
 final NumberFormat _money =
@@ -163,7 +170,8 @@ class _SpecGroup {
   final String? missingText;
 }
 
-class _BikeRecordPanelState extends State<BikeRecordPanel> {
+class _BikeRecordPanelState extends State<BikeRecordPanel>
+    implements BikeRecordPanelLeaveGuard {
   _RecordTab _tab = _RecordTab.history;
   late Future<_RecordHistory> _historyFuture;
   JobLineSystem? _systemFilter;
@@ -340,7 +348,12 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
         return;
       }
       final aggregate = await service.getBikeAggregate(bikeId);
-      if (!mounted) return;
+      // Si el anfitrión pasó a otra bici mientras se leía, no se instala la
+      // ficha de la anterior.
+      if (!mounted || widget.snapshot.bike.id != bikeId) {
+        if (mounted) setState(() => _specBusy = false);
+        return;
+      }
       setState(() {
         _specDraft = BikeSpecDraft.fromRecord(
           bike: aggregate.bike,
@@ -395,6 +408,15 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
     });
   }
 
+  void _reviewSpecValue(String key) {
+    final draft = _specDraft;
+    if (draft == null) return;
+    setState(() {
+      draft.review(key);
+      _specNotice = null;
+    });
+  }
+
   void _revertSpecValue(String key) {
     final draft = _specDraft;
     if (draft == null) return;
@@ -439,6 +461,18 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
     if (_specDirty && !await _confirmDiscardSpecs()) return;
     if (!mounted) return;
     setState(_leaveSpecEdit);
+  }
+
+  @override
+  Future<bool> confirmLeave() async {
+    if (_specDirty && !await _confirmDiscardSpecs()) return false;
+    if (mounted && _specDraft != null) {
+      setState(() {
+        _specHostStale = false;
+        _leaveSpecEdit();
+      });
+    }
+    return true;
   }
 
   /// El regreso de la ficha no se lleva cambios sin guardar en silencio.
@@ -542,6 +576,10 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
       final aggregate =
           await context.read<BikeshopService>().getBikeAggregate(bikeId!);
       if (!mounted) return;
+      if (widget.snapshot.bike.id != bikeId) {
+        setState(() => _specBusy = false);
+        return;
+      }
       setState(() {
         _specDraft = draft.rebasedOn(
           bike: aggregate.bike,
@@ -3216,17 +3254,22 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
     final options = draft.options(field.key);
     final value = draft.value(field.key);
     final changed = draft.isChanged(field.key);
+    final reviewed = draft.isReviewed(field.key);
     final before = draft.originalValue(field.key);
     final touch =
         MediaQuery.sizeOf(context).width < ResponsiveBreakpoints.desktopMin;
-    final origin =
-        changed || value == null ? null : _specOriginCaption(draft, field.key);
+    final origin = changed || reviewed || value == null
+        ? null
+        : _specOriginCaption(draft, field.key);
+    // Lo que llegó del catálogo o de una sugerencia se confirma ahí mismo,
+    // sin tener que volver a elegirlo.
+    final confirmable = origin != null && draft.canReview(field.key);
 
     // En escritorio la línea de debajo existe siempre: marcar un cambio no
     // mueve la grilla. En el teléfono, una columna, sólo cuando dice algo:
     // reservar el objetivo táctil del deshacer abría huecos de 44 px.
     final Widget caption;
-    if (changed) {
+    if (changed || reviewed) {
       caption = Row(
         children: [
           Container(
@@ -3240,9 +3283,11 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
           const SizedBox(width: 7),
           Expanded(
             child: Text(
-              before == null
-                  ? 'Nuevo'
-                  : 'Antes: ${draft.labelFor(field.key, before)}',
+              reviewed
+                  ? 'Confirmado'
+                  : before == null
+                      ? 'Nuevo'
+                      : 'Antes: ${draft.labelFor(field.key, before)}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
@@ -3253,7 +3298,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
             ),
           ),
           IconButton(
-            tooltip: 'Deshacer este cambio',
+            tooltip: 'Deshacer cambio de ${field.label}',
             onPressed: _specBusy ? null : () => _revertSpecValue(field.key),
             icon: const Icon(Icons.undo),
             iconSize: 16,
@@ -3266,17 +3311,39 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
         ],
       );
     } else {
-      caption = Align(
-        alignment: Alignment.centerLeft,
-        child: Text(
-          origin ?? '',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: 12.5,
-            color: theme.colorScheme.onSurfaceVariant,
+      caption = Row(
+        children: [
+          Expanded(
+            child: Text(
+              origin ?? '',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12.5,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
           ),
-        ),
+          if (confirmable)
+            TextButton(
+              onPressed: _specBusy ? null : () => _reviewSpecValue(field.key),
+              style: TextButton.styleFrom(
+                minimumSize: Size(0, touch ? 44 : 24),
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                visualDensity: VisualDensity.compact,
+                textStyle: const TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              child: Semantics(
+                label: 'Confirmar ${field.label}',
+                excludeSemantics: true,
+                child: const Text('Confirmar'),
+              ),
+            ),
+        ],
       );
     }
 
@@ -3308,7 +3375,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
         ),
         if (!touch)
           SizedBox(height: 24, child: caption)
-        else if (changed)
+        else if (changed || reviewed || confirmable)
           SizedBox(height: 44, child: caption)
         else if (origin != null)
           Padding(padding: const EdgeInsets.only(top: 2), child: caption)
