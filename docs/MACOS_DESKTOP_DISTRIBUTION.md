@@ -199,6 +199,19 @@ se comprueba el manifiesto (`gh release download macos-latest --pattern
 macos-release-manifest.json`: `commit`, `release_notes.source: ai`) y `Published … Android
 1.0.3+N` en el log del run.
 
+**Corrección 2026-10-01: este despacho a mano se salta la versión visible.** Desde que
+cada entrega avanza la versión (`release_version.mjs`, ver `docs/development/RELEASES.md`),
+despachar un commit que no la subió falla: Android rechaza con «Version 1.0.4 is already
+published. Prepare a new visible version after 1.0.4.» tras compilar unos tres minutos, y
+macOS rechaza igual al firmar. Costó un despacho fallido y otro gate. Con el árbol limpio
+(sólo tus commits), el camino es `bash scripts/releases/prepare_erp_update.sh --message
+"…"`: sube el patch de `pubspec.yaml`, escribe `docs/releases/changes/version-X.Y.Z.json`,
+valida los registros, comitea y empuja; el despacho de arriba va después, contra ese commit
+y su gate. Con cambios ajenos en el árbol, la versión se prepara a mano
+(`node scripts/releases/release_version.mjs --prepare --write --macos`) y se comitea sólo
+`pubspec.yaml` y el registro de versión con `git commit --only`. Android se despacha por
+`macos-release.yml` con `release_target: "android"` (la ruta protegida), como macOS.
+
 ### El recuadro de «Novedades» se escribe antes, o se pierde (2026-08-22)
 
 El texto que ven los compañeros viaja **dentro del manifiesto firmado**, no en
