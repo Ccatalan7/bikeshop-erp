@@ -349,5 +349,93 @@ void main() {
       );
       expect(visits.map((visit) => visit.job.id), ['7', '1']);
     });
+
+    test('a bike never takes the request of another bike of the same job', () {
+      // The header keeps the first bike's request; bike c asked for nothing.
+      final job = _job('2',
+          bikeId: 'b',
+          status: _parts,
+          arrival: DateTime(2026, 9, 25),
+          request: 'Cambiar pastillas');
+      final rows = {
+        '2': [
+          _jobBike('jb2b', '2', 'b', request: 'Cambiar pastillas'),
+          _jobBike('jb2c', '2', 'c'),
+        ],
+      };
+      final forC = buildBikeVisits(
+        bikeId: 'c',
+        jobs: [job],
+        jobBikesByJobId: rows,
+        itemsByJobId: const {},
+        systemOf: systemOf,
+      ).single;
+      expect(forC.request, isNull);
+
+      // With only its own row, the header request is that bike's.
+      final single = buildBikeVisits(
+        bikeId: 'b',
+        jobs: [job],
+        jobBikesByJobId: {
+          '2': [_jobBike('jb2b', '2', 'b')],
+        },
+        itemsByJobId: const {},
+        systemOf: systemOf,
+      ).single;
+      expect(single.request, 'Cambiar pastillas');
+    });
+
+    test('a finished bike still in the shop counts its days until today', () {
+      final visit = buildBikeVisits(
+        bikeId: 'c',
+        jobs: [
+          _job('3',
+              status: _finished,
+              arrival: DateTime(2026, 9, 4),
+              completed: DateTime(2026, 9, 16)),
+        ],
+        jobBikesByJobId: {
+          '3': [_jobBike('jb3c', '3', 'c')],
+        },
+        itemsByJobId: const {},
+        systemOf: systemOf,
+      ).single;
+      expect(visit.inWorkshop, isTrue);
+      expect(visit.daysInWorkshop(DateTime(2026, 10, 2)), 28);
+    });
+
+    test('test jobs stay out with the same identity the directory uses', () {
+      final jobs = [
+        _job('5',
+            bikeId: 't', status: _pending, arrival: DateTime(2026, 10, 1)),
+        _job('6',
+            bikeId: 't',
+            status: _pending,
+            arrival: DateTime(2026, 9, 1),
+            request: '[test] revisar'),
+      ];
+      final ofTestOwner = buildBikeVisits(
+        bikeId: 't',
+        jobs: jobs,
+        jobBikesByJobId: const {},
+        itemsByJobId: const {},
+        systemOf: systemOf,
+        bike: _bike('t'),
+        ownerName: 'Test',
+      );
+      expect(ofTestOwner, isEmpty);
+
+      final ofRealOwner = buildBikeVisits(
+        bikeId: 't',
+        jobs: jobs,
+        jobBikesByJobId: const {},
+        itemsByJobId: const {},
+        systemOf: systemOf,
+        bike: _bike('t'),
+        ownerName: 'Andrés Kroll',
+      );
+      expect(ofRealOwner.map((visit) => visit.job.id), ['5'],
+          reason: 'a marked job is a test whoever owns the bike');
+    });
   });
 }

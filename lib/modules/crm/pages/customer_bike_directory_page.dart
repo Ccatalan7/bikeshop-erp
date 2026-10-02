@@ -65,6 +65,9 @@ class _CustomerBikeDirectoryPageState extends State<CustomerBikeDirectoryPage> {
 
   bool _isLoading = true;
   String? _error;
+
+  /// Sólo publica la carga más reciente (dos «Actualizar» seguidos).
+  int _loadGeneration = 0;
   String _query = '';
   _DirectoryView _view = _DirectoryView.all;
   int _visibleCount = _pageSize;
@@ -111,6 +114,7 @@ class _CustomerBikeDirectoryPageState extends State<CustomerBikeDirectoryPage> {
   }
 
   Future<void> _load({bool forceRefresh = false}) async {
+    final generation = ++_loadGeneration;
     setState(() {
       _error = null;
       if (_bikes.isEmpty) _isLoading = true;
@@ -122,9 +126,12 @@ class _CustomerBikeDirectoryPageState extends State<CustomerBikeDirectoryPage> {
         bikeshop.getBikes(forceRefresh: forceRefresh),
         customers.getCustomersForList(forceRefresh: forceRefresh),
         bikeshop.getJobs(forceRefresh: forceRefresh),
-        bikeshop.getAllJobBikes(forceRefresh: forceRefresh),
+        bikeshop.getAllJobBikes(
+          forceRefresh: forceRefresh,
+          rethrowErrors: true,
+        ),
       ]);
-      if (!mounted) return;
+      if (!mounted || generation != _loadGeneration) return;
       setState(() {
         _bikes = results[0] as List<Bike>;
         _customersById = _indexCustomers(results[1] as List<Customer>);
@@ -135,7 +142,7 @@ class _CustomerBikeDirectoryPageState extends State<CustomerBikeDirectoryPage> {
       });
     } catch (error) {
       debugPrint('Bike directory load failed: $error');
-      if (!mounted) return;
+      if (!mounted || generation != _loadGeneration) return;
       setState(() {
         _error = 'No pudimos actualizar las bicicletas.';
         _isLoading = false;
@@ -853,7 +860,7 @@ class _WideRow extends StatelessWidget {
     final Widget whenCell;
     final Widget lastCell;
     if (workshopView && row.inWorkshop) {
-      final late = (days ?? 0) > _longWaitDays;
+      final late = (days ?? 0) >= _longWaitDays;
       whenCell = Text(
         days == null ? '—' : _waitLabel(days),
         style: TextStyle(
@@ -1072,7 +1079,7 @@ class _CompactRow extends StatelessWidget {
     final roles = VinabikeThemeRoles.of(context);
     final job = workshopView ? row.workshopJob : row.latestJob;
     final days = row.waitingDays(today);
-    final late = workshopView && (days ?? 0) > _longWaitDays;
+    final late = workshopView && (days ?? 0) >= _longWaitDays;
     final String detail;
     if (workshopView && days != null) {
       detail = _waitLabel(days);

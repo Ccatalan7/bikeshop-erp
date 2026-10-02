@@ -28,6 +28,7 @@ final _delivered = JobStatusCustom(
 
 class _HistoryService extends ChangeNotifier implements BikeshopService {
   bool fail = false;
+  bool failJobBikes = false;
   bool hasJobs = false;
   int requests = 0;
 
@@ -109,8 +110,14 @@ class _HistoryService extends ChangeNotifier implements BikeshopService {
   @override
   Future<Map<String, List<MechanicJobBike>>> getAllJobBikes({
     bool forceRefresh = false,
-  }) async =>
-      const {};
+    bool rethrowErrors = false,
+  }) async {
+    if (failJobBikes) {
+      if (rethrowErrors) throw StateError('job bikes unavailable');
+      return const {};
+    }
+    return const {};
+  }
 
   @override
   Future<Map<String, List<MechanicJobItem>>> getJobItemsForJobs(
@@ -271,6 +278,33 @@ void main() {
     await tester.tap(find.text('Todo el historial'));
     await tester.pumpAndSettle();
     expect(find.text('Cadena KMC HV408'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'a failed job-bike read is an error, never a history for the header bike',
+      (tester) async {
+    _setSize(tester, const Size(390, 844));
+    final service = _HistoryService()
+      ..hasJobs = true
+      ..failJobBikes = true;
+    addTearDown(service.dispose);
+    await _pump(tester, service, _snapshot(), Brightness.light);
+    expect(find.text('No pudimos cargar el historial.'), findsOneWidget);
+    expect(find.text('Cadena KMC HV408'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('on a phone the job number is a 48 px named target',
+      (tester) async {
+    _setSize(tester, const Size(390, 844));
+    final service = _HistoryService()..hasJobs = true;
+    addTearDown(service.dispose);
+    await _pump(tester, service, _snapshot(), Brightness.light);
+    final link = find.bySemanticsLabel('Abrir trabajo PG-00257');
+    await tester.ensureVisible(link);
+    expect(link, findsOneWidget);
+    expect(tester.getSize(link).height, greaterThanOrEqualTo(48));
     expect(tester.takeException(), isNull);
   });
 

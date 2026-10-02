@@ -4419,20 +4419,28 @@ class BikeshopService extends ChangeNotifier {
     if (ids.isEmpty) return const <String, List<MechanicJobItem>>{};
 
     try {
-      var query = Supabase.instance.client
+      if (!await _ensureAuthorityScope()) {
+        throw const AuthorityScopeChangedException();
+      }
+      final lease = _cacheScope.capture();
+      if (lease == null) throw const AuthorityScopeChangedException();
+      final data = await Supabase.instance.client
           .from('mechanic_job_items')
           .select()
+          .eq('tenant_id', lease.scope.tenantId)
           .inFilter('job_id', ids.toList());
-      // Las líneas son del tenant del trabajo; se filtra igual cuando hay
-      // autoridad, sin romper a quien llame antes de tenerla.
-      final tenantId = _cacheScope.capture()?.scope.tenantId;
-      if (tenantId != null && tenantId.isNotEmpty) {
-        query = query.eq('tenant_id', tenantId);
+      // Una respuesta que llega después de cambiar de cuenta no se publica.
+      if (!_cacheScope.owns(lease)) {
+        throw const AuthorityScopeChangedException();
       }
-      final data = await query;
       final result = <String, List<MechanicJobItem>>{};
       for (final json in data as List) {
         final item = MechanicJobItem.fromJson(json);
+        if (item.tenantId != lease.scope.tenantId) {
+          throw StateError(
+            'Job item query returned data outside the authority tenant',
+          );
+        }
         result.putIfAbsent(item.jobId, () => <MechanicJobItem>[]).add(item);
       }
       return result;
@@ -4623,8 +4631,14 @@ class BikeshopService extends ChangeNotifier {
   }
 
   /// Get all job bikes (for list views - single query optimization)
+  ///
+  /// By default a failed read returns an empty map, as the list views always
+  /// did. A reader that treats «no rows» as meaning something — the bicycle
+  /// directory and history attribute a job without rows to its header bike —
+  /// passes [rethrowErrors] so a failure is shown as a failure.
   Future<Map<String, List<MechanicJobBike>>> getAllJobBikes({
     bool forceRefresh = false,
+    bool rethrowErrors = false,
   }) async {
     try {
       if (!await _ensureAuthorityScope()) {
@@ -4669,6 +4683,7 @@ class BikeshopService extends ChangeNotifier {
       rethrow;
     } catch (e) {
       if (kDebugMode) print('Error fetching all job bikes: $e');
+      if (rethrowErrors) rethrow;
       return {};
     }
   }

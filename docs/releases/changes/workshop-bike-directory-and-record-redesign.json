@@ -20,11 +20,11 @@
   "evidence": [
     {
       "path": "lib/modules/bikeshop/pages/bike_record_page.dart",
-      "sha256": "71f602e422b4313a08573068caccd59f74bbfbd2b6444a7bfa07040bb50d41ab"
+      "sha256": "e0545c8fddfd19db72a004b825725a21fe8e1cec95d1c3a085907a718e58786c"
     },
     {
       "path": "lib/modules/bikeshop/widgets/bike_record_panel.dart",
-      "sha256": "fb3cc9583938fd2fce947d26d8ec12caf04889ce78042921c3d77ff42498595a"
+      "sha256": "a14eeae2613e784c067fb20f8528c59868f82afe6407fe24420c2cadabd3f788"
     },
     {
       "path": "lib/modules/bikeshop/widgets/bike_silhouette.dart",
@@ -40,7 +40,7 @@
     },
     {
       "path": "lib/modules/bikeshop/services/bike_visit_history.dart",
-      "sha256": "30f20c99746a2467f5fefd90545583142d9cc255230541350acdb57ccb53909b"
+      "sha256": "c718a77f87353e12c507be5616a645939e2f032d4839c501eb99b5701fdf8ce9"
     },
     {
       "path": "lib/modules/bikeshop/services/mechanic_job_visibility_policy.dart",
@@ -48,7 +48,7 @@
     },
     {
       "path": "lib/modules/bikeshop/services/bikeshop_service.dart",
-      "sha256": "1eeb0aa463abfa5b343b404b1d9c2dbea4f9a39d2c4c149b4cb879a65c856884"
+      "sha256": "27415ac294cf040c03d02ab815df7badc82a20c771072cdc5dde56b4ed20ac02"
     },
     {
       "path": "lib/modules/bikeshop/services/service_wizard_service.dart",
@@ -56,7 +56,7 @@
     },
     {
       "path": "lib/modules/crm/pages/customer_bike_directory_page.dart",
-      "sha256": "8df6f51cb5fedaa7dd123576149a2dd34a4b9876e2e0743056d62d192f41b672"
+      "sha256": "9b5fe263d8d7a71cd8160fbfb1cd34cd7c60401be887325392c6d0e1989165fb"
     },
     {
       "path": "lib/shared/routes/app_router.dart",

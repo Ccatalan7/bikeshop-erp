@@ -37,6 +37,10 @@ class _BikeRecordPageState extends State<BikeRecordPage> {
   bool _notFound = false;
   String? _error;
 
+  /// Sólo la carga más reciente publica: una anterior que termina después
+  /// (guardar dos ediciones seguidas) no pisa la ficha nueva.
+  int _loadGeneration = 0;
+
   @override
   void initState() {
     super.initState();
@@ -44,6 +48,8 @@ class _BikeRecordPageState extends State<BikeRecordPage> {
   }
 
   Future<void> _load() async {
+    final generation = ++_loadGeneration;
+    bool isCurrent() => mounted && generation == _loadGeneration;
     setState(() {
       _isLoading = _snapshot == null;
       _error = null;
@@ -52,7 +58,7 @@ class _BikeRecordPageState extends State<BikeRecordPage> {
       final snapshot = await context
           .read<BikeshopService>()
           .getBikeRecordSnapshot(widget.bikeId);
-      if (!mounted) return;
+      if (!isCurrent()) return;
       if (snapshot == null) {
         setState(() {
           _notFound = true;
@@ -63,7 +69,7 @@ class _BikeRecordPageState extends State<BikeRecordPage> {
       final owner = await context
           .read<CustomerService>()
           .getCustomerById(snapshot.bike.customerId);
-      if (!mounted) return;
+      if (!isCurrent()) return;
       setState(() {
         _snapshot = snapshot;
         _ownerName = owner?.name ?? '';
@@ -72,7 +78,7 @@ class _BikeRecordPageState extends State<BikeRecordPage> {
       });
     } catch (error) {
       debugPrint('Bike record page load failed: $error');
-      if (!mounted) return;
+      if (!isCurrent()) return;
       setState(() {
         _error = 'No pudimos abrir esta bicicleta.';
         _isLoading = false;
@@ -192,7 +198,7 @@ class _BikeRecordPageState extends State<BikeRecordPage> {
         ),
       );
     }
-    return BikeRecordPanel(
+    final panel = BikeRecordPanel(
       snapshot: snapshot,
       ownerName: _ownerName,
       onEdit: _edit,
@@ -201,6 +207,44 @@ class _BikeRecordPageState extends State<BikeRecordPage> {
       onOpenOwner: _openOwner,
       closeLabel: 'Bicicletas',
       showBackRow: !compact,
+    );
+    final error = _error;
+    if (error == null) return panel;
+    // Falló la recarga después de editar: la ficha que se ve es la anterior
+    // y se dice, con la forma de reintentar.
+    return Column(
+      children: [
+        Material(
+          color: theme.colorScheme.errorContainer,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+            child: Row(
+              children: [
+                Icon(Icons.error_outline,
+                    size: 20, color: theme.colorScheme.onErrorContainer),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    '$error Lo que ves puede no tener el último cambio.',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onErrorContainer,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: _load,
+                  style: TextButton.styleFrom(
+                    foregroundColor: theme.colorScheme.onErrorContainer,
+                    minimumSize: const Size(48, 48),
+                  ),
+                  child: const Text('Reintentar'),
+                ),
+              ],
+            ),
+          ),
+        ),
+        Expanded(child: panel),
+      ],
     );
   }
 }

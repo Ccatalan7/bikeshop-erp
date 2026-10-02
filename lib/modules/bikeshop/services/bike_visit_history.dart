@@ -59,10 +59,13 @@ class BikeVisit {
 
   DateTime get date => job.deliveredAt ?? job.completedAt ?? job.arrivalDate;
 
-  /// Días que estuvo (o lleva) en el taller.
+  /// Días que estuvo (o lleva) en el taller. Mientras siga ahí cuenta hasta
+  /// hoy, aunque el trabajo ya esté terminado y espere el retiro.
   int daysInWorkshop(DateTime today) => calendarDaysBetween(
         job.arrivalDate,
-        job.deliveredAt ?? job.completedAt ?? today,
+        inWorkshop
+            ? today
+            : (job.deliveredAt ?? job.completedAt ?? job.updatedAt),
       );
 
   Set<JobLineSystem> get systems => {for (final group in groups) group.system};
@@ -106,18 +109,32 @@ JobLineSystem? jobLineSystemFromKey(String? key) =>
 /// Las líneas de la bici son las de su fila en `mechanic_job_bikes`; las sin
 /// fila son compra aparte («General», dueño 2026-10-01), salvo en trabajos
 /// que no tienen filas por bici, donde todo es de la bici de la cabecera.
+/// Los trabajos de prueba no cuentan, con la misma identidad (bici y dueño)
+/// con que los descarta el directorio.
 List<BikeVisit> buildBikeVisits({
   required String bikeId,
   required List<MechanicJob> jobs,
   required Map<String, List<MechanicJobBike>> jobBikesByJobId,
   required Map<String, List<MechanicJobItem>> itemsByJobId,
   required JobLineSystem Function(MechanicJobItem item) systemOf,
+  Bike? bike,
+  String? ownerName,
 }) {
   final visits = <BikeVisit>[];
   for (final job in jobs) {
     final jobId = job.id;
     if (jobId == null || job.deletedAt != null) continue;
     if (!bikeIdsOfJob(job, jobBikesByJobId).contains(bikeId)) continue;
+    if (mechanicJobMatchesTestFixture(
+      job,
+      customerName: ownerName,
+      bikeName: bike?.displayName,
+      bikeBrand: bike?.brand,
+      bikeModel: bike?.model,
+      bikeSerialNumber: bike?.serialNumber,
+    )) {
+      continue;
+    }
 
     final jobBikes = jobBikesByJobId[jobId] ?? const <MechanicJobBike>[];
     final ownRows = jobBikes.where((row) => row.bikeId == bikeId).toList();
@@ -127,6 +144,7 @@ List<BikeVisit> buildBikeVisits({
     };
     final items = itemsByJobId[jobId] ?? const <MechanicJobItem>[];
     final legacy = jobBikes.isEmpty;
+    final onlyThisBike = legacy || jobBikes.length == 1;
     final own = <MechanicJobItem>[];
     var separate = 0.0;
     for (final item in items) {
@@ -151,12 +169,14 @@ List<BikeVisit> buildBikeVisits({
         ),
     ];
     final linesTotal = lines.fold<double>(0, (sum, line) => sum + line.amount);
-    final onlyThisBike = legacy || jobBikes.length == 1;
     final amount = onlyThisBike && separate == 0 && job.totalCost > 0
         ? job.totalCost
         : linesTotal;
     final ownRequest =
         ownRows.isEmpty ? null : ownRows.first.workRequested?.trim();
+    // La cabecera guarda el pedido de la primera bici: sólo es de esta bici
+    // si el trabajo no tiene filas o tiene sólo la suya.
+    final headerRequest = onlyThisBike ? job.clientRequest?.trim() : null;
 
     visits.add(
       BikeVisit(
@@ -169,8 +189,15 @@ List<BikeVisit> buildBikeVisits({
         separatePurchaseAmount: separate,
         request: (ownRequest != null && ownRequest.isNotEmpty)
             ? ownRequest
-            : job.clientRequest?.trim(),
-        inWorkshop: isMechanicJobIntakeInWorkshop(job),
+            : headerRequest,
+        inWorkshop: isMechanicJobIntakeInWorkshop(
+          job,
+          customerName: ownerName,
+          bikeName: bike?.displayName,
+          bikeBrand: bike?.brand,
+          bikeModel: bike?.model,
+          bikeSerialNumber: bike?.serialNumber,
+        ),
       ),
     );
   }
@@ -181,20 +208,24 @@ List<BikeVisit> buildBikeVisits({
 /// Lee los trabajos de una bici con sus líneas.
 ///
 /// Trabajos y filas por bici vienen del caché que la app ya precarga; las
-/// líneas, de una lectura por lote. La categoría de cada repuesto y la
-/// familia de cada servicio sólo afinan el sistema: si fallan, las líneas
-/// quedan en «General» y el historial igual se muestra.
+/// líneas, de una lectura por lote. Si falla la lectura de filas por bici,
+/// falla el historial: tomarla como vacía le daría todos los trabajos a la
+/// bici de la cabecera. La categoría de cada repuesto y la familia de cada
+/// servicio sólo afinan el sistema: si fallan, las líneas quedan en
+/// «General» y el historial igual se muestra.
 Future<List<BikeVisit>> loadBikeVisits(
   BuildContext context,
-  String bikeId,
-) async {
+  String bikeId, {
+  Bike? bike,
+  String? ownerName,
+}) async {
   final bikeshop = context.read<BikeshopService>();
   final inventory = _maybeRead<InventoryService>(context);
   final categories = _maybeRead<CategoryService>(context);
 
   final results = await Future.wait<Object>([
     bikeshop.getJobs(),
-    bikeshop.getAllJobBikes(),
+    bikeshop.getAllJobBikes(rethrowErrors: true),
   ]);
   final jobs = results[0] as List<MechanicJob>;
   final jobBikes = results[1] as Map<String, List<MechanicJobBike>>;
@@ -260,6 +291,8 @@ Future<List<BikeVisit>> loadBikeVisits(
 
   return buildBikeVisits(
     bikeId: bikeId,
+    bike: bike,
+    ownerName: ownerName,
     jobs: ownJobs,
     jobBikesByJobId: jobBikes,
     itemsByJobId: items,

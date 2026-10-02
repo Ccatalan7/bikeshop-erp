@@ -184,7 +184,12 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
         bikeshop.getBikeSystemStates(bikeId),
         bikeshop.getBikeInterventions(bikeId),
         bikeshop.getBikeComponentLifecycles(bikeId),
-        loadBikeVisits(context, bikeId),
+        loadBikeVisits(
+          context,
+          bikeId,
+          bike: widget.snapshot.bike,
+          ownerName: widget.ownerName,
+        ),
       ]);
       return _RecordHistory(
         memory: _BikeRecordHistoryData.fromRaw(
@@ -1411,15 +1416,28 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     if (job.jobNumber != null)
-                      InkWell(
-                        onTap: job.id == null ? null : () => _openJob(job.id),
-                        borderRadius: BorderRadius.circular(6),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          child: Text(
-                            job.jobNumber!,
-                            style: BikeModuleText.code(context,
-                                color: theme.colorScheme.primary),
+                      Semantics(
+                        button: job.id != null,
+                        label: 'Abrir trabajo ${job.jobNumber}',
+                        excludeSemantics: true,
+                        child: InkWell(
+                          onTap: job.id == null ? null : () => _openJob(job.id),
+                          borderRadius: BorderRadius.circular(6),
+                          child: ConstrainedBox(
+                            // En teléfono el número es un objetivo táctil.
+                            constraints: BoxConstraints(
+                              minHeight: narrow ? 48 : 28,
+                              minWidth: narrow ? 48 : 0,
+                            ),
+                            child: Align(
+                              widthFactor: 1,
+                              heightFactor: 1,
+                              child: Text(
+                                job.jobNumber!,
+                                style: BikeModuleText.code(context,
+                                    color: theme.colorScheme.primary),
+                              ),
+                            ),
                           ),
                         ),
                       ),

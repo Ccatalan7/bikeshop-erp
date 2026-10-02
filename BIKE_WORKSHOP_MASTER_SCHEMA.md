@@ -2869,7 +2869,9 @@ Which bike a job belongs to (2026-10-02, bicycle directory and record redesign):
 - `mechanic_job_bikes` is the link. A job belongs to every bike in its job-bike rows; the header `mechanic_jobs.bike_id` counts only for a job that has no job-bike rows (the legacy jobs, Dec 2025–May 2026). Production on 2026-10-02 had 15 bike jobs with a null header and 50 whose header named a bike outside their own job-bike rows, so a reader that trusts the header loses or misattributes visits.
 - A line belongs to the bike of its `job_bike_id`. A null `job_bike_id` is «General» — a separate purchase, never any bike's history — except on a legacy job without job-bike rows, where every line is the header bike's.
 - «In the workshop» is one rule, `isMechanicJobIntakeInWorkshop` in `mechanic_job_visibility_policy.dart`: live, bike intake, not a test fixture, not cancelled (enum or custom status `CANCELADO`), not delivered. The directory, the record and the quick finder share it (the finder through `isMechanicJobBikeInWorkshop`, which adds the bike match); the stage comes from the custom status phase, because the text status can disagree with it.
-- These read models are `bike_directory_entries.dart` and `bike_visit_history.dart`; they read jobs, job bikes and lines with the tenant filter and change nothing.
+- «No job-bike rows» must be a successful read that came back empty. `getAllJobBikes` returns `{}` on failure for the list views, so these readers pass `rethrowErrors: true`: a swallowed failure would hand every job to its header bike with no error (Codex review, 2026-10-02).
+- A bike's request is its own `work_requested`; the header `client_request` is the first bike's, so it counts only for a job without rows or with that bike's row alone.
+- These read models are `bike_directory_entries.dart` and `bike_visit_history.dart`; they read jobs, job bikes and lines with the tenant filter (the line read takes the authority lease and drops a response that arrives after an account change), exclude test jobs with the same bike and owner identity, and change nothing.
 
 ## Structured Diagnosis Layer
 
