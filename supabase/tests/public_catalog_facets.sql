@@ -1329,12 +1329,12 @@ select results_eq(
   $$,
   $$
     values
-      ('spec:facet_test_valve:single_select:'::text, 'Auto (Schrader / americana)'::text, 'Tipo de válvula (prueba)'::text, 1::bigint, 2::numeric),
-      ('spec:facet_test_valve:single_select:'::text, 'Francesa (Presta)'::text, 'Tipo de válvula (prueba)'::text, 1::bigint, 2::numeric),
+      ('spec:facet_test_valve:single_select:'::text, 'Auto (Schrader / americana)'::text, 'Tipo de válvula (prueba)'::text, 1::bigint, 3::numeric),
+      ('spec:facet_test_valve:single_select:'::text, 'Francesa (Presta)'::text, 'Tipo de válvula (prueba)'::text, 2::bigint, 3::numeric),
       ('spec:facet_test_valve_len:number:mm'::text, '48'::text, 'Largo de válvula (contrato)'::text, 3::bigint, 3::numeric),
       ('spec:facet_test_valve_len:number:mm'::text, '60'::text, 'Largo de válvula (contrato)'::text, 1::bigint, 3::numeric)
   $$,
-  'spec facets list filterable visible fields by shop label, count products per value and per key (a fit row projects onto the number field it names), and hide private, retired and unconfirmed inferred facts'
+  'spec facets list filterable visible fields by shop label, count products per value and per key (a fit row projects onto the number field it names), hide private and retired facts, and count a deduction like any other datum (20261002140000)'
 );
 
 select ok(
@@ -1363,8 +1363,9 @@ select results_eq(
   $$
     values
       ('spec:facet_test_valve:single_select:'::text, 'Auto (Schrader / americana)'::text, 1::bigint),
-      ('spec:facet_test_valve:single_select:'::text, 'Francesa (Presta)'::text, 1::bigint),
-      ('spec:facet_test_valve_len:number:mm'::text, '48'::text, 1::bigint)
+      ('spec:facet_test_valve:single_select:'::text, 'Francesa (Presta)'::text, 2::bigint),
+      ('spec:facet_test_valve_len:number:mm'::text, '48'::text, 2::bigint),
+      ('spec:facet_test_valve_len:number:mm'::text, '60'::text, 1::bigint)
   $$,
   'a spec filter narrows the other spec facets but keeps its own alternatives, as the brand facet does'
 );
@@ -1380,7 +1381,7 @@ select results_eq(
     order by product.id
   $$,
   $$
-    values ('7fac2000-0000-4000-8000-000000000001'::uuid)
+    values ('7fac2000-0000-4000-8000-000000000001'::uuid), ('7fac2000-0000-4000-8000-000000000003'::uuid)
   $$,
   'the paged catalog keeps only the products carrying the requested option'
 );
@@ -1432,8 +1433,8 @@ select is(
       p_spec_filters := '{"facet_test_valve": ["Francesa (Presta)"], "facet_test_valve_len": ["60"]}'::jsonb
     )
   ),
-  0::bigint,
-  'two keys must both match: no product is Presta and 60 mm'
+  1::bigint,
+  'two keys must both match: only the deduced Presta of 60 mm'
 );
 
 select is(

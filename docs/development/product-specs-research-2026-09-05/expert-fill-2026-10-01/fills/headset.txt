@@ -1,0 +1,2 @@
+@reason Juego de dirección completo: trae cubetas, rodamientos y pista de corona.
+* headset_part_scope=Completa; crown_race_included=sí

@@ -1,0 +1,16 @@
+@reason Manubrio separado de la tee; tipo, material y color por el nombre; los de MTB y BMX tienen 22,2 mm en la zona de los puños.
+* bar_construction=Manubrio separado
+77a0ce7d material=Acero; color=Negro; grip_area_diameter_mm=22.2
+5ab2b359 bar_style=Riser; material=Aluminio; color=Negro; grip_area_diameter_mm=22.2; bar_width_reference=Centro a centro en los extremos
+1336466c color=Negro; grip_area_diameter_mm=22.2
+183ee55b color=Plateado
+3a1cfa79 bar_style=Riser; grip_area_diameter_mm=22.2; bar_width_reference=Centro a centro en los extremos
+c73761d3 bar_style=Riser; color=Negro; grip_area_diameter_mm=22.2; bar_width_reference=Centro a centro en los extremos
+f0321b31 color=Negro; grip_area_diameter_mm=22.2
+d8d9ce49 material=Aluminio; color=Negro; grip_area_diameter_mm=22.2
+5c9f71b5 material=Aluminio; grip_area_diameter_mm=22.2
+d1195cd4 material=Aluminio; color=Negro; grip_area_diameter_mm=22.2
+365bfc4d grip_area_diameter_mm=22.2
+f6f725cd grip_area_diameter_mm=22.2
+29bbde93 material=Aluminio; color=Negro
+623e7529 grip_area_diameter_mm=22.2

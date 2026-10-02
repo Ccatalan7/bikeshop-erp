@@ -1,0 +1,10 @@
+@reason Espaciador de dirección o de motor: material y color por el nombre; se vende por unidad.
+* pack_quantity=1
+c82876d2 material=Carbono
+9f64e1e4 material=Aluminio; color=Negro
+52469904 material=Policarbonato / plástico; color=Negro
+4840cfd7 color=Negro
+642b3a61 color=Negro
+b7adf9dc color=Negro
+2f261e3c color=Negro
+f0e791c4 material=Policarbonato / plástico; color=Negro

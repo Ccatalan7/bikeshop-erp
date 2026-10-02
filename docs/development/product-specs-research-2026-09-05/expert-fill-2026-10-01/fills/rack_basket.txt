@@ -1,0 +1,6 @@
+@reason Canasto delantero de manubrio; material y color por el nombre.
+d27f7d5d carrier_kind=Canasto delantero; material=Acero; color=Negro
+1091e5fa carrier_kind=Canasto delantero; carrier_mount_kind=Abrazaderas de manubrio; color=Negro
+f97e50a9 carrier_kind=Canasto delantero; carrier_mount_kind=Abrazaderas de manubrio; material=Acero
+63baf4f4 carrier_kind=Canasto delantero; color=Blanco
+44e000b9 carrier_kind=Correa / pulpo de carga

@@ -1,0 +1,32 @@
+@reason Qué es la herramienta y para qué sirve, por su nombre y su uso en taller.
+04bef693 tool_kind=Manómetro / bomba de suspensión; tool_capabilities=[{"operation":"Inflar / presurizar","target_standard":"Suspensiones de aire con nitrógeno (con manómetro)","supported":true}]
+ff07ba0c tool_kind=Multiherramienta; tool_capabilities=[{"operation":"Apretar / aflojar","target_standard":"Pernos Allen de 2 a 6 mm y tornillos de paleta y cruz","supported":true}]
+38a1aad9 tool_kind=Punta / bit; tool_interface=Torx T25
+a8cb1eec tool_kind=Repuesto de herramienta
+9ed3d854 color=Negro; tool_capabilities=[{"operation":"Cortar / extraer remache","target_standard":"Cadenas de bicicleta (sacar y poner el pasador)","supported":true}]
+06a3962e color=Negro; tool_capabilities=[{"operation":"Cortar / extraer remache","target_standard":"Cadenas de bicicleta (sacar y poner el pasador)","supported":true}]
+749108da color=Negro; tool_capabilities=[{"operation":"Cortar / extraer remache","target_standard":"Cadenas de bicicleta (sacar y poner el pasador)","supported":true}]
+575e4655 tool_capabilities=[{"operation":"Extraer","target_standard":"Neumáticos de bicicleta (sacar y poner de la llanta)","supported":true}]
+7b75b4d8 color=Negro; tool_capabilities=[{"operation":"Extraer","target_standard":"Neumáticos de bicicleta (sacar y poner de la llanta)","supported":true}]
+7cb41d63 color=Azul; tool_capabilities=[{"operation":"Extraer","target_standard":"Neumáticos de bicicleta (sacar y poner de la llanta)","supported":true}]
+3a27a1db color=Negro; tool_capabilities=[{"operation":"Extraer","target_standard":"Neumáticos de bicicleta (sacar y poner de la llanta)","supported":true}]
+c6267592 color=Rojo; tool_capabilities=[{"operation":"Extraer","target_standard":"Neumáticos de bicicleta (sacar y poner de la llanta)","supported":true}]
+970ce513 tool_capabilities=[{"operation":"Limpiar","target_standard":"Cadena, piñones y platos","supported":true}]
+b887f8e9 tool_capabilities=[{"operation":"Limpiar","target_standard":"Platos, piñones y cadena","supported":true}]
+cb16446d color=Azul; tool_interface=Obús de válvula; tool_capabilities=[{"operation":"Extraer","target_standard":"Obús de válvula Presta y Schrader","supported":true}]
+69b5a761 tool_interface=Tapa de biela integrada; tool_capabilities=[{"operation":"Apretar / aflojar","target_standard":"Tapa de ajuste de bielas integradas (Shimano Hollowtech II)","supported":true}]
+e208a188 tool_capabilities=[{"operation":"Apretar / aflojar","target_standard":"Pernos Allen de la bicicleta","supported":true}]
+083d9540 tool_capabilities=[{"operation":"Instalar","target_standard":"Cables y fundas por dentro del cuadro","supported":true}]
+f2bd577d tool_capabilities=[{"operation":"Apretar / aflojar","target_standard":"Pernos Allen de la bicicleta","supported":true}]
+c70c2643 tool_interface=15 mm; tool_capabilities=[{"operation":"Apretar / aflojar","target_standard":"Pedales con llave de 15 mm","supported":true}] # Llave de pedal estándar: boca de 15 mm.
+25cabc4c tool_interface=Pedalier de cartucho de 20 estrías; tool_capabilities=[{"operation":"Apretar / aflojar","target_standard":"Motor sellado de cartucho de 20 estrías (Shimano BB-UN, Octalink, ISIS)","supported":true}] # Bike Hand YC-26BB-2: llave de pedalier de cartucho de 20 estrías.
+f3bc831f tool_capabilities=[{"operation":"Apretar / aflojar","target_standard":"Pernos Allen de 1,5 a 8 mm","supported":true}]
+41c5819c tool_capabilities=[{"operation":"Apretar / aflojar","target_standard":"Pernos Allen de 2 a 7 mm","supported":true}]
+18c527b7 tool_capabilities=[{"operation":"Apretar / aflojar","target_standard":"Pernos Allen de la bicicleta","supported":true}]
+5b9e252a tool_capabilities=[{"operation":"Otra","target_standard":"Tomar piezas pequeñas, terminales y resortes","supported":true}]
+dbc5560f tool_capabilities=[{"operation":"Medir","target_standard":"Largo de rayos y diámetro de bolitas","supported":true}]
+3ed6a042 tool_capabilities=[{"operation":"Apretar / aflojar","target_standard":"Niples de rayo de varios tamaños","supported":true}]
+57ac8746 tool_capabilities=[{"operation":"Apretar / aflojar","target_standard":"Niples de rayo de 6 tamaños","supported":true}]
+f5c42db9 tool_capabilities=[{"operation":"Otra","target_standard":"Rayos rectos: sujetar el rayo sin que gire al tensar","supported":true}]
+f1970172 tool_capabilities=[{"operation":"Apretar / aflojar","target_standard":"Pernos Allen y tornillos de la bicicleta (11 funciones)","supported":true}]
+0810d86e tool_capabilities=[{"operation":"Apretar / aflojar","target_standard":"Pernos Allen y tornillos de la bicicleta (15 funciones)","supported":true}]

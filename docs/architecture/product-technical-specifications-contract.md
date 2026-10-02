@@ -659,8 +659,8 @@ una bicicleta ni una visita. Mantener posiciones y scopes y el contrato de
 afirmaciones aceptadas y sus límites, con proyecciones que no filtren evidencia
 privada del tenant. **Corrección 2026-10-01:** ningún hecho está confirmado
 (`confirmed` es falso en los 4.604 de productos); «aceptada» significa hoy
-cualquier origen salvo una inferencia sin confirmar. La tienda lo dice una vez
-y no promete verificación (§7.4).
+cualquier origen, también una deducción (§7.5). La tienda lo dice una vez y no
+promete verificación (§7.4).
 
 ### 7.4 La ficha pública habla con palabras de cliente (2026-10-01, migración 20261002130000)
 
@@ -696,9 +696,11 @@ cajas iguales, encabezada por el SKU.
   nombre visible de cada opción (`get_public_spec_option_labels_v1`). El filtro
   sigue guardando la etiqueta, que es lo que citan los enlaces compartidos
   (`spec.drivetrain_mode=Derailleur` se lee «Con cambio trasero»).
-- **El origen se dice una vez:** «Datos informados por el fabricante y el
-  proveedor.» bajo la ficha, con una forma de preguntar (el WhatsApp del sitio)
-  al lado.
+- **El origen se dice una vez:** «Ficha preparada por nuestro equipo con
+  información del fabricante y del proveedor.» bajo la ficha, con una forma de
+  preguntar (el WhatsApp del sitio) al lado. Un producto sin datos técnicos (un
+  café, un recuerdo) no anuncia una ficha que falta: su sección se llama
+  «Detalles del producto» y muestra la descripción y la ayuda.
 
 **Regla:** un dato visible al cliente con valor en un producto publicado lleva
 `store_label`; el read-back de 130000 lo exige, y una pasada de catálogo que
@@ -707,13 +709,101 @@ trae texto de proveedor o notas de conciliación no es visible al cliente
 (`published_variant_label` «12-32T (br)», `rear_derailleur_supplied_adapter_reference`
 «Riveted adapter (ROAD type)», `rim_joint_designation` «Sleeve»).
 
-Lo que la tienda todavía no muestra (2026-10-01, 1.600 publicados): 347 sin
-ningún dato público y 810 con uno o dos; 1.059 valores en campos retirados de
-su ficha (`legacy`), entre ellos el rodado de 252 productos; la horquilla sin
-aro fuera de una tabla oculta (`fork_tire_clearance_configurations`); tablas
-ocultas al cliente con datos útiles (presión máxima del neumático, dientes de
-cada plato, núcleos aceptados). Es falta de datos o de presentación de tablas,
-no de palabras.
+Lo que la tienda todavía no mostraba (2026-10-01, 1.600 publicados): 347 sin
+ningún dato público y 810 con uno o dos; la horquilla sin aro fuera de una
+tabla oculta (`fork_tire_clearance_configurations`); tablas ocultas al cliente
+con datos útiles (presión máxima del neumático, dientes de cada plato).
+**Corrección 2026-10-01:** se dijo «el rodado de 252 productos en un campo
+retirado»; 237 de esos 252 ya tienen su sucesor proyectado desde el
+2026-09-16 (`apply_legacy_projections.py`) y sólo 15 quedan, todos ambiguos
+por regla (24 x 1 3/8 puede ser 540 o 520; un 26" sin ancho no se proyecta).
+Lo resuelven §7.5 y §7.6.
+
+### 7.5 Las tablas se leen por su vista; lo deducido se muestra (2026-10-01, migración 20261002140000)
+
+Una tabla de la ficha (`rows_schema`) guarda lo que se documenta fila por
+fila. La tienda sólo sabía mostrarla entera, con el rótulo de operador de
+cada columna, el documento y la URL de la fuente, así que 17 tablas con datos
+en productos publicados estaban ocultas.
+
+- **`spec_definitions.store_view`** dice qué lee el cliente de cada fila:
+  `format` (plantilla con `{columna}`, o una lista que se prueba en orden),
+  `only` (sólo filas con esos valores: «Compatible declarado», «Admitido por
+  la fuente», una operación admitida), `sort_by`/`sort_desc`, `join`,
+  `suffix`, `distinct` y `replace`. Lo arma
+  `spec_rows_store_display_internal_v1`; los números van con coma decimal. Una
+  vista que no deja nada saca la fila de la ficha. Sin vista, una tabla
+  visible se muestra entera (las cámaras).
+- Una vista se juzga entera al guardarla (`spec_definitions_store_view_check`
+  con `spec_store_view_problem_internal_v1`, que dice qué tiene mal): sin
+  `format` no hay vista, cada `{columna}`, `only` y `sort_by` nombra una
+  columna de la tabla, las banderas son sí o no y cada patrón de `replace`
+  compila. La tienda lee la vista para cada producto, y una vista que fallara
+  al leerse apagaría la ficha entera de todos sus productos, no sólo esa
+  tabla (revisión de Codex, 2026-10-01).
+- Las 17 vistas: dientes de cada piñón («11-13-15-…-34 dientes»), platos
+  («42-34-24 dientes»), presión máxima del neumático y del bombín, aro y
+  neumático más ancho de la horquilla, velocidades del cambio trasero, cadena
+  compatible, mandos, peso de la cadena, abrazadera y transmisión del
+  desviador («3x7 o 3x8»), cadenas de un eslabón rápido, para qué sirve una
+  herramienta, componentes de un kit, circuitos de un freno y eje de motor de
+  una biela. La tienda escribe el aro de la horquilla como se pide
+  (`forkWheelLabel`: «29" / 700c · neumático hasta 2.3" (58 mm)»). El
+  neumático más ancho es un máximo de calce: la pulgada nunca promete más que
+  los milímetros guardados (el décimo que cabe en ellos, con el medio
+  milímetro de redondeo del registro). 60 mm dice 2.3", no 2.4" (61 mm).
+- Una columna numérica de esas tablas con el nombre de un campo filtrable
+  (el aro de la horquilla, el manubrio de un mando) ya alimenta los filtros
+  del catálogo; esas columnas tienen nombre de tienda.
+- **Lo deducido se muestra.** Desde `20260915034000` la tienda escondía un
+  dato `inferred` mientras nadie lo confirmara, y nadie confirma: 229 datos de
+  133 cámaras publicadas (butilo, sin líquido) nunca salían. El origen de un
+  dato queda en el editor; no decide si se publica (dueño: «nadie pidió eso de
+  que los datos tuvieran que sí o sí ser respaldados con fuente
+  documentada»). Vale para la ficha y para los filtros.
+
+### 7.6 El catálogo se completa con criterio de experto (2026-10-01, migración 20261002150000)
+
+**Regla:** un dato de la ficha no necesita documento, URL ni cita. Lo que un
+vendedor experto sabe del producto —por su nombre, su descripción, su marca,
+su modelo y la línea del fabricante— se escribe; lo que de verdad no se sabe
+se deja vacío. No se propone «investigar con documento» como requisito.
+
+- **`record_product_spec_expert_value_v1(producto, campo, valor, tanda,
+  razón, modelo)`** escribe en cualquier campo vigente de la ficha (no sólo
+  los filtrables), con origen `research` («De la investigación del catálogo»
+  en el editor) y un recibo en `spec_fact_expert_fills` (tanda, modelo,
+  razón opcional). Sólo llena un campo vacío, reemplaza una deducción que
+  nadie confirmó o corrige un dato de una tanda anterior que nadie tocó: lo
+  escrito a mano, lo confirmado, el texto del proveedor, una lectura del
+  nombre, la ficha anterior y la investigación con evidencia se conservan. Las
+  reglas de la ficha siguen siendo el juez (una cámara sólida no puede ser
+  tubeless: se rechaza).
+- «Nadie lo tocó» se decide por la **huella** del dato
+  (`spec_fact_fingerprint_internal_v1`: valor, opciones, origen y
+  confirmación) guardada en el recibo, no por la hora: dentro de una
+  transacción `now()` no cambia y una corrección pasaba por intacta (revisión
+  de Codex, 2026-10-01).
+- **`discard_product_spec_expert_batch_v1(tanda)`** deshace una tanda entera,
+  producto por producto bajo el candado del editor de la ficha, salvo los
+  datos cuya huella ya no es la del recibo.
+- **Las tablas tampoco exigen fuente:** 88 de 150 pedían en cada fila el
+  documento, la URL o el «alcance» de la fuente. Esas columnas son opcionales
+  y el disparador `spec_rows_source_optional_guard` (23514) impide volver a
+  exigirlas. Una fila de horquilla puede llevar sólo su aro: el neumático más
+  ancho deja de ser obligatorio.
+- El llenado corre como el actor real con
+  `scripts/inventory/fill_expert_values.py` (`--mode dry` con rollback,
+  `--prelude` para ensayar contra una migración que producción todavía no
+  tiene; sale con error si un tramo falla, porque en `commit` los tramos
+  anteriores quedan escritos). La primera tanda, `catalogo-experto-2026-10-01`, son 2.938 valores en
+  1.175 productos de 59 familias, ensayados en producción sin un rechazo
+  (`docs/development/product-specs-research-2026-09-05/expert-fill-2026-10-01/`);
+  con ella los productos con tres datos o más pasan de 504 a 1.151 y los que
+  no tienen ninguno de 281 a 79. Las opciones de un campo se acotan por ficha
+  (`form_contract.allowed_options`) y cada tabla tiene su propia versión de
+  esquema: un compilador que use las de la definición o asuma la versión 1
+  escribe valores que la base rechaza.
 
 ## 8. Resultado de compatibilidad
 

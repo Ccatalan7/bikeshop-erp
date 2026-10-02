@@ -1,0 +1,35 @@
+@reason Guante de ciclismo para adulto, corte unisex; talla y color escritos en el nombre.
+* glove_intended_use=Ciclismo; intended_audience=Adulto; gender_fit=Unisex
+4e394f05 oem_size_label=L; color=Negro y Gris
+954b7dd7 oem_size_label=XL; color=Negro y Gris
+2804ec98 color=Negro y Azul
+06508177 oem_size_label=L
+d69d39d5 oem_size_label=M; color=Azul y Amarillo
+77209ab6 oem_size_label=L; color=Negro; glove_intended_use=Moto
+36adea72 oem_size_label=L; color=Blanco y Verde
+c13e3581 oem_size_label=M; color=Blanco y Verde
+102e1c15 oem_size_label=M; color=Camuflado
+4864965a oem_size_label=L; color=Azul
+6d53d79a oem_size_label=M; color=Azul
+085039cf oem_size_label=XL; color=Azul
+3f25a0ab oem_size_label=L; color=Verde
+f79515ed oem_size_label=M; color=Verde
+c469a4f8 oem_size_label=XL; color=Verde
+4d7985ab oem_size_label=XL; color=Negro y Gris
+a4cfe811 oem_size_label=XL; color=Negro y Rojo
+e569d25c oem_size_label=L; color=Negro y Gris
+4fd9ac0b oem_size_label=M; color=Negro y Gris
+9f49d44e oem_size_label=L; color=Negro y Rojo
+4c31ff3b oem_size_label=M; color=Negro y Rojo
+1a6ecc0f oem_size_label=L; color=Amarillo y Negro
+9900bda3 oem_size_label=M; color=Amarillo y Negro
+992923ac oem_size_label=L; color=Azul y Negro
+021029cb oem_size_label=M; color=Azul y Negro
+90df196f oem_size_label=L; color=Negro y Azul
+d7974f43 oem_size_label=XL; color=Negro y Azul
+fba810d8 oem_size_label=S; color=Negro y Rojo
+6d762940 oem_size_label=L; color=Negro
+9739c46e oem_size_label=M; color=Negro
+43a12900 oem_size_label=XL; color=Negro
+63d56f72 oem_size_label=L; color=Negro y Rojo
+7c5f180d finger_length=Largo (dedo completo)

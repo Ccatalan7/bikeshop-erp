@@ -1,0 +1,28 @@
+@reason Medidas y color escritos en el nombre: U-lock ancho x largo interior; espiral largo x grosor del cable.
+b5d67288 inner_width_mm=115; inner_height_mm=230; color=Naranjo
+e7c2a27b inner_width_mm=180; inner_height_mm=245; color=Negro
+c319b2be inner_width_mm=180; inner_height_mm=245
+e9f32086 lock_kind=Kit U + cable; color=Naranjo # Luma Enduro Kit: U-lock más cable.
+b4de526d lock_kind=Cable / espiral; cable_length_mm=1200; cable_diameter_mm=8; color=Azul
+1089297a lock_kind=Cable / espiral; cable_length_mm=1800; cable_diameter_mm=12; color=Azul
+fc30f58f cable_length_mm=1500; color=Azul
+194262c0 cable_length_mm=1500; color=Negro
+3a37851a cable_length_mm=1800; color=Naranjo
+fd972b50 cable_length_mm=1800; cable_diameter_mm=12; color=Amarillo
+f03f0400 cable_length_mm=1800; cable_diameter_mm=12; color=Azul
+d7a50cc6 cable_length_mm=1800; color=Azul
+fb610647 cable_length_mm=1800; color=Verde
+c9c74777 cable_length_mm=1800; color=Amarillo
+7a94d944 cable_length_mm=1800; color=Amarillo
+891f71a3 inner_width_mm=115; inner_height_mm=230
+463fe60b color=Negro
+8bf5da1c inner_width_mm=115; inner_height_mm=292; color=Negro
+d749e340 inner_width_mm=90; inner_height_mm=140; color=Negro
+6197ac40 cable_length_mm=1800; color=Verde
+77dcffd1 cable_length_mm=1800; color=Naranjo
+3a47d604 cable_length_mm=1800; color=Naranjo
+20a7f18e cable_length_mm=1800; color=Naranjo
+762ea2f1 inner_width_mm=115; inner_height_mm=230; color=Negro
+ef584c99 inner_width_mm=115; inner_height_mm=292; color=Azul
+c56c40f7 inner_height_mm=320
+9a3c9d8d inner_width_mm=165; inner_height_mm=320

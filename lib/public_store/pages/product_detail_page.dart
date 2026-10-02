@@ -1999,6 +1999,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     final hasWhatsApp = whatsappDigits(
       context.read<WebsiteService>().getSetting('whatsapp', ''),
     ).isNotEmpty;
+    final sheet = _specSheet();
 
     return Container(
       width: double.infinity,
@@ -2020,7 +2021,11 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                 clipBehavior: Clip.none,
                 children: [
                   _buildSectionHeading(
-                    'Ficha técnica',
+                    // A product with nothing technical to say (food, a
+                    // souvenir) is not announced as a technical sheet.
+                    _isLoadingTechnicalSpecs || sheet.hasTechnicalData
+                        ? 'Ficha técnica'
+                        : 'Detalles del producto',
                     foreground: _storeTheme.commerceAccent,
                     lineColor: _storeTheme.commerceAccent,
                   ),
@@ -2033,7 +2038,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
               ),
               SizedBox(height: isMobile ? 24 : 32),
               ProductSpecSheetView(
-                sheet: _specSheet(),
+                sheet: sheet,
                 isLoading: _isLoadingTechnicalSpecs,
                 isMobile: isMobile,
                 description: description,

@@ -1,10 +1,12 @@
 -- Assertions shared by the standalone test and exact preimage/replay rehearsal.
-select is((select count(*)::int from pg_temp.public_inference_rows()),3,
- 'public output omits only the two pending inferences and existing legacy field');
-select ok(not exists(select 1 from pg_temp.public_inference_rows() where spec_key='public_inference_pending_number'),
- 'unconfirmed inferred number is not asserted publicly');
-select ok(not exists(select 1 from pg_temp.public_inference_rows() where spec_key='public_inference_pending_text'),
- 'unconfirmed inferred text is not asserted publicly');
+-- 20261002140000: the origin of a datum no longer decides whether it is
+-- published (owner, 2026-10-01); only the retired field stays out.
+select is((select count(*)::int from pg_temp.public_inference_rows()),5,
+ 'public output omits only the existing legacy field');
+select is((select display_value from pg_temp.public_inference_rows() where spec_key='public_inference_pending_number'),'12',
+ 'an unconfirmed deduced number is published like any other datum');
+select is((select display_value from pg_temp.public_inference_rows() where spec_key='public_inference_pending_text'),'Synthetic inference',
+ 'an unconfirmed deduced text is published like any other datum');
 select is((select display_value from pg_temp.public_inference_rows() where spec_key='public_inference_confirmed_number'),'13',
  'inference already confirmed by the existing contract keeps its display policy');
 select is((select display_value from pg_temp.public_inference_rows() where spec_key='public_inference_supplier_boolean'),'No',

@@ -1,0 +1,16 @@
+@reason Tee o potencia por el nombre: las de 31,8 mm de manubrio son ahead para tubo de dirección de 1-1/8" (28,6 mm).
+2517eada stem_kind=Ahead (sin rosca); stem_steerer_clamp_diameter_mm=28.6; bar_clamp_diameter_mm=31.8; material=Aluminio
+0d6b31a2 stem_kind=Ahead (sin rosca); stem_steerer_clamp_diameter_mm=28.6; color=Negro
+3b5f6dce stem_kind=Ahead (sin rosca); stem_steerer_clamp_diameter_mm=28.6
+82d7765e stem_kind=Ahead (sin rosca); stem_steerer_clamp_diameter_mm=28.6
+32c4dc73 bar_clamp_diameter_mm=25.4; color=Negro
+ca7afc3a stem_kind=Ahead (sin rosca); stem_steerer_clamp_diameter_mm=28.6; color=Azul
+6a267ca8 stem_kind=Ahead (sin rosca); stem_steerer_clamp_diameter_mm=28.6; color=Dorado
+33e9e33a stem_kind=Ahead (sin rosca); stem_steerer_clamp_diameter_mm=28.6; color=Morado
+779ffe89 stem_kind=Ahead (sin rosca); stem_steerer_clamp_diameter_mm=28.6; color=Negro
+966cd4f0 stem_kind=Ahead (sin rosca); stem_steerer_clamp_diameter_mm=28.6; color=Rojo
+12c6b1b8 stem_kind=Ahead (sin rosca); stem_steerer_clamp_diameter_mm=28.6; color=Negro
+3b060239 stem_kind=Ahead (sin rosca); stem_steerer_clamp_diameter_mm=28.6; bar_clamp_diameter_mm=31.8; color=Negro y morado
+61f96979 stem_kind=Ahead (sin rosca); stem_steerer_clamp_diameter_mm=28.6; bar_clamp_diameter_mm=31.8; color=Rojo
+2756bc28 stem_kind=Ahead (sin rosca); stem_steerer_clamp_diameter_mm=28.6
+69946ff2 stem_kind=De espiga (quill); material=Acero; color=Negro # Tee de espiga 22,2 mm para manubrio de 25,4 mm.

@@ -1,0 +1,3 @@
+@reason Rango de plato escrito en el nombre.
+bb179852 chainring_teeth_min=28; chainring_teeth_max=34
+298247da chainring_teeth_min=32; chainring_teeth_max=38

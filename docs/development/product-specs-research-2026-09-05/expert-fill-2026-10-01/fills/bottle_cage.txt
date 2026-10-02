@@ -1,0 +1,10 @@
+@reason Portacaramagiola de aro que se atornilla con los dos tornillos del cuadro; material y color por el nombre.
+* cage_mount=Dos tornillos del cuadro (estándar); cage_retention_system=Portabotella convencional (de aro); boss_count=2
+af1961d6 color=Negro
+c024d0b5 color=Negro
+94942e2b material=Plástico / nylon; color=Negro
+ba2f806d material=Plástico / nylon
+5ecff272 color=Negro
+47872a2a material=Plástico / nylon
+6cefaf04 color=Plateado
+b907f69a -cage_mount; -cage_retention_system; -boss_count; color=Negro

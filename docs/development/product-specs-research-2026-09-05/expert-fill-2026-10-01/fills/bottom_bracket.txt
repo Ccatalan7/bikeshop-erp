@@ -1,0 +1,37 @@
+@reason Eje de motor sellado de cartucho con punta cuadrada: estándar JIS (Shimano BB-UN, Neco B910, VP-BC73 y genéricos).
+4d07ebd2 spindle_interface=Cuadrado JIS
+58be67ad spindle_interface=Cuadrado JIS
+49fa8c1a spindle_interface=Cuadrado JIS
+a5ef9ca3 spindle_interface=Cuadrado JIS
+8afabefd spindle_interface=Cuadrado JIS
+59022ac9 spindle_interface=Cuadrado JIS
+ba1b2404 spindle_interface=Cuadrado JIS
+b63ffb0b spindle_interface=Cuadrado JIS
+b8dffa43 spindle_interface=Cuadrado JIS
+437e39c1 spindle_interface=Cuadrado JIS
+7fa182ff spindle_interface=Cuadrado JIS
+c6f5fa2c spindle_interface=Cuadrado JIS
+a4a3da24 spindle_interface=Cuadrado JIS
+808f0f4e spindle_interface=Cuadrado JIS
+c6b0bcaf spindle_interface=Cuadrado JIS
+c53f47f9 spindle_interface=Cuadrado JIS
+3711b13d spindle_interface=Cuadrado JIS
+3deef919 spindle_interface=Cuadrado JIS
+d9f9f4b3 spindle_interface=Cuadrado JIS
+6a1a3c31 spindle_interface=Cuadrado JIS
+9e485c55 spindle_interface=Cuadrado JIS
+7d9c0cc0 spindle_interface=Cuadrado JIS
+10aac12d spindle_interface=Cuadrado JIS
+d60e00e3 spindle_interface=Cuadrado JIS
+c156fa6b spindle_interface=Cuadrado JIS
+3276ec2c spindle_interface=Cuadrado JIS
+c1c9a246 spindle_interface=Cuadrado JIS
+f7474188 spindle_interface=Cuadrado JIS
+b374d934 spindle_interface=Cuadrado JIS
+6d66efa0 spindle_interface=Cuadrado JIS; spindle_length_mm=122.5
+@reason Pedalier de cubetas externas o press-fit para bielas de eje integrado de 24 mm (Hollowtech II).
+4519a25f spindle_interface=Hollowtech / 24mm
+86fcb1db spindle_interface=Hollowtech / 24mm
+86fa7b83 spindle_interface=Hollowtech / 24mm
+90497f78 spindle_interface=Hollowtech / 24mm
+75a58093 spindle_interface=BMX 22mm # Cubetas TSC Stacked Mid de 22 mm: para eje BMX de 22 mm.

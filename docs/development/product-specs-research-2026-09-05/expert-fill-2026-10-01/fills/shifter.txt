@@ -1,0 +1,22 @@
+@reason Mando de MTB o paseo para manubrio plano: abrazadera de 22,2 mm.
+* handlebar_clamp_mm=22.2
+@reason Velocidades, tipo de manilla y accionamiento por el modelo y el nombre.
+dd32e9dd shifter_indexed_positions=6; shifter_control_style=Palanca de pulgar
+99cf1a0e shifter_position=Par; shifter_indexed_positions=7; shifter_control_style=Palanca de pulgar
+e5a61d81 shifter_indexed_positions=7; shifter_control_style=Palanca de pulgar
+17472a97 shifter_control_style=Gatillo (trigger)
+27574183 shifter_indexed_positions=3; shifter_actuation_mode=Indexado
+8beb59ca shifter_indexed_positions=8; shifter_control_style=Gatillo (trigger); shifter_actuation_mode=Indexado
+69d968a1 shifter_indexed_positions=3; shifter_control_style=Gatillo (trigger); shifter_actuation_mode=Indexado
+28018750 shifter_indexed_positions=8; shifter_control_style=Gatillo (trigger); shifter_actuation_mode=Indexado
+eb03c0ff shifter_indexed_positions=7; shifter_control_style=Palanca de pulgar
+35cb97f8 shifter_indexed_positions=7; shifter_actuation_mode=Indexado
+7f6855d2 shifter_indexed_positions=6; shifter_control_style=Palanca de pulgar
+009108c2 shifter_control_style=Palanca de pulgar; shifter_actuation_mode=Fricción # SunRace M10 3x5/6/7: palancas de pulgar de fricción, sirven de 5 a 7 velocidades.
+97a15ff7 shifter_control_style=Palanca de pulgar; shifter_actuation_mode=Fricción # SunRace M10: palanca de pulgar de fricción.
+2a3f212f shifter_control_style=Palanca de pulgar; shifter_actuation_mode=Fricción # SunRace M10: palanca de pulgar de fricción.
+cc077708 shifter_control_style=Gatillo (trigger)
+9b64aa04 shifter_control_style=Gatillo (trigger)
+a142ba96 shifter_control_style=Gatillo (trigger)
+f786e897 shifter_indexed_positions=3
+b21f91e5 handlebar_clamp_mm=23.8; shifter_position=Par; shifter_indexed_positions=8; shifter_actuation_mode=Indexado # Mando integrado de ruta 2x8: va en manubrio de ruta (23,8 mm en la zona de las manillas).

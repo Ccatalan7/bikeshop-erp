@@ -1,0 +1,25 @@
+@reason Postiza o extensión: el cambio trasero se atornilla con rosca M10 x 1.
+* hanger_derailleur_interface=Rosca M10 x 1
+@reason Postiza recambiable que se atornilla a la puntera del cuadro; el código del modelo va en el nombre.
+3ef5ece6 hanger_model_code=A-HG001; hanger_frame_interface=Puntera con anclaje propio del cuadro
+4014dfeb hanger_model_code=A-HG005; hanger_frame_interface=Puntera con anclaje propio del cuadro
+a443a645 hanger_model_code=A-HG009; hanger_frame_interface=Puntera con anclaje propio del cuadro
+fd469ecf hanger_model_code=A-HG011; hanger_frame_interface=Puntera con anclaje propio del cuadro
+bc52a3c4 hanger_model_code=A-HG014; hanger_frame_interface=Puntera con anclaje propio del cuadro
+020c3b3d hanger_model_code=A-HG018; hanger_frame_interface=Puntera con anclaje propio del cuadro
+901f6ad7 hanger_model_code=A-HG033; hanger_frame_interface=Puntera con anclaje propio del cuadro
+d85bbdd8 hanger_model_code=A-HG039; hanger_frame_interface=Puntera con anclaje propio del cuadro
+186bc2e1 hanger_model_code=A-HG068; hanger_frame_interface=Puntera con anclaje propio del cuadro
+ec9d68ee hanger_model_code=A-HG022; hanger_frame_interface=Puntera con anclaje propio del cuadro
+dc967e21 hanger_model_code=GH-260; hanger_frame_interface=Puntera con anclaje propio del cuadro
+11fc2172 hanger_model_code=ATIDH0021; hanger_frame_interface=Puntera con anclaje propio del cuadro
+a0fc6992 hanger_model_code=ATIDH0233 / K33407; hanger_frame_interface=Puntera con anclaje propio del cuadro
+415295a4 hanger_model_code=301608; hanger_frame_interface=Puntera con anclaje propio del cuadro
+25e05e59 hanger_frame_interface=Puntera con anclaje propio del cuadro
+5443ddf6 hanger_frame_interface=Puntera con anclaje propio del cuadro
+d95b2589 hanger_frame_interface=Puntera con anclaje propio del cuadro
+01770923 hanger_frame_interface=Puntera con anclaje propio del cuadro
+7cde2c28 hanger_frame_interface=Puntera con anclaje propio del cuadro
+80b4e2a7 hanger_frame_interface=Puntera con anclaje propio del cuadro
+3361eb3d hanger_frame_interface=Puntera con anclaje propio del cuadro
+96411477 hanger_frame_interface=Con uña / claw sobre el eje # Pata de cambio cromada: uña que se sujeta con el eje en punteras horizontales.

@@ -1,0 +1,5 @@
+@reason Espaciador de cassette para núcleo Shimano HG; espesor por el nombre.
+* target_rear_drive_interface=Shimano HG spline M (8/9/10v y MTB 11v; ROAD 11v y 7v sólo según filas C-731; LINKGLIDE según C-649)
+d9bf881d spacer_thickness_mm=1.5
+4c0e7b04 spacer_thickness_mm=1
+356887b2 spacer_thickness_mm=2

@@ -1689,3 +1689,25 @@ una segunda restauración en la misma prueba las encuentra de nuevo. El
 medio de pago y la terminal se apuntan entre sí: soltar la terminal exige
 poner `terminal_profile_id` en null antes, o la reinserción del medio de pago
 falla en `payment_methods_terminal_profile_fk`.
+
+## Un cambio de catálogo se ensaya contra producción, no sólo en local (2026-10-01)
+
+La base local sólo tiene 99 definiciones globales y ninguna tabla con filas
+(`rows_schema`): una migración que edita definiciones del catálogo pasa en
+local con `UPDATE 0` y no prueba nada de lo que hará en producción. La
+`20261002150000` apartaba `spec_rows_definition_guard`, quitaba la
+obligación de las columnas de fuente en 88 tablas y volvía a encender el
+guardia; en local, verde. Ensayada en producción falló con `cannot ALTER
+TABLE "spec_definitions" because it has pending trigger events`: el `update`
+dispara disparadores diferidos (revisión de contrato, guardias de reglas) y
+Postgres no deja tocar los disparadores de la tabla con eventos pendientes.
+Arreglo: `set constraints all immediate;` antes del `enable trigger`, como ya
+hacía `20260919253000`.
+
+Cómo se ensaya sin desplegar: `scripts/inventory/fill_expert_values.py
+--mode dry --prelude <cuerpo-de-la-migración>` corre, en cada transacción
+que termina en `rollback`, el cuerpo de la migración (sin `begin`/`commit`)
+y después las llamadas reales como el actor. Sirve para cualquier migración
+que el llenado necesite y que producción todavía no tiene. Ojo: un `alter
+table` del cuerpo bloquea las escrituras (no las lecturas) de esa tabla
+mientras dura cada tanda; tandas cortas.

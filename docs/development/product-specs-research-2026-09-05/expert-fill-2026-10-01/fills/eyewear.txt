@@ -1,0 +1,4 @@
+@reason Lentes de sol con filtro UV, como dice el nombre.
+e996aa4a uv_protection_claim=Con protección UV
+29008654 uv_protection_claim=Con protección UV
+93054a13 uv_protection_claim=Con protección UV

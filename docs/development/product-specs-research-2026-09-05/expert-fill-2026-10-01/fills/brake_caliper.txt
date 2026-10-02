@@ -1,0 +1,11 @@
+@reason Cáliper de disco mecánico (a cable, tiro largo) de dos pastillas; la posición sale del nombre.
+45298bc6 braking_surface=Disco; brake_actuation=Mecánico (cable); cable_pull_required=Tiro largo (V-brake / disco mecánico tiro largo) # Zoom DB-280: cáliper de disco mecánico.
+e66e3220 braking_surface=Disco
+204b43a0 braking_surface=Disco; cable_pull_required=Tiro largo (V-brake / disco mecánico tiro largo)
+11fb6129 braking_surface=Disco; cable_pull_required=Tiro largo (V-brake / disco mecánico tiro largo)
+b240488f braking_surface=Disco; cable_pull_required=Tiro largo (V-brake / disco mecánico tiro largo)
+e47e925e braking_surface=Disco; cable_pull_required=Tiro largo (V-brake / disco mecánico tiro largo)
+8b59e049 braking_surface=Disco; cable_pull_required=Tiro largo (V-brake / disco mecánico tiro largo)
+8cd9c302 braking_surface=Disco; cable_pull_required=Tiro largo (V-brake / disco mecánico tiro largo)
+a71403a9 braking_surface=Disco; brake_actuation=Mecánico (cable); cable_pull_required=Tiro largo (V-brake / disco mecánico tiro largo) # Zoom DB-280: cáliper de disco mecánico.
+b7fb996c cable_pull_required=Tiro largo (V-brake / disco mecánico tiro largo); brake_position=Universal

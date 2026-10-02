@@ -1,0 +1,9 @@
+@reason Aro de la horquilla por su nombre (29 = 622, 27.5 = 584, 700c = 622); el neumático más ancho queda sin declarar cuando no se sabe.
+7c97926b fork_kind=Rígida; fork_tire_clearance_configurations=[{"bead_seat_diameter_mm":622}]
+fa498bf2 fork_kind=Rígida; fork_tire_clearance_configurations=[{"bead_seat_diameter_mm":622}]
+84cee299 fork_kind=Rígida; fork_tire_clearance_configurations=[{"bead_seat_diameter_mm":622}]
+537570e9 fork_kind=Suspensión (muelle); steerer_fit=1 1/8" (28.6 mm); axle_type=Cierre rápido 9 mm (delantero); fork_tire_clearance_configurations=[{"bead_seat_diameter_mm":622}] # Suntour XCM de resorte, tubo recto 1-1/8 y cierre rápido de 9 mm.
+3e395768 fork_kind=Suspensión (muelle); steerer_fit=1 1/8" (28.6 mm); axle_type=Cierre rápido 9 mm (delantero); fork_tire_clearance_configurations=[{"bead_seat_diameter_mm":622}] # Suntour XCM de resorte, tubo recto 1-1/8 y cierre rápido de 9 mm.
+7db673b8 fork_kind=Suspensión (muelle); steerer_fit=1 1/8" (28.6 mm); axle_type=Cierre rápido 9 mm (delantero); brake_mount=Post Mount; lockout=sí; fork_tire_clearance_configurations=[{"bead_seat_diameter_mm":622}] # Suntour XCM RL: resorte con bloqueo (L), disco Post Mount.
+5622d586 fork_kind=Suspensión (muelle); steerer_fit=1 1/8" (28.6 mm); axle_type=Cierre rápido 9 mm (delantero); brake_mount=Post Mount; fork_tire_clearance_configurations=[{"bead_seat_diameter_mm":584}] # Suntour XCT DS 27.5 de disco: resorte, Post Mount, cierre rápido.
+4251ecbe fork_tire_clearance_configurations=[{"bead_seat_diameter_mm":622}]

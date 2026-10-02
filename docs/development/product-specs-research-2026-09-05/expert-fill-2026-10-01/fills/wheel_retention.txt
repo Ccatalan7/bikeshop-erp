@@ -1,0 +1,7 @@
+@reason Aguja de cierre rápido de acero; eje pasante de aluminio.
+124256f9 material=Acero
+c65ba6af material=Acero
+ddddc669 material=Acero
+06f3caf0 material=Aluminio
+5d8bdc99 material=Aluminio
+e55dfdea material=Aluminio

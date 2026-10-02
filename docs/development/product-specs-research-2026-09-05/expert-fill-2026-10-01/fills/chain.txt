@@ -1,0 +1,38 @@
+@reason Cadena KMC: sin sentido de montaje, con su conector rápido (Missing Link o CL) en la caja; velocidades, ancho y largo por modelo.
+e10477e6 chain_speeds=1; drivetrain_mode=Single speed / BMX / IGH; link_count=112; quick_link_included=sí; chain_directional=no
+c0ba0602 chain_speeds=1; drivetrain_mode=Single speed / BMX / IGH; link_count=112; quick_link_included=sí; chain_directional=no
+6bc19f8b chain_speeds=1; drivetrain_mode=Single speed / BMX / IGH; link_count=112; quick_link_included=sí; chain_directional=no
+b1a0c768 chain_speeds=6; chain_directional=no
+a19eb224 chain_directional=no
+764c6ce2 chain_directional=no
+7a832bfe chain_speeds=6; link_count=116; chain_directional=no
+7a7c152f chain_speeds=6; drivetrain_mode=Derailleur; link_count=116; chain_directional=no
+ebfdc050 link_count=116; chain_directional=no
+69dcf998 chain_directional=no
+f81391b4 chain_directional=no
+1995eb4c chain_directional=no
+6289516c chain_directional=no
+1ac2583f link_count=116; chain_directional=no
+779ffcb0 chain_width_family=3/32; chain_directional=no
+1da6cb84 chain_width_family=1/8; link_count=112; chain_directional=no
+9417403f chain_directional=no
+9182f238 link_count=116; chain_directional=no
+061e7c9b link_count=116; quick_link_included=sí; chain_outer_width_mm=5.88; chain_directional=no
+6c4638c4 link_count=118; chain_directional=no
+92517c91 link_count=116; chain_directional=no
+e6c82d94 link_count=116; chain_directional=no
+b1b8abc4 chain_width_family=11/128; link_count=116; quick_link_included=sí; chain_outer_width_mm=6.6; chain_directional=no
+5ced3a3d chain_width_family=3/32; link_count=116; quick_link_included=sí; chain_outer_width_mm=7.3; chain_directional=no
+d5834fe6 link_count=116; quick_link_included=sí; chain_outer_width_mm=6.6; chain_directional=no
+@reason Cadena Shimano HG: las de 10 y 12 velocidades tienen sentido de montaje; ancho por velocidades.
+3c1a8558 chain_width_family=11/128; chain_directional=sí
+4961cdc3 chain_width_family=3/32; link_count=116; chain_directional=no
+f8dcbeff chain_width_family=11/128
+6d9c79c6 chain_width_family=11/128; link_count=126; chain_directional=sí
+e926483c chain_width_family=11/128; link_count=116; chain_directional=sí
+@reason Cadena ZTTO de 9 a 12 velocidades: ancho estrecho (11/128) y conector rápido incluido.
+40ebef38 chain_width_family=11/128; quick_link_included=sí
+c1cd3df8 chain_width_family=11/128; quick_link_included=sí
+3033899f chain_width_family=11/128; quick_link_included=sí
+87791871 chain_width_family=11/128; quick_link_included=sí
+74fd52f0 chain_width_family=11/128; quick_link_included=sí

@@ -192,19 +192,8 @@ class ProductSpecSheetView extends StatelessWidget {
             ),
           )
         else ...[
-          if (!sheet.hasTechnicalData)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 24),
-              child: Text(
-                'Aún no publicamos la ficha técnica de este producto.',
-                key: const ValueKey('product_technical_specs_empty'),
-                style: theme.text.bodyMedium?.copyWith(
-                  fontSize: 15,
-                  color: theme.commerceTextSecondary,
-                  height: 1.6,
-                ),
-              ),
-            ),
+          // A product without technical data (a coffee, a souvenir) shows
+          // what it has; announcing a missing sheet only reads as neglect.
           for (var i = 0; i < sheet.groups.length; i++) ...[
             if (i > 0) const SizedBox(height: 28),
             _group(theme, sheet.groups[i]),
@@ -212,7 +201,8 @@ class ProductSpecSheetView extends StatelessWidget {
           if (sheet.hasTechnicalData) ...[
             const SizedBox(height: 16),
             Text(
-              'Datos informados por el fabricante y el proveedor.',
+              'Ficha preparada por nuestro equipo con información del '
+              'fabricante y del proveedor.',
               key: const ValueKey('product-spec-origin'),
               style: theme.text.bodySmall?.copyWith(
                 fontSize: 12.5,
@@ -225,29 +215,40 @@ class ProductSpecSheetView extends StatelessWidget {
     );
 
     final help = _help(theme);
+    final hasContent = description.trim().isNotEmpty ||
+        sheet.groups.isNotEmpty ||
+        (isLoading && sheet.isEmpty);
     return KeyedSubtree(
       key: const ValueKey('product_technical_specs_tab'),
-      child: isMobile
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [content, const SizedBox(height: 32), help],
+      child: !hasContent
+          ? Align(
+              alignment: Alignment.topLeft,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: help,
+              ),
             )
-          : Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Align(
-                    alignment: Alignment.topLeft,
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 820),
-                      child: content,
+          : isMobile
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [content, const SizedBox(height: 32), help],
+                )
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.topLeft,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 820),
+                          child: content,
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 56),
+                    SizedBox(width: 340, child: help),
+                  ],
                 ),
-                const SizedBox(width: 56),
-                SizedBox(width: 340, child: help),
-              ],
-            ),
     );
   }
 
@@ -354,11 +355,17 @@ class ProductSpecSheetView extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.pedal_bike_outlined,
-              size: 26, color: theme.commerceAccent),
+          Icon(
+              sheet.hasTechnicalData
+                  ? Icons.pedal_bike_outlined
+                  : Icons.chat_bubble_outline_rounded,
+              size: 26,
+              color: theme.commerceAccent),
           const SizedBox(height: 12),
           Text(
-            '¿Le sirve a tu bicicleta?',
+            sheet.hasTechnicalData
+                ? '¿Le sirve a tu bicicleta?'
+                : '¿Tienes una duda?',
             style: theme.text.titleMedium?.copyWith(
               fontSize: 17,
               fontWeight: FontWeight.w700,

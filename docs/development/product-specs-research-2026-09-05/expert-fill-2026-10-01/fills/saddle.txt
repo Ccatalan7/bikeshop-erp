@@ -1,0 +1,22 @@
+@reason Sillín con forro sintético; color y uso por el nombre; los de MTB y prostáticos van con rieles redondos de 7 mm.
+* cover_material=Sintético
+9d2f393a saddle_intended_use=Gel / confort; saddle_rail_geometry=Redondo 7 mm; color=Negro
+2e50f4ee saddle_rail_geometry=Redondo 7 mm; color=Negro
+5f796cd9 saddle_rail_geometry=Redondo 7 mm; color=Negro y azul
+5e722644 saddle_rail_geometry=Redondo 7 mm; color=Negro y rojo
+3ccdec43 saddle_rail_geometry=Redondo 7 mm; color=Negro y amarillo
+b3a27e56 saddle_rail_geometry=Redondo 7 mm; color=Negro y rojo
+3f4aeecd saddle_rail_geometry=Redondo 7 mm; color=Negro y rojo
+a32b7ce7 color=Blanco
+d03d0f39 color=Negro
+822c6c33 color=Negro
+a5c79c90 color=Negro
+b2675605 saddle_rail_geometry=Redondo 7 mm; color=Morado
+50c7f760 saddle_intended_use=Urbano / confort; color=Negro
+0d1dcde8 saddle_rail_geometry=Redondo 7 mm; color=Negro
+24d77618 color=Negro
+678724b7 saddle_rail_geometry=Redondo 7 mm; color=Negro
+95142ca1 saddle_rail_geometry=Redondo 7 mm
+a45f30fe saddle_rail_geometry=Redondo 7 mm
+4926fdf8 saddle_rail_geometry=Redondo 7 mm
+4aa2e7bd saddle_rail_geometry=Redondo 7 mm; color=Negro

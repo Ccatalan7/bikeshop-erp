@@ -1,0 +1,16 @@
+@reason Bolitas sueltas o en canastillo: tamaño y presentación por el nombre y la medida estándar de cada maza (delantera 3/16", trasera 1/4").
+f0affbf4 ball_diameter_in=1/4; bearing_element_retention=Complemento completo / sin jaula
+95bd56e7 bearing_element_retention=Con jaula
+4dd04e48 bearing_element_retention=Con jaula
+23b2fd3d bearing_element_retention=Con jaula; ball_diameter_in=1/4
+149ab3bb bearing_element_retention=Con jaula
+8ff5de65 bearing_element_retention=Con jaula; ball_diameter_in=3/16
+2fa783a2 bearing_element_retention=Con jaula; ball_diameter_in=1/4
+f21d3e1c ball_count_per_pack=144; bearing_element_retention=Complemento completo / sin jaula
+55854485 ball_count_per_pack=144; bearing_element_retention=Complemento completo / sin jaula
+9b1fcb72 bearing_element_retention=Complemento completo / sin jaula
+bd33c1c0 bearing_element_retention=Complemento completo / sin jaula
+97e1e4ed bearing_application=Maza; bearing_supply_form=Bolas sueltas; bearing_element_retention=Complemento completo / sin jaula
+ed62898c ball_count_per_pack=144; bearing_element_retention=Complemento completo / sin jaula
+b4f1f9d8 bearing_element_retention=Con jaula
+82833917 bearing_supply_form=Bolas sueltas; bearing_element_retention=Complemento completo / sin jaula

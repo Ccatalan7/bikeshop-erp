@@ -1,0 +1,14 @@
+@reason Casco: uso, talla, color y para quién por el nombre; los de MTB y enduro traen visera y regulador.
+92f109a9 intended_audience=Adulto; helmet_kind=Urbano; color=Borgoña
+e746c313 intended_audience=Adulto; helmet_kind=Urbano; color=Negro
+553028be intended_audience=Adulto; oem_size_label=L; color=Negro mate; visor=sí; adjustable_fit=sí
+d43d1009 intended_audience=Adulto; oem_size_label=M; color=Negro y morado; visor=sí; adjustable_fit=sí
+5f828e02 intended_audience=Adulto; oem_size_label=L; color=Negro mate; adjustable_fit=sí
+f0830f07 oem_size_label=M; head_circumference_min_cm=54; head_circumference_max_cm=58; color=Gris; adjustable_fit=sí
+0142a5d5 intended_audience=Adulto; oem_size_label=M; color=Negro y azul; visor=sí; adjustable_fit=sí
+39cd39c5 intended_audience=Adulto; oem_size_label=M/L; head_circumference_min_cm=58; head_circumference_max_cm=61; color=Negro mate; visor=sí
+374254b6 helmet_kind=Urbano; head_circumference_min_cm=48; head_circumference_max_cm=54; color=Gris; adjustable_fit=sí
+87972620 helmet_kind=Urbano; color=Azul; adjustable_fit=sí
+c3e775af helmet_kind=Urbano; color=Celeste; adjustable_fit=sí
+6ee9d74b intended_audience=Adulto; oem_size_label=L; color=Negro y blanco; visor=sí; adjustable_fit=sí
+c4109ce8 intended_audience=Adulto; oem_size_label=M; color=Negro

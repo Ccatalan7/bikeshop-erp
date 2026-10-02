@@ -13,18 +13,18 @@
   "title": "La ficha de la tienda habla como el cliente",
   "summary": "Junto al precio aparece lo que decide la compra (aro, ancho, velocidades, recorrido) y la ficha completa se ve sin pestañas, en medidas y características, con números a la chilena y una explicación para cada término técnico.",
   "items": [
-    "Cada dato y cada opción se nombra en español de taller: «Talón», «Con cambio trasero», «3/32\"», «11 dientes», y ya no «Derailleur» ni «(alambre o plegable)».",
-    "Los filtros del catálogo muestran el nombre en español de cada opción, y los enlaces con filtros que ya circulan siguen funcionando.",
-    "Bajo la ficha se dice de dónde vienen los datos y un botón abre WhatsApp para preguntar si el producto le sirve a tu bicicleta."
+    "Cada dato y opción se nombra en español de taller («Talón», «3/32\"», «11 dientes») y las tablas se leen: dientes de cada piñón, platos y presión máxima.",
+    "Las horquillas dicen para qué aro son y el neumático más ancho: «29\" / 700c · neumático hasta 2.3\" (58 mm)»; los filtros muestran cada opción en español.",
+    "Un producto sin datos técnicos, como un café, muestra su descripción y un botón de WhatsApp para preguntar si le sirve a tu bicicleta."
   ],
   "evidence": [
     {
       "path": "lib/public_store/pages/product_detail_page.dart",
-      "sha256": "eb54ce1cada36a39ad20f60ab002ccae1e62913b5db55bd25216bf8dd2c7c4dc"
+      "sha256": "aa7595f705361e0c99e23c24227f051ee6be10168461e7c59edec6cb19d745db"
     },
     {
       "path": "lib/public_store/widgets/product_spec_sheet_view.dart",
-      "sha256": "102bf14f15f74862ea711e97cf578cc2715c94d9fd44fdb8a916689c048bde5a"
+      "sha256": "ec9d27042fffa96fd3c77bfc3ca197a5996346a7df6d17f79511ddf70683c87c"
     },
     {
       "path": "lib/public_store/models/public_product_spec_sheet.dart",
@@ -32,7 +32,7 @@
     },
     {
       "path": "lib/public_store/utils/public_spec_display.dart",
-      "sha256": "88a67f86950c238e6c3263eff2485d47dceb94e0d6c7a4275a4866ebd32e4016"
+      "sha256": "6ba872046635941594f75310d66b38d305ce1e6bce4d0f2b2b3abca58bb751b7"
     },
     {
       "path": "lib/public_store/pages/product_catalog_page.dart",

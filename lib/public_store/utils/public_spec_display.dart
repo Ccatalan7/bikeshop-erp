@@ -93,6 +93,10 @@ PublicSpecDisplayValue publicSpecSheetValue({
     final fit = tubeFitLabel(raw);
     if (fit != null) return PublicSpecDisplayValue(fit);
   }
+  if (specKey == 'fork_tire_clearance_configurations') {
+    final wheel = forkWheelLabel(raw);
+    if (wheel != null) return PublicSpecDisplayValue(wheel);
+  }
   return PublicSpecDisplayValue(
     _valueWithUnit(raw, dataType: dataType, unit: unit),
   );
@@ -271,6 +275,42 @@ String? tubeFitLabel(String raw) {
     rows.add(widths.isEmpty ? wheel : '$wheel · $widths');
   }
   return rows.isEmpty ? null : rows.join('\n');
+}
+
+/// La rueda de una horquilla, del texto que redacta su vista de tienda
+/// («BSD: 622 · máximo: 58»): «29" / 700c · neumático hasta 2.3" (58 mm)».
+/// El neumático se pide en pulgadas (29x2.25), así que va primero; los
+/// milímetros quedan para quien compara. Una fila por línea; null si el texto
+/// no trae el diámetro.
+///
+/// Es un máximo de calce: la pulgada nunca promete más que los milímetros
+/// guardados. Se toma el décimo más grande que cabe en ellos, con el medio
+/// milímetro de redondeo de un registro en milímetros enteros: 58 mm es 2.3"
+/// (58,4 mm) y 60 mm también, porque 2.4" son 61 mm.
+String? forkWheelLabel(String raw) {
+  final rows = <String>[];
+  for (final row in raw.split(RegExp(r'\s*\|\s*|\n'))) {
+    final bsdMatch = RegExp(r'BSD\s*:\s*([0-9]+)').firstMatch(row);
+    if (bsdMatch == null) continue;
+    final bsd = int.parse(bsdMatch.group(1)!);
+    final wheel = _wheelSizeByBsd[bsd] ?? 'ISO $bsd';
+    final maxMatch =
+        RegExp(r'm[aá]ximo\s*:\s*([0-9]+(?:[.,][0-9]+)?)', caseSensitive: false)
+            .firstMatch(row);
+    final mm = maxMatch == null
+        ? null
+        : double.tryParse(maxMatch.group(1)!.replaceAll(',', '.'));
+    rows.add(mm == null
+        ? wheel
+        : '$wheel · neumático hasta ${_maxInchWidth(mm)}" '
+            '(${chileanNumber(_trimNumber(mm))} mm)');
+  }
+  return rows.isEmpty ? null : rows.join('\n');
+}
+
+String _maxInchWidth(double mm) {
+  final tenths = ((mm + 0.5) / 25.4 * 10 + 1e-9).floor();
+  return (tenths / 10).toStringAsFixed(1);
 }
 
 String _trimNumber(double value) {

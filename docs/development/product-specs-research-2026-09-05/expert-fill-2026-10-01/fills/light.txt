@@ -1,0 +1,6 @@
+@reason Posición y color de la luz por el nombre: la blanca va adelante y la roja atrás.
+9e6452b7 light_position=Delantera; color=Blanca
+c9e9c8dd light_position=Trasera; color=Roja
+3ee8e0ed color=Blanca
+f77ccd4b light_position=Delantera # T6 LED: foco delantero recargable por USB.
+93fc25a5 light_position=Delantera

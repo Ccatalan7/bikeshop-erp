@@ -190,6 +190,32 @@ void main() {
       );
       expect(tubeFitLabel('sin diámetro'), isNull);
     });
+
+    test('a fork reads as its wheel and the widest tire it takes', () {
+      expect(forkWheelLabel('BSD: 622 · máximo: 58'),
+          '29" / 700c · neumático hasta 2.3" (58 mm)');
+      expect(forkWheelLabel('BSD: 559 · máximo: 58,5'),
+          '26" · neumático hasta 2.3" (58,5 mm)');
+      expect(forkWheelLabel('BSD: 584'), '27.5" / 650b');
+      expect(
+          forkWheelLabel('BSD: 622 · máximo: 63 | BSD: 584 · máximo: 66'),
+          '29" / 700c · neumático hasta 2.5" (63 mm)\n'
+          '27.5" / 650b · neumático hasta 2.6" (66 mm)');
+      expect(forkWheelLabel('sin diámetro'), isNull);
+      // A fitment maximum never rounds up past the recorded millimetres:
+      // 2.4" is 61 mm, so a 60 mm fork says 2.3".
+      expect(forkWheelLabel('BSD: 622 · máximo: 60'),
+          '29" / 700c · neumático hasta 2.3" (60 mm)');
+      expect(forkWheelLabel('BSD: 622 · máximo: 61'),
+          '29" / 700c · neumático hasta 2.4" (61 mm)');
+      expect(
+          publicSpecSheetValue(
+                  specKey: 'fork_tire_clearance_configurations',
+                  value: 'BSD: 622 · máximo: 58',
+                  dataType: 'json')
+              .text,
+          '29" / 700c · neumático hasta 2.3" (58 mm)');
+    });
   });
 
   group('publicSpecValueLabel with option names', () {

@@ -1,0 +1,8 @@
+@reason Reparación de cámara por el nombre: parche que se pega con solución, pegamento sin tolueno de Thumbs Up.
+10f7004e repair_kind=Parche vulcanizable; toluene_free=sí
+ce4bda12 repair_kind=Parche vulcanizable
+e20a29bd repair_kind=Parche vulcanizable; patch_count=1
+85b92f51 toluene_free=sí
+353f8b6a patch_size_mm=32 x 50; toluene_free=sí
+187719d8 toluene_free=sí
+b358cc1b patch_count=1

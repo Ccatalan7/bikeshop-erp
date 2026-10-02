@@ -1,0 +1,14 @@
+@reason Pieza de cable estándar: cable de 1,2 mm (cambio) o 1,6 mm (freno), funda de 4 mm (cambio) o 5 mm (freno); material y tamaño por el nombre.
+438d40f7 fits_housing_diameter_mm=4; material=Plástico / nylon
+1efa73c1 noodle_angle_deg=90; material=Aluminio
+03ba399b noodle_angle_deg=90; material=Aluminio
+b5d1f730 noodle_angle_deg=90; material=Aluminio
+52417619 material=Plástico / nylon
+9c22c4b4 material=Aluminio
+8a9f46de fits_cable_diameter_mm=1.6; material=Aluminio
+46f4faa8 material=Aluminio; color=Plata
+dbeb459a material=Plástico / nylon; color=Negro
+c591e605 control_part_kind=Tope / terminal de funda; fits_housing_diameter_mm=5
+47cf5405 control_part_kind=Tope / terminal de funda; fits_housing_diameter_mm=4
+c108c2a7 control_part_kind=Tope / terminal de funda; fits_housing_diameter_mm=5
+23f8f55c control_part_kind=Noodle V-brake; noodle_angle_deg=90

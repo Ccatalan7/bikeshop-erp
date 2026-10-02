@@ -1,0 +1,30 @@
+@reason Piñón de rosca (rueda libre) con rosca inglesa 1.37" x 24; los de varias velocidades usan cadena 3/32 y los de una velocidad cadena 1/8.
+* freewheel_thread_standard=1.37" x 24 tpi (ISO)
+62a41771 chain_width_family=1/8; sprocket_count=1
+e0275b3d chain_width_family=1/8; sprocket_count=1
+e7ca49a6 chain_width_family=1/8; sprocket_count=1
+965a6b01 chain_width_family=1/8; sprocket_count=1
+1061be8c chain_width_family=1/8; sprocket_count=1
+8c5149da chain_width_family=1/8; sprocket_count=1
+88a1352a chain_width_family=1/8; sprocket_count=1
+aacd8919 chain_width_family=3/32
+2a899407 chain_width_family=3/32; remover_tool_standard=Shimano 12 estrías
+080118b1 chain_width_family=3/32; remover_tool_standard=Shimano 12 estrías
+1c32bcde chain_width_family=3/32; remover_tool_standard=Falcon
+09a4b2d9 chain_width_family=3/32; remover_tool_standard=Falcon
+c8f991a6 chain_width_family=3/32; remover_tool_standard=Falcon
+e5df86ce chain_width_family=3/32
+b4d84acf chain_width_family=3/32
+87838030 chain_width_family=3/32; remover_tool_standard=Shimano 12 estrías
+791b49eb chain_width_family=3/32
+e4825ded chain_width_family=3/32; remover_tool_standard=Falcon
+9940a392 chain_width_family=3/32; remover_tool_standard=Falcon
+af11e8dc chain_width_family=3/32; remover_tool_standard=Falcon
+93e8c915 chain_width_family=3/32
+84b815a0 chain_width_family=3/32
+0af9493d chain_width_family=3/32
+67b595bd chain_width_family=3/32; remover_tool_standard=Shimano 12 estrías
+70d1700d chain_width_family=3/32; remover_tool_standard=Shimano 12 estrías
+bfd5eb6a chain_width_family=3/32; remover_tool_standard=Shimano 12 estrías
+852e074f chain_width_family=3/32; remover_tool_standard=Shimano 12 estrías
+bca760ea chain_width_family=3/32; remover_tool_standard=Shimano 12 estrías

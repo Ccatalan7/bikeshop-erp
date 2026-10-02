@@ -1,0 +1,9 @@
+@reason Soporte de teléfono de manubrio; medidas, giro y color por el nombre.
+82ad9a0e bike_attachment_kind=Abrazadera de manubrio; color=Negro
+50294b52 bike_attachment_kind=Abrazadera de manubrio
+68b61fc1 bike_attachment_kind=Abrazadera de manubrio
+1729c2cc bike_attachment_kind=Abrazadera de manubrio
+06f2c947 bike_attachment_kind=Abrazadera de manubrio; color=Negro
+0616486e bike_attachment_kind=Abrazadera de manubrio
+2cae5848 bike_attachment_kind=Abrazadera de manubrio; color=Negro
+12d649bd bike_attachment_kind=Abrazadera de manubrio; color=Negro

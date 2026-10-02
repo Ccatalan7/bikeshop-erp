@@ -1,0 +1,12 @@
+@reason Poste de asiento rígido; diámetro, material y color por el nombre.
+* seatpost_kind=Rígida
+d65e272d seatpost_diameter_mm=22.2
+8e8c7fa6 seatpost_diameter_mm=26.4; color=Negro
+5f74cbe1 seatpost_diameter_mm=27.2; material=Aluminio; color=Negro
+f26066f9 color=Negro
+cdcab0dd material=Aluminio; color=Negro
+f5dd41e7 seatpost_diameter_mm=25.4
+303c6ed1 seatpost_diameter_mm=27.2
+da743cd0 seatpost_diameter_mm=27.2; material=Aluminio; color=Negro
+1c8a0c92 seatpost_diameter_mm=30.9; material=Aluminio; color=Negro
+141877f8 material=Aluminio; color=Negro

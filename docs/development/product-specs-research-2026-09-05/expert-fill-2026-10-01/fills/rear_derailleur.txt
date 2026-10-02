@@ -1,0 +1,40 @@
+@reason Cambio trasero de retorno normal (top normal), como todos los Shimano y compatibles salvo los Rapid Rise.
+* rear_derailleur_spring_return=Retorno normal (top normal)
+@reason Cambio sin estabilizador de cadena (clutch): sólo lo traen las líneas Shadow RD+ (Deore M5100/M6100, SLX).
+88ff31d3 derailleur_clutch=no; rear_derailleur_application_configurations=[{"configuration_identity":"Ruta 2x9","front_chainring_count":2,"rear_sprocket_count":9}]
+563f263c derailleur_clutch=no
+7705b14d derailleur_clutch=no
+9ad85952 derailleur_clutch=no; rear_derailleur_application_configurations=[{"configuration_identity":"3x7","front_chainring_count":3,"rear_sprocket_count":7},{"configuration_identity":"3x8","front_chainring_count":3,"rear_sprocket_count":8}]
+a63bfa58 derailleur_clutch=no; rear_derailleur_application_configurations=[{"configuration_identity":"3x6","front_chainring_count":3,"rear_sprocket_count":6},{"configuration_identity":"3x7","front_chainring_count":3,"rear_sprocket_count":7},{"configuration_identity":"3x8","front_chainring_count":3,"rear_sprocket_count":8}]
+fadafe9d derailleur_clutch=no; rear_derailleur_application_configurations=[{"configuration_identity":"3x9","front_chainring_count":3,"rear_sprocket_count":9}]
+7ccc2225 derailleur_clutch=no; rear_derailleur_application_configurations=[{"configuration_identity":"3x6","front_chainring_count":3,"rear_sprocket_count":6},{"configuration_identity":"3x7","front_chainring_count":3,"rear_sprocket_count":7}]
+50c44461 derailleur_clutch=no
+fdb71bf4 rear_derailleur_application_configurations=[{"configuration_identity":"1x9","front_chainring_count":1,"rear_sprocket_count":9}] # Sensah MX9: cambio para transmisión 1x de 9 velocidades.
+518f06b2 rear_derailleur_application_configurations=[{"configuration_identity":"1x7","front_chainring_count":1,"rear_sprocket_count":7}] # Sensah MX7: cambio para transmisión 1x de 7 velocidades.
+c7d10f03 rear_derailleur_application_configurations=[{"configuration_identity":"1x8","front_chainring_count":1,"rear_sprocket_count":8}] # Sensah MX8: cambio para transmisión 1x de 8 velocidades, piñón hasta 42T.
+3fab72b2 derailleur_clutch=no; rear_derailleur_application_configurations=[{"configuration_identity":"3x6","front_chainring_count":3,"rear_sprocket_count":6},{"configuration_identity":"3x7","front_chainring_count":3,"rear_sprocket_count":7}]
+7a4bd2fb derailleur_clutch=no
+7745beec derailleur_clutch=no; rear_derailleur_application_configurations=[{"configuration_identity":"3x6","front_chainring_count":3,"rear_sprocket_count":6}]
+0c03c87a derailleur_clutch=no; rear_derailleur_application_configurations=[{"configuration_identity":"3x6","front_chainring_count":3,"rear_sprocket_count":6}]
+c51cdb87 derailleur_clutch=no; rear_derailleur_application_configurations=[{"configuration_identity":"3x9","front_chainring_count":3,"rear_sprocket_count":9}]
+44ed0235 derailleur_clutch=no; derailleur_cage_length=Larga (SGS); rear_derailleur_application_configurations=[{"configuration_identity":"3x7","front_chainring_count":3,"rear_sprocket_count":7},{"configuration_identity":"3x8","front_chainring_count":3,"rear_sprocket_count":8}]
+03c663b9 derailleur_clutch=no; derailleur_cage_length=Larga (SGS); rear_derailleur_application_configurations=[{"configuration_identity":"3x7","front_chainring_count":3,"rear_sprocket_count":7},{"configuration_identity":"3x8","front_chainring_count":3,"rear_sprocket_count":8}]
+3db514bc derailleur_clutch=no; derailleur_cage_length=Larga (SGS); rear_derailleur_application_configurations=[{"configuration_identity":"3x7","front_chainring_count":3,"rear_sprocket_count":7},{"configuration_identity":"3x8","front_chainring_count":3,"rear_sprocket_count":8}]
+4d3d9270 derailleur_clutch=no; derailleur_cage_length=Larga (SGS); rear_derailleur_application_configurations=[{"configuration_identity":"3x7","front_chainring_count":3,"rear_sprocket_count":7},{"configuration_identity":"3x8","front_chainring_count":3,"rear_sprocket_count":8}]
+d930fb5b derailleur_clutch=no; rear_derailleur_application_configurations=[{"configuration_identity":"3x6","front_chainring_count":3,"rear_sprocket_count":6},{"configuration_identity":"3x7","front_chainring_count":3,"rear_sprocket_count":7}]
+665759a2 derailleur_clutch=no; rear_derailleur_application_configurations=[{"configuration_identity":"3x6","front_chainring_count":3,"rear_sprocket_count":6},{"configuration_identity":"3x7","front_chainring_count":3,"rear_sprocket_count":7}]
+20bd90e2 derailleur_clutch=no; rear_derailleur_application_configurations=[{"configuration_identity":"3x6","front_chainring_count":3,"rear_sprocket_count":6}]
+2adde042 derailleur_clutch=no; rear_derailleur_application_configurations=[{"configuration_identity":"3x6","front_chainring_count":3,"rear_sprocket_count":6},{"configuration_identity":"3x7","front_chainring_count":3,"rear_sprocket_count":7}]
+d85e23c9 derailleur_clutch=no
+70b35ab6 derailleur_clutch=no; rear_derailleur_application_configurations=[{"configuration_identity":"3x7","front_chainring_count":3,"rear_sprocket_count":7},{"configuration_identity":"3x8","front_chainring_count":3,"rear_sprocket_count":8}]
+674567b8 derailleur_clutch=no; rear_derailleur_mount_type=Pata/postiza estándar; rear_derailleur_application_configurations=[{"configuration_identity":"3x6","front_chainring_count":3,"rear_sprocket_count":6},{"configuration_identity":"3x7","front_chainring_count":3,"rear_sprocket_count":7}]
+602f588a derailleur_clutch=no; rear_derailleur_application_configurations=[{"configuration_identity":"3x7","front_chainring_count":3,"rear_sprocket_count":7},{"configuration_identity":"3x8","front_chainring_count":3,"rear_sprocket_count":8},{"configuration_identity":"3x9","front_chainring_count":3,"rear_sprocket_count":9}]
+12dd64e8 derailleur_clutch=no; rear_derailleur_application_configurations=[{"configuration_identity":"3x7","front_chainring_count":3,"rear_sprocket_count":7},{"configuration_identity":"3x8","front_chainring_count":3,"rear_sprocket_count":8},{"configuration_identity":"3x9","front_chainring_count":3,"rear_sprocket_count":9}]
+cf40f3c2 derailleur_clutch=no
+5e33dacb derailleur_clutch=no; rear_derailleur_application_configurations=[{"configuration_identity":"3x7","front_chainring_count":3,"rear_sprocket_count":7},{"configuration_identity":"3x8","front_chainring_count":3,"rear_sprocket_count":8}]
+77ea8429 derailleur_clutch=no; rear_derailleur_application_configurations=[{"configuration_identity":"3x6","front_chainring_count":3,"rear_sprocket_count":6},{"configuration_identity":"3x7","front_chainring_count":3,"rear_sprocket_count":7}]
+cecb09d2 derailleur_clutch=no; rear_derailleur_application_configurations=[{"configuration_identity":"3x9","front_chainring_count":3,"rear_sprocket_count":9}]
+f5566b5a derailleur_clutch=no; rear_derailleur_application_configurations=[{"configuration_identity":"3x6","front_chainring_count":3,"rear_sprocket_count":6},{"configuration_identity":"3x7","front_chainring_count":3,"rear_sprocket_count":7}]
+@reason Línea Shadow RD+ de Shimano: trae estabilizador de cadena (clutch).
+0cc4a595 derailleur_clutch=sí
+0fbd00f3 derailleur_clutch=sí

@@ -1,0 +1,19 @@
+@reason Disco de freno: sirve adelante o atrás; fijación, material y pastillas que admite por modelo.
+* brake_position=Universal
+0b718082 rotor_mount_type=6 pernos; rotor_material=Acero Inoxidable; pad_compound_restriction=Resina o metálica
+3b04aab7 rotor_mount_type=6 pernos; rotor_material=Aluminio (Pista Acerada)
+80177df7 rotor_mount_type=6 pernos; rotor_material=Aluminio (Pista Acerada)
+58f73e13 rotor_mount_type=6 pernos; rotor_material=Aluminio (Pista Acerada)
+c4242ca0 rotor_material=Acero Inoxidable; pad_compound_restriction=Resina o metálica
+7d81f6bf rotor_mount_type=6 pernos; pad_compound_restriction=Sólo resina; rotor_floating=no # Shimano SM-RT56: 6 pernos, sólo pastillas de resina.
+0367a62f rotor_mount_type=6 pernos; pad_compound_restriction=Sólo resina; rotor_floating=no # Shimano SM-RT56: 6 pernos, sólo pastillas de resina.
+416cb816 rotor_mount_type=6 pernos; pad_compound_restriction=Sólo resina; rotor_floating=no # Shimano SM-RT26: 6 pernos, sólo pastillas de resina.
+2995de28 pad_compound_restriction=Sólo resina; rotor_floating=no # Shimano SM-RT10 Centerlock: sólo pastillas de resina.
+0d92a6d2 pad_compound_restriction=Sólo resina; rotor_floating=no # Shimano SM-RT10 Centerlock: sólo pastillas de resina.
+564a66ea rotor_mount_type=6 pernos; pad_compound_restriction=Resina o metálica; rotor_floating=no
+17a08994 rotor_mount_type=6 pernos; pad_compound_restriction=Resina o metálica; rotor_floating=no
+09fa6275 rotor_mount_type=6 pernos; pad_compound_restriction=Resina o metálica; rotor_floating=no
+9fab68ad rotor_mount_type=6 pernos; pad_compound_restriction=Resina o metálica; rotor_floating=no
+868fd196 rotor_mount_type=6 pernos; pad_compound_restriction=Resina o metálica; rotor_floating=no
+64e9e200 -brake_position
+255054e6 -brake_position

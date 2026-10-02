@@ -1,0 +1,3 @@
+@reason Cubre asiento: relleno y color por el nombre.
+415ff1f7 padding=Gel; color=Negro
+bc4814c8 color=Negro

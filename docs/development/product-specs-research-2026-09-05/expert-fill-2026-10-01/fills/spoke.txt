@@ -1,0 +1,47 @@
+@reason Rayo estándar de bicicleta: cabeza con codo (J-bend) y calibre 14G (2,0 mm), el de casi todas las ruedas.
+* spoke_head_interface=J-Bend; spoke_gauge_designation=14G
+@reason Una gruesa son 144 rayos.
+893bbc0f pack_quantity=144; spoke_finish_declared=Negro
+d1645285 pack_quantity=144; spoke_finish_declared=Negro
+87b19076 pack_quantity=144; spoke_finish_declared=Negro
+04b7cd41 pack_quantity=144; spoke_finish_declared=Negro
+b17e4a2c pack_quantity=144; spoke_finish_declared=Negro
+6f0c5057 pack_quantity=144; spoke_finish_declared=Negro
+77d9b626 pack_quantity=144; spoke_finish_declared=Negro
+65fba113 pack_quantity=144
+0e1ecdef pack_quantity=144; spoke_finish_declared=Negro
+ceae0e17 spoke_finish_declared=Negro
+bf741b74 pack_quantity=144
+461f841a pack_quantity=144; spoke_finish_declared=Cromado
+36dd5e23 pack_quantity=144; spoke_finish_declared=Negro; spoke_material_declared=Acero inoxidable
+d050144d pack_quantity=144
+5780d66e pack_quantity=144; spoke_finish_declared=Negro; spoke_length_mm=285
+59febe92 pack_quantity=144
+be783151 pack_quantity=144
+@reason Acabado y material escritos en el nombre.
+4b9dcf70 spoke_finish_declared=Negro
+d258b287 spoke_finish_declared=Negro
+31233502 spoke_finish_declared=Negro; spoke_material_declared=Acero inoxidable
+7022a9a6 spoke_finish_declared=Cromado; spoke_length_mm=263
+30953524 spoke_finish_declared=Negro
+16802543 spoke_finish_declared=Negro
+26b85408 spoke_finish_declared=Negro
+6b9223b8 spoke_finish_declared=Negro
+46f04ef5 spoke_finish_declared=Negro
+07623766 spoke_finish_declared=Negro
+96c9846c spoke_finish_declared=Negro; -spoke_head_interface
+34d431f6 spoke_finish_declared=Negro; -spoke_head_interface
+89c6283a spoke_finish_declared=Negro; -spoke_head_interface
+42b125fe spoke_finish_declared=Negro
+d254bb41 spoke_finish_declared=Negro
+7443aca4 spoke_finish_declared=Negro
+9a4e0477 spoke_finish_declared=Negro
+8c00ef7d spoke_finish_declared=Negro
+b9df1b29 spoke_finish_declared=Negro
+dd680387 spoke_finish_declared=Negro
+0f81a642 spoke_finish_declared=Negro; spoke_length_mm=290
+a86f56be spoke_finish_declared=Negro; spoke_material_declared=Acero
+e3411b76 spoke_finish_declared=Negro; spoke_material_declared=Acero inoxidable
+61d33d07 spoke_finish_declared=Negro
+b3424ba2 spoke_finish_declared=Cromado
+b8c0ab7c spoke_finish_declared=Negro

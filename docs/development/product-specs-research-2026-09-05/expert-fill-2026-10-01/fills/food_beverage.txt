@@ -1,0 +1,21 @@
+@reason Bebida de la máquina de café del local (Nescafé): se prepara al momento y se sirve caliente; tipo y tamaño por el nombre.
+* temperature=Caliente; preparation_kind=Preparado en barra
+5cd91d08 food_item_kind=Americano; serving_size=Chico; milk_in_recipe=Sin leche
+45a89f2b food_item_kind=Americano; serving_size=Mediano; milk_in_recipe=Sin leche
+94b3eda2 food_item_kind=Cappuccino; serving_size=Chico; milk_in_recipe=Según receta
+4bdde126 food_item_kind=Cappuccino; serving_size=Mediano; milk_in_recipe=Según receta
+232dea10 food_item_kind=Cappuccino; serving_size=Chico; milk_in_recipe=Según receta; flavor=Vainilla
+eb379e32 food_item_kind=Cappuccino; serving_size=Mediano; milk_in_recipe=Según receta; flavor=Vainilla
+0fd7f8d6 food_item_kind=Café (espresso); serving_size=Único; milk_in_recipe=Sin leche
+adc3b301 food_item_kind=Espresso doble; serving_size=Único; milk_in_recipe=Sin leche
+1b8349c2 food_item_kind=Latte; serving_size=Chico; milk_in_recipe=Según receta
+92b481e9 food_item_kind=Latte; serving_size=Mediano; milk_in_recipe=Según receta
+997fb184 food_item_kind=Lungo; serving_size=Único; milk_in_recipe=Sin leche
+0fbc460e food_item_kind=Chocolate / Milo; serving_size=Chico; milk_in_recipe=Según receta; flavor=Chocolate (Milo)
+90edd89c food_item_kind=Chocolate / Milo; serving_size=Mediano; milk_in_recipe=Según receta; flavor=Chocolate (Milo)
+2568718c food_item_kind=Mokaccino; serving_size=Chico; milk_in_recipe=Según receta; flavor=Café con chocolate
+d2b416f9 food_item_kind=Mokaccino; serving_size=Chico; milk_in_recipe=Según receta; flavor=Café con chocolate, más espresso
+7511ac54 food_item_kind=Mokaccino; serving_size=Mediano; milk_in_recipe=Según receta; flavor=Café con chocolate, más espresso
+677459a0 food_item_kind=Mokaccino; serving_size=Mediano; milk_in_recipe=Según receta; flavor=Café con chocolate
+88a56e7a food_item_kind=Bebida saborizada; serving_size=Chico; milk_in_recipe=Según receta; flavor=Vainilla
+cea35e61 food_item_kind=Bebida saborizada; serving_size=Mediano; milk_in_recipe=Según receta; flavor=Vainilla

@@ -1,0 +1,5 @@
+@reason Pedal de plataforma para biela de adulto: se vende por par y lleva rosca 9/16" x 20 (la de BMX y biela de una pieza es 1/2").
+* pedal_type=Plataforma; sold_as=Par; pedal_thread_standard=9/16" x 20 TPI
+7699debd -pedal_type; cleat_system=SPD # Pedal automático de MTB de dos caras: sistema SPD.
+0c9635c0 -pedal_thread_standard
+3f3138a5 -pedal_thread_standard

@@ -97,14 +97,18 @@ void main() {
         find.text('Hilos por pulgada de la carcasa: más TPI, más flexible y '
             'liviano.'),
         findsOneWidget);
-    expect(find.text('Datos informados por el fabricante y el proveedor.'),
+    expect(
+        find.text('Ficha preparada por nuestro equipo con información del '
+            'fabricante y del proveedor.'),
         findsOneWidget);
+    expect(find.text('¿Le sirve a tu bicicleta?'), findsOneWidget);
     await tester.tap(find.text('Preguntar por WhatsApp'));
     expect(asked, isTrue);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a product without a sheet says so plainly, phone width',
+  testWidgets(
+      'a product without technical data offers help, not an apology, phone width',
       (tester) async {
     await tester.pumpWidget(_host(
       ProductSpecSheetView(
@@ -118,10 +122,11 @@ void main() {
       ),
       width: 343,
     ));
-    expect(find.text('Aún no publicamos la ficha técnica de este producto.'),
-        findsOneWidget);
-    expect(find.text('Datos informados por el fabricante y el proveedor.'),
-        findsNothing);
+    // A product without technical data is not announced as missing one.
+    expect(find.textContaining('Aún no publicamos'), findsNothing);
+    expect(find.textContaining('Ficha preparada'), findsNothing);
+    expect(find.text('¿Le sirve a tu bicicleta?'), findsNothing);
+    expect(find.text('¿Tienes una duda?'), findsOneWidget);
     expect(find.text('Escríbenos'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

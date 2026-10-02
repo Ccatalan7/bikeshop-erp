@@ -1,0 +1,1183 @@
+[
+ {
+  "family": "bearing",
+  "name": "Bolsa Rodamientos Eje Trasero Bettabikes",
+  "field_key": "bearing_element_retention",
+  "value": "Complemento completo / sin jaula",
+  "rule": "Con jaula o sueltas: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "bearing",
+  "name": "CANASTILLO DIRECCION OVERSIZE 1-1/8 (MIN.20 PCS) COMPATIBLE / GENERICO",
+  "field_key": "bearing_element_retention",
+  "value": "Con jaula",
+  "rule": "Con jaula o sueltas: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "bearing",
+  "name": "CANASTILLO DIRECCION OVERSIZE 1-1/8 COMPATIBLE / GENERICO ALTERNATIVO 2022 ECONOM.",
+  "field_key": "bearing_element_retention",
+  "value": "Con jaula",
+  "rule": "Con jaula o sueltas: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "bearing",
+  "name": "Canastillo Rodamiento Eje Thompson 20 Unid",
+  "field_key": "bearing_element_retention",
+  "value": "Con jaula",
+  "rule": "Con jaula o sueltas: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "bearing",
+  "name": "Canastillo Rodamiento Para Direccion 20unid",
+  "field_key": "bearing_element_retention",
+  "value": "Con jaula",
+  "rule": "Con jaula o sueltas: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "bearing",
+  "name": "Canastillo Rodamiento Rueda Delanter 20 Unid",
+  "field_key": "bearing_element_retention",
+  "value": "Con jaula",
+  "rule": "Con jaula o sueltas: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "bearing",
+  "name": "Canastillo Rodamiento Rueda Trasera 20 Unid",
+  "field_key": "bearing_element_retention",
+  "value": "Con jaula",
+  "rule": "Con jaula o sueltas: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "bearing",
+  "name": "Rodamiento 1/4\" ( En Bolsa De 1 Gruesa)",
+  "field_key": "bearing_element_retention",
+  "value": "Complemento completo / sin jaula",
+  "rule": "Con jaula o sueltas: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "bearing",
+  "name": "Rodamiento 1/8\" ( En Bolsa De 1 Gruesa)",
+  "field_key": "bearing_element_retention",
+  "value": "Complemento completo / sin jaula",
+  "rule": "Con jaula o sueltas: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "bearing",
+  "name": "Rodamiento 3/16 Maza Delantera Bettabikes Bolsa",
+  "field_key": "bearing_element_retention",
+  "value": "Complemento completo / sin jaula",
+  "rule": "Con jaula o sueltas: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "bearing",
+  "name": "RODAMIENTO 3/16 MAZA DELANTERA EN BOLSA COMPATIBLES GENERICOS",
+  "field_key": "bearing_element_retention",
+  "value": "Complemento completo / sin jaula",
+  "rule": "Con jaula o sueltas: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "bearing",
+  "name": "RODAMIENTO 7/32 MAZA TRASERA",
+  "field_key": "bearing_element_retention",
+  "value": "Complemento completo / sin jaula",
+  "rule": "Con jaula o sueltas: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "bearing",
+  "name": "Rodamiento 7/32\" ( En Bolsa De 1 Gruesa)",
+  "field_key": "bearing_element_retention",
+  "value": "Complemento completo / sin jaula",
+  "rule": "Con jaula o sueltas: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "bearing",
+  "name": "Rodamiento enjaulado dirección 1 1/8",
+  "field_key": "bearing_element_retention",
+  "value": "Con jaula",
+  "rule": "Con jaula o sueltas: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "bearing",
+  "name": "RODAMIENTOS 1/4 GRADO-1000 COMPATIBLE / GENERICO ACERO ALTERNATIVO 2022 ECONOM.",
+  "field_key": "bearing_element_retention",
+  "value": "Complemento completo / sin jaula",
+  "rule": "Con jaula o sueltas: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "bottom_bracket",
+  "name": "Cubetas De Motor TSC Stacked MID 22mm Rojo",
+  "field_key": "spindle_interface",
+  "value": "BMX 22mm",
+  "rule": "Tipo de eje (cuadrado, Hollowtech…): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "bottom_bracket",
+  "name": "MOTOR INTEGRADO GIZABOSS BSA FOR SHIMANO 24/24",
+  "field_key": "spindle_interface",
+  "value": "Hollowtech / 24mm",
+  "rule": "Tipo de eje (cuadrado, Hollowtech…): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "bottom_bracket",
+  "name": "MOTOR SHIMANO BB-MT501 INTEGRADO/HOLLOWTECH",
+  "field_key": "spindle_interface",
+  "value": "Hollowtech / 24mm",
+  "rule": "Tipo de eje (cuadrado, Hollowtech…): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "bottom_bracket",
+  "name": "MOTOR SHIMANO SM-BB52 INTEGRADO/HOLLOWTECH",
+  "field_key": "spindle_interface",
+  "value": "Hollowtech / 24mm",
+  "rule": "Tipo de eje (cuadrado, Hollowtech…): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "bottom_bracket",
+  "name": "SHIMANO XTR SM-BB94-41A MOTOR PRESS-FIT",
+  "field_key": "spindle_interface",
+  "value": "Hollowtech / 24mm",
+  "rule": "Tipo de eje (cuadrado, Hollowtech…): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "chainring",
+  "name": "Juego Coronas PROWHEEL Triple Plato 44-32-22T 8-9V",
+  "field_key": "chain_width_family",
+  "value": "11/128",
+  "rule": "Ancho de cadena (1/8, 3/32): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "control_small_part",
+  "name": "Capuchón piola cambio RISK Basic 4mm",
+  "field_key": "fits_housing_diameter_mm",
+  "value": 4,
+  "rule": "Para funda de: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "fastener",
+  "name": "Golilla Espaciadora Para Perno M8 2mm",
+  "field_key": "thread",
+  "value": "M8",
+  "rule": "Rosca: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "fastener",
+  "name": "Golilla Espaciadora Para Perno M8 2mm",
+  "field_key": "length_mm",
+  "value": 2,
+  "rule": "Largo: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "fastener",
+  "name": "Golilla Espaciadora Para Perno M8 3mm",
+  "field_key": "thread",
+  "value": "M8",
+  "rule": "Rosca: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "fastener",
+  "name": "Golilla Espaciadora Para Perno M8 3mm",
+  "field_key": "length_mm",
+  "value": 3,
+  "rule": "Largo: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "grip",
+  "name": "PUÑO CSC MOD. 660L NEGRO 130MM CON TAPAS EN BOLSA ALTERNATIVO",
+  "field_key": "sold_as",
+  "value": "Par",
+  "rule": "Largo: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "grip",
+  "name": "PUÑO GOMA BEST 130MM NEGRO CON DOBLE LOCK",
+  "field_key": "sold_as",
+  "value": "Par",
+  "rule": "Largo: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "grip",
+  "name": "Puños 10TEN Niño Black Grey 92mm",
+  "field_key": "sold_as",
+  "value": "Par",
+  "rule": "Largo: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "grip",
+  "name": "Puños FOSS Pro 2, 125mm, 2 Lock, Black/Silver.",
+  "field_key": "sold_as",
+  "value": "Par",
+  "rule": "Largo: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "grip",
+  "name": "Puños ODI-1 Morados 135mm",
+  "field_key": "sold_as",
+  "value": "Par",
+  "rule": "Largo: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "grip",
+  "name": "Puños ODI-1 Negros 135mm",
+  "field_key": "sold_as",
+  "value": "Par",
+  "rule": "Largo: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "grip",
+  "name": "PUÑOS OZONO NEGROS 132mm 22mm",
+  "field_key": "sold_as",
+  "value": "Par",
+  "rule": "Largo: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "grip",
+  "name": "Puños Sram Stationary Racing 130mm Par",
+  "field_key": "grip_length_mm",
+  "value": 130,
+  "rule": "Largo: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "Jgo De Mazas Mtb Alumi Plata C/Bloqueo China",
+  "field_key": "hub_spoke_head_interface",
+  "value": "J-Bend",
+  "rule": "Tipo de rayo (con codo o recto): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "Jgo De Mazas Mtb Alumi Plata C/Bloqueo China",
+  "field_key": "hub_rotor_mount_present",
+  "value": false,
+  "rule": "Para freno de disco: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "Jgo De Mazas Mtb Alumi Plata C/Bloqueo China",
+  "field_key": "hub_axle_mount_kind",
+  "value": "Cierre rápido",
+  "rule": "Tipo de eje (cierre rápido o pasante): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "Jgo De Mazas Mtb Alumi Plata C/Bloqueo China",
+  "field_key": "bearing_system",
+  "value": "Bolas sueltas",
+  "rule": "Tipo de rodamiento: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "Juego de Mazas Pista Aluminio Qi&Su 36H Sellada Flip Flop",
+  "field_key": "hub_spoke_head_interface",
+  "value": "J-Bend",
+  "rule": "Tipo de rayo (con codo o recto): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "Juego de Mazas Pista Aluminio Qi&Su 36H Sellada Flip Flop",
+  "field_key": "spoke_hole_count",
+  "value": 36,
+  "rule": "Cantidad de rayos / hoyos: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "Juego de Mazas Pista Aluminio Qi&Su 36H Sellada Flip Flop",
+  "field_key": "hub_rotor_mount_present",
+  "value": false,
+  "rule": "Para freno de disco: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "Juego de Mazas Pista Aluminio Qi&Su 36H Sellada Flip Flop",
+  "field_key": "hub_axle_mount_kind",
+  "value": "Eje con tuercas",
+  "rule": "Tipo de eje (cierre rápido o pasante): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "Juego de Mazas Pista Aluminio Qi&Su 36H Sellada Flip Flop",
+  "field_key": "bearing_system",
+  "value": "Sellados",
+  "rule": "Tipo de rodamiento: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "MAZA (JGO) ALUMINIO QI Y SU (36H) PURPLE QS-403 CON BLOQ.",
+  "field_key": "hub_spoke_head_interface",
+  "value": "J-Bend",
+  "rule": "Tipo de rayo (con codo o recto): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "MAZA (JGO) ALUMINIO QI Y SU (36H) PURPLE QS-403 CON BLOQ.",
+  "field_key": "spoke_hole_count",
+  "value": 36,
+  "rule": "Cantidad de rayos / hoyos: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "MAZA (JGO) ALUMINIO QI Y SU (36H) PURPLE QS-403 CON BLOQ.",
+  "field_key": "hub_rotor_mount_present",
+  "value": false,
+  "rule": "Para freno de disco: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "MAZA (JGO) ALUMINIO QI Y SU (36H) PURPLE QS-403 CON BLOQ.",
+  "field_key": "hub_axle_mount_kind",
+  "value": "Cierre rápido",
+  "rule": "Tipo de eje (cierre rápido o pasante): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "MAZA (JGO) ALUMINIO QI Y SU (36H) PURPLE QS-403 CON BLOQ.",
+  "field_key": "bearing_system",
+  "value": "Bolas sueltas",
+  "rule": "Tipo de rodamiento: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "MAZA (JUEGO) ACERO (36H) CROMADA QS-202 C/DIST.",
+  "field_key": "hub_spoke_head_interface",
+  "value": "J-Bend",
+  "rule": "Tipo de rayo (con codo o recto): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "MAZA (JUEGO) ACERO (36H) CROMADA QS-202 C/DIST.",
+  "field_key": "spoke_hole_count",
+  "value": 36,
+  "rule": "Cantidad de rayos / hoyos: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "MAZA (JUEGO) ACERO (36H) CROMADA QS-202 C/DIST.",
+  "field_key": "hub_rotor_mount_present",
+  "value": false,
+  "rule": "Para freno de disco: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "MAZA (JUEGO) ACERO (36H) CROMADA QS-202 C/DIST.",
+  "field_key": "hub_axle_mount_kind",
+  "value": "Eje con tuercas",
+  "rule": "Tipo de eje (cierre rápido o pasante): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "MAZA (JUEGO) ACERO (36H) CROMADA QS-202 C/DIST.",
+  "field_key": "bearing_system",
+  "value": "Bolas sueltas",
+  "rule": "Tipo de rodamiento: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "MAZA (JUEGO) ALUMINIO (36H) SILVER QS-401 C/TUERCA",
+  "field_key": "hub_spoke_head_interface",
+  "value": "J-Bend",
+  "rule": "Tipo de rayo (con codo o recto): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "MAZA (JUEGO) ALUMINIO (36H) SILVER QS-401 C/TUERCA",
+  "field_key": "spoke_hole_count",
+  "value": 36,
+  "rule": "Cantidad de rayos / hoyos: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "MAZA (JUEGO) ALUMINIO (36H) SILVER QS-401 C/TUERCA",
+  "field_key": "hub_rotor_mount_present",
+  "value": false,
+  "rule": "Para freno de disco: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "MAZA (JUEGO) ALUMINIO (36H) SILVER QS-401 C/TUERCA",
+  "field_key": "hub_axle_mount_kind",
+  "value": "Eje con tuercas",
+  "rule": "Tipo de eje (cierre rápido o pasante): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "MAZA (JUEGO) ALUMINIO (36H) SILVER QS-401 C/TUERCA",
+  "field_key": "bearing_system",
+  "value": "Bolas sueltas",
+  "rule": "Tipo de rodamiento: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "MAZA (PAR) PARALAX 36H, ( CAJA) EASTMAN - INDIA",
+  "field_key": "hub_spoke_head_interface",
+  "value": "J-Bend",
+  "rule": "Tipo de rayo (con codo o recto): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "MAZA (PAR) PARALAX 36H, ( CAJA) EASTMAN - INDIA",
+  "field_key": "spoke_hole_count",
+  "value": 36,
+  "rule": "Cantidad de rayos / hoyos: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "MAZA (PAR) PARALAX 36H, ( CAJA) EASTMAN - INDIA",
+  "field_key": "hub_rotor_mount_present",
+  "value": false,
+  "rule": "Para freno de disco: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "MAZA (PAR) PARALAX 36H, ( CAJA) EASTMAN - INDIA",
+  "field_key": "hub_axle_mount_kind",
+  "value": "Eje con tuercas",
+  "rule": "Tipo de eje (cierre rápido o pasante): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "MAZA (PAR) PARALAX 36H, ( CAJA) EASTMAN - INDIA",
+  "field_key": "bearing_system",
+  "value": "Bolas sueltas",
+  "rule": "Tipo de rodamiento: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "MAZAS JGO. FIXI 36H 17T ECLIPSE NEGRA",
+  "field_key": "hub_spoke_head_interface",
+  "value": "J-Bend",
+  "rule": "Tipo de rayo (con codo o recto): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "MAZAS JGO. FIXI 36H 17T ECLIPSE NEGRA",
+  "field_key": "spoke_hole_count",
+  "value": 36,
+  "rule": "Cantidad de rayos / hoyos: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "MAZAS JGO. FIXI 36H 17T ECLIPSE NEGRA",
+  "field_key": "hub_rotor_mount_present",
+  "value": false,
+  "rule": "Para freno de disco: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "MAZAS JGO. FIXI 36H 17T ECLIPSE NEGRA",
+  "field_key": "hub_axle_mount_kind",
+  "value": "Eje con tuercas",
+  "rule": "Tipo de eje (cierre rápido o pasante): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "MAZAS JGO. FIXI 36H 17T ECLIPSE NEGRA",
+  "field_key": "hub_drive_receiver_present",
+  "value": true,
+  "rule": "Tiene montaje para piñón: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "MAZAS JGO. FIXI 36H 17T ECLIPSE NEGRA",
+  "field_key": "hub_drive_receiver_kind",
+  "value": "Rosca para piñón fijo",
+  "rule": "Sistema de montaje del piñón: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "Mazas Novatec 32H Microspline QR",
+  "field_key": "hub_spoke_head_interface",
+  "value": "J-Bend",
+  "rule": "Tipo de rayo (con codo o recto): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "Mazas Novatec 32H Microspline QR",
+  "field_key": "spoke_hole_count",
+  "value": 32,
+  "rule": "Cantidad de rayos / hoyos: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "Mazas Novatec 32H Microspline QR",
+  "field_key": "hub_axle_mount_kind",
+  "value": "Cierre rápido",
+  "rule": "Tipo de eje (cierre rápido o pasante): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "Mazas Novatec 32H Microspline QR",
+  "field_key": "bearing_system",
+  "value": "Sellados",
+  "rule": "Tipo de rodamiento: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "Mazas Novatec 32H Microspline QR",
+  "field_key": "hub_drive_receiver_present",
+  "value": true,
+  "rule": "Tiene montaje para piñón: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "hub",
+  "name": "Mazas Novatec 32H Microspline QR",
+  "field_key": "hub_drive_receiver_kind",
+  "value": "Núcleo de cassette",
+  "rule": "Sistema de montaje del piñón: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "rim_brake",
+  "name": "Freno V-Brake RADIUS, BMX, Aluminio, Trasero, Pads 60mm, Black",
+  "field_key": "brake_circuits",
+  "value": {
+   "schema_version": 1,
+   "rows": [
+    {
+     "id": "expert-1",
+     "values": {
+      "circuit_id": "rear",
+      "position": "Trasero",
+      "actuation": "Cable"
+     },
+     "sources": []
+    }
+   ]
+  },
+  "rule": "Circuitos de freno de esta presentación: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "rim_brake",
+  "name": "Herradura de Tiro Lateral ZTTO ASA 2.5D [JUEGO]",
+  "field_key": "brake_circuits",
+  "value": {
+   "schema_version": 1,
+   "rows": [
+    {
+     "id": "expert-1",
+     "values": {
+      "circuit_id": "front",
+      "position": "Delantero",
+      "actuation": "Cable"
+     },
+     "sources": []
+    },
+    {
+     "id": "expert-2",
+     "values": {
+      "circuit_id": "rear",
+      "position": "Trasero",
+      "actuation": "Cable"
+     },
+     "sources": []
+    }
+   ]
+  },
+  "rule": "Circuitos de freno de esta presentación: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "rim_brake",
+  "name": "HERRADURA FRENO V-BRAKE ALUMINIO CB-132\nSAIGUAN JGO",
+  "field_key": "brake_circuits",
+  "value": {
+   "schema_version": 1,
+   "rows": [
+    {
+     "id": "expert-1",
+     "values": {
+      "circuit_id": "front",
+      "position": "Delantero",
+      "actuation": "Cable"
+     },
+     "sources": []
+    },
+    {
+     "id": "expert-2",
+     "values": {
+      "circuit_id": "rear",
+      "position": "Trasero",
+      "actuation": "Cable"
+     },
+     "sources": []
+    }
+   ]
+  },
+  "rule": "Circuitos de freno de esta presentación: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "rim_brake",
+  "name": "HERRADURA FRENO V-BRAKE ALUMINIO HJ-612AD7 DEL/TRA",
+  "field_key": "brake_circuits",
+  "value": {
+   "schema_version": 1,
+   "rows": [
+    {
+     "id": "expert-1",
+     "values": {
+      "circuit_id": "front",
+      "position": "Delantero",
+      "actuation": "Cable"
+     },
+     "sources": []
+    },
+    {
+     "id": "expert-2",
+     "values": {
+      "circuit_id": "rear",
+      "position": "Trasero",
+      "actuation": "Cable"
+     },
+     "sources": []
+    }
+   ]
+  },
+  "rule": "Circuitos de freno de esta presentación: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "rim_brake",
+  "name": "HERRADURA FRENO V-BRAKE ALUMINIO HJ-811AD7 DEL/TRA\nALHONGA SET",
+  "field_key": "brake_circuits",
+  "value": {
+   "schema_version": 1,
+   "rows": [
+    {
+     "id": "expert-1",
+     "values": {
+      "circuit_id": "front",
+      "position": "Delantero",
+      "actuation": "Cable"
+     },
+     "sources": []
+    },
+    {
+     "id": "expert-2",
+     "values": {
+      "circuit_id": "rear",
+      "position": "Trasero",
+      "actuation": "Cable"
+     },
+     "sources": []
+    }
+   ]
+  },
+  "rule": "Circuitos de freno de esta presentación: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "rim_brake",
+  "name": "Herradura Tiro Lateral Larga Ztto Par Negra",
+  "field_key": "brake_circuits",
+  "value": {
+   "schema_version": 1,
+   "rows": [
+    {
+     "id": "expert-1",
+     "values": {
+      "circuit_id": "front",
+      "position": "Delantero",
+      "actuation": "Cable"
+     },
+     "sources": []
+    },
+    {
+     "id": "expert-2",
+     "values": {
+      "circuit_id": "rear",
+      "position": "Trasero",
+      "actuation": "Cable"
+     },
+     "sources": []
+    }
+   ]
+  },
+  "rule": "Circuitos de freno de esta presentación: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "rim_brake",
+  "name": "Herradura Tiro Lateral Racework Aluminio (JUEGO)",
+  "field_key": "brake_circuits",
+  "value": {
+   "schema_version": 1,
+   "rows": [
+    {
+     "id": "expert-1",
+     "values": {
+      "circuit_id": "front",
+      "position": "Delantero",
+      "actuation": "Cable"
+     },
+     "sources": []
+    },
+    {
+     "id": "expert-2",
+     "values": {
+      "circuit_id": "rear",
+      "position": "Trasero",
+      "actuation": "Cable"
+     },
+     "sources": []
+    }
+   ]
+  },
+  "rule": "Circuitos de freno de esta presentación: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "rim_brake",
+  "name": "Herradura Tiro Lateral Racework Aluminio Delantero",
+  "field_key": "brake_circuits",
+  "value": {
+   "schema_version": 1,
+   "rows": [
+    {
+     "id": "expert-1",
+     "values": {
+      "circuit_id": "front",
+      "position": "Delantero",
+      "actuation": "Cable"
+     },
+     "sources": []
+    }
+   ]
+  },
+  "rule": "Circuitos de freno de esta presentación: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "rim_brake",
+  "name": "HERRADURA V-BRAKE ALHONGA (JUEGO) COMPATIBLE / GENERICO",
+  "field_key": "brake_circuits",
+  "value": {
+   "schema_version": 1,
+   "rows": [
+    {
+     "id": "expert-1",
+     "values": {
+      "circuit_id": "front",
+      "position": "Delantero",
+      "actuation": "Cable"
+     },
+     "sources": []
+    },
+    {
+     "id": "expert-2",
+     "values": {
+      "circuit_id": "rear",
+      "position": "Trasero",
+      "actuation": "Cable"
+     },
+     "sources": []
+    }
+   ]
+  },
+  "rule": "Circuitos de freno de esta presentación: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "rim_brake",
+  "name": "HERRADURA V-BRAKE ALUMINIO ALHONGA (JUEGO) COMPATIBLE / GENERICO",
+  "field_key": "brake_circuits",
+  "value": {
+   "schema_version": 1,
+   "rows": [
+    {
+     "id": "expert-1",
+     "values": {
+      "circuit_id": "front",
+      "position": "Delantero",
+      "actuation": "Cable"
+     },
+     "sources": []
+    },
+    {
+     "id": "expert-2",
+     "values": {
+      "circuit_id": "rear",
+      "position": "Trasero",
+      "actuation": "Cable"
+     },
+     "sources": []
+    }
+   ]
+  },
+  "rule": "Circuitos de freno de esta presentación: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "rim_brake",
+  "name": "Herradura V-Brake Shimano Br-T4000, X-Type Trasera S65T Shoe, 16.0Mm Fixing Bolts, W/O Inner Cable L",
+  "field_key": "brake_circuits",
+  "value": {
+   "schema_version": 1,
+   "rows": [
+    {
+     "id": "expert-1",
+     "values": {
+      "circuit_id": "rear",
+      "position": "Trasero",
+      "actuation": "Cable"
+     },
+     "sources": []
+    }
+   ]
+  },
+  "rule": "Circuitos de freno de esta presentación: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "rim_brake",
+  "name": "Herraduras (Juego) Freno Alhonga 570ag 1/2 Pista Alum",
+  "field_key": "brake_circuits",
+  "value": {
+   "schema_version": 1,
+   "rows": [
+    {
+     "id": "expert-1",
+     "values": {
+      "circuit_id": "front",
+      "position": "Delantero",
+      "actuation": "Cable"
+     },
+     "sources": []
+    },
+    {
+     "id": "expert-2",
+     "values": {
+      "circuit_id": "rear",
+      "position": "Trasero",
+      "actuation": "Cable"
+     },
+     "sources": []
+    }
+   ]
+  },
+  "rule": "Circuitos de freno de esta presentación: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "rim_brake",
+  "name": "Herraduras Del/Tras Freno 1/2 Pista Alumin Tw",
+  "field_key": "brake_circuits",
+  "value": {
+   "schema_version": 1,
+   "rows": [
+    {
+     "id": "expert-1",
+     "values": {
+      "circuit_id": "front",
+      "position": "Delantero",
+      "actuation": "Cable"
+     },
+     "sources": []
+    },
+    {
+     "id": "expert-2",
+     "values": {
+      "circuit_id": "rear",
+      "position": "Trasero",
+      "actuation": "Cable"
+     },
+     "sources": []
+    }
+   ]
+  },
+  "rule": "Circuitos de freno de esta presentación: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "rim_brake",
+  "name": "Herraduras Tektro 855al Del/Tras V-Brake Negr",
+  "field_key": "brake_circuits",
+  "value": {
+   "schema_version": 1,
+   "rows": [
+    {
+     "id": "expert-1",
+     "values": {
+      "circuit_id": "front",
+      "position": "Delantero",
+      "actuation": "Cable"
+     },
+     "sources": []
+    },
+    {
+     "id": "expert-2",
+     "values": {
+      "circuit_id": "rear",
+      "position": "Trasero",
+      "actuation": "Cable"
+     },
+     "sources": []
+    }
+   ]
+  },
+  "rule": "Circuitos de freno de esta presentación: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "rim_brake",
+  "name": "Herraduras V-brake Aluminio Negra Taiwan",
+  "field_key": "brake_circuits",
+  "value": {
+   "schema_version": 1,
+   "rows": [
+    {
+     "id": "expert-1",
+     "values": {
+      "circuit_id": "front",
+      "position": "Delantero",
+      "actuation": "Cable"
+     },
+     "sources": []
+    },
+    {
+     "id": "expert-2",
+     "values": {
+      "circuit_id": "rear",
+      "position": "Trasero",
+      "actuation": "Cable"
+     },
+     "sources": []
+    }
+   ]
+  },
+  "rule": "Circuitos de freno de esta presentación: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "rim_brake",
+  "name": "Juego Freno V-brake Acero Plastific Eastman",
+  "field_key": "brake_circuits",
+  "value": {
+   "schema_version": 1,
+   "rows": [
+    {
+     "id": "expert-1",
+     "values": {
+      "circuit_id": "front",
+      "position": "Delantero",
+      "actuation": "Cable"
+     },
+     "sources": []
+    },
+    {
+     "id": "expert-2",
+     "values": {
+      "circuit_id": "rear",
+      "position": "Trasero",
+      "actuation": "Cable"
+     },
+     "sources": []
+    }
+   ]
+  },
+  "rule": "Circuitos de freno de esta presentación: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "rim_brake",
+  "name": "Juego Frenos Tiro Lateral Garozzo",
+  "field_key": "brake_circuits",
+  "value": {
+   "schema_version": 1,
+   "rows": [
+    {
+     "id": "expert-1",
+     "values": {
+      "circuit_id": "front",
+      "position": "Delantero",
+      "actuation": "Cable"
+     },
+     "sources": []
+    },
+    {
+     "id": "expert-2",
+     "values": {
+      "circuit_id": "rear",
+      "position": "Trasero",
+      "actuation": "Cable"
+     },
+     "sources": []
+    }
+   ]
+  },
+  "rule": "Circuitos de freno de esta presentación: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "rim_brake",
+  "name": "Set de Herraduras de Frenos de Tiro Lateral Estandar",
+  "field_key": "brake_circuits",
+  "value": {
+   "schema_version": 1,
+   "rows": [
+    {
+     "id": "expert-1",
+     "values": {
+      "circuit_id": "front",
+      "position": "Delantero",
+      "actuation": "Cable"
+     },
+     "sources": []
+    },
+    {
+     "id": "expert-2",
+     "values": {
+      "circuit_id": "rear",
+      "position": "Trasero",
+      "actuation": "Cable"
+     },
+     "sources": []
+    }
+   ]
+  },
+  "rule": "Circuitos de freno de esta presentación: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "shifter",
+  "name": "MANILLA CAMBIO 6 VEL. M.T.B. KD-20-03F\nSAIGUAN SET",
+  "field_key": "handlebar_clamp_mm",
+  "value": 22.2,
+  "rule": "Diámetro del manubrio (abrazadera): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "shifter",
+  "name": "manilla cambio 6v shimano (par - bolsa) sl-tx30 shimano",
+  "field_key": "handlebar_clamp_mm",
+  "value": 22.2,
+  "rule": "Diámetro del manubrio (abrazadera): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "shifter",
+  "name": "manilla cambio 6v shimano (par - bolsa) sl-tx30 shimano",
+  "field_key": "shifter_indexed_positions",
+  "value": 6,
+  "rule": "Velocidades: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "shifter",
+  "name": "manilla cambio 6v shimano (par - bolsa) sl-tx30 shimano",
+  "field_key": "shifter_control_style",
+  "value": "Palanca de pulgar",
+  "rule": "Tipo de manilla (gatillo, giro…): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "shifter",
+  "name": "MANILLA CAMBIO 7 VEL. M.T.B. KD-20-3SI/7SI INDEX\nSAIGUAN SET",
+  "field_key": "shifter_position",
+  "value": "Par",
+  "rule": "Diámetro del manubrio (abrazadera): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "shifter",
+  "name": "manilla cambio 7v shimano sl-tx30 (par) 7r&l(friction)",
+  "field_key": "handlebar_clamp_mm",
+  "value": 22.2,
+  "rule": "Diámetro del manubrio (abrazadera): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "shifter",
+  "name": "manilla cambio 7v shimano sl-tx30 (par) 7r&l(friction)",
+  "field_key": "shifter_indexed_positions",
+  "value": 7,
+  "rule": "Velocidades: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "shifter",
+  "name": "manilla cambio 7v shimano sl-tx30 (par) 7r&l(friction)",
+  "field_key": "shifter_control_style",
+  "value": "Palanca de pulgar",
+  "rule": "Tipo de manilla (gatillo, giro…): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "shifter",
+  "name": "Manillas de Cambio Juego SENSAH MX8 8x3 Velocidades",
+  "field_key": "handlebar_clamp_mm",
+  "value": 22.2,
+  "rule": "Diámetro del manubrio (abrazadera): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "shifter",
+  "name": "Manillas de Cambio Juego SENSAH MX8 8x3 Velocidades",
+  "field_key": "shifter_indexed_positions",
+  "value": 8,
+  "rule": "Velocidades: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "shifter",
+  "name": "Manillas de Cambio Juego SENSAH MX8 8x3 Velocidades",
+  "field_key": "shifter_control_style",
+  "value": "Gatillo (trigger)",
+  "rule": "Tipo de manilla (gatillo, giro…): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "shifter",
+  "name": "Manillas de Cambio Juego SENSAH MX8 8x3 Velocidades",
+  "field_key": "shifter_actuation_mode",
+  "value": "Indexado",
+  "rule": "Accionamiento (indexado o fricción): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "shifter",
+  "name": "Manillas De Cambio Mtb Sun Race M2t 7s \"juego\"",
+  "field_key": "handlebar_clamp_mm",
+  "value": 22.2,
+  "rule": "Diámetro del manubrio (abrazadera): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "shifter",
+  "name": "Manillas De Cambio Mtb Sun Race M2t 7s \"juego\"",
+  "field_key": "shifter_indexed_positions",
+  "value": 7,
+  "rule": "Velocidades: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "shifter",
+  "name": "Manillas De Cambio Mtb Sun Race M2t 7s \"juego\"",
+  "field_key": "shifter_control_style",
+  "value": "Palanca de pulgar",
+  "rule": "Tipo de manilla (gatillo, giro…): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "shifter",
+  "name": "Manillas Sun Race De Cambio Mtb M2t 6s \"juego\"",
+  "field_key": "handlebar_clamp_mm",
+  "value": 22.2,
+  "rule": "Diámetro del manubrio (abrazadera): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "shifter",
+  "name": "Manillas Sun Race De Cambio Mtb M2t 6s \"juego\"",
+  "field_key": "shifter_indexed_positions",
+  "value": 6,
+  "rule": "Velocidades: no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "shifter",
+  "name": "Manillas Sun Race De Cambio Mtb M2t 6s \"juego\"",
+  "field_key": "shifter_control_style",
+  "value": "Palanca de pulgar",
+  "rule": "Tipo de manilla (gatillo, giro…): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "shifter",
+  "name": "Manillas SunRace Cambio M10 3x5/6/7V Par",
+  "field_key": "handlebar_clamp_mm",
+  "value": 22.2,
+  "rule": "Diámetro del manubrio (abrazadera): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "shifter",
+  "name": "Manillas SunRace Cambio M10 3x5/6/7V Par",
+  "field_key": "shifter_control_style",
+  "value": "Palanca de pulgar",
+  "rule": "Tipo de manilla (gatillo, giro…): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "shifter",
+  "name": "Manillas SunRace Cambio M10 3x5/6/7V Par",
+  "field_key": "shifter_actuation_mode",
+  "value": "Fricción",
+  "rule": "Accionamiento (indexado o fricción): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "shifter",
+  "name": "Shifter Integrado Ruta Sensah 2x8V - AE",
+  "field_key": "shifter_position",
+  "value": "Par",
+  "rule": "Diámetro del manubrio (abrazadera): no corresponde a los requisitos elegidos."
+ },
+ {
+  "family": "tire",
+  "name": "Rueda Sólida Scooter Xiaomi M365 8 1/2 x 2",
+  "field_key": "tire_tubeless_ready",
+  "value": false,
+  "rule": "Apto para usar sin cámara (Tubeless Ready): no corresponde a los requisitos elegidos."
+ }
+]

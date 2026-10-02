@@ -1,0 +1,18 @@
+@reason Plato por su nombre: BMX de cadena 1/8 con montaje propio; los monoplatos de 104 y 96 BCD son de 4 pernos, narrow-wide para 9 a 12 velocidades.
+61001234 chainring_position=Único; chain_width_family=1/8; chainring_package_kind=Un plato
+490f6322 chainring_position=Único; chain_width_family=1/8; chainring_package_kind=Un plato
+dbf2964f teeth_count=39; chainring_position=Único; chain_width_family=1/8; chainring_package_kind=Un plato
+f0782550 chainring_mount_type=BCD 4 pernos; narrow_wide=sí; chainring_package_kind=Un plato
+0e9f19ff chainring_mount_type=BCD 4 pernos; narrow_wide=sí; chainring_package_kind=Un plato
+052332ec chainring_mount_type=BCD 4 pernos; narrow_wide=sí; chainring_package_kind=Un plato
+fc0b57a8 chainring_mount_type=BCD 4 pernos; narrow_wide=sí; chainring_package_kind=Un plato
+df0ca667 chainring_mount_type=BCD 4 pernos; chainring_position=Único; narrow_wide=sí; chainring_package_kind=Un plato
+c04ba799 chainring_mount_type=BCD 4 pernos; chainring_position=Único; narrow_wide=sí; chainring_package_kind=Un plato
+ad07b78d chainring_mount_type=BCD 4 pernos; narrow_wide=sí; chainring_package_kind=Un plato
+0b10f2e3 chainring_mount_type=BCD 4 pernos; chainring_package_kind=Un plato
+d5023c6f chainring_mount_type=BCD 4 pernos; chainring_position=Único; chainring_package_kind=Un plato; chainring_bolt_pattern_symmetric=no
+69fbed51 chainring_mount_type=BCD 4 pernos; chainring_position=Único; narrow_wide=sí; chainring_package_kind=Un plato
+07708df1 chainring_mount_type=BCD 4 pernos; chainring_position=Único; narrow_wide=sí; chainring_package_kind=Un plato
+9efe2c3e chainring_mount_type=BCD 4 pernos; chainring_position=Único; narrow_wide=sí; chainring_package_kind=Un plato; chainring_bolt_pattern_symmetric=no # 96 BCD asimétrico de Shimano M6000/M7000/M8000.
+39f64976 chainring_set_member_count=2
+5227aeaf chainring_set_member_count=3; chain_width_family=11/128

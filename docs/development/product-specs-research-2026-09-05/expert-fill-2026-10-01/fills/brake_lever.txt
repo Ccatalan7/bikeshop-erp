@@ -1,0 +1,19 @@
+@reason Manilla de freno a cable con abrazadera al manubrio; sirve adelante o atrás.
+* brake_actuation=Mecánico (cable); lever_mount_method=Abrazadera externa; brake_position=Universal
+@reason Manilla de MTB o de niño para manubrio plano (22,2 mm); las de 3 o 4 dedos y V-brake son de tiro largo.
+80a30d22 handlebar_clamp_mm=22.2
+2dee28f6 handlebar_clamp_mm=22.2
+1f998869 handlebar_clamp_mm=22.2
+eb526234 handlebar_clamp_mm=22.2
+36c822c5 handlebar_clamp_mm=22.2; lever_cable_pull=Tiro largo (V-brake / disco mecánico tiro largo)
+aebd808f handlebar_clamp_mm=22.2
+380f3312 handlebar_clamp_mm=22.2
+7aaeef8d handlebar_clamp_mm=22.2
+d81fbb9d handlebar_clamp_mm=22.2; lever_cable_pull=Tiro largo (V-brake / disco mecánico tiro largo)
+230656ec handlebar_clamp_mm=22.2; lever_cable_pull=Tiro largo (V-brake / disco mecánico tiro largo)
+40ba0369 handlebar_clamp_mm=22.2
+d3fc83b2 handlebar_clamp_mm=22.2
+5df6da34 handlebar_clamp_mm=22.2
+202e46f9 handlebar_clamp_mm=22.2
+da33ba6e handlebar_clamp_mm=22.2
+9a55fe80 handlebar_clamp_mm=22.2

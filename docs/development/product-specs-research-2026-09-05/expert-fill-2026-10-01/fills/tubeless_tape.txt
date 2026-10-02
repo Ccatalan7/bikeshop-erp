@@ -1,0 +1,2 @@
+@reason Cinta de fondo tubeless: lámina plástica adhesiva; se elige 2 a 5 mm más ancha que el ancho interno de la llanta.
+* tubeless_tape_application=Elegir 2 a 5 mm más ancha que el ancho interno de la llanta; limpiar el fondo y dar una vuelta y media tensando.

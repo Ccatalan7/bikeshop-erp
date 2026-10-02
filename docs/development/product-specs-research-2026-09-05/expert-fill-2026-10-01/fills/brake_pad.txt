@@ -1,0 +1,50 @@
+@reason Pastilla o patín genérico: sirve adelante o atrás.
+* brake_position=Universal
+@reason Pastilla de disco: el modelo de cáliper sale del nombre.
+c013efa8 braking_surface=Disco; pad_shape_code=Avid BB5 / Promax
+db0f35e2 braking_surface=Disco; pad_shape_code=Avid BB5
+ad1165f3 pad_shape_code=B01S (Shimano y Tektro de 2 pistones); pack_quantity=2
+68bb5081 braking_surface=Disco; pad_shape_code=B01S (Shimano y Tektro de 2 pistones)
+f422ac3e braking_surface=Disco; pad_shape_code=J04C (Shimano XT, SLX y Deore de 2 pistones); pad_spring_included=sí # Shimano J04C: pastilla de 2 pistones con disipador; viene con su resorte.
+36778cf5 braking_surface=Disco
+d62dd5f5 braking_surface=Disco # Pastilla redonda a presión: de cáliper mecánico de disco.
+5caacb95 braking_surface=Disco; pad_shape_code=Shimano Deore y XT
+48957c6b braking_surface=Disco
+a72eea6d compound_type=Metálico # Pastilla «copper»: compuesto sinterizado metálico.
+@reason La palabra «par» del nombre: dos pastillas o dos patines.
+abc3217b pack_quantity=2
+33d73695 pack_quantity=2
+d81ea945 pack_quantity=2
+8ff56d95 pack_quantity=2
+f23d4b1c pack_quantity=2
+bb406f4b pack_quantity=2
+1be415ee pack_quantity=2
+46c678a5 pack_quantity=2
+f6bdc1e7 pack_quantity=2
+2352911a pack_quantity=2
+c2e9c622 pack_quantity=2
+b8017fe2 pack_quantity=2
+9cda4c89 pack_quantity=2
+5c1b5862 pack_quantity=2
+d31b700c pack_quantity=2
+b771a55c pack_quantity=2
+0e265f12 pack_quantity=2
+d187da4a pack_quantity=2
+@reason Patín de llanta moldeado de una pieza; la fijación y el par salen del nombre.
+a7c4773f rim_pad_construction=Una pieza; pack_quantity=2
+ced690b3 rim_pad_construction=Una pieza; rim_pad_stud_type=Perno de ruta; pack_quantity=2
+cc503936 rim_pad_construction=Una pieza; pack_quantity=2
+cf561a16 rim_pad_construction=Una pieza
+09df57e0 rim_pad_construction=Una pieza
+af022d11 rim_pad_construction=Una pieza
+541ee2b8 rim_pad_construction=Una pieza; pack_quantity=2
+e0607cb6 rim_pad_construction=Una pieza; pack_quantity=2
+5e99a0d9 rim_pad_construction=Una pieza; pack_quantity=2
+0c902bf6 rim_pad_construction=Una pieza; rim_pad_stud_type=Perno de ruta
+2b8dda94 rim_pad_construction=Una pieza; pack_quantity=2
+45898186 rim_pad_construction=Una pieza
+3efa08d0 rim_pad_construction=Una pieza; rim_pad_stud_type=Perno de ruta
+b58b22b6 rim_pad_construction=Una pieza
+ebfdb08e rim_pad_construction=Una pieza
+374e9b3d rim_pad_construction=Una pieza
+ee9f9f62 rim_pad_construction=Una pieza; rim_pad_stud_type=Perno de ruta

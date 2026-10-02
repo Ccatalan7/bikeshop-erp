@@ -1,0 +1,5 @@
+@reason Tipo, material y color del protector por el nombre.
+6be54ef6 bike_protection_kind=Funda para bicicleta; color=Gris
+e42eac36 bike_protection_kind=Protector de vaina / cadena
+75566ba7 bike_protection_kind=Protector de vaina / cadena
+4d4cafc3 bike_protection_kind=Lámina protectora de cuadro; material=Silicona

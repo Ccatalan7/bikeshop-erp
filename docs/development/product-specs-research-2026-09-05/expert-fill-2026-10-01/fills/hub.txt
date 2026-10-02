@@ -1,0 +1,55 @@
+@reason Maza de brida tradicional: rayos con codo (J-bend).
+* hub_spoke_head_interface=J-Bend
+@reason Maza económica de eje con tuercas y bolas sueltas, para freno de llanta y piñón de rosca (rueda libre).
+d6d44803 hub_package_position=Trasera; hub_rotor_mount_present=no; hub_axle_mount_kind=Eje con tuercas; bearing_system=Bolas sueltas; hub_drive_receiver_present=sí; hub_drive_receiver_kind=Piñón retenido por anillo # Maza de contrapedal: el piñón va retenido por anillo, eje con tuercas.
+b0f8e297 hub_rotor_mount_present=no; hub_axle_mount_kind=Cierre rápido; bearing_system=Bolas sueltas # Juego MTB de aluminio con bloqueo (cierre rápido), sin montaje de disco.
+90d63e24 spoke_hole_count=36; hub_rotor_mount_present=no; hub_axle_mount_kind=Eje con tuercas; bearing_system=Sellados # Juego pista flip-flop sellado: eje con tuercas, sin disco.
+074da02d spoke_hole_count=36; hub_rotor_mount_present=no; hub_axle_mount_kind=Cierre rápido; bearing_system=Bolas sueltas # QS-403 con bloqueo: cierre rápido, sin disco.
+5d7e22c2 spoke_hole_count=36; hub_rotor_mount_present=no; hub_axle_mount_kind=Eje con tuercas; bearing_system=Bolas sueltas
+7ec6e631 spoke_hole_count=36; hub_rotor_mount_present=no; hub_axle_mount_kind=Eje con tuercas; bearing_system=Bolas sueltas
+0cfd090c spoke_hole_count=36; hub_rotor_mount_present=no; hub_axle_mount_kind=Eje con tuercas; bearing_system=Bolas sueltas
+@reason Maza de disco de 6 pernos y cierre rápido 100x9 (delantera) o 135x10 (trasera), medidas del nombre.
+15978b2a hub_old_mm=100; rotor_mount_type=6 pernos; hub_axle_mount_kind=Cierre rápido; hub_axle_diameter_mm=9
+047a7046 rotor_mount_type=6 pernos; hub_axle_mount_kind=Cierre rápido
+8c1605ea rotor_mount_type=6 pernos; hub_axle_mount_kind=Cierre rápido
+ecded186 rotor_mount_type=6 pernos; hub_axle_mount_kind=Cierre rápido
+0c2b3b3a hub_old_mm=100; rotor_mount_type=6 pernos
+417497ba hub_old_mm=100; rotor_mount_type=6 pernos
+c0b57f0d hub_old_mm=100; rotor_mount_type=6 pernos
+79e3a4ec rotor_mount_type=6 pernos; hub_rotor_mount_present=sí; bearing_system=Sellados; hub_axle_mount_kind=Cierre rápido # Novatec D041SB: la D es de disco (6 pernos), rodamientos sellados.
+c8b1d589 rotor_mount_type=6 pernos; hub_rotor_mount_present=sí; bearing_system=Sellados; hub_axle_mount_kind=Cierre rápido; hub_drive_receiver_kind=Núcleo de cassette # Novatec D042SB: disco 6 pernos, sellada, núcleo HG.
+a4fc7ebc rotor_mount_type=6 pernos; hub_rotor_mount_present=sí; bearing_system=Sellados; hub_axle_mount_kind=Eje pasante; hub_drive_receiver_kind=Núcleo de cassette # Novatec D442SB Boost 148x12: eje pasante, disco 6 pernos.
+d3c6b2be hub_old_mm=135; rotor_mount_type=6 pernos
+f18363cb hub_old_mm=135; rotor_mount_type=6 pernos
+bea0b3a7 hub_old_mm=135; rotor_mount_type=6 pernos
+29aad149 hub_old_mm=135; rotor_mount_type=6 pernos
+60362f8c hub_old_mm=135; rotor_mount_type=6 pernos
+613635d6 hub_old_mm=135; rotor_mount_type=6 pernos
+@reason Maza económica de eje con tuercas y bolas sueltas, sin disco, para piñón de rosca.
+d25959b5 hub_old_mm=100; hub_rotor_mount_present=no; bearing_system=Bolas sueltas
+d42afb1a hub_old_mm=100; hub_rotor_mount_present=no; bearing_system=Bolas sueltas
+f595ad50 hub_rotor_mount_present=no; bearing_system=Bolas sueltas; hub_drive_receiver_kind=Rosca para piñón (rueda libre)
+7fe209b8 hub_rotor_mount_present=no; bearing_system=Bolas sueltas; hub_drive_receiver_kind=Rosca para piñón (rueda libre)
+f73b4a79 hub_rotor_mount_present=no; bearing_system=Bolas sueltas; hub_axle_mount_kind=Eje con tuercas; hub_drive_receiver_kind=Rosca para piñón (rueda libre)
+47fae644 hub_rotor_mount_present=no; bearing_system=Bolas sueltas; hub_axle_mount_kind=Eje con tuercas; hub_drive_receiver_kind=Rosca para piñón (rueda libre)
+@reason Maza con medidas en el nombre; el estándar del eje sale de ellas (100x9 y 135x10 son cierre rápido; 12x142, 12x148 y 15x110 son eje pasante, sólo para disco).
+14fb3f5d hub_axle_mount_kind=Eje pasante; hub_rotor_mount_present=sí
+1bdf724a hub_axle_mount_kind=Eje pasante; hub_rotor_mount_present=sí
+eed0bb05 hub_axle_mount_kind=Eje pasante; hub_rotor_mount_present=sí; bearing_system=Sellados; hub_drive_receiver_kind=Núcleo de cassette
+9889bac6 hub_axle_mount_kind=Cierre rápido
+88a31a64 hub_axle_mount_kind=Cierre rápido
+f4c3e833 hub_axle_mount_kind=Cierre rápido
+28aadc0c hub_axle_mount_kind=Cierre rápido; hub_drive_receiver_kind=Núcleo de cassette
+cc828965 hub_axle_diameter_mm=10
+8016cd5f hub_rotor_mount_present=no; hub_axle_mount_kind=Cierre rápido # Maza de ruta 100 mm de cierre rápido para freno de llanta.
+3a884496 hub_rotor_mount_present=no; hub_axle_mount_kind=Cierre rápido # Maza de ruta 130 mm de cierre rápido para freno de llanta.
+2da1d9a1 hub_rotor_mount_present=sí; bearing_system=Sellados # Hassns Pro 7: maza MTB de disco con rodamientos sellados.
+b5c89b15 hub_rotor_mount_present=sí; bearing_system=Sellados; hub_drive_receiver_kind=Núcleo de cassette # Hassns Pro 7: maza MTB de disco, sellada, con núcleo de cassette.
+e19fa02f hub_old_mm=100; hub_axle_mount_kind=Cierre rápido; bearing_system=Bolas sueltas # Shimano HB-RM66: cierre rápido 100 mm, conos y bolas sueltas.
+4c2bbbf2 hub_package_position=Trasera # Maza de 135 mm para 8 velocidades: trasera.
+a79b375e hub_package_position=Trasera; spoke_hole_count=36; hub_old_mm=135; hub_drive_receiver_present=sí; hub_drive_receiver_kind=Núcleo de cassette # Neco MTB 7/8/9 velocidades: trasera con núcleo de cassette.
+039a7080 hub_old_mm=135
+213bb95b hub_old_mm=135
+a83e5f26 hub_rotor_mount_present=no; hub_axle_mount_kind=Eje con tuercas # BMX freestyle: eje de 14 mm con tuercas, sin disco.
+a5018a49 spoke_hole_count=36; hub_rotor_mount_present=no; hub_axle_mount_kind=Eje con tuercas; hub_drive_receiver_present=sí; hub_drive_receiver_kind=Rosca para piñón fijo # Juego fixie con piñón de 17 dientes: rosca para piñón fijo, eje con tuercas.
+bf3c8f45 spoke_hole_count=32; hub_axle_mount_kind=Cierre rápido; bearing_system=Sellados; hub_drive_receiver_present=sí; hub_drive_receiver_kind=Núcleo de cassette # Novatec MicroSpline QR: núcleo MicroSpline, cierre rápido, sellada.

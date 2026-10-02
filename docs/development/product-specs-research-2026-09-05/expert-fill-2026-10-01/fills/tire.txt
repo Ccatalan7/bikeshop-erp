@@ -1,0 +1,111 @@
+@reason Talón de alambre y sin tubeless: es la versión rígida (ALAMBRE en el nombre o línea económica sin plegable); uso por rodado, ancho y dibujo.
+1629b9d6 tire_use=MTB; tire_tubeless_ready=no
+085aedf6 tire_tubeless_ready=no
+5670a812 tire_tubeless_ready=no
+3459d2f7 tire_tubeless_ready=no
+f7016bed tire_tubeless_ready=no
+8f29bd7f tire_tubeless_ready=no
+4f35e59c tire_tubeless_ready=no
+f1f0b1f3 tire_tubeless_ready=no
+fbe03d6a tire_tubeless_ready=no
+c67110dd tire_use=Urbano / híbrido; tire_tubeless_ready=no # Maxxis Reaver 700x40 alambre: gravel/mixto, versión rígida sin tubeless.
+7327b760 tire_tubeless_ready=no
+69cee10e tire_tubeless_ready=no
+a9da66aa tire_tubeless_ready=no
+261c02a3 tire_use=BMX; tire_bead_type=Alambre; tire_tubeless_ready=no
+a67e22f7 tire_use=Urbano / híbrido; tire_bead_type=Alambre; tire_tubeless_ready=no
+e88f8197 tire_use=Urbano / híbrido; tire_bead_type=Alambre; tire_tubeless_ready=no
+b000415f tire_use=MTB; tire_bead_type=Alambre; tire_tubeless_ready=no
+cf44c717 tire_use=MTB; tire_bead_type=Alambre; tire_tubeless_ready=no
+249c65a9 tire_use=Urbano / híbrido; tire_bead_type=Alambre; tire_tubeless_ready=no
+a5ae0f0c tire_use=Niño; tire_bead_type=Alambre; tire_tubeless_ready=no
+2f9135e9 tire_use=Urbano / híbrido; tire_bead_type=Alambre; tire_tubeless_ready=no
+02c0d6df tire_use=MTB; tire_bead_type=Alambre; tire_tubeless_ready=no
+8f7e45a5 tire_use=MTB; tire_bead_type=Alambre; tire_tubeless_ready=no
+575ce307 tire_use=Urbano / híbrido; tire_bead_type=Alambre; tire_tubeless_ready=no
+da4345bc tire_use=BMX; tire_tubeless_ready=no
+33ea7f25 tire_use=MTB; tire_bead_type=Alambre; tire_tubeless_ready=no
+be610400 tire_use=MTB; tire_tubeless_ready=no
+1c5f31a3 tire_use=MTB; tire_tubeless_ready=no
+1a7115c3 tire_use=MTB; tire_bead_type=Alambre; tire_tubeless_ready=no
+2a4f31ef tire_use=MTB; tire_bead_type=Alambre; tire_tubeless_ready=no
+6a9b24fe tire_use=MTB; tire_bead_type=Alambre; tire_tubeless_ready=no
+e0a96a73 tire_use=MTB; tire_bead_type=Alambre; tire_tubeless_ready=no
+ffbb6ca6 tire_bead_type=Alambre; tire_tubeless_ready=no
+44f3aacd tire_use=Urbano / híbrido; tire_tubeless_ready=no
+b4717e6a tire_use=Ruta; tire_bead_type=Alambre; tire_tubeless_ready=no
+bbaf4107 tire_use=Ruta; tire_bead_type=Alambre; tire_tubeless_ready=no
+565799bc tire_use=Ruta; tire_bead_type=Alambre; tire_tubeless_ready=no
+987f2242 tire_use=Ruta; tire_bead_type=Alambre; tire_tubeless_ready=no
+60b12c04 tire_use=Urbano / híbrido; tire_bead_type=Alambre; tire_tubeless_ready=no
+888ce9dc tire_bead_type=Alambre; tire_tubeless_ready=no
+165ba027 tire_tubeless_ready=no
+02d0d992 tire_bead_type=Alambre; tire_tubeless_ready=no
+f43e35d3 tire_tubeless_ready=no
+2681e863 tire_tubeless_ready=no
+61174dc4 tire_use=MTB; tire_bead_type=Alambre; tire_tubeless_ready=no
+953ec0a4 tire_use=MTB; tire_bead_type=Alambre; tire_tubeless_ready=no
+07204139 tire_use=BMX; tire_bead_type=Alambre; tire_tubeless_ready=no
+16eaec3d tire_bead_type=Alambre; tire_tubeless_ready=no
+e8413b00 tire_bead_type=Alambre; tire_tubeless_ready=no
+fc2b9078 tire_use=Urbano / híbrido; tire_bead_type=Alambre; tire_tubeless_ready=no
+cd8a9016 tire_bead_type=Alambre; tire_tubeless_ready=no
+1460e86c tire_use=MTB; tire_bead_type=Alambre; tire_tubeless_ready=no
+af3b5f40 tire_bead_type=Alambre; tire_tubeless_ready=no
+12df22c5 tire_use=MTB; tire_bead_type=Alambre; tire_tubeless_ready=no
+93bc1fa4 tire_use=MTB; tire_bead_type=Alambre; tire_tubeless_ready=no
+8187aae6 tire_use=Urbano / híbrido; tire_bead_type=Alambre; tire_tubeless_ready=no
+bbc06dfd tire_bead_type=Alambre; tire_tubeless_ready=no
+2f8b0311 tire_use=BMX; tire_bead_type=Alambre; tire_tubeless_ready=no
+11d40720 tire_use=BMX; tire_bead_type=Alambre; tire_tubeless_ready=no
+f8a4d0a7 bead_seat_diameter_mm=507; tire_width_mm=54; tire_bead_type=Alambre; tire_tubeless_ready=no
+3f6335dd tire_bead_type=Alambre; tire_tubeless_ready=no
+85d7f228 tire_bead_type=Alambre; tire_tubeless_ready=no
+82189cb4 tire_bead_type=Alambre; tire_tubeless_ready=no
+84afe266 tire_bead_type=Alambre; tire_tubeless_ready=no
+37b7feb7 tire_bead_type=Alambre; tire_tubeless_ready=no
+d61519e9 tire_use=MTB; tire_bead_type=Alambre; tire_tubeless_ready=no
+525d70ed tire_use=MTB; tire_bead_type=Alambre; tire_tubeless_ready=no
+b934dd98 bead_seat_diameter_mm=584; tire_width_mm=53.3; tire_use=MTB; tire_bead_type=Alambre; tire_tubeless_ready=no
+a27b6534 bead_seat_diameter_mm=559; tire_width_mm=38.1; tire_use=Urbano / híbrido; tire_bead_type=Alambre; tire_tubeless_ready=no
+aa04c5e3 tire_use=BMX; tire_bead_type=Alambre; tire_tubeless_ready=no
+2d3607da tire_bead_type=Alambre; tire_tubeless_ready=no
+ab6521c3 tire_use=MTB; tire_bead_type=Alambre; tire_tubeless_ready=no
+382c6a16 tire_use=MTB; tire_bead_type=Alambre; tire_tubeless_ready=no
+3a491ff0 tire_use=Ruta
+1eb2d9cd tire_use=MTB; tire_bead_type=Alambre; tire_tubeless_ready=no
+baf80c1b tire_use=MTB; tire_bead_type=Alambre; tire_tubeless_ready=no
+27816b43 tire_use=MTB; tire_bead_type=Alambre; tire_tubeless_ready=no
+03391f9a tire_use=Ruta; tire_bead_type=Alambre; tire_tubeless_ready=no
+a0c58f42 tire_use=MTB
+d734c30f tire_use=MTB
+607a3a25 bead_seat_diameter_mm=584; tire_width_mm=57.1; tire_use=MTB
+680132a2 tire_use=Urbano / híbrido # 700x38 es medida de paseo/gravel, no de ruta.
+9c3f7928 tire_use=MTB; tire_tubeless_ready=no
+4b684a5b tire_bead_type=Alambre; tire_tubeless_ready=no
+5cfcfb8e tire_use=MTB; tire_bead_type=Alambre; tire_tubeless_ready=no
+0930dbdb tire_bead_type=Alambre; tire_tubeless_ready=no
+449a4c19 tire_bead_type=Alambre; tire_tubeless_ready=no
+5c1637ec tire_tubeless_ready=no
+051eb363 tire_tubeless_ready=no
+803855f4 tire_use=Urbano / híbrido; tire_bead_type=Alambre; tire_tubeless_ready=no # 700x33 de dibujo mixto: urbano, no de ruta.
+c11a3a4d tire_use=BMX; tire_bead_type=Alambre; tire_tubeless_ready=no
+9eaf3153 tire_bead_type=Alambre; tire_tubeless_ready=no
+5bc8fde8 tire_bead_type=Alambre; tire_tubeless_ready=no
+ee4210e3 tire_use=MTB; tire_bead_type=Alambre; tire_tubeless_ready=no
+f1988cde tire_use=Urbano / híbrido; tire_bead_type=Alambre; tire_tubeless_ready=no # «Pan» es dibujo liso de ciudad.
+e2084fb6 tire_use=MTB; tire_bead_type=Alambre; tire_tubeless_ready=no
+e15caf53 tire_use=MTB; tire_bead_type=Alambre; tire_tubeless_ready=no
+ecb4f5d2 tire_use=BMX; tire_bead_type=Alambre; tire_tubeless_ready=no
+13c7b197 tire_use=Urbano / híbrido; tire_bead_type=Alambre; tire_tubeless_ready=no
+500a9b90 tire_use=Urbano / híbrido; tire_bead_type=Alambre; tire_tubeless_ready=no
+8cda31cb bead_seat_diameter_mm=559; tire_width_mm=53.3; tire_use=MTB; tire_bead_type=Alambre; tire_tubeless_ready=no
+10531389 tire_use=Urbano / híbrido; tire_bead_type=Alambre; tire_tubeless_ready=no # «Pan» es dibujo liso de ciudad.
+451b3894 tire_use=Urbano / híbrido; tire_bead_type=Alambre; tire_tubeless_ready=no
+d1853891 tire_use=MTB; tire_bead_type=Alambre; tire_tubeless_ready=no
+cf8930ed bead_seat_diameter_mm=622; tire_width_mm=38; tire_use=Urbano / híbrido # Gravel 700x38: uso mixto.
+ec5cf97f bead_seat_diameter_mm=622; tire_width_mm=32; tire_use=Urbano / híbrido # «700x320» es 700x32.
+6c174060 bead_seat_diameter_mm=622; tire_width_mm=23; tire_use=Ruta
+ade05924 bead_seat_diameter_mm=203; tire_width_mm=54; tire_use=Niño; tire_bead_type=Alambre; tire_tubeless_ready=no # 12x2.125 es el aro 12 1/2 (ISO 203) de bicicleta infantil.
+802afbdf tire_bead_type=Sólido / sin aire; tire_tubeless_ready=no
+f268cf37 tire_use=MTB; tire_bead_type=Alambre; tire_tubeless_ready=no

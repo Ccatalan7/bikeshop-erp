@@ -1,0 +1,8 @@
+@reason Color de la funda escrito en el nombre.
+65d6f881 color=Negro
+19dc0ca8 color=Negro
+2c7c5b2e color=Gris
+2f6da451 color=Negro
+07a61557 color=Negro
+a1014296 color=Negro
+8d56555f color=Negro

@@ -1,0 +1,9 @@
+@reason Caramagiola de plástico para portabotella de aro; volumen y color por el nombre.
+* material=PE / plástico; bottle_retention_system=Portabotella convencional (de aro)
+dc5d8293 volume_ml=620; color=Gris
+34bbd6e0 volume_ml=710; color=Negro
+b2a9baf2 volume_ml=750; color=Azul
+63cbe360 volume_ml=750; color=Gris
+181403cf volume_ml=750; color=Blanco y transparente
+057e49ec color=Gris
+212e4c8a color=Negro

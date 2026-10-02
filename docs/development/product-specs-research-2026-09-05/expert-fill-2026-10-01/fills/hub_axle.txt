@@ -1,0 +1,13 @@
+@reason Eje de maza: «completo» trae conos y contratuercas; «perforado» o «para bloqueo» es hueco (cierre rápido); 3/8" sin perforar es macizo.
+5908b918 cones_and_locknuts_included=no
+c4f264b3 axle_hollow=no
+c0c287da axle_hollow=no
+9af11d28 axle_hollow=no
+46064b1f axle_hollow=no
+872d78d2 axle_hollow=no
+bd83fe2e axle_hollow=no
+97f6429a axle_hollow=no
+2b817c93 axle_hollow=no
+7d128e4b axle_hollow=no
+eddd0aa5 axle_hollow=no
+77691c88 axle_hollow=no

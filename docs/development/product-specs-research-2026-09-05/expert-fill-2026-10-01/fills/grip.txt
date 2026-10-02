@@ -1,0 +1,26 @@
+@reason Puño de manubrio plano (22,2 mm), se vende por par; fijación, largo y color por el nombre.
+* grip_bar_nominal_diameter_mm=22.2; sold_as=Par; intended_rider=Adulto
+6ec21b3d grip_attachment=Deslizante; grip_end_plugs_included=sí; color=Negro
+4766f2ca grip_attachment=Lock-on (una abrazadera); color=Negro
+08be4dea color=Negro
+1b46fc72 color=Rojo
+ae8c779f grip_attachment=Deslizante; color=Negro
+cd639263 color=Negro y rosado
+fcbca732 -intended_rider; grip_attachment=Deslizante; color=Amarillo y negro
+0cbd8687 grip_attachment=Lock-on (una abrazadera); color=Negro
+365acbd6 -intended_rider; grip_attachment=Deslizante; color=Negro y gris
+a0ad4a12 grip_attachment=Deslizante
+e94bf2a4 color=Morado
+1a73d214 color=Negro y plateado
+5bad1ccb grip_attachment=Lock-on (una abrazadera) # ODI ergonómico de gel: lock-on de una abrazadera.
+2e990255 grip_attachment=Lock-on (doble abrazadera); color=Morado # ODI: puño lock-on de dos abrazaderas.
+dbd9cb45 grip_attachment=Lock-on (doble abrazadera); color=Negro # ODI: puño lock-on de dos abrazaderas.
+299d38f4 color=Negro
+6ed421cb color=Negro y turquesa
+b4855de5 color=Negro
+2dbcc6b5 color=Negro
+e1a9dcd0 color=Negro
+d830ac57 color=Negro y verde
+d25ea663 color=Negro y naranjo
+9fd6157d grip_attachment=Deslizante; grip_length_mm=130 # SRAM Stationary Racing: puño deslizante de goma, 130 mm.
+cab779c2 grip_attachment=Deslizante # VP ER06 City: puño de paseo deslizante.

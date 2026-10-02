@@ -1,0 +1,11 @@
+@reason Collarín de asiento de aluminio; tipo y color por el nombre.
+9bf8cbe9 clamp_kind=Collarín con cierre rápido; color=Negro
+d40fb9c0 color=Negro
+09b8c989 material=Aluminio
+932027d5 clamp_kind=Collarín con perno; material=Aluminio; color=Negro
+ff9953dc material=Aluminio
+6eb87c44 clamp_kind=Collarín con perno; color=Negro
+3a33e52f clamp_kind=Collarín con perno; color=Negro
+9d625f4a clamp_kind=Collarín con perno; color=Negro
+580aedd4 clamp_kind=Collarín con perno; color=Negro mate
+2dc3293f clamp_kind=Collarín con perno; color=Negro mate

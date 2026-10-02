@@ -1,0 +1,46 @@
+@reason Llanta de bicicleta con gancho en el borde (hooked), como todas las de aluminio y acero de este rango.
+* rim_bead_profile=Con gancho (hooked)
+@reason Rodado del nombre a diámetro ISO (20=406, 24=507, 26=559, 27.5=584, 28/29/700c=622); material, pared, ojetillos y pista de freno por el nombre y la línea del fabricante.
+f61ba2a0 bead_seat_diameter_mm=507; rim_material=Aluminio; rim_wall_type=Pared simple; brake_track=sí
+5e6f5566 bead_seat_diameter_mm=559
+0934d089 bead_seat_diameter_mm=559; rim_wall_type=Pared simple; brake_track=sí
+ffb83f0b bead_seat_diameter_mm=559; rim_material=Aluminio; rim_wall_type=Pared simple; brake_track=sí
+36a6c8f4 bead_seat_diameter_mm=559; rim_material=Acero; rim_wall_type=Pared simple; brake_track=sí # «C.P.» es acero cromado; llanta reforzada de pared simple para V-brake.
+327b5ea4 bead_seat_diameter_mm=584
+2348290f bead_seat_diameter_mm=584
+4a81b187 bead_seat_diameter_mm=584; rim_internal_width_mm=21; rim_material=Aluminio; rim_wall_type=Doble pared
+becfe56b bead_seat_diameter_mm=622
+973c0173 rim_material=Aluminio; rim_wall_type=Doble pared
+8d30232b bead_seat_diameter_mm=622
+1e51fa93 bead_seat_diameter_mm=622
+0905b385 bead_seat_diameter_mm=584; brake_track=no
+eb270b5f bead_seat_diameter_mm=622; brake_track=no
+e12ec06b brake_track=sí
+9fcf9afc bead_seat_diameter_mm=406
+bffd15dd bead_seat_diameter_mm=559; rim_material=Aluminio; brake_track=sí
+d0c28735 bead_seat_diameter_mm=622; rim_eyelet_type=Ojetillo simple
+28a474ea bead_seat_diameter_mm=559
+ee7bfdf9 bead_seat_diameter_mm=559; brake_track=sí
+5f7e115e bead_seat_diameter_mm=622; brake_track=sí
+fbc46625 bead_seat_diameter_mm=622; brake_track=sí
+50c35ac2 bead_seat_diameter_mm=622; rim_material=Aluminio; rim_wall_type=Doble pared; rim_eyelet_type=Ojetillo simple
+2c7752aa rim_material=Aluminio; rim_wall_type=Doble pared; brake_track=no
+a0a978df bead_seat_diameter_mm=622; rim_wall_type=Doble pared; brake_track=no
+462ab03c bead_seat_diameter_mm=406; rim_material=Aluminio; rim_wall_type=Doble pared; rim_eyelet_type=Ojetillo simple
+5bcfd2b5 bead_seat_diameter_mm=559; rim_material=Aluminio
+e1dda70a rim_material=Aluminio; rim_wall_type=Doble pared
+b4489b99 bead_seat_diameter_mm=559; rim_material=Aluminio; rim_wall_type=Doble pared; brake_track=sí
+a4128189 bead_seat_diameter_mm=559; rim_material=Aluminio; rim_wall_type=Doble pared; brake_track=sí
+61aa573c rim_material=Aluminio; rim_wall_type=Doble pared
+5a587ba7 bead_seat_diameter_mm=584; rim_material=Aluminio; rim_wall_type=Doble pared
+556e2fbd bead_seat_diameter_mm=584; rim_material=Aluminio; rim_wall_type=Doble pared; rim_eyelet_type=Ojetillo simple; brake_track=no
+73d639b5 bead_seat_diameter_mm=622; rim_material=Aluminio; rim_eyelet_type=Ojetillo simple
+8f289f05 bead_seat_diameter_mm=622; rim_material=Aluminio
+502c0c6a bead_seat_diameter_mm=622; rim_material=Aluminio
+2e35645b bead_seat_diameter_mm=622; rim_material=Aluminio; rim_wall_type=Doble pared; brake_track=sí
+df1bbb6b rim_material=Aluminio; rim_wall_type=Doble pared; rim_eyelet_type=Ojetillo simple; brake_track=no
+2c2b1d24 bead_seat_diameter_mm=584; rim_material=Aluminio; rim_wall_type=Doble pared
+e3e9663b rim_material=Aluminio; rim_wall_type=Doble pared; rim_eyelet_type=Ojetillo simple
+cd71aafd rim_material=Aluminio; rim_wall_type=Doble pared; rim_eyelet_type=Ojetillo simple; brake_track=no
+af32de00 bead_seat_diameter_mm=559; rim_material=Aluminio; rim_wall_type=Doble pared
+c25cf5ac bead_seat_diameter_mm=559

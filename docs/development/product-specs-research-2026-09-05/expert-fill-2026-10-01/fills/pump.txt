@@ -1,0 +1,14 @@
+@reason Bombín: válvulas, manómetro, material y presión máxima escritos en el nombre; los de pie traen manguera.
+9293aa3a hose=sí; pump_pressure_specifications=[{"quantity_kind": "Máximo de bombeo declarado", "value": 160, "unit": "psi", "configuration": "Bomba de pie Giyo (máx. 160 psi)"}]
+2cab8899 pump_kind=De mano / mini; valve_heads_supported=Presta (francesa)|Schrader (americana / auto); pump_pressure_specifications=[{"quantity_kind": "Máximo de bombeo declarado", "value": 120, "unit": "psi", "configuration": "Bombín Beto CRH-030PG (120 psi)"}]
+46d57db5 pump_kind=De mano / mini
+cf5f9783 pump_kind=De mano / mini; valve_heads_supported=Presta (francesa)|Schrader (americana / auto); pump_pressure_specifications=[{"quantity_kind": "Máximo de bombeo declarado", "value": 80, "unit": "psi", "configuration": "Bombín Beto de resina (80 psi)"}]
+82b88c3e hose=sí
+505687df hose=sí
+c99ba126 hose=sí
+0fafef9e hose=sí; gauge=sí; valve_heads_supported=Presta (francesa)|Schrader (americana / auto); pump_pressure_specifications=[{"quantity_kind": "Máximo de bombeo declarado", "value": 160, "unit": "psi", "configuration": "Giyo GF-43P (máx. 160 psi)"}]
+3cb7a681 hose=sí; valve_heads_supported=Presta (francesa)|Schrader (americana / auto); pump_pressure_specifications=[{"quantity_kind": "Máximo de bombeo declarado", "value": 160, "unit": "psi", "configuration": "West Biking de piso (máx. 160 psi)"}]
+63d1ad1a gauge=sí; valve_heads_supported=Schrader (americana / auto); pump_pressure_specifications=[{"quantity_kind": "Máximo de bombeo declarado", "value": 300, "unit": "psi", "configuration": "Bomba de suspensión ThinkRider (300 psi)"}] # Bomba de suspensión: manómetro y cabezal Schrader, 300 psi.
+1b37ae36 hose=sí; valve_heads_supported=Presta (francesa)|Schrader (americana / auto); pump_pressure_specifications=[{"quantity_kind": "Máximo de bombeo declarado", "value": 160, "unit": "psi", "configuration": "Bombín de pie Beto (160 psi)"}]
+157fb59e valve_heads_supported=Presta (francesa)|Schrader (americana / auto)
+48d8a715 valve_heads_supported=Presta (francesa)|Schrader (americana / auto)

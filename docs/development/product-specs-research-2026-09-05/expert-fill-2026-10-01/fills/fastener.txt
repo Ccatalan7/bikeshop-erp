@@ -1,0 +1,20 @@
+@reason Perno de bicicleta de acero salvo que el nombre diga otra cosa; medida y uso del nombre.
+835f95ec material=Aluminio; thread=M8; length_mm=2 # Golilla espaciadora de 2 mm para perno M8.
+08daacb6 material=Aluminio; thread=M8; length_mm=3 # Golilla espaciadora de 3 mm para perno M8.
+84bb27ff material=Acero; declared_purpose=Perno de biela (cuadrado); thread=M8; head_drive=Hexagonal interior (Allen)
+38457846 material=Acero; thread=M8; head_drive=Hexagonal interior (Allen)
+1dbac5b2 material=Acero; thread=M8; head_drive=Hexagonal interior (Allen)
+e748a185 material=Acero; thread=M8; head_drive=Hexagonal interior (Allen)
+3341b136 material=Acero; declared_purpose=Perno de biela (cuadrado); head_drive=Hexagonal interior (Allen)
+9a44adea material=Aluminio; declared_purpose=Otro # Tapa de ajuste de volante integrado: aluminio.
+5f3514b7 material=Aluminio; declared_purpose=Otro
+c01c068d material=Aluminio; declared_purpose=Otro
+4d2d6a20 material=Aluminio; declared_purpose=Otro
+daf56433 material=Aluminio; head_drive=Hexagonal interior (Allen) # Perno de plato Hassns: aluminio, cabeza Allen.
+2ccb3723 material=Aluminio; head_drive=Hexagonal interior (Allen)
+783ca0c1 material=Acero; thread=M5
+27ebaf79 material=Acero; head_drive=Torx
+10cdce92 material=Acero; head_drive=Torx
+2a3837dc material=Acero; thread=M5; head_drive=Hexagonal interior (Allen)
+760e663a material=Acero; declared_purpose=Otro
+c1355a3c material=Acero; head_drive=Hexagonal interior (Allen)

@@ -1,0 +1,6 @@
+@reason Missing Link reutilizable sin sentido de montaje; velocidades y ancho por el nombre.
+ca05aac0 chain_speeds=10; chain_link_reusable=sí; chain_connector_directional=no; chain_width_family=11/128
+af324fe9 chain_speeds=11; chain_link_reusable=sí; chain_connector_directional=no; chain_width_family=11/128
+447c0e53 chain_speeds=12; chain_link_reusable=sí; chain_connector_directional=no; chain_width_family=11/128
+38d18ebf chain_speeds=6|7|8; chain_link_reusable=sí; chain_connector_directional=no; chain_width_family=3/32
+46ff17d8 chain_speeds=9; chain_link_reusable=sí; chain_connector_directional=no; chain_width_family=11/128

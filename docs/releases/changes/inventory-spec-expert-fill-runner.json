@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "inventory",
+  "id": "inventory-spec-expert-fill-runner",
+  "scope": "internal",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "scripts/inventory/fill_expert_values.py",
+      "sha256": "a2c779026cc0b4a2c702fca8d29db18ea14b6a6b05536a2c16f25b3a7e6aa5dd"
+    }
+  ]
+}

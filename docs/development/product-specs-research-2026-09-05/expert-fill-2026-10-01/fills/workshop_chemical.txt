@@ -1,0 +1,29 @@
+@reason Lubricante de cadena: se aplica en la cadena y nunca en las superficies de frenado.
+fae34059 declared_applications=Cadena; not_for=Superficies de frenado; container=Gotero
+b3b2d978 declared_applications=Cadena; not_for=Superficies de frenado; container=Gotero
+fb79a0aa declared_applications=Cadena; not_for=Superficies de frenado; container=Gotero
+51adc979 declared_applications=Cadena; not_for=Superficies de frenado; container=Gotero
+27b65323 declared_applications=Cadena; not_for=Superficies de frenado
+a84f83bb declared_applications=Cadena; not_for=Superficies de frenado; container=Aerosol
+79c676a9 declared_applications=Cadena; not_for=Superficies de frenado
+937dae93 chemical_kind=Lubricante de cadena (seco); declared_applications=Cadena; not_for=Superficies de frenado; container=Aerosol # Weldtite TF2 con teflón en aerosol: lubricante seco.
+4f1e5112 declared_applications=Cadena; not_for=Superficies de frenado
+c32283c0 not_for=Superficies de frenado
+011a008d chemical_kind=Lubricante de cadena (húmedo); declared_applications=Cadena; not_for=Superficies de frenado # HidroLub: lubricante húmedo para invierno y barro.
+548e7136 not_for=Superficies de frenado
+7cf02c8a declared_applications=Cadena; not_for=Superficies de frenado
+7bf20e2d declared_applications=Cadena; not_for=Superficies de frenado; container=Botella
+69d35e12 declared_applications=Cadena; not_for=Superficies de frenado; container=Gotero
+d89b0fc3 declared_applications=Cadena; not_for=Superficies de frenado
+@reason Envase y uso por el nombre del producto.
+75a9afcf volume_ml=236; container=Botella; declared_applications=Cuadro # Pedro's Bike Lust 8 oz (236 ml): abrillantador para el cuadro.
+ccdb85f9 chemical_kind=Aceite multiuso
+f98796c1 volume_ml=1000; container=Botella; declared_applications=Cadena; biodegradable_claim=sí
+6a2cd454 volume_ml=1000; container=Botella; declared_applications=Cadena
+6d0a2619 container=Aerosol; declared_applications=Cadena
+ba167d7b container=Tarro; declared_applications=Rodamientos
+bfc1155a container=Tarro; declared_applications=Rodamientos
+e17308a5 declared_applications=Cuadro
+918bd6f2 container=Aerosol; declared_applications=Cadena
+fcada8bc chemical_kind=Limpiador; declared_applications=Cadena # CleanLub de RaceLub: limpiador de cadena.
+d06ee726 declared_applications=Cuadro; not_for=Superficies de frenado
