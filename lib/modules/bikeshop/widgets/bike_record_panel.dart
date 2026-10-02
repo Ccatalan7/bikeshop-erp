@@ -396,6 +396,9 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
               context,
               width: _identityWidth - 48,
               height: (_identityWidth - 48) * 0.62,
+              markers: _tab == _RecordTab.technical
+                  ? _specMarkers(_specGroups())
+                  : const [],
             ),
             const SizedBox(height: 20),
             _buildTitle(context, narrow: false),
@@ -829,6 +832,9 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
                   context,
                   width: roomy ? 236 : 176,
                   height: roomy ? 150 : 112,
+                  markers: _tab == _RecordTab.technical
+                      ? _specMarkers(_specGroups())
+                      : const [],
                 ),
                 const SizedBox(width: 28),
                 Expanded(
@@ -2088,15 +2094,21 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
         confirmed: fact.confirmed,
       );
 
+  List<BikeSilhouetteMarker> _specMarkers(List<_SpecGroup> groups) => [
+        for (final group in groups)
+          BikeSilhouetteMarker(anchor: group.anchor, label: '${group.number}'),
+      ];
+
   Widget _buildTechnicalTab(BuildContext context, {required double width}) {
     final theme = Theme.of(context);
     final roles = VinabikeThemeRoles.of(context);
     final groups = _specGroups();
-    final markers = [
-      for (final group in groups)
-        BikeSilhouetteMarker(anchor: group.anchor, label: '${group.number}'),
-    ];
-    final wide = width >= 900;
+    // Con ancho, la ficha es una hoja: cada sistema una franja a lo ancho.
+    // El dibujo con los números es el de la bici, arriba o a la izquierda
+    // (dueño, 2026-10-02: el dibujo repetido y las tarjetas disparejas se
+    // veían mal).
+    if (width >= 680) return _buildSpecSheet(context, groups);
+    final markers = _specMarkers(groups);
     final confirmedAt = widget.snapshot.lastConfirmedAt;
 
     final mapCard = DecoratedBox(
@@ -2171,25 +2183,291 @@ class _BikeRecordPanelState extends State<BikeRecordPanel> {
       },
     );
 
-    if (!wide) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 520),
-            child: mapCard,
-          ),
-          const SizedBox(height: 16),
-          cards,
-        ],
-      );
-    }
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SizedBox(width: 360, child: mapCard),
-        const SizedBox(width: 24),
-        Expanded(child: cards),
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: mapCard,
+        ),
+        const SizedBox(height: 16),
+        cards,
+      ],
+    );
+  }
+
+  /// La ficha técnica en escritorio: una hoja continua, un sistema por
+  /// franja, con sus datos repartidos en columnas.
+  Widget _buildSpecSheet(BuildContext context, List<_SpecGroup> groups) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final confirmedAt = widget.snapshot.lastConfirmedAt;
+    final complete =
+        groups.where((group) => group.knownCount >= group.expectedCount).length;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Icon(
+              confirmedAt != null
+                  ? Icons.verified_outlined
+                  : Icons.info_outline,
+              size: 20,
+              color: confirmedAt != null
+                  ? roles.success.accent
+                  : roles.faintForeground,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text.rich(
+                TextSpan(children: [
+                  TextSpan(
+                    text: confirmedAt != null
+                        ? 'Confirmada en el taller el ${bikeFullDate(confirmedAt)}'
+                        : 'Todavía nadie la confirma en el taller',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  TextSpan(
+                    text:
+                        '  ·  $complete de ${groups.length} sistemas completos',
+                    style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+                  ),
+                ]),
+                style: const TextStyle(fontSize: 14.5),
+              ),
+            ),
+            const SizedBox(width: 12),
+            VbButton(
+              label: 'Editar ficha',
+              icon: Icons.edit_outlined,
+              variant: VbButtonVariant.secondary,
+              density: VbDensity.comfortable,
+              onPressed: widget.onEdit,
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: theme.colorScheme.outlineVariant),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var index = 0; index < groups.length; index++)
+                Container(
+                  decoration: BoxDecoration(
+                    border: index == 0
+                        ? null
+                        : Border(top: BorderSide(color: roles.hairline)),
+                  ),
+                  child: _buildSpecSection(context, groups[index]),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSpecSection(BuildContext context, _SpecGroup group) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final known = group.knownCount;
+    final (String status, Color statusBg, Color statusFg) = known == 0
+        ? (
+            'Sin datos',
+            theme.colorScheme.surfaceContainerHigh,
+            theme.colorScheme.onSurfaceVariant
+          )
+        : known < group.expectedCount
+            ? (
+                'Faltan datos',
+                roles.warning.container,
+                roles.warning.onContainer
+              )
+            : ('Completo', roles.success.container, roles.success.onContainer);
+    final title = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 26,
+              height: 26,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary,
+                shape: BoxShape.circle,
+              ),
+              child: Text(
+                '${group.number}',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: theme.colorScheme.onPrimary,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Flexible(
+              child: Semantics(
+                header: true,
+                child: Text(
+                  group.title,
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.only(left: 38),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+            decoration: BoxDecoration(
+              color: statusBg,
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              status,
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: statusFg,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+    final body = LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = (constraints.maxWidth / 230).floor().clamp(1, 4);
+        final cellWidth = (constraints.maxWidth - 24 * (columns - 1)) / columns;
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (group.facts.isEmpty)
+              Text(
+                'Sin datos todavía. El próximo servicio los pregunta.',
+                style: TextStyle(fontSize: 14, color: roles.faintForeground),
+              )
+            else
+              Wrap(
+                spacing: 24,
+                runSpacing: 16,
+                children: [
+                  for (final fact in group.facts)
+                    SizedBox(
+                      width: cellWidth,
+                      child: _buildSpecCell(context, fact),
+                    ),
+                ],
+              ),
+            if (group.facts.isNotEmpty && group.missingText != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 14),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 1),
+                      child: Icon(Icons.info_outline,
+                          size: 16, color: roles.faintForeground),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        group.missingText!,
+                        style: TextStyle(
+                            fontSize: 13, color: roles.faintForeground),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        );
+      },
+    );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < 760) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [title, const SizedBox(height: 14), body],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(width: 250, child: title),
+              const SizedBox(width: 24),
+              Expanded(child: body),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  /// Un dato de la hoja: nombre, valor y, sólo si dice algo que el visto no
+  /// dice, de dónde salió.
+  Widget _buildSpecCell(BuildContext context, _BikeRecordTechnicalFact fact) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final origin =
+        bikeFactOriginCaption(fact.source, confirmed: fact.confirmed);
+    final redundant = fact.confirmed && origin == 'Anotado en el taller';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          fact.label,
+          style: TextStyle(fontSize: 13, color: roles.faintForeground),
+        ),
+        const SizedBox(height: 3),
+        Row(
+          children: [
+            Flexible(
+              child: Text(
+                fact.value,
+                style: const TextStyle(
+                  fontSize: 15.5,
+                  fontWeight: FontWeight.w600,
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
+            if (fact.confirmed) ...[
+              const SizedBox(width: 6),
+              Tooltip(
+                message: 'Confirmado en el taller',
+                child: Icon(Icons.check_circle,
+                    size: 16, color: roles.success.accent),
+              ),
+            ],
+          ],
+        ),
+        if (origin != null && !redundant)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              origin,
+              style: TextStyle(
+                  fontSize: 12.5, color: theme.colorScheme.onSurfaceVariant),
+            ),
+          ),
       ],
     );
   }

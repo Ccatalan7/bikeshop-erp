@@ -335,6 +335,15 @@ void main() {
         reason: 'the system rail reaches the right edge');
     expect(tester.takeException(), isNull);
 
+    // The technical tab is one sheet; the numbered bike is the docked one.
+    await tester.tap(find.text('Ficha técnica'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('sistemas completos'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp(r'^Dibujo de')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await tester.tap(find.textContaining('Historial'));
+    await tester.pumpAndSettle();
+
     // A narrower host keeps the header above the history.
     _setSize(tester, const Size(1100, 900));
     await tester.pumpAndSettle();
