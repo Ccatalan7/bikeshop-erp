@@ -83,6 +83,8 @@ class VbSearchableSelect<T> extends StatefulWidget {
     this.useTouchLayout,
     this.density,
     this.showSearch = true,
+    this.onCreate,
+    this.createLabel,
   });
 
   final T? value;
@@ -124,6 +126,15 @@ class VbSearchableSelect<T> extends StatefulWidget {
   /// pick from the list.
   final bool showSearch;
 
+  /// Offers «Agregar "…"» when the search text names nothing in the list (a
+  /// bike brand or model the catalog does not have yet, 2026-10-02). It
+  /// receives the typed text, trimmed; the host creates the value and then
+  /// selects it. Null keeps the list closed to new values.
+  final ValueChanged<String>? onCreate;
+
+  /// Wording of that row. By default «Agregar "…"».
+  final String Function(String query)? createLabel;
+
   /// Height of one result row on desktop.
   static const double optionHeight = 34;
 
@@ -156,7 +167,11 @@ class _VbSearchableSelectState<T> extends State<VbSearchableSelect<T>> {
   bool get _comfortable => widget.density == VbDensity.comfortable;
 
   Future<void> _open_() async {
-    if (!_enabled || widget.options.isEmpty) return;
+    // Un catálogo vacío se abre igual si se puede agregar: es la única forma
+    // de escribir su primera opción (revisión de Codex, 2026-10-02).
+    if (!_enabled || (widget.options.isEmpty && widget.onCreate == null)) {
+      return;
+    }
     final useSheet = _isTouchHost(context);
     final pending = useSheet ? _showSheet() : _showPopover();
     setState(() => _open = true);
@@ -165,8 +180,18 @@ class _VbSearchableSelectState<T> extends State<VbSearchableSelect<T>> {
     setState(() => _open = false);
     // A cancelled popover and a deliberate empty choice must stay
     // distinguishable, so the answer travels wrapped.
-    if (result != null) widget.onChanged?.call(result.value);
+    if (result == null) return;
+    final created = result.created;
+    if (created != null) {
+      widget.onCreate?.call(created);
+    } else {
+      widget.onChanged?.call(result.value);
+    }
   }
+
+  String Function(String)? get _createLabel => widget.onCreate == null
+      ? null
+      : (widget.createLabel ?? (query) => 'Agregar «$query»');
 
   Future<_VbSearchableChoice<T>?> _showPopover() {
     return showVbAnchoredPopover<_VbSearchableChoice<T>>(
@@ -181,6 +206,7 @@ class _VbSearchableSelectState<T> extends State<VbSearchableSelect<T>> {
         clearLabel: widget.clearLabel,
         showSearch: widget.showSearch,
         comfortable: _comfortable,
+        createLabel: _createLabel,
       ),
     );
   }
@@ -202,6 +228,7 @@ class _VbSearchableSelectState<T> extends State<VbSearchableSelect<T>> {
         allowClear: widget.allowClear,
         clearLabel: widget.clearLabel,
         showSearch: widget.showSearch,
+        createLabel: _createLabel,
       ),
     );
   }
@@ -342,9 +369,27 @@ class _VbSearchableSelectState<T> extends State<VbSearchableSelect<T>> {
 }
 
 class _VbSearchableChoice<T> {
-  const _VbSearchableChoice(this.value);
+  const _VbSearchableChoice(this.value, {this.created});
 
   final T? value;
+
+  /// The typed text when the operator chose «Agregar».
+  final String? created;
+}
+
+/// The text «Agregar» would create: what was typed, unless it is empty or
+/// already names an option.
+String? _creatable<T>(
+  List<VbSearchableSelectOption<T>> options,
+  String query,
+) {
+  final text = query.trim();
+  if (text.isEmpty) return null;
+  final lower = text.toLowerCase();
+  if (options.any((option) => option.label.trim().toLowerCase() == lower)) {
+    return null;
+  }
+  return text;
 }
 
 /// Shared filtering so the popover and the sheet cannot drift apart.
@@ -373,6 +418,7 @@ class _VbSearchableMenu<T> extends StatefulWidget {
     this.clearLabel = 'Sin especificar',
     this.showSearch = true,
     this.comfortable = false,
+    this.createLabel,
   });
 
   final List<VbSearchableSelectOption<T>> options;
@@ -383,6 +429,7 @@ class _VbSearchableMenu<T> extends StatefulWidget {
   final String clearLabel;
   final bool showSearch;
   final bool comfortable;
+  final String Function(String query)? createLabel;
 
   @override
   State<_VbSearchableMenu<T>> createState() => _VbSearchableMenuState<T>();
@@ -422,11 +469,15 @@ class _VbSearchableMenuState<T> extends State<_VbSearchableMenu<T>> {
   List<VbSearchableSelectOption<T>> get _results =>
       _filter(widget.options, _query.text);
 
+  String? get _creatableText => widget.createLabel == null
+      ? null
+      : _creatable(widget.options, _query.text);
+
   void _move(int delta) {
-    final results = _results;
-    if (results.isEmpty) return;
+    final count = _results.length + (_creatableText == null ? 0 : 1);
+    if (count == 0) return;
     setState(() {
-      _highlighted = (_highlighted + delta).clamp(0, results.length - 1);
+      _highlighted = (_highlighted + delta).clamp(0, count - 1);
     });
     final target = _highlighted * VbSearchableSelect.optionHeight;
     if (_scroll.hasClients) {
@@ -440,15 +491,23 @@ class _VbSearchableMenuState<T> extends State<_VbSearchableMenu<T>> {
 
   void _commit() {
     final results = _results;
-    if (results.isEmpty) return;
-    Navigator.of(context)
-        .pop(_VbSearchableChoice<T>(results[_highlighted].value));
+    if (_highlighted < results.length) {
+      Navigator.of(context)
+          .pop(_VbSearchableChoice<T>(results[_highlighted].value));
+      return;
+    }
+    final created = _creatableText;
+    if (created != null) {
+      Navigator.of(context).pop(_VbSearchableChoice<T>(null, created: created));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final results = _results;
+    final created = _creatableText;
+    final clearRows = widget.allowClear ? 1 : 0;
 
     return VbPopoverSurface(
       child: ConstrainedBox(
@@ -491,7 +550,7 @@ class _VbSearchableMenuState<T> extends State<_VbSearchableMenu<T>> {
                   ),
                 ),
               Flexible(
-                child: results.isEmpty
+                child: results.isEmpty && created == null
                     ? Padding(
                         padding: const EdgeInsets.all(14),
                         child: Text(
@@ -505,8 +564,24 @@ class _VbSearchableMenuState<T> extends State<_VbSearchableMenu<T>> {
                         controller: _scroll,
                         padding: const EdgeInsets.all(5),
                         shrinkWrap: true,
-                        itemCount: results.length + (widget.allowClear ? 1 : 0),
+                        itemCount: results.length +
+                            clearRows +
+                            (created == null ? 0 : 1),
                         itemBuilder: (context, index) {
+                          if (created != null &&
+                              index == results.length + clearRows) {
+                            return _OptionRow(
+                              label: widget.createLabel!(created),
+                              context: null,
+                              icon: Icons.add,
+                              selected: false,
+                              highlighted: _highlighted == results.length,
+                              comfortable: widget.comfortable,
+                              onTap: () => Navigator.of(context).pop(
+                                  _VbSearchableChoice<T>(null,
+                                      created: created)),
+                            );
+                          }
                           if (widget.allowClear && index == 0) {
                             return _OptionRow(
                               label: widget.clearLabel,
@@ -551,6 +626,7 @@ class _VbSearchableSheet<T> extends StatefulWidget {
     required this.allowClear,
     this.clearLabel = 'Sin especificar',
     this.showSearch = true,
+    this.createLabel,
   });
 
   final String title;
@@ -561,6 +637,7 @@ class _VbSearchableSheet<T> extends StatefulWidget {
   final bool allowClear;
   final String clearLabel;
   final bool showSearch;
+  final String Function(String query)? createLabel;
 
   @override
   State<_VbSearchableSheet<T>> createState() => _VbSearchableSheetState<T>();
@@ -580,6 +657,10 @@ class _VbSearchableSheetState<T> extends State<_VbSearchableSheet<T>> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final results = _filter(widget.options, _query.text);
+    final created = widget.createLabel == null
+        ? null
+        : _creatable(widget.options, _query.text);
+    final clearRows = widget.allowClear ? 1 : 0;
 
     return Padding(
       padding: EdgeInsets.only(
@@ -636,7 +717,7 @@ class _VbSearchableSheetState<T> extends State<_VbSearchableSheet<T>> {
                 ),
               const SizedBox(height: 8),
               Flexible(
-                child: results.isEmpty
+                child: results.isEmpty && created == null
                     ? Padding(
                         padding: const EdgeInsets.all(24),
                         child: Text(
@@ -648,12 +729,25 @@ class _VbSearchableSheetState<T> extends State<_VbSearchableSheet<T>> {
                       )
                     : ListView.separated(
                         shrinkWrap: true,
-                        itemCount: results.length + (widget.allowClear ? 1 : 0),
+                        itemCount: results.length +
+                            clearRows +
+                            (created == null ? 0 : 1),
                         separatorBuilder: (_, __) => Divider(
                           height: 1,
                           color: theme.dividerColor,
                         ),
                         itemBuilder: (context, index) {
+                          if (created != null &&
+                              index == results.length + clearRows) {
+                            return ListTile(
+                              minTileHeight: 48,
+                              leading: const Icon(Icons.add),
+                              title: Text(widget.createLabel!(created)),
+                              onTap: () => Navigator.of(context).pop(
+                                  _VbSearchableChoice<T>(null,
+                                      created: created)),
+                            );
+                          }
                           if (widget.allowClear && index == 0) {
                             return ListTile(
                               minTileHeight: 48,
@@ -698,6 +792,7 @@ class _OptionRow extends StatelessWidget {
     required this.highlighted,
     required this.onTap,
     this.comfortable = false,
+    this.icon,
   });
 
   final String label;
@@ -707,6 +802,9 @@ class _OptionRow extends StatelessWidget {
   final bool highlighted;
   final VoidCallback onTap;
   final bool comfortable;
+
+  /// Leads the row: «Agregar» carries a plus.
+  final IconData? icon;
 
   @override
   Widget build(BuildContext buildContext) {
@@ -732,6 +830,10 @@ class _OptionRow extends StatelessWidget {
         ),
         child: Row(
           children: [
+            if (icon != null) ...[
+              Icon(icon, size: comfortable ? 18 : 15, color: roles.focusRing),
+              const SizedBox(width: 8),
+            ],
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

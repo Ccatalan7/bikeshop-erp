@@ -1711,3 +1711,27 @@ y después las llamadas reales como el actor. Sirve para cualquier migración
 que el llenado necesite y que producción todavía no tiene. Ojo: un `alter
 table` del cuerpo bloquea las escrituras (no las lecturas) de esa tabla
 mientras dura cada tanda; tandas cortas.
+
+## Cuatro trampas de un pgTAP y un read-back de cambios de partes (2026-10-02)
+
+Costaron tres corridas de `just db-test part_change_cockpit` y una revisión de
+Codex antes del despliegue de `20261002170000`.
+
+- **Insertar el tenant pone `request.jwt.claim.sub` con su id.** Un
+  `created_by` posterior falla por la llave foránea a `auth.users`. Se reponen
+  los claims del empleado de prueba después de insertar el tenant, como hace
+  `part_change_rim.sql`.
+- **En `like`, la barra invertida es el escape.** `like '%(\.[0-9]+)?$%'` sobre
+  `pg_get_functiondef` nunca coincide aunque el texto esté. Un read-back que
+  busca un fragmento literal usa `position(... in ...) > 0`.
+- **Una línea `incompatible` o `stale_change` bloquea terminar el trabajo**
+  (`job_completion_blocked`) y revierte todo lo que ese cierre escribía, eventos
+  incluidos. Un caso que espera el bloqueo va en un trabajo propio; si comparte
+  trabajo con casos que escriben, se lleva sus aserciones.
+- **Una pasada sobre el historial no pasa por la puerta.** No puede marcar
+  líneas viejas (la factura pagada las protege), así que escribe la ficha
+  directo; entonces tiene que repetir lo que la puerta revisa —rango y
+  vocabulario de cada dato—, o escribe lo que la puerta habría rechazado. Lo
+  encontró Codex leyendo la migración, no el pgTAP: el read-back final lo
+  habría detectado sólo después de escribir.
+

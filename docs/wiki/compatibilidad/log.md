@@ -29,3 +29,10 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint), **correc
 - 2026-10-02 — ingesta — Bike Matrix: sitio, FAQ, documentación del SDK, eventos,
   estados de la etiqueta, blog, repositorio de ejemplos y dos análisis de
   terceros.
+- 2026-10-02 — mantenimiento — dirección y cockpit en la ficha de la bici
+  (20261002170000): siete claves, filas sin rueda con décimas, la regla del tipo
+  para la zona de mandos y `assessCockpitCompatibility`; datos reales: ninguna
+  dirección del inventario dice su SHIS.
+- 2026-10-02 — mantenimiento — la potencia sale de la relación de la ficha: con
+  laina, una de 31,8 aprieta un manubrio de 25,4, y la regla «tiene que
+  calzar» bloqueaba terminar ese trabajo. La revisa sólo la matriz de la app.

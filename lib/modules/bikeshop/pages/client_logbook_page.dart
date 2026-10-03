@@ -5422,7 +5422,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
           }
         },
         onClose: _closeBikePane,
-        onSpecSaved: () =>
+        onRecordSaved: () =>
             _loadSelectedBikeRecordSnapshot(recordSnapshot.bike.id),
       );
     }

@@ -3,7 +3,7 @@ titulo: Manubrio, potencia, puños y tija
 resumen: diámetros de abrazadera del manubrio, zona de mandos, potencia al tubo, tija y abrazadera del asiento
 fuentes: [sheldon-brown, park-tool]
 k: [K20, K21]
-claves_bici: []
+claves_bici: [handlebarClampMm, controlsBarDiameterMm, seatpostDiameterMm, seatpostKind]
 claves_producto: [handlebar_clamp_mm, bar_clamp_diameter_mm, bar_clamp_configurations, grip_area_diameter_mm, grip_bar_nominal_diameter_mm, grip_inner_diameter_mm, stem_steerer_clamp_diameter_mm, seatpost_diameter_mm, seatpost_min_insertion_mm, seatpost_kind, seatpost_shim_shape, saddle_rail_geometry, dropper_travel_mm, dropper_actuation, dropper_cable_routing]
 revisado: 2026-10-02
 ---
@@ -79,8 +79,28 @@ queda suelta en uno plano [Taller].
   `seatpost_min_insertion_mm`, `seatpost_kind`, `seatpost_shim_shape`,
   `saddle_rail_geometry`, `dropper_travel_mm`, `dropper_actuation`,
   `dropper_cable_routing`.
-- **Bici:** la ficha de la bici no guarda manubrio ni tija; es un hueco de la
-  matriz unificada.
+- **Bici (20261002170000):** `handlebarClampMm` (la abrazadera del manubrio, la
+  misma de la potencia), `controlsBarDiameterMm` (la zona de mandos),
+  `seatpostDiameterMm` y `seatpostKind` (`rigid`, `suspension`, `dropper`).
+  Medidas con décimas (31,8; 22,2; 27,2), guardadas como número sin redondear.
+- **Se llenan solas:** el manubrio cambia su abrazadera y su zona de mandos, la
+  tija su diámetro y su tipo (un «Suplemento (shim)» no es la tija).
+  Manillas, mandos y puños tienen que calzar con la zona de mandos: si la ficha
+  no lo sabe lo anotan, si dice otra medida no calzan y el trabajo no se
+  termina con ellos. Una manilla que aprieta 22,2 es evidencia de la zona de
+  mandos, no un supuesto. La potencia **no** está en esa relación: una de 31,8
+  aprieta un manubrio de 25,4 con laina, así que su medida no dice la del
+  manubrio y una distinta no es «no calza» (la primera versión la tenía y
+  bloqueaba terminar un trabajo correcto; revisión de Codex, 2026-10-02). Las piezas de toda la bici van sin rueda
+  (`position = 'none'`) y la línea nueva queda marcada sola en la pestaña de su
+  bici.
+- **La regla del tipo:** ruta y gravel, 23,8 en la zona de mandos; MTB, paseo,
+  BMX, plegable, crucero, híbrida, 22,2; eléctrica, sin sugerencia. Se muestra
+  como sugerencia sin confirmar y se usa con un toque; sola no se guarda.
+- **Motor:** `assessCockpitCompatibility` al buscar una pieza para el trabajo:
+  tija más gruesa no entra, más delgada con casquillo; manilla, mando o puño de
+  otra zona de mandos no calza; potencia más delgada que el manubrio no entra,
+  más gruesa con laina.
 
 ## Fuentes
 

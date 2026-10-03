@@ -3978,6 +3978,17 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     });
     final line = moved;
     if (line == null || !mounted) return;
+    // Pasarla a su bici es la acción que la marca: un repuesto de toda la
+    // bici no tiene rueda que confirmar.
+    if (!target.isGeneralTab && line.partChange == null) {
+      final marker = _bikeWideMarkerFor(line);
+      final index = target.partItems.indexWhere((item) => item.id == line.id);
+      if (marker != null && index >= 0) {
+        setState(() {
+          target.partItems[index] = line.copyWith(partChange: marker);
+        });
+      }
+    }
     void showTarget() {
       final index = _bikeTabs.indexOf(target);
       if (!mounted || index < 0) return;
@@ -7784,25 +7795,50 @@ Si tienes alguna duda o necesitas coordinar algo, puedes responder por este mism
 
   /// Un repuesto de una sola rueda (un cassette, una rueda libre, una maza
   /// trasera) va en ella: no se pregunta el lado (dueño, 2026-10-01: «acaso
-  /// existe un piñón delantero»). Corre cuando llega la ficha técnica de los
-  /// repuestos; fuera de un setState no repinta.
+  /// existe un piñón delantero»). Uno de toda la bici (horquilla, manubrio,
+  /// tija, potencia, manillas, mandos, puños) no tiene lado: una línea nueva
+  /// en la pestaña de su bici queda marcada sola ([bikeWidePartMarker]). Una
+  /// guardada no: su marca nace de una acción, nunca de volver a guardar el
+  /// trabajo. Corre cuando llega la ficha técnica de los repuestos; fuera de
+  /// un setState no repinta.
   void _settleSingleWheelParts() {
     if (_isCommercialSnapshotLocked) return;
-    void settle(List<JobPartItem> items) {
+    void settle(List<JobPartItem> items, {required bool bikeTab}) {
       for (var index = 0; index < items.length; index++) {
-        final item = items[index];
+        var item = items[index];
         final positions = _partWheelPositions(item);
-        if (positions.length != 1 || positions.contains(item.location)) {
-          continue;
+        if (positions.length == 1 && !positions.contains(item.location)) {
+          item = item.copyWith(location: positions.single);
         }
-        items[index] = item.copyWith(location: positions.single);
+        if (bikeTab &&
+            item.partChange == null &&
+            !_seenLineVersions.containsKey(item.id)) {
+          final marker = _bikeWideMarkerFor(item);
+          if (marker != null) item = item.copyWith(partChange: marker);
+        }
+        if (!identical(item, items[index])) items[index] = item;
       }
     }
 
     for (final tab in _bikeTabs) {
-      settle(tab.partItems);
+      settle(tab.partItems, bikeTab: !tab.isGeneralTab);
     }
-    settle(_partItems);
+    settle(_partItems, bikeTab: false);
+  }
+
+  /// La marca de una línea de repuesto de toda la bici, sin rueda.
+  Object? _bikeWideMarkerFor(JobPartItem item) {
+    final links = _bikeFactSpecLinks;
+    final product = item.product;
+    if (links == null ||
+        item.isServiceItem ||
+        product == null ||
+        item.location != BikeMemoryLocation.none) {
+      return null;
+    }
+    final specs = _partSpecValues[product.id];
+    if (specs == null) return null;
+    return bikeWidePartMarker(links: links, productSpecValues: specs);
   }
 
   Set<BikeMemoryLocation> _availableServiceLocationsForItem(JobPartItem item) {

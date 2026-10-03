@@ -3,8 +3,8 @@ titulo: Cómo guarda y juzga Vinabike la compatibilidad
 resumen: el mapa entre el oficio y el sistema — ficha de la bici, ficha técnica del producto, motor, reglas en la base y el Master Schema
 fuentes: [bike-matrix]
 k: [K36, K51]
-claves_bici: [drivetrainPlatform, drivetrainPlatformFamily, shiftActuationFamily, largestCogTeeth, rearLargestCogTeeth, chainWidthFamily, bikeType, wheelSize, brakeType, rimBrakeFamily, suspensionLayout, frontHubSpacingMm, rearHubSpacingMm, freehubType, drivetrainSpeeds, drivetrainConfig, frontSpokeHoles, rearSpokeHoles, valveType, bottomBracketFamily, bbShellWidthMm, bbShellDiameterMm, spindleInterface, frontAxleInterface, rearAxleInterface, frontBrakeFluidType, rearBrakeFluidType, frontRotorSizeMm, rearRotorSizeMm]
-claves_producto: [bead_seat_diameter_mm, hub_old_mm, axle_type, spoke_hole_count, freehub_type, cassette_spline_standard, chain_speeds, shift_actuation_family, bb_shell_standard, crank_axle_interface_declarations, brake_type, rotor_diameter_mm, fluid_type, valve_type]
+claves_bici: [drivetrainPlatform, drivetrainPlatformFamily, shiftActuationFamily, largestCogTeeth, rearLargestCogTeeth, chainWidthFamily, bikeType, wheelSize, brakeType, rimBrakeFamily, suspensionLayout, frontHubSpacingMm, rearHubSpacingMm, freehubType, drivetrainSpeeds, drivetrainConfig, frontSpokeHoles, rearSpokeHoles, valveType, bottomBracketFamily, bbShellWidthMm, bbShellDiameterMm, spindleInterface, frontAxleInterface, rearAxleInterface, frontBrakeFluidType, rearBrakeFluidType, frontRotorSizeMm, rearRotorSizeMm, steererFit, headsetUpperShis, headsetLowerShis, handlebarClampMm, controlsBarDiameterMm, seatpostDiameterMm, seatpostKind]
+claves_producto: [bead_seat_diameter_mm, hub_old_mm, axle_type, spoke_hole_count, freehub_type, cassette_spline_standard, chain_speeds, shift_actuation_family, bb_shell_standard, crank_axle_interface_declarations, brake_type, rotor_diameter_mm, fluid_type, valve_type, steerer_fit, bar_clamp_diameter_mm, grip_area_diameter_mm, handlebar_clamp_mm, grip_bar_nominal_diameter_mm, stem_steerer_clamp_diameter_mm, seatpost_diameter_mm, seatpost_kind]
 revisado: 2026-10-02
 ---
 
@@ -47,6 +47,9 @@ manda el código y la base viva; se corrige la que esté atrasada.
 | Rotor | `frontRotorSizeMm`, `rearRotorSizeMm` | `rotor_diameter_mm`, `max_rotor_mm`, `rotor_adapter_fitments` | [disco](frenos-de-disco.md) |
 | Líquido de freno | `frontBrakeFluidType`, `rearBrakeFluidType` | `fluid_type`, `brake_fluid_declarations` | [hidráulicos](frenos-hidraulicos.md) |
 | Suspensión | `suspensionLayout` | `fork_kind`, `eye_to_eye_mm`, `stroke_mm` | [suspensión](suspension.md) |
+| Dirección | `steererFit`, `headsetUpperShis`, `headsetLowerShis` | `steerer_fit`, `headset_upper_shis`, `headset_lower_shis`, `stem_steerer_clamp_diameter_mm` | [dirección](direccion.md) |
+| Manubrio y potencia | `handlebarClampMm` (la abrazadera del manubrio), `controlsBarDiameterMm` (zona de mandos) | `bar_clamp_diameter_mm` (manubrio; la potencia sólo en la matriz de la app), `grip_area_diameter_mm`, `handlebar_clamp_mm` (manillas y mandos), `grip_bar_nominal_diameter_mm` (puños) | [manubrio](manubrio-potencia-y-tija.md) |
+| Tija | `seatpostDiameterMm`, `seatpostKind` | `seatpost_diameter_mm`, `seatpost_kind` | [manubrio](manubrio-potencia-y-tija.md) |
 
 La bici y el producto comparten **conceptos y posiciones, no nombres de campo**:
 `spoke_hole_count` de una llanta trasera corresponde a `rearSpokeHoles` (visión
@@ -54,9 +57,14 @@ del dueño, 2026-09-27, «matriz de compatibilidad unificada»).
 
 ## Huecos conocidos (2026-10-02)
 
-- La bici no guarda: patilla del cuadro, dirección (SHIS), diámetro de tija,
-  manubrio, neumático más ancho que admite el cuadro, rotor máximo del cuadro.
-- El motor no tiene familia para horquillas ni amortiguadores.
+- La bici no guarda: patilla del cuadro, neumático más ancho que admite el
+  cuadro, rotor máximo del cuadro. (Dirección, manubrio y tija sí desde
+  20261002170000.)
+- Ninguna dirección del inventario dice su SHIS (2026-10-02): los dos datos de
+  dirección de la bici se eligen a mano hasta que el inventario los diga.
+- El motor no tiene familia para amortiguadores; horquilla, potencia, manubrio,
+  tija, manillas, mandos y puños se juzgan contra la ficha con
+  `assessCockpitCompatibility` (`cockpit_compatibility.dart`).
 - *Revisar* mezcla «con condiciones», «sin confirmar» y «en conflicto»; el
   contrato tiene los cinco veredictos.
 - La tienda no puede todavía decir «calza con tu bici» usando la ficha real del

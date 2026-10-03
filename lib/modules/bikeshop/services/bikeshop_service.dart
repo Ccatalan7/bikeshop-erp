@@ -584,6 +584,28 @@ class BikeshopService extends ChangeNotifier {
     }
   }
 
+  /// Lo que `save_bike_aggregate` recibe de [bike]. `Bike.toJson` omite
+  /// `brand_id` y `model_id` nulos y, sin la clave, el servidor conserva el
+  /// enlace que había: [clearCatalogLinks] nombra los que este guardado vacía
+  /// a propósito (otra marca deja la bici sin modelo del catálogo).
+  static Map<String, dynamic> bikeAggregatePayload(
+    Bike bike, {
+    Set<String> clearCatalogLinks = const {},
+  }) {
+    final payload = Map<String, dynamic>.from(bike.toJson())
+      ..remove('id')
+      ..remove('tenant_id')
+      ..remove('customer_id')
+      ..remove('created_at')
+      ..remove('updated_at');
+    for (final column in const ['brand_id', 'model_id']) {
+      if (clearCatalogLinks.contains(column) && payload[column] == null) {
+        payload[column] = null;
+      }
+    }
+    return payload;
+  }
+
   /// Saves bicycle identity and optional profile truth as one PostgreSQL
   /// transaction. The operation key must be reused after an uncertain network
   /// outcome; the server will replay the committed aggregate instead of
@@ -600,6 +622,7 @@ class BikeshopService extends ChangeNotifier {
     DateTime? expectedProfileUpdatedAt,
     WorkshopCommandTrigger trigger = WorkshopCommandTrigger.save,
     Set<String>? acknowledgedPendingCreations,
+    Set<String> clearCatalogLinks = const {},
   }) async {
     try {
       final bikeId = bike.id;
@@ -607,12 +630,10 @@ class BikeshopService extends ChangeNotifier {
         throw ArgumentError('Atomic bicycle save requires a stable bike id');
       }
 
-      final bikePayload = Map<String, dynamic>.from(bike.toJson())
-        ..remove('id')
-        ..remove('tenant_id')
-        ..remove('customer_id')
-        ..remove('created_at')
-        ..remove('updated_at');
+      final bikePayload = bikeAggregatePayload(
+        bike,
+        clearCatalogLinks: clearCatalogLinks,
+      );
       final profilePayload = profile == null
           ? null
           : (Map<String, dynamic>.from(profile.toJson())

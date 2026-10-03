@@ -15,6 +15,8 @@ import '../config/drivetrain_canonical_data.dart';
 import '../config/wheel_canonical_data.dart';
 import '../models/bikeshop_models.dart';
 import '../models/bike_fact_origin.dart';
+import '../services/bike_identity_draft.dart'
+    show bikeImageExtension, kBikeImagesBucket;
 import '../services/bikeshop_service.dart';
 import '../services/workshop_command_notices.dart';
 import '../services/workshop_command_outbox.dart';
@@ -2351,17 +2353,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
     }
   }
 
-  static const String _bikeImagesBucket = 'bike-images';
-
-  /// La extensión del archivo elegido, si es una que el bucket acepta.
-  static String _bikeImageExtension(String fileName) {
-    final dot = fileName.lastIndexOf('.');
-    final extension = dot < 0 ? '' : fileName.substring(dot + 1).toLowerCase();
-    return const {'jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'}
-            .contains(extension)
-        ? '.$extension'
-        : '.jpg';
-  }
+  static const String _bikeImagesBucket = kBikeImagesBucket;
 
   void _removeImage(int index, bool isNew) {
     setState(() {
@@ -2449,7 +2441,7 @@ class _BikeFormDialogState extends State<BikeFormDialog> {
         for (final imageData in pendingImages) {
           try {
             final objectPath = '${imageScope.tenantId}/$_draftBikeId/'
-                '${const Uuid().v4()}${_bikeImageExtension(imageData.name)}';
+                '${const Uuid().v4()}${bikeImageExtension(imageData.name)}';
             final publicUrl =
                 ImageService.publicUrlFor(_bikeImagesBucket, objectPath);
             await WorkshopCommandOutbox.shared.recordImageIntent(

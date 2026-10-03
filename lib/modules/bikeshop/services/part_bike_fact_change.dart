@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../config/brake_canonical_data.dart';
+import '../config/cockpit_canonical_data.dart';
 import '../config/drivetrain_canonical_data.dart';
 import '../config/wheel_canonical_data.dart';
 import '../models/bikeshop_models.dart';
@@ -45,6 +46,7 @@ class BikeFactSpecLink {
     this.productConditionMax,
     this.productConditionValues,
     this.productConditionMissingOk = false,
+    this.valueDecimals = 0,
   });
 
   /// El campo de la ficha técnica del producto, o `_family` cuando lo dice
@@ -98,6 +100,13 @@ class BikeFactSpecLink {
   final Set<String>? productConditionValues;
   final bool productConditionMissingOk;
 
+  /// Decimales que acepta la medida (31,8 mm de una abrazadera: 1); 0, una
+  /// medida entera (20261002170000).
+  final int valueDecimals;
+
+  /// Una pieza de toda la bici (horquilla, manubrio, tija): va sin rueda.
+  bool get isBikeWide => position == BikeMemoryLocation.none;
+
   /// Lo que el producto cumple de la condición de la fila
   /// (`bike_fact_product_condition_met_internal`).
   bool productMeetsCondition(Map<String, dynamic> specValues) {
@@ -132,14 +141,24 @@ class BikeFactSpecLink {
         'freewheel' => 'piñón de rosca',
         'hub' => 'maza',
         'rim' => 'llanta',
+        'fork' => 'horquilla',
+        'handlebar' => 'manubrio',
+        'stem' => 'potencia',
+        'seatpost' => 'tija',
+        'shifter' => 'mando',
+        'brake_lever' => 'manilla',
+        'grip' => 'puños',
         _ => componentLabel.split(' ').first,
       };
 
   /// Un código nombrado sin su rueda: «driver Shimano HG», «anclaje Center
   /// Lock».
-  String codeNoun(Object? value) =>
-      '${_isRotorMount(bikeFactKey) ? 'anclaje' : 'driver'} '
-      '${measureLabel(value)}';
+  String codeNoun(Object? value) => switch (bikeFactKey) {
+        kSteererFitKey => 'tubo ${measureLabel(value)}',
+        kSeatpostKindKey => 'tija ${measureLabel(value).toLowerCase()}',
+        _ => '${_isRotorMount(bikeFactKey) ? 'anclaje' : 'driver'} '
+            '${measureLabel(value)}',
+      };
 
   /// «622 (29″/700c)», «180 mm», «Shimano HG», «Center Lock», «32H».
   String measureLabel(Object? value) {
@@ -147,7 +166,15 @@ class BikeFactSpecLink {
       return kDrivetrainFreehubTypeOptions['$value'] ?? '$value';
     }
     if (_isRotorMount(bikeFactKey)) return rotorMountLabel(value);
+    if (bikeFactKey == kSteererFitKey) {
+      return kSteererFitLabels['$value'] ?? '$value';
+    }
+    if (bikeFactKey == kSeatpostKindKey) {
+      return kSeatpostKindLabels['$value'] ?? '$value';
+    }
     if (_isSpokeHoles(bikeFactKey)) return '${value}H';
+    final measured = valueDecimals > 0 ? _measure(value) : null;
+    if (measured != null) return cockpitMillimeters(measured);
     final whole = _wholeMeasure(value);
     if (whole != null && _isWheelBsd(bikeFactKey)) {
       return isoWheelBsdLabel(whole);
@@ -169,6 +196,18 @@ class BikeFactSpecLink {
     if (constantValue != null) return constantValue;
     final raw = specValues[specKey];
     if (valueMap.isNotEmpty) return raw is String ? valueMap[raw] : null;
+    if (valueDecimals > 0) {
+      // Hasta los decimales de la fila, sin redondear: 31.85 no es 31,8
+      // (`bike_fact_link_value_internal`).
+      final measured = _measure(raw);
+      if (measured == null || !accepts(measured)) return null;
+      final scale = valueDecimals == 1 ? 10 : 100;
+      final scaled = measured * scale;
+      if ((scaled - scaled.roundToDouble()).abs() > 1e-9) return null;
+      return measured == measured.truncateToDouble()
+          ? measured.toInt()
+          : measured;
+    }
     final whole = _wholeMeasure(raw);
     return whole != null && accepts(whole) ? whole : null;
   }
@@ -188,7 +227,7 @@ class BikeFactSpecLink {
   final num? minValue;
   final num? maxValue;
 
-  bool accepts(int value) =>
+  bool accepts(num value) =>
       (minValue == null || value >= minValue!) &&
       (maxValue == null || value <= maxValue!);
 
@@ -196,6 +235,8 @@ class BikeFactSpecLink {
     final position = switch (json['position']) {
       'front' => BikeMemoryLocation.front,
       'rear' => BikeMemoryLocation.rear,
+      // Toda la bici: horquilla, manubrio, tija (20261002170000).
+      'none' => BikeMemoryLocation.none,
       _ => null,
     };
     final specKey = json['spec_key'];
@@ -259,6 +300,10 @@ class BikeFactSpecLink {
           : null,
       productConditionMissingOk:
           condition is Map && condition['missing_ok'] == true,
+      valueDecimals: switch (json['value_decimals']) {
+        final int decimals when decimals > 0 && decimals <= 2 => decimals,
+        _ => 0,
+      },
     );
   }
 }
@@ -453,7 +498,9 @@ class PartBikeFactChange {
       (unit == null ? '$value' : '$value $unit');
   String get _current {
     final whole = _wholeMeasure(current);
-    if (link?.isCode ?? false) return link!.measureLabel(current);
+    if ((link?.isCode ?? false) || (link?.valueDecimals ?? 0) > 0) {
+      return link!.measureLabel(current);
+    }
     if (whole != null && _isSpokeHoles(link?.bikeFactKey)) return '${whole}H';
     return whole != null && link != null && _isWheelBsd(link!.bikeFactKey)
         ? '$whole'
@@ -566,6 +613,11 @@ class PartBikeFactChange {
             'drivetrainConfig' =>
               'No calza: la transmisión de la ficha es $blockingValue '
                   '(${drivetrainRearCogCount(blockingValue)} piñones atrás)',
+            // Dirección y cockpit (20261002170000).
+            kControlsBarDiameterKey => 'No calza: en la ficha la zona de '
+                'mandos es de ${_millimeters(blockingValue)}',
+            kHandlebarClampKey => 'No calza: en la ficha la abrazadera del '
+                'manubrio es de ${_millimeters(blockingValue)}',
             _ => 'No calza: en la ficha el freno es '
                 '«${bikeRequirementLabel(blockingValue)}»; no cambiará el '
                 '$componentLabel',
@@ -687,6 +739,21 @@ class PartBikeFactChange {
         PartBikeFactChangeStatus.incompatible
             when blockingKey == kBikeWheelSizeFactKey =>
           kWheelSizeAdvice,
+        // Los mismos consejos que `bike_fact_requirement_advice`
+        // (20261002170000).
+        PartBikeFactChangeStatus.incompatible
+            when blockingKey == kControlsBarDiameterKey =>
+          'Manillas, mandos y puños calzan por la zona de mandos del manubrio '
+              '(22,2 mm en uno plano, 23,8 mm en uno de ruta): si también '
+              'cambiaste el manubrio, agrega su línea; si la bici tiene otro, '
+              'corrige la ficha; si no, cambia la línea.',
+        PartBikeFactChangeStatus.incompatible
+            when blockingKey == kHandlebarClampKey =>
+          'Una potencia aprieta el manubrio por su centro y tiene que ser de '
+              'su misma medida (con laina, un manubrio más delgado en una '
+              'potencia más grande, nunca al revés): si también cambiaste el '
+              'manubrio, agrega su línea; si la bici tiene otra medida, '
+              'corrige la ficha; si no, cambia la línea.',
         PartBikeFactChangeStatus.caution when blockingKey == 'specialLacing' =>
           [...notes, 'La ficha no cambia.'].join(' '),
         PartBikeFactChangeStatus.caution =>
@@ -703,6 +770,12 @@ class PartBikeFactChange {
   static const String _declared =
       'Entra como lo dice la ficha técnica del repuesto, sin confirmar, '
       'salvo que esa ficha esté verificada.';
+}
+
+/// «23,8 mm», o el texto tal cual si no es una medida.
+String _millimeters(String? value) {
+  final measured = _measure(value);
+  return measured == null ? (value ?? '?') : cockpitMillimeters(measured);
 }
 
 String _capitalized(String text) =>
@@ -760,10 +833,25 @@ Object? _knownFact(Object? value) {
 bool _sameFact(Object? a, Object? b) {
   if (a == null || b == null) return false;
   if (a is num && b is num) return a == b;
-  final wholeA = _wholeMeasure(a);
-  final wholeB = _wholeMeasure(b);
-  if (a is num || b is num) return wholeA != null && wholeA == wholeB;
+  // Una medida, también con décimas: 22.2 y «22.2» son lo mismo.
+  if (a is num || b is num) {
+    final measuredA = _measure(a);
+    return measuredA != null && measuredA == _measure(b);
+  }
   return '$a' == '$b';
+}
+
+/// Una medida de la ficha técnica, entera o con décimas: 31.8, «31.8» o
+/// «31,8», como la lee `bike_fact_link_value_internal`.
+num? _measure(Object? value) {
+  final text = value is String ? value.trim().replaceAll(',', '.') : null;
+  final number = value is num
+      ? value
+      : text != null && RegExp(r'^\d{1,4}(?:\.\d+)?$').hasMatch(text)
+          ? num.tryParse(text)
+          : null;
+  if (number == null || !number.isFinite || number <= 0) return null;
+  return number;
 }
 
 /// Dos marcas dicen lo mismo: la misma clave y la misma medida o el mismo
@@ -771,10 +859,11 @@ bool _sameFact(Object? a, Object? b) {
 bool samePartChangeMarker(Map<String, dynamic>? a, Map<String, dynamic>? b) {
   if (a == null || b == null) return a == b;
   if (a['key'] != b['key']) return false;
-  final wholeA = _wholeMeasure(a['value']);
-  final wholeB = _wholeMeasure(b['value']);
-  if (wholeA != null || wholeB != null) {
-    return wholeA != null && wholeA == wholeB;
+  // Una medida por valor, también con décimas (31.8; 20261002170000).
+  final measuredA = _measure(a['value']);
+  final measuredB = _measure(b['value']);
+  if (measuredA != null || measuredB != null) {
+    return measuredA != null && measuredA == measuredB;
   }
   final codeA = a['value'];
   return codeA is String && codeA.isNotEmpty && codeA == b['value'];
@@ -1122,6 +1211,29 @@ PartBikeFactChange? partBikeFactChange({
     jobFinished: jobFinished,
   );
   return changes.isEmpty ? null : changes.first;
+}
+
+/// La marca de un repuesto de toda la bici (horquilla, manubrio, tija,
+/// potencia, manillas, mandos, puños): no tiene rueda que elegir, así que la
+/// línea la lleva sola desde que se agrega en la pestaña de su bici (dueño,
+/// 2026-10-02: nada que dependa de que alguien toque algo); al terminar el
+/// trabajo, el servidor la revisa contra la ficha. Nula si el repuesto no
+/// dice nada de toda la bici (20261002170000).
+Object? bikeWidePartMarker({
+  required List<BikeFactSpecLink> links,
+  required Map<String, dynamic> productSpecValues,
+}) {
+  final templateKey = productSpecValues['__template_key']?.toString();
+  final seen = <String>{};
+  return partChangeMarkerJson([
+    for (final link in links)
+      if (link.isBikeWide &&
+          !link.isCheck &&
+          link.appliesTo(templateKey) &&
+          seen.add(link.bikeFactKey))
+        if (link.productValue(productSpecValues) case final value?)
+          <String, dynamic>{'key': link.bikeFactKey, 'value': value},
+  ]);
 }
 
 /// En qué ruedas puede ir un repuesto: las de los datos que le escribe a la

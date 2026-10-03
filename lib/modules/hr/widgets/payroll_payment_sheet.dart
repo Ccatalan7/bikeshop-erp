@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../shared/utils/clp_amount_input_formatter.dart';
 import '../models/payroll_voucher.dart';
 import 'payroll_format.dart';
 import 'payroll_money_bar.dart';
+
+export '../../../shared/utils/clp_amount_input_formatter.dart'
+    show ClpAmountInputFormatter;
 
 /// What the operator decided for one worker's balance.
 ///
@@ -29,32 +32,6 @@ class PayrollManualPaymentIntent {
   final double totalAmount;
   final String operationKey;
   final int expectedReconciliationVersion;
-}
-
-/// Groups digits with Chilean thousands separators while the operator types.
-class ClpAmountInputFormatter extends TextInputFormatter {
-  const ClpAmountInputFormatter();
-
-  @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
-    final digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
-    if (digits.isEmpty) {
-      return const TextEditingValue(text: '');
-    }
-    final buffer = StringBuffer();
-    for (var index = 0; index < digits.length; index++) {
-      if (index > 0 && (digits.length - index) % 3 == 0) buffer.write('.');
-      buffer.write(digits[index]);
-    }
-    final text = buffer.toString();
-    return TextEditingValue(
-      text: text,
-      selection: TextSelection.collapsed(offset: text.length),
-    );
-  }
 }
 
 /// Parses an amount field formatted by [ClpAmountInputFormatter].

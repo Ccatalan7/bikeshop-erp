@@ -98,7 +98,14 @@ class _BikeRecordPageState extends State<BikeRecordPage> {
     ReturnNavigation.close(context, fallbackRoute: _fallbackRoute);
   }
 
+  /// La bici se edita en su lugar; el formulario queda para un panel que
+  /// no lo sabe hacer.
   Future<void> _edit() async {
+    final Object? editor = _panelKey.currentState;
+    if (editor is BikeRecordPanelEditor) {
+      await editor.startBikeEdit();
+      return;
+    }
     final snapshot = _snapshot;
     if (snapshot == null) return;
     final saved = await showDialog<Bike?>(
@@ -217,7 +224,7 @@ class _BikeRecordPageState extends State<BikeRecordPage> {
       onOpenOwner: _openOwner,
       closeLabel: 'Bicicletas',
       showBackRow: !compact,
-      onSpecSaved: _load,
+      onRecordSaved: _load,
     );
     final error = _error;
     if (error == null) return panel;

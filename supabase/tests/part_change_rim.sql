@@ -41,8 +41,9 @@ select is(
     {"key": "rearWheelBsdMm", "spec": "bead_seat_diameter_mm", "label": "rueda trasera", "rule": "change", "range": [150, 700], "position": "rear", "condition": null}]'::jsonb,
   'la llanta cambia el BSD y las perforaciones de la rueda que eligió el mecánico');
 select is(
-  (select count(*)::integer from public.bike_fact_spec_links), 19,
-  'la relación tiene sus 19 filas: las 15 de antes y las 4 de la llanta');
+  (select count(*)::integer from public.bike_fact_spec_links
+    where position in ('front', 'rear')), 19,
+  'la relación tiene sus 19 filas de rueda: las 15 de antes y las 4 de la llanta');
 select is(
   jsonb_build_array(
     public.bike_fact_requirement_text('rearHubSpokeHoles', '28'),

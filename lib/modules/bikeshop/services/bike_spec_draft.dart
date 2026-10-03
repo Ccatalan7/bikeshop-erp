@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../config/bike_sheet_options.dart';
 import '../config/bottom_bracket_canonical_data.dart';
 import '../config/brake_canonical_data.dart';
+import '../config/cockpit_canonical_data.dart';
 import '../config/drivetrain_canonical_data.dart';
 import '../config/wheel_canonical_data.dart';
 import '../models/bikeshop_models.dart';
@@ -130,6 +131,14 @@ class BikeSpecDraft {
         'valveType': text(values['valveType']),
         'frontRotorMount': text(values['frontRotorMount']),
         'rearRotorMount': text(values['rearRotorMount']),
+        // Dirección y cockpit (20261002170000).
+        kSteererFitKey: text(values[kSteererFitKey]),
+        kHeadsetUpperShisKey: text(values[kHeadsetUpperShisKey]),
+        kHeadsetLowerShisKey: text(values[kHeadsetLowerShisKey]),
+        kHandlebarClampKey: number(values[kHandlebarClampKey]),
+        kControlsBarDiameterKey: number(values[kControlsBarDiameterKey]),
+        kSeatpostDiameterKey: number(values[kSeatpostDiameterKey]),
+        kSeatpostKindKey: text(values[kSeatpostKindKey]),
       },
     );
   }
@@ -192,7 +201,27 @@ class BikeSpecDraft {
       BikeSpecField('frontRotorMount', 'Anclaje rotor delantero'),
       BikeSpecField('rearRotorMount', 'Anclaje rotor trasero'),
     ]),
+    // Los mismos conceptos que el inventario: se llenan con lo que el taller
+    // instala (horquilla, manubrio, tija) y se revisan con lo que no cambia la
+    // ficha (potencia, manillas, mandos, puños) (20261002170000).
+    BikeSpecSection(6, 'Dirección y cockpit', [
+      BikeSpecField(kSteererFitKey, 'Tubo de horquilla'),
+      BikeSpecField(kHeadsetUpperShisKey, 'Dirección arriba (SHIS)'),
+      BikeSpecField(kHeadsetLowerShisKey, 'Dirección abajo (SHIS)'),
+      BikeSpecField(kHandlebarClampKey, 'Manubrio (abrazadera)'),
+      BikeSpecField(kControlsBarDiameterKey, 'Zona de mandos'),
+      BikeSpecField(kSeatpostDiameterKey, 'Tija'),
+      BikeSpecField(kSeatpostKindKey, 'Tipo de tija'),
+    ]),
   ];
+
+  /// Las medidas con décimas de la sección 6: se guardan como número, sin
+  /// redondear.
+  static const Set<String> _decimalMeasureKeys = {
+    kHandlebarClampKey,
+    kControlsBarDiameterKey,
+    kSeatpostDiameterKey,
+  };
 
   /// Las claves del perfil que esta hoja escribe; las mismas que el
   /// formulario de la bici, con los alias antiguos del pedalier.
@@ -223,6 +252,13 @@ class BikeSpecDraft {
     'rearRotorMount',
     'drivetrainSpeeds',
     'drivetrainConfig',
+    kSteererFitKey,
+    kHeadsetUpperShisKey,
+    kHeadsetLowerShisKey,
+    kHandlebarClampKey,
+    kControlsBarDiameterKey,
+    kSeatpostDiameterKey,
+    kSeatpostKindKey,
   };
 
   /// Los nombres antiguos de tres datos del pedalier, que todavía se leen.
@@ -404,8 +440,43 @@ class BikeSpecDraft {
       'frontRotorMount' ||
       'rearRotorMount' =>
         fromMap(kBikeRotorMountChoiceOptions),
+      kSteererFitKey => fromMap(kSteererFitLabels),
+      kHeadsetUpperShisKey => [
+          for (final code in kHeadsetUpperShisOptions)
+            BikeSpecOption(code, code),
+        ],
+      kHeadsetLowerShisKey => [
+          for (final code in kHeadsetLowerShisOptions)
+            BikeSpecOption(code, code),
+        ],
+      kHandlebarClampKey => _millimeterOptions(kHandlebarClampOptions),
+      kControlsBarDiameterKey => [
+          for (final value in kControlsBarDiameterOptions)
+            BikeSpecOption(
+              _formatNumber(value)!,
+              cockpitMillimeters(value),
+              context: kControlsBarDiameterContext[_formatNumber(value)],
+            ),
+        ],
+      kSeatpostDiameterKey => _millimeterOptions(kSeatpostDiameterOptions),
+      kSeatpostKindKey => fromMap(kSeatpostKindLabels),
       _ => const [],
     };
+  }
+
+  static List<BikeSpecOption> _millimeterOptions(List<double> values) => [
+        for (final value in values)
+          BikeSpecOption(_formatNumber(value)!, cockpitMillimeters(value)),
+      ];
+
+  /// Lo que sugiere el tipo de bici para [key] mientras la ficha no lo
+  /// dice: la zona de mandos de un manubrio de ruta o uno plano. Se usa con
+  /// «Usar»; sola no se guarda.
+  String? suggestion(String key) {
+    if (key != kControlsBarDiameterKey || _values[key] != null) return null;
+    final suggested = suggestedControlsBarDiameterForBikeType(
+        BikeType.fromDbValue(_values['bikeType']));
+    return suggested == null ? null : _formatNumber(suggested);
   }
 
   static const Map<String, String> _fluidBrands = {
@@ -426,6 +497,12 @@ class BikeSpecDraft {
       'frontRotorSizeMm' ||
       'rearRotorSizeMm' =>
         '$value mm',
+      kHandlebarClampKey ||
+      kControlsBarDiameterKey ||
+      kSeatpostDiameterKey =>
+        double.tryParse(value) == null
+            ? value
+            : cockpitMillimeters(double.parse(value)),
       'frontWheelBsdMm' || 'rearWheelBsdMm' => int.tryParse(value) == null
           ? value
           : isoWheelBsdLabel(int.parse(value)),
@@ -576,8 +653,15 @@ class BikeSpecDraft {
       'rearAxleInterface',
       'frontRotorMount',
       'rearRotorMount',
+      kSteererFitKey,
+      kHeadsetUpperShisKey,
+      kHeadsetLowerShisKey,
+      kSeatpostKindKey,
     ]) {
       if (writes(key)) put(key, shown(key));
+    }
+    for (final key in _decimalMeasureKeys) {
+      if (writes(key)) put(key, _parseDouble(shown(key)));
     }
     if (writes('spindleInterface')) {
       put('spindleInterface', shown('spindleInterface'),

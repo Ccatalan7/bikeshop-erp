@@ -3,7 +3,7 @@ titulo: Dirección y tubo de dirección (SHIS)
 resumen: diámetros de tubo de horquilla, cónico, códigos SHIS arriba y abajo, roscada o sin rosca
 fuentes: [sheldon-brown, park-tool]
 k: [K19, K38]
-claves_bici: []
+claves_bici: [steererFit, headsetUpperShis, headsetLowerShis]
 claves_producto: [headset_upper_shis, headset_lower_shis, headset_standard, headset_upper_bearing_configuration, headset_lower_bearing_configuration, steerer_type, steerer_fit, steerer_threaded, stem_steerer_clamp_diameter_mm]
 revisado: 2026-10-02
 ---
@@ -71,10 +71,20 @@ revisado: 2026-10-02
   `headset_upper/lower_bearing_configuration`; en horquillas `steerer_type`,
   `steerer_fit` (la tienda muestra «1 1/8" (28.6 mm)»), `steerer_threaded`; en
   potencias `stem_steerer_clamp_diameter_mm`.
-- **Bici:** la ficha de la bici no guarda la dirección; queda para la matriz
-  unificada (la memoria del dueño pide los mismos conceptos en bici, servicio e
-  inventario).
-- **Motor:** `_assessHeadsetFamilyCompatibility` y `_assessBearingFamilyCompatibility`.
+- **Bici (20261002170000):** `steererFit` (códigos `straight_1`,
+  `straight_1_1_8`, `straight_1_1_4`, `straight_1_5`, `tapered_1_1_8_1_5`) y
+  `headsetUpperShis` / `headsetLowerShis` (el código SHIS tal cual). Una
+  horquilla instalada cambia `steererFit` al terminar el trabajo (fila
+  `steerer_fit` sin rueda de `bike_fact_spec_links`, con mapa de códigos). Los
+  SHIS se eligen en la hoja: ninguna dirección del inventario dice el suyo
+  (2026-10-02).
+- **Motor:** `_assessHeadsetFamilyCompatibility` y
+  `_assessBearingFamilyCompatibility`; la horquilla y la potencia contra el
+  tubo de la ficha, en `assessCockpitCompatibility`
+  (`lib/modules/bikeshop/services/cockpit_compatibility.dart`): una horquilla
+  cónica no entra en una dirección recta de 1⅛″; una recta en un cuadro cónico
+  va con la taza de abajo reductora; la potencia aprieta el tubo por arriba (un
+  cónico es 1⅛″ ahí) y con laina baja una medida, nunca sube.
 
 ## Fuentes
 

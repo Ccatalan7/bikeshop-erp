@@ -2016,8 +2016,27 @@ Canonical command/read contract:
   had 0 of 196 profiles exposed to that on 2026-10-02. Before editing it resumes the bike's
   outbox and refuses to edit over a save still pending on that device; a
   stale rejection re-reads the aggregate and re-applies the mechanic's
-  changes for review. Direction/cockpit has no sheet keys yet (see
-  `docs/wiki/compatibilidad/paginas/direccion.md`).
+  changes for review. Section 6, «Dirección y cockpit», has its seven keys
+  since 20261002170000 (see «Cambios de partes — dirección y cockpit»).
+- **Third editor: the bike itself, in place (2026-10-02).** «Editar» on the
+  bike page no longer opens the floating bike form: brand, model, year,
+  colour, serial and photos are edited in the identity column (the header on
+  narrower widths), and notes, purchase date, purchase price and warranty in
+  the Notas tab, with one save bar for both. The model is
+  `lib/modules/bikeshop/services/bike_identity_draft.dart`: it writes only the
+  fields that changed, through `save_bike_aggregate` with `profile: null`
+  (the profile is preserved untouched) and a stable operation key. Brand and
+  model come from the catalog (`bike_brands`, `bike_models`); typing one that
+  is not there adds it, as the form did. Another brand drops the model,
+  because the server rejects a catalog model of another brand, and since
+  `Bike.toJson` omits a null `model_id` (the server would keep the old one)
+  the save names the links it clears (`clearCatalogLinks`). New photos are
+  uploaded at save time through the same outbox image intents as the form,
+  and released if the edit is left unsaved. «Archivar bici» sets
+  `is_active = false` with nothing else in the same save; an archived bike
+  shows «Archivada» and «Reactivar» instead of «Nuevo trabajo» (the
+  directory and the job forms already left archived bikes out). The floating
+  form only creates bikes.
 - **Corrección 2026-09-27.** La promoción desde un servicio ya no pasa por el
   cliente. Antes llamaba a `BikeshopService.upsertBikeProfile`, que reescribía
   la fila completa sin comparar versiones cuando traía id. Ahora la escribe
@@ -8120,6 +8139,39 @@ desplegar).** Migración `20260928140000_part_change_rim.sql`, pgTAP
   privada de la espera y los disparadores de las bicis, y parcha el
   aplicador y el comando de guardado con anclas exactas); después, el
   cliente. Su read-back falla hoy en producción (la tabla no existe).
+
+**8. Cambios de partes — dirección y cockpit, hecho el 2026-10-02
+(`20261002170000_cockpit_bike_facts.sql`).**
+
+- La sección 6 de la ficha guarda siete datos con los conceptos del
+  inventario: `steererFit`, `headsetUpperShis`, `headsetLowerShis`,
+  `handlebarClampMm`, `controlsBarDiameterMm`, `seatpostDiameterMm`,
+  `seatpostKind` (wiki `direccion.md` y `manubrio-potencia-y-tija.md`).
+- Las piezas de toda la bici van sin rueda: `bike_fact_spec_links.position`
+  admite `none`, el `location_key` de esas líneas, y `value_decimals` deja
+  medidas con décimas (31,8) sin redondear. Cambian la ficha (`change`) la
+  horquilla, el manubrio y la tija (un suplemento no); tienen que calzar
+  (`conflict`) manillas, mandos y puños con la zona de mandos, que no tiene
+  laina. La potencia no está en la relación: una más grande aprieta el
+  manubrio con laina y una de 28,6 va en un tubo recto o en un cónico, así que
+  su medida no dice la de la bici; la revisa la matriz de la app al buscarla
+  (más chica que el manubrio no entra, más grande va con laina).
+- La marca de una línea de toda la bici no espera a que alguien toque el chip:
+  una línea nueva en la pestaña de su bici la lleva sola
+  (`bikeWidePartMarker`); una guardada no, porque su marca nace de una acción
+  y nunca de volver a guardar el trabajo; pasar una línea a su bici también la
+  marca. Una pieza que no calza bloquea terminar el trabajo con el mensaje de
+  siempre (`bike_fact_requirement_text` / `_advice` con coma decimal).
+- La pasada sobre el historial la hizo la migración con la misma relación:
+  lo último instalado de cada bici y dato en trabajos terminados o entregados,
+  sólo donde la ficha no lo sabía, origen `job_completion` sin confirmar
+  (salvo ficha verificada) y un evento de la bici. No marca líneas viejas (la
+  factura pagada las protege) ni deja recibos de línea (el aplicador los
+  leería como algo que la línea ya no respalda).
+- La regla del tipo: ruta y gravel 23,8 en la zona de mandos, plano 22,2. Es
+  una sugerencia que la hoja dice y se usa con un toque; sola no se guarda.
+- Al buscar una pieza para el trabajo, `assessCockpitCompatibility` la compara
+  con la ficha (o con el tipo, para la zona de mandos) y dice la razón.
 
 ## La ficha es el estado real de la bici (dueño, 2026-09-27)
 

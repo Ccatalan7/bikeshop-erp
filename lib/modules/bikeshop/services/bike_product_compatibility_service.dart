@@ -9,6 +9,7 @@ import '../config/brake_canonical_data.dart';
 import '../config/wheel_canonical_data.dart';
 import '../models/bikeshop_models.dart';
 import '../utils/drivetrain_compatibility_projection.dart';
+import 'cockpit_compatibility.dart';
 
 class BikeProductCompatibilityService {
   BikeProductCompatibilityService({SupabaseClient? client}) : _client = client;
@@ -514,7 +515,14 @@ class BikeProductCompatibilityService {
       technicalValues: profile.technicalValues,
       technicalConfirmed: profile.technicalConfirmed,
     );
-    if (compatibilityContext == null) {
+    // Dirección y cockpit se comparan con lo que la ficha dice de ellos (y la
+    // zona de mandos con el tipo de bici), aunque la ficha no sepa todavía
+    // ruedas ni frenos (20261002170000).
+    final cockpitFacts = cockpitFactsKnown(
+      profile.technicalValues,
+      bikeType: bike.bikeType,
+    );
+    if (compatibilityContext == null && !cockpitFacts) {
       return const {};
     }
 
@@ -523,6 +531,16 @@ class BikeProductCompatibilityService {
     final assessments = <String, ProductCompatibilityAssessment>{};
     for (final product in products) {
       final specValues = _productSpecCache[product.id]?.values ?? const {};
+      final cockpit = assessCockpitCompatibility(
+        templateKey: specValues['__template_key']?.toString(),
+        specValues: specValues,
+        technicalValues: profile.technicalValues,
+        bikeType: bike.bikeType,
+      );
+      if (compatibilityContext == null) {
+        if (cockpit != null) assessments[product.id] = cockpit;
+        continue;
+      }
       final specIssues =
           (specValues['__spec_issues'] as List? ?? []).whereType<Map>();
       if (_hasBlockingSpecIssues(specValues)) {
@@ -542,10 +560,18 @@ class BikeProductCompatibilityService {
         technicalMapping: technicalMapping,
         specValues: specValues,
       );
-      final resolvedAssessment = _mergeAssessments(
+      final familyResolved = _mergeAssessments(
         familyAssessment: familyAssessment,
         detailedAssessment: detailedAssessment,
       );
+      // Lo de cockpit manda si dice algo más fuerte que la familia: un mando
+      // de 22,2 en un manubrio de 23,8 no calza aunque la familia sólo pida
+      // revisar.
+      final resolvedAssessment = cockpit == null ||
+              (familyResolved != null &&
+                  familyResolved.level.index >= cockpit.level.index)
+          ? familyResolved ?? cockpit
+          : cockpit;
       if (resolvedAssessment != null) {
         // Incompleteness cannot erase a known physical contradiction. It also
         // cannot promote a nominal positive while the ficha remains incomplete.

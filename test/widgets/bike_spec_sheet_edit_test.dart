@@ -129,6 +129,7 @@ class _SpecService extends ChangeNotifier implements BikeshopService {
     DateTime? expectedProfileUpdatedAt,
     WorkshopCommandTrigger trigger = WorkshopCommandTrigger.save,
     Set<String>? acknowledgedPendingCreations,
+    Set<String> clearCatalogLinks = const {},
   }) async {
     saves++;
     savedBike = bike;
@@ -181,7 +182,7 @@ Future<int Function()> _pump(
             onEdit: () => fail('the sheet edits in place, not in the dialog'),
             onNewJob: () {},
             onClose: () {},
-            onSpecSaved: () async => reloads++,
+            onRecordSaved: () async => reloads++,
           ),
         ),
       ),
@@ -389,5 +390,50 @@ void main() {
     await tester.pumpAndSettle();
     expect(service.saves, 1);
     expect(find.text('Editando la ficha técnica'), findsNothing);
+  });
+
+  testWidgets(
+      'section 6 reads what the job installed and the type suggests the '
+      'control zone; «Usar» keeps it', (tester) async {
+    _setSize(tester, const Size(1920, 1080));
+    final service = _SpecService()
+      ..profile = BikeProfile(
+        id: 'profile-1',
+        tenantId: 'tenant-1',
+        bikeId: 'bike-1',
+        technicalProfile: const {
+          'values': {'seatpostDiameterMm': 27.2},
+          'sources': {'seatpostDiameterMm': 'job_completion'},
+          'confirmed': {},
+        },
+        updatedAt: _profileUpdatedAt,
+      );
+    addTearDown(service.dispose);
+    await _pump(tester, service, Brightness.light);
+
+    await _openEditor(tester);
+    expect(_select('Tubo de horquilla'), findsOneWidget);
+    expect(_select('Dirección arriba (SHIS)'), findsOneWidget);
+    expect(find.text('Instalado en un trabajo terminado · sin confirmar'),
+        findsOneWidget);
+    // La Marlin es MTB: su zona de mandos sería de 22,2.
+    final use = find.bySemanticsLabel('Usar la sugerencia para Zona de mandos');
+    await tester.ensureVisible(use);
+    await tester.pumpAndSettle();
+    expect(find.text('El tipo de bici sugiere 22,2 mm'), findsOneWidget);
+    await tester.tap(use);
+    await tester.pumpAndSettle();
+    expect(find.text('1 cambio sin guardar'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.tap(find.bySemanticsLabel('Guardar ficha técnica'));
+    await tester.pumpAndSettle();
+    expect(service.saves, 1);
+    final values = service.savedProfile!.technicalValues;
+    expect(values['controlsBarDiameterMm'], 22.2);
+    expect(values['seatpostDiameterMm'], 27.2,
+        reason: 'lo que nadie tocó queda como estaba');
+    expect(service.savedProfile!.technicalSources['seatpostDiameterMm'],
+        'job_completion');
   });
 }

@@ -1983,3 +1983,22 @@ acciones antes del scroll de lectura. Condiciones verificadas: mapa 320×260
 y 430×560, ambos lados accionables, macOS ancho/estrecho claro/oscuro sin
 recorte. Regresión mínima: límites de etiquetas y toque de ambas ruedas en el
 dueño compartido; no convertir esa composición en receta para otros módulos.
+
+### Con una barra de guardar abajo, el aviso va en la barra (2026-10-02)
+
+Al editar la bici en su página, «Modelo «X» agregado al catálogo» salía como
+`SnackBar` de 8 s justo encima de la barra «Cancelar · Guardar bici», y tapaba
+el botón: la prueba de widget que guardaba después de crear el modelo tocó el
+aviso y no guardó. Mientras una edición tiene su barra abajo, lo que le pasa a
+esa edición (un error, un guardado ajeno, una creación fallida) se dice en la
+barra misma; lo que salió bien y ya se ve en el campo no necesita aviso. El
+`SnackBar` queda para lo que ocurre después de cerrar la edición. Regresión
+mínima: crear y guardar seguido en la prueba de la edición.
+
+**`InputDecoration.constraints` no agranda el borde.** Para igualar un campo de
+texto (30 de alto con `isDense`) a los selectores y fechas de al lado (38 y 48
+en táctil) se probó `constraints: BoxConstraints(minHeight: 38)`: la semántica
+dijo 38, pero el borde siguió en 30 y sobró aire abajo, porque el decorador
+pinta el contorno con el alto de su contenido. El alto se da con
+`contentPadding`. Se ve en la captura, no en `read`.
+

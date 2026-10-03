@@ -11,20 +11,20 @@
     "web"
   ],
   "title": "Bicicletas registradas, rediseñadas",
-  "summary": "La lista muestra cada bicicleta con un dibujo de su tipo y color, su dueño y su último trabajo, y cada bici abre su propia página con el historial, la ficha técnica y las notas; en escritorio todo usa el ancho completo.",
+  "summary": "Cada bici tiene su página con el historial, la ficha técnica y las notas, y ahí mismo se editan sus datos y fotos; la ficha suma dirección y cockpit, y en escritorio todo usa el ancho completo.",
   "items": [
-    "«Todas» muestra cada bici con su dibujo, dueño, teléfono y último trabajo; «En el taller» es un tablero por etapa que marca las que llevan 14 días o más.",
-    "Cada bici tiene su página: en escritorio queda fija a la izquierda y el historial muestra cada visita con lo pedido y lo hecho, por sistema.",
-    "La ficha técnica se lee en seis grupos, dice qué dato falta y se completa o confirma ahí mismo, sin abrir el formulario de la bici."
+    "«Todas» muestra cada bici con su dibujo, dueño y último trabajo; «En el taller» es un tablero por etapa, y cada bici abre su página con el historial por visita.",
+    "«Editar» cambia marca, modelo, año, color, serie, fotos, compra y garantía en la misma página, con un solo «Guardar»; «Archivar bici» la saca de la lista.",
+    "La ficha se completa ahí mismo y suma dirección y cockpit, que se anotan solos al terminar un trabajo; al buscar una potencia, tija o mando, avisa si no calza."
   ],
   "evidence": [
     {
       "path": "lib/modules/bikeshop/pages/bike_record_page.dart",
-      "sha256": "7349845dd0ef061b2f197b902a321fba0cf0062ff3fe25c3dc1186ccca59d4cb"
+      "sha256": "46472fe998f522c20b95740649bc45abcf3799527f360e0ea29b803a6e521e97"
     },
     {
       "path": "lib/modules/bikeshop/widgets/bike_record_panel.dart",
-      "sha256": "ceebcdeb79bf695085f8be1171196cd54f393a2d2b3a372c8d6dd68d06141d26"
+      "sha256": "61344e7e1fbbeacfdb70bf02ad3eb4f7690ae47979d4e2459a0946efb9f1c4f3"
     },
     {
       "path": "lib/modules/bikeshop/widgets/bike_silhouette.dart",
@@ -48,7 +48,7 @@
     },
     {
       "path": "lib/modules/bikeshop/services/bikeshop_service.dart",
-      "sha256": "27415ac294cf040c03d02ab815df7badc82a20c771072cdc5dde56b4ed20ac02"
+      "sha256": "ba2b1ce45eef5e89db3be3e8f0b55428cf196e8aa0a9dcf8c8cb80c91308a1a0"
     },
     {
       "path": "lib/modules/bikeshop/services/service_wizard_service.dart",
@@ -72,7 +72,7 @@
     },
     {
       "path": "lib/modules/bikeshop/services/bike_spec_draft.dart",
-      "sha256": "b30353fec35224d65c4bdd344ba36b03772933c8d714cb789e60fc38678b54fa"
+      "sha256": "6785846b997487e3e7051fd67da218f8a503e1708d9dd8e1d084070441b56c1a"
     },
     {
       "path": "lib/modules/bikeshop/config/bike_sheet_options.dart",
@@ -80,19 +80,55 @@
     },
     {
       "path": "lib/modules/bikeshop/pages/client_logbook_page.dart",
-      "sha256": "5d753e4cf56b1aa49e2703093d562da16b86064607d9ee63bc2358147c791a40"
+      "sha256": "e039bb58f67160575a8ddf2384376ac48f1736e7d76fe9da2f217819539ea9d5"
     },
     {
       "path": "lib/shared/widgets/vb_searchable_select.dart",
-      "sha256": "dca544795759c97f934f36dd3e0a292ccf6ef918cbf727a75a29951c71a2eaa0"
+      "sha256": "b83075b4daeb44e0db6b0e12338d3a1ab95affc4d9d2cd82e721c5fb3be859d5"
     },
     {
       "path": "lib/modules/bikeshop/pages/bike_form_dialog.dart",
-      "sha256": "4b498457367954b3870e2fe8b8f32e5f207e5f6ad09723dc232019d9c85cf5f5"
+      "sha256": "3b6ea030e3e9ef896522c6c32f7b6913c26d2b579e3d5b95178527a176d9881c"
     },
     {
       "path": "lib/modules/bikeshop/config/drivetrain_canonical_data.dart",
       "sha256": "71a378eb152014ece07046405be5716dc41476d8967877105c07060607c7d858"
+    },
+    {
+      "path": "lib/modules/bikeshop/services/bike_identity_draft.dart",
+      "sha256": "c61f482533d5ff9a051b6ea33bef1276afc47886499bf4e3d86eefba5d48450d"
+    },
+    {
+      "path": "lib/modules/bikeshop/services/part_bike_fact_change.dart",
+      "sha256": "a7dfd404d6841de3f88d96d3a4829c191770ddc3148ce135bee11fdd7e8d4269"
+    },
+    {
+      "path": "lib/modules/bikeshop/services/cockpit_compatibility.dart",
+      "sha256": "d2ec18d9ab78769a6e1e7b426837abde8901ca47ab9fc9327128024ffb52d928"
+    },
+    {
+      "path": "lib/modules/bikeshop/services/bike_product_compatibility_service.dart",
+      "sha256": "048bc9fff0ebb051468bfadc114f36f43617f79bcd1cdb43284f7b84ea556478"
+    },
+    {
+      "path": "lib/modules/bikeshop/config/cockpit_canonical_data.dart",
+      "sha256": "707528f497590a6aa3c2fd1f2ec19a78dcb0b4c5e9b3d71e2280339418c0323b"
+    },
+    {
+      "path": "lib/modules/bikeshop/pages/mechanic_job_form_page.dart",
+      "sha256": "28fee2dc1ac05866b15a2211f74b7fb421d261b297cfdc1093a0324ace419f7c"
+    },
+    {
+      "path": "lib/shared/utils/clp_amount_input_formatter.dart",
+      "sha256": "649731c5ede0fa67cade699674e2bafe4c34f8ad63f621dbacfbba92a8fb6e7d"
+    },
+    {
+      "path": "lib/modules/hr/widgets/payroll_payment_sheet.dart",
+      "sha256": "27d8f8db06d3cb7799319d15019e1e4d3b9bdb198f51e8d037cffd03cc9b8f01"
+    },
+    {
+      "path": "supabase/migrations/20261002170000_cockpit_bike_facts.sql",
+      "sha256": "a7c564a7c9c82cbb98902091ea220a75d968d302c42da7cfbc695350662959ac"
     }
   ]
 }
