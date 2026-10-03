@@ -189,9 +189,11 @@ jq -n --arg c <sha> --arg b <base> --arg r <gate_run_id> --arg a <gate_attempt> 
   | gh workflow run macos-release.yml --repo Ccatalan7/bikeshop-erp --ref main --json
 ```
 
-`<base>` sale de `scripts/releases/resolve_previous_release_commit.sh macos-v
-macos-release-manifest.json <sha>` (y `windows-v windows-release-manifest.json` para Windows;
-Android acepta el mismo base), `<gate_run_id>` es el `ERP Integrity Gate` verde del sha exacto
+`<base>` sale de `GH_REPO=Ccatalan7/bikeshop-erp
+scripts/releases/resolve_previous_release_commit.sh macos-v macos-release-manifest.json <sha>`
+(sin `GH_REPO` se corta con «GH_REPO is required», 2026-10-03; y `windows-v
+windows-release-manifest.json` para Windows; Android acepta el mismo base, y
+`prepare_erp_update.sh` ya lo imprime como «Notes base»), `<gate_run_id>` es el `ERP Integrity Gate` verde del sha exacto
 (`gh run list --workflow erp-integrity-gate.yml --commit <sha>`) y el intento sale de
 `gh api repos/…/actions/runs/<id> --jq .run_attempt`. Windows y Android llevan las mismas
 entradas sin `release_target`. El sha tiene que ser el head vivo de `main` al despachar. Después
