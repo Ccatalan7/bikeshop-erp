@@ -6,6 +6,8 @@ void main() {
   late String table;
   late String form;
   late String logbook;
+  late String visitCard;
+  late String visits;
   late String operationalBadge;
   late String visibilityPolicy;
 
@@ -18,6 +20,12 @@ void main() {
     ).readAsStringSync();
     logbook = File(
       'lib/modules/bikeshop/pages/client_logbook_page.dart',
+    ).readAsStringSync();
+    visitCard = File(
+      'lib/modules/bikeshop/widgets/job_visit_card.dart',
+    ).readAsStringSync();
+    visits = File(
+      'lib/modules/bikeshop/services/bike_visit_history.dart',
     ).readAsStringSync();
     operationalBadge = File(
       'lib/shared/widgets/operational_status_badge.dart',
@@ -56,8 +64,8 @@ void main() {
       contains("tooltip ?? 'Cambiar estado y ver acciones'"),
     );
     expect(operationalBadge, contains('Icons.keyboard_arrow_down_rounded'));
-    expect(logbook, contains('if (job.isServiceBudget)'));
-    expect(logbook, contains('job.proposalStatusDisplayName'));
+    expect(visitCard, contains('if (job.isServiceBudget)'));
+    expect(visitCard, contains('job.proposalStatusDisplayName'));
   });
 
   test('commercial-only rows cannot enter the operational lifecycle', () {
@@ -178,14 +186,10 @@ void main() {
 
   test('standalone quotation history uses its requested description', () {
     expect(
-      logbook,
+      visits,
       contains(
-        'final requestSummary = job.isStandaloneQuotation\n        ? job.subjectNotes?.trim()',
+        'final requestSummary =\n        job.isStandaloneQuotation ? job.subjectNotes?.trim() : null;',
       ),
-    );
-    expect(
-      logbook,
-      contains("requestSummary?.isNotEmpty == true ? requestSummary! : '—'"),
     );
   });
 }

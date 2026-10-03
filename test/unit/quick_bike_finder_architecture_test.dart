@@ -53,7 +53,8 @@ void main() {
     expect(finder, contains('BikeFinderSearchField(owner?.name'));
 
     expect(finder, contains("path: '/clientes/\$customerId'"));
-    expect(finder, contains("'bike_id': bikeId"));
+    // La bici tiene su propia página (2026-10-03).
+    expect(finder, contains("'/taller/bicicletas/\$bikeId'"));
     expect(finder, contains("path: '/taller/pegas/nueva'"));
     expect(finder, contains("'/taller/pegas/\$jobId'"));
     expect(finder, contains("'/taller/bicicletas'"));

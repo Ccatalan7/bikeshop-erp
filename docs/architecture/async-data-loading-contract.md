@@ -460,6 +460,19 @@ Su resultado sólo puede publicarse si sigue vigente la generación del document
 La regresión mantiene las consultas pendientes y comprueba el nombre visible
 antes de resolverlas, además de rechazar resultados tras reemplazar el documento.
 
+### Guardar contra la versión leída: el texto de `updated_at`, no un `DateTime` (2026-10-03)
+
+La hoja «Datos» del cliente guarda sólo las columnas que cambiaron con
+`.eq('updated_at', <lo que leyó>)`: si otro guardó entre medio, la fila no
+coincide, no se escribe nada y la página relee y pone la edición encima. La
+versión leída se guarda como **el texto que devolvió la base**
+(`ClientRecord.updatedAtToken`), no como un `DateTime`: en la web un `DateTime`
+de Dart tiene milisegundos y `updated_at` microsegundos, así que comparar el
+valor de vuelta nunca coincidiría y todo guardado parecería «viejo». El `+` del
+desfase viaja bien (`Uri` lo codifica como `%2B`). Comprobado el 2026-10-03 con
+tres guardados reales sobre el cliente de prueba «Test Taller» (agregar, quitar
+y uno rechazado por un cambio ajeno), restaurado después.
+
 ## 9. Regresiones mínimas por consumidor
 
 1. Respuesta A empieza, B empieza, A termina última: sólo B publica.

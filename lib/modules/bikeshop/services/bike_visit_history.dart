@@ -1,6 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
 
+import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/services/inventory_service.dart';
 import '../../inventory/services/category_service.dart';
 import '../models/bikeshop_models.dart';
@@ -38,6 +39,7 @@ class BikeVisit {
     required this.separatePurchaseAmount,
     required this.request,
     required this.inWorkshop,
+    this.bikeIds = const [],
   });
 
   final MechanicJob job;
@@ -56,6 +58,9 @@ class BikeVisit {
   final String? request;
 
   final bool inWorkshop;
+
+  /// Las bicis que entraron en este trabajo (las visitas de un cliente).
+  final List<String> bikeIds;
 
   DateTime get date => job.deliveredAt ?? job.completedAt ?? job.arrivalDate;
 
@@ -247,7 +252,34 @@ Future<List<BikeVisit>> loadBikeVisits(
     ownJobs.map((job) => job.id!),
   );
 
-  final allItems = items.values.expand((lines) => lines).toList();
+  final systemOf = await resolveJobLineSystems(
+    items.values.expand((lines) => lines),
+    inventory: inventory,
+    categories: categories,
+  );
+
+  return buildBikeVisits(
+    bikeId: bikeId,
+    bike: bike,
+    ownerName: ownerName,
+    jobs: ownJobs,
+    jobBikesByJobId: jobBikes,
+    itemsByJobId: items,
+    systemOf: systemOf,
+  );
+}
+
+/// El sistema de cada línea de [lines], para armar visitas.
+///
+/// La categoría de cada repuesto y la familia de cada servicio sólo afinan
+/// el sistema de las líneas que no lo guardaron: si su lectura falla, esas
+/// líneas quedan en «General» y el historial igual se muestra.
+Future<JobLineSystem Function(MechanicJobItem item)> resolveJobLineSystems(
+  Iterable<MechanicJobItem> lines, {
+  InventoryService? inventory,
+  CategoryService? categories,
+}) async {
+  final allItems = lines.toList();
   final productIds = {
     for (final item in allItems)
       if (item.systemKey == null || item.systemKey!.trim().isEmpty)
@@ -279,7 +311,7 @@ Future<List<BikeVisit>> loadBikeVisits(
         }
       }
     } catch (error) {
-      debugPrint('Bike history product categories: $error');
+      debugPrint('Visit history product categories: $error');
     }
   }
 
@@ -292,22 +324,166 @@ Future<List<BikeVisit>> loadBikeVisits(
         tenantId: allItems.first.tenantId,
       );
     } catch (error) {
-      debugPrint('Bike history service families: $error');
+      debugPrint('Visit history service families: $error');
     }
   }
 
-  return buildBikeVisits(
-    bikeId: bikeId,
-    bike: bike,
-    ownerName: ownerName,
-    jobs: ownJobs,
+  return (item) => bikeVisitLineSystem(
+        item,
+        serviceFamily:
+            familyByProductId[item.serviceProductId ?? item.productId],
+        categoryPath: categoryPathByProductId[item.productId],
+      );
+}
+
+/// Lo que vale un trabajo para su cliente.
+///
+/// Una propuesta (presupuesto o cotización) no tiene impuesto antes de
+/// facturarse, pero su total con descuento es `totalCost`: no se muestra el
+/// subtotal sin descuento. Un trabajo sin impuesto muestra su neto.
+double jobDisplayTotal(MechanicJob job) {
+  if (job.isQuotationWorkflow) {
+    return job.totalCost;
+  }
+  if (job.taxTreatment == TaxTreatment.noTax) {
+    return job.partsCost + job.laborCost;
+  }
+  return job.totalCost;
+}
+
+/// Arma las visitas de un cliente, la más reciente primero: cada trabajo
+/// suyo con todas sus líneas.
+///
+/// A diferencia de la bici, la visita del cliente es el trabajo entero: las
+/// líneas de cada bici y lo comprado aparte (en «General», como en el
+/// trabajo), con el total del trabajo ([jobDisplayTotal]). Lo que pidió es
+/// lo pedido para cada bici; en una cotización sin objeto, lo que se cotizó.
+List<BikeVisit> buildCustomerVisits({
+  required List<MechanicJob> jobs,
+  required Map<String, List<MechanicJobBike>> jobBikesByJobId,
+  required Map<String, List<MechanicJobItem>> itemsByJobId,
+  required JobLineSystem Function(MechanicJobItem item) systemOf,
+  Map<String, Bike> bikesById = const {},
+  String? ownerName,
+}) {
+  final visits = <BikeVisit>[];
+  for (final job in jobs) {
+    final jobId = job.id;
+    if (jobId == null || job.deletedAt != null) continue;
+    final jobBikes = [...?jobBikesByJobId[jobId]]
+      ..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+    final bikeIds = <String>[
+      for (final row in jobBikes)
+        if (row.bikeId.trim().isNotEmpty) row.bikeId.trim(),
+    ];
+    final headerBikeId = job.bikeId?.trim();
+    if (bikeIds.isEmpty && headerBikeId != null && headerBikeId.isNotEmpty) {
+      bikeIds.add(headerBikeId);
+    }
+    final distinctBikeIds = bikeIds.toSet().toList();
+
+    final items = itemsByJobId[jobId] ?? const <MechanicJobItem>[];
+    final lines = [
+      for (final item in items)
+        BikeVisitLine(
+          name: item.productName.trim().isEmpty
+              ? 'Línea sin nombre'
+              : item.productName.trim(),
+          amount: item.totalPrice,
+          quantity: item.quantity,
+          isService: item.itemType == 'service',
+          // Sin fila de bici en un trabajo que sí las tiene: compra aparte.
+          system: jobBikes.isNotEmpty && item.jobBikeId == null
+              ? JobLineSystem.general
+              : systemOf(item),
+        ),
+    ];
+    final linesTotal = lines.fold<double>(0, (sum, line) => sum + line.amount);
+    final total = jobDisplayTotal(job);
+
+    final requestSummary =
+        job.isStandaloneQuotation ? job.subjectNotes?.trim() : null;
+    final bikeRequests = [
+      for (final row in jobBikes)
+        if (row.workRequested?.trim() case final text? when text.isNotEmpty)
+          text,
+    ];
+    final request = requestSummary?.isNotEmpty == true
+        ? requestSummary
+        : bikeRequests.isNotEmpty
+            ? bikeRequests.toSet().join('\n')
+            : job.clientRequest?.trim();
+
+    final firstBike =
+        distinctBikeIds.isEmpty ? null : bikesById[distinctBikeIds.first];
+    visits.add(
+      BikeVisit(
+        job: job,
+        groups: groupJobLinesBySystem<BikeVisitLine>(
+          lines,
+          (line) => line.system,
+        ),
+        // Una propuesta muestra su total aunque sea cero (todo descontado);
+        // sólo un trabajo sin total guardado se suma por sus líneas.
+        amount: job.isQuotationWorkflow || total != 0 ? total : linesTotal,
+        separatePurchaseAmount: 0,
+        request: request,
+        inWorkshop: isMechanicJobIntakeInWorkshop(
+          job,
+          customerName: ownerName,
+          bikeName: firstBike?.displayName,
+          bikeBrand: firstBike?.brand,
+          bikeModel: firstBike?.model,
+          bikeSerialNumber: firstBike?.serialNumber,
+        ),
+        bikeIds: distinctBikeIds,
+      ),
+    );
+  }
+  visits.sort((a, b) => b.job.arrivalDate.compareTo(a.job.arrivalDate));
+  return visits;
+}
+
+/// Lee los trabajos de un cliente con sus líneas, como visitas.
+///
+/// Igual que [loadBikeVisits]: si falla la lectura de filas por bici, falla
+/// la actividad (tomarla como vacía mezclaría lo comprado aparte con lo de
+/// cada bici); la categoría y la familia sólo afinan el sistema.
+Future<List<BikeVisit>> loadCustomerVisits(
+  BuildContext context,
+  String customerId, {
+  Map<String, Bike> bikesById = const {},
+  String? ownerName,
+}) async {
+  final bikeshop = context.read<BikeshopService>();
+  final inventory = _maybeRead<InventoryService>(context);
+  final categories = _maybeRead<CategoryService>(context);
+
+  final results = await Future.wait<Object>([
+    bikeshop.getJobs(customerId: customerId, includeCompleted: true),
+    bikeshop.getAllJobBikes(rethrowErrors: true),
+  ]);
+  final jobs = [
+    for (final job in results[0] as List<MechanicJob>)
+      if (job.id != null &&
+          job.deletedAt == null &&
+          job.customerId == customerId)
+        job,
+  ];
+  final jobBikes = results[1] as Map<String, List<MechanicJobBike>>;
+  final items = await bikeshop.getJobItemsForJobs(jobs.map((job) => job.id!));
+  final systemOf = await resolveJobLineSystems(
+    items.values.expand((lines) => lines),
+    inventory: inventory,
+    categories: categories,
+  );
+  return buildCustomerVisits(
+    jobs: jobs,
     jobBikesByJobId: jobBikes,
     itemsByJobId: items,
-    systemOf: (item) => bikeVisitLineSystem(
-      item,
-      serviceFamily: familyByProductId[item.serviceProductId ?? item.productId],
-      categoryPath: categoryPathByProductId[item.productId],
-    ),
+    systemOf: systemOf,
+    bikesById: bikesById,
+    ownerName: ownerName,
   );
 }
 

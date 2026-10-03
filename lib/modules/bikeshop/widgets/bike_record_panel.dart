@@ -14,6 +14,7 @@ import '../../../shared/themes/vinabike_theme_roles.dart';
 import '../../../shared/utils/clp_amount_input_formatter.dart';
 import '../../../shared/utils/responsive_breakpoints.dart';
 import '../../../shared/widgets/vb_button.dart';
+import '../../../shared/widgets/vb_edit_dock.dart';
 import '../../../shared/widgets/vb_searchable_select.dart';
 import '../../../shared/widgets/vb_segmented.dart' show VbDensity;
 import '../../../shared/widgets/vb_short_select.dart' show VbShortSelect;
@@ -37,6 +38,7 @@ import 'bike_measurement_timeline.dart';
 import 'bike_module_style.dart';
 import 'bike_silhouette.dart';
 import 'bike_system_controller.dart';
+import 'job_visit_card.dart';
 
 /// La ficha de una bicicleta: quién es, qué se le ha hecho y qué se sabe de
 /// ella.
@@ -120,10 +122,6 @@ enum _RecordTab { history, technical, notes }
 final NumberFormat _money =
     NumberFormat.currency(symbol: r'$', decimalDigits: 0);
 
-bool _isCancelledJob(MechanicJob job) =>
-    job.status == JobStatus.cancelado ||
-    job.customStatus?.code.trim().toUpperCase() == 'CANCELADO';
-
 /// Lo que lee el historial: la memoria técnica de la bici y sus visitas.
 class _RecordHistory {
   const _RecordHistory({required this.memory, required this.visits});
@@ -136,7 +134,7 @@ class _RecordHistory {
   final List<BikeVisit> visits;
 
   int get visitCount =>
-      visits.where((visit) => !_isCancelledJob(visit.job)).length;
+      visits.where((visit) => !isCancelledJob(visit.job)).length;
 
   BikeVisit? get workshopVisit {
     for (final visit in visits) {
@@ -2298,7 +2296,14 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
         for (final visit in visits)
           Padding(
             padding: const EdgeInsets.only(bottom: 18),
-            child: _buildVisit(context, visit, filter: filter, narrow: narrow),
+            child: JobVisitCard(
+              visit: visit,
+              today: _today,
+              narrow: narrow,
+              filter: filter,
+              onOpenJob: _openJob,
+              emptyLinesText: 'Sin líneas registradas para esta bici.',
+            ),
           ),
         if (visits.isEmpty && history.visits.isNotEmpty)
           Padding(
@@ -2343,7 +2348,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
   List<_SystemSummary> _systemSummaries(_RecordHistory history) {
     final bySystem = <JobLineSystem, _SystemSummary>{};
     for (final visit in history.visits) {
-      if (_isCancelledJob(visit.job)) continue;
+      if (isCancelledJob(visit.job)) continue;
       for (final group in visit.groups) {
         final summary = bySystem.putIfAbsent(
             group.system, () => _SystemSummary(group.system));
@@ -2718,317 +2723,6 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
                   ),
                 ),
             ]),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildVisit(
-    BuildContext context,
-    BikeVisit visit, {
-    required JobLineSystem? filter,
-    required bool narrow,
-  }) {
-    final theme = Theme.of(context);
-    final roles = VinabikeThemeRoles.of(context);
-    final job = visit.job;
-    final groups = filter == null
-        ? visit.groups
-        : visit.groups.where((group) => group.system == filter).toList();
-    final days = visit.daysInWorkshop(_today);
-    final arrival = bikeShortDate(job.arrivalDate, today: _today);
-    final daysText = days == 1 ? '1 día' : '$days días';
-    final meta = switch ((visit.inWorkshop, days)) {
-      (true, 0) => 'Ingresó hoy',
-      (true, _) => 'Ingresó el $arrival · lleva $daysText',
-      (false, 0) => 'Ingresó el $arrival · salió el mismo día',
-      (false, _) => 'Ingresó el $arrival · $daysText en el taller',
-    };
-    final cancelled = _isCancelledJob(job);
-
-    final header = Padding(
-      padding: const EdgeInsets.fromLTRB(18, 14, 18, 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (narrow)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Text(
-                      bikeFullDate(visit.date),
-                      style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.w700),
-                    ),
-                  ),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 4,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    if (job.jobNumber != null)
-                      Semantics(
-                        button: job.id != null,
-                        label: 'Abrir trabajo ${job.jobNumber}',
-                        // Sin el hijo en la semántica, la acción va aquí.
-                        onTap: job.id == null ? null : () => _openJob(job.id),
-                        excludeSemantics: true,
-                        child: InkWell(
-                          onTap: job.id == null ? null : () => _openJob(job.id),
-                          borderRadius: BorderRadius.circular(6),
-                          child: ConstrainedBox(
-                            // En teléfono el número es un objetivo táctil.
-                            constraints: BoxConstraints(
-                              minHeight: narrow ? 48 : 28,
-                              minWidth: narrow ? 48 : 0,
-                            ),
-                            child: Align(
-                              widthFactor: 1,
-                              heightFactor: 1,
-                              child: Text(
-                                job.jobNumber!,
-                                style: BikeModuleText.code(context,
-                                    color: theme.colorScheme.primary),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    BikeJobStatusDot(
-                      label: jobStatusLabel(job),
-                      color: jobStatusColor(job),
-                      muted: cancelled,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  meta,
-                  style: TextStyle(
-                      fontSize: 13, color: theme.colorScheme.onSurfaceVariant),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Text(
-            visit.amount > 0 ? _money.format(visit.amount) : '—',
-            style:
-                BikeModuleText.figure(context, size: narrow ? 19 : 22).copyWith(
-              color: cancelled
-                  ? theme.colorScheme.onSurfaceVariant
-                  : theme.colorScheme.onSurface,
-              decoration: cancelled ? TextDecoration.lineThrough : null,
-            ),
-          ),
-        ],
-      ),
-    );
-
-    final request = visit.request?.trim();
-    final content = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        header,
-        if (request != null && request.isNotEmpty && filter == null)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
-            child: Text.rich(
-              TextSpan(children: [
-                const TextSpan(
-                  text: 'Pidió: ',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-                TextSpan(
-                  text: bikeRequestAsSentence(request),
-                  style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
-                ),
-              ]),
-              maxLines: 4,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 14, height: 1.4),
-            ),
-          ),
-        if (groups.isEmpty)
-          Container(
-            padding: const EdgeInsets.fromLTRB(18, 12, 18, 14),
-            decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: roles.hairline)),
-            ),
-            child: Text(
-              'Sin líneas registradas para esta bici.',
-              style: TextStyle(fontSize: 14, color: roles.faintForeground),
-            ),
-          ),
-        for (final group in groups)
-          Container(
-            padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
-            decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: roles.hairline)),
-            ),
-            child: narrow
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(group.system.label.toUpperCase(),
-                          style: BikeModuleText.label(context)),
-                      const SizedBox(height: 6),
-                      for (final line in group.lines)
-                        _buildLine(context, line, narrow: true),
-                    ],
-                  )
-                : Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(
-                        width: 128,
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 1),
-                          child: Text(
-                            group.system.label,
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            for (final line in group.lines)
-                              _buildLine(context, line, narrow: false),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
-        if (visit.separatePurchaseAmount > 0 && filter == null)
-          Container(
-            padding: const EdgeInsets.fromLTRB(18, 10, 18, 12),
-            decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: roles.hairline)),
-            ),
-            child: Text(
-              'Además, ${_money.format(visit.separatePurchaseAmount)} en '
-              'compras aparte en este trabajo.',
-              style: TextStyle(fontSize: 13, color: roles.faintForeground),
-            ),
-          ),
-      ],
-    );
-
-    final decoration = BoxDecoration(
-      color: theme.colorScheme.surface,
-      borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: theme.colorScheme.outlineVariant),
-    );
-    if (narrow) return DecoratedBox(decoration: decoration, child: content);
-
-    // La fecha va dentro de la tarjeta, en una franja a la izquierda: todos
-    // los bloques blancos del historial empiezan en el mismo borde (dueño,
-    // 2026-10-02: la fecha suelta dejaba «en el aire» a la tarjeta de abajo).
-    const stubWidth = 92.0;
-    return Container(
-      decoration: decoration,
-      clipBehavior: Clip.antiAlias,
-      child: Stack(
-        children: [
-          Positioned(
-            left: 0,
-            top: 0,
-            bottom: 0,
-            width: stubWidth,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerLow,
-                border: Border(right: BorderSide(color: roles.hairline)),
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(left: stubWidth),
-            child: content,
-          ),
-          Positioned(
-            left: 0,
-            top: 14,
-            width: stubWidth,
-            child: Semantics(
-              label: bikeFullDate(visit.date),
-              excludeSemantics: true,
-              child: Column(
-                children: [
-                  Text(
-                    visit.date.toLocal().day.toString().padLeft(2, '0'),
-                    style: BikeModuleText.figure(context, size: 32)
-                        .copyWith(fontWeight: FontWeight.w600, height: 1.05),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    bikeMonthYear(visit.date).toUpperCase(),
-                    style: BikeModuleText.label(context),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLine(BuildContext context, BikeVisitLine line,
-      {required bool narrow}) {
-    final theme = Theme.of(context);
-    final roles = VinabikeThemeRoles.of(context);
-    final quantity = line.quantity == 1
-        ? ''
-        : ' × ${line.quantity == line.quantity.roundToDouble() ? line.quantity.toInt() : line.quantity}';
-    final amount = Text(
-      line.amount > 0 ? _money.format(line.amount) : '—',
-      textAlign: TextAlign.end,
-      style: TextStyle(
-        fontSize: 14,
-        fontFeatures: const [FontFeature.tabularFigures()],
-        color: theme.colorScheme.onSurfaceVariant,
-      ),
-    );
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Text.rich(
-              TextSpan(children: [
-                TextSpan(text: '${line.name}$quantity'),
-                if (line.isService && narrow)
-                  TextSpan(
-                    text: ' · servicio',
-                    style:
-                        TextStyle(fontSize: 12, color: roles.faintForeground),
-                  ),
-              ]),
-              style: const TextStyle(fontSize: 14, height: 1.35),
-            ),
-          ),
-          if (!narrow)
-            SizedBox(
-              width: 72,
-              child: Text(
-                line.isService ? 'Servicio' : 'Repuesto',
-                style: TextStyle(fontSize: 12, color: roles.faintForeground),
-              ),
-            ),
-          SizedBox(width: narrow ? 78 : 90, child: amount),
         ],
       ),
     );
@@ -3437,19 +3131,11 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
     final theme = Theme.of(context);
     final roles = VinabikeThemeRoles.of(context);
     final known = group.knownCount;
-    final (String status, Color statusBg, Color statusFg) = known == 0
-        ? (
-            'Sin datos',
-            theme.colorScheme.surfaceContainerHigh,
-            theme.colorScheme.onSurfaceVariant
-          )
+    final (String status, SheetStatusTone statusTone) = known == 0
+        ? ('Sin datos', SheetStatusTone.neutral)
         : known < group.expectedCount
-            ? (
-                'Faltan datos',
-                roles.warning.container,
-                roles.warning.onContainer
-              )
-            : ('Completo', roles.success.container, roles.success.onContainer);
+            ? ('Faltan datos', SheetStatusTone.warning)
+            : ('Completo', SheetStatusTone.success);
     final title = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -3489,21 +3175,7 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
         const SizedBox(height: 8),
         Padding(
           padding: const EdgeInsets.only(left: 38),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-            decoration: BoxDecoration(
-              color: statusBg,
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(
-              status,
-              style: TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w700,
-                color: statusFg,
-              ),
-            ),
-          ),
+          child: SheetStatusChip(label: status, tone: statusTone),
         ),
       ],
     );
@@ -4154,140 +3826,29 @@ class _BikeRecordPanelState extends State<BikeRecordPanel>
   /// La barra que flota al pie mientras se edita: cuántos cambios hay y
   /// cómo guardarlos o descartarlos, sin volver arriba de la hoja.
   Widget _buildEditDock(BuildContext context) {
-    final theme = Theme.of(context);
-    final roles = VinabikeThemeRoles.of(context);
     final spec = _specDraft != null;
-    final count =
-        spec ? _specDraft!.changeCount : (_bikeDraft?.changeCount ?? 0);
-    // La hoja dice su aviso en su cabecera; la bici, que se edita en dos
-    // lugares, lo dice aquí, a la vista desde los dos.
-    final notice = spec ? null : _bikeNotice;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < 520;
-        final status = count == 0
-            ? (compact ? 'Sin cambios' : 'Sin cambios todavía')
-            : count == 1
-                ? (compact ? '1 cambio' : '1 cambio sin guardar')
-                : (compact ? '$count cambios' : '$count cambios sin guardar');
-        return DecoratedBox(
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: theme.colorScheme.outlineVariant),
-            boxShadow: [
-              BoxShadow(
-                color: theme.shadowColor.withValues(alpha: 0.16),
-                blurRadius: 28,
-                offset: const Offset(0, 10),
-              ),
-            ],
-          ),
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(compact ? 14 : 18, 10, 10, 10),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (notice != null)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8, bottom: 8),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(Icons.warning_amber_rounded,
-                            size: 18, color: roles.warning.accent),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Semantics(
-                            liveRegion: true,
-                            child: Text(
-                              notice,
-                              style: TextStyle(
-                                fontSize: 13.5,
-                                color: roles.warning.onContainer,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                Row(
-                  children: [
-                    if (!compact) ...[
-                      Icon(Icons.edit_note,
-                          size: 22, color: theme.colorScheme.primary),
-                      const SizedBox(width: 10),
-                    ],
-                    Expanded(
-                      child: Semantics(
-                        liveRegion: true,
-                        child: Text(
-                          status,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 14.5,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    VbButton(
-                      label: 'Cancelar',
-                      variant: VbButtonVariant.secondary,
-                      density: VbDensity.comfortable,
-                      onPressed: _editBusy ? null : _cancelEdit,
-                    ),
-                    const SizedBox(width: 8),
-                    VbButton(
-                      label: compact
-                          ? 'Guardar'
-                          : (spec ? 'Guardar ficha' : 'Guardar bici'),
-                      icon: Icons.check,
-                      density: VbDensity.comfortable,
-                      busy: _editBusy,
-                      semanticLabel:
-                          spec ? 'Guardar ficha técnica' : 'Guardar bicicleta',
-                      onPressed:
-                          count == 0 || _editBusy || (!spec && _catalogCreating)
-                              ? null
-                              : (spec ? _saveSpecs : _saveBike),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+    return VbEditDock(
+      changeCount:
+          spec ? _specDraft!.changeCount : (_bikeDraft?.changeCount ?? 0),
+      saveLabel: spec ? 'Guardar ficha' : 'Guardar bici',
+      saveSemanticLabel: spec ? 'Guardar ficha técnica' : 'Guardar bicicleta',
+      busy: _editBusy,
+      // La hoja dice su aviso en su cabecera; la bici, que se edita en dos
+      // lugares, lo dice aquí, a la vista desde los dos.
+      notice: spec ? null : _bikeNotice,
+      onCancel: _cancelEdit,
+      onSave:
+          !spec && _catalogCreating ? null : (spec ? _saveSpecs : _saveBike),
     );
   }
 
   /// La vista con desplazamiento y, mientras se edita, su barra de guardar
   /// flotando al pie.
-  Widget _withEditDock(BuildContext context, Widget scrollable) {
-    if (!_editing) return scrollable;
-    return Stack(
-      fit: StackFit.passthrough,
-      children: [
-        scrollable,
-        Positioned(
-          left: 16,
-          right: 16,
-          bottom: 16,
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 640),
-              child: _buildEditDock(context),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+  Widget _withEditDock(BuildContext context, Widget scrollable) =>
+      VbEditDockLayer(
+        dock: _editing ? _buildEditDock(context) : null,
+        child: scrollable,
+      );
 
   Widget _buildSpecCard(BuildContext context, _SpecGroup group) {
     final theme = Theme.of(context);

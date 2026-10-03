@@ -282,15 +282,28 @@ void main() {
       contains('Este presupuesto aún no ha generado una factura.'),
     );
 
-    expect(logbook, contains("? 'Cotización'"));
-    expect(logbook, contains("'Sin objeto recibido'"));
-    expect(logbook, contains('_buildStatusBadge(job)'));
-    expect(logbook, contains('job.statusDisplayName'));
-    expect(logbook, contains("? 'Total presupuestado'"));
-    expect(logbook, contains(": 'Total cotizado'"));
+    // Desde el rediseño del 2026-10-03 la actividad del cliente es la
+    // tarjeta de visita compartida con la bici y su armado de visitas.
+    final visitCard = File(
+      'lib/modules/bikeshop/widgets/job_visit_card.dart',
+    ).readAsStringSync();
+    final visits = File(
+      'lib/modules/bikeshop/services/bike_visit_history.dart',
+    ).readAsStringSync();
+    expect(logbook, contains("JobVisitSubject(label: 'Sin objeto recibido')"));
+    expect(logbook, contains('JobVisitCard('));
     expect(
-      logbook,
-      contains('if (job.isQuotationWorkflow)'),
+      visitCard,
+      contains('job.isStandaloneQuotation ? job.statusDisplayName'),
+    );
+    expect(
+      visitCard,
+      contains(
+          "job.isServiceBudget ? 'Total presupuestado' : 'Total cotizado'"),
+    );
+    expect(
+      visits,
+      contains('if (job.isQuotationWorkflow) {\n    return job.totalCost;'),
       reason:
           'Client history must not display the undiscounted no-tax subtotal for proposals.',
     );

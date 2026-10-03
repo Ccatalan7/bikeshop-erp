@@ -456,6 +456,7 @@ variant of any of these is the defect this document exists to prevent.
 | `F-03` Dinero | `VbMoneyText` | `lib/shared/widgets/vb_money_text.dart` |
 | `X-01` Estado de superficie | `VbSurfaceState` · esqueletos | `lib/shared/widgets/vb_skeleton.dart` |
 | `F-02` / `F-04` Form section anatomy | `VbFormSection` | `lib/shared/widgets/vb_form_section.dart` |
+| Barra de guardar de una edición en su lugar (2026-10-03) | `VbEditDock` · `VbEditDockLayer` | `lib/shared/widgets/vb_edit_dock.dart` |
 
 **Form containment (2026-09-06).** `VbFormSection` composes the guide's section
 title and panel anatomy: radius 10, hairline 1, body padding 16 vertical / 18

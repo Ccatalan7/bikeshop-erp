@@ -1995,6 +1995,11 @@ barra misma; lo que salió bien y ya se ve en el campo no necesita aviso. El
 `SnackBar` queda para lo que ocurre después de cerrar la edición. Regresión
 mínima: crear y guardar seguido en la prueba de la edición.
 
+Desde el 2026-10-03 esa barra es un control compartido, `VbEditDock`
+(`lib/shared/widgets/vb_edit_dock.dart`), con su capa `VbEditDockLayer`: la
+usan la ficha de la bici y la hoja «Datos» del cliente. Una tercera edición en
+su lugar la reutiliza en vez de copiarla.
+
 **`InputDecoration.constraints` no agranda el borde.** Para igualar un campo de
 texto (30 de alto con `isDense`) a los selectores y fechas de al lado (38 y 48
 en táctil) se probó `constraints: BoxConstraints(minHeight: 38)`: la semántica

@@ -3592,14 +3592,8 @@ class _MechanicJobFormPageState extends State<MechanicJobFormPage> {
     final bikeId = _selectedBike?.id;
     if (customerId == null || bikeId == null) return;
 
-    final route = Uri(
-      path: '/clientes/$customerId',
-      queryParameters: {
-        'bike_id': bikeId,
-      },
-    ).toString();
-
-    await context.push(route);
+    // La ficha de la bici es su propia página (2026-10-03).
+    await context.push('/taller/bicicletas/$bikeId');
 
     if (!mounted) return;
     await _refreshCustomerBikes(selectedBikeId: bikeId);

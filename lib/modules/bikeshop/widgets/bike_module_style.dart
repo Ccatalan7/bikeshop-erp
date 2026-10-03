@@ -187,3 +187,53 @@ class BikeJobStatusDot extends StatelessWidget {
     );
   }
 }
+
+enum SheetStatusTone { neutral, warning, success }
+
+/// El estado de una sección de una hoja («Completo», «Faltan datos», «Sin
+/// datos»): la ficha técnica de la bici y los datos del cliente.
+class SheetStatusChip extends StatelessWidget {
+  const SheetStatusChip({
+    super.key,
+    required this.label,
+    this.tone = SheetStatusTone.neutral,
+  });
+
+  final String label;
+  final SheetStatusTone tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final (Color background, Color ink) = switch (tone) {
+      SheetStatusTone.neutral => (
+          theme.colorScheme.surfaceContainerHigh,
+          theme.colorScheme.onSurfaceVariant
+        ),
+      SheetStatusTone.warning => (
+          roles.warning.container,
+          roles.warning.onContainer
+        ),
+      SheetStatusTone.success => (
+          roles.success.container,
+          roles.success.onContainer
+        ),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12.5,
+          fontWeight: FontWeight.w700,
+          color: ink,
+        ),
+      ),
+    );
+  }
+}

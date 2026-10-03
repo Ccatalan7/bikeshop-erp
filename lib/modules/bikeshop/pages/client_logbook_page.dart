@@ -1,41 +1,78 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-import '../../../modules/crm/models/crm_models.dart';
-import '../../../shared/models/tax_treatment.dart';
 import '../../../shared/services/current_user_profile_service.dart';
 import '../../../shared/services/return_navigation.dart';
 import '../../../shared/services/user_management_navigation.dart';
+import '../../../shared/themes/vinabike_theme_roles.dart';
+import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/utils/responsive_viewport.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/main_layout.dart';
-import '../../../modules/crm/services/customer_service.dart';
-import '../../sales/models/sales_models.dart';
-import '../../sales/services/sales_service.dart';
-import '../services/bikeshop_service.dart';
-import '../models/bikeshop_models.dart';
-import '../widgets/bike_record_panel.dart';
-import '../widgets/client_logbook_responsive_frame.dart';
-import 'bike_form_dialog.dart';
-import 'mechanic_job_form_page.dart';
+import '../../../shared/widgets/vb_button.dart';
+import '../../../shared/widgets/vb_edit_dock.dart';
+import '../../../shared/widgets/vb_segmented.dart' show VbDensity;
+import '../../../shared/widgets/vb_sub_tabs.dart';
+import '../../crm/services/client_data_draft.dart';
+import '../../crm/services/customer_service.dart';
+import '../../crm/widgets/client_data_sheet.dart';
 import '../../messaging/models/conversation.dart';
 import '../../messaging/services/messaging_service.dart';
 import '../../messaging/widgets/chat_window.dart';
+import '../../sales/models/sales_models.dart';
+import '../../sales/services/sales_service.dart';
+import '../models/bikeshop_models.dart';
+import '../services/bike_directory_entries.dart';
+import '../services/bike_visit_history.dart';
+import '../services/bikeshop_service.dart';
+import '../widgets/bike_module_style.dart';
+import '../widgets/bike_silhouette.dart';
+import '../widgets/job_visit_card.dart';
+import 'bike_form_dialog.dart';
 
-enum JobViewFilter { active, completed, all }
+/// Las pestañas de la página del cliente. **Datos** va primero: es la
+/// primera cara del cliente (dueño, 2026-10-03).
+enum ClientPageTab { data, activity, invoices, messages }
 
-enum ClientBikePanelMode { none, record, creating, editing }
+/// La pestaña que pide un enlace (`?tab=`). Los nombres viejos (pegas,
+/// historial, chats) siguen abriendo lo que hoy los reemplaza.
+ClientPageTab clientPageTabFor(String? tab) =>
+    switch (tab?.trim().toLowerCase()) {
+      'actividad' ||
+      'trabajos' ||
+      'pegas' ||
+      'historial' =>
+        ClientPageTab.activity,
+      'facturas' || 'invoices' => ClientPageTab.invoices,
+      'mensajes' || 'chats' => ClientPageTab.messages,
+      _ => ClientPageTab.data,
+    };
 
+final NumberFormat _money =
+    NumberFormat.currency(symbol: r'$', decimalDigits: 0);
+
+/// Una factura que todavía se debe: emitida, no anulada y con saldo.
+bool invoiceIsOwed(Invoice invoice) =>
+    invoice.status != InvoiceStatus.draft &&
+    invoice.status != InvoiceStatus.cancelled &&
+    invoice.balance > 0.5;
+
+/// La página de un cliente (`/clientes/:id`), rediseñada el 2026-10-03 a
+/// partir del lienzo que aprobó el dueño («sigue con la original con
+/// cabecera arriba»).
+///
+/// Arriba, a todo el ancho, quién es (nombre, contacto, «Editar» y «Nuevo
+/// trabajo»), lo que pide atención (la bici que está en el taller, lo que
+/// debe) y cinco datos. Debajo, las pestañas **Datos** —sus datos a la vista
+/// y editables en su lugar—, **Actividad** —cada trabajo como en la página
+/// de la bici, con su factura—, **Facturas** y **Mensajes**, y a la derecha
+/// sus bicicletas, que abren su propia página, y sus conversaciones. En
+/// teléfono, el mismo orden en una columna.
 class ClientLogbookPage extends StatefulWidget {
-  final String customerId;
-  final String? initialTab;
-  final String? initialBikeId;
-
   const ClientLogbookPage({
     super.key,
     required this.customerId,
@@ -43,3369 +80,1130 @@ class ClientLogbookPage extends StatefulWidget {
     this.initialBikeId,
   });
 
+  final String customerId;
+  final String? initialTab;
+
+  /// Un enlace viejo a la bici del cliente: la bici tiene su propia página
+  /// y se abre encima.
+  final String? initialBikeId;
+
   @override
   State<ClientLogbookPage> createState() => _ClientLogbookPageState();
 }
 
-class _ClientLogbookPageState extends State<ClientLogbookPage>
-    with SingleTickerProviderStateMixin {
-  Customer? _customer;
-  List<Bike> _bikes = [];
-  List<MechanicJob> _jobs = [];
-  List<MechanicJobTimeline> _timeline = [];
-  List<Invoice> _invoices = [];
-  Loyalty? _loyalty;
-  bool _isLoading = true;
-  bool _isLoadingInvoices = false;
-  bool _hasLoadedInvoices = false;
+class _ClientLogbookPageState extends State<ClientLogbookPage> {
+  static const _fallbackRoute = '/clientes';
+
+  final MessagingService _messaging = MessagingService();
+
+  ClientRecord? _record;
+  List<Bike> _bikes = const [];
+  bool _loading = true;
+  bool _notFound = false;
   String? _error;
-  String? _invoiceError;
 
-  // Chats tab
-  final MessagingService _messagingService = MessagingService();
-  List<Conversation> _chats = [];
+  /// Sólo la carga más reciente publica.
+  int _generation = 0;
+
+  List<BikeVisit>? _visits;
+  bool _visitsFailed = false;
+  List<Invoice>? _invoices;
+  bool _invoicesFailed = false;
+  List<Conversation>? _chats;
+  bool _chatsFailed = false;
   Conversation? _selectedChat;
-  bool _isLoadingChats = false;
-  bool _hasLoadedChats = false;
-  String? _chatError;
 
-  String? _selectedJobId;
-  String? _selectedBikeId;
-  bool _isEditingJob = false;
-  ClientBikePanelMode _bikePanelMode = ClientBikePanelMode.none;
-  BikeRecordSnapshot? _selectedBikeRecordSnapshot;
-  bool _isLoadingSelectedBikeRecordSnapshot = false;
-  String? _bikeRecordLoadError;
+  late ClientPageTab _tab = clientPageTabFor(widget.initialTab);
+  String? _openedBikeId;
 
-  late TabController _tabController;
-
-  final TextEditingController _bikeSearchController = TextEditingController();
-  final TextEditingController _jobSearchController = TextEditingController();
-  final TextEditingController _timelineSearchController =
-      TextEditingController();
-  final TextEditingController _invoiceSearchController =
-      TextEditingController();
-  String _bikeSearchTerm = '';
-  String _jobSearchTerm = '';
-  String _timelineSearchTerm = '';
-  String _invoiceSearchTerm = '';
-  String _bikeSortKey = 'recent';
-  String _jobSortKey = 'arrival_desc';
-  String _timelineSortKey = 'date_desc';
-  String _invoiceSortKey = 'date_desc';
-  JobViewFilter _jobViewFilter = JobViewFilter.active;
-  final ScrollController _headerScrollController = ScrollController();
-  final ScrollController _bodyScrollController = ScrollController();
-
-  // ── Column sort (column-header click) ──
-  String?
-      _bikeSortCol; // 'name' | 'serial' | 'registered' | 'last_delivery' | 'jobs'
-  bool _bikeSortAsc = true;
-  String?
-      _jobSortCol; // 'number' | 'bike' | 'request' | 'status' | 'date' | 'total'
-  bool _jobSortAsc = false;
-  String? _timelineSortCol; // 'desc' | 'ref' | 'tech' | 'date'
-  bool _timelineSortAsc = false;
-  String?
-      _invoiceSortCol; // 'number' | 'context' | 'date' | 'status' | 'total' | 'balance'
-  bool _invoiceSortAsc = false;
-
-  // ── Column widths (bikes) ──
-  double _bikeColSerial = 150;
-  double _bikeColRegistered = 100;
-  double _bikeColDelivery = 120;
-  double _bikeColJobs = 80;
-
-  // ── Column widths (jobs) ──
-  double _jobColNumber = 108;
-  double _jobColBike = 140;
-  double _jobColStatus = 110;
-  double _jobColDate = 90;
-  double _jobColTotal = 80;
-
-  // ── Column widths (timeline) ──
-  double _tlColRef = 150;
-  double _tlColTech = 120;
-  double _tlColDate = 130;
-  double _invoiceColNumber = 130;
-  double _invoiceColDate = 110;
-  double _invoiceColStatus = 122;
-  double _invoiceColTotal = 110;
-  double _invoiceColBalance = 110;
-  Map<String, Bike> _bikeIndex = {};
-  Map<String?, List<MechanicJob>> _jobsByBike = {};
-  Map<String, MechanicJob> _jobIndex = {};
-  Set<TimelineEventType> _timelineTypeFilters =
-      TimelineEventType.values.toSet();
-  static const Map<String, String> _bikeSortLabels = {
-    'recent': 'Más recientes',
-    'name': 'Nombre (A-Z)',
-    'jobs_desc': 'Más trabajos',
-    'jobs_asc': 'Menos trabajos',
+  // ── La hoja en edición ──
+  ClientDataDraft? _draft;
+  final Map<ClientDataField, TextEditingController> _text = {};
+  final Map<ClientDataField, FocusNode> _focus = {
+    for (final field in ClientDataField.values) field: FocusNode(),
   };
-  static const Map<String, String> _jobSortLabels = {
-    'arrival_desc': 'Ingresadas recientes',
-    'arrival_asc': 'Ingresadas antiguas',
-    'cost_desc': 'Mayor costo',
-    'cost_asc': 'Menor costo',
-  };
-  static const Map<String, String> _timelineSortLabels = {
-    'date_desc': 'Más recientes',
-    'date_asc': 'Más antiguas',
-  };
-  static const Map<String, String> _invoiceSortLabels = {
-    'date_desc': 'Más recientes',
-    'date_asc': 'Más antiguas',
-    'total_desc': 'Mayor total',
-    'total_asc': 'Menor total',
-    'balance_desc': 'Mayor saldo',
-    'balance_asc': 'Menor saldo',
-  };
+  bool _saving = false;
+
+  /// Después de intentar guardar, cada regla que falta se dice en su dato.
+  bool _showProblems = false;
+  ({ClientDataField? field, String message})? _saveProblem;
+  String? _dockNotice;
+
+  DateTime get _today => DateTime.now();
 
   @override
   void initState() {
     super.initState();
-    final initialBikeId = widget.initialBikeId?.trim();
-    final initialIndex = _resolveTabIndex(
-      initialTab: widget.initialTab,
-      initialBikeId: initialBikeId,
-    );
-    if (initialBikeId != null && initialBikeId.isNotEmpty) {
-      _selectedBikeId = initialBikeId;
-      _bikePanelMode = ClientBikePanelMode.record;
-    }
-    _tabController = TabController(
-      length: 5,
-      vsync: this,
-      initialIndex: initialIndex,
-    )..addListener(_handleTabChanged);
-
-    _bikeSearchController.addListener(_handleBikeSearchChanged);
-    _jobSearchController.addListener(_handleJobSearchChanged);
-    _timelineSearchController.addListener(_handleTimelineSearchChanged);
-    _invoiceSearchController.addListener(_handleInvoiceSearchChanged);
-
-    _headerScrollController.addListener(() {
-      if (_bodyScrollController.hasClients &&
-          _bodyScrollController.offset != _headerScrollController.offset) {
-        _bodyScrollController.jumpTo(_headerScrollController.offset);
-      }
-    });
-
-    _bodyScrollController.addListener(() {
-      if (_headerScrollController.hasClients &&
-          _headerScrollController.offset != _bodyScrollController.offset) {
-        _headerScrollController.jumpTo(_bodyScrollController.offset);
-      }
-    });
-
-    _loadData();
-    if (initialIndex == 2) {
-      unawaited(_loadInvoices());
-    }
-    if (initialIndex == 3) {
-      unawaited(_loadChats());
-    }
+    _load();
   }
 
   @override
   void didUpdateWidget(covariant ClientLogbookPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-
     if (widget.customerId != oldWidget.customerId) {
-      final nextBikeId = widget.initialBikeId?.trim();
-      final nextIndex = _resolveTabIndex(
-        initialTab: widget.initialTab,
-        initialBikeId: nextBikeId,
-      );
-
+      // La ruta cambió de cliente debajo de la página (un `go` del buscador):
+      // no hay cómo preguntar antes, así que se dice qué se perdió.
+      final lost = _hasUnsavedChanges ? _record?.name : null;
+      _leaveEdit();
+      if (lost != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Los cambios sin guardar de $lost se descartaron.'),
+          ));
+        });
+      }
       setState(() {
-        _customer = null;
-        _bikes = [];
-        _jobs = [];
-        _timeline = [];
-        _invoices = [];
-        _loyalty = null;
-        _selectedJobId = null;
-        _selectedBikeId =
-            nextBikeId != null && nextBikeId.isNotEmpty ? nextBikeId : null;
-        _bikePanelMode = _selectedBikeId != null
-            ? ClientBikePanelMode.record
-            : ClientBikePanelMode.none;
-        _selectedBikeRecordSnapshot = null;
-        _isLoadingSelectedBikeRecordSnapshot = false;
-        _bikeRecordLoadError = null;
-        _isLoading = true;
-        _isLoadingInvoices = false;
-        _hasLoadedInvoices = false;
-        _error = null;
-        _invoiceError = null;
-        _chats = [];
+        _record = null;
+        _bikes = const [];
+        _visits = null;
+        _invoices = null;
+        _chats = null;
         _selectedChat = null;
-        _isLoadingChats = false;
-        _hasLoadedChats = false;
-        _chatError = null;
-        _tabController.index = nextIndex;
+        _openedBikeId = null;
+        _loading = true;
+        _tab = clientPageTabFor(widget.initialTab);
       });
-
-      unawaited(_loadData());
-      if (nextIndex == 3) {
-        unawaited(_loadInvoices());
-      }
-      if (nextIndex == 4) {
-        unawaited(_loadChats());
-      }
+      _load();
       return;
     }
-
-    final nextBikeId = widget.initialBikeId?.trim();
-    final previousBikeId = oldWidget.initialBikeId?.trim();
-    final nextTab = widget.initialTab;
-    final previousTab = oldWidget.initialTab;
-
-    if (nextBikeId != previousBikeId) {
-      if (nextBikeId != null && nextBikeId.isNotEmpty) {
-        setState(() {
-          _selectedBikeId = nextBikeId;
-          _bikePanelMode = ClientBikePanelMode.record;
-          _tabController.index = 0;
-        });
-        if (_bikeIndex.containsKey(nextBikeId)) {
-          unawaited(_loadSelectedBikeRecordSnapshot(nextBikeId));
-        }
-      } else if (previousBikeId != null && previousBikeId.isNotEmpty) {
-        _closeBikePane();
-      }
-    } else if (nextTab != previousTab) {
-      final nextIndex = _resolveTabIndex(
-        initialTab: nextTab,
-        initialBikeId: nextBikeId,
-      );
-      if (_tabController.index != nextIndex) {
-        _tabController.index = nextIndex;
-      }
-      if (nextIndex == 3 && !_hasLoadedInvoices && !_isLoadingInvoices) {
-        unawaited(_loadInvoices());
-      }
+    if (widget.initialTab != oldWidget.initialTab) {
+      setState(() => _tab = clientPageTabFor(widget.initialTab));
+    }
+    if (widget.initialBikeId != oldWidget.initialBikeId) {
+      _openInitialBike();
     }
   }
 
   @override
   void dispose() {
-    _tabController.removeListener(_handleTabChanged);
-    _tabController.dispose();
-    _headerScrollController.dispose();
-    _bodyScrollController.dispose();
-    _bikeSearchController.removeListener(_handleBikeSearchChanged);
-    _jobSearchController.removeListener(_handleJobSearchChanged);
-    _timelineSearchController.removeListener(_handleTimelineSearchChanged);
-    _invoiceSearchController.removeListener(_handleInvoiceSearchChanged);
-    _bikeSearchController.dispose();
-    _jobSearchController.dispose();
-    _timelineSearchController.dispose();
-    _invoiceSearchController.dispose();
+    for (final controller in _text.values) {
+      controller.dispose();
+    }
+    for (final node in _focus.values) {
+      node.dispose();
+    }
     super.dispose();
   }
 
-  int _resolveTabIndex({String? initialTab, String? initialBikeId}) {
-    if (initialBikeId != null && initialBikeId.isNotEmpty) {
-      return 0;
-    }
+  // ── Lectura ──────────────────────────────────────────────────────────────
 
-    switch (initialTab) {
-      case 'pegas':
-        return 1;
-      case 'facturas':
-      case 'invoices':
-        return 2;
-      case 'chats':
-        return 3;
-      case 'historial':
-        return 4;
-      default:
-        return 0;
-    }
-  }
-
-  void _handleTabChanged() {
-    if (_tabController.indexIsChanging) {
-      return;
-    }
-
-    if (_tabController.index == 2 &&
-        !_hasLoadedInvoices &&
-        !_isLoadingInvoices) {
-      unawaited(_loadInvoices());
-    }
-    if (_tabController.index == 3 && !_hasLoadedChats && !_isLoadingChats) {
-      unawaited(_loadChats());
-    }
-  }
-
-  void _handleInvoiceSearchChanged() {
+  /// [refresh] pide las facturas sin caché: al volver de una factura o de
+  /// un pago, lo guardado allá tiene que verse acá.
+  Future<void> _load({bool refresh = false}) async {
+    final generation = ++_generation;
+    bool isCurrent() => mounted && generation == _generation;
+    final customers = context.read<CustomerService>();
+    final bikeshop = context.read<BikeshopService>();
     setState(() {
-      _invoiceSearchTerm = _invoiceSearchController.text.trim();
-    });
-  }
-
-  void _handleBikeSearchChanged() {
-    setState(() {
-      _bikeSearchTerm = _bikeSearchController.text.trim();
-    });
-  }
-
-  void _handleJobSearchChanged() {
-    setState(() {
-      _jobSearchTerm = _jobSearchController.text.trim();
-    });
-  }
-
-  void _handleTimelineSearchChanged() {
-    setState(() {
-      _timelineSearchTerm = _timelineSearchController.text.trim();
-    });
-  }
-
-  Future<void> _loadData() async {
-    setState(() {
-      _isLoading = true;
+      _loading = _record == null;
       _error = null;
     });
-
     try {
-      final customerService =
-          Provider.of<CustomerService>(context, listen: false);
-      final bikeshopService =
-          Provider.of<BikeshopService>(context, listen: false);
-
-      // Load customer data
-      final customer = await customerService.getCustomerById(widget.customerId);
-      final loyalty =
-          await customerService.getCustomerLoyalty(widget.customerId);
-
-      if (customer == null) {
+      final record = await customers.getClientRecord(widget.customerId);
+      if (!isCurrent()) return;
+      if (record == null) {
         setState(() {
-          _error = 'Cliente no encontrado';
-          _isLoading = false;
+          _notFound = true;
+          _loading = false;
         });
         return;
       }
-
-      // Load bikes for this customer
-      final bikes =
-          await bikeshopService.getBikes(customerId: widget.customerId);
-      final bikeIndex = <String, Bike>{
-        for (final bike in bikes)
-          if (bike.id != null && bike.id!.isNotEmpty) bike.id!: bike,
-      };
-
-      // Load all jobs for this customer
-      final jobs = await bikeshopService.getJobs(
-        customerId: widget.customerId,
-        includeCompleted: true,
-      );
-      final jobsByBike = <String?, List<MechanicJob>>{};
-      final jobIndex = <String, MechanicJob>{};
-      for (final job in jobs) {
-        if (job.id != null && job.id!.isNotEmpty) {
-          jobIndex[job.id!] = job;
-        }
-        jobsByBike.putIfAbsent(job.bikeId, () => []).add(job);
-      }
-
-      // Load combined timeline from all jobs
-      final allTimeline = <MechanicJobTimeline>[];
-      if (kDebugMode) {
-        print('📋 Loading timeline for ${jobs.length} jobs...');
-      }
-
-      for (final job in jobs) {
-        if (job.id == null) continue;
-
-        try {
-          final jobTimeline = await bikeshopService.getJobTimeline(job.id!);
-          if (kDebugMode) {
-            print(
-                '📋 Job ${job.jobNumber}: ${jobTimeline.length} timeline events');
-          }
-          allTimeline.addAll(jobTimeline);
-        } catch (e) {
-          if (kDebugMode) {
-            print('❌ Error loading timeline for job ${job.id}: $e');
-          }
-        }
-      }
-
-      if (kDebugMode) {
-        print('📋 Total timeline events loaded: ${allTimeline.length}');
-      }
-
-      // Sort timeline by date descending (most recent first)
-      allTimeline.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-
-      final requestedBikeId = widget.initialBikeId?.trim();
-      final requestedBikeExists = requestedBikeId != null &&
-          requestedBikeId.isNotEmpty &&
-          bikeIndex.containsKey(requestedBikeId);
-      final selectedBikeStillExists = requestedBikeExists ||
-          _selectedBikeId == null ||
-          bikeIndex.containsKey(_selectedBikeId);
-
+      final bikes = await bikeshop.getBikes(customerId: widget.customerId);
+      if (!isCurrent()) return;
       setState(() {
-        _customer = customer;
-        _bikes = bikes;
-        _jobs = jobs;
-        _bikeIndex = bikeIndex;
-        _jobsByBike = jobsByBike;
-        _jobIndex = jobIndex;
-        _timeline = allTimeline;
-        _loyalty = loyalty;
-        if (requestedBikeExists) {
-          _selectedBikeId = requestedBikeId;
-          _bikePanelMode = ClientBikePanelMode.record;
-          _tabController.index = 0;
-        } else if (!selectedBikeStillExists) {
-          _selectedBikeId = null;
-          _bikePanelMode = ClientBikePanelMode.none;
-          _selectedBikeRecordSnapshot = null;
-          _isLoadingSelectedBikeRecordSnapshot = false;
-        }
-        _isLoading = false;
+        _record = record;
+        _bikes = [
+          for (final bike in bikes)
+            if (bike.customerId == widget.customerId) bike,
+        ];
+        _notFound = false;
+        _loading = false;
       });
-
-      if ((requestedBikeExists || selectedBikeStillExists) &&
-          _selectedBikeId != null) {
-        unawaited(_loadSelectedBikeRecordSnapshot(_selectedBikeId));
-      }
-
-      // Eagerly load invoices so totalSpent stat is accurate on first render
-      unawaited(_loadInvoices());
-    } catch (e) {
+    } catch (error) {
+      debugPrint('Client page load failed: $error');
+      if (!isCurrent()) return;
       setState(() {
-        _error = 'Error al cargar datos: $e';
-        _isLoading = false;
+        _error = 'No pudimos abrir este cliente.';
+        _loading = false;
       });
-    }
-  }
-
-  Future<void> _loadInvoices({bool forceRefresh = false}) async {
-    if (_isLoadingInvoices) {
       return;
     }
+    unawaited(_loadVisits(generation));
+    unawaited(_loadInvoices(generation, force: refresh));
+    unawaited(_loadChats(generation));
+    _openInitialBike();
+  }
 
-    final salesService = context.read<SalesService>();
+  Map<String, Bike> get _bikesById => {
+        for (final bike in _bikes)
+          if (bike.id != null) bike.id!: bike,
+      };
 
-    if (!forceRefresh && salesService.hasInvoicesCache) {
-      final cachedInvoices = salesService.cachedInvoices
-          .where((invoice) => invoice.customerId == widget.customerId)
-          .toList()
-        ..sort((a, b) => b.date.compareTo(a.date));
-      if (mounted) {
-        setState(() {
-          _invoices = cachedInvoices;
-          _hasLoadedInvoices = true;
-          _invoiceError = null;
-        });
-      }
-    }
-
-    setState(() {
-      _isLoadingInvoices = true;
-      _invoiceError = null;
-    });
-
+  Future<void> _loadVisits(int generation) async {
+    final record = _record;
+    if (record == null || !mounted) return;
+    setState(() => _visitsFailed = false);
     try {
-      final invoices = await salesService.getInvoicesForCustomer(
-        customerId: widget.customerId,
-        forceRefresh: forceRefresh,
+      final visits = await loadCustomerVisits(
+        context,
+        widget.customerId,
+        bikesById: _bikesById,
+        ownerName: record.name,
       );
-
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _invoices = invoices;
-        _hasLoadedInvoices = true;
-        _isLoadingInvoices = false;
-      });
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        _invoiceError = 'No se pudieron cargar las facturas';
-        _isLoadingInvoices = false;
-        _hasLoadedInvoices = true;
-      });
+      if (!mounted || generation != _generation) return;
+      setState(() => _visits = visits);
+    } catch (error) {
+      debugPrint('Client activity load failed: $error');
+      if (!mounted || generation != _generation) return;
+      setState(() => _visitsFailed = true);
     }
   }
 
-  Future<void> _loadChats({bool forceRefresh = false}) async {
-    if (_isLoadingChats && !forceRefresh) return;
-
-    setState(() {
-      _isLoadingChats = true;
-      _chatError = null;
-    });
-
+  Future<void> _loadInvoices(int generation, {bool force = false}) async {
+    if (!mounted) return;
+    final sales = context.read<SalesService>();
+    setState(() => _invoicesFailed = false);
     try {
-      final chats = await _messagingService
-          .getConversationsForCustomer(widget.customerId);
+      final invoices = await sales.getInvoicesForCustomer(
+        customerId: widget.customerId,
+        forceRefresh: force,
+      );
+      if (!mounted || generation != _generation) return;
+      setState(() {
+        _invoices = [...invoices]..sort((a, b) => b.date.compareTo(a.date));
+      });
+    } catch (error) {
+      debugPrint('Client invoices load failed: $error');
+      if (!mounted || generation != _generation) return;
+      setState(() => _invoicesFailed = true);
+    }
+  }
 
-      if (!mounted) return;
-
+  Future<void> _loadChats(int generation) async {
+    if (!mounted) return;
+    setState(() => _chatsFailed = false);
+    try {
+      final chats =
+          await _messaging.getConversationsForCustomer(widget.customerId);
+      if (!mounted || generation != _generation) return;
       setState(() {
         _chats = chats;
-        _hasLoadedChats = true;
-        _isLoadingChats = false;
-        if (_selectedChat == null && chats.isNotEmpty) {
-          _selectedChat = chats.first;
-        }
+        final selected = _selectedChat;
+        _selectedChat = selected == null
+            ? null
+            : chats.where((chat) => chat.id == selected.id).firstOrNull;
       });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _chatError = 'No se pudieron cargar los chats';
-        _isLoadingChats = false;
-        _hasLoadedChats = true;
-      });
+    } catch (error) {
+      debugPrint('Client chats load failed: $error');
+      if (!mounted || generation != _generation) return;
+      setState(() => _chatsFailed = true);
     }
   }
 
-  List<Bike> _getFilteredBikes() {
-    final term = _bikeSearchTerm.toLowerCase();
-    final filtered = _bikes.where((bike) {
-      if (term.isEmpty) return true;
-      final candidates = [
-        bike.displayName,
-        bike.brand,
-        bike.model,
-        bike.serialNumber,
-        bike.color,
-        bike.notes,
-        bike.bikeType?.displayName,
-      ];
-      return candidates.any(
-        (value) => value != null && value.toLowerCase().contains(term),
-      );
-    }).toList();
-
-    if (_bikeSortCol != null) {
-      filtered.sort((a, b) {
-        int cmp;
-        switch (_bikeSortCol!) {
-          case 'name':
-            cmp = a.displayName
-                .toLowerCase()
-                .compareTo(b.displayName.toLowerCase());
-            break;
-          case 'serial':
-            cmp = (a.serialNumber ?? '').compareTo(b.serialNumber ?? '');
-            break;
-          case 'registered':
-            cmp = a.createdAt.compareTo(b.createdAt);
-            break;
-          case 'last_delivery':
-            final aD = _jobs
-                .where((j) => j.bikeId == a.id && j.deliveredAt != null)
-                .fold<DateTime?>(
-                    null,
-                    (p, j) => p == null || j.deliveredAt!.isAfter(p)
-                        ? j.deliveredAt
-                        : p);
-            final bD = _jobs
-                .where((j) => j.bikeId == b.id && j.deliveredAt != null)
-                .fold<DateTime?>(
-                    null,
-                    (p, j) => p == null || j.deliveredAt!.isAfter(p)
-                        ? j.deliveredAt
-                        : p);
-            cmp = (aD ?? DateTime(0)).compareTo(bD ?? DateTime(0));
-            break;
-          case 'jobs':
-            cmp = _totalJobsForBike(a.id).compareTo(_totalJobsForBike(b.id));
-            break;
-          default:
-            cmp = 0;
-        }
-        return _bikeSortAsc ? cmp : -cmp;
-      });
-    } else {
-      filtered.sort((a, b) {
-        switch (_bikeSortKey) {
-          case 'name':
-            return a.displayName.toLowerCase().compareTo(
-                  b.displayName.toLowerCase(),
-                );
-          case 'jobs_desc':
-            final aCount = _totalJobsForBike(a.id);
-            final bCount = _totalJobsForBike(b.id);
-            return bCount.compareTo(aCount);
-          case 'jobs_asc':
-            final aCount = _totalJobsForBike(a.id);
-            final bCount = _totalJobsForBike(b.id);
-            return aCount.compareTo(bCount);
-          case 'recent':
-          default:
-            return b.updatedAt.compareTo(a.updatedAt);
-        }
-      });
-    }
-
-    return filtered;
+  /// Al volver de otra página (un trabajo, una factura, una bici) se lee
+  /// todo de nuevo: lo que se hizo allá cambia lo de acá.
+  void _reloadAfterReturn() {
+    if (!mounted) return;
+    unawaited(_load(refresh: true));
   }
 
-  List<MechanicJob> _getFilteredJobs() {
-    Iterable<MechanicJob> filtered = _jobs;
-
-    switch (_jobViewFilter) {
-      case JobViewFilter.active:
-        filtered = filtered.where((job) =>
-            job.status != JobStatus.entregado &&
-            job.status != JobStatus.cancelado);
-        break;
-      case JobViewFilter.completed:
-        filtered = filtered.where((job) => job.status == JobStatus.entregado);
-        break;
-      case JobViewFilter.all:
-        break;
-    }
-
-    final term = _jobSearchTerm.toLowerCase();
-    if (term.isNotEmpty) {
-      filtered = filtered.where((job) {
-        final bikeName = _bikeIndex[job.bikeId]?.displayName;
-        final candidates = [
-          job.jobNumber,
-          job.isQuotationWorkflow ? job.proposalDocumentLabel : null,
-          job.isStandaloneQuotation ? 'Sin objeto recibido' : null,
-          job.clientRequest,
-          job.subjectNotes,
-          job.diagnosis,
-          job.workPerformed,
-          job.notes,
-          job.assignedTechnicianName,
-          bikeName,
-        ];
-        return candidates.any(
-          (value) => value != null && value.toLowerCase().contains(term),
-        );
-      });
-    }
-
-    final result = filtered.toList();
-    if (_jobSortCol != null) {
-      result.sort((a, b) {
-        int cmp;
-        switch (_jobSortCol!) {
-          case 'number':
-            cmp = (a.jobNumber ?? '').compareTo(b.jobNumber ?? '');
-            break;
-          case 'bike':
-            final aBike = _bikeIndex[a.bikeId]?.displayName ?? '';
-            final bBike = _bikeIndex[b.bikeId]?.displayName ?? '';
-            cmp = aBike.compareTo(bBike);
-            break;
-          case 'request':
-            cmp = (a.clientRequest ?? '').compareTo(b.clientRequest ?? '');
-            break;
-          case 'status':
-            cmp = a.statusDisplayName.compareTo(b.statusDisplayName);
-            break;
-          case 'date':
-            cmp = a.arrivalDate.compareTo(b.arrivalDate);
-            break;
-          case 'total':
-            cmp = a.totalCost.compareTo(b.totalCost);
-            break;
-          default:
-            cmp = 0;
-        }
-        return _jobSortAsc ? cmp : -cmp;
-      });
-    } else {
-      result.sort((a, b) {
-        switch (_jobSortKey) {
-          case 'arrival_asc':
-            return a.arrivalDate.compareTo(b.arrivalDate);
-          case 'cost_desc':
-            return b.totalCost.compareTo(a.totalCost);
-          case 'cost_asc':
-            return a.totalCost.compareTo(b.totalCost);
-          case 'arrival_desc':
-          default:
-            return b.arrivalDate.compareTo(a.arrivalDate);
-        }
-      });
-    }
-
-    return result;
-  }
-
-  List<Invoice> _getFilteredInvoices() {
-    final term = _invoiceSearchTerm.toLowerCase();
-    final filtered = _invoices.where((invoice) {
-      if (term.isEmpty) {
-        return true;
-      }
-
-      final bikeName = _bikeIndex[invoice.bikeId]?.displayName;
-      final candidates = [
-        invoice.invoiceNumber,
-        invoice.reference,
-        invoice.jobNumber,
-        bikeName,
-        _invoiceStatusLabel(invoice.status),
-        _invoiceTypeLabel(invoice),
-      ];
-      return candidates.any(
-        (value) => value != null && value.toLowerCase().contains(term),
-      );
-    }).toList();
-
-    if (_invoiceSortCol != null) {
-      filtered.sort((a, b) {
-        int cmp;
-        switch (_invoiceSortCol!) {
-          case 'number':
-            cmp = a.invoiceNumber.compareTo(b.invoiceNumber);
-            break;
-          case 'context':
-            cmp = _invoiceContextSortValue(a)
-                .compareTo(_invoiceContextSortValue(b));
-            break;
-          case 'date':
-            cmp = a.date.compareTo(b.date);
-            break;
-          case 'status':
-            cmp = _invoiceStatusLabel(a.status)
-                .compareTo(_invoiceStatusLabel(b.status));
-            break;
-          case 'total':
-            cmp = a.total.compareTo(b.total);
-            break;
-          case 'balance':
-            cmp = a.balance.compareTo(b.balance);
-            break;
-          default:
-            cmp = 0;
-        }
-        return _invoiceSortAsc ? cmp : -cmp;
-      });
-      return filtered;
-    }
-
-    filtered.sort((a, b) {
-      switch (_invoiceSortKey) {
-        case 'date_asc':
-          return a.date.compareTo(b.date);
-        case 'total_desc':
-          return b.total.compareTo(a.total);
-        case 'total_asc':
-          return a.total.compareTo(b.total);
-        case 'balance_desc':
-          return b.balance.compareTo(a.balance);
-        case 'balance_asc':
-          return a.balance.compareTo(b.balance);
-        case 'date_desc':
-        default:
-          return b.date.compareTo(a.date);
-      }
+  void _openInitialBike() {
+    final bikeId = widget.initialBikeId?.trim();
+    if (bikeId == null || bikeId.isEmpty || bikeId == _openedBikeId) return;
+    if (!_bikes.any((bike) => bike.id == bikeId)) return;
+    _openedBikeId = bikeId;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _openBike(bikeId);
     });
-
-    return filtered;
   }
 
-  int _totalJobsForBike(String? bikeId) {
-    if (bikeId == null) return 0;
-    return _jobsByBike[bikeId]?.length ?? 0;
+  // ── Navegación ───────────────────────────────────────────────────────────
+
+  Future<void> _close() async {
+    if (_saving) return;
+    if (!await _confirmDiscard()) return;
+    if (!mounted) return;
+    _leaveEdit();
+    ReturnNavigation.close(context, fallbackRoute: _fallbackRoute);
   }
 
-  int _activeJobsForBike(String? bikeId) {
-    if (bikeId == null) return 0;
-    final jobs = _jobsByBike[bikeId];
-    if (jobs == null) return 0;
-    return jobs
-        .where((job) =>
-            job.status != JobStatus.entregado &&
-            job.status != JobStatus.cancelado)
-        .length;
+  void _openJob(String jobId) {
+    context.push('/taller/pegas/$jobId').then((_) => _reloadAfterReturn());
   }
 
-  double _tableViewportWidth(BoxConstraints constraints) {
-    final viewportWidth = constraints.maxWidth;
-    if (viewportWidth.isFinite && viewportWidth > 0) return viewportWidth;
-    return MediaQuery.of(context).size.width - 32;
+  void _newJob() {
+    final route = Uri(
+      path: '/taller/pegas/nueva',
+      queryParameters: {'customer_id': widget.customerId},
+    ).toString();
+    context.push(route).then((_) => _reloadAfterReturn());
   }
 
-  double _bikeTableWidth(double viewportWidth) {
-    final fixedWidth = 52 +
-        _bikeColSerial +
-        _bikeColRegistered +
-        _bikeColDelivery +
-        _bikeColJobs +
-        44;
-    final desiredWidth = fixedWidth + 320;
-    return desiredWidth > viewportWidth ? desiredWidth : viewportWidth;
+  void _openBike(String bikeId) {
+    context
+        .push('/taller/bicicletas/$bikeId')
+        .then((_) => _reloadAfterReturn());
   }
 
-  double _jobTableWidth(double viewportWidth) {
-    final fixedWidth = 4 +
-        _jobColNumber +
-        _jobColBike +
-        _jobColStatus +
-        _jobColDate +
-        _jobColTotal +
-        44;
-    final desiredWidth = fixedWidth + 320;
-    return desiredWidth > viewportWidth ? desiredWidth : viewportWidth;
+  Future<void> _addBike() async {
+    final saved = await showDialog<Bike?>(
+      context: context,
+      builder: (_) => BikeFormDialog(customerId: widget.customerId),
+    );
+    if (saved != null && mounted) _reloadAfterReturn();
   }
 
-  double _timelineTableWidth(double viewportWidth) {
-    final fixedWidth = 52 + _tlColRef + _tlColTech + _tlColDate;
-    final desiredWidth = fixedWidth + 360;
-    return desiredWidth > viewportWidth ? desiredWidth : viewportWidth;
+  void _openInvoice(Invoice invoice) {
+    final id = invoice.id;
+    if (id == null || id.isEmpty) return;
+    context.push('/sales/invoices/$id/edit').then((_) => _reloadAfterReturn());
   }
 
-  double _invoiceTableWidth(double viewportWidth) {
-    final fixedWidth = 4 +
-        _invoiceColNumber +
-        _invoiceColDate +
-        _invoiceColStatus +
-        _invoiceColTotal +
-        _invoiceColBalance +
-        44;
-    final desiredWidth = fixedWidth + 320;
-    return desiredWidth > viewportWidth ? desiredWidth : viewportWidth;
+  void _registerPayment(Invoice invoice) {
+    final id = invoice.id;
+    if (id == null || id.isEmpty) return;
+    context
+        .push('/sales/invoices/$id/payment')
+        .then((_) => _reloadAfterReturn());
   }
 
-  double _bikeNameColumnWidth(double tableWidth) {
-    return tableWidth -
-        (52 +
-            _bikeColSerial +
-            _bikeColRegistered +
-            _bikeColDelivery +
-            _bikeColJobs +
-            44);
-  }
-
-  double _jobRequestColumnWidth(double tableWidth) {
-    return tableWidth -
-        (4 +
-            _jobColNumber +
-            _jobColBike +
-            _jobColStatus +
-            _jobColDate +
-            _jobColTotal +
-            44);
-  }
-
-  double _timelineDescriptionColumnWidth(double tableWidth) {
-    return tableWidth - (52 + _tlColRef + _tlColTech + _tlColDate);
-  }
-
-  double _invoiceContextColumnWidth(double tableWidth) {
-    return tableWidth -
-        (4 +
-            _invoiceColNumber +
-            _invoiceColDate +
-            _invoiceColStatus +
-            _invoiceColTotal +
-            _invoiceColBalance +
-            44);
-  }
-
-  String _jobFilterLabel(JobViewFilter filter) {
-    switch (filter) {
-      case JobViewFilter.active:
-        return 'Activos';
-      case JobViewFilter.completed:
-        return 'Entregados';
-      case JobViewFilter.all:
-        return 'Todos';
-    }
-  }
-
-  String _invoiceStatusLabel(InvoiceStatus status) {
-    switch (status) {
-      case InvoiceStatus.draft:
-        return 'Borrador';
-      case InvoiceStatus.sent:
-        return 'Enviada';
-      case InvoiceStatus.confirmed:
-        return 'Confirmada';
-      case InvoiceStatus.paid:
-        return 'Pagada';
-      case InvoiceStatus.overdue:
-        return 'Vencida';
-      case InvoiceStatus.cancelled:
-        return 'Anulada';
-    }
-  }
-
-  String _invoiceTypeLabel(Invoice invoice) {
-    switch (invoice.invoiceType) {
-      case 'pega':
-        return 'Taller';
-      case 'service':
-        return 'Servicio';
-      case 'sale':
-      default:
-        return 'Venta';
-    }
-  }
-
-  String _invoiceContextSortValue(Invoice invoice) {
-    final bikeName = _bikeIndex[invoice.bikeId]?.displayName;
-    return [
-      bikeName,
-      invoice.jobNumber,
-      invoice.reference,
-      _invoiceTypeLabel(invoice),
-    ].whereType<String>().join(' ').toLowerCase();
-  }
-
-  Bike _getBikeForJob(MechanicJob job) {
-    if (job.bikeId == null || job.isComponentIntake) {
-      // Display-only object label. A standalone quotation must never look like
-      // a bicycle was received by the workshop.
-      final subjectName = job.subjectData?.name.trim();
-      final subjectNotes = job.subjectNotes?.trim();
-      final label = job.isStandaloneQuotation
-          ? 'Cotización'
-          : job.isComponentIntake
-              ? (subjectName?.isNotEmpty == true
-                  ? subjectName!
-                  : subjectNotes?.isNotEmpty == true
-                      ? subjectNotes!
-                      : 'Componente recibido')
-              : job.subjectData?.name ?? job.jobType.displayName;
-      return Bike(
-        id: null,
-        tenantId: '',
-        customerId: job.customerId,
-        brand: label,
-        model: job.isStandaloneQuotation ? 'Sin objeto recibido' : null,
-        createdAt: job.createdAt,
-        updatedAt: job.updatedAt,
-      );
-    }
-    final bike = _bikeIndex[job.bikeId];
-    if (bike != null) return bike;
-    // Fallback bike for display only (not saved to DB)
-    return Bike(
-      id: job.bikeId,
-      tenantId: '', // Fallback only - this bike won't be saved
-      customerId: job.customerId,
-      brand: 'Bicicleta',
-      model: 'sin datos',
-      bikeType: BikeType.other,
-      createdAt: job.createdAt,
-      updatedAt: job.updatedAt,
+  void _manageAccess() {
+    UserManagementNavigation.open(
+      context,
+      audience: UserManagementAudience.customers,
+      target: UserManagementTarget.customer,
+      targetId: widget.customerId,
     );
   }
 
-  List<MechanicJobTimeline> _getFilteredTimeline() {
-    Iterable<MechanicJobTimeline> filtered = _timeline;
+  void _showTab(ClientPageTab tab) => setState(() => _tab = tab);
 
-    if (_timelineTypeFilters.isNotEmpty &&
-        _timelineTypeFilters.length < TimelineEventType.values.length) {
-      filtered = filtered.where(
-        (event) => _timelineTypeFilters.contains(event.eventType),
+  void _openChat(Conversation chat) {
+    setState(() {
+      _selectedChat = chat;
+      _tab = ClientPageTab.messages;
+    });
+  }
+
+  // ── Edición en su lugar ──────────────────────────────────────────────────
+
+  bool get _hasUnsavedChanges => (_draft?.changeCount ?? 0) > 0;
+
+  void _startEdit([ClientDataField? focus]) {
+    final record = _record;
+    if (record == null || _saving) return;
+    if (_draft == null) {
+      final draft = ClientDataDraft(record);
+      _resetControllers(draft);
+      setState(() {
+        _draft = draft;
+        _tab = ClientPageTab.data;
+        _showProblems = false;
+        _saveProblem = null;
+        _dockNotice = null;
+      });
+    } else if (_tab != ClientPageTab.data) {
+      setState(() => _tab = ClientPageTab.data);
+    }
+    if (focus != null && focus != ClientDataField.region) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _focus[focus]?.requestFocus();
+      });
+    }
+  }
+
+  void _resetControllers(ClientDataDraft draft) {
+    for (final field in ClientDataField.values) {
+      final text = draft.value(field) ?? '';
+      final controller = _text[field];
+      if (controller == null) {
+        _text[field] = TextEditingController(text: text);
+      } else if (controller.text != text) {
+        controller.text = text;
+      }
+    }
+  }
+
+  void _leaveEdit() {
+    _draft = null;
+    _saving = false;
+    _showProblems = false;
+    _saveProblem = null;
+    _dockNotice = null;
+  }
+
+  void _onFieldChanged(ClientDataField field, String value) {
+    final draft = _draft;
+    if (draft == null) return;
+    draft.set(field, value);
+    setState(() {
+      if (_saveProblem?.field == field) _saveProblem = null;
+    });
+  }
+
+  void _onRegionChanged(String? region) {
+    final draft = _draft;
+    if (draft == null) return;
+    draft.set(ClientDataField.region, region);
+    setState(() {});
+  }
+
+  void _undo(ClientDataField field) {
+    final draft = _draft;
+    if (draft == null) return;
+    draft.revert(field);
+    _text[field]?.text = draft.value(field) ?? '';
+    setState(() {
+      if (_saveProblem?.field == field) _saveProblem = null;
+    });
+  }
+
+  Future<bool> _confirmDiscard() async {
+    if (!_hasUnsavedChanges) return true;
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('¿Descartar los cambios?'),
+        content: const Text('Los datos del cliente quedan como estaban.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Seguir editando'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Descartar'),
+          ),
+        ],
+      ),
+    );
+    return discard == true;
+  }
+
+  Future<void> _cancelEdit() async {
+    if (_saving) return;
+    if (!await _confirmDiscard() || !mounted) return;
+    setState(_leaveEdit);
+  }
+
+  Map<ClientDataField, String> get _problems {
+    final draft = _draft;
+    if (draft == null) return const {};
+    final problems = <ClientDataField, String>{
+      if (_showProblems) ...draft.problems,
+    };
+    final saveProblem = _saveProblem;
+    if (saveProblem?.field case final field?) {
+      problems[field] = saveProblem!.message;
+    }
+    return problems;
+  }
+
+  Future<void> _save() async {
+    final draft = _draft;
+    if (draft == null || _saving) return;
+    final problems = draft.problems;
+    if (problems.isNotEmpty) {
+      setState(() {
+        _showProblems = true;
+        _saveProblem = null;
+        _dockNotice = 'Revisa ${_joinNames(problems.keys)} antes de guardar.';
+      });
+      final first = problems.keys.first;
+      if (first != ClientDataField.region) _focus[first]?.requestFocus();
+      return;
+    }
+    final customers = context.read<CustomerService>();
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() {
+      _saving = true;
+      _saveProblem = null;
+      _dockNotice = null;
+    });
+    try {
+      final saved = await customers.saveClientData(draft);
+      if (!_stillEditing(draft)) return;
+      setState(() {
+        _record = saved;
+        _leaveEdit();
+      });
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Datos del cliente guardados.')),
       );
-    }
-
-    final term = _timelineSearchTerm.toLowerCase();
-    if (term.isNotEmpty) {
-      filtered = filtered.where((event) {
-        final job = event.jobId.isNotEmpty ? _jobIndex[event.jobId] : null;
-        final bike = job != null ? _bikeIndex[job.bikeId] : null;
-        final defaultDescription = _getDefaultDescription(event.eventType);
-        final candidates = [
-          event.description,
-          defaultDescription,
-          event.oldValue,
-          event.newValue,
-          event.createdByName,
-          job?.jobNumber,
-          bike?.displayName,
-        ];
-        return candidates.any(
-          (value) => value != null && value.toLowerCase().contains(term),
-        );
+    } on ClientDataSaveException catch (error) {
+      if (!_stillEditing(draft)) return;
+      setState(() {
+        _saving = false;
+        _saveProblem = (field: error.field, message: error.message);
+        _dockNotice = error.message;
+      });
+    } on ClientDataStaleException {
+      if (!_stillEditing(draft)) return;
+      await _rebaseAfterStale(draft, customers);
+    } catch (error) {
+      debugPrint('Client data save failed: $error');
+      if (!_stillEditing(draft)) return;
+      setState(() {
+        _saving = false;
+        _dockNotice = 'No se pudo guardar. Revisa la conexión y vuelve a '
+            'intentar; tus cambios siguen aquí.';
       });
     }
+  }
 
-    final result = filtered.toList();
-    if (_timelineSortCol != null) {
-      result.sort((a, b) {
-        int cmp;
-        final aJob = a.jobId.isNotEmpty ? _jobIndex[a.jobId] : null;
-        final bJob = b.jobId.isNotEmpty ? _jobIndex[b.jobId] : null;
-        switch (_timelineSortCol!) {
-          case 'desc':
-            final aDesc = a.description ?? _getDefaultDescription(a.eventType);
-            final bDesc = b.description ?? _getDefaultDescription(b.eventType);
-            cmp = aDesc.compareTo(bDesc);
-            break;
-          case 'ref':
-            cmp = (aJob?.jobNumber ?? '').compareTo(bJob?.jobNumber ?? '');
-            break;
-          case 'tech':
-            cmp = (a.createdByName ?? '').compareTo(b.createdByName ?? '');
-            break;
-          case 'date':
-            cmp = a.createdAt.compareTo(b.createdAt);
-            break;
-          default:
-            cmp = 0;
-        }
-        return _timelineSortAsc ? cmp : -cmp;
+  /// Lo que vuelve de un guardado sólo vale para la edición que lo pidió: si
+  /// entre medio la página pasó a otro cliente, se ignora (Codex,
+  /// 2026-10-03: un rechazo tardío ponía los cambios de uno sobre el otro).
+  bool _stillEditing(ClientDataDraft draft) =>
+      mounted &&
+      identical(_draft, draft) &&
+      widget.customerId == draft.record.id;
+
+  /// Otro guardó el cliente mientras se editaba: se lee lo suyo y se ponen
+  /// encima los cambios de esta edición, marcados, para revisarlos.
+  Future<void> _rebaseAfterStale(
+    ClientDataDraft draft,
+    CustomerService customers,
+  ) async {
+    ClientRecord? newer;
+    try {
+      newer = await customers.getClientRecord(draft.record.id);
+    } catch (error) {
+      debugPrint('Client data reread failed: $error');
+    }
+    if (!_stillEditing(draft)) return;
+    if (newer == null || newer.id != draft.record.id) {
+      setState(() {
+        _saving = false;
+        _dockNotice = 'Otro guardó este cliente mientras editabas y no '
+            'pudimos leer su versión. Vuelve a intentar.';
       });
-    } else {
-      result.sort((a, b) {
-        switch (_timelineSortKey) {
-          case 'date_asc':
-            return a.createdAt.compareTo(b.createdAt);
-          case 'date_desc':
-          default:
-            return b.createdAt.compareTo(a.createdAt);
-        }
-      });
+      return;
     }
-
-    return result;
+    final next = draft.rebasedOn(newer);
+    _resetControllers(next);
+    final overlap = next.changedByOthers;
+    setState(() {
+      _record = newer;
+      _draft = next;
+      _saving = false;
+      _dockNotice = overlap.isEmpty
+          ? 'Otro guardó este cliente mientras editabas. Tus cambios siguen '
+              'aquí, encima de lo suyo: guarda de nuevo.'
+          : 'Otro guardó este cliente mientras editabas y también cambió '
+              '${_joinNames(overlap)}. Quedó lo tuyo: revísalo y guarda de '
+              'nuevo.';
+    });
   }
 
-  String _timelineEventLabel(TimelineEventType type) {
-    return type.displayName;
+  /// «el correo», «el correo y el RUT», «el nombre, el correo y el RUT».
+  static String _joinNames(Iterable<ClientDataField> fields) {
+    final names = [for (final field in fields) field.phrase];
+    if (names.length == 1) return names.first;
+    return '${names.sublist(0, names.length - 1).join(', ')} y ${names.last}';
   }
 
-  IconData _timelineIcon(TimelineEventType type) {
-    switch (type) {
-      case TimelineEventType.created:
-        return Icons.add_circle;
-      case TimelineEventType.statusChanged:
-        return Icons.swap_horiz;
-      case TimelineEventType.assigned:
-        return Icons.person_add;
-      case TimelineEventType.diagnosisAdded:
-        return Icons.description;
-      case TimelineEventType.partsAdded:
-        return Icons.build_circle;
-      case TimelineEventType.laborAdded:
-        return Icons.work;
-      case TimelineEventType.photoAdded:
-        return Icons.photo_camera;
-      case TimelineEventType.noteAdded:
-        return Icons.note;
-      case TimelineEventType.approved:
-        return Icons.check_circle;
-      case TimelineEventType.invoiced:
-        return Icons.receipt;
-      case TimelineEventType.paid:
-        return Icons.attach_money;
-      case TimelineEventType.completed:
-        return Icons.done_all;
-      case TimelineEventType.delivered:
-        return Icons.local_shipping;
+  // ── Lo que se calcula de la actividad ────────────────────────────────────
+
+  Map<String, Invoice> get _invoiceById => {
+        for (final invoice in _invoices ?? const <Invoice>[])
+          if (invoice.id != null) invoice.id!: invoice,
+      };
+
+  Map<String, MechanicJob> get _jobByInvoiceId => {
+        for (final visit in _visits ?? const <BikeVisit>[])
+          if (visit.job.invoiceId case final id?) id: visit.job,
+      };
+
+  List<BikeVisit> get _countedVisits => [
+        for (final visit in _visits ?? const <BikeVisit>[])
+          if (!isCancelledJob(visit.job)) visit,
+      ];
+
+  List<Invoice> get _owedInvoices => [
+        for (final invoice in _invoices ?? const <Invoice>[])
+          if (invoiceIsOwed(invoice)) invoice,
+      ]..sort((a, b) => a.date.compareTo(b.date));
+
+  double get _paidTotal => (_invoices ?? const <Invoice>[])
+      .where((invoice) => invoice.status != InvoiceStatus.cancelled)
+      .fold(0.0, (sum, invoice) => sum + invoice.paidAmount);
+
+  double get _owedTotal =>
+      _owedInvoices.fold(0.0, (sum, invoice) => sum + invoice.balance);
+
+  String _bikeName(Bike bike) {
+    final parts = [bike.brand, bike.model]
+        .whereType<String>()
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty);
+    return parts.isEmpty ? 'Bicicleta sin nombre' : parts.join(' ');
+  }
+
+  /// Lo que entró al taller: la bici (que abre su página), el componente o
+  /// nada, si es una cotización.
+  List<JobVisitSubject> _subjectsFor(BikeVisit visit) {
+    final job = visit.job;
+    if (job.isStandaloneQuotation) {
+      return const [JobVisitSubject(label: 'Sin objeto recibido')];
     }
+    if (job.isComponentIntake) {
+      final subjectName = job.subjectData?.name.trim();
+      final subjectNotes = job.subjectNotes?.trim();
+      return [
+        JobVisitSubject(
+          label: subjectName?.isNotEmpty == true
+              ? subjectName!
+              : subjectNotes?.isNotEmpty == true
+                  ? subjectNotes!
+                  : 'Componente recibido',
+        ),
+      ];
+    }
+    if (job.isSaleWorkflow) return const [JobVisitSubject(label: 'Venta')];
+    final bikes = _bikesById;
+    return [
+      for (final bikeId in visit.bikeIds)
+        if (bikes[bikeId] case final bike?)
+          JobVisitSubject(
+              label: _bikeName(bike), onTap: () => _openBike(bikeId))
+        else
+          const JobVisitSubject(label: 'Bicicleta sin datos'),
+    ];
   }
 
-  Color _timelineColor(TimelineEventType type) {
-    switch (type) {
-      case TimelineEventType.created:
-        return Colors.blue;
-      case TimelineEventType.statusChanged:
-        return Colors.purple;
-      case TimelineEventType.assigned:
-        return Colors.teal;
-      case TimelineEventType.diagnosisAdded:
-        return Colors.orange;
-      case TimelineEventType.partsAdded:
-        return Colors.amber;
-      case TimelineEventType.laborAdded:
-        return Colors.indigo;
-      case TimelineEventType.photoAdded:
-        return Colors.pink;
-      case TimelineEventType.noteAdded:
-        return Colors.cyan;
-      case TimelineEventType.approved:
-        return Colors.green;
-      case TimelineEventType.invoiced:
-        return Colors.deepPurple;
-      case TimelineEventType.paid:
-        return Colors.green;
-      case TimelineEventType.completed:
-        return Colors.teal;
-      case TimelineEventType.delivered:
-        return Colors.blue;
-    }
-  }
+  String _subjectLabel(BikeVisit visit) =>
+      _subjectsFor(visit).map((subject) => subject.label).join(', ');
+
+  // ── Página ───────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
+    final compact = ResponsiveViewport.usesCompactShell(context);
+    final record = _record;
+    final title =
+        record == null || record.name.isEmpty ? 'Cliente' : record.name;
+    final phone = record?.phone;
+    return MainLayout(
+      title: title,
+      onBackPressed: compact ? _close : null,
+      compactHeader: compact
+          ? MainLayoutCompactHeader(
+              title: title,
+              contextLine:
+                  phone == null ? null : ChileanUtils.formatPhone(phone),
+              actions: [
+                if (record != null && _draft == null)
+                  IconButton(
+                    tooltip: 'Editar datos del cliente',
+                    onPressed: () => _startEdit(),
+                    icon: const Icon(Icons.edit_outlined),
+                  ),
+              ],
+            )
+          : null,
+      body: PopScope(
+        canPop: !_hasUnsavedChanges && !_saving,
+        onPopInvokedWithResult: (didPop, _) async {
+          if (didPop || _saving) return;
+          if (!await _confirmDiscard() || !mounted) return;
+          setState(_leaveEdit);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              ReturnNavigation.close(context, fallbackRoute: _fallbackRoute);
+            }
+          });
+        },
+        child: BikeModuleTheme(
+          child: ColoredBox(
+            color: Theme.of(context).colorScheme.surfaceContainer,
+            child: _buildBody(context, compactShell: compact),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody(BuildContext context, {required bool compactShell}) {
+    final theme = Theme.of(context);
+    if (_loading) return const Center(child: BrandedLoading());
+    final record = _record;
+    if (record == null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _notFound
+                    ? 'Este cliente no existe o ya no está registrado.'
+                    : (_error ?? 'No pudimos abrir este cliente.'),
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleMedium,
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                alignment: WrapAlignment.center,
+                children: [
+                  if (!_notFound)
+                    VbButton(
+                      label: 'Reintentar',
+                      icon: Icons.refresh,
+                      onPressed: _load,
+                    ),
+                  VbButton(
+                    label: 'Volver a clientes',
+                    variant: VbButtonVariant.secondary,
+                    onPressed: _close,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     final canManageUsers =
         context.watch<CurrentUserProfileService>().profile?.canManageUsers ==
             true;
-    return MainLayout(
-      title: _customer?.name ?? 'Historial del Cliente',
-      onBackPressed: () => context.pop(),
-      body: _isLoading
-          ? const Center(child: BrandedLoading())
-          : _error != null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final phone = width < 680;
+        final gutter = phone ? 16.0 : 28.0;
+        final contentWidth = width - gutter * 2;
+        final twoColumns = contentWidth >= 1000;
+        final mainWidth = twoColumns ? contentWidth - 380 : contentWidth;
+        final dock = _draft == null ? null : _buildDock();
+        return VbEditDockLayer(
+          dock: dock,
+          child: SingleChildScrollView(
+            padding: EdgeInsets.fromLTRB(
+              gutter,
+              phone ? 8 : 16,
+              gutter,
+              dock == null ? 48 : (_dockNotice == null ? 120 : 190),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (!compactShell) ...[
+                  _buildBackRow(context),
+                  const SizedBox(height: 8),
+                ],
+                if (phone)
+                  _buildPhoneHeader(context, record)
+                else
+                  _buildWideHeader(context, record, width: contentWidth),
+                const SizedBox(height: 18),
+                if (!twoColumns) ...[
+                  _buildBikesCard(context, phone: phone),
+                  const SizedBox(height: 18),
+                ],
+                _buildTabs(),
+                const SizedBox(height: 18),
+                if (twoColumns)
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.error_outline,
-                          size: 64, color: Colors.red[300]),
-                      const SizedBox(height: 16),
-                      Text(_error!, style: const TextStyle(fontSize: 16)),
-                      const SizedBox(height: 16),
-                      ElevatedButton.icon(
-                        onPressed: _loadData,
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Reintentar'),
+                      Expanded(
+                        child: _buildTabContent(context, record,
+                            width: mainWidth, canManageUsers: canManageUsers),
+                      ),
+                      const SizedBox(width: 20),
+                      SizedBox(
+                        width: 360,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _buildBikesCard(context, phone: false),
+                            const SizedBox(height: 14),
+                            _buildMessagesCard(context),
+                          ],
+                        ),
                       ),
                     ],
-                  ),
-                )
-              : _customer == null
-                  ? const Center(child: Text('Cliente no encontrado'))
-                  : _buildContent(canManageUsers: canManageUsers),
+                  )
+                else
+                  _buildTabContent(context, record,
+                      width: mainWidth, canManageUsers: canManageUsers),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
-  // ─────────────────────────────────────────────
-  // MAIN LAYOUT
-  // ─────────────────────────────────────────────
-
-  Widget _buildContent({required bool canManageUsers}) {
-    return ClientLogbookResponsiveFrame(
-      desktopIdentity: _buildLeftPanel(canManageUsers: canManageUsers),
-      compactIdentity:
-          _buildCompactClientSummary(canManageUsers: canManageUsers),
-      content: _buildRightPanel(),
-    );
-  }
-
-  // ─────────────────────────────────────────────
-  // LEFT PANEL  (compact identity card + stats)
-  // ─────────────────────────────────────────────
-
-  Widget _buildLeftPanel({required bool canManageUsers}) {
+  Widget _buildBackRow(BuildContext context) {
     final theme = Theme.of(context);
-    final c = _customer!;
-    final totalJobs = _jobs.length;
-    final activeJobs = _jobs
-        .where((j) =>
-            j.status != JobStatus.entregado && j.status != JobStatus.cancelado)
-        .length;
-    final completedJobs =
-        _jobs.where((j) => j.status == JobStatus.entregado).length;
-    // Use invoice paid amounts when loaded (accurate); fall back to job costs otherwise
-    final totalSpent = _hasLoadedInvoices
-        ? _invoices.fold(0.0, (sum, inv) => sum + inv.paidAmount)
-        : _jobs
-            .where((j) => j.status == JobStatus.entregado)
-            .fold(0.0, (sum, j) => sum + j.totalCost);
-
-    return Container(
-      color: theme.scaffoldBackgroundColor,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Back link ──
-            GestureDetector(
-              onTap: () => ReturnNavigation.close(
-                context,
-                fallbackRoute: '/clientes',
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.arrow_back_ios_new_rounded,
-                      size: 12, color: theme.colorScheme.primary),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Clientes',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.primary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            // ── Identity ──
-            Center(
-              child: CircleAvatar(
-                radius: 26,
-                backgroundColor: theme.colorScheme.primaryContainer,
-                child: Text(
-                  c.name.substring(0, 1).toUpperCase(),
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: theme.colorScheme.onPrimaryContainer,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              c.name,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-                height: 1.2,
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            if (_loyalty != null) ...[
-              const SizedBox(height: 6),
-              Center(child: _buildLoyaltyBadge()),
-            ],
-
-            const SizedBox(height: 20),
-
-            // ── Contact info ──
-            if (c.phone != null && c.phone!.isNotEmpty)
-              _buildInfoRow(Icons.phone_outlined, c.phone!),
-            if (c.email != null && c.email!.isNotEmpty)
-              _buildInfoRow(Icons.email_outlined, c.email!),
-            if (c.rut.isNotEmpty) _buildInfoRow(Icons.badge_outlined, c.rut),
-            if (c.address != null && c.address!.isNotEmpty)
-              _buildInfoRow(Icons.place_outlined, c.address!),
-
-            const SizedBox(height: 20),
-            Divider(thickness: 1, color: theme.dividerColor),
-            const SizedBox(height: 16),
-
-            // ── Stats ──
-            _buildStatRow('Bicicletas', _bikes.length.toString()),
-            _buildStatRow('Total trabajos', totalJobs.toString()),
-            _buildStatRow('En curso', activeJobs.toString(),
-                highlight: activeJobs > 0),
-            _buildStatRow('Entregadas', completedJobs.toString()),
-            _buildStatRow(
-              'Total ingresado',
-              NumberFormat.currency(symbol: '\$', decimalDigits: 0)
-                  .format(totalSpent),
-            ),
-            _buildStatRow(
-              'Cliente desde',
-              DateFormat('MMM yyyy', 'es').format(c.createdAt),
-            ),
-
-            if (_loyalty != null) ...[
-              const SizedBox(height: 16),
-              Divider(thickness: 1, color: theme.dividerColor),
-              const SizedBox(height: 16),
-              _buildLoyaltySection(),
-            ],
-
-            const SizedBox(height: 24),
-            Divider(thickness: 1, color: theme.dividerColor),
-            const SizedBox(height: 16),
-
-            // ── Actions ──
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: () {
-                  if (MediaQuery.of(context).size.width < 900) {
-                    context.push('/taller/pegas/nueva?customer_id=${c.id}');
-                  } else {
-                    setState(() {
-                      _selectedJobId = null;
-                      _isEditingJob = true;
-                      _tabController.index = 1; // Jobs tab
-                    });
-                  }
-                },
-                icon: const Icon(Icons.add, size: 16),
-                label: const Text('Nuevo Trabajo'),
-              ),
-            ),
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () => context
-                    .push('/clientes/${c.id}/editar')
-                    .then((_) => _loadData()),
-                icon: const Icon(Icons.edit_outlined, size: 16),
-                label: const Text('Editar Cliente'),
-              ),
-            ),
-            if (canManageUsers) ...[
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: TextButton.icon(
-                  onPressed: () => UserManagementNavigation.open(
-                    context,
-                    audience: UserManagementAudience.customers,
-                    target: UserManagementTarget.customer,
-                    targetId: c.id,
-                  ),
-                  style: TextButton.styleFrom(
-                    minimumSize: const Size(0, 48),
-                  ),
-                  icon: const Icon(Icons.manage_accounts_outlined, size: 18),
-                  label: const Text('Gestionar acceso web'),
-                ),
-              ),
-            ],
-          ],
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: TextButton.icon(
+        onPressed: _close,
+        icon: const Icon(Icons.chevron_left, size: 22),
+        label: const Text(
+          'Clientes',
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+        ),
+        style: TextButton.styleFrom(
+          foregroundColor: theme.colorScheme.primary,
+          minimumSize: const Size(44, 44),
+          padding: const EdgeInsets.only(left: 2, right: 10),
         ),
       ),
     );
   }
 
-  Widget _buildCompactClientSummary({required bool canManageUsers}) {
-    final theme = Theme.of(context);
-    final customer = _customer!;
-    final activeJobs = _jobs
-        .where((job) =>
-            job.status != JobStatus.entregado &&
-            job.status != JobStatus.cancelado)
-        .length;
-    final completedJobs =
-        _jobs.where((job) => job.status == JobStatus.entregado).length;
-    final totalSpent = _hasLoadedInvoices
-        ? _invoices.fold(0.0, (sum, invoice) => sum + invoice.paidAmount)
-        : _jobs
-            .where((job) => job.status == JobStatus.entregado)
-            .fold(0.0, (sum, job) => sum + job.totalCost);
-    final compactContact = [
-      if (customer.phone != null && customer.phone!.trim().isNotEmpty)
-        customer.phone!.trim(),
-      if (customer.email != null && customer.email!.trim().isNotEmpty)
-        customer.email!.trim(),
-    ].join(' · ');
+  Widget _buildDock() {
+    return VbEditDock(
+      changeCount: _draft?.changeCount ?? 0,
+      saveLabel: 'Guardar datos',
+      saveSemanticLabel: 'Guardar datos del cliente',
+      busy: _saving,
+      notice: _dockNotice,
+      onCancel: _cancelEdit,
+      onSave: _save,
+    );
+  }
 
+  // ── Cabecera ─────────────────────────────────────────────────────────────
+
+  String _initials(String name) {
+    final words = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((word) => word.isNotEmpty)
+        .toList();
+    if (words.isEmpty) return '?';
+    final first = words.first.characters.first;
+    final second = words.length > 1 ? words[1].characters.first : '';
+    return (first + second).toUpperCase();
+  }
+
+  Widget _avatar(BuildContext context, String name, {required double size}) {
+    final theme = Theme.of(context);
+    return ExcludeSemantics(
+      child: Container(
+        width: size,
+        height: size,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerHigh,
+          shape: BoxShape.circle,
+          // En teléfono va sobre el fondo de la página, no sobre la tarjeta.
+          border: Border.all(color: theme.colorScheme.outlineVariant),
+        ),
+        child: Text(
+          _initials(name),
+          style: TextStyle(
+            fontFamily: BikeModuleText.display,
+            fontWeight: FontWeight.w600,
+            fontSize: size * 0.35,
+            letterSpacing: 0.8,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// «+56 9 8121 0019 · nombre@correo.cl», o lo que falta con su atajo.
+  Widget _contactLine(BuildContext context, ClientRecord record) {
+    final theme = Theme.of(context);
+    final phone =
+        record.phone == null ? null : ChileanUtils.formatPhone(record.phone);
+    final email = record.email;
+    final parts = [phone, email].whereType<String>().toList();
+    final style =
+        TextStyle(fontSize: 14, color: theme.colorScheme.onSurfaceVariant);
+    final add = phone == null
+        ? (email == null ? 'Agregar contacto' : 'Agregar teléfono')
+        : null;
+    return Wrap(
+      spacing: 10,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        SelectableText(
+          parts.isEmpty ? 'Sin teléfono ni correo' : parts.join(' · '),
+          style: style,
+        ),
+        if (add != null)
+          TextButton(
+            onPressed: _saving ? null : () => _startEdit(ClientDataField.phone),
+            style: TextButton.styleFrom(
+              minimumSize: const Size(44, 36),
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              textStyle:
+                  const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            ),
+            child: Text(add),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildWideHeader(BuildContext context, ClientRecord record,
+      {required double width}) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final alerts = _alerts(context, narrow: false);
+    final facts = _facts(record);
+    final columns = width >= 820 ? facts.length : 3;
+    final cellWidth = (width - 2) / columns;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLowest,
-        border: Border(
-          bottom: BorderSide(color: theme.dividerColor),
-        ),
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
       ),
-      child: ExpansionTile(
-        key: const PageStorageKey('client-logbook-compact-summary'),
-        maintainState: true,
-        minTileHeight: 64,
-        tilePadding: const EdgeInsets.symmetric(horizontal: 12),
-        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-        shape: const Border(),
-        collapsedShape: const Border(),
-        leading: CircleAvatar(
-          radius: 20,
-          backgroundColor: theme.colorScheme.primaryContainer,
-          child: Text(
-            customer.name.substring(0, 1).toUpperCase(),
-            style: TextStyle(
-              fontWeight: FontWeight.w700,
-              color: theme.colorScheme.onPrimaryContainer,
-            ),
-          ),
-        ),
-        title: Text(
-          'Resumen del cliente',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        subtitle: Text(
-          [
-            '${_bikes.length} ${_bikes.length == 1 ? 'bici' : 'bicis'}',
-            '$activeJobs ${activeJobs == 1 ? 'activo' : 'activos'}',
-            if (_loyalty != null) _getLoyaltyTierName(_loyalty!.tier),
-          ].join(' · '),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Divider(height: 1),
-          if (compactContact.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                compactContact,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 22, 24, 22),
+            child: Row(
+              children: [
+                _avatar(context, record.name, size: 68),
+                const SizedBox(width: 20),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Semantics(
+                        header: true,
+                        child: Text(
+                          record.name.isEmpty
+                              ? 'Cliente sin nombre'
+                              : record.name,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: BikeModuleText.title(context, size: 38),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      _contactLine(context, record),
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 16),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    VbButton(
+                      label: 'Editar',
+                      icon: Icons.edit_outlined,
+                      variant: VbButtonVariant.secondary,
+                      density: VbDensity.comfortable,
+                      semanticLabel: 'Editar datos del cliente',
+                      onPressed:
+                          _draft != null || _saving ? null : () => _startEdit(),
+                    ),
+                    VbButton(
+                      label: 'Nuevo trabajo',
+                      icon: Icons.add,
+                      density: VbDensity.comfortable,
+                      onPressed: _newJob,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          if (alerts.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final pair = alerts.length > 1 && constraints.maxWidth >= 720;
+                  final bandWidth = pair
+                      ? (constraints.maxWidth - 12) / 2
+                      : constraints.maxWidth;
+                  return Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      for (final alert in alerts)
+                        SizedBox(width: bandWidth, child: alert),
+                    ],
+                  );
+                },
               ),
             ),
-          ],
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _buildCompactClientMetric(
-                  label: 'Trabajos',
-                  value: _jobs.length.toString(),
-                ),
-              ),
-              Expanded(
-                child: _buildCompactClientMetric(
-                  label: 'Entregados',
-                  value: completedJobs.toString(),
-                ),
-              ),
-              Expanded(
-                child: _buildCompactClientMetric(
-                  label: 'Ingresado',
-                  value: NumberFormat.compactCurrency(
-                    symbol: '\$',
-                    decimalDigits: 0,
-                  ).format(totalSpent),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: () => context.push(
-                    '/taller/pegas/nueva?customer_id=${customer.id}',
-                  ),
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size(0, 48),
-                  ),
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Trabajo'),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => context
-                      .push('/clientes/${customer.id}/editar')
-                      .then((_) => _loadData()),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(0, 48),
-                  ),
-                  icon: const Icon(Icons.edit_outlined, size: 18),
-                  label: const Text('Editar'),
-                ),
-              ),
-            ],
-          ),
-          if (canManageUsers) ...[
-            const SizedBox(height: 4),
-            SizedBox(
-              width: double.infinity,
-              child: TextButton.icon(
-                onPressed: () => UserManagementNavigation.open(
-                  context,
-                  audience: UserManagementAudience.customers,
-                  target: UserManagementTarget.customer,
-                  targetId: customer.id,
-                ),
-                style: TextButton.styleFrom(
-                  minimumSize: const Size(0, 48),
-                ),
-                icon: const Icon(Icons.manage_accounts_outlined, size: 18),
-                label: const Text('Gestionar acceso web'),
-              ),
+          Container(
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: roles.hairline)),
             ),
-          ],
+            child: Wrap(
+              children: [
+                for (var index = 0; index < facts.length; index++)
+                  Container(
+                    width: cellWidth,
+                    padding: const EdgeInsets.fromLTRB(24, 14, 16, 14),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        left: index % columns == 0
+                            ? BorderSide.none
+                            : BorderSide(color: roles.hairline),
+                        top: index >= columns
+                            ? BorderSide(color: roles.hairline)
+                            : BorderSide.none,
+                      ),
+                    ),
+                    child: _factCell(context, facts[index]),
+                  ),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildCompactClientMetric({
-    required String label,
-    required String value,
-  }) {
+  Widget _buildPhoneHeader(BuildContext context, ClientRecord record) {
     final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final alerts = _alerts(context, narrow: true);
+    final facts = _facts(record);
     return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          value,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildInfoRow(IconData icon, String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 15, color: Colors.grey[500]),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(fontSize: 12.5, color: Colors.grey[700]),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatRow(String label, String value, {bool highlight = false}) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label,
-              style: TextStyle(fontSize: 12.5, color: Colors.grey[600])),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w600,
-              color: highlight ? theme.colorScheme.primary : null,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLoyaltyBadge() {
-    if (_loyalty == null) return const SizedBox.shrink();
-    final color = _getLoyaltyColor(_loyalty!.tier);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(_getLoyaltyIcon(_loyalty!.tier), size: 12, color: color),
-        const SizedBox(width: 4),
-        Text(
-          _getLoyaltyTierName(_loyalty!.tier),
-          style: TextStyle(
-              fontSize: 11, color: color, fontWeight: FontWeight.w600),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildLoyaltySection() {
-    if (_loyalty == null) return const SizedBox.shrink();
-    final color = _getLoyaltyColor(_loyalty!.tier);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
           children: [
-            Icon(_getLoyaltyIcon(_loyalty!.tier), size: 15, color: color),
-            const SizedBox(width: 6),
-            Text(
-              _getLoyaltyTierName(_loyalty!.tier),
-              style: TextStyle(
-                  fontSize: 12.5, fontWeight: FontWeight.w600, color: color),
-            ),
-            const Spacer(),
-            Text(
-              '${_loyalty!.points} pts',
-              style: TextStyle(
-                  fontSize: 12.5, fontWeight: FontWeight.w600, color: color),
-            ),
-            const SizedBox(width: 4),
-            PopupMenuButton<String>(
-              icon: Icon(Icons.more_horiz, size: 18, color: Colors.grey[500]),
-              onSelected: (value) {
-                if (value == 'add') _showAddPointsDialog();
-                if (value == 'redeem') _showRedeemPointsDialog();
-              },
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'add', child: Text('Agregar puntos')),
-                PopupMenuItem(value: 'redeem', child: Text('Canjear puntos')),
-              ],
+            _avatar(context, record.name, size: 56),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Semantics(
+                header: true,
+                child: Text(
+                  record.name.isEmpty ? 'Cliente sin nombre' : record.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: BikeModuleText.title(context, size: 30),
+                ),
+              ),
             ),
           ],
         ),
-      ],
-    );
-  }
-
-  // ─────────────────────────────────────────────
-  // RIGHT PANEL  (tabbed content)
-  // ─────────────────────────────────────────────
-
-  Widget _buildRightPanel() {
-    final theme = Theme.of(context);
-    final usesCompactLayout = ResponsiveViewport.usesCompactShell(context);
-    final activeJobs = _jobs
-        .where((j) =>
-            j.status != JobStatus.entregado && j.status != JobStatus.cancelado)
-        .length;
-    final tabBar = TabBar(
-      controller: _tabController,
-      isScrollable: true,
-      tabAlignment: TabAlignment.start,
-      tabs: [
-        Tab(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Bicicletas'),
-              if (_bikes.isNotEmpty) ...[
-                const SizedBox(width: 6),
-                _buildTabCount(_bikes.length),
-              ],
-            ],
-          ),
-        ),
-        Tab(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Trabajos'),
-              if (_jobs.isNotEmpty) ...[
-                const SizedBox(width: 6),
-                _buildTabCount(
-                  _jobs.length,
-                  highlight: activeJobs > 0,
-                  highlightValue: activeJobs,
-                ),
-              ],
-            ],
-          ),
-        ),
-        Tab(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Facturas'),
-              if (_invoices.isNotEmpty) ...[
-                const SizedBox(width: 6),
-                _buildTabCount(
-                  _invoices.length,
-                  highlight: _invoices.any(
-                    (invoice) =>
-                        invoice.balance > 0.01 &&
-                        invoice.status != InvoiceStatus.cancelled,
-                  ),
-                  highlightValue: _invoices
-                      .where((invoice) =>
-                          invoice.balance > 0.01 &&
-                          invoice.status != InvoiceStatus.cancelled)
-                      .length,
-                ),
-              ],
-            ],
-          ),
-        ),
-        Tab(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Chats'),
-              if (_chats.isNotEmpty) ...[
-                const SizedBox(width: 6),
-                _buildTabCount(
-                  _chats.length,
-                  highlight: _chats.any((chat) => chat.unreadCount > 0),
-                  highlightValue:
-                      _chats.where((chat) => chat.unreadCount > 0).length,
-                ),
-              ],
-            ],
-          ),
-        ),
-        Tab(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Historial'),
-              if (_timeline.isNotEmpty) ...[
-                const SizedBox(width: 6),
-                _buildTabCount(_timeline.length),
-              ],
-            ],
-          ),
-        ),
-      ],
-    );
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // ── Tab bar row with context actions ──
-        Container(
+        const SizedBox(height: 6),
+        _contactLine(context, record),
+        for (final alert in alerts) ...[
+          const SizedBox(height: 12),
+          alert,
+        ],
+        const SizedBox(height: 12),
+        DecoratedBox(
           decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(color: theme.dividerColor),
-            ),
+            color: theme.colorScheme.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: theme.colorScheme.outlineVariant),
           ),
-          padding: EdgeInsets.only(
-            left: usesCompactLayout ? 4 : 24,
-            right: usesCompactLayout ? 4 : 24,
-          ),
-          child: Row(
-            children: [
-              Expanded(child: tabBar),
-              _buildTabContextAction(compact: usesCompactLayout),
-            ],
-          ),
-        ),
-
-        // ── Tab views ──
-        Expanded(
-          child: TabBarView(
-            controller: _tabController,
-            physics: const NeverScrollableScrollPhysics(),
-            children: [
-              _buildBikesTab(),
-              _buildJobsTab(),
-              _buildInvoicesTab(),
-              _buildChatsTab(),
-              _buildTimelineTab(),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTabContextAction({required bool compact}) {
-    return AnimatedBuilder(
-      animation: _tabController,
-      builder: (context, _) {
-        Future<void> addBike() async {
-          if (ResponsiveViewport.usesCompactShell(context)) {
-            final savedBike = await showDialog<Bike>(
-              context: context,
-              builder: (_) => BikeFormDialog(customerId: widget.customerId),
-            );
-            if (savedBike != null) {
-              await _loadData();
-            }
-          } else {
-            _openNewBikePane();
-          }
-        }
-
-        void addJob() {
-          if (ResponsiveViewport.usesCompactShell(context)) {
-            context.push(
-              '/taller/pegas/nueva?customer_id=${_customer!.id}',
-            );
-          } else {
-            setState(() {
-              _selectedJobId = null;
-              _isEditingJob = true;
-            });
-          }
-        }
-
-        void addInvoice() {
-          context
-              .push(
-            '/sales/invoices/new?customer_id=${widget.customerId}',
-          )
-              .then((_) {
-            if (mounted) {
-              unawaited(_loadInvoices(forceRefresh: true));
-            }
-          });
-        }
-
-        final action = switch (_tabController.index) {
-          0 => (
-              label: 'Agregar bicicleta',
-              icon: Icons.add,
-              onPressed: () => unawaited(addBike()),
-            ),
-          1 => (
-              label: 'Nuevo trabajo',
-              icon: Icons.add,
-              onPressed: addJob,
-            ),
-          2 => (
-              label: 'Nueva factura',
-              icon: Icons.add,
-              onPressed: addInvoice,
-            ),
-          _ => null,
-        };
-
-        if (action == null) {
-          return const SizedBox.shrink();
-        }
-        if (compact) {
-          return IconButton(
-            tooltip: action.label,
-            constraints: BoxConstraints.tight(const Size(48, 48)),
-            onPressed: action.onPressed,
-            icon: Icon(action.icon),
-          );
-        }
-        return TextButton.icon(
-          onPressed: action.onPressed,
-          icon: Icon(action.icon, size: 16),
-          label: Text(action.label),
-        );
-      },
-    );
-  }
-
-  Widget _buildTabCount(int count,
-      {bool highlight = false, int? highlightValue}) {
-    final theme = Theme.of(context);
-    final display =
-        (highlight && highlightValue != null) ? highlightValue : count;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: highlight
-            ? theme.colorScheme.primary.withValues(alpha: 0.12)
-            : Colors.grey.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Text(
-        display.toString(),
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: highlight ? theme.colorScheme.primary : Colors.grey[600],
-        ),
-      ),
-    );
-  }
-
-  // ─────────────────────────────────────────────
-  // BIKES TAB
-  // ─────────────────────────────────────────────
-
-  Widget _buildBikesTab() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final usesCompactLayout = ResponsiveViewport.usesCompactShell(context);
-        if (usesCompactLayout && _bikePanelMode == ClientBikePanelMode.none) {
-          return _buildBikesList();
-        }
-
-        final showRightPane =
-            !usesCompactLayout && _bikePanelMode != ClientBikePanelMode.none;
-        if (usesCompactLayout && _bikePanelMode != ClientBikePanelMode.none) {
-          final selectedBike = _selectedBikeId != null
-              ? _bikes.where((b) => b.id == _selectedBikeId).firstOrNull
-              : null;
-          return ColoredBox(
-            color: Colors.white,
-            child: Scaffold(
-              backgroundColor: Colors.white,
-              body: _buildBikePaneBody(selectedBike),
-            ),
-          );
-        }
-
-        if (!showRightPane) {
-          return _buildBikesList();
-        }
-
-        final selectedBike = _selectedBikeId != null
-            ? _bikes.where((b) => b.id == _selectedBikeId).firstOrNull
-            : null;
-
-        return ColoredBox(
-          color: Colors.white,
-          child: Scaffold(
-            backgroundColor: Colors.white,
-            body: _buildBikePaneBody(selectedBike),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildBikesList() {
-    final filteredBikes = _getFilteredBikes();
-    if (ResponsiveViewport.usesCompactShell(context)) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildTabToolbar(
-            searchController: _bikeSearchController,
-            searchHint: 'Buscar bicicleta…',
-            sortKey: _bikeSortKey,
-            sortLabels: _bikeSortLabels,
-            onSortChanged: (value) => setState(() => _bikeSortKey = value),
-            statusText: filteredBikes.length == _bikes.length
-                ? '${_bikes.length} bicicletas'
-                : '${filteredBikes.length} de ${_bikes.length}',
-          ),
-          Expanded(
-            child: filteredBikes.isEmpty
-                ? _buildEmptyState(
-                    _bikes.isEmpty
-                        ? 'Sin bicicletas registradas'
-                        : 'Ninguna bicicleta coincide',
-                    Icons.pedal_bike_outlined,
-                  )
-                : ListView.separated(
-                    key: const PageStorageKey(
-                      'client-logbook-compact-bikes',
-                    ),
-                    padding: EdgeInsets.zero,
-                    itemCount: filteredBikes.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (_, index) =>
-                        _buildCompactBikeRow(filteredBikes[index]),
-                  ),
-          ),
-        ],
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // ── Inline toolbar ──
-        _buildTabToolbar(
-          searchController: _bikeSearchController,
-          searchHint: 'Buscar por marca, modelo o serie…',
-          sortKey: _bikeSortKey,
-          sortLabels: _bikeSortLabels,
-          onSortChanged: (v) => setState(() => _bikeSortKey = v),
-          statusText: filteredBikes.length == _bikes.length
-              ? '${_bikes.length} bicicletas'
-              : '${filteredBikes.length} de ${_bikes.length}',
-        ),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final viewportWidth = _tableViewportWidth(constraints);
-            final tableWidth = _bikeTableWidth(viewportWidth);
-
-            return Container(
-              height: 36,
-              decoration: BoxDecoration(
-                color: Colors.grey[50],
-                border: Border(
-                  bottom: BorderSide(color: Colors.grey[200]!, width: 1),
-                ),
-              ),
-              child: SingleChildScrollView(
-                controller: _headerScrollController,
-                scrollDirection: Axis.horizontal,
-                physics: const ClampingScrollPhysics(),
-                child: SizedBox(
-                  width: tableWidth,
-                  child: Row(
-                    children: [
-                      const SizedBox(width: 52),
-                      SizedBox(
-                        width: _bikeNameColumnWidth(tableWidth),
-                        child: _buildSortableHeader(
-                          'MARCA / MODELO',
-                          'name',
-                          _bikeSortCol,
-                          _bikeSortAsc,
-                          (col, asc) => setState(() {
-                            _bikeSortCol = col;
-                            _bikeSortAsc = asc;
-                          }),
-                          leftPad: 12,
-                        ),
-                      ),
-                      _buildResizableHeader(
-                        label: 'SERIE',
-                        colKey: 'serial',
-                        width: _bikeColSerial,
-                        sortCol: _bikeSortCol,
-                        sortAsc: _bikeSortAsc,
-                        onSort: (col, asc) => setState(() {
-                          _bikeSortCol = col;
-                          _bikeSortAsc = asc;
-                        }),
-                        onResize: (d) => setState(() => _bikeColSerial =
-                            (_bikeColSerial + d).clamp(60, 300)),
-                      ),
-                      _buildResizableHeader(
-                        label: 'REGISTRADA',
-                        colKey: 'registered',
-                        width: _bikeColRegistered,
-                        sortCol: _bikeSortCol,
-                        sortAsc: _bikeSortAsc,
-                        onSort: (col, asc) => setState(() {
-                          _bikeSortCol = col;
-                          _bikeSortAsc = asc;
-                        }),
-                        onResize: (d) => setState(() => _bikeColRegistered =
-                            (_bikeColRegistered + d).clamp(60, 200)),
-                      ),
-                      _buildResizableHeader(
-                        label: 'ÚLT. ENTREGA',
-                        colKey: 'last_delivery',
-                        width: _bikeColDelivery,
-                        sortCol: _bikeSortCol,
-                        sortAsc: _bikeSortAsc,
-                        onSort: (col, asc) => setState(() {
-                          _bikeSortCol = col;
-                          _bikeSortAsc = asc;
-                        }),
-                        onResize: (d) => setState(() => _bikeColDelivery =
-                            (_bikeColDelivery + d).clamp(60, 200)),
-                      ),
-                      _buildResizableHeader(
-                        label: 'TRABAJOS',
-                        colKey: 'jobs',
-                        width: _bikeColJobs,
-                        sortCol: _bikeSortCol,
-                        sortAsc: _bikeSortAsc,
-                        onSort: (col, asc) => setState(() {
-                          _bikeSortCol = col;
-                          _bikeSortAsc = asc;
-                        }),
-                        onResize: (d) => setState(() =>
-                            _bikeColJobs = (_bikeColJobs + d).clamp(50, 160)),
-                      ),
-                      const SizedBox(width: 44),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-        Expanded(
-          child: filteredBikes.isEmpty
-              ? _buildEmptyState(
-                  _bikes.isEmpty
-                      ? 'Sin bicicletas registradas'
-                      : 'Ninguna bicicleta coincide',
-                  Icons.pedal_bike_outlined,
-                )
-              : LayoutBuilder(
-                  builder: (context, constraints) {
-                    final viewportWidth = _tableViewportWidth(constraints);
-                    final tableWidth = _bikeTableWidth(viewportWidth);
-
-                    return SingleChildScrollView(
-                      controller: _bodyScrollController,
-                      scrollDirection: Axis.horizontal,
-                      physics: const ClampingScrollPhysics(),
-                      child: SizedBox(
-                        width: tableWidth,
-                        child: ListView.builder(
-                          itemCount: filteredBikes.length,
-                          itemBuilder: (_, i) => _buildBikeTableRow(
-                              filteredBikes[i], i.isEven, tableWidth),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-        ),
-      ],
-    );
-  }
-
-  // ─────────────────────────────────────────────
-  // JOBS TAB
-  // ─────────────────────────────────────────────
-
-  Widget _buildJobsTab() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final usesCompactLayout = ResponsiveViewport.usesCompactShell(context);
-        if (usesCompactLayout && (_selectedJobId != null || _isEditingJob)) {
-          return ColoredBox(
-            color: Colors.white,
-            child: MechanicJobFormPage(
-              key: ValueKey(
-                'client-logbook-mobile-job-${_selectedJobId ?? 'new'}',
-              ),
-              jobId: _selectedJobId,
-              customerId: widget.customerId,
-              isEmbedded: true,
-              isInlineWorkspace: true,
-              onSaved: () {
-                setState(() {
-                  _isEditingJob = false;
-                  _selectedJobId = null;
-                });
-                _loadData();
-              },
-              onCanceled: () {
-                setState(() {
-                  _isEditingJob = false;
-                  _selectedJobId = null;
-                });
-              },
-            ),
-          );
-        }
-
-        final showRightPane =
-            !usesCompactLayout && (_selectedJobId != null || _isEditingJob);
-
-        if (!showRightPane) {
-          return _buildJobsList();
-        }
-
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              flex: 1,
-              child: _buildJobsList(),
-            ),
-            Container(
-              width: 1,
-              color: Colors.grey[300],
-            ),
-            Expanded(
-              flex: 1,
-              child: ColoredBox(
-                color: Colors.white,
-                child: MechanicJobFormPage(
-                  key: ValueKey(_selectedJobId ?? 'new_job'),
-                  jobId: _selectedJobId,
-                  customerId: widget.customerId,
-                  isEmbedded: true,
-                  onSaved: () {
-                    setState(() {
-                      _isEditingJob = false;
-                    });
-                    _loadData(); // Refresh list
-                  },
-                  onCanceled: () {
-                    setState(() {
-                      _isEditingJob = false;
-                      _selectedJobId = null;
-                    });
-                  },
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildJobsList() {
-    final filteredJobs = _getFilteredJobs();
-    final activeCount = _jobs
-        .where((j) =>
-            j.status != JobStatus.entregado && j.status != JobStatus.cancelado)
-        .length;
-    final completedCount =
-        _jobs.where((j) => j.status == JobStatus.entregado).length;
-
-    if (ResponsiveViewport.usesCompactShell(context)) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildTabToolbar(
-            searchController: _jobSearchController,
-            searchHint: 'Buscar trabajo…',
-            sortKey: _jobSortKey,
-            sortLabels: _jobSortLabels,
-            onSortChanged: (value) => setState(() => _jobSortKey = value),
-            statusText: filteredJobs.length == _jobs.length
-                ? '${_jobs.length} trabajos'
-                : '${filteredJobs.length} de ${_jobs.length}',
-            compactTrailing: _buildCompactJobFilter(
-              activeCount: activeCount,
-              completedCount: completedCount,
-            ),
-          ),
-          Expanded(
-            child: filteredJobs.isEmpty
-                ? _buildEmptyState(
-                    _jobs.isEmpty
-                        ? 'Sin trabajos registrados'
-                        : 'Ningún trabajo coincide',
-                    Icons.build_outlined,
-                  )
-                : ListView.separated(
-                    key: const PageStorageKey(
-                      'client-logbook-compact-jobs',
-                    ),
-                    padding: EdgeInsets.zero,
-                    itemCount: filteredJobs.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (_, index) =>
-                        _buildCompactJobRow(filteredJobs[index]),
-                  ),
-          ),
-        ],
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // ── Toolbar with filter chips ──
-        _buildTabToolbar(
-          searchController: _jobSearchController,
-          searchHint: 'Buscar por número, técnico o nota…',
-          sortKey: _jobSortKey,
-          sortLabels: _jobSortLabels,
-          onSortChanged: (v) => setState(() => _jobSortKey = v),
-          statusText: filteredJobs.length == _jobs.length
-              ? '${_jobs.length} trabajos'
-              : '${filteredJobs.length} de ${_jobs.length}',
-          trailing: Row(
-            children: JobViewFilter.values.map((filter) {
-              final selected = _jobViewFilter == filter;
-              int? count;
-              if (filter == JobViewFilter.active) count = activeCount;
-              if (filter == JobViewFilter.completed) count = completedCount;
-              return Padding(
-                padding: const EdgeInsets.only(right: 6),
-                child: _buildFilterToggle(
-                  _jobFilterLabel(filter),
-                  selected,
-                  () => setState(() => _jobViewFilter = filter),
-                  count: (count != null && count > 0) ? count : null,
-                ),
-              );
-            }).toList(),
-          ),
-          compactTrailing: _buildCompactJobFilter(
-            activeCount: activeCount,
-            completedCount: completedCount,
-          ),
-        ),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final viewportWidth = _tableViewportWidth(constraints);
-            final tableWidth = _jobTableWidth(viewportWidth);
-
-            return Container(
-              height: 36,
-              decoration: BoxDecoration(
-                color: Colors.grey[50],
-                border: Border(
-                  bottom: BorderSide(color: Colors.grey[200]!, width: 1),
-                ),
-              ),
-              child: SingleChildScrollView(
-                controller: _headerScrollController,
-                scrollDirection: Axis.horizontal,
-                physics: const ClampingScrollPhysics(),
-                child: SizedBox(
-                  width: tableWidth,
-                  child: Row(
-                    children: [
-                      const SizedBox(width: 4),
-                      _buildResizableHeader(
-                        label: 'N° TRABAJO',
-                        colKey: 'number',
-                        width: _jobColNumber,
-                        sortCol: _jobSortCol,
-                        sortAsc: _jobSortAsc,
-                        onSort: (col, asc) => setState(() {
-                          _jobSortCol = col;
-                          _jobSortAsc = asc;
-                        }),
-                        onResize: (d) => setState(() =>
-                            _jobColNumber = (_jobColNumber + d).clamp(60, 200)),
-                      ),
-                      _buildResizableHeader(
-                        label: 'BICICLETA',
-                        colKey: 'bike',
-                        width: _jobColBike,
-                        sortCol: _jobSortCol,
-                        sortAsc: _jobSortAsc,
-                        onSort: (col, asc) => setState(() {
-                          _jobSortCol = col;
-                          _jobSortAsc = asc;
-                        }),
-                        onResize: (d) => setState(() =>
-                            _jobColBike = (_jobColBike + d).clamp(60, 300)),
-                      ),
-                      SizedBox(
-                        width: _jobRequestColumnWidth(tableWidth),
-                        child: _buildSortableHeader(
-                          'SOLICITUD',
-                          'request',
-                          _jobSortCol,
-                          _jobSortAsc,
-                          (col, asc) => setState(() {
-                            _jobSortCol = col;
-                            _jobSortAsc = asc;
-                          }),
-                          leftPad: 12,
-                        ),
-                      ),
-                      _buildResizableHeader(
-                        label: 'ESTADO',
-                        colKey: 'status',
-                        width: _jobColStatus,
-                        sortCol: _jobSortCol,
-                        sortAsc: _jobSortAsc,
-                        onSort: (col, asc) => setState(() {
-                          _jobSortCol = col;
-                          _jobSortAsc = asc;
-                        }),
-                        onResize: (d) => setState(() =>
-                            _jobColStatus = (_jobColStatus + d).clamp(60, 220)),
-                      ),
-                      _buildResizableHeader(
-                        label: 'FECHA',
-                        colKey: 'date',
-                        width: _jobColDate,
-                        sortCol: _jobSortCol,
-                        sortAsc: _jobSortAsc,
-                        onSort: (col, asc) => setState(() {
-                          _jobSortCol = col;
-                          _jobSortAsc = asc;
-                        }),
-                        onResize: (d) => setState(() =>
-                            _jobColDate = (_jobColDate + d).clamp(60, 180)),
-                      ),
-                      _buildResizableHeader(
-                        label: 'TOTAL',
-                        colKey: 'total',
-                        width: _jobColTotal,
-                        sortCol: _jobSortCol,
-                        sortAsc: _jobSortAsc,
-                        onSort: (col, asc) => setState(() {
-                          _jobSortCol = col;
-                          _jobSortAsc = asc;
-                        }),
-                        onResize: (d) => setState(() =>
-                            _jobColTotal = (_jobColTotal + d).clamp(50, 160)),
-                      ),
-                      const SizedBox(width: 44),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-        Expanded(
-          child: filteredJobs.isEmpty
-              ? _buildEmptyState(
-                  _jobs.isEmpty
-                      ? 'Sin trabajos registrados'
-                      : 'Ningún trabajo coincide',
-                  Icons.build_outlined,
-                )
-              : LayoutBuilder(
-                  builder: (context, constraints) {
-                    final viewportWidth = _tableViewportWidth(constraints);
-                    final tableWidth = _jobTableWidth(viewportWidth);
-
-                    return SingleChildScrollView(
-                      controller: _bodyScrollController,
-                      scrollDirection: Axis.horizontal,
-                      physics: const ClampingScrollPhysics(),
-                      child: SizedBox(
-                        width: tableWidth,
-                        child: ListView.builder(
-                          itemCount: filteredJobs.length,
-                          itemBuilder: (_, i) => _buildJobTableRow(
-                              filteredJobs[i], i.isEven, tableWidth),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-        ),
-      ],
-    );
-  }
-
-  // ─────────────────────────────────────────────
-  // TIMELINE TAB
-  // ─────────────────────────────────────────────
-
-  Widget _buildTimelineTab() {
-    final filteredTimeline = _getFilteredTimeline();
-    const allTypes = TimelineEventType.values;
-    final allSelected = _timelineTypeFilters.length == allTypes.length;
-    final filterSummary = allSelected
-        ? 'Todos los tipos'
-        : '${_timelineTypeFilters.length}/${allTypes.length} tipos';
-
-    if (ResponsiveViewport.usesCompactShell(context)) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildTabToolbar(
-            searchController: _timelineSearchController,
-            searchHint: 'Buscar evento…',
-            sortKey: _timelineSortKey,
-            sortLabels: _timelineSortLabels,
-            onSortChanged: (value) => setState(() => _timelineSortKey = value),
-            statusText: filteredTimeline.length == _timeline.length
-                ? '${_timeline.length} eventos'
-                : '${filteredTimeline.length} de ${_timeline.length}',
-            compactTrailing: IconButton(
-              tooltip: allSelected
-                  ? 'Filtrar tipos de evento'
-                  : 'Filtros de evento activos',
-              constraints: BoxConstraints.tight(const Size(48, 48)),
-              onPressed: _showTimelineFilterSheet,
-              icon: Icon(
-                allSelected ? Icons.filter_list : Icons.filter_list_alt,
-              ),
-            ),
-          ),
-          Expanded(
-            child: filteredTimeline.isEmpty
-                ? _buildEmptyState(
-                    _timeline.isEmpty
-                        ? 'Sin eventos registrados'
-                        : 'Ningún evento coincide',
-                    Icons.history_outlined,
-                  )
-                : ListView.separated(
-                    key: const PageStorageKey(
-                      'client-logbook-compact-timeline',
-                    ),
-                    padding: EdgeInsets.zero,
-                    itemCount: filteredTimeline.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (_, index) =>
-                        _buildCompactTimelineRow(filteredTimeline[index]),
-                  ),
-          ),
-        ],
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildTabToolbar(
-          searchController: _timelineSearchController,
-          searchHint: 'Buscar evento, técnico o bicicleta…',
-          sortKey: _timelineSortKey,
-          sortLabels: _timelineSortLabels,
-          onSortChanged: (v) => setState(() => _timelineSortKey = v),
-          statusText: filteredTimeline.length == _timeline.length
-              ? '${_timeline.length} eventos'
-              : '${filteredTimeline.length} de ${_timeline.length}',
-          trailing: Row(
-            children: [
-              OutlinedButton.icon(
-                onPressed: _showTimelineFilterSheet,
-                icon: Icon(
-                  allSelected ? Icons.filter_list_off : Icons.filter_list,
-                  size: 16,
-                ),
-                label: Text(filterSummary),
-                style: OutlinedButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  textStyle: const TextStyle(fontSize: 12.5),
-                ),
-              ),
-              if (!allSelected) ...[
-                const SizedBox(width: 6),
-                IconButton(
-                  tooltip: 'Restablecer filtros',
-                  icon: const Icon(Icons.refresh, size: 18),
-                  onPressed: () => setState(() {
-                    _timelineTypeFilters = allTypes.toSet();
-                    _timelineSearchController.clear();
-                    _timelineSortKey = 'date_desc';
-                  }),
-                ),
-              ],
-            ],
-          ),
-          compactTrailing: IconButton(
-            tooltip: allSelected
-                ? 'Filtrar tipos de evento'
-                : 'Filtros de evento activos',
-            constraints: BoxConstraints.tight(const Size(48, 48)),
-            onPressed: _showTimelineFilterSheet,
-            icon: Icon(
-              allSelected ? Icons.filter_list : Icons.filter_list_alt,
-            ),
-          ),
-        ),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final viewportWidth = _tableViewportWidth(constraints);
-            final tableWidth = _timelineTableWidth(viewportWidth);
-
-            return Container(
-              height: 36,
-              decoration: BoxDecoration(
-                color: Colors.grey[50],
-                border: Border(
-                  bottom: BorderSide(color: Colors.grey[200]!, width: 1),
-                ),
-              ),
-              child: SingleChildScrollView(
-                controller: _headerScrollController,
-                scrollDirection: Axis.horizontal,
-                physics: const ClampingScrollPhysics(),
-                child: SizedBox(
-                  width: tableWidth,
-                  child: Row(
-                    children: [
-                      const SizedBox(width: 52),
-                      SizedBox(
-                        width: _timelineDescriptionColumnWidth(tableWidth),
-                        child: _buildSortableHeader(
-                          'DESCRIPCIÓN',
-                          'desc',
-                          _timelineSortCol,
-                          _timelineSortAsc,
-                          (col, asc) => setState(() {
-                            _timelineSortCol = col;
-                            _timelineSortAsc = asc;
-                          }),
-                          leftPad: 12,
-                        ),
-                      ),
-                      _buildResizableHeader(
-                        label: 'TRABAJO / BICI',
-                        colKey: 'ref',
-                        width: _tlColRef,
-                        sortCol: _timelineSortCol,
-                        sortAsc: _timelineSortAsc,
-                        onSort: (col, asc) => setState(() {
-                          _timelineSortCol = col;
-                          _timelineSortAsc = asc;
-                        }),
-                        onResize: (d) => setState(
-                            () => _tlColRef = (_tlColRef + d).clamp(80, 300)),
-                      ),
-                      _buildResizableHeader(
-                        label: 'TÉCNICO',
-                        colKey: 'tech',
-                        width: _tlColTech,
-                        sortCol: _timelineSortCol,
-                        sortAsc: _timelineSortAsc,
-                        onSort: (col, asc) => setState(() {
-                          _timelineSortCol = col;
-                          _timelineSortAsc = asc;
-                        }),
-                        onResize: (d) => setState(
-                            () => _tlColTech = (_tlColTech + d).clamp(60, 250)),
-                      ),
-                      _buildResizableHeader(
-                        label: 'FECHA',
-                        colKey: 'date',
-                        width: _tlColDate,
-                        sortCol: _timelineSortCol,
-                        sortAsc: _timelineSortAsc,
-                        onSort: (col, asc) => setState(() {
-                          _timelineSortCol = col;
-                          _timelineSortAsc = asc;
-                        }),
-                        onResize: (d) => setState(
-                            () => _tlColDate = (_tlColDate + d).clamp(80, 220)),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-        Expanded(
-          child: filteredTimeline.isEmpty
-              ? _buildEmptyState(
-                  _timeline.isEmpty
-                      ? 'Sin eventos registrados'
-                      : 'Ningún evento coincide',
-                  Icons.history_outlined,
-                )
-              : LayoutBuilder(
-                  builder: (context, constraints) {
-                    final viewportWidth = _tableViewportWidth(constraints);
-                    final tableWidth = _timelineTableWidth(viewportWidth);
-
-                    return SingleChildScrollView(
-                      controller: _bodyScrollController,
-                      scrollDirection: Axis.horizontal,
-                      physics: const ClampingScrollPhysics(),
-                      child: SizedBox(
-                        width: tableWidth,
-                        child: ListView.builder(
-                          itemCount: filteredTimeline.length,
-                          itemBuilder: (_, i) => _buildTimelineTableRow(
-                              filteredTimeline[i], i.isEven, tableWidth),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildInvoicesTab() {
-    final filteredInvoices = _getFilteredInvoices();
-    final pendingCount = _invoices
-        .where((invoice) =>
-            invoice.balance > 0.01 && invoice.status != InvoiceStatus.cancelled)
-        .length;
-    final paidCount = _invoices
-        .where((invoice) => invoice.status == InvoiceStatus.paid)
-        .length;
-
-    if (ResponsiveViewport.usesCompactShell(context)) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildTabToolbar(
-            searchController: _invoiceSearchController,
-            searchHint: 'Buscar factura…',
-            sortKey: _invoiceSortKey,
-            sortLabels: _invoiceSortLabels,
-            onSortChanged: (value) => setState(() => _invoiceSortKey = value),
-            statusText: !_hasLoadedInvoices
-                ? 'Cargando facturas…'
-                : filteredInvoices.length == _invoices.length
-                    ? '${_invoices.length} facturas'
-                    : '${filteredInvoices.length} de ${_invoices.length}',
-          ),
-          Expanded(
-            child: _isLoadingInvoices && !_hasLoadedInvoices
-                ? const Center(
-                    child: BrandedLoading(
-                      size: 120,
-                      message: 'Cargando facturas…',
-                    ),
-                  )
-                : _invoiceError != null
-                    ? _buildInvoiceErrorState()
-                    : filteredInvoices.isEmpty
-                        ? _buildEmptyState(
-                            _invoices.isEmpty
-                                ? 'Sin facturas registradas'
-                                : 'Ninguna factura coincide',
-                            Icons.receipt_long_outlined,
-                          )
-                        : ListView.separated(
-                            key: const PageStorageKey(
-                              'client-logbook-compact-invoices',
-                            ),
-                            padding: EdgeInsets.zero,
-                            itemCount: filteredInvoices.length,
-                            separatorBuilder: (_, __) =>
-                                const Divider(height: 1),
-                            itemBuilder: (_, index) => _buildCompactInvoiceRow(
-                              filteredInvoices[index],
-                            ),
-                          ),
-          ),
-        ],
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _buildTabToolbar(
-          searchController: _invoiceSearchController,
-          searchHint: 'Buscar por número, referencia o bici…',
-          sortKey: _invoiceSortKey,
-          sortLabels: _invoiceSortLabels,
-          onSortChanged: (v) => setState(() => _invoiceSortKey = v),
-          statusText: !_hasLoadedInvoices
-              ? 'Cargando facturas…'
-              : filteredInvoices.length == _invoices.length
-                  ? '${_invoices.length} facturas'
-                  : '${filteredInvoices.length} de ${_invoices.length}',
-          trailing: _invoices.isEmpty
-              ? null
-              : Row(
-                  children: [
-                    _buildInvoiceSummaryChip(
-                      'Pendientes',
-                      pendingCount,
-                      Colors.orange,
-                    ),
-                    const SizedBox(width: 6),
-                    _buildInvoiceSummaryChip(
-                      'Pagadas',
-                      paidCount,
-                      Colors.green,
-                    ),
-                  ],
-                ),
-        ),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final viewportWidth = _tableViewportWidth(constraints);
-            final tableWidth = _invoiceTableWidth(viewportWidth);
-
-            return Container(
-              height: 36,
-              decoration: BoxDecoration(
-                color: Colors.grey[50],
-                border: Border(
-                  bottom: BorderSide(color: Colors.grey[200]!, width: 1),
-                ),
-              ),
-              child: SingleChildScrollView(
-                controller: _headerScrollController,
-                scrollDirection: Axis.horizontal,
-                physics: const ClampingScrollPhysics(),
-                child: SizedBox(
-                  width: tableWidth,
-                  child: Row(
-                    children: [
-                      const SizedBox(width: 4),
-                      _buildResizableHeader(
-                        label: 'N° FACTURA',
-                        colKey: 'number',
-                        width: _invoiceColNumber,
-                        sortCol: _invoiceSortCol,
-                        sortAsc: _invoiceSortAsc,
-                        onSort: (col, asc) => setState(() {
-                          _invoiceSortCol = col;
-                          _invoiceSortAsc = asc;
-                        }),
-                        onResize: (d) => setState(() => _invoiceColNumber =
-                            (_invoiceColNumber + d).clamp(90, 220)),
-                      ),
-                      SizedBox(
-                        width: _invoiceContextColumnWidth(tableWidth),
-                        child: _buildSortableHeader(
-                          'ORIGEN / BICI',
-                          'context',
-                          _invoiceSortCol,
-                          _invoiceSortAsc,
-                          (col, asc) => setState(() {
-                            _invoiceSortCol = col;
-                            _invoiceSortAsc = asc;
-                          }),
-                          leftPad: 12,
-                        ),
-                      ),
-                      _buildResizableHeader(
-                        label: 'FECHA',
-                        colKey: 'date',
-                        width: _invoiceColDate,
-                        sortCol: _invoiceSortCol,
-                        sortAsc: _invoiceSortAsc,
-                        onSort: (col, asc) => setState(() {
-                          _invoiceSortCol = col;
-                          _invoiceSortAsc = asc;
-                        }),
-                        onResize: (d) => setState(() => _invoiceColDate =
-                            (_invoiceColDate + d).clamp(80, 180)),
-                      ),
-                      _buildResizableHeader(
-                        label: 'ESTADO',
-                        colKey: 'status',
-                        width: _invoiceColStatus,
-                        sortCol: _invoiceSortCol,
-                        sortAsc: _invoiceSortAsc,
-                        onSort: (col, asc) => setState(() {
-                          _invoiceSortCol = col;
-                          _invoiceSortAsc = asc;
-                        }),
-                        onResize: (d) => setState(() => _invoiceColStatus =
-                            (_invoiceColStatus + d).clamp(90, 200)),
-                      ),
-                      _buildResizableHeader(
-                        label: 'TOTAL',
-                        colKey: 'total',
-                        width: _invoiceColTotal,
-                        sortCol: _invoiceSortCol,
-                        sortAsc: _invoiceSortAsc,
-                        onSort: (col, asc) => setState(() {
-                          _invoiceSortCol = col;
-                          _invoiceSortAsc = asc;
-                        }),
-                        onResize: (d) => setState(() => _invoiceColTotal =
-                            (_invoiceColTotal + d).clamp(80, 180)),
-                      ),
-                      _buildResizableHeader(
-                        label: 'SALDO',
-                        colKey: 'balance',
-                        width: _invoiceColBalance,
-                        sortCol: _invoiceSortCol,
-                        sortAsc: _invoiceSortAsc,
-                        onSort: (col, asc) => setState(() {
-                          _invoiceSortCol = col;
-                          _invoiceSortAsc = asc;
-                        }),
-                        onResize: (d) => setState(() => _invoiceColBalance =
-                            (_invoiceColBalance + d).clamp(80, 180)),
-                      ),
-                      const SizedBox(width: 44),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-        Expanded(
-          child: _isLoadingInvoices && !_hasLoadedInvoices
-              ? const Center(
-                  child: BrandedLoading(
-                    size: 120,
-                    message: 'Cargando facturas…',
-                  ),
-                )
-              : _invoiceError != null
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.receipt_long_outlined,
-                              size: 48, color: Colors.red[300]),
-                          const SizedBox(height: 12),
-                          Text(
-                            _invoiceError!,
-                            style: TextStyle(
-                              color: Colors.grey[700],
-                              fontSize: 13,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          OutlinedButton.icon(
-                            onPressed: () => _loadInvoices(forceRefresh: true),
-                            icon: const Icon(Icons.refresh, size: 16),
-                            label: const Text('Reintentar'),
-                          ),
-                        ],
-                      ),
-                    )
-                  : filteredInvoices.isEmpty
-                      ? _buildEmptyState(
-                          _invoices.isEmpty
-                              ? 'Sin facturas registradas'
-                              : 'Ninguna factura coincide',
-                          Icons.receipt_long_outlined,
-                        )
-                      : LayoutBuilder(
-                          builder: (context, constraints) {
-                            final viewportWidth =
-                                _tableViewportWidth(constraints);
-                            final tableWidth =
-                                _invoiceTableWidth(viewportWidth);
-
-                            return SingleChildScrollView(
-                              controller: _bodyScrollController,
-                              scrollDirection: Axis.horizontal,
-                              physics: const ClampingScrollPhysics(),
-                              child: SizedBox(
-                                width: tableWidth,
-                                child: ListView.builder(
-                                  itemCount: filteredInvoices.length,
-                                  itemBuilder: (_, i) => _buildInvoiceTableRow(
-                                    filteredInvoices[i],
-                                    i.isEven,
-                                    tableWidth,
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-        ),
-      ],
-    );
-  }
-
-  // ─────────────────────────────────────────────
-  // CHATS TAB
-  // ─────────────────────────────────────────────
-
-  Widget _buildChatsTab() {
-    if (_isLoadingChats) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (_chatError != null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.chat_bubble_outline, size: 48, color: Colors.red[300]),
-            const SizedBox(height: 12),
-            Text(
-              _chatError!,
-              style: TextStyle(color: Colors.grey[700], fontSize: 13),
-            ),
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: () => _loadChats(forceRefresh: true),
-              icon: const Icon(Icons.refresh, size: 16),
-              label: const Text('Reintentar'),
-            ),
-          ],
-        ),
-      );
-    }
-
-    if (_chats.isEmpty) {
-      return _buildEmptyState(
-        'Sin conversaciones registradas',
-        Icons.chat_bubble_outline,
-      );
-    }
-
-    final theme = Theme.of(context);
-
-    // Single conversation: just show the chat directly, no list panel
-    if (_chats.length == 1) {
-      return ChatWindow(
-        key: ValueKey(_chats.first.id),
-        conversation: _chats.first,
-      );
-    }
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isWide = constraints.maxWidth >= 640;
-
-        if (isWide) {
-          // Split: list on left, ChatWindow on right
-          return Row(
-            children: [
-              SizedBox(
-                width: 220,
-                child: ListView.builder(
-                  itemCount: _chats.length,
-                  itemBuilder: (_, i) =>
-                      _buildChatListItem(_chats[i], isWide: true),
-                ),
-              ),
-              VerticalDivider(width: 1, color: theme.dividerColor),
-              Expanded(
-                child: _selectedChat != null
-                    ? ChatWindow(
-                        key: ValueKey(_selectedChat!.id),
-                        conversation: _selectedChat!,
-                      )
-                    : Center(
-                        child: Text(
-                          'Selecciona una conversación',
-                          style:
-                              TextStyle(color: Colors.grey[500], fontSize: 13),
-                        ),
-                      ),
-              ),
-            ],
-          );
-        }
-
-        // Narrow: show selected chat or list
-        if (_selectedChat != null) {
-          return Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                color: theme.cardColor,
-                child: Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back, size: 18),
-                      onPressed: () => setState(() => _selectedChat = null),
-                      padding: EdgeInsets.zero,
-                      constraints:
-                          const BoxConstraints(minWidth: 32, minHeight: 32),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _selectedChat!.title ?? 'Conversación',
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w500, fontSize: 14),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: ChatWindow(
-                  key: ValueKey(_selectedChat!.id),
-                  conversation: _selectedChat!,
-                ),
-              ),
-            ],
-          );
-        }
-
-        return ListView.builder(
-          itemCount: _chats.length,
-          itemBuilder: (_, i) => _buildChatListItem(_chats[i], isWide: false),
-        );
-      },
-    );
-  }
-
-  Widget _buildChatListItem(Conversation chat, {required bool isWide}) {
-    final theme = Theme.of(context);
-    final isSelected = isWide && _selectedChat?.id == chat.id;
-    final hasUnread = chat.unreadCount > 0;
-    final lastAt = chat.lastMessageAt ?? chat.updatedAt;
-
-    final String subtitle = switch (chat.contextType) {
-      'job' => 'Trabajo técnico',
-      'invoice' => 'Factura',
-      'customer' => 'Cliente',
-      _ => chat.type == 'support' ? 'Soporte' : 'Interno',
-    };
-
-    return InkWell(
-      onTap: () => setState(() => _selectedChat = chat),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        color: isSelected
-            ? theme.colorScheme.primary.withValues(alpha: 0.08)
-            : null,
-        child: Row(
-          children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor:
-                      theme.colorScheme.primary.withValues(alpha: 0.12),
-                  child: Icon(
-                    Icons.chat_bubble_outline,
-                    size: 16,
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
-                if (hasUnread)
-                  Positioned(
-                    top: -2,
-                    right: -2,
-                    child: Container(
-                      padding: const EdgeInsets.all(3),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.error,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Text(
-                        chat.unreadCount > 9 ? '9+' : '${chat.unreadCount}',
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final half = (constraints.maxWidth - 2) / 2;
+              return Wrap(
                 children: [
-                  Text(
-                    chat.title ?? 'Conversación',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: hasUnread ? FontWeight.w600 : FontWeight.w500,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (subtitle.isNotEmpty)
-                    Text(
-                      subtitle,
-                      style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                  for (var index = 0; index < facts.length; index++)
+                    Container(
+                      width: half,
+                      padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+                      decoration: BoxDecoration(
+                        border: Border(
+                          right: index.isEven
+                              ? BorderSide(color: roles.hairline)
+                              : BorderSide.none,
+                          top: index >= 2
+                              ? BorderSide(color: roles.hairline)
+                              : BorderSide.none,
+                        ),
+                      ),
+                      child: _factCell(context, facts[index]),
                     ),
                 ],
-              ),
-            ),
-            Text(
-              _formatChatDate(lastAt),
-              style: TextStyle(fontSize: 11, color: Colors.grey[500]),
-            ),
-          ],
+              );
+            },
+          ),
         ),
-      ),
+        const SizedBox(height: 14),
+        VbButton(
+          label: 'Nuevo trabajo',
+          icon: Icons.add,
+          expand: true,
+          onPressed: _newJob,
+        ),
+      ],
     );
   }
 
-  String _formatChatDate(DateTime date) {
-    final now = DateTime.now();
-    final diff = now.difference(date);
-    if (diff.inDays == 0) {
-      return '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-    } else if (diff.inDays == 1) {
-      return 'Ayer';
-    } else if (diff.inDays < 7) {
-      const days = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
-      return days[date.weekday - 1];
-    } else {
-      return '${date.day}/${date.month}';
-    }
+  List<({String label, String? value, bool warn})> _facts(ClientRecord record) {
+    final visits = _visits == null ? null : _countedVisits;
+    final last = visits == null || visits.isEmpty
+        ? null
+        : visits
+            .map((visit) => visit.date)
+            .reduce((a, b) => a.isAfter(b) ? a : b);
+    final invoicesReady = _invoices != null;
+    final owed = _owedTotal;
+    return [
+      (label: 'Visitas', value: visits?.length.toString(), warn: false),
+      (
+        label: 'Pagado',
+        value: invoicesReady ? _money.format(_paidTotal) : null,
+        warn: false
+      ),
+      (
+        label: 'Por cobrar',
+        value: invoicesReady ? _money.format(owed) : null,
+        warn: owed > 0.5
+      ),
+      (
+        label: 'Última visita',
+        value: last == null ? null : bikeFullDate(last),
+        warn: false
+      ),
+      (
+        label: 'Cliente desde',
+        value: bikeMonthYear(record.createdAt),
+        warn: false
+      ),
+    ];
   }
 
-  // ─────────────────────────────────────────────
-  // SHARED TAB TOOLBAR
-  // ─────────────────────────────────────────────
-
-  Widget _buildTabToolbar({
-    required TextEditingController searchController,
-    required String searchHint,
-    required String sortKey,
-    required Map<String, String> sortLabels,
-    required ValueChanged<String> onSortChanged,
-    required String statusText,
-    Widget? trailing,
-    Widget? compactTrailing,
-  }) {
+  Widget _factCell(
+      BuildContext context, ({String label, String? value, bool warn}) fact) {
     final theme = Theme.of(context);
-    final usesCompactLayout = ResponsiveViewport.usesCompactShell(context);
-
-    if (usesCompactLayout) {
-      return Container(
-        key: const ValueKey('client-logbook-compact-tab-toolbar'),
-        padding: const EdgeInsets.fromLTRB(8, 8, 8, 6),
-        decoration: BoxDecoration(
-          color: theme.cardColor,
-          border: Border(bottom: BorderSide(color: theme.dividerColor)),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: SizedBox(
-                height: 48,
-                child: TextField(
-                  controller: searchController,
-                  style: const TextStyle(fontSize: 14),
-                  textInputAction: TextInputAction.search,
-                  decoration: InputDecoration(
-                    hintText: searchHint,
-                    hintStyle: const TextStyle(fontSize: 13),
-                    prefixIcon: const Icon(Icons.search, size: 20),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(color: theme.dividerColor),
-                    ),
-                    filled: true,
-                    fillColor: theme.scaffoldBackgroundColor,
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 4),
-            PopupMenuButton<String>(
-              initialValue: sortKey,
-              tooltip: 'Ordenar: ${sortLabels[sortKey] ?? sortKey}',
-              constraints: const BoxConstraints(
-                minWidth: 240,
-                maxWidth: 320,
-              ),
-              onSelected: onSortChanged,
-              itemBuilder: (context) => sortLabels.entries
-                  .map(
-                    (entry) => PopupMenuItem(
-                      value: entry.key,
-                      height: 52,
-                      child: Row(
-                        children: [
-                          SizedBox(
-                            width: 28,
-                            child: entry.key == sortKey
-                                ? Icon(
-                                    Icons.check,
-                                    color: theme.colorScheme.primary,
-                                  )
-                                : null,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(child: Text(entry.value)),
-                        ],
-                      ),
-                    ),
-                  )
-                  .toList(),
-              child: const SizedBox(
-                width: 48,
-                height: 48,
-                child: Icon(Icons.sort),
-              ),
-            ),
-            if (compactTrailing != null) ...[
-              const SizedBox(width: 4),
-              compactTrailing,
-            ],
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(24, 12, 24, 10),
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        border: Border(bottom: BorderSide(color: theme.dividerColor)),
-      ),
+    final roles = VinabikeThemeRoles.of(context);
+    return Semantics(
+      container: true,
+      label: '${fact.label}: ${fact.value ?? 'sin dato'}',
+      excludeSemantics: true,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            children: [
-              // Search
-              SizedBox(
-                width: 300,
-                height: 36,
-                child: TextField(
-                  controller: searchController,
-                  style: const TextStyle(fontSize: 13),
-                  decoration: InputDecoration(
-                    hintText: searchHint,
-                    hintStyle: const TextStyle(fontSize: 13),
-                    prefixIcon: const Icon(Icons.search, size: 18),
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(6),
-                      borderSide: BorderSide(color: theme.dividerColor),
-                    ),
-                    filled: true,
-                    fillColor: theme.scaffoldBackgroundColor,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              // Sort
-              Container(
-                height: 36,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                decoration: BoxDecoration(
-                  color: theme.scaffoldBackgroundColor,
-                  border: Border.all(color: Colors.grey[350]!),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: sortKey,
-                    style: TextStyle(fontSize: 12.5, color: Colors.grey[800]),
-                    isDense: true,
-                    icon: Icon(Icons.unfold_more,
-                        size: 16, color: Colors.grey[500]),
-                    items: sortLabels.entries
-                        .map((e) => DropdownMenuItem(
-                            value: e.key,
-                            child: Text(e.value,
-                                style: TextStyle(
-                                    fontSize: 12.5, color: Colors.grey[800]))))
-                        .toList(),
-                    onChanged: (v) {
-                      if (v != null) onSortChanged(v);
-                    },
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Text(statusText,
-                  style: TextStyle(fontSize: 12, color: Colors.grey[500])),
-              const Spacer(),
-              if (trailing != null) trailing,
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildResizableHeader({
-    required String label,
-    required String colKey,
-    required double width,
-    required String? sortCol,
-    required bool sortAsc,
-    required void Function(String col, bool asc) onSort,
-    required void Function(double delta) onResize,
-  }) {
-    final isActive = sortCol == colKey;
-    return Container(
-      width: width,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      alignment: Alignment.centerLeft,
-      child: Row(
-        children: [
-          Expanded(
-            child: InkWell(
-              onTap: () => onSort(colKey, isActive ? !sortAsc : true),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      label,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: isActive ? Colors.blue[700] : Colors.grey[600],
-                        letterSpacing: 0.5,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (isActive)
-                    Icon(
-                      sortAsc ? Icons.arrow_upward : Icons.arrow_downward,
-                      size: 11,
-                      color: Colors.blue[700],
-                    ),
-                ],
-              ),
-            ),
-          ),
-          GestureDetector(
-            behavior: HitTestBehavior.translucent,
-            onHorizontalDragUpdate: (d) => onResize(d.delta.dx),
-            child: MouseRegion(
-              cursor: SystemMouseCursors.resizeColumn,
-              child: Container(
-                width: 8,
-                height: double.infinity,
-                color: Colors.transparent,
-                child: Center(
-                  child: Container(
-                    width: 1,
-                    height: 20,
-                    color: Colors.grey[300],
-                  ),
-                ),
-              ),
+          Text(fact.label.toUpperCase(), style: BikeModuleText.label(context)),
+          const SizedBox(height: 3),
+          Text(
+            fact.value ?? '—',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight:
+                  fact.value == null ? FontWeight.w500 : FontWeight.w600,
+              fontFeatures: const [FontFeature.tabularFigures()],
+              color: fact.value == null
+                  ? roles.faintForeground
+                  : fact.warn
+                      ? roles.warning.onContainer
+                      : theme.colorScheme.onSurface,
             ),
           ),
         ],
@@ -3413,850 +1211,1017 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
     );
   }
 
-  Widget _buildSortableHeader(
-    String label,
-    String colKey,
-    String? sortCol,
-    bool sortAsc,
-    void Function(String col, bool asc) onSort, {
-    double leftPad = 0,
+  // ── Lo que pide atención ─────────────────────────────────────────────────
+
+  List<Widget> _alerts(BuildContext context, {required bool narrow}) {
+    final inWorkshop = [
+      for (final visit in _visits ?? const <BikeVisit>[])
+        if (visit.inWorkshop) visit,
+    ];
+    return [
+      for (final visit in inWorkshop.take(2))
+        _workshopBand(context, visit, narrow: narrow),
+      if (_owedInvoices.isNotEmpty) _debtBand(context, narrow: narrow),
+    ];
+  }
+
+  Widget _band(
+    BuildContext context, {
+    required String title,
+    required Widget details,
+    required Widget action,
+    required Color background,
+    required Color border,
+    required Color titleColor,
+    required bool narrow,
   }) {
-    final isActive = sortCol == colKey;
-    return InkWell(
-      onTap: () => onSort(colKey, isActive ? !sortAsc : true),
-      child: Container(
-        height: 36,
-        padding: EdgeInsets.only(left: leftPad, right: 12),
-        alignment: Alignment.centerLeft,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: isActive ? Colors.blue[700] : const Color(0xFF9E9E9E),
-                letterSpacing: 0.5,
-              ),
-            ),
-            if (isActive) ...[
-              const SizedBox(width: 4),
-              Icon(
-                sortAsc ? Icons.arrow_upward : Icons.arrow_downward,
-                size: 11,
-                color: Colors.blue[700],
-              ),
-            ],
-          ],
+    final text = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: titleColor,
+          ),
         ),
-      ),
+        const SizedBox(height: 4),
+        details,
+      ],
     );
-  }
-
-  Widget _buildCompactJobFilter({
-    required int activeCount,
-    required int completedCount,
-  }) {
-    return PopupMenuButton<JobViewFilter>(
-      initialValue: _jobViewFilter,
-      tooltip: 'Filtrar trabajos: ${_jobFilterLabel(_jobViewFilter)}',
-      constraints: const BoxConstraints(
-        minWidth: 220,
-        maxWidth: 300,
-      ),
-      onSelected: (filter) => setState(() => _jobViewFilter = filter),
-      itemBuilder: (context) => JobViewFilter.values.map((filter) {
-        final count = switch (filter) {
-          JobViewFilter.active => activeCount,
-          JobViewFilter.completed => completedCount,
-          JobViewFilter.all => _jobs.length,
-        };
-        return PopupMenuItem(
-          value: filter,
-          height: 52,
-          child: Row(
-            children: [
-              SizedBox(
-                width: 28,
-                child: filter == _jobViewFilter
-                    ? Icon(
-                        Icons.check,
-                        color: Theme.of(context).colorScheme.primary,
-                      )
-                    : null,
-              ),
-              const SizedBox(width: 8),
-              Expanded(child: Text(_jobFilterLabel(filter))),
-              Text(
-                count.toString(),
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-              ),
-            ],
-          ),
-        );
-      }).toList(),
-      child: const SizedBox(
-        width: 48,
-        height: 48,
-        child: Icon(Icons.filter_list),
-      ),
-    );
-  }
-
-  Widget _buildFilterToggle(
-    String label,
-    bool selected,
-    VoidCallback onTap, {
-    int? count,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(4),
+    return Semantics(
+      container: true,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
         decoration: BoxDecoration(
-          color: selected ? Colors.blue[50] : Colors.transparent,
-          borderRadius: BorderRadius.circular(4),
-          border: Border.all(
-            color: selected ? Colors.blue[300]! : Colors.grey[300]!,
-            width: 1,
-          ),
+          color: background,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: border),
         ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              label.toUpperCase(),
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-                color: selected ? Colors.blue[700] : Colors.grey[600],
-                letterSpacing: 0.5,
-              ),
-            ),
-            if (count != null) ...[
-              const SizedBox(width: 6),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                decoration: BoxDecoration(
-                  color: selected ? Colors.blue[100] : Colors.grey[200],
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  count.toString(),
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                    color: selected ? Colors.blue[700] : Colors.grey[600],
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmptyState(String message, IconData icon) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 48, color: Colors.grey[300]),
-          const SizedBox(height: 12),
-          Text(message,
-              style: TextStyle(color: Colors.grey[500], fontSize: 13)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCompactBikeRow(Bike bike) {
-    final theme = Theme.of(context);
-    final jobsForBike = _totalJobsForBike(bike.id);
-    final activeJobs = _activeJobsForBike(bike.id);
-    final serial = bike.serialNumber?.trim();
-
-    void openBike() => _openBikeRecordPane(bike);
-
-    return Material(
-      color: theme.colorScheme.surface,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            child: Semantics(
-              button: true,
-              label: 'Abrir bicicleta ${bike.displayName}',
-              onTap: openBike,
-              excludeSemantics: true,
-              child: InkWell(
-                onTap: openBike,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(minHeight: 76),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 10, 6, 10),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 42,
-                          height: 42,
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.primaryContainer,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Icon(
-                            Icons.pedal_bike,
-                            color: theme.colorScheme.onPrimaryContainer,
-                            size: 22,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                bike.displayName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.titleSmall?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                [
-                                  if (bike.bikeType != null)
-                                    bike.bikeType!.displayName,
-                                  if (serial?.isNotEmpty == true)
-                                    'Serie $serial',
-                                ].join(' · '),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                '$jobsForBike ${jobsForBike == 1 ? 'trabajo' : 'trabajos'}'
-                                '${activeJobs > 0 ? ' · $activeJobs ${activeJobs == 1 ? 'activo' : 'activos'}' : ''}',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.labelSmall?.copyWith(
-                                  color: activeJobs > 0
-                                      ? theme.colorScheme.primary
-                                      : theme.colorScheme.onSurfaceVariant,
-                                  fontWeight: activeJobs > 0
-                                      ? FontWeight.w700
-                                      : FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          PopupMenuButton<String>(
-            tooltip: 'Opciones de ${bike.displayName}',
-            constraints: const BoxConstraints(
-              minWidth: 230,
-              maxWidth: 310,
-            ),
-            onSelected: (value) {
-              if (value == 'jobs') {
-                setState(() {
-                  _jobViewFilter = JobViewFilter.all;
-                  _jobSearchController.text = bike.displayName;
-                  _jobSearchTerm = bike.displayName;
-                });
-                _tabController.animateTo(1);
-              } else if (value == 'edit') {
-                _openBikeEditorPane(bike);
-              } else if (value == 'delete') {
-                _confirmDeleteBike(bike);
-              }
-            },
-            itemBuilder: (_) => [
-              const PopupMenuItem(
-                value: 'jobs',
-                height: 56,
-                child: Row(
-                  children: [
-                    Icon(Icons.build_circle_outlined),
-                    SizedBox(width: 12),
-                    Expanded(child: Text('Ver trabajos')),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'edit',
-                height: 56,
-                child: Row(
-                  children: [
-                    Icon(Icons.edit_outlined),
-                    SizedBox(width: 12),
-                    Expanded(child: Text('Editar bicicleta')),
-                  ],
-                ),
-              ),
-              PopupMenuItem(
-                value: 'delete',
-                height: 56,
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.delete_outline,
-                      color: theme.colorScheme.error,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Eliminar bicicleta',
-                        style: TextStyle(color: theme.colorScheme.error),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-            child: const SizedBox(
-              width: 48,
-              height: 56,
-              child: Icon(Icons.more_horiz),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCompactJobRow(MechanicJob job) {
-    final theme = Theme.of(context);
-    final bike = _getBikeForJob(job);
-    final request = job.isStandaloneQuotation
-        ? job.subjectNotes?.trim()
-        : job.clientRequest?.trim();
-    final total = NumberFormat.currency(symbol: '\$', decimalDigits: 0)
-        .format(_getJobDisplayTotal(job));
-
-    void openJob() {
-      setState(() {
-        _selectedJobId = job.id;
-        _isEditingJob = true;
-      });
-    }
-
-    return Material(
-      color: theme.colorScheme.surface,
-      child: Semantics(
-        button: true,
-        label:
-            'Abrir trabajo ${job.jobNumber ?? ''}, ${bike.displayName}, ${job.statusDisplayName}',
-        onTap: openJob,
-        excludeSemantics: true,
-        child: InkWell(
-          onTap: openJob,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 88),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        child: narrow
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [text, const SizedBox(height: 10), action],
+              )
+            : Row(
                 children: [
-                  Container(
-                    width: 4,
-                    height: 48,
-                    margin: const EdgeInsets.only(top: 2, right: 10),
-                    decoration: BoxDecoration(
-                      color: _compactJobPriorityColor(job.priority),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                  ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                job.jobNumber ?? 'Trabajo',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.titleSmall?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Flexible(child: _buildStatusBadge(job)),
-                          ],
-                        ),
-                        const SizedBox(height: 5),
-                        Text(
-                          bike.displayName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        if (request?.isNotEmpty == true) ...[
-                          const SizedBox(height: 3),
-                          Text(
-                            request!,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  SizedBox(
-                    width: 78,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          total,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.labelLarge?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          DateFormat('dd/MM/yy').format(job.arrivalDate),
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        const Icon(Icons.chevron_right, size: 20),
-                      ],
-                    ),
-                  ),
+                  Expanded(child: text),
+                  const SizedBox(width: 12),
+                  action,
                 ],
               ),
-            ),
-          ),
-        ),
       ),
     );
   }
 
-  Color _compactJobPriorityColor(JobPriority priority) {
-    return switch (priority) {
-      JobPriority.urgente => Colors.red,
-      JobPriority.alta => Colors.orange,
-      JobPriority.baja => Colors.grey,
-      JobPriority.normal => Colors.blue,
+  Widget _workshopBand(BuildContext context, BikeVisit visit,
+      {required bool narrow}) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final job = visit.job;
+    final days = calendarDaysBetween(job.arrivalDate, _today);
+    final title = days == 0
+        ? 'En el taller desde hoy'
+        : 'En el taller hace ${days == 1 ? '1 día' : '$days días'}';
+    final jobId = job.id;
+    return _band(
+      context,
+      title: title,
+      titleColor: roles.onSelectionContainer,
+      background: roles.selectionContainer,
+      border: roles.accentBorder,
+      narrow: narrow,
+      details: Wrap(
+        spacing: 10,
+        runSpacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Text(
+            _subjectLabel(visit),
+            style: TextStyle(
+                fontSize: 14, color: theme.colorScheme.onSurfaceVariant),
+          ),
+          if (job.jobNumber != null)
+            Text(job.jobNumber!, style: BikeModuleText.code(context)),
+          BikeJobStatusDot(
+            label: jobVisitStatusLabel(job),
+            color: jobVisitStatusColor(job),
+            fontSize: 14,
+          ),
+        ],
+      ),
+      action: VbButton(
+        label: 'Abrir trabajo',
+        icon: Icons.arrow_forward,
+        variant: VbButtonVariant.secondary,
+        density: narrow ? null : VbDensity.comfortable,
+        expand: narrow,
+        semanticLabel: job.jobNumber == null
+            ? 'Abrir trabajo'
+            : 'Abrir trabajo ${job.jobNumber}',
+        onPressed: jobId == null ? null : () => _openJob(jobId),
+      ),
+    );
+  }
+
+  Widget _debtBand(BuildContext context, {required bool narrow}) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final owed = _owedInvoices;
+    final single = owed.length == 1 ? owed.first : null;
+    final today = _today;
+    final String detail;
+    if (single != null) {
+      final date = bikeShortDate(single.date, today: today);
+      detail = single.paidAmount > 0.5
+          ? '${single.invoiceNumber} del $date · abonó '
+              '${_money.format(single.paidAmount)} de '
+              '${_money.format(single.total)}'
+          : '${single.invoiceNumber} del $date · sin abonos';
+    } else {
+      detail = '${owed.length} facturas con saldo · la más antigua del '
+          '${bikeShortDate(owed.first.date, today: today)}';
+    }
+    return _band(
+      context,
+      title: 'Debe ${_money.format(_owedTotal)}',
+      titleColor: roles.warning.onContainer,
+      background: roles.warning.container,
+      border: roles.warning.border,
+      narrow: narrow,
+      details: Text(
+        detail,
+        style:
+            TextStyle(fontSize: 14, color: theme.colorScheme.onSurfaceVariant),
+      ),
+      action: single != null
+          ? VbButton(
+              label: 'Registrar pago',
+              variant: VbButtonVariant.secondary,
+              density: narrow ? null : VbDensity.comfortable,
+              expand: narrow,
+              semanticLabel: 'Registrar pago de ${single.invoiceNumber}',
+              onPressed: () => _registerPayment(single),
+            )
+          : VbButton(
+              label: 'Ver facturas',
+              variant: VbButtonVariant.secondary,
+              density: narrow ? null : VbDensity.comfortable,
+              expand: narrow,
+              onPressed: () => _showTab(ClientPageTab.invoices),
+            ),
+    );
+  }
+
+  // ── Pestañas ─────────────────────────────────────────────────────────────
+
+  Widget _buildTabs() {
+    String counted(String label, int? count) =>
+        count == null || count == 0 ? label : '$label · $count';
+    return VbSubTabs<ClientPageTab>(
+      density: VbSubTabsDensity.comfortable,
+      value: _tab,
+      onChanged: _showTab,
+      tabs: [
+        const VbSubTab(value: ClientPageTab.data, label: 'Datos'),
+        VbSubTab(
+          value: ClientPageTab.activity,
+          label: counted('Actividad', _visits?.length),
+        ),
+        VbSubTab(
+          value: ClientPageTab.invoices,
+          label: counted('Facturas', _invoices?.length),
+        ),
+        VbSubTab(
+          value: ClientPageTab.messages,
+          label: counted('Mensajes', _chats?.length),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTabContent(
+    BuildContext context,
+    ClientRecord record, {
+    required double width,
+    required bool canManageUsers,
+  }) {
+    return switch (_tab) {
+      ClientPageTab.data => ClientDataSheet(
+          record: record,
+          draft: _draft,
+          controllers: _text,
+          focusNodes: _focus,
+          problems: _problems,
+          busy: _saving,
+          onAdd: _startEdit,
+          onChanged: _onFieldChanged,
+          onRegionChanged: _onRegionChanged,
+          onUndo: _undo,
+          onManageAccess: canManageUsers ? _manageAccess : null,
+        ),
+      ClientPageTab.activity => _buildActivity(context, width: width),
+      ClientPageTab.invoices => _buildInvoices(context, width: width),
+      ClientPageTab.messages => _buildMessages(context, width: width),
     };
   }
 
-  Widget _buildCompactInvoiceRow(Invoice invoice) {
+  Widget _stateBlock(
+    BuildContext context, {
+    required String title,
+    String? body,
+    IconData? icon,
+    Widget? action,
+  }) {
     final theme = Theme.of(context);
-    final bikeName = _bikeIndex[invoice.bikeId]?.displayName;
-    final contextTitle =
-        bikeName ?? invoice.reference ?? _invoiceTypeLabel(invoice);
-    final formatter = NumberFormat.currency(symbol: '\$', decimalDigits: 0);
-
-    return Material(
-      color: theme.colorScheme.surface,
-      child: Semantics(
-        button: invoice.id != null,
-        label:
-            'Abrir factura ${invoice.invoiceNumber}, $contextTitle, saldo ${formatter.format(invoice.balance)}',
-        onTap: invoice.id == null ? null : () => _openInvoice(invoice),
-        excludeSemantics: true,
-        child: InkWell(
-          onTap: invoice.id == null ? null : () => _openInvoice(invoice),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 82),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                invoice.invoiceNumber,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.titleSmall?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            _buildInvoiceStatusChip(invoice.status),
-                          ],
-                        ),
-                        const SizedBox(height: 5),
-                        Text(
-                          contextTitle,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          [
-                            DateFormat('dd/MM/yy').format(invoice.date),
-                            _invoiceTypeLabel(invoice),
-                          ].join(' · '),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  SizedBox(
-                    width: 92,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          formatter.format(invoice.total),
-                          maxLines: 1,
-                          style: theme.textTheme.labelLarge?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          invoice.balance > 0.01
-                              ? 'Saldo ${formatter.format(invoice.balance)}'
-                              : 'Pagada',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: invoice.balance > 0.01
-                                ? Colors.orange.shade800
-                                : Colors.green.shade700,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        const Icon(Icons.chevron_right, size: 20),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
       ),
-    );
-  }
-
-  Widget _buildCompactTimelineRow(MechanicJobTimeline event) {
-    final theme = Theme.of(context);
-    final color = _timelineColor(event.eventType);
-    final job = event.jobId.isNotEmpty ? _jobIndex[event.jobId] : null;
-    final bike = job != null ? _bikeIndex[job.bikeId] : null;
-    final description =
-        event.description ?? _getDefaultDescription(event.eventType);
-    final reference = [
-      if (job?.jobNumber?.isNotEmpty == true) job!.jobNumber!,
-      if (bike != null) bike.displayName,
-      if (event.createdByName?.isNotEmpty == true) event.createdByName!,
-    ].join(' · ');
-
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 72),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        child: Row(
+      child: Semantics(
+        liveRegion: true,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(12),
+            if (icon != null) ...[
+              Icon(icon, size: 30, color: theme.colorScheme.onSurfaceVariant),
+              const SizedBox(height: 12),
+            ],
+            Text(title,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleMedium),
+            if (body != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                body,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
               ),
-              child: Icon(
-                _timelineIcon(event.eventType),
-                color: color,
-                size: 21,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    description,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  if (event.oldValue != null || event.newValue != null) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      '${event.oldValue ?? ''} → ${event.newValue ?? ''}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                  if (reference.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      reference,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              DateFormat('dd/MM\nHH:mm').format(event.createdAt),
-              textAlign: TextAlign.right,
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
+            ],
+            if (action != null) ...[
+              const SizedBox(height: 16),
+              action,
+            ],
           ],
         ),
       ),
     );
   }
 
-  Widget _buildInvoiceErrorState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.receipt_long_outlined, size: 48, color: Colors.red[300]),
-          const SizedBox(height: 12),
+  Widget _loadingBlock() => const Padding(
+        padding: EdgeInsets.symmetric(vertical: 40),
+        child: Center(child: CircularProgressIndicator()),
+      );
+
+  // ── Actividad ────────────────────────────────────────────────────────────
+
+  Widget _buildActivity(BuildContext context, {required double width}) {
+    final visits = _visits;
+    if (_visitsFailed && visits == null) {
+      return _stateBlock(
+        context,
+        icon: Icons.cloud_off_outlined,
+        title: 'No pudimos cargar la actividad.',
+        body: 'Revisa la conexión y vuelve a intentar.',
+        action: VbButton(
+          label: 'Reintentar',
+          icon: Icons.refresh,
+          variant: VbButtonVariant.secondary,
+          onPressed: () => _loadVisits(_generation),
+        ),
+      );
+    }
+    if (visits == null) return _loadingBlock();
+    if (visits.isEmpty) {
+      return _stateBlock(
+        context,
+        title: 'Todavía no tiene trabajos.',
+        body: 'Cuando traiga su bici, cada trabajo queda aquí con lo que se '
+            'le hizo y su factura.',
+        action: VbButton(
+          label: 'Nuevo trabajo',
+          icon: Icons.add,
+          onPressed: _newJob,
+        ),
+      );
+    }
+    final narrow = width < 640;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final visit in visits)
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Text(
-              _invoiceError!,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey[700], fontSize: 13),
+            padding: const EdgeInsets.only(bottom: 14),
+            child: JobVisitCard(
+              visit: visit,
+              today: _today,
+              narrow: narrow,
+              onOpenJob: _openJob,
+              subjects: _subjectsFor(visit),
+              footer: _visitFooter(context, visit),
             ),
           ),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            onPressed: () => _loadInvoices(forceRefresh: true),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size(0, 48),
-            ),
-            icon: const Icon(Icons.refresh, size: 18),
-            label: const Text('Reintentar'),
-          ),
-        ],
-      ),
+      ],
     );
   }
 
-  Widget _buildInvoiceSummaryChip(String label, int count, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: color.withValues(alpha: 0.18)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label.toUpperCase(),
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: color,
-              letterSpacing: 0.5,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.14),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              count.toString(),
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w700,
-                color: color,
-              ),
-            ),
-          ),
-        ],
-      ),
+  /// La factura del trabajo y cuánto se pagó; o por qué todavía no tiene.
+  Widget? _visitFooter(BuildContext context, BikeVisit visit) {
+    if (_invoices == null) return null;
+    final roles = VinabikeThemeRoles.of(context);
+    final job = visit.job;
+    final invoice = job.invoiceId == null ? null : _invoiceById[job.invoiceId];
+    if (invoice == null) {
+      if (isCancelledJob(job)) return null;
+      return Text(
+        job.isQuotationWorkflow
+            ? (job.isServiceBudget
+                ? 'Este presupuesto aún no ha generado una factura.'
+                : 'Esta cotización aún no ha generado una factura.')
+            : 'Sin factura todavía.',
+        style: TextStyle(fontSize: 13, color: roles.faintForeground),
+      );
+    }
+    return Wrap(
+      spacing: 10,
+      runSpacing: 6,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        _invoiceNumber(context, invoice),
+        _payChip(invoice),
+      ],
     );
   }
 
-  Widget _buildInvoiceTableRow(Invoice invoice, bool even, double tableWidth) {
-    final bikeName = _bikeIndex[invoice.bikeId]?.displayName;
-    final contextTitle =
-        bikeName ?? invoice.reference ?? _invoiceTypeLabel(invoice);
-    final detailParts = [
-      if (invoice.jobNumber != null && invoice.jobNumber!.isNotEmpty)
-        invoice.jobNumber!,
-      _invoiceTypeLabel(invoice),
-    ];
-    final amountFormatter =
-        NumberFormat.currency(symbol: '\$', decimalDigits: 0);
-
-    return Material(
-      color: even ? Colors.white : Colors.grey[50],
+  Widget _invoiceNumber(BuildContext context, Invoice invoice) {
+    final theme = Theme.of(context);
+    return Semantics(
+      button: true,
+      label: 'Abrir factura ${invoice.invoiceNumber}',
+      excludeSemantics: true,
+      onTap: () => _openInvoice(invoice),
       child: InkWell(
-        onTap: invoice.id == null ? null : () => _openInvoice(invoice),
-        child: SizedBox(
-          height: 56,
-          width: tableWidth,
+        onTap: () => _openInvoice(invoice),
+        borderRadius: BorderRadius.circular(6),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 32),
+          child: Align(
+            widthFactor: 1,
+            heightFactor: 1,
+            child: Text(
+              invoice.invoiceNumber,
+              style: BikeModuleText.code(context,
+                  color: theme.colorScheme.primary),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// «Pagada», «Debe $45.000 de $90.000», «Anulada», «Borrador».
+  (String, SheetStatusTone) _payState(Invoice invoice) {
+    if (invoice.status == InvoiceStatus.cancelled) {
+      return ('Anulada', SheetStatusTone.neutral);
+    }
+    if (invoice.status == InvoiceStatus.draft) {
+      return ('Borrador', SheetStatusTone.neutral);
+    }
+    if (invoice.balance <= 0.5) return ('Pagada', SheetStatusTone.success);
+    final owed = _money.format(invoice.balance);
+    return invoice.paidAmount > 0.5
+        ? (
+            'Debe $owed de ${_money.format(invoice.total)}',
+            SheetStatusTone.warning
+          )
+        : ('Debe $owed', SheetStatusTone.warning);
+  }
+
+  Widget _payChip(Invoice invoice) {
+    final (label, tone) = _payState(invoice);
+    return SheetStatusChip(label: label, tone: tone);
+  }
+
+  // ── Facturas ─────────────────────────────────────────────────────────────
+
+  Widget _buildInvoices(BuildContext context, {required double width}) {
+    final invoices = _invoices;
+    if (_invoicesFailed && invoices == null) {
+      return _stateBlock(
+        context,
+        icon: Icons.cloud_off_outlined,
+        title: 'No pudimos cargar las facturas.',
+        body: 'Revisa la conexión y vuelve a intentar.',
+        action: VbButton(
+          label: 'Reintentar',
+          icon: Icons.refresh,
+          variant: VbButtonVariant.secondary,
+          onPressed: () => _loadInvoices(_generation, force: true),
+        ),
+      );
+    }
+    if (invoices == null) return _loadingBlock();
+    if (invoices.isEmpty) {
+      return _stateBlock(context, title: 'Todavía no tiene facturas.');
+    }
+    final theme = Theme.of(context);
+    final narrow = width < 720;
+    final jobs = _jobByInvoiceId;
+    final bikes = _bikesById;
+    String contextOf(Invoice invoice) {
+      final job = invoice.id == null ? null : jobs[invoice.id];
+      if (job != null) {
+        final visit =
+            _visits?.where((visit) => visit.job.id == job.id).firstOrNull;
+        final subject = visit == null ? null : _subjectLabel(visit);
+        return [job.jobNumber, subject]
+            .whereType<String>()
+            .where((part) => part.isNotEmpty)
+            .join(' · ');
+      }
+      final bike = invoice.bikeId == null ? null : bikes[invoice.bikeId];
+      if (bike != null) return _bikeName(bike);
+      final reference = invoice.reference?.trim();
+      if (reference != null && reference.isNotEmpty) return reference;
+      return invoice.invoiceType == 'sale' ? 'Venta' : 'Taller';
+    }
+
+    final rows = <Widget>[
+      if (!narrow)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 10),
           child: Row(
             children: [
-              const SizedBox(width: 4),
               SizedBox(
-                width: _invoiceColNumber,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Text(
-                    invoice.invoiceNumber,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
+                  width: 120,
+                  child: Text('FACTURA', style: BikeModuleText.label(context))),
+              SizedBox(
+                  width: 110,
+                  child: Text('FECHA', style: BikeModuleText.label(context))),
+              Expanded(
+                  child:
+                      Text('DE QUÉ ES', style: BikeModuleText.label(context))),
+              SizedBox(
+                  width: 190,
+                  child: Text('ESTADO', style: BikeModuleText.label(context))),
+              SizedBox(
+                width: 110,
+                child: Text('TOTAL',
+                    textAlign: TextAlign.end,
+                    style: BikeModuleText.label(context)),
               ),
-              SizedBox(
-                width: _invoiceContextColumnWidth(tableWidth),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
+            ],
+          ),
+        ),
+      for (var index = 0; index < invoices.length; index++)
+        _invoiceRow(context, invoices[index],
+            contextLabel: contextOf(invoices[index]),
+            narrow: narrow,
+            divider: index > 0 || !narrow),
+    ];
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: rows,
+        ),
+      ),
+    );
+  }
+
+  Widget _invoiceRow(
+    BuildContext context,
+    Invoice invoice, {
+    required String contextLabel,
+    required bool narrow,
+    required bool divider,
+  }) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final (status, tone) = _payState(invoice);
+    final date = bikeFullDate(invoice.date);
+    final total = Text(
+      _money.format(invoice.total),
+      textAlign: TextAlign.end,
+      style: TextStyle(
+        fontSize: 14.5,
+        fontWeight: FontWeight.w600,
+        fontFeatures: const [FontFeature.tabularFigures()],
+        decoration: invoice.status == InvoiceStatus.cancelled
+            ? TextDecoration.lineThrough
+            : null,
+        color: invoice.status == InvoiceStatus.cancelled
+            ? theme.colorScheme.onSurfaceVariant
+            : theme.colorScheme.onSurface,
+      ),
+    );
+    final number = Text(
+      invoice.invoiceNumber,
+      style: BikeModuleText.code(context, color: theme.colorScheme.primary),
+    );
+    final Widget content;
+    if (narrow) {
+      content = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              number,
+              const SizedBox(width: 10),
+              Expanded(
+                  child: Text(date,
+                      style: TextStyle(
+                          fontSize: 13, color: roles.faintForeground))),
+              total,
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(contextLabel,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 14)),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: SheetStatusChip(label: status, tone: tone),
+          ),
+        ],
+      );
+    } else {
+      content = Row(
+        children: [
+          SizedBox(width: 120, child: number),
+          SizedBox(
+            width: 110,
+            child: Text(date,
+                style: TextStyle(
+                    fontSize: 13.5, color: theme.colorScheme.onSurfaceVariant)),
+          ),
+          Expanded(
+            child: Text(contextLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 14)),
+          ),
+          SizedBox(
+            width: 190,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: SheetStatusChip(label: status, tone: tone),
+            ),
+          ),
+          SizedBox(width: 110, child: total),
+        ],
+      );
+    }
+    return Semantics(
+      button: true,
+      label: 'Factura ${invoice.invoiceNumber}, $date, $contextLabel, '
+          '$status, ${_money.format(invoice.total)}',
+      excludeSemantics: true,
+      onTap: () => _openInvoice(invoice),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => _openInvoice(invoice),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 52),
+            padding:
+                EdgeInsets.fromLTRB(20, narrow ? 12 : 10, 20, narrow ? 12 : 10),
+            decoration: BoxDecoration(
+              border: divider
+                  ? Border(top: BorderSide(color: roles.hairline))
+                  : null,
+            ),
+            alignment: Alignment.centerLeft,
+            child: content,
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Mensajes ─────────────────────────────────────────────────────────────
+
+  Widget _buildMessages(BuildContext context, {required double width}) {
+    final chats = _chats;
+    if (_chatsFailed && chats == null) {
+      return _stateBlock(
+        context,
+        icon: Icons.cloud_off_outlined,
+        title: 'No pudimos cargar los mensajes.',
+        body: 'Revisa la conexión y vuelve a intentar.',
+        action: VbButton(
+          label: 'Reintentar',
+          icon: Icons.refresh,
+          variant: VbButtonVariant.secondary,
+          onPressed: () => _loadChats(_generation),
+        ),
+      );
+    }
+    if (chats == null) return _loadingBlock();
+    if (chats.isEmpty) {
+      return _stateBlock(
+        context,
+        icon: Icons.chat_bubble_outline,
+        title: 'Sin conversaciones con este cliente.',
+        body: 'Aquí aparecen sus chats de WhatsApp y del portal, y los de sus '
+            'trabajos y facturas.',
+      );
+    }
+    final theme = Theme.of(context);
+    final height =
+        (MediaQuery.sizeOf(context).height * 0.72).clamp(420.0, 780.0);
+    final selected = chats.length == 1 ? chats.first : _selectedChat;
+    final wide = width >= 640;
+    Widget chatWindow(Conversation chat) => ChatWindow(
+          key: ValueKey(chat.id),
+          conversation: chat,
+          compact: !wide,
+        );
+
+    final Widget body;
+    if (chats.length == 1) {
+      body = chatWindow(chats.first);
+    } else if (wide) {
+      body = Row(
+        children: [
+          SizedBox(
+            width: 250,
+            child: ListView(
+              children: [
+                for (final chat in chats)
+                  _chatRow(context, chat, selected: chat.id == selected?.id),
+              ],
+            ),
+          ),
+          VerticalDivider(width: 1, color: theme.colorScheme.outlineVariant),
+          Expanded(
+            child: selected == null
+                ? Center(
+                    child: Text(
+                      'Elige una conversación.',
+                      style:
+                          TextStyle(color: theme.colorScheme.onSurfaceVariant),
+                    ),
+                  )
+                : chatWindow(selected),
+          ),
+        ],
+      );
+    } else if (selected != null) {
+      body = Column(
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => setState(() => _selectedChat = null),
+              icon: const Icon(Icons.chevron_left),
+              label: const Text('Conversaciones'),
+              style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
+            ),
+          ),
+          Expanded(child: chatWindow(selected)),
+        ],
+      );
+    } else {
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: theme.colorScheme.outlineVariant),
+        ),
+        child: Column(
+          children: [
+            for (final chat in chats) _chatRow(context, chat, selected: false),
+          ],
+        ),
+      );
+    }
+    return Container(
+      height: height,
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: body,
+    );
+  }
+
+  String _chatKind(Conversation chat) => switch (chat.contextType) {
+        'job' => 'Trabajo',
+        'invoice' => 'Factura',
+        _ => chat.channel == 'whatsapp'
+            ? 'WhatsApp'
+            : chat.type == 'support'
+                ? 'Portal'
+                : 'Interno',
+      };
+
+  String _chatDate(DateTime date) {
+    final local = date.toLocal();
+    final now = DateTime.now();
+    if (local.year == now.year &&
+        local.month == now.month &&
+        local.day == now.day) {
+      return DateFormat('HH:mm').format(local);
+    }
+    return bikeShortDate(local, today: now);
+  }
+
+  Widget _chatRow(BuildContext context, Conversation chat,
+      {required bool selected}) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final unread = chat.unreadCount > 0;
+    final preview = chat.lastMessageContent?.trim();
+    return Material(
+      color: selected ? roles.selectionContainer : Colors.transparent,
+      child: InkWell(
+        onTap: () => _openChat(chat),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 56),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Row(
+              children: [
+                Expanded(
                   child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        contextTitle,
+                        chat.title?.trim().isNotEmpty == true
+                            ? chat.title!.trim()
+                            : 'Conversación',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w600,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight:
+                              unread ? FontWeight.w700 : FontWeight.w600,
                         ),
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        detailParts.join(' · '),
+                        preview == null || preview.isEmpty
+                            ? _chatKind(chat)
+                            : '${_chatKind(chat)} · $preview',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 11.5,
-                          color: Colors.grey[600],
-                        ),
+                            fontSize: 13,
+                            color: theme.colorScheme.onSurfaceVariant),
                       ),
                     ],
                   ),
                 ),
-              ),
-              SizedBox(
-                width: _invoiceColDate,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Text(
-                    DateFormat('dd/MM/yy').format(invoice.date),
-                    style: TextStyle(fontSize: 12.5, color: Colors.grey[800]),
-                  ),
-                ),
-              ),
-              SizedBox(
-                width: _invoiceColStatus,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: _buildInvoiceStatusChip(invoice.status),
-                  ),
-                ),
-              ),
-              SizedBox(
-                width: _invoiceColTotal,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Text(
-                    amountFormatter.format(invoice.total),
-                    textAlign: TextAlign.right,
-                    style: const TextStyle(fontSize: 12.5),
-                  ),
-                ),
-              ),
-              SizedBox(
-                width: _invoiceColBalance,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Text(
-                    amountFormatter.format(invoice.balance),
-                    textAlign: TextAlign.right,
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      color: invoice.balance > 0.01
-                          ? Colors.orange[800]
-                          : Colors.green[700],
-                      fontWeight: FontWeight.w600,
+                const SizedBox(width: 10),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _chatDate(chat.lastMessageAt ?? chat.updatedAt),
+                      style:
+                          TextStyle(fontSize: 12, color: roles.faintForeground),
                     ),
-                  ),
+                    if (unread) ...[
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          chat.unreadCount > 9 ? '9+' : '${chat.unreadCount}',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: theme.colorScheme.onPrimary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Riel: bicis y mensajes ───────────────────────────────────────────────
+
+  Widget _railCard(BuildContext context, {required List<Widget> children}) {
+    final theme = Theme.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: children,
+      ),
+    );
+  }
+
+  Widget _railTitle(BuildContext context, String title) => Padding(
+        padding: const EdgeInsets.fromLTRB(18, 14, 18, 6),
+        child: Semantics(
+          header: true,
+          child:
+              Text(title.toUpperCase(), style: BikeModuleText.label(context)),
+        ),
+      );
+
+  Widget _buildBikesCard(BuildContext context, {required bool phone}) {
+    final roles = VinabikeThemeRoles.of(context);
+    final active = [
+      for (final bike in _bikes)
+        if (bike.isActive) bike,
+    ];
+    final archived = [
+      for (final bike in _bikes)
+        if (!bike.isActive) bike,
+    ];
+    final visits = _visits;
+    ({int count, BikeVisit? workshop, DateTime? last}) statsOf(Bike bike) {
+      var count = 0;
+      BikeVisit? workshop;
+      DateTime? last;
+      for (final visit in visits ?? const <BikeVisit>[]) {
+        if (!visit.bikeIds.contains(bike.id)) continue;
+        if (visit.inWorkshop) workshop ??= visit;
+        if (isCancelledJob(visit.job)) continue;
+        count++;
+        if (last == null || visit.date.isAfter(last)) last = visit.date;
+      }
+      return (count: count, workshop: workshop, last: last);
+    }
+
+    final ordered = [...active]..sort((a, b) {
+        final left = statsOf(a);
+        final right = statsOf(b);
+        if ((left.workshop != null) != (right.workshop != null)) {
+          return left.workshop != null ? -1 : 1;
+        }
+        final leftLast = left.last ?? a.createdAt;
+        final rightLast = right.last ?? b.createdAt;
+        return rightLast.compareTo(leftLast);
+      });
+    final all = [...ordered, ...archived];
+    return _railCard(
+      context,
+      children: [
+        _railTitle(
+            context, all.isEmpty ? 'Bicicletas' : 'Bicicletas · ${all.length}'),
+        if (all.isEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(18, 2, 18, 10),
+            child: Text(
+              'Todavía no tiene bicicletas registradas.',
+              style: TextStyle(fontSize: 14, color: roles.faintForeground),
+            ),
+          ),
+        for (final bike in all) _bikeRow(context, bike, statsOf(bike)),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(18, 4, 18, 14),
+          child: VbButton(
+            label: 'Agregar bicicleta',
+            icon: Icons.add,
+            variant: VbButtonVariant.secondary,
+            expand: true,
+            onPressed: _addBike,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _bikeRow(BuildContext context, Bike bike,
+      ({int count, BikeVisit? workshop, DateTime? last}) stats) {
+    final theme = Theme.of(context);
+    final roles = VinabikeThemeRoles.of(context);
+    final brand = bike.brand?.trim() ?? '';
+    final model = bike.model?.trim() ?? '';
+    final color = bike.color?.trim();
+    final meta = [
+      bike.bikeType?.displayName ?? 'Tipo sin registrar',
+      color == null || color.isEmpty
+          ? 'sin color registrado'
+          : color[0].toUpperCase() + color.substring(1),
+    ].join(' · ');
+    final visitsText = stats.count == 1 ? '1 visita' : '${stats.count} visitas';
+    final (String status, Color statusColor) = !bike.isActive
+        ? ('Archivada', roles.faintForeground)
+        : stats.workshop != null
+            ? ('En el taller · $visitsText', roles.warning.onContainer)
+            : stats.last != null
+                ? (
+                    '$visitsText · última ${bikeShortDate(stats.last!, today: _today)}',
+                    theme.colorScheme.onSurfaceVariant
+                  )
+                : ('Sin visitas', roles.faintForeground);
+    final name = brand.isEmpty && model.isEmpty
+        ? const TextSpan(text: 'Bicicleta sin nombre')
+        : TextSpan(children: [
+            if (brand.isNotEmpty)
+              TextSpan(
+                text: model.isEmpty ? brand : '$brand ',
+                style: TextStyle(
+                  fontWeight: model.isEmpty ? FontWeight.w600 : FontWeight.w500,
+                  color: model.isEmpty
+                      ? theme.colorScheme.onSurface
+                      : theme.colorScheme.onSurfaceVariant,
                 ),
               ),
-              SizedBox(
-                width: 44,
-                child: Icon(
-                  Icons.open_in_new,
-                  size: 16,
-                  color: Colors.grey[500],
+            if (model.isNotEmpty) TextSpan(text: model),
+          ]);
+    final bikeId = bike.id;
+    return Semantics(
+      button: bikeId != null,
+      label: '${_bikeName(bike)}, $meta, $status',
+      excludeSemantics: true,
+      onTap: bikeId == null ? null : () => _openBike(bikeId),
+      child: InkWell(
+        onTap: bikeId == null ? null : () => _openBike(bikeId),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 8, 14, 10),
+          child: Row(
+            children: [
+              Container(
+                width: 96,
+                height: 62,
+                padding: const EdgeInsets.symmetric(horizontal: 7),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: BikeSilhouette(
+                    bikeType: bike.bikeType, colorText: bike.color),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text.rich(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: theme.colorScheme.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      meta,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style:
+                          TextStyle(fontSize: 13, color: roles.faintForeground),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      status,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: statusColor,
+                      ),
+                    ),
+                  ],
                 ),
               ),
+              Icon(Icons.chevron_right,
+                  size: 20, color: theme.colorScheme.onSurfaceVariant),
             ],
           ),
         ),
@@ -4264,1272 +2229,70 @@ class _ClientLogbookPageState extends State<ClientLogbookPage>
     );
   }
 
-  Widget _buildInvoiceStatusChip(InvoiceStatus status) {
-    late final Color bgColor;
-    late final Color textColor;
-
-    switch (status) {
-      case InvoiceStatus.draft:
-        bgColor = Colors.grey[200]!;
-        textColor = Colors.grey[700]!;
-        break;
-      case InvoiceStatus.sent:
-        bgColor = Colors.blue[100]!;
-        textColor = Colors.blue[800]!;
-        break;
-      case InvoiceStatus.confirmed:
-        bgColor = Colors.purple[100]!;
-        textColor = Colors.purple[800]!;
-        break;
-      case InvoiceStatus.paid:
-        bgColor = Colors.green[100]!;
-        textColor = Colors.green[800]!;
-        break;
-      case InvoiceStatus.overdue:
-        bgColor = Colors.red[100]!;
-        textColor = Colors.red[800]!;
-        break;
-      case InvoiceStatus.cancelled:
-        bgColor = Colors.red[100]!;
-        textColor = Colors.red[800]!;
-        break;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(3),
-      ),
-      child: Text(
-        _invoiceStatusLabel(status).toUpperCase(),
-        style: TextStyle(
-          color: textColor,
-          fontSize: 10.5,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.2,
-        ),
-      ),
-    );
-  }
-
-  void _openInvoice(Invoice invoice) {
-    final invoiceId = invoice.id;
-    if (invoiceId == null || invoiceId.isEmpty) {
-      return;
-    }
-
-    context.push('/sales/invoices/$invoiceId/edit').then((_) {
-      if (!mounted) {
-        return;
-      }
-      unawaited(_loadInvoices(forceRefresh: true));
-    });
-  }
-
-  Color _getLoyaltyColor(LoyaltyTier tier) {
-    switch (tier) {
-      case LoyaltyTier.bronze:
-        return Colors.brown;
-      case LoyaltyTier.silver:
-        return Colors.grey;
-      case LoyaltyTier.gold:
-        return Colors.amber;
-      case LoyaltyTier.platinum:
-        return Colors.purple;
-    }
-  }
-
-  IconData _getLoyaltyIcon(LoyaltyTier tier) {
-    switch (tier) {
-      case LoyaltyTier.bronze:
-      case LoyaltyTier.silver:
-      case LoyaltyTier.gold:
-        return Icons.workspace_premium;
-      case LoyaltyTier.platinum:
-        return Icons.diamond;
-    }
-  }
-
-  String _getLoyaltyTierName(LoyaltyTier tier) {
-    switch (tier) {
-      case LoyaltyTier.bronze:
-        return 'Bronce';
-      case LoyaltyTier.silver:
-        return 'Plata';
-      case LoyaltyTier.gold:
-        return 'Oro';
-      case LoyaltyTier.platinum:
-        return 'Platino';
-    }
-  }
-
-  void _showAddPointsDialog() {
-    final controller = TextEditingController();
-    final customerService =
-        Provider.of<CustomerService>(context, listen: false);
-    final messenger = ScaffoldMessenger.of(context);
-
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Agregar Puntos'),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: 'Cantidad de puntos',
-            hintText: '100',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Cancelar'),
-          ),
-          TextButton(
-            onPressed: () async {
-              final points = int.tryParse(controller.text);
-              if (points == null || points <= 0) {
-                messenger.showSnackBar(
-                  const SnackBar(
-                    content: Text('Ingresa una cantidad válida de puntos'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-                return;
-              }
-
-              try {
-                await customerService.addLoyaltyPoints(
-                    widget.customerId, points);
-                if (mounted && dialogContext.mounted) {
-                  Navigator.of(dialogContext).pop();
-                  messenger.showSnackBar(
-                    const SnackBar(
-                      content: Text('Puntos agregados exitosamente'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                  await _loadData();
-                }
-              } catch (e) {
-                messenger.showSnackBar(
-                  SnackBar(
-                    content: Text('Error agregando puntos: $e'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              }
-            },
-            child: const Text('Agregar'),
-          ),
-        ],
-      ),
-    ).then((_) => controller.dispose());
-  }
-
-  void _showRedeemPointsDialog() {
-    final controller = TextEditingController();
-    final customerService =
-        Provider.of<CustomerService>(context, listen: false);
-    final messenger = ScaffoldMessenger.of(context);
-    final availablePoints = _loyalty?.points ?? 0;
-
-    if (availablePoints <= 0) {
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('El cliente no tiene puntos disponibles para canjear'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Canjear Puntos'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Puntos disponibles: $availablePoints'),
-            const SizedBox(height: 16),
-            TextField(
-              controller: controller,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Puntos a canjear',
-                hintText: '100',
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('Cancelar'),
-          ),
-          TextButton(
-            onPressed: () async {
-              final points = int.tryParse(controller.text);
-              if (points == null || points <= 0) {
-                messenger.showSnackBar(
-                  const SnackBar(
-                    content: Text('Ingresa una cantidad válida de puntos'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-                return;
-              }
-
-              if (points > availablePoints) {
-                messenger.showSnackBar(
-                  const SnackBar(
-                    content: Text('No hay puntos suficientes para canjear'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-                return;
-              }
-
-              try {
-                await customerService.redeemLoyaltyPoints(
-                    widget.customerId, points);
-                if (mounted && dialogContext.mounted) {
-                  Navigator.of(dialogContext).pop();
-                  messenger.showSnackBar(
-                    const SnackBar(
-                      content: Text('Puntos canjeados exitosamente'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                  await _loadData();
-                }
-              } catch (e) {
-                messenger.showSnackBar(
-                  SnackBar(
-                    content: Text('Error canjeando puntos: $e'),
-                    backgroundColor: Colors.red,
-                  ),
-                );
-              }
-            },
-            child: const Text('Canjear'),
-          ),
-        ],
-      ),
-    ).then((_) => controller.dispose());
-  }
-
-  Widget _buildBikeTableRow(Bike bike, bool isEven, double tableWidth) {
-    final jobsForBike = _totalJobsForBike(bike.id);
-    final activeJobsCount = _activeJobsForBike(bike.id);
+  Widget _buildMessagesCard(BuildContext context) {
     final theme = Theme.of(context);
-    final lastDelivered = _jobs
-        .where((j) =>
-            j.bikeId == bike.id &&
-            j.status == JobStatus.entregado &&
-            j.deliveredAt != null)
-        .fold<DateTime?>(
-            null,
-            (prev, j) => prev == null || j.deliveredAt!.isAfter(prev)
-                ? j.deliveredAt
-                : prev);
-
-    return InkWell(
-      onTap: () {
-        if (MediaQuery.of(context).size.width < 900) {
-          _editBike(bike);
-        } else {
-          _openBikeRecordPane(bike);
-        }
-      },
-      hoverColor: Colors.blue[50]?.withValues(alpha: 0.5),
-      child: Container(
-        height: 52,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border(
-            bottom: BorderSide(color: Colors.grey[200]!, width: 1),
-          ),
-        ),
+    final chats = _chats;
+    final Widget body;
+    if (_chatsFailed && chats == null) {
+      body = Padding(
+        padding: const EdgeInsets.fromLTRB(18, 0, 18, 14),
         child: Row(
           children: [
-            const SizedBox(width: 16),
-            SizedBox(
-              width: 36,
-              child: Icon(
-                Icons.pedal_bike,
-                size: 18,
-                color: theme.colorScheme.primary.withValues(alpha: 0.65),
+            Expanded(
+              child: Text(
+                'No pudimos cargar los mensajes.',
+                style: TextStyle(
+                    fontSize: 14, color: theme.colorScheme.onSurfaceVariant),
               ),
             ),
-            SizedBox(
-              width: _bikeNameColumnWidth(tableWidth),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      bike.displayName,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w500,
-                          fontSize: 13,
-                          color: Colors.black87),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (bike.bikeType != null)
-                      Text(
-                        bike.bikeType!.displayName,
-                        style:
-                            TextStyle(fontSize: 11.5, color: Colors.grey[500]),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            SizedBox(
-              width: _bikeColSerial,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Text(
-                  bike.serialNumber?.isNotEmpty == true
-                      ? bike.serialNumber!
-                      : '—',
-                  style: TextStyle(fontSize: 13, color: Colors.grey[700]),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ),
-            SizedBox(
-              width: _bikeColRegistered,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Text(
-                  DateFormat('dd MMM yyyy', 'es').format(bike.createdAt),
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ),
-            SizedBox(
-              width: _bikeColDelivery,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Text(
-                  lastDelivered != null
-                      ? DateFormat('dd MMM yyyy', 'es').format(lastDelivered)
-                      : '—',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: lastDelivered != null
-                        ? Colors.grey[700]
-                        : Colors.grey[400],
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ),
-            SizedBox(
-              width: _bikeColJobs,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: activeJobsCount > 0
-                            ? Colors.orange[50]
-                            : Colors.grey[100],
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        jobsForBike.toString(),
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: activeJobsCount > 0
-                              ? Colors.orange[700]
-                              : Colors.grey[600],
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                    ),
-                    if (bike.isUnderWarranty) ...[
-                      const SizedBox(width: 6),
-                      Icon(Icons.verified_user,
-                          size: 14, color: Colors.green[600]),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-            SizedBox(
-              width: 44,
-              child: PopupMenuButton<String>(
-                icon: Icon(Icons.more_horiz, size: 18, color: Colors.grey[500]),
-                padding: EdgeInsets.zero,
-                splashRadius: 16,
-                tooltip: 'Opciones',
-                onSelected: (value) {
-                  if (value == 'jobs') {
-                    setState(() {
-                      _jobViewFilter = JobViewFilter.all;
-                      _jobSearchController.text = bike.displayName;
-                      _jobSearchTerm = bike.displayName;
-                    });
-                    _tabController.animateTo(1);
-                  }
-                  if (value == 'edit') {
-                    if (MediaQuery.of(context).size.width < 900) {
-                      _editBike(bike);
-                    } else {
-                      _openBikeEditorPane(bike);
-                    }
-                  }
-                  if (value == 'delete') _confirmDeleteBike(bike);
-                },
-                itemBuilder: (_) => [
-                  const PopupMenuItem(
-                      value: 'jobs',
-                      child: Row(children: [
-                        Icon(Icons.build_circle_outlined, size: 18),
-                        SizedBox(width: 10),
-                        Text('Ver Trabajos'),
-                      ])),
-                  const PopupMenuItem(
-                      value: 'edit',
-                      child: Row(children: [
-                        Icon(Icons.edit_outlined, size: 18),
-                        SizedBox(width: 10),
-                        Text('Editar'),
-                      ])),
-                  const PopupMenuItem(
-                      value: 'delete',
-                      child: Row(children: [
-                        Icon(Icons.delete_outline, size: 18, color: Colors.red),
-                        SizedBox(width: 10),
-                        Text('Eliminar', style: TextStyle(color: Colors.red)),
-                      ])),
-                ],
-              ),
+            TextButton(
+              onPressed: () => _loadChats(_generation),
+              style: TextButton.styleFrom(minimumSize: const Size(48, 44)),
+              child: const Text('Reintentar'),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildTimelineTableRow(
-      MechanicJobTimeline event, bool isEven, double tableWidth) {
-    final icon = _timelineIcon(event.eventType);
-    final color = _timelineColor(event.eventType);
-    final job = event.jobId.isNotEmpty ? _jobIndex[event.jobId] : null;
-    final bike = job != null ? _bikeIndex[job.bikeId] : null;
-    final defaultDescription = _getDefaultDescription(event.eventType);
-
-    return InkWell(
-      hoverColor: Colors.blue[50]?.withValues(alpha: 0.5),
-      child: Container(
-        height: 52,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border(
-            bottom: BorderSide(color: Colors.grey[200]!, width: 1),
-          ),
-        ),
-        child: Row(
-          children: [
-            const SizedBox(width: 12),
-            Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.1),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: color, size: 14),
-            ),
-            const SizedBox(width: 12),
-            SizedBox(
-              width: _timelineDescriptionColumnWidth(tableWidth),
-              child: Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      event.description ?? defaultDescription,
-                      style: const TextStyle(
-                          fontSize: 13, fontWeight: FontWeight.w500),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (event.oldValue != null || event.newValue != null)
-                      Text(
-                        '${event.oldValue ?? ''} → ${event.newValue ?? ''}',
-                        style: TextStyle(
-                            fontSize: 11.5,
-                            color: Colors.grey[500],
-                            fontStyle: FontStyle.italic),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            SizedBox(
-              width: _tlColRef,
-              child: Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    if (job != null)
-                      Text(
-                        (job.jobNumber?.isNotEmpty ?? false)
-                            ? 'Trabajo ${job.jobNumber}'
-                            : '—',
-                        style: const TextStyle(
-                            fontSize: 12.5, fontWeight: FontWeight.w500),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    if (bike != null)
-                      Text(
-                        bike.displayName,
-                        style:
-                            TextStyle(fontSize: 11.5, color: Colors.grey[500]),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    if (job == null && bike == null)
-                      Text('—',
-                          style:
-                              TextStyle(fontSize: 13, color: Colors.grey[400])),
-                  ],
-                ),
-              ),
-            ),
-            SizedBox(
-              width: _tlColTech,
-              child: Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: Text(
-                  event.createdByName ?? '—',
-                  style: TextStyle(fontSize: 13, color: Colors.grey[700]),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ),
-            SizedBox(
-              width: _tlColDate,
-              child: Padding(
-                padding: const EdgeInsets.only(right: 16),
-                child: Text(
-                  DateFormat('dd/MM/yyyy HH:mm').format(event.createdAt),
-                  style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _showTimelineFilterSheet() async {
-    const allTypes = TimelineEventType.values;
-    final selected = Set<TimelineEventType>.from(_timelineTypeFilters);
-
-    final result = await showModalBottomSheet<Set<TimelineEventType>>(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: EdgeInsets.only(
-              left: 24,
-              right: 24,
-              top: 24,
-              bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-            ),
-            child: StatefulBuilder(
-              builder: (context, setStateModal) {
-                void toggle(TimelineEventType type) {
-                  setStateModal(() {
-                    if (selected.contains(type)) {
-                      selected.remove(type);
-                    } else {
-                      selected.add(type);
-                    }
-                  });
-                }
-
-                void selectAll() {
-                  setStateModal(() {
-                    selected
-                      ..clear()
-                      ..addAll(allTypes);
-                  });
-                }
-
-                void clearAll() {
-                  setStateModal(selected.clear);
-                }
-
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Filtrar tipos de evento',
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleMedium
-                          ?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        TextButton(
-                          onPressed: selectAll,
-                          child: const Text('Seleccionar todo'),
-                        ),
-                        TextButton(
-                          onPressed: clearAll,
-                          child: const Text('Limpiar'),
-                        ),
-                        const Spacer(),
-                        Text(
-                          selected.length == allTypes.length
-                              ? 'Todos seleccionados'
-                              : '${selected.length} de ${allTypes.length}',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Flexible(
-                      child: ListView.builder(
-                        shrinkWrap: true,
-                        itemCount: allTypes.length,
-                        itemBuilder: (context, index) {
-                          final type = allTypes[index];
-                          return CheckboxListTile(
-                            value: selected.contains(type),
-                            onChanged: (_) => toggle(type),
-                            title: Text(_timelineEventLabel(type)),
-                            secondary: Icon(
-                              _timelineIcon(type),
-                              color: _timelineColor(type),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.of(context).pop(),
-                          child: const Text('Cancelar'),
-                        ),
-                        const SizedBox(width: 8),
-                        ElevatedButton(
-                          onPressed: () => Navigator.of(context)
-                              .pop(Set<TimelineEventType>.from(selected)),
-                          child: const Text('Aplicar filtros'),
-                        ),
-                      ],
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-        );
-      },
-    );
-
-    if (result != null) {
-      setState(() {
-        _timelineTypeFilters = result.isEmpty ? <TimelineEventType>{} : result;
-      });
-    }
-  }
-
-  Widget _buildJobTableRow(MechanicJob job, bool isEven, double tableWidth) {
-    final bike = _getBikeForJob(job);
-    final requestSummary = job.isStandaloneQuotation
-        ? job.subjectNotes?.trim()
-        : job.clientRequest?.trim();
-    final Color priorityColor;
-    switch (job.priority) {
-      case JobPriority.urgente:
-        priorityColor = Colors.red;
-        break;
-      case JobPriority.alta:
-        priorityColor = Colors.orange;
-        break;
-      case JobPriority.baja:
-        priorityColor = Colors.grey;
-        break;
-      default:
-        priorityColor = Colors.blue;
-    }
-
-    return InkWell(
-      onTap: () {
-        if (MediaQuery.of(context).size.width < 900) {
-          context.push('/taller/pegas/${job.id}');
-        } else {
-          setState(() {
-            _selectedJobId = job.id;
-            _isEditingJob = true;
-          });
-        }
-      },
-      hoverColor: Colors.blue[50]?.withValues(alpha: 0.5),
-      child: Container(
-        height: 52,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border(
-            bottom: BorderSide(color: Colors.grey[200]!, width: 1),
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 4,
-              height: 52,
-              color: priorityColor.withValues(alpha: 0.65),
-            ),
-            const SizedBox(width: 12),
-            SizedBox(
-              width: _jobColNumber - 16,
-              child: Text(
-                job.jobNumber ?? '—',
-                style:
-                    const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            SizedBox(
-              width: _jobColBike,
-              child: Text(
-                bike.displayName,
-                style: TextStyle(fontSize: 13, color: Colors.grey[700]),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            SizedBox(
-              width: _jobRequestColumnWidth(tableWidth),
-              child: Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: Text(
-                  requestSummary?.isNotEmpty == true ? requestSummary! : '—',
-                  style: TextStyle(fontSize: 13, color: Colors.grey[800]),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ),
-            SizedBox(
-              width: _jobColStatus,
-              child: Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: _buildStatusBadge(job),
-              ),
-            ),
-            SizedBox(
-              width: _jobColDate,
-              child: Text(
-                DateFormat('dd/MM/yy').format(job.arrivalDate),
-                style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-              ),
-            ),
-            SizedBox(
-              width: _jobColTotal,
-              child: Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: Tooltip(
-                  message: job.isQuotationWorkflow
-                      ? '${job.isServiceBudget ? 'Total presupuestado' : 'Total cotizado'}; todavía no es una cuenta por cobrar.'
-                      : 'Total del trabajo',
-                  child: Text(
-                    NumberFormat.currency(symbol: '\$', decimalDigits: 0)
-                        .format(_getJobDisplayTotal(job)),
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                      color: job.isQuotationWorkflow
-                          ? Colors.orange.shade800
-                          : null,
-                    ),
-                    textAlign: TextAlign.right,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ),
-            ),
-            SizedBox(
-              width: 44,
-              child: PopupMenuButton<String>(
-                icon: Icon(Icons.more_horiz, size: 18, color: Colors.grey[500]),
-                padding: EdgeInsets.zero,
-                splashRadius: 16,
-                tooltip: 'Opciones',
-                onSelected: (value) {
-                  if (value == 'open') {
-                    context.push('/taller/pegas/${job.id}');
-                  }
-                },
-                itemBuilder: (_) => [
-                  const PopupMenuItem(
-                      value: 'open',
-                      child: Row(children: [
-                        Icon(Icons.open_in_new, size: 18),
-                        SizedBox(width: 10),
-                        Text('Ver Detalle'),
-                      ])),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Calculate display total respecting tax treatment
-  /// For noTax jobs, show partsCost + laborCost (net amount)
-  /// For taxIncluded jobs, show totalCost (gross amount)
-  double _getJobDisplayTotal(MechanicJob job) {
-    // Quotation workflows are deliberately no-tax before an invoice exists;
-    // totalCost is nevertheless their authoritative discounted proposal total.
-    if (job.isQuotationWorkflow) {
-      return job.totalCost;
-    }
-    if (job.taxTreatment == TaxTreatment.noTax) {
-      return job.partsCost + job.laborCost;
-    }
-    return job.totalCost;
-  }
-
-  Widget _buildStatusBadge(MechanicJob job) {
-    if (job.isStandaloneQuotation) {
-      final color = switch (job.effectiveQuotationStatus) {
-        QuotationStatus.pending => Colors.orange,
-        QuotationStatus.approved => Colors.green,
-        QuotationStatus.rejected => Colors.red,
-        QuotationStatus.expired => Colors.grey,
-      };
-      return _statusBadgeContainer(job.statusDisplayName, color);
-    }
-
-    final status = job.status;
-    final color =
-        job.customStatus?.colorValue ?? _operationalStatusColor(status);
-
-    if (job.isServiceBudget) {
-      final proposalColor = switch (job.effectiveQuotationStatus) {
-        QuotationStatus.pending => Colors.orange,
-        QuotationStatus.approved => Colors.green,
-        QuotationStatus.rejected => Colors.red,
-        QuotationStatus.expired => Colors.grey,
-      };
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _statusBadgeContainer(job.statusDisplayName, color),
-          const SizedBox(height: 3),
-          Text(
-            job.proposalStatusDisplayName,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: proposalColor,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
       );
-    }
-
-    return _statusBadgeContainer(job.statusDisplayName, color);
-  }
-
-  Color _operationalStatusColor(JobStatus status) {
-    switch (status) {
-      case JobStatus.pendiente:
-        return Colors.grey;
-      case JobStatus.diagnostico:
-        return Colors.blue;
-      case JobStatus.esperandoAprobacion:
-        return Colors.amber;
-      case JobStatus.esperandoRepuestos:
-        return Colors.orange;
-      case JobStatus.enCurso:
-        return Colors.green;
-      case JobStatus.finalizado:
-        return Colors.teal;
-      case JobStatus.entregado:
-        return Colors.purple;
-      case JobStatus.cancelado:
-        return Colors.red;
-    }
-  }
-
-  Widget _statusBadgeContainer(String label, Color color) {
-    return Tooltip(
-      message: label,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
-        ),
+    } else if (chats == null) {
+      body = const Padding(
+        padding: EdgeInsets.fromLTRB(18, 4, 18, 18),
+        child: LinearProgressIndicator(),
+      );
+    } else if (chats.isEmpty) {
+      body = Padding(
+        padding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
         child: Text(
-          label,
+          'Sin conversaciones con este cliente.',
           style: TextStyle(
-            fontSize: 12,
-            color: color,
-            fontWeight: FontWeight.bold,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+              fontSize: 14, color: theme.colorScheme.onSurfaceVariant),
         ),
-      ),
-    );
-  }
-
-  String _getDefaultDescription(TimelineEventType eventType) {
-    var description = 'Evento';
-
-    switch (eventType) {
-      case TimelineEventType.created:
-        description = 'Trabajo creado';
-        break;
-      case TimelineEventType.statusChanged:
-        description = 'Estado cambiado';
-        break;
-      case TimelineEventType.assigned:
-        description = 'Técnico asignado';
-        break;
-      case TimelineEventType.diagnosisAdded:
-        description = 'Diagnóstico agregado';
-        break;
-      case TimelineEventType.partsAdded:
-        description = 'Repuestos agregados';
-        break;
-      case TimelineEventType.laborAdded:
-        description = 'Mano de obra registrada';
-        break;
-      case TimelineEventType.photoAdded:
-        description = 'Foto agregada';
-        break;
-      case TimelineEventType.noteAdded:
-        description = 'Nota agregada';
-        break;
-      case TimelineEventType.approved:
-        description = 'Trabajo aprobado';
-        break;
-      case TimelineEventType.invoiced:
-        description = 'Factura generada';
-        break;
-      case TimelineEventType.paid:
-        description = 'Pago recibido';
-        break;
-      case TimelineEventType.completed:
-        description = 'Trabajo completado';
-        break;
-      case TimelineEventType.delivered:
-        description = 'Bicicleta entregada';
-        break;
-    }
-
-    return description;
-  }
-
-  // ============================================================
-  // BIKE MANAGEMENT
-  // ============================================================
-
-  void _openNewBikePane() {
-    setState(() {
-      _selectedBikeId = null;
-      _bikePanelMode = ClientBikePanelMode.creating;
-      _selectedBikeRecordSnapshot = null;
-      _isLoadingSelectedBikeRecordSnapshot = false;
-    });
-  }
-
-  void _openBikeRecordPane(Bike bike) {
-    setState(() {
-      _selectedBikeId = bike.id;
-      _bikePanelMode = ClientBikePanelMode.record;
-    });
-    unawaited(_loadSelectedBikeRecordSnapshot(bike.id));
-  }
-
-  void _openBikeEditorPane(Bike bike) {
-    setState(() {
-      _selectedBikeId = bike.id;
-      _bikePanelMode = ClientBikePanelMode.editing;
-    });
-    unawaited(_loadSelectedBikeRecordSnapshot(bike.id));
-  }
-
-  void _closeBikePane() {
-    setState(() {
-      _selectedBikeId = null;
-      _bikePanelMode = ClientBikePanelMode.none;
-      _selectedBikeRecordSnapshot = null;
-      _isLoadingSelectedBikeRecordSnapshot = false;
-    });
-  }
-
-  Future<void> _loadSelectedBikeRecordSnapshot(String? bikeId) async {
-    if (bikeId == null || bikeId.isEmpty) {
-      if (!mounted) return;
-      setState(() {
-        _selectedBikeRecordSnapshot = null;
-        _isLoadingSelectedBikeRecordSnapshot = false;
-        _bikeRecordLoadError = null;
-      });
-      return;
-    }
-
-    setState(() {
-      // Releer la misma bici (después de guardar su ficha) deja la vista que
-      // hay mientras llega la nueva, en vez de cambiarla por un cargando.
-      _isLoadingSelectedBikeRecordSnapshot =
-          _selectedBikeRecordSnapshot?.bike.id != bikeId;
-      _bikeRecordLoadError = null;
-    });
-
-    try {
-      final bikeshopService = context.read<BikeshopService>();
-      final snapshot = await bikeshopService.getBikeRecordSnapshot(bikeId);
-      if (!mounted || _selectedBikeId != bikeId) return;
-
-      setState(() {
-        _selectedBikeRecordSnapshot = snapshot;
-        _isLoadingSelectedBikeRecordSnapshot = false;
-        if (snapshot == null) {
-          _bikeRecordLoadError =
-              'La bicicleta no fue encontrada en la base de datos.';
-        }
-      });
-    } catch (e) {
-      debugPrint('Error loading bike record snapshot: $e');
-      if (mounted && _selectedBikeId == bikeId) {
-        setState(() {
-          _bikeRecordLoadError = 'Error de conexión: $e';
-        });
-      }
-    } finally {
-      if (mounted && _selectedBikeId == bikeId) {
-        setState(() => _isLoadingSelectedBikeRecordSnapshot = false);
-      }
-    }
-  }
-
-  Widget _buildBikePaneBody(Bike? selectedBike) {
-    if (_bikePanelMode == ClientBikePanelMode.none) {
-      return const SizedBox.shrink();
-    }
-
-    final recordSnapshot = _selectedBikeRecordSnapshot;
-    final isLoadingRecordSnapshot = _isLoadingSelectedBikeRecordSnapshot;
-    final bikeForDisplay = recordSnapshot?.bike ?? selectedBike;
-
-    if ((_bikePanelMode == ClientBikePanelMode.record ||
-            _bikePanelMode == ClientBikePanelMode.editing) &&
-        bikeForDisplay == null) {
-      return const Center(child: Text('Bicicleta no encontrada'));
-    }
-
-    final isCreatingNew = _bikePanelMode == ClientBikePanelMode.creating;
-
-    if (_bikePanelMode == ClientBikePanelMode.record) {
-      if (isLoadingRecordSnapshot) {
-        return const ColoredBox(
-          color: Colors.white,
-          child: Center(
-            child: CircularProgressIndicator(),
-          ),
-        );
-      }
-      if (recordSnapshot == null) {
-        // Fallback or error state
-        return Container(
-          color: Colors.white,
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.error_outline, size: 48, color: Colors.grey),
-                const SizedBox(height: 16),
-                Text(
-                  _bikeRecordLoadError ??
-                      'No se pudo cargar la vista de la bicicleta.',
-                  style: const TextStyle(color: Colors.grey),
-                  textAlign: TextAlign.center,
+      );
+    } else {
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final chat in chats.take(3))
+            _chatRow(context, chat, selected: false),
+          if (chats.length > 3)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: () => _showTab(ClientPageTab.messages),
+                  style: TextButton.styleFrom(minimumSize: const Size(48, 44)),
+                  child: Text('Ver las ${chats.length} conversaciones'),
                 ),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () => _openBikeEditorPane(bikeForDisplay!),
-                  child: const Text('Abrir Editor Principal'),
-                ),
-              ],
-            ),
-          ),
-        );
-      }
-      return BikeRecordPanel(
-        snapshot: recordSnapshot,
-        ownerName: _customer?.name ?? 'Desconocido',
-        isLoading: false,
-        onEdit: () {
-          setState(() {
-            _bikePanelMode = ClientBikePanelMode.editing;
-          });
-        },
-        onNewJob: () {
-          if (MediaQuery.of(context).size.width < 900) {
-            context.push(
-                '/taller/pegas/nueva?customer_id=${widget.customerId}&bike_id=${bikeForDisplay!.id}');
-          } else {
-            setState(() {
-              _selectedJobId = null;
-              _isEditingJob = true;
-              _tabController.index = 1; // Jobs tab
-            });
-          }
-        },
-        onClose: _closeBikePane,
-        onRecordSaved: () =>
-            _loadSelectedBikeRecordSnapshot(recordSnapshot.bike.id),
+              ),
+            )
+          else
+            const SizedBox(height: 6),
+        ],
       );
     }
-
-    return BikeFormDialog(
-      key: ValueKey(
-        '${_bikePanelMode.name}_${_selectedBikeId ?? 'new_bike'}_${isLoadingRecordSnapshot ? 'loading' : 'ready'}',
-      ),
-      customerId: widget.customerId,
-      bike: bikeForDisplay,
-      isEmbedded: true,
-      onSaved: (savedBike) {
-        if (isCreatingNew) {
-          _closeBikePane();
-        } else {
-          _openBikeRecordPane(savedBike);
-        }
-        _loadData();
-      },
-      onCanceled: () {
-        if (_bikePanelMode == ClientBikePanelMode.editing &&
-            selectedBike != null) {
-          _openBikeRecordPane(selectedBike);
-          return;
-        }
-        _closeBikePane();
-      },
+    return _railCard(
+      context,
+      children: [_railTitle(context, 'Mensajes'), body],
     );
-  }
-
-  void _editBike(Bike bike) async {
-    final result = await showDialog<Bike?>(
-      context: context,
-      builder: (context) => BikeFormDialog(
-        customerId: widget.customerId,
-        bike: bike,
-      ),
-    );
-
-    if (result != null) {
-      // Reload data after editing bike
-      _loadData();
-    }
-  }
-
-  Future<void> _confirmDeleteBike(Bike bike) async {
-    final bikeshopService =
-        Provider.of<BikeshopService>(context, listen: false);
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Confirmar eliminación'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('¿Está seguro de eliminar esta bicicleta?'),
-            const SizedBox(height: 16),
-            Text(
-              bike.displayName,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            if (bike.serialNumber != null && bike.serialNumber!.isNotEmpty)
-              Text('N° Serie: ${bike.serialNumber}'),
-            if (bike.bikeType != null)
-              Text('Tipo: ${bike.bikeType!.displayName}'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Eliminar'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true && bike.id != null) {
-      try {
-        await bikeshopService.deleteBike(bike.id!);
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Bicicleta eliminada exitosamente'),
-              backgroundColor: Colors.green,
-            ),
-          );
-
-          // Refresh the bike list automatically
-          _loadData();
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error eliminando bicicleta: $e'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    }
   }
 }

@@ -375,20 +375,15 @@ class _QuickBikeFinderPanelState extends State<QuickBikeFinderPanel> {
     return rankScore;
   }
 
+  /// La bici tiene su propia página; la del cliente ya no la muestra
+  /// dentro (2026-10-03).
   void _openBike(Bike bike) {
     final bikeId = bike.id?.trim();
-    final customerId = bike.customerId.trim();
-    if (bikeId == null || bikeId.isEmpty || customerId.isEmpty) return;
+    if (bikeId == null || bikeId.isEmpty) return;
 
-    final route = Uri(
-      path: '/clientes/$customerId',
-      queryParameters: {
-        'tab': 'bicicletas',
-        'bike_id': bikeId,
-      },
-    ).toString();
-
-    context.read<WorkspaceManager>().navigateActiveWorkspace(route);
+    context
+        .read<WorkspaceManager>()
+        .navigateActiveWorkspace('/taller/bicicletas/$bikeId');
     widget.onBikeOpened?.call();
   }
 
@@ -396,12 +391,7 @@ class _QuickBikeFinderPanelState extends State<QuickBikeFinderPanel> {
     final customerId = bike.customerId.trim();
     if (customerId.isEmpty) return;
 
-    final route = Uri(
-      path: '/clientes/$customerId',
-      queryParameters: const {
-        'tab': 'bicicletas',
-      },
-    ).toString();
+    final route = Uri(path: '/clientes/$customerId').toString();
 
     context.read<WorkspaceManager>().navigateActiveWorkspace(route);
   }

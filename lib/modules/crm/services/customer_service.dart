@@ -4,6 +4,7 @@ import '../../../shared/services/database_service.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../models/crm_models.dart';
+import 'client_data_draft.dart';
 
 class CustomerService extends ChangeNotifier {
   final DatabaseService _db;
@@ -299,6 +300,120 @@ class CustomerService extends ChangeNotifier {
       if (kDebugMode) print('Error updating customer: $e');
       rethrow;
     }
+  }
+
+  /// El cliente como lo lee su hoja «Datos», del taller actual.
+  Future<ClientRecord?> getClientRecord(String id) async {
+    if (id.isEmpty) return null;
+    final tenantId = await _requireTenantId();
+    final row = await _db.supabase
+        .from('customers')
+        .select(kClientRecordColumns)
+        .eq('id', id)
+        .eq('tenant_id', tenantId)
+        .maybeSingle();
+    return row == null ? null : ClientRecord.fromRow(row);
+  }
+
+  /// Guarda sólo los datos que cambiaron en [draft], contra la versión que
+  /// leyó la hoja.
+  ///
+  /// Lanza [ClientDataSaveException] si un dato no se puede guardar (otro
+  /// cliente del taller ya tiene ese RUT o ese correo) y
+  /// [ClientDataStaleException] si otro guardó el cliente entre medio: no se
+  /// escribe nada encima de lo suyo.
+  Future<ClientRecord> saveClientData(ClientDataDraft draft) async {
+    final problems = draft.problems;
+    if (problems.isNotEmpty) {
+      final first = problems.entries.first;
+      throw ClientDataSaveException(first.value, field: first.key);
+    }
+    final changes = draft.changes;
+    final record = draft.record;
+    if (changes.isEmpty) return record;
+    final tenantId = await _requireTenantId();
+
+    final rut = changes['rut'];
+    if (rut is String) {
+      final other = await _otherClientWith(tenantId, record.id, 'rut', rut);
+      if (other != null) {
+        throw ClientDataSaveException(
+          'Ya hay otro cliente con este RUT: $other.',
+          field: ClientDataField.rut,
+        );
+      }
+    }
+    final email = changes['email'];
+    if (email is String) {
+      final other = await _otherClientWith(tenantId, record.id, 'email', email,
+          caseInsensitive: true);
+      if (other != null) {
+        throw ClientDataSaveException(
+          'Ya hay otro cliente con este correo: $other.',
+          field: ClientDataField.email,
+        );
+      }
+    }
+
+    final List<dynamic> rows;
+    try {
+      rows = await _db.supabase
+          .from('customers')
+          .update({
+            ...changes,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('id', record.id)
+          .eq('tenant_id', tenantId)
+          .eq('updated_at', record.updatedAtToken)
+          .select(kClientRecordColumns);
+    } on PostgrestException catch (error) {
+      // Dos guardados a la vez con el mismo correo: lo atrapa el índice.
+      if (error.code == '23505') {
+        throw const ClientDataSaveException(
+          'Ya hay otro cliente con este correo.',
+          field: ClientDataField.email,
+        );
+      }
+      rethrow;
+    }
+    if (rows.isEmpty) throw const ClientDataStaleException();
+    invalidateCustomersCache();
+    notifyListeners();
+    return ClientRecord.fromRow(Map<String, dynamic>.from(rows.first as Map));
+  }
+
+  /// El nombre de otro cliente del taller con este valor, si lo hay.
+  Future<String?> _otherClientWith(
+    String tenantId,
+    String customerId,
+    String column,
+    String value, {
+    bool caseInsensitive = false,
+  }) async {
+    var query = _db.supabase
+        .from('customers')
+        .select('id,name')
+        .eq('tenant_id', tenantId)
+        .neq('id', customerId);
+    query = caseInsensitive
+        ? query.ilike(column, _escapeLike(value))
+        : query.eq(column, value);
+    final rows = await query.limit(1);
+    if (rows.isEmpty) return null;
+    final name = rows.first['name']?.toString().trim() ?? '';
+    return name.isEmpty ? 'sin nombre' : name;
+  }
+
+  static String _escapeLike(String value) =>
+      value.replaceAllMapped(RegExp(r'[\\%_]'), (m) => '\\${m[0]}');
+
+  Future<String> _requireTenantId() async {
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null || tenantId.isEmpty) {
+      throw Exception('No se pudo identificar el taller');
+    }
+    return tenantId;
   }
 
   Future<void> deleteCustomer(String id) async {
