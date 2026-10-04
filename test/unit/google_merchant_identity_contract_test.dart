@@ -93,11 +93,18 @@ void main() {
       'lib/public_store/models/public_commerce_product_projection.dart',
     ).readAsStringSync();
 
+    final structuredData = File(
+      'lib/public_store/seo/public_product_structured_data.dart',
+    ).readAsStringSync();
+
+    // One builder for the snapshot and the hydrated page (2026-10-04).
     expect(
         detailPage, contains("_structuredDataScriptId = 'seo-product-jsonld'"));
-    expect(detailPage, contains('_commerceProjection(product)'));
-    expect(detailPage, contains("'name': commerce.title"));
-    expect(detailPage, contains("'availability': commerce.availability"));
+    expect(detailPage, contains('buildPublicProductStructuredData('));
+    expect(detailPage, contains('commerce: _commerceProjection(product)'));
+    expect(snapshots, contains('buildPublicProductStructuredData('));
+    expect(structuredData, contains("'name': title"));
+    expect(structuredData, contains("'availability': commerce.availability"));
     expect(detailPage, contains('_categoryTrail.last.fullPath'));
     expect(
         detailPage, contains('for (final category in breadcrumbCategories)'));

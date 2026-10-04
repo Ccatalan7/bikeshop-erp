@@ -25,13 +25,13 @@ HTML**.
 | Palabras en el HTML sin JavaScript | 1.318 | 751 | 940 | 694 | 10.448 | 19 | 2.238 | **13 visibles + 57–87 en `<noscript>`** |
 | Enlaces `<a href>` sin JavaScript | 403 | 54 | 91 | 74 | 1.057 | 0 | 95 | **3 (+2 en `<noscript>`)** |
 | Palabras en una categoría | 1.118 | 912 | 721 | 391 | 2.930 | 19 | 2.758 | **1 + 149 en `<noscript>` (25 enlaces de 67 productos)** |
-| `description` en el JSON-LD del producto | sí | no | sí | sí | (microdatos) | sí | no | **no** |
-| Código de barras (`gtin`/`mpn`) | sí | sí | no | sí | — | `mpn` | no | **no** |
-| Política de devolución declarada | no | **sí** | no | no | no | no | no | no |
+| `description` en el JSON-LD del producto | sí | no | sí | sí | (microdatos) | sí | no | **sólo si el producto la tiene: 29 de 1.541** |
+| Código de barras (`gtin`/`mpn`) | sí | sí | no | sí | — | `mpn` | no | **5 de 1.541 tienen uno real** |
+| Política de devolución declarada | no | **sí** | no | no | no | no | no | **sí (link), desde 2026-10-04** |
 | Variantes (`ProductGroup`) | no | sí | no | no | no | no | sí | no |
-| Especificaciones (`additionalProperty`) | no | no | no | no | no | no | **sí** | no |
+| Especificaciones (`additionalProperty`) | no | no | no | no | no | no | **sí** | **sí, 1.232 fichas, desde 2026-10-04** |
 | Valoraciones (`AggregateRating`) | no | no | no | no | sí | no | sí | no |
-| Negocio declarado como | Organization | Organization | Organization | — | Organization | Organization | Organization | LocalBusiness |
+| Negocio declarado como | Organization | Organization | Organization | — | Organization | Organization | Organization | **BikeStore** con horario, envío y devoluciones (2026-10-04) |
 | Sitemaps (archivos) | 6 | 8 | 5 | 5 | 1 | 8 | 12 | 1 |
 | Blog o guías | sí | sí | no | no | sí | sí | — | **no** |
 
@@ -66,14 +66,13 @@ primero la capacidad al editor (regla 1, [principios](principios.md)).
    paginación; la portada, sus bloques en texto. No es rehacer la tienda: es enriquecer el HTML que el build ya
    escribe (la página instantánea ya lo pinta antes de Flutter). Es la brecha que
    más pesa y la que pone a vinabike.cl a la par de Oxford Store o Cycling Store.
-2. **Ficha de producto completa en JSON-LD:** `description`, `gtin` cuando el
-   producto lo tenga y **la ficha técnica como `additionalProperty`** — sólo
-   Canyon lo hace y nosotros tenemos más datos técnicos que cualquiera de ellos
-   (el motor de compatibilidad).
-3. **Envío y devoluciones declarados una vez para todo el negocio**
-   (`hasShippingService` desde los tramos reales; `hasMerchantReturnPolicy`),
-   como Better Bike con las devoluciones. Pesa también para Merchant
-   ([datos-estructurados](datos-estructurados.md)).
+2. ~~**Ficha de producto completa en JSON-LD**~~ — hecho el 2026-10-04 para lo
+   que tiene dueño: ficha técnica como `additionalProperty` (1.232 fichas),
+   `model` y migas completas ([datos-estructurados](datos-estructurados.md)).
+   La `description` y el `gtin` ya se declaraban cuando existen: lo que falta
+   es **contenido** (29 descripciones y 5 códigos de barras de 1.541).
+3. ~~**Envío y devoluciones declarados una vez para todo el negocio**~~ — hecho
+   el 2026-10-04: los tramos reales y el link a `/devoluciones`.
 4. **Textos de categoría:** cada categoría visible con su presentación (título,
    texto, imagen) escrita y servida en HTML; hoy la descripción de categoría tiene
    50 caracteres. Se escriben en `Catálogo web > Categorías > Presentación`.
@@ -84,11 +83,11 @@ primero la capacidad al editor (regla 1, [principios](principios.md)).
 6. **Páginas de aterrizaje para búsquedas de filtro** («cadenas 11 velocidades»,
    «neumáticos 29»): hoy los filtros no tienen URL. Se crean desde el editor como
    destinos con URL, título y texto propios, no como combinaciones automáticas.
-7. **El negocio:** `BikeStore` con logo, `geo`, horario (ya existe en el ERP) y
-   `sameAs` (redes); un nodo `WebSite`. El `SearchAction` que tienen varios
+7. ~~**El negocio**~~ — `BikeStore` con logo, horario, mapa e imagen, hecho el
+   2026-10-04. Falta `geo` (sin dueño). El `SearchAction` que tienen varios
    referentes ya no lo usa Google `[GSC]`.
-8. **`robots.txt`:** quitar el bloqueo de `/cuenta/` y `/pedido/` (impide leer su
-   `noindex`).
+8. ~~`robots.txt`~~ — descartado: el bloqueo de `/pedido/` protege el token del
+   pedido ([rutas](rutas-y-navegacion.md)).
 9. **Reseñas:** `AggregateRating` sólo con reseñas reales de productos,
    visibles en la misma página. Google no da estrellas a un negocio que controla
    sus propias reseñas ni acepta reseñas traídas de otro sitio (las de Google

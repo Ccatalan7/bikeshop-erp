@@ -4,7 +4,7 @@ resumen: cuándo lo guardado en el editor llega al HTML que ve Google, cómo se 
 fuentes: [repositorio, flutter-web]
 archivos: [.github/workflows/firebase-hosting-store.yml, scripts/sync_seo_index.sh, scripts/generate_product_seo_snapshots.dart, scripts/check_storefront_bundle_budget.sh, scripts/write_storefront_release_evidence.sh, supabase/functions/dispatch-storefront-publication/index.ts, lib/modules/website/services/storefront_publication_service.dart, supabase/migrations/20260728230000_add_storefront_publication_contract.sql]
 tablas: [website_settings, website_pages, website_blocks, products]
-revisado: 2026-10-03
+revisado: 2026-10-04
 ---
 
 # Publicación y despliegue de la tienda
@@ -43,7 +43,13 @@ hora o plazo máximo `[Repo]`.
    disponibilidad, marcas, categorías, alias, páginas y bloques **como una sola
    revisión**: la lee dos veces idéntica y la revalida antes de aplicar las
    redirecciones; si algo cambió, aborta en vez de publicar HTML, sitemap y
-   redirecciones mezclados `[Repo: website-editor-contract.md]`.
+   redirecciones mezclados `[Repo: website-editor-contract.md]`. Fuera de esa
+   revisión lee, una vez, la ficha técnica de cada producto
+   (`get_public_product_technical_specs`, 8 a la vez), los tramos de envío
+   (`get_public_online_shipping_tiers`) y el logo del tenant, y completa el nodo
+   del negocio de `index.html` antes de derivar todas las páginas
+   ([datos-estructurados](datos-estructurados.md)). Con 1.295 fichas, el paso
+   tarda ~120 s `[Repo 2026-10-04]`.
 6. Verifica los activos, sella la revisión, escribe `release.json`, despliega el
    target `store` y comprueba la evidencia en `vinabike.cl` y
    `vinabike-store.web.app`.
@@ -84,7 +90,15 @@ build diario cubre `[Prod]` `[Repo]`.
 - El generador reescribe `firebase.json` y `scripts/generated_product_redirects.json`
   al correrlo en local: restaurarlos después (CI los regenera).
 - `--build-dir` distinto de `build/web_store` aborta; la validación exige un solo
-  `LocalBusiness`, un `h1` y un `main` por página.
+  nodo de negocio (`BikeStore`), un `h1` y un `main` por página.
+- **`web/index.html` es salida de `sync_seo_index.sh`, no fuente.** El paso 1
+  lo reescribe entero desde la plantilla del script. Lo que se edite a mano en
+  `web/index.html` funciona en local y **nunca llega a producción**: el script
+  que evita la doble navegación de los `<a href>` de Flutter (2026-09-23) vivió
+  así hasta el 2026-10-04 (0 apariciones en vivo). Se cambia la plantilla y se
+  regenera con `bash scripts/sync_seo_index.sh`; desde el 2026-10-04
+  `test/unit/public_structured_data_test.dart` falla si un script del índice no
+  está en la plantilla.
 - Un push a `main` publica la web (también el ERP web); macOS, Windows y Android
   van por despacho aparte.
 

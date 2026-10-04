@@ -458,5 +458,53 @@ select is(
   'shipping-inclusive invoice and payment journals remain balanced'
 );
 
+-- 20261004120000: the store reads the active tiers it states on its shipping
+-- page and declares to Google, through a narrow public function.
+select has_function(
+  'public',
+  'get_public_online_shipping_tiers',
+  array['uuid'],
+  'the store has a public read of its shipping tiers'
+);
+select ok(
+  has_function_privilege(
+    'anon', 'public.get_public_online_shipping_tiers(uuid)', 'EXECUTE'
+  )
+  and has_function_privilege(
+    'service_role', 'public.get_public_online_shipping_tiers(uuid)', 'EXECUTE'
+  )
+  and not has_table_privilege(
+    'anon', 'public.online_shipping_rate_tiers', 'SELECT'
+  ),
+  'anon and the deploy read the tiers through the function, never the table'
+);
+update public.online_shipping_rate_tiers
+   set is_active = false
+ where id = '9e300000-0000-4000-8000-000000000104';
+select results_eq(
+  $$
+    select min_order_gross, max_order_gross, shipping_gross,
+           estimated_min_business_days, estimated_max_business_days
+      from public.get_public_online_shipping_tiers(
+        '9e300000-0000-4000-8000-000000000001'
+      )
+  $$,
+  $$
+    values
+      (0::numeric, 30000::numeric, 6990::numeric, 3, 12),
+      (30000::numeric, 80000::numeric, 8990::numeric, 3, 12),
+      (80000::numeric, 150000::numeric, 11990::numeric, 3, 12)
+  $$,
+  'the public read returns the active tiers in order and nothing inactive'
+);
+select is_empty(
+  $$
+    select 1 from public.get_public_online_shipping_tiers(
+      '9e300000-0000-4000-8000-0000000000ff'
+    )
+  $$,
+  'another tenant reads none of these tiers'
+);
+
 select * from finish();
 rollback;

@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-google-specs-hours-shipping",
+  "scope": "release",
+  "platforms": [
+    "web"
+  ],
+  "title": "Google lee la ficha técnica, horario y envíos",
+  "summary": "Cada producto le declara a Google los mismos datos técnicos y el mismo recorrido de categorías que ve el cliente, y la tienda se presenta como tienda de bicicletas con su horario, logo, tarifas de despacho, retiro gratis y su página de devoluciones.",
+  "items": [
+    "Más de 1.200 productos le dicen a Google sus datos técnicos (velocidades, dientes, núcleo, material), los mismos de la ficha.",
+    "Viñabike aparece como tienda de bicicletas con horario de lunes a sábado, logo, mapa, despacho por tramo, retiro gratis y devoluciones.",
+    "Con un lector de pantalla, abrir un enlace de la tienda ya no recarga la página completa."
+  ],
+  "evidence": [
+    {
+      "path": "lib/public_store/seo/public_product_structured_data.dart",
+      "sha256": "75e527b0c962ff8b9fe5b257be98979bb5f409693de16f0ce1f1d346cba6c39e"
+    },
+    {
+      "path": "lib/public_store/seo/public_business_structured_data.dart",
+      "sha256": "418f33179dc552fd63e1eea3a4bac57a9201fe6c9264ed9153e64e2483eefb31"
+    },
+    {
+      "path": "lib/public_store/models/public_business_hours.dart",
+      "sha256": "139f631869d7bd6d47b70f7fca342efee1a3091db31585bc23eb9d51acf3af3c"
+    },
+    {
+      "path": "lib/public_store/pages/product_detail_page.dart",
+      "sha256": "811cdec4512d5c31702a0c162996d2f145c565300170832b0823b8a6158d8308"
+    },
+    {
+      "path": "lib/public_store/pages/contact_page.dart",
+      "sha256": "4d4660c78d70857aac7dad7072a14e8f879c62b62fd2d5e76cc39a4d38f84401"
+    },
+    {
+      "path": "scripts/generate_product_seo_snapshots.dart",
+      "sha256": "5252b597bd513af947b9b8ba891d0149aecdb4c56f3a94e8779792812e4b267b"
+    },
+    {
+      "path": "scripts/sync_seo_index.sh",
+      "sha256": "65d123280755df1290e6c35e1eae1e148fc250568615f6b1a06740029c84a99c"
+    }
+  ]
+}

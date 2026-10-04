@@ -3,8 +3,8 @@ titulo: Mapa del sistema
 resumen: de punta a punta, quién es dueño de qué — editor, base, funciones, build, hosting, borde y navegador — con los nombres exactos de archivos, tablas y funciones
 fuentes: [repositorio]
 archivos: [lib/main_store.dart, lib/public_store/routes/public_store_router.dart, lib/public_store/widgets/public_store_bootstrap.dart, lib/modules/website/services/website_service.dart, lib/modules/website/services/website_save_coordinator.dart, scripts/generate_product_seo_snapshots.dart, scripts/sync_seo_index.sh, scripts/check_storefront_bundle_budget.sh, scripts/write_storefront_release_evidence.sh, .github/workflows/firebase-hosting-store.yml, firebase.json, web/index.html, cloudflare-worker/src/index.js]
-tablas: [website_settings, website_pages, website_blocks, website_navigation, website_content, website_banners, website_backups, featured_products, products, product_categories, online_orders, online_order_items]
-revisado: 2026-10-03
+tablas: [website_settings, website_pages, website_blocks, website_navigation, website_content, website_banners, website_backups, featured_products, products, product_categories, online_orders, online_order_items, online_shipping_rate_tiers]
+revisado: 2026-10-04
 ---
 
 # Mapa del sistema
@@ -52,6 +52,7 @@ El ERP también monta la tienda dentro de sí en `/tienda/*` para editarla en vi
 | `featured_products` | colección destacada | `Catálogo web > Portada` |
 | `website_backups` | respaldos del sitio | `WebsiteBackupService` |
 | `products`, `product_categories` | catálogo; `show_on_website`, textos y SEO por producto, presentación de categoría | ficha del producto en el ERP y `Catálogo web` |
+| `online_shipping_rate_tiers` | tramos de despacho por total del pedido (4 activos, $6.990 a $14.990, 3–12 días hábiles; 2026-10-04): lo que cobra `quote_online_shipping_internal` | sólo personal y sin control en el editor (pendiente); el sitio lo lee con `get_public_online_shipping_tiers` |
 | `online_orders`, `online_order_items` y `online_order_*` | pedidos web, pagos, reservas de stock, documentos, correcciones, tokens de acceso | checkout público + `Sitio Web > Pedidos online` |
 
 ## Lo que un visitante sin cuenta puede llamar
@@ -65,6 +66,7 @@ devuelven sólo lo publicable) `[Prod 2026-10-03]`:
 `get_public_spec_option_labels_v1`, `get_public_product_tax_classifications`,
 `search_public_products`, `resolve_public_product_url_alias`,
 `get_public_checkout_capabilities`, `quote_public_online_shipping`,
+`get_public_online_shipping_tiers` (2026-10-04),
 `create_public_online_order_with_access`,
 `get_public_online_order_by_access_token`. Las versiones `_v1` de facetas y
 productos siguen por compatibilidad. Detalle en [seguridad](seguridad.md).
@@ -95,7 +97,8 @@ productos siguen por compatibilidad. Detalle en [seguridad](seguridad.md).
    se aborta en vez de publicar mezclado.
 5. `scripts/generate_product_seo_snapshots.dart`: HTML por ficha, categoría y
    página, `sitemap.xml`, `robots.txt` y redirecciones de URL viejas
-   ([seo-tecnico](seo-tecnico.md)).
+   ([seo-tecnico](seo-tecnico.md)); completa el nodo `BikeStore` y declara la
+   ficha técnica de cada producto ([datos-estructurados](datos-estructurados.md)).
 6. Verifica los activos generados, sella la revisión, escribe `release.json`
    (`scripts/write_storefront_release_evidence.sh`), despliega el target `store`
    y comprueba la evidencia en los dos orígenes.

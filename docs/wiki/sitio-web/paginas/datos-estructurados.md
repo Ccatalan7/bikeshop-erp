@@ -1,91 +1,133 @@
 ---
 titulo: Datos estructurados (JSON-LD)
-resumen: qué declara cada tipo de página de vinabike.cl, qué pide Google para fichas de comercio y negocio local, y lo que falta
+resumen: qué declara cada tipo de página de vinabike.cl, de qué dueño sale cada dato, qué pide Google para fichas de comercio y negocio local, y lo que falta
 fuentes: [google-search-central, schema-org, repositorio]
-archivos: [scripts/generate_product_seo_snapshots.dart, lib/public_store/utils/structured_data.dart]
-tablas: [products, website_settings]
-revisado: 2026-10-03
+archivos: [scripts/generate_product_seo_snapshots.dart, scripts/sync_seo_index.sh, lib/public_store/seo/public_product_structured_data.dart, lib/public_store/seo/public_business_structured_data.dart, lib/public_store/models/public_business_hours.dart, lib/public_store/utils/structured_data.dart]
+tablas: [products, website_settings, online_shipping_rate_tiers, spec_facts]
+revisado: 2026-10-04
 ---
 
 # Datos estructurados (JSON-LD)
 
 ## Lo esencial
 
-El JSON-LD va en el **snapshot HTML** que escribe el build, no lo inventa
-Flutter: así Google lo lee sin esperar el render y coincide con lo visible
-`[Repo]`. Regla de Google: el marcado describe lo que la página muestra; si
-dice otro precio o disponibilidad, es una discrepancia que Merchant castiga
-`[GSC]` `[MC]`.
+El JSON-LD va en el **snapshot HTML** que escribe el build, así Google lo lee
+sin esperar el render y coincide con lo visible `[Repo]`. Regla de Google: el
+marcado describe lo que la página muestra; si dice otro precio o disponibilidad,
+es una discrepancia que Merchant castiga `[GSC]` `[MC]`.
 
-## Lo que declara cada página (vivo, 2026-10-03)
+**Un armado por cosa declarada (2026-10-04).** La ficha de producto la arma
+`buildPublicProductStructuredData` (`lib/public_store/seo/`) y la usan los dos
+que la escriben: el snapshot del build y la página en Flutter, que al cargar
+**reemplaza el script del snapshot por su id** (`seo-product-jsonld`). Antes
+cada uno tenía su mapa y la página, al tomar el control, borraba las migas que
+el snapshot había declarado: lo que Google renderiza es la versión de Flutter.
 
-| Página | Tipos | `[Prod]` |
+## Lo que declara cada página (build local con datos reales, 2026-10-04)
+
+| Página | Tipos | De dónde sale |
 |---|---|---|
-| Todas | un `LocalBusiness` (nombre, razón social, RUT, dirección completa, teléfono, correo, `areaServed`, `sameAs`, `contactPoint`) | la validación del build exige uno solo por página |
-| Ficha `/productos/<slug>/<sku>` | `Product` (`name`, `image`, `sku`, `brand`, `category`, `url`) con `Offer` (`price`, `priceCurrency` CLP, `availability`, `itemCondition`, `seller`, `url`) + `BreadcrumbList` | agotado → `OutOfStock` |
+| Todas | un **`BikeStore`** (`@id` `https://vinabike.cl/#negocio`) | ver «El negocio» abajo |
+| Ficha `/productos/<slug>/<sku>` | `Product` + `Offer` + `BreadcrumbList` en un `@graph` | proyección pública + ficha técnica publicada |
 | Categoría | `CollectionPage` + `ItemList` + `BreadcrumbList` | |
-| `/servicios` | `ItemList` de 57 `Service`, cada uno con su `Offer` | |
-| Portada | sólo el `LocalBusiness` | |
+| `/servicios` | `ItemList` de 59 `Service`, cada uno con su `Offer` | |
+| Páginas legales | `WebPage` | |
 
-## Lo que pide Google para una ficha de comercio
+## La ficha de producto
 
-**Obligatorio** (y lo cumplimos): `name`, `image`, `offers` como `Offer` (no
-`AggregateOffer`) con `price` > 0 y `priceCurrency` ISO `[GSC]`.
+| Propiedad | Dueño | Estado `[Prod 2026-10-04]` |
+|---|---|---|
+| `name`, `image`, `sku`, `brand`, `category`, `offers` | `PublicCommerceProductProjection` (la misma que Merchant y la página) | todas las fichas |
+| `description` | descripción del producto (`website_merchant_description` → `website_description` → `description`) | **sólo 29 de 1.541** publicados tienen texto; nunca se rellena con el texto generado de la meta descripción, que no se ve en la página |
+| `gtin` | `firstValidGtin` (rechaza los códigos internos que parten en 2) | 5 de 1.541 con un código de barras real |
+| `model` | `products.model` | 174 |
+| `additionalProperty` | la ficha técnica que ve el cliente: filas de `get_public_product_technical_specs` armadas con `PublicProductSpecSheet.build`, sin el grupo «Marca y modelo» (va como `brand`/`model`/`gtin`) | **1.232 de 1.295** fichas del build; 3 a 6 datos lo más común, hasta más de 10 (un casete: velocidades, dientes de cada piñón, tecnología, núcleo…) |
+| `BreadcrumbList` | el mismo recorrido que la miga visible: Inicio › Productos › cada categoría pública › producto | |
 
-**Recomendado** y estado nuestro:
+Lectura de la ficha técnica en el build: una llamada por producto, 8 a la vez,
+3 intentos; si una no se puede leer, el build se cae en vez de publicar un
+snapshot que dice menos que la página. Ese paso y todo el generador tardan
+~120 s con 1.295 fichas `[Repo 2026-10-04]`.
 
-| Propiedad | ¿La declaramos? |
+## El negocio
+
+El nodo tiene **dos escritores, cada propiedad uno** `[Repo]`:
+
+- `scripts/sync_seo_index.sh` escribe en `web/index.html` la identidad desde
+  `website_settings`: tipo, `@id`, nombre, razón social, RUT, dirección,
+  teléfono, correo, `contactPoint`, `sameAs`. Su `--check` la compara.
+- El generador (`completeSeoBusinessJsonLd`) le **agrega** lo que sólo el build
+  puede leer, sin reescribir nada de lo anterior:
+
+| Propiedad | Dueño |
 |---|---|
-| `availability`, `itemCondition`, `brand` | sí |
-| `description` | **no** — la ficha la tiene en la página pero no en el JSON-LD |
-| `shippingDetails` (envío) | **no** — la tienda sí despacha por tramos (2026-10-04: pedidos de $30.000 a $80.000 pagan $8.990, 3 a 12 días hábiles; `quote_public_online_shipping`). La clave `shipping_enabled = false` de `website_settings` es vieja y nadie la lee |
-| `hasMerchantReturnPolicy` (devoluciones) | **no** — hay página `/devoluciones`, pero no está declarada |
-| `priceValidUntil` | no (sólo importa si se declara una fecha) |
-| `gtin` / `mpn` | casi imposible hoy: 5 de 1.635 productos con EAN y ninguno con MPN (2026-10-02) |
+| `logo` | el logo que pinta la tienda (`storefrontFirstLogoSource`: `logo_url` del sitio → logo del tenant → el empaquetado de Viñabike) |
+| `image` | `seo_og_image` |
+| `hasMap` | `seo_google_maps_url` (o sus alias) |
+| `openingHoursSpecification` | `business_hours_json` (ERP › «Horario del local»), leído por `parsePublicBusinessHours`, el mismo que usa `/contacto`; días con igual horario van juntos |
+| `hasShippingService` | despacho: un `ShippingConditions` por tramo activo de `online_shipping_rate_tiers` (lo que cobra el checkout), `maxValue` = tope − 1 porque Google lee ambos extremos como incluidos; retiro en tienda gratis (`FulfillmentTypeCollectionPoint`) |
+| `hasMerchantReturnPolicy` | **sólo** `merchantReturnLink` a `/devoluciones`, y sólo si esa página está publicada con contenido |
 
-Las tres primeras faltas son las de más valor: Google las usa para mostrar envío
-y devoluciones en los resultados de compra, y la política de Merchant mira
-justamente que costos y devoluciones estén claros `[GSC]` `[MC]`.
+Los tramos son de personal; el build los lee por
+`get_public_online_shipping_tiers` (20261004120000), lectura pública de las
+filas activas, igual que puede leerlos la página de envíos.
 
-## Negocio local
+**Devoluciones con link y nada más, a propósito.** Los términos (10 días, quién
+paga el envío, reembolso) viven como texto en la página del editor. Declararlos
+como campos (`merchantReturnDays`, `returnFees`…) sería un segundo dueño sin
+control en el editor; un test lo prohíbe. Para declararlos hay que agregar
+primero esos campos al editor (regla 1) — está en
+[estado-y-pendientes](estado-y-pendientes.md).
 
-Google pide `name` y `address` (los tenemos) y recomienda `geo`, `telephone`,
-`openingHoursSpecification`, `image` y usar **el subtipo más específico** `[GSC]`.
-Hoy: sin `geo` ni horario, y el tipo es el genérico `LocalBusiness`, cuando
-schema.org tiene **`BikeStore`** (LocalBusiness → Store → BikeStore) `[SO]`.
+La validación del build exige en cada página **un** nodo de negocio
+(`BikeStore` o `LocalBusiness`), que una política de devolución sólo exista
+dentro de él y que su link sea la `/devoluciones` publicada.
 
-## Envío y devoluciones para todo el negocio (Google, 2026-09-08)
+## Lo que pide Google
 
-Google acepta las dos políticas declaradas **una sola vez** en la organización
-(no en cada ficha): `hasShippingService` con `ShippingService` →
-`shippingConditions` (destino, tramo por `orderValue`, `shippingRate`,
-`transitTime`) y `hasMerchantReturnPolicy` (país, categoría y días, o sólo
-`merchantReturnLink` a la página de la política). Orden de prioridad: lo
-configurado en Merchant Center gana, después lo declarado en la ficha, después lo
-de la organización `[GSC]`.
+Ficha de comercio — **obligatorio** (cumplido): `name`, `image`, `offers` como
+`Offer` (no `AggregateOffer`) con `price` > 0 y `priceCurrency` ISO. Recomendado:
+disponibilidad, condición, marca, GTIN/MPN, descripción, envío y devolución
+`[GSC]`.
 
-## Oportunidades (2026-10-03)
+Negocio local: `name` y `address`; recomendado `geo`, `telephone`, horario,
+`image` y **el subtipo más específico** (`BikeStore`: LocalBusiness → Store →
+BikeStore) `[GSC]` `[SO]`.
 
-1. Agregar `description` al `Product` (desde el mismo resolvedor del texto de la
-   ficha).
-2. Declarar envío y devoluciones (`shippingDetails` con la cotización de envío
-   real y `hasMerchantReturnPolicy` con la política de `/devoluciones`), desde
-   los dueños que ya existen (`quote_public_online_shipping`, páginas CMS), nunca
-   como texto fijo.
-3. `LocalBusiness` → `BikeStore`, con `geo` y horario desde la configuración del
-   negocio (`business_*` en `website_settings`).
-4. Cargar EAN donde el producto lo tenga en la caja (aporta a Merchant).
+Envío y devoluciones se declaran **una vez** en la organización desde el
+2026-09-08: `hasShippingService` → `ShippingService` → `shippingConditions`;
+`hasMerchantReturnPolicy` con país + categoría (+ días) **o sólo**
+`merchantReturnLink`. Prioridad: Merchant Center > ficha > organización `[GSC]`.
+
+## Lo que falta
+
+1. **Descripciones de producto** (29 de 1.541): es contenido, no marcado.
+2. `geo` del local (no hay latitud/longitud en ningún dueño).
+3. `addressCountry` va como «Chile»; Google prefiere el código `CL`, y
+   `seo_address_country_code` no tiene quien la escriba.
+4. Términos de devolución como campos del editor (ver arriba).
 
 ## Trampas
 
-- Dos `LocalBusiness` en una página (la validación del build lo rechaza).
-- JSON-LD distinto entre el snapshot y lo que Flutter muestra (precio, stock).
-- Declarar `AggregateOffer` en una ficha: deja de ser elegible como ficha de comercio.
+- Dos nodos de negocio en una página (la validación del build lo rechaza).
+- Un mapa propio de JSON-LD en la página o en el generador: vuelve a separar lo
+  que ve Google en el snapshot de lo que ve al renderizar.
+- Declarar `AggregateOffer` en una ficha: deja de ser elegible como ficha de
+  comercio.
+- JSON dentro de `<script>` sin escapar `<`: un nombre con `</script>` cierra el
+  elemento. `encodeStructuredDataForHtml` lo escapa.
 
 ## En el código y la base
 
-- Generador: `scripts/generate_product_seo_snapshots.dart` (Product, Offer,
-  BreadcrumbList, CollectionPage, ItemList, Service, WebSite, LocalBusiness).
+- Ficha de producto: `lib/public_store/seo/public_product_structured_data.dart`;
+  la página la llama en `_updateStructuredData` (al cargar el producto, la ficha
+  técnica y el recorrido de categorías).
+- Negocio: identidad en `scripts/sync_seo_index.sh`; lo demás en
+  `lib/public_store/seo/public_business_structured_data.dart`, aplicado por
+  `completeSeoBusinessJsonLd` en `scripts/generate_product_seo_snapshots.dart`.
+- Horario: `lib/public_store/models/public_business_hours.dart`.
 - En la app: `lib/public_store/utils/structured_data.dart` (y su versión web).
-- Datos: `products` (campos `website_*`), configuración del negocio en
+- Base: `products`, `spec_facts` (vía `get_public_product_technical_specs`),
+  `online_shipping_rate_tiers` (vía `get_public_online_shipping_tiers`),
   `website_settings`.
+- Pruebas: `test/unit/public_structured_data_test.dart`.

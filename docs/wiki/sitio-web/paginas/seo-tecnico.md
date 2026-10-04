@@ -4,7 +4,7 @@ resumen: cómo lee Google una tienda hecha en Flutter, qué hace Viñabike para 
 fuentes: [google-search-central, flutter-web, repositorio, consolas-google]
 archivos: [scripts/generate_product_seo_snapshots.dart, scripts/sync_seo_index.sh, lib/public_store/services/crawler_semantics.dart, lib/public_store/widgets/public_link_semantics.dart, lib/modules/website/services/website_seo_center_service.dart, lib/modules/website/pages/seo_settings_page.dart, lib/public_store/models/public_product_seo_copy.dart]
 tablas: [website_settings, website_pages, products, product_categories]
-revisado: 2026-10-03
+revisado: 2026-10-04
 ---
 
 # SEO técnico
@@ -89,9 +89,9 @@ No ve Search Console hasta reconectar la cuenta Google con el permiso
 
 ## Oportunidades (2026-10-03)
 
-- `robots.txt` bloquea `/cuenta/` y `/pedido/` **y** les manda `noindex`: Google
-  no puede leer el `noindex` de una URL bloqueada. Quitar esas dos líneas y dejar
-  la cabecera `[GSC]`.
+- ~~Quitar de `robots.txt` el bloqueo de `/cuenta/` y `/pedido/`~~ — descartado
+  el 2026-10-04: `/pedido/<id>` lleva el token del pedido y el bloqueo evita que
+  el rastreador lo abra ([rutas](rutas-y-navegacion.md)).
 - Enlaces externos: 0 en Search Console (2026-09-23). Fuera del código: ficha de
   Google, marcas, proveedores y comunidades que enlacen a fichas y categorías.
 - `/servicios` estaba «Rastreada: sin indexar» (último rastreo 7-may) al pedir su

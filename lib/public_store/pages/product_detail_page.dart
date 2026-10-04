@@ -13,6 +13,7 @@ import '../theme/public_store_surface_theme.dart';
 import '../models/public_commerce_product_projection.dart';
 import '../models/public_product_spec_sheet.dart';
 import '../models/public_product_seo_copy.dart';
+import '../seo/public_product_structured_data.dart';
 import '../providers/cart_provider.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../services/catalog_page_prefetch_cache.dart';
@@ -577,6 +578,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     if (cached != null && mounted && _product?.id == product.id) {
       if (!sameCategoryTrail(_categoryTrail, cached)) {
         setState(() => _categoryTrail = cached);
+        _updateStructuredData();
       }
       if (snapshot!.isFresh) return;
     }
@@ -589,6 +591,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     if (!mounted || token != _loadToken || _product?.id != product.id) return;
     if (sameCategoryTrail(_categoryTrail, categoryTrail)) return;
     setState(() => _categoryTrail = categoryTrail);
+    _updateStructuredData();
   }
 
   Future<List<Category>> _resolveCategoryTrail({
@@ -677,6 +680,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         _technicalSpecs = specs;
         _isLoadingTechnicalSpecs = false;
       });
+      _updateStructuredData();
     } catch (e) {
       debugPrint('[ProductDetailPage] Error loading technical specs: $e');
       if (!current()) return;
@@ -949,47 +953,26 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       removeStructuredDataScript(_structuredDataScriptId);
       return;
     }
-    final productUrl = '$normalizedStoreUrl${publicProductPath(product)}';
-    final commerce = _commerceProjection(product);
-    if (commerce.imageUrls.isEmpty) {
+    final structuredData = buildPublicProductStructuredData(
+      commerce: _commerceProjection(product),
+      productUrl: '$normalizedStoreUrl${publicProductPath(product)}',
+      storeUrl: normalizedStoreUrl,
+      storeName: storeName,
+      categoryTrail: [
+        for (final link in _breadcrumbCategoryLinks())
+          if (link.href != null)
+            PublicStructuredDataCrumb(
+              link.name,
+              '$normalizedStoreUrl${link.href}',
+            ),
+      ],
+      specSheet: _technicalSpecs.isEmpty ? null : _specSheet(),
+      model: product.model ?? '',
+    );
+    if (structuredData == null) {
       removeStructuredDataScript(_structuredDataScriptId);
       return;
     }
-
-    final structuredData = <String, dynamic>{
-      '@context': 'https://schema.org/',
-      '@type': 'Product',
-      'name': commerce.title,
-      if (commerce.description.isNotEmpty)
-        'description': _cleanSeoText(commerce.description),
-      'url': productUrl,
-      if (commerce.sku.isNotEmpty) 'sku': commerce.sku,
-      'image': commerce.imageUrls,
-      if (commerce.gtin.isNotEmpty) 'gtin': commerce.gtin,
-      if (commerce.mpn.isNotEmpty) 'mpn': commerce.mpn,
-      if (commerce.brand.isNotEmpty)
-        'brand': {
-          '@type': 'Brand',
-          'name': commerce.brand,
-        },
-      'offers': {
-        '@type': 'Offer',
-        'priceCurrency': commerce.currency,
-        if (commerce.price > 0) 'price': commerce.formattedPrice,
-        'availability': commerce.availability.schemaValue,
-        'url': productUrl,
-        'seller': {
-          '@type': 'Organization',
-          'name': storeName,
-        },
-        'itemCondition': 'https://schema.org/NewCondition',
-      },
-    };
-
-    if (commerce.categoryPath.isNotEmpty) {
-      structuredData['category'] = commerce.categoryPath;
-    }
-
     setStructuredDataScript(_structuredDataScriptId, structuredData);
   }
 
@@ -1594,10 +1577,11 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     );
   }
 
-  Widget _buildBreadcrumb() {
+  /// The categories of the visible trail, each with its public path when it
+  /// is a destination. The breadcrumb and the structured data read the same
+  /// list, so what Google is told is what the customer sees.
+  List<({String name, String? href})> _breadcrumbCategoryLinks() {
     final isService = _product?.productType == ProductType.service;
-    final catalogLabel = isService ? 'Servicios' : 'Productos';
-    final catalogHref = isService ? '/servicios' : '/productos';
     final categoryId = _product?.categoryId?.trim() ?? '';
     final categoryName = _product?.categoryName?.trim() ?? '';
     final breadcrumbCategories = productBreadcrumbCategories(
@@ -1605,6 +1589,34 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       fallbackCategoryId: categoryId,
       fallbackCategoryName: categoryName,
     );
+    WebsiteCatalogPresentationRegistry? registry;
+    try {
+      registry = context.read<WebsiteService>().catalogPresentationRegistry;
+    } catch (_) {
+      registry = null;
+    }
+    return [
+      for (final category in breadcrumbCategories)
+        (
+          name: category.name,
+          href: !category.isActive || !category.showOnWebsite
+              ? null
+              : publicCategoryPath(
+                  presentation: registry?.forCategory(category.id) ??
+                      WebsiteCatalogPresentation.fallback(
+                        categoryId: category.id!,
+                        categoryName: category.name,
+                      ),
+                  services: isService,
+                ),
+        ),
+    ];
+  }
+
+  Widget _buildBreadcrumb() {
+    final isService = _product?.productType == ProductType.service;
+    final catalogLabel = isService ? 'Servicios' : 'Productos';
+    final catalogHref = isService ? '/servicios' : '/productos';
 
     return Wrap(
       spacing: 8,
@@ -1615,42 +1627,16 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         _buildBreadcrumbSeparator(),
         _buildBreadcrumbLink(catalogLabel, catalogHref),
         _buildBreadcrumbSeparator(),
-        for (final category in breadcrumbCategories) ...[
-          Builder(
-            builder: (context) {
-              if (!category.isActive || !category.showOnWebsite) {
-                return Text(
-                  category.name,
-                  style: _storeTheme.text.bodyMedium?.copyWith(
-                    color: _storeTheme.commerceTextMuted,
-                  ),
-                );
-              }
-              WebsiteCatalogPresentation presentation;
-              try {
-                presentation = context
-                        .read<WebsiteService>()
-                        .catalogPresentationRegistry
-                        .forCategory(category.id) ??
-                    WebsiteCatalogPresentation.fallback(
-                      categoryId: category.id!,
-                      categoryName: category.name,
-                    );
-              } catch (_) {
-                presentation = WebsiteCatalogPresentation.fallback(
-                  categoryId: category.id!,
-                  categoryName: category.name,
-                );
-              }
-              return _buildBreadcrumbLink(
-                category.name,
-                publicCategoryPath(
-                  presentation: presentation,
-                  services: isService,
-                ),
-              );
-            },
-          ),
+        for (final link in _breadcrumbCategoryLinks()) ...[
+          if (link.href == null)
+            Text(
+              link.name,
+              style: _storeTheme.text.bodyMedium?.copyWith(
+                color: _storeTheme.commerceTextMuted,
+              ),
+            )
+          else
+            _buildBreadcrumbLink(link.name, link.href!),
           _buildBreadcrumbSeparator(),
         ],
         Text(

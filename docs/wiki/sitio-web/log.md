@@ -4,6 +4,19 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-04 — corrección — datos estructurados hechos y medidos con un build
+  local sobre datos reales: ficha técnica como `additionalProperty` en 1.232 de
+  1.295 fichas, migas completas y un solo armado para snapshot y página (la
+  página borraba las migas del snapshot al cargar); `BikeStore` con horario,
+  logo, mapa, envío por tramos (función nueva `get_public_online_shipping_tiers`)
+  y link a `/devoluciones` ([datos-estructurados](paginas/datos-estructurados.md)).
+  Tres afirmaciones anteriores eran falsas: «la ficha no declara
+  `description`» (sí la declara; sólo 29 de 1.541 productos tienen texto), «quitar
+  el bloqueo de `/pedido/` en robots» (protege el token del pedido; descartado en
+  [rutas](paginas/rutas-y-navegacion.md)) y que `web/index.html` fuera fuente: lo
+  regenera el build, y el script de doble navegación nunca llegó a producción
+  ([publicación](paginas/publicacion-y-despliegue.md)).
+
 - 2026-10-04 — ingesta — el dueño pidió aplicar «absolutamente toda la
   configuración de SEO» de los referentes. Se midió en vivo (portada, categoría,
   ficha, robots, sitemaps) a Oxford Store, Better Bike, Cycling Store, Express

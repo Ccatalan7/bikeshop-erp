@@ -8,9 +8,13 @@ import 'package:vinabike_erp/modules/website/models/website_catalog_presentation
 import 'package:vinabike_erp/modules/website/models/website_font_registry.dart';
 import 'package:vinabike_erp/modules/website/models/website_seo_settings_aliases.dart';
 import 'package:vinabike_erp/modules/website/theme/website_theme_color_value.dart';
+import 'package:vinabike_erp/public_store/models/public_business_hours.dart';
 import 'package:vinabike_erp/public_store/models/public_commerce_product_projection.dart';
+import 'package:vinabike_erp/public_store/models/public_product_spec_sheet.dart';
 import 'package:vinabike_erp/public_store/models/public_product_seo_copy.dart';
 import 'package:vinabike_erp/public_store/models/storefront_logo_source.dart';
+import 'package:vinabike_erp/public_store/seo/public_business_structured_data.dart';
+import 'package:vinabike_erp/public_store/seo/public_product_structured_data.dart';
 import 'package:vinabike_erp/shared/config/supabase_config.dart';
 import 'package:vinabike_erp/shared/models/public_product_visibility_policy.dart';
 import 'package:vinabike_erp/shared/utils/chilean_utils.dart';
@@ -319,8 +323,28 @@ void main(List<String> args) async {
     ...eligibleStaticTrustPagePaths,
     ...dynamicCmsPages.map((page) => page.canonicalPath),
   };
+  final tenantLogoUrl = await _fetchTenantLogoUrl(
+    supabaseUrl: supabaseUrl,
+    tenantId: tenantId,
+    serviceRoleKey: serviceRoleKey,
+  );
+  final shippingTiers = await _fetchActiveShippingTiers(
+    supabaseUrl: supabaseUrl,
+    tenantId: tenantId,
+    serviceRoleKey: serviceRoleKey,
+  );
+  final businessBaseHtml = completeSeoBusinessJsonLd(
+    baseIndexHtml,
+    settings: settings,
+    storeUrl: storeUrl,
+    tenantId: tenantId,
+    tenantLogoUrl: tenantLogoUrl,
+    shippingTiers: shippingTiers,
+    returnPolicyPublished:
+        eligibleStaticTrustPagePaths.contains(seoReturnPolicyPath),
+  );
   final baseHtml = _buildHomepageHtml(
-    baseHtml: baseIndexHtml,
+    baseHtml: businessBaseHtml,
     storeUrl: storeUrl,
     storeName: storeName,
     globalTitle: _getSetting(settings, 'seo_meta_title') ??
@@ -359,11 +383,7 @@ void main(List<String> args) async {
   final instantTheme = SeoInstantPageTheme.fromSettings(
     settings,
     storeName: storeName,
-    tenantLogoUrl: await _fetchTenantLogoUrl(
-      supabaseUrl: supabaseUrl,
-      tenantId: tenantId,
-      serviceRoleKey: serviceRoleKey,
-    ),
+    tenantLogoUrl: tenantLogoUrl,
     tenantId: tenantId,
   );
   // La portada instantánea va sólo en el `index.html` de la raíz, escrito
@@ -397,11 +417,25 @@ void main(List<String> args) async {
       'ℹ️  Portada sin instantánea: su primer bloque no se dibuja igual',
     );
   }
+  final technicalSpecsByProductId = await fetchSeoSnapshotTechnicalSpecs(
+    productIds: products.map((product) => (product['id'] ?? '').toString()),
+    loadOne: (productId) => _fetchPublicProductTechnicalSpecs(
+      supabaseUrl: supabaseUrl,
+      tenantId: tenantId,
+      serviceRoleKey: serviceRoleKey,
+      productId: productId,
+    ),
+  );
+  stdout.writeln(
+    '✅ Fichas técnicas: '
+    '${technicalSpecsByProductId.values.where((rows) => rows.isNotEmpty).length}'
+    ' de ${products.length} productos con datos publicados',
+  );
+
   final productHtmlById = <String, String>{};
   var written = 0;
   for (final product in products) {
     final productCategoryId = (product['category_id'] ?? '').toString().trim();
-    final canonicalCategory = categoriesById[productCategoryId];
     final commerce = projectSeoSnapshotCommerceProduct(
       product,
       resolvedBrandNamesById: resolvedBrandNamesById,
@@ -470,7 +504,17 @@ void main(List<String> args) async {
         storeUrl: storeUrl,
         storeName: _cleanText(storeName),
         commerce: commerce,
-        canonicalCategory: canonicalCategory,
+        categoryTrail: buildSeoProductCategoryTrail(
+          categoryId: productCategoryId,
+          activeCategories: activeCategoryRows,
+          categoriesById: categoriesById,
+        ),
+        specSheet: buildSeoProductSpecSheet(
+          product: product,
+          commerce: commerce,
+          rows: technicalSpecsByProductId[id] ?? const [],
+        ),
+        model: _cleanText((product['model'] ?? '').toString()),
       ),
       fallbackHtml: _buildProductFallbackHtml(
         title: productName,
@@ -2477,65 +2521,137 @@ String? _buildProductJsonLd({
   required String storeUrl,
   required String storeName,
   required PublicCommerceProductProjection commerce,
-  required SeoCategoryProjection? canonicalCategory,
+  required List<SeoCategoryProjection> categoryTrail,
+  required PublicProductSpecSheet specSheet,
+  required String model,
 }) {
-  if (commerce.imageUrls.isEmpty) {
-    return null;
+  final data = buildPublicProductStructuredData(
+    commerce: commerce,
+    productUrl: productUrl,
+    storeUrl: storeUrl,
+    storeName: storeName,
+    categoryTrail: [
+      for (final category in categoryTrail)
+        PublicStructuredDataCrumb(
+          category.displayTitle,
+          _joinUrl(storeUrl, category.canonicalPath),
+        ),
+    ],
+    specSheet: specSheet,
+    model: model,
+  );
+  return data == null ? null : encodeStructuredDataForHtml(data);
+}
+
+/// The public categories from the root to the product's own, as the product
+/// page's breadcrumb links them: an ancestor that is not a public destination
+/// is left out, never invented.
+List<SeoCategoryProjection> buildSeoProductCategoryTrail({
+  required String categoryId,
+  required List<Map<String, dynamic>> activeCategories,
+  required Map<String, SeoCategoryProjection> categoriesById,
+}) {
+  final parentById = <String, String>{
+    for (final row in activeCategories)
+      if ((row['id'] ?? '').toString().trim().isNotEmpty)
+        (row['id'] ?? '').toString().trim():
+            (row['parent_id'] ?? '').toString().trim(),
+  };
+  final trail = <SeoCategoryProjection>[];
+  final seen = <String>{};
+  var current = categoryId.trim();
+  while (current.isNotEmpty && seen.add(current)) {
+    final category = categoriesById[current];
+    if (category != null) trail.insert(0, category);
+    current = parentById[current] ?? '';
+  }
+  return List.unmodifiable(trail);
+}
+
+/// The sheet the product page shows: the published rows of
+/// `get_public_product_technical_specs` plus the product's own identity, built
+/// by the same [PublicProductSpecSheet.build] the page uses.
+PublicProductSpecSheet buildSeoProductSpecSheet({
+  required Map<String, dynamic> product,
+  required PublicCommerceProductProjection commerce,
+  required List<PublicProductSpecRow> rows,
+}) {
+  String? text(String key) {
+    final value = _cleanText((product[key] ?? '').toString());
+    return value.isEmpty ? null : value;
   }
 
-  final productData = <String, dynamic>{
-    '@type': 'Product',
-    'name': _cleanText(commerce.title),
-    if (commerce.description.isNotEmpty)
-      'description': _cleanText(commerce.description),
-    'url': productUrl,
-    'image': commerce.imageUrls,
-    if (commerce.sku.isNotEmpty) 'sku': commerce.sku,
-    if (commerce.mpn.isNotEmpty) 'mpn': commerce.mpn,
-    if (commerce.categoryPath.isNotEmpty) 'category': commerce.categoryPath,
-    if (commerce.brand.isNotEmpty)
-      'brand': {
-        '@type': 'Brand',
-        'name': commerce.brand,
-      },
-    if (commerce.gtin.isNotEmpty) 'gtin': commerce.gtin,
-    'offers': {
-      '@type': 'Offer',
-      'url': productUrl,
-      'priceCurrency': commerce.currency,
-      if (commerce.price > 0) 'price': commerce.formattedPrice,
-      'availability': commerce.availability.schemaValue,
-      'itemCondition': 'https://schema.org/NewCondition',
-      'seller': {
-        '@type': 'Organization',
-        'name': storeName,
-      },
-    },
-  };
-
-  final graph = <Map<String, dynamic>>[
-    productData,
-    _buildBreadcrumbListJsonLd(
-      storeUrl: storeUrl,
-      items: [
-        ('Inicio', '/'),
-        ('Productos', '/productos'),
-        if (canonicalCategory != null)
-          (
-            canonicalCategory.displayTitle,
-            canonicalCategory.canonicalPath,
-          ),
-        (commerce.title, productUrl),
-      ],
+  return PublicProductSpecSheet.build(
+    rows: rows,
+    identity: PublicSpecIdentity(
+      brand: commerce.brand.isEmpty ? null : commerce.brand,
+      model: text('model'),
+      manufacturerSku: text('manufacturer_sku'),
+      gtin: commerce.gtin.isEmpty ? null : commerce.gtin,
+      color: text('color'),
+      size: text('size'),
+      material: text('material'),
+      weightKg: _toDouble(product['weight']) ?? 0,
     ),
-  ];
+  );
+}
 
-  final data = <String, dynamic>{
-    '@context': 'https://schema.org',
-    '@graph': graph,
-  };
+/// Reads every product's published technical sheet, a few at a time.
+///
+/// It runs once per build, after the consistent owner read: the sheet is its
+/// own owner (`spec_facts` behind `get_public_product_technical_specs`), and a
+/// sheet edited during the build is picked up by the next one. A product
+/// whose sheet cannot be read after [attempts] aborts the build rather than
+/// publishing a snapshot that says less than its page.
+Future<Map<String, List<PublicProductSpecRow>>> fetchSeoSnapshotTechnicalSpecs({
+  required Iterable<String> productIds,
+  required Future<List<PublicProductSpecRow>> Function(String productId)
+      loadOne,
+  int concurrency = 8,
+  int attempts = 3,
+}) async {
+  final queue = productIds.where((id) => id.trim().isNotEmpty).toSet().toList();
+  final result = <String, List<PublicProductSpecRow>>{};
+  var next = 0;
 
-  return jsonEncode(data);
+  Future<void> worker() async {
+    while (next < queue.length) {
+      final productId = queue[next++];
+      for (var attempt = 1;; attempt++) {
+        try {
+          result[productId] = await loadOne(productId);
+          break;
+        } on Object {
+          if (attempt >= attempts) rethrow;
+          await Future<void>.delayed(Duration(milliseconds: 400 * attempt));
+        }
+      }
+    }
+  }
+
+  await Future.wait([
+    for (var i = 0; i < concurrency; i++) worker(),
+  ]);
+  return Map.unmodifiable(result);
+}
+
+Future<List<PublicProductSpecRow>> _fetchPublicProductTechnicalSpecs({
+  required String supabaseUrl,
+  required String tenantId,
+  required String serviceRoleKey,
+  required String productId,
+}) async {
+  final response = await _httpPostJson(
+    Uri.parse(
+      '$supabaseUrl/rest/v1/rpc/get_public_product_technical_specs',
+    ),
+    headers: {'apikey': serviceRoleKey},
+    body: {'p_tenant_id': tenantId, 'p_product_id': productId},
+  );
+  return [
+    for (final row in jsonDecode(response) as List<dynamic>)
+      PublicProductSpecRow.fromJson(Map<String, dynamic>.from(row as Map)),
+  ].where((row) => row.value.isNotEmpty).toList(growable: false);
 }
 
 String _buildCategoryJsonLd({
@@ -2725,6 +2841,114 @@ Future<String?> _fetchTenantLogoUrl({
   return (rows.first as Map)['logo_url']?.toString();
 }
 
+/// The published policy page Google's `merchantReturnLink` points to.
+const String seoReturnPolicyPath = '/devoluciones';
+
+/// Schema types the business node may carry. `scripts/sync_seo_index.sh`
+/// writes `BikeStore` since 2026-10-04; an older shell still says
+/// `LocalBusiness`, its parent type.
+const Set<String> seoBusinessSchemaTypes = {'BikeStore', 'LocalBusiness'};
+
+/// Completes the business node the shell carries with what only the deploy
+/// can read: the hours, the logo the store paints, the shipping tiers and the
+/// published return policy ([completePublicBusinessStructuredData]).
+///
+/// The shell's node keeps its identity, written by `sync_seo_index.sh` from
+/// `website_settings`; this adds properties, it never rewrites one the shell
+/// owns. A shell without exactly one business node fails the build.
+String completeSeoBusinessJsonLd(
+  String html, {
+  required Map<String, String> settings,
+  required String storeUrl,
+  required String tenantId,
+  required String? tenantLogoUrl,
+  required List<PublicShippingTier> shippingTiers,
+  required bool returnPolicyPublished,
+}) {
+  final scripts = RegExp(
+    r'(<script[^>]+type="application/ld\+json"[^>]*>)(.*?)(</script>)',
+    caseSensitive: false,
+    dotAll: true,
+  ).allMatches(html).where((match) {
+    try {
+      final decoded = jsonDecode(match.group(2)!.trim());
+      return decoded is Map &&
+          seoBusinessSchemaTypes.contains(decoded['@type']);
+    } on FormatException {
+      return false;
+    }
+  }).toList();
+  if (scripts.length != 1) {
+    throw StateError(
+      'El index.html base debe traer exactamente un nodo de negocio '
+      '(${seoBusinessSchemaTypes.join('/')}); trae ${scripts.length}.',
+    );
+  }
+  final match = scripts.single;
+  final identity = Map<String, dynamic>.from(
+    jsonDecode(match.group(2)!.trim()) as Map,
+  );
+
+  final logo = storefrontFirstLogoSource(
+    configuredUrl: settings['logo_url'] ?? '',
+    tenantLogoUrl: tenantLogoUrl,
+    tenantId: tenantId,
+  );
+  final countries = {
+    for (final tier in shippingTiers)
+      if (tier.countryCode.isNotEmpty) tier.countryCode,
+  };
+  final completed = completePublicBusinessStructuredData(
+    identity,
+    logoUrl: logo.isEmpty || logo.startsWith('https://')
+        ? logo
+        : _joinUrl(storeUrl, '/$logo'),
+    imageUrl: _cleanText(_getSetting(settings, 'seo_og_image') ?? ''),
+    mapUrl: _cleanText(
+      _getSetting(settings, 'seo_google_maps_url') ??
+          _getSetting(settings, 'business_google_maps_url') ??
+          _getSetting(settings, 'google_maps_url') ??
+          '',
+    ),
+    hours: parsePublicBusinessHours(
+      _getSetting(settings, 'business_hours_json') ??
+          _getSetting(settings, 'google_business_regular_hours') ??
+          '',
+    ),
+    shippingTiers: shippingTiers,
+    currency: (_getSetting(settings, 'currency') ?? 'CLP').toUpperCase(),
+    // The checkout offers pickup on every order it ships (the quote answers
+    // `pickup` without a tier), so it reaches the same customers.
+    pickupCountryCode: countries.length == 1 ? countries.single : '',
+    returnPolicyUrl:
+        returnPolicyPublished ? _joinUrl(storeUrl, seoReturnPolicyPath) : '',
+  );
+  return html.replaceRange(
+    match.start,
+    match.end,
+    '${match.group(1)}\n  ${encodeStructuredDataForHtml(completed)}\n  '
+    '${match.group(3)}',
+  );
+}
+
+Future<List<PublicShippingTier>> _fetchActiveShippingTiers({
+  required String supabaseUrl,
+  required String tenantId,
+  required String serviceRoleKey,
+}) async {
+  // The table is staff-only; the store reads its public facts through the
+  // narrow function (20261004120000), as the shipping page can.
+  final response = await _httpPostJson(
+    Uri.parse('$supabaseUrl/rest/v1/rpc/get_public_online_shipping_tiers'),
+    headers: {'apikey': serviceRoleKey},
+    body: {'p_tenant_id': tenantId},
+  );
+  return [
+    for (final row in jsonDecode(response) as List<dynamic>)
+      PublicShippingTier.fromRow(Map<String, dynamic>.from(row as Map)),
+  ];
+}
+
 Future<SeoWebsiteSettingsSource> _fetchWebsiteSettingsSource({
   required String supabaseUrl,
   required String tenantId,
@@ -2770,7 +2994,7 @@ Uri buildSeoSnapshotProductPageUri({
       'show_on_website': 'eq.true',
       'product_type': 'eq.$productType',
       'select':
-          'id,name,description,website_description,website_name,website_price,website_image_url,website_image_url_optimized,website_image_urls,website_seo_title,website_seo_description,website_search_terms,website_merchant_title,website_merchant_description,website_merchant_gtin,website_merchant_mpn,website_merchant_brand,website_google_product_category,is_google_merchant,price,price_currency,sku,gtin,barcode,image_url,image_url_optimized,image_urls,brand_id,brand,category_id,category_name,stock_quantity,inventory_qty,track_stock,is_set,product_type,is_active,is_published,show_on_website,updated_at,created_at',
+          'id,name,description,website_description,website_name,website_price,website_image_url,website_image_url_optimized,website_image_urls,website_seo_title,website_seo_description,website_search_terms,website_merchant_title,website_merchant_description,website_merchant_gtin,website_merchant_mpn,website_merchant_brand,website_google_product_category,is_google_merchant,price,price_currency,sku,gtin,barcode,image_url,image_url_optimized,image_urls,brand_id,brand,category_id,category_name,stock_quantity,inventory_qty,track_stock,is_set,product_type,is_active,is_published,show_on_website,updated_at,created_at,model,manufacturer_sku,color,size,material,weight',
       'order': 'id.asc',
       if (afterId?.trim().isNotEmpty == true) 'id': 'gt.${afterId!.trim()}',
       'limit': pageSize.toString(),
@@ -5208,7 +5432,6 @@ Future<void> validateGeneratedSeoArtifacts({
   Map<String, String>? expectedLocalBusinessIdentity,
 }) async {
   final files = <String, File>{};
-  const unownedReturnPolicyType = 'Merchant' 'ReturnPolicy';
 
   void addFile(File file) {
     if (file.existsSync()) files[file.absolute.path] = file;
@@ -5280,13 +5503,8 @@ Future<void> validateGeneratedSeoArtifacts({
     if (mainCount != 1) {
       failures.add('$relativePath contiene $mainCount elementos main.');
     }
-    if (html.contains(unownedReturnPolicyType)) {
-      failures.add(
-        '$relativePath contiene $unownedReturnPolicyType sin dueño.',
-      );
-    }
-
     final localBusinessNodes = <Map<dynamic, dynamic>>[];
+    var returnPolicyNodes = 0;
     final jsonLdScripts = RegExp(
       r'<script[^>]+type="application/ld\+json"[^>]*>(.*?)</script>',
       caseSensitive: false,
@@ -5298,9 +5516,11 @@ Future<void> validateGeneratedSeoArtifacts({
     for (final script in jsonLdScripts) {
       try {
         final decoded = jsonDecode(script.group(1)!.trim());
-        localBusinessNodes.addAll(
-          _schemaNodesByType(decoded, 'LocalBusiness'),
-        );
+        for (final type in seoBusinessSchemaTypes) {
+          localBusinessNodes.addAll(_schemaNodesByType(decoded, type));
+        }
+        returnPolicyNodes +=
+            _schemaNodesByType(decoded, 'MerchantReturnPolicy').length;
       } catch (error) {
         failures.add('$relativePath contiene JSON-LD inválido: $error');
       }
@@ -5308,9 +5528,32 @@ Future<void> validateGeneratedSeoArtifacts({
     if (localBusinessNodes.length != 1) {
       failures.add(
         '$relativePath contiene ${localBusinessNodes.length} nodos '
-        'LocalBusiness.',
+        'de negocio (${seoBusinessSchemaTypes.join('/')}).',
       );
-    } else if (expectedLocalBusinessIdentity != null) {
+    } else {
+      // A return policy has one owner, the published policy page, and is
+      // declared once for the whole business (Google, 2026-09-08).
+      final policy = localBusinessNodes.single['hasMerchantReturnPolicy'];
+      final ownedPolicies = policy == null ? 0 : 1;
+      if (returnPolicyNodes != ownedPolicies) {
+        failures.add(
+          '$relativePath declara $returnPolicyNodes políticas de devolución; '
+          'sólo cabe la del negocio.',
+        );
+      }
+      if (policy is Map) {
+        final link = policy['merchantReturnLink'];
+        if (link != '$normalizedStoreUrl$seoReturnPolicyPath' ||
+            !staticTrustPagePaths.contains(seoReturnPolicyPath)) {
+          failures.add(
+            '$relativePath enlaza la política de devolución a $link, que no '
+            'es la página $seoReturnPolicyPath publicada.',
+          );
+        }
+      }
+    }
+    if (localBusinessNodes.length == 1 &&
+        expectedLocalBusinessIdentity != null) {
       final localBusiness = localBusinessNodes.single;
       for (final entry in expectedLocalBusinessIdentity.entries) {
         final actual = _readNestedJsonValue(localBusiness, entry.key);
@@ -5759,6 +6002,12 @@ String _cleanText(String text) {
   // Collapse whitespace.
   t = t.replaceAll(RegExp(r'\s+'), ' ').trim();
   return t;
+}
+
+double? _toDouble(dynamic v) {
+  if (v == null) return null;
+  if (v is num) return v.toDouble();
+  return double.tryParse(v.toString().trim());
 }
 
 int? _toInt(dynamic v) {

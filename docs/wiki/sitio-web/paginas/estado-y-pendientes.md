@@ -3,8 +3,8 @@ titulo: Estado y pendientes
 resumen: qué está en vivo hoy, qué falta y de quién depende — la lista de trabajo del sitio, con fecha
 fuentes: [repositorio, consolas-google, google-search-central]
 archivos: [supabase/migrations/20260728223000_harden_website_navigation_seed.sql, supabase/migrations/20260728230000_add_storefront_publication_contract.sql, docs/architecture/storefront-instant-page.md]
-tablas: [website_navigation, website_settings]
-revisado: 2026-10-03
+tablas: [website_navigation, website_settings, products, online_shipping_rate_tiers]
+revisado: 2026-10-04
 ---
 
 # Estado y pendientes
@@ -40,14 +40,14 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 | Desde | Qué | Página |
 |---|---|---|
 | 2026-10-04 | **Contenido real y visible en el HTML** de fichas, categorías y portada (hoy en `<noscript>`, ~100–150 palabras contra 700–2.500 de los referentes) | [seo-de-referentes](seo-de-referentes.md) |
-| 2026-10-04 | Ficha técnica como `additionalProperty` y `gtin` en el JSON-LD | [seo-de-referentes](seo-de-referentes.md) |
+| 2026-10-04 | **Descripciones de producto**: 29 de 1.541 publicados tienen texto; el JSON-LD y la página no tienen qué mostrar en el resto (contenido, no marcado) | [datos-estructurados](datos-estructurados.md) |
+| 2026-10-04 | Términos de devolución (días, quién paga, reembolso) como campos del editor, para declararlos además del link (regla 1: primero el control) | [datos-estructurados](datos-estructurados.md) |
+| 2026-10-04 | Los tramos de envío no tienen control en el editor y la página `/envios` los repite como texto: un cambio de tarifa hay que hacerlo en dos lados. Llevarlos al editor y que la página los lea de `get_public_online_shipping_tiers` | [checkout](checkout-y-pedidos.md) |
+| 2026-10-04 | `geo` del local y `addressCountry` como `CL` (hoy «Chile»; `seo_address_country_code` sin dueño) | [datos-estructurados](datos-estructurados.md) |
 | 2026-10-04 | Textos de presentación de las 11 categorías visibles | [seo-de-referentes](seo-de-referentes.md) |
 | 2026-10-04 | Artículos/guías en el editor (capacidad nueva) y páginas de aterrizaje de filtros | [seo-de-referentes](seo-de-referentes.md) |
 | 2026-10-04 | Ver en vivo los correos de pago, preparación, retiro, envío y entrega: ningún pedido real los ha disparado (la última venta web pagada es del 3-may) | [checkout](checkout-y-pedidos.md) |
 | 2026-10-04 | Avisar al taller por correo o WhatsApp cuando entra un pedido web (hoy sólo el aviso dentro del ERP) | [checkout](checkout-y-pedidos.md) |
-| 2026-10-03 | JSON-LD: `description` en la ficha; envío (`hasShippingService`, desde los tramos reales) y devoluciones (`hasMerchantReturnPolicy`) declarados una vez para todo el negocio | [datos-estructurados](datos-estructurados.md) |
-| 2026-10-03 | `LocalBusiness` → `BikeStore`, con `geo` y horario | [datos-estructurados](datos-estructurados.md) |
-| 2026-10-03 | `robots.txt`: quitar `Disallow` de `/cuenta/` y `/pedido/` (la cabecera `noindex` ya los saca) | [rutas](rutas-y-navegacion.md) |
 | 2026-10-03 | Eventos GA4 que faltan: `view_item_list`, `select_item`, `remove_from_cart`, `view_cart`, `add_shipping_info`, `add_payment_info` | [medicion](medicion.md) |
 | 2026-10-03 | Comparar Search Console contra la línea base del 23-sep (filtrada al sitemap) y mirar `/servicios` | [seo-tecnico](seo-tecnico.md) |
 | 2026-09-24 | Carrusel en teléfono: las flechas tapan el texto (antes esperaba Design; desde el 27-sep el aspecto lo decide el agente) | `storefront-instant-page.md` |
@@ -56,6 +56,15 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 | 2026-09-26 | Login `/cuenta/login` sin la dirección «Sendero» | [portal](portal-de-clientes.md) |
 | 2026-10-03 | Código muerto: `banners_management_page.dart`, `content_management_page.dart`, `customer_account_page.dart`, `premium_dashboard_widgets.dart`, ruta `/cuenta/mensajes`; clave `header_nav_links` | [editor](editor-del-sitio.md) |
 | 2026-10-08 | Leer el resultado de la tarea `vinabike-store-ready-review` | [rendimiento](rendimiento.md) |
+
+## Hecho
+
+| Fecha | Qué | Página |
+|---|---|---|
+| 2026-10-04 | Ficha técnica (`additionalProperty`), `model` y migas completas en el JSON-LD de cada producto, con un solo armado para el snapshot y la página | [datos-estructurados](datos-estructurados.md) |
+| 2026-10-04 | `BikeStore` con logo, imagen, mapa, horario, envío por tramos, retiro gratis y link a la política de devoluciones | [datos-estructurados](datos-estructurados.md) |
+| 2026-10-04 | El script que evita la doble navegación de un enlace de Flutter llega por fin a producción (estaba sólo en `web/index.html`, que el build regenera) | [publicacion](publicacion-y-despliegue.md) |
+| 2026-10-04 | Descartado: quitar `Disallow` de `/pedido/` en `robots.txt`. Esas URL llevan el token privado del pedido; con el bloqueo Google nunca las abre, y la cabecera `noindex` cubre el caso de que alguna se filtre | [rutas](rutas-y-navegacion.md) |
 
 ## Migraciones en git, no en producción
 

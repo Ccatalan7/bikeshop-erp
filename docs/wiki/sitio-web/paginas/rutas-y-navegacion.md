@@ -4,7 +4,7 @@ resumen: cada URL pública de vinabike.cl, cuáles indexa Google, las redireccio
 fuentes: [repositorio, google-search-central]
 archivos: [lib/public_store/routes/public_store_router.dart, firebase.json, web/robots.txt, lib/public_store/utils/product_url.dart]
 tablas: [website_navigation, website_pages, product_categories, product_url_aliases]
-revisado: 2026-10-03
+revisado: 2026-10-04
 ---
 
 # Rutas, redirecciones y navegación
@@ -67,10 +67,15 @@ cambiar un slug sin alias rompe ese hilo.
 la app llega tarde: Google puede no renderizar una página cuyo HTML original ya
 dice otra cosa `[GSC]`.
 
-`robots.txt` además bloquea `/cuenta/` y `/pedido/`. **Trampa:** Google no lee el
-`noindex` de una URL bloqueada en robots.txt, así que esas URL pueden aparecer
-como resultado sin contenido si alguien las enlaza `[GSC]`. Lo correcto es dejar
-que se rastreen y que la cabecera las saque ([estado-y-pendientes](estado-y-pendientes.md)).
+`robots.txt` además bloquea `/cuenta/` y `/pedido/`, **y se queda así**
+(decidido 2026-10-04, corrige la propuesta del 2026-10-03 de quitarlo). Es cierto
+que Google no lee el `noindex` de una URL bloqueada y que una URL bloqueada y
+enlazada puede salir como resultado sin contenido `[GSC]`. Pero `/pedido/<id>`
+lleva el token de acceso al pedido: con el bloqueo, el rastreador nunca abre ni
+renderiza el detalle de un pedido aunque alguien filtre el enlace, y la cabecera
+sigue cubriendo a quien llegue sin pasar por robots.txt. Ninguna de esas URL
+está enlazada desde páginas públicas. El test
+`google_merchant_identity_contract_test.dart` exige las dos líneas.
 
 ## Menús y destinos
 

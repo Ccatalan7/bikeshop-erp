@@ -376,14 +376,14 @@ if [[ "$CHECK_ONLY" == true ]]; then
   if ! INDEX_LOCAL_BUSINESS_JSON=$(perl -0777 -ne '
     while (/<script\b[^>]*type="application\/ld\+json"[^>]*>(.*?)<\/script>/gis) {
       my $body = $1;
-      if ($body =~ /"\@type"\s*:\s*"LocalBusiness"/) {
+      if ($body =~ /"\@type"\s*:\s*"BikeStore"/) {
         print $body;
         $count++;
       }
     }
     END { exit(($count // 0) == 1 ? 0 : 2); }
   ' "$INDEX_FILE"); then
-    echo "web/index.html must contain exactly one LocalBusiness JSON-LD node." >&2
+    echo "web/index.html must contain exactly one BikeStore JSON-LD node." >&2
     exit 65
   fi
   if ! printf '%s' "$INDEX_LOCAL_BUSINESS_JSON" | jq -e \
@@ -401,7 +401,8 @@ if [[ "$CHECK_ONLY" == true ]]; then
     --arg country_code "$ADDRESS_COUNTRY_CODE" \
     --arg instagram "$INSTAGRAM" \
     '
-      .["@type"] == "LocalBusiness"
+      .["@type"] == "BikeStore"
+      and .["@id"] == ($url + "/#negocio")
       and .name == $name
       and .legalName == $legal_name
       and .taxID == $tax_id
@@ -434,7 +435,7 @@ if [[ "$CHECK_ONLY" == true ]]; then
         end
       )
     ' >/dev/null; then
-    echo "web/index.html LocalBusiness JSON-LD is stale or does not match the canonical website settings." >&2
+    echo "web/index.html BikeStore JSON-LD is stale or does not match the canonical website settings." >&2
     exit 65
   fi
 
@@ -459,7 +460,8 @@ JSON_LD=$(jq -cn \
   --arg instagram "$INSTAGRAM" \
   '({
     "@context": "https://schema.org",
-    "@type": "LocalBusiness",
+    "@type": "BikeStore",
+    "@id": ($url + "/#negocio"),
     name: $name,
     legalName: $legal_name,
     taxID: $tax_id,
@@ -741,7 +743,7 @@ cat > "$INDEX_FILE" << HEREDOC
 
   </style>
   
-  <!-- JSON-LD Structured Data for LocalBusiness -->
+  <!-- JSON-LD: the business (BikeStore); the store build completes it -->
   <script type="application/ld+json">
   $JSON_LD_SAFE
   </script>
@@ -877,6 +879,31 @@ cat > "$INDEX_FILE" << HEREDOC
     }, { passive: false });
   </script>
   <script>
+    // Con la semántica activa (rastreadores o lector de pantalla) Flutter
+    // dibuja cada destino como <a href>. Flutter ya navega dentro de la app al
+    // recibir el clic (o abre la pestaña de un enlace externo); sin esto el
+    // navegador además navegaría la pestaña actual. Un clic con modificador
+    // (pestaña o ventana nueva) es sólo del navegador: no le llega a Flutter,
+    // que si no navegaría también esta pestaña.
+    document.addEventListener('click', function (event) {
+      if (event.defaultPrevented || event.button !== 0) return;
+      var target = event.target;
+      var link = target && target.closest &&
+          target.closest('flt-semantics-host a[href]');
+      if (!link) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+        event.stopPropagation();
+        return;
+      }
+      event.preventDefault();
+      // Flutter escucha el clic en el nodo tocable de adentro (el botón),
+      // no en el <a>: si activaron el enlace mismo (Enter del teclado o un
+      // lector de pantalla), el clic se le entrega a ese nodo.
+      var tappable = link.querySelector('[flt-tappable]');
+      if (tappable && !tappable.contains(target)) tappable.click();
+    }, true);
+  </script>
+  <script>
     {{flutter_bootstrap_js}}
   </script>
   <!-- 
@@ -896,6 +923,6 @@ echo "📝 Generated with:"
 echo "   - Business info: $BUSINESS_NAME, $PHONE, $EMAIL"
 echo "   - Address: $FULL_ADDRESS"
 echo "   - Navigation links: deferred to the snapshot generator after content eligibility checks"
-echo "   - JSON-LD LocalBusiness schema"
+echo "   - JSON-LD BikeStore schema"
 echo "   - Open Graph meta tags"
 echo "   - Twitter Card meta tags"

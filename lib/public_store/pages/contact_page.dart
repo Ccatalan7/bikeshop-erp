@@ -1,10 +1,9 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../modules/website/services/website_service.dart';
+import '../models/public_business_hours.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../../modules/website/theme/website_resolved_theme.dart';
 import '../providers/public_store_tenant_provider.dart';
@@ -854,155 +853,66 @@ class _ContactPageState extends State<ContactPage>
   }
 
   List<_BusinessHourRowData> _parseBusinessHours(String rawJson) {
-    if (rawJson.trim().isEmpty) return const [];
+    final periods = parsePublicBusinessHours(rawJson);
+    if (periods.isEmpty) return const [];
 
-    try {
-      final decoded = jsonDecode(rawJson);
-      final rootData = decoded is Map<String, dynamic>
-          ? decoded
-          : Map<String, dynamic>.from(decoded as Map);
-      final data = rootData['opening_hours'] is Map
-          ? Map<String, dynamic>.from(rootData['opening_hours'] as Map)
-          : rootData;
-      final periods = data['periods'] as List<dynamic>? ?? const [];
-      if (periods.isEmpty) return const [];
+    const dayLabels = {
+      'MONDAY': 'Lunes',
+      'TUESDAY': 'Martes',
+      'WEDNESDAY': 'Miércoles',
+      'THURSDAY': 'Jueves',
+      'FRIDAY': 'Viernes',
+      'SATURDAY': 'Sábado',
+      'SUNDAY': 'Domingo',
+    };
+    const dayOrder = publicBusinessDays;
 
-      const dayOrder = [
-        'MONDAY',
-        'TUESDAY',
-        'WEDNESDAY',
-        'THURSDAY',
-        'FRIDAY',
-        'SATURDAY',
-        'SUNDAY',
-      ];
-      const dayLabels = {
-        'MONDAY': 'Lunes',
-        'TUESDAY': 'Martes',
-        'WEDNESDAY': 'Miércoles',
-        'THURSDAY': 'Jueves',
-        'FRIDAY': 'Viernes',
-        'SATURDAY': 'Sábado',
-        'SUNDAY': 'Domingo',
-      };
-
-      final hoursByDay = {
-        for (final day in dayOrder) day: <String>[],
-      };
-
-      for (final rawPeriod in periods) {
-        if (rawPeriod is! Map) continue;
-        final period = Map<String, dynamic>.from(rawPeriod);
-
-        if (period.containsKey('openDay') || period.containsKey('openTime')) {
-          final openDay = period['openDay']?.toString().toUpperCase();
-          if (openDay == null || !hoursByDay.containsKey(openDay)) continue;
-
-          final openTime = _formatBusinessTime(period['openTime']);
-          final closeTime = _formatBusinessTime(period['closeTime']);
-          if (openTime == null || closeTime == null) continue;
-
-          hoursByDay[openDay]!.add('$openTime - $closeTime');
-          continue;
-        }
-
-        final open = period['open'] is Map
-            ? Map<String, dynamic>.from(period['open'] as Map)
-            : null;
-        final close = period['close'] is Map
-            ? Map<String, dynamic>.from(period['close'] as Map)
-            : null;
-        final openDay = _googlePlacesDayToBusinessDay(open?['day']);
-        if (openDay == null || !hoursByDay.containsKey(openDay)) continue;
-
-        final openTime = _formatPlacesTime(open?['time']);
-        final closeTime = _formatPlacesTime(close?['time']);
-        if (openTime == null || closeTime == null) continue;
-
-        hoursByDay[openDay]!.add('$openTime - $closeTime');
-      }
-
-      final daySchedules = <String, String>{
-        for (final day in dayOrder)
-          day: hoursByDay[day]!.isEmpty
-              ? 'Cerrado'
-              : hoursByDay[day]!.join(' / '),
-      };
-
-      final rows = <_BusinessHourRowData>[];
-      var start = 0;
-
-      while (start < dayOrder.length) {
-        final schedule = daySchedules[dayOrder[start]]!;
-        var end = start;
-
-        while (end + 1 < dayOrder.length &&
-            daySchedules[dayOrder[end + 1]] == schedule) {
-          end++;
-        }
-
-        rows.add(
-          _BusinessHourRowData(
-            dayLabel: _formatDayRange(
-              dayLabels[dayOrder[start]]!,
-              dayLabels[dayOrder[end]]!,
-            ),
-            hoursLabel: schedule,
-            isOpen: schedule != 'Cerrado',
-          ),
-        );
-
-        start = end + 1;
-      }
-
-      return rows;
-    } catch (error) {
-      debugPrint('Could not parse Google Business hours: $error');
-      return const [];
+    final hoursByDay = {
+      for (final day in dayOrder) day: <String>[],
+    };
+    for (final period in periods) {
+      hoursByDay[period.day]!.add('${period.opens} - ${period.closes}');
     }
+
+    final daySchedules = <String, String>{
+      for (final day in dayOrder)
+        day:
+            hoursByDay[day]!.isEmpty ? 'Cerrado' : hoursByDay[day]!.join(' / '),
+    };
+
+    final rows = <_BusinessHourRowData>[];
+    var start = 0;
+
+    while (start < dayOrder.length) {
+      final schedule = daySchedules[dayOrder[start]]!;
+      var end = start;
+
+      while (end + 1 < dayOrder.length &&
+          daySchedules[dayOrder[end + 1]] == schedule) {
+        end++;
+      }
+
+      rows.add(
+        _BusinessHourRowData(
+          dayLabel: _formatDayRange(
+            dayLabels[dayOrder[start]]!,
+            dayLabels[dayOrder[end]]!,
+          ),
+          hoursLabel: schedule,
+          isOpen: schedule != 'Cerrado',
+        ),
+      );
+
+      start = end + 1;
+    }
+
+    return rows;
   }
 
   String _formatDayRange(String start, String end) {
     if (start == end) return start;
     if (start == 'Lunes' && end == 'Domingo') return 'Todos los días';
     return '$start a $end';
-  }
-
-  String? _googlePlacesDayToBusinessDay(dynamic rawDay) {
-    final day = rawDay is num ? rawDay.toInt() : int.tryParse('$rawDay');
-    return switch (day) {
-      0 => 'SUNDAY',
-      1 => 'MONDAY',
-      2 => 'TUESDAY',
-      3 => 'WEDNESDAY',
-      4 => 'THURSDAY',
-      5 => 'FRIDAY',
-      6 => 'SATURDAY',
-      _ => null,
-    };
-  }
-
-  String? _formatBusinessTime(dynamic rawTime) {
-    if (rawTime is String) return _formatPlacesTime(rawTime);
-    if (rawTime is! Map) return null;
-
-    final time = Map<String, dynamic>.from(rawTime);
-    final hours = (time['hours'] as num?)?.toInt() ?? 0;
-    final minutes = (time['minutes'] as num?)?.toInt() ?? 0;
-
-    return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}';
-  }
-
-  String? _formatPlacesTime(dynamic rawTime) {
-    final digits = rawTime?.toString().trim();
-    if (digits == null || digits.isEmpty) return null;
-    if (digits.contains(':')) return digits;
-    if (digits.length < 3) return null;
-
-    final padded = digits.padLeft(4, '0');
-    final hours = padded.substring(0, 2);
-    final minutes = padded.substring(2, 4);
-    return '$hours:$minutes';
   }
 
   Widget _buildHourRow(String day, String hours, bool isOpen) {

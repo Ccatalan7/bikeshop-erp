@@ -13,12 +13,19 @@ void main() {
     final generator =
         File('scripts/generate_product_seo_snapshots.dart').readAsStringSync();
     final indexSync = File('scripts/sync_seo_index.sh').readAsStringSync();
+    final business = File(
+      'lib/public_store/seo/public_business_structured_data.dart',
+    ).readAsStringSync();
 
-    for (final source in [generator, indexSync]) {
-      expect(source, isNot(contains('MerchantReturnPolicy')));
+    // Since 2026-10-04 the business links its published «Política de
+    // devoluciones» page; the terms stay on that page, not restated here.
+    expect(indexSync, isNot(contains('MerchantReturnPolicy')));
+    expect(business, contains("'merchantReturnLink': returnPolicyUrl"));
+    for (final source in [generator, indexSync, business]) {
       expect(source, isNot(contains('merchantReturnDays')));
       expect(source, isNot(contains('ReturnByMail')));
       expect(source, isNot(contains('ReturnFeesCustomerResponsibility')));
+      expect(source, isNot(contains('returnPolicyCategory')));
     }
   });
 
