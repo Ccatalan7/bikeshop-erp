@@ -64,7 +64,8 @@ con fecha).
 3. **Cada afirmación dice de dónde sale**, con una etiqueta al final:
    - `[GSC]` Google Search Central (documentación y ayuda de Search Console),
    - `[MC]` ayuda de Google Merchant Center, `[GA]` GA4, `[WD]` web.dev,
-     `[FL]` documentación de Flutter, `[SO]` schema.org,
+     `[FL]` documentación de Flutter, `[SO]` schema.org, `[Ref]` medición en vivo
+     de tiendas de referencia,
    - `[Repo]` contrato, código o documento del repositorio (la frase nombra cuál),
    - `[Prod]` lectura de producción con `scripts/db/query.sh` o de
      `https://vinabike.cl` (con fecha),

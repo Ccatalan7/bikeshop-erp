@@ -4,6 +4,17 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-04 — ingesta — el dueño pidió aplicar «absolutamente toda la
+  configuración de SEO» de los referentes. Se midió en vivo (portada, categoría,
+  ficha, robots, sitemaps) a Oxford Store, Better Bike, Cycling Store, Express
+  Bike, RudolfBike, ExtremeZone, Bike Center, Sparta, Canyon, Specialized y
+  Commencal. Nace [seo-de-referentes](paginas/seo-de-referentes.md) con la
+  comparación y diez brechas en orden de impacto, la ficha
+  [referentes](fuentes/referentes.md) y la etiqueta `[Ref]`. Corrección en el
+  camino: nuestro HTML sí trae la descripción del producto, pero en
+  `<noscript>`, que Google descarta; no son 13 palabras para un rastreador sin
+  JavaScript sino ~100. Ingesta de la guía de reseñas de Google (2026-09-08).
+
 - 2026-10-04 — consulta archivada — el dueño fijó el objetivo (tienda premium,
   moderna, segura y bien conectada; venta, correos y creación de cuenta
   impecables) y se revisó el flujo de venta en producción: correos del pedido

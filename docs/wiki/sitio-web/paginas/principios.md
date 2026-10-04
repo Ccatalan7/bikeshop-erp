@@ -14,7 +14,12 @@ revisado: 2026-10-04
 «El objetivo principal de todo esto es tener una página web premium, que cautive
 al usuario, con UI moderna, segura y con APIs de calidad y bien conectadas.
 También todo el flujo de venta con notificaciones vía email y creación de usuario
-tienen que estar funcionando de forma impecable» `[Dueño]`. Cada cambio del sitio
+tienen que estar funcionando de forma impecable» `[Dueño]`. Y en el mismo día:
+«lo otro súper importante es el SEO: absolutamente toda la configuración de SEO
+que ocupan sitios web de venta profesionales, u otros referentes de venta de
+bicicletas, nosotros debemos aplicar lo mismo. Queremos llegar a público, siendo
+visibles de forma óptima en internet» `[Dueño]`. La vara del SEO es lo que hacen
+los referentes, medido en vivo ([seo-de-referentes](seo-de-referentes.md)). Cada cambio del sitio
 se juzga contra eso: si no acerca a una tienda premium y a una venta que funciona
 sin fallas (pedido, pago, correo, cuenta), no es prioridad.
 

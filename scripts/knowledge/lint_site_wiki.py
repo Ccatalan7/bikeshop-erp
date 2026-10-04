@@ -10,7 +10,7 @@ Checks, without network:
   - every `fuentes` id names a card in fuentes/;
   - every `archivos` path exists in the repository;
   - every inline evidence tag is a known one ([GSC], [MC], [GA], [WD], [FL],
-    [SO], [Repo…], [Prod…], [Consola…], [Dueño…]);
+    [SO], [Ref], [Repo…], [Prod…], [Consola…], [Dueño…]);
   - every page has an «En el código y la base» section (warning).
 
 With `--db production` (or `local`) it also checks, read-only through
@@ -35,7 +35,7 @@ PAGE_FIELDS = ('titulo', 'resumen', 'fuentes', 'archivos', 'tablas', 'revisado')
 SOURCE_FIELDS = ('titulo', 'resumen', 'tipo', 'revisado')
 LINK = re.compile(r'\]\(([^)#\s]+)(?:#[^)]*)?\)')
 TAG = re.compile(r'`\[([A-Za-zñ]+)(?:[ :][^\]`]*)?\]`')
-KNOWN_TAGS = {'GSC', 'MC', 'GA', 'WD', 'FL', 'SO', 'Repo', 'Prod', 'Consola', 'Dueño'}
+KNOWN_TAGS = {'GSC', 'MC', 'GA', 'WD', 'FL', 'SO', 'Ref', 'Repo', 'Prod', 'Consola', 'Dueño'}
 
 
 def front_matter(path):

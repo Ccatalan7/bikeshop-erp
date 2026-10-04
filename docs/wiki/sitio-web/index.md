@@ -38,6 +38,9 @@ qué pide Google y el oficio, qué está en vivo y qué falta. Cómo se mantiene
 
 ## Google y rendimiento
 
+- [SEO de los referentes y lo que nos falta](paginas/seo-de-referentes.md) —
+  medición en vivo de Oxford Store, Better Bike, Cycling Store, Canyon y otros
+  contra vinabike.cl; las brechas en orden de impacto.
 - [SEO técnico](paginas/seo-tecnico.md) — cómo lee Google una tienda Flutter,
   snapshots, canonical, sitemap, centro SEO, cómo leer Search Console.
 - [Datos estructurados (JSON-LD)](paginas/datos-estructurados.md) — qué
@@ -60,7 +63,7 @@ qué pide Google y el oficio, qué está en vivo y qué falta. Cómo se mantiene
 - Externas: [Google Search Central](fuentes/google-search-central.md) ·
   [Merchant Center](fuentes/merchant-center.md) · [web.dev](fuentes/web-dev.md) ·
   [Flutter web](fuentes/flutter-web.md) · [GA4](fuentes/ga4.md) ·
-  [schema.org](fuentes/schema-org.md)
+  [schema.org](fuentes/schema-org.md) · [tiendas de referencia](fuentes/referentes.md)
 - Internas: [contratos del repositorio](fuentes/repositorio.md) ·
   [consolas de Google](fuentes/consolas-google.md)
 - Wiki hermano: [compatibilidad de partes](../compatibilidad/index.md) (fichas

@@ -34,8 +34,15 @@ Se actualiza cada vez que algo cambia de estado; cada línea con su fecha.
 
 ## Lo puede hacer un agente
 
+El plan de SEO completo, medido contra los referentes y ordenado por impacto, está
+en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabajo.
+
 | Desde | Qué | Página |
 |---|---|---|
+| 2026-10-04 | **Contenido real y visible en el HTML** de fichas, categorías y portada (hoy en `<noscript>`, ~100–150 palabras contra 700–2.500 de los referentes) | [seo-de-referentes](seo-de-referentes.md) |
+| 2026-10-04 | Ficha técnica como `additionalProperty` y `gtin` en el JSON-LD | [seo-de-referentes](seo-de-referentes.md) |
+| 2026-10-04 | Textos de presentación de las 11 categorías visibles | [seo-de-referentes](seo-de-referentes.md) |
+| 2026-10-04 | Artículos/guías en el editor (capacidad nueva) y páginas de aterrizaje de filtros | [seo-de-referentes](seo-de-referentes.md) |
 | 2026-10-04 | Ver en vivo los correos de pago, preparación, retiro, envío y entrega: ningún pedido real los ha disparado (la última venta web pagada es del 3-may) | [checkout](checkout-y-pedidos.md) |
 | 2026-10-04 | Avisar al taller por correo o WhatsApp cuando entra un pedido web (hoy sólo el aviso dentro del ERP) | [checkout](checkout-y-pedidos.md) |
 | 2026-10-03 | JSON-LD: `description` en la ficha; envío (`hasShippingService`, desde los tramos reales) y devoluciones (`hasMerchantReturnPolicy`) declarados una vez para todo el negocio | [datos-estructurados](datos-estructurados.md) |

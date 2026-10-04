@@ -16,7 +16,7 @@
   "evidence": [
     {
       "path": "scripts/knowledge/lint_site_wiki.py",
-      "sha256": "a88f6ddc8762417d2e52af3e31d817bad4dbc97f38d5ed5db5ec7db6ba7bf5e5"
+      "sha256": "98e103c1ee180cfac84a553aa131603e2c89801b092d9d740dc1b70d7d615b6f"
     }
   ]
 }
