@@ -36,3 +36,8 @@ node tool/storefront_html_prototype/measure.mjs "http://localhost:4325/productos
 Celular lento (1,6 Mbps, 150 ms, CPU ×4, 412×823), perfil nuevo por carga,
 mediana. Con la URL de vinabike.cl mide la tienda actual: «lista» es cuando
 Flutter retira la página instantánea. Resultados del 2026-10-04 en el plan.
+
+Una captura de página completa (`fullPage`) no desplaza la página, así que las
+fotos con `loading="lazy"` (relacionados, miniaturas) salen como cuadros
+vacíos. Antes de capturar hay que recorrer la página con `scrollTo` y esperar
+`img.complete && naturalWidth > 0`. La primera captura del 2026-10-04 salió así.

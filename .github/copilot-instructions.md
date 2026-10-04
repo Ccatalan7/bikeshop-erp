@@ -1468,12 +1468,19 @@ These are safe to remove when disk space is low because they are regenerated fro
 - local dependency installs such as root `node_modules/`, `cloudflare-worker/node_modules/`, `ios/Pods/`, `macos/Pods/`, and mobile scanner Pods when the relevant lockfiles are present
 
 Check for a live canonical Flutter session before removing root `build/` or
-`.dart_tool/`: `pgrep -fl "flutter run|vinabike_erp.app"`. The running app
+`.dart_tool/`: `pgrep -f "flutter run|vinabike_erp.app"` (PIDs only). The running app
 binary lives under `build/macos/Build/Products/Debug/`, and the incremental
 compiler holds `.dart_tool/package_config.json` and its dill cache, so deleting
 either kills a session another agent or the owner may be mid-round on. Report
 the live session and skip those two targets instead — they are only safe on an
 idle checkout.
+
+Never add `-l` to that check (corrected 2026-10-04). The canonical session's
+`flutter run` and its `screen` wrapper carry the Supabase key as a
+`--dart-define` in their arguments, so `pgrep -fl` prints it into the
+transcript; it happened once while following this paragraph. `pgrep -fl
+vinabike_erp`, which only matches the app binaries, is still how to tell the
+Debug and installed apps apart.
 
 Do **not** use broad recursive cleanup such as deleting every folder named `build` anywhere under the repo. Some vendored or tracked dependency trees may legitimately contain a directory named `build`. Prefer explicit known generated paths, and check `git status --short` after cleanup. If tracked files were removed by mistake, restore only those files.
 
