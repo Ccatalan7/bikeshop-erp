@@ -741,6 +741,21 @@ totales (30/12 en `181000`). Se probó con una primera versión de
 `20261001200000` que agregaba dos disparadores; el dueño la corrigió y esa
 versión no se desplegó.
 
+## Borrar un cliente borra sus bicis y sus trabajos (2026-10-03)
+
+`DELETE FROM customers` no se detiene ante la actividad del cliente: las
+llaves foráneas **borran en cascada** `bikes`, `mechanic_jobs`, `vehicles`,
+`customer_addresses` y la fidelización, y **dejan en NULL** el cliente de
+`sales_invoices`, `orders`, `online_orders`, `smart_tasks` y
+`whatsapp_conversation_bindings`. La lista de clientes antigua ofrecía
+«Eliminar» en cada fila con una confirmación, así que un clic podía llevarse
+las bicis y los trabajos de un cliente y dejar sus facturas sin dueño. Desde
+este día la app sólo ofrece eliminar en la página del cliente y sólo si no
+tiene bicis, trabajos ni facturas, y `CustomerService.deleteCustomer` vuelve
+a comprobarlo en la base antes de borrar. **La base todavía no lo impide:** un
+`DELETE` por SQL o desde otro camino sigue en cascada. Antes de borrar un
+cliente a mano, cuenta sus filas en esas tablas filtrando `tenant_id`.
+
 ## JSONB backup redaction preserves structure and derived metadata
 
 **2026-08-09 — supplier historical-backup gate.** Removing sensitive keys

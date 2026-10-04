@@ -10,21 +10,21 @@
     "android",
     "web"
   ],
-  "title": "La página del cliente, rediseñada",
-  "summary": "Cada cliente abre con sus datos a la vista y editables ahí mismo, lo que pide atención arriba (su bici en el taller, lo que debe) y sus trabajos, facturas, mensajes y bicis en la misma página.",
+  "title": "La lista y la página de clientes, rediseñadas",
+  "summary": "La lista muestra primero a los clientes que vienen, con su bici, su trabajo abierto y lo que deben; cada cliente abre con sus datos a la vista y editables, y «Eliminar» sólo aparece en quien no tiene bicis, trabajos ni facturas.",
   "items": [
-    "La página de cada cliente abre en «Datos»: todo lo suyo a la vista, se completa ahí mismo y se guarda sólo lo que cambiaste.",
-    "Arriba avisa si tiene una bici en el taller o algo por pagar, con «Abrir trabajo» y «Registrar pago»; en «Actividad» cada trabajo trae su factura.",
-    "Sus bicis abren su propia página, igual que desde el buscador rápido y desde el trabajo; en escritorio la página usa todo el ancho."
+    "La lista abre en los clientes que vienen: su bici, su trabajo abierto, su última visita y lo pagado; arriba, cuántos están en el taller y cuánto se debe.",
+    "«Por cobrar» muestra lo que debe cada cliente, en cuántas facturas y desde cuándo, y también las facturas sin cliente, para que el total cuadre.",
+    "Cada cliente abre en «Datos», editables ahí mismo, con aviso si tiene una bici en el taller o algo por pagar; sus bicis abren su propia página."
   ],
   "evidence": [
     {
       "path": "lib/modules/bikeshop/pages/client_logbook_page.dart",
-      "sha256": "81eb62317942863d80ea26885f906638caee1474c9f797f45af5eda829fccd29"
+      "sha256": "c9b1772d6bfeda5b980807cefca7edf0a8c099823c52be3065f255e0383fa182"
     },
     {
       "path": "lib/modules/crm/services/customer_service.dart",
-      "sha256": "8548fb508b30decb08b2b7a279f5d89152e0a04942c36cf71f5b8a61b3db29cf"
+      "sha256": "8cea44644c753c9cf2dc7edc01915ff447548e28a2ad059c0191b18a267546ee"
     },
     {
       "path": "lib/modules/crm/services/client_data_draft.dart",
@@ -32,7 +32,7 @@
     },
     {
       "path": "lib/modules/crm/widgets/client_data_sheet.dart",
-      "sha256": "9553f348bef81fc6ed09deeb38cd65ad9e3a403b55e3e7815b82732f96cf309c"
+      "sha256": "ba2a1d9bc4a4c57f24fa00b6de431de2ad851c16e50497a2c8d56beb09e62c2b"
     },
     {
       "path": "lib/modules/bikeshop/services/bike_visit_history.dart",
@@ -65,6 +65,18 @@
     {
       "path": "lib/modules/bikeshop/widgets/client_logbook_responsive_frame.dart",
       "sha256": "1782c5bd43064d6105c982a01b3fb1d71031c4a2349cabc3be664553b87dd780"
+    },
+    {
+      "path": "lib/modules/crm/pages/customer_list_page.dart",
+      "sha256": "55177c38c04b88e3e8d7e2e2dbe468bb8a32c8b6b345e3ea0bccf336b9d933a4"
+    },
+    {
+      "path": "lib/modules/crm/services/customer_directory.dart",
+      "sha256": "256b7051dcc3ca5a79473737fc2d5ac34f959bdbf1a96aeb9ba4596187096fd8"
+    },
+    {
+      "path": "lib/modules/sales/services/sales_service.dart",
+      "sha256": "fe89c16fd5f6e991abbd30c9780d71a3892aca3a06d219d56c7002ec2e1321c4"
     }
   ]
 }

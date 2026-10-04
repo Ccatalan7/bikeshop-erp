@@ -82,6 +82,8 @@ class SalesService extends ChangeNotifier {
   final List<Payment> _payments = [];
 
   bool _isLoadingInvoices = false;
+  Future<void>? _invoicesLoad;
+  Future<void>? _invoicesRefresh;
   bool _isLoadingPayments = false;
   String? _invoiceError;
   String? _paymentError;
@@ -260,18 +262,36 @@ class SalesService extends ChangeNotifier {
     _ensureRealtimeSubscriptions();
   }
 
-  Future<void> loadInvoices({bool forceRefresh = false}) async {
+  /// Lee las facturas. Si ya hay una lectura en curso, devuelve esa misma:
+  /// quien espera recibe el resultado leído (o `invoiceError`), no una caché
+  /// vacía (lista de clientes, 2026-10-03).
+  Future<void> loadInvoices({bool forceRefresh = false}) {
     // Return cached data if valid
     if (!forceRefresh &&
         _isCacheValid(_invoicesCacheTime) &&
         _invoices.isNotEmpty) {
       debugPrint(
           '📦 [SalesService] Using cached invoices (${_invoices.length} items)');
-      return;
+      return Future.value();
     }
 
-    if (_isLoadingInvoices) return;
+    if (_invoicesLoad case final running?) {
+      if (!forceRefresh) return running;
+      // Un refresco pedido después de un cambio no se queda con una lectura
+      // que empezó antes: lee de nuevo cuando ésa termina.
+      return _invoicesRefresh ??= running.then((_) {
+        _invoicesRefresh = null;
+        return loadInvoices(forceRefresh: true);
+      });
+    }
+    final load = _readInvoices();
+    _invoicesLoad = load;
+    return load.whenComplete(() {
+      if (identical(_invoicesLoad, load)) _invoicesLoad = null;
+    });
+  }
 
+  Future<void> _readInvoices() async {
     _isLoadingInvoices = true;
     _invoiceError = null;
     notifyListeners();
@@ -1028,29 +1048,24 @@ class SalesService extends ChangeNotifier {
       return sortCustomerInvoices(_invoices);
     }
 
-    try {
-      final tenantId = await _tenantService.getTenantId();
-      if (tenantId == null) {
-        return [];
-      }
-
-      final response = await Supabase.instance.client
-          .from(_invoicesCollection)
-          .select()
-          .eq('tenant_id', tenantId)
-          .eq('customer_id', customerId)
-          .order('date', ascending: false);
-
-      if ((response as List).isEmpty) {
-        return [];
-      }
-
-      return response.map((data) => Invoice.fromJson(data)).toList()
-        ..sort((a, b) => b.date.compareTo(a.date));
-    } catch (e) {
-      debugPrint('SalesService.getInvoicesForCustomer error: $e');
-      return [];
+    // Una lectura fallida se lanza: la página del cliente la dice como
+    // error con «Reintentar», nunca como «no tiene facturas» ni «no debe».
+    final tenantId = await _tenantService.getTenantId();
+    if (tenantId == null || tenantId.isEmpty) {
+      throw StateError('No se pudo resolver la empresa activa.');
     }
+
+    final response = await Supabase.instance.client
+        .from(_invoicesCollection)
+        .select()
+        .eq('tenant_id', tenantId)
+        .eq('customer_id', customerId)
+        .order('date', ascending: false);
+
+    return (response as List)
+        .map((data) => Invoice.fromJson(Map<String, dynamic>.from(data as Map)))
+        .toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
   }
 
   /// Get pending invoices for a specific customer

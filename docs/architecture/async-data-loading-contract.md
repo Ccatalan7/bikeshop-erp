@@ -473,6 +473,18 @@ desfase viaja bien (`Uri` lo codifica como `%2B`). Comprobado el 2026-10-03 con
 tres guardados reales sobre el cliente de prueba «Test Taller» (agregar, quitar
 y uno rechazado por un cambio ajeno), restaurado después.
 
+### Un `if (_isLoading) return;` le miente a quien espera (2026-10-03)
+
+`SalesService.loadInvoices` volvía de inmediato si otra pantalla ya estaba
+leyendo facturas. Quien hacía `await` recibía la caché todavía vacía y sin
+`invoiceError`, así que la lista de clientes nueva habría mostrado «nadie debe
+nada» con $0 por cobrar. Lo encontró la revisión de Codex leyendo el código,
+no una prueba. Ahora la lectura en curso se guarda y se devuelve la misma
+(`_invoicesLoad`): quien espera recibe el resultado o el error de esa lectura
+(regla 11). La misma salida temprana sigue en `SalesService.loadPayments`,
+`PaymentMethodService` y `PaymentTerminalProfileService` (2026-10-03): quien
+los consuma con `await` tiene que contar con que pueden volver antes de leer.
+
 ## 9. Regresiones mínimas por consumidor
 
 1. Respuesta A empieza, B empieza, A termina última: sólo B publica.

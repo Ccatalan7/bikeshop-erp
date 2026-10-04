@@ -397,6 +397,11 @@ filas que un `ListView` mantiene en caché fuera de pantalla; `find`, `tap` y
 fila y `find` dice «sin coincidencias», la fila está arriba o abajo del
 viewport: desplaza **sobre la lista** (`scroll X Y N`, positivo sube, negativo
 baja) y vuelve a buscar.
+**Precisión 2026-10-03:** `find` también puede devolver una fila de esa caché
+(«Aaron Ayala», arriba del encabezado fijo de la lista de clientes, con sus
+coordenadas) y aun así `tap --label` responde «sin coincidencias: nada que
+controlar». Que `find` la encuentre no prueba que esté a la vista: compáralo
+con el `shot` y toca una fila que se vea.
 
 ### El selector de archivos es una ventana del sistema (2026-08-01)
 

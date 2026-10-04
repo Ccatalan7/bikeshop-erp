@@ -18,6 +18,7 @@ import '../../../shared/widgets/vb_edit_dock.dart';
 import '../../../shared/widgets/vb_segmented.dart' show VbDensity;
 import '../../../shared/widgets/vb_sub_tabs.dart';
 import '../../crm/services/client_data_draft.dart';
+import '../../crm/services/customer_directory.dart' show invoiceIsOwed;
 import '../../crm/services/customer_service.dart';
 import '../../crm/widgets/client_data_sheet.dart';
 import '../../messaging/models/conversation.dart';
@@ -54,12 +55,6 @@ ClientPageTab clientPageTabFor(String? tab) =>
 
 final NumberFormat _money =
     NumberFormat.currency(symbol: r'$', decimalDigits: 0);
-
-/// Una factura que todavía se debe: emitida, no anulada y con saldo.
-bool invoiceIsOwed(Invoice invoice) =>
-    invoice.status != InvoiceStatus.draft &&
-    invoice.status != InvoiceStatus.cancelled &&
-    invoice.balance > 0.5;
 
 /// La página de un cliente (`/clientes/:id`), rediseñada el 2026-10-03 a
 /// partir del lienzo que aprobó el dueño («sigue con la original con
@@ -109,6 +104,11 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
   bool _visitsFailed = false;
   List<Invoice>? _invoices;
   bool _invoicesFailed = false;
+
+  /// La carga a la que pertenecen `_visits` y `_invoices`: mientras una
+  /// recarga no termina, las listas son las de antes y no deciden nada.
+  int _visitsReadFor = -1;
+  int _invoicesReadFor = -1;
   List<Conversation>? _chats;
   bool _chatsFailed = false;
   Conversation? _selectedChat;
@@ -252,7 +252,10 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
         ownerName: record.name,
       );
       if (!mounted || generation != _generation) return;
-      setState(() => _visits = visits);
+      setState(() {
+        _visits = visits;
+        _visitsReadFor = generation;
+      });
     } catch (error) {
       debugPrint('Client activity load failed: $error');
       if (!mounted || generation != _generation) return;
@@ -272,6 +275,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
       if (!mounted || generation != _generation) return;
       setState(() {
         _invoices = [...invoices]..sort((a, b) => b.date.compareTo(a.date));
+        _invoicesReadFor = generation;
       });
     } catch (error) {
       debugPrint('Client invoices load failed: $error');
@@ -378,6 +382,67 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
   }
 
   void _showTab(ClientPageTab tab) => setState(() => _tab = tab);
+
+  /// Sólo se ofrece eliminar a un cliente sin nada (y el servicio lo vuelve
+  /// a revisar): en la base, eliminarlo borraría sus bicis y trabajos.
+  bool get _canDelete =>
+      _draft == null &&
+      _bikes.isEmpty &&
+      _visitsReadFor == _generation &&
+      _invoicesReadFor == _generation &&
+      _visits != null &&
+      _visits!.isEmpty &&
+      !_visitsFailed &&
+      _invoices != null &&
+      _invoices!.isEmpty &&
+      !_invoicesFailed;
+
+  Future<void> _deleteCustomer() async {
+    final record = _record;
+    if (record == null) return;
+    final customers = context.read<CustomerService>();
+    final messenger = ScaffoldMessenger.of(context);
+    final name = record.name.isEmpty ? 'este cliente' : record.name;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('¿Eliminar a $name?'),
+        content: const Text(
+          'No tiene bicis, trabajos ni facturas. Se borran sus datos y no se '
+          'puede deshacer.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Theme.of(context).colorScheme.onError,
+            ),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await customers.deleteCustomer(record.id);
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text('$name se eliminó.')));
+      ReturnNavigation.close(context, fallbackRoute: _fallbackRoute);
+    } on CustomerHasActivityException catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text(error.toString())));
+      _reloadAfterReturn();
+    } catch (error) {
+      debugPrint('Customer delete failed: $error');
+      messenger.showSnackBar(const SnackBar(
+        content: Text('No se pudo eliminar. Revisa la conexión y reintenta.'),
+      ));
+    }
+  }
 
   void _openChat(Conversation chat) {
     setState(() {
@@ -1421,6 +1486,7 @@ class _ClientLogbookPageState extends State<ClientLogbookPage> {
           onRegionChanged: _onRegionChanged,
           onUndo: _undo,
           onManageAccess: canManageUsers ? _manageAccess : null,
+          onDelete: _canDelete ? _deleteCustomer : null,
         ),
       ClientPageTab.activity => _buildActivity(context, width: width),
       ClientPageTab.invoices => _buildInvoices(context, width: width),

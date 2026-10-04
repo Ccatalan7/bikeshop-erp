@@ -28,6 +28,7 @@ class ClientDataSheet extends StatelessWidget {
     required this.onRegionChanged,
     required this.onUndo,
     this.onManageAccess,
+    this.onDelete,
   });
 
   final ClientRecord record;
@@ -49,6 +50,9 @@ class ClientDataSheet extends StatelessWidget {
 
   /// «Gestionar acceso web», para quien puede administrar usuarios.
   final VoidCallback? onManageAccess;
+
+  /// «Eliminar cliente»: sólo para uno sin bicis, trabajos ni facturas.
+  final VoidCallback? onDelete;
 
   bool get _editing => draft != null;
 
@@ -176,6 +180,19 @@ class ClientDataSheet extends StatelessWidget {
             const _Field.fixed('Origen', 'Importado de Zoho'),
           _Field.fixed('Estado', record.isActive ? 'Activo' : 'Inactivo'),
         ],
+        action: onDelete == null || _editing
+            ? null
+            : Builder(
+                builder: (context) => TextButton.icon(
+                  onPressed: busy ? null : onDelete,
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                  label: const Text('Eliminar cliente'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.error,
+                    minimumSize: const Size(48, 44),
+                  ),
+                ),
+              ),
       ),
     ];
   }

@@ -132,6 +132,35 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('deleting is offered only when the page allows it',
+      (tester) async {
+    tester.view.physicalSize = const Size(1200, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    var deleted = 0;
+    Widget sheet({VoidCallback? onDelete}) => _app(ClientDataSheet(
+          record: _ivan(),
+          draft: null,
+          controllers: const {},
+          focusNodes: const {},
+          problems: const {},
+          busy: false,
+          onAdd: (_) {},
+          onChanged: (_, __) {},
+          onRegionChanged: (_) {},
+          onUndo: (_) {},
+          onDelete: onDelete,
+        ));
+
+    await tester.pumpWidget(sheet());
+    expect(find.text('Eliminar cliente'), findsNothing);
+
+    await tester.pumpWidget(sheet(onDelete: () => deleted++));
+    await tester.tap(find.text('Eliminar cliente'));
+    expect(deleted, 1);
+  });
+
   group('a visit card keeps a proposal apart from a bill', () {
     BikeVisit visit(MechanicJob job) => BikeVisit(
           job: job,

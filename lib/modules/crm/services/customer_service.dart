@@ -416,18 +416,52 @@ class CustomerService extends ChangeNotifier {
     return tenantId;
   }
 
+  /// Las tablas cuyo vínculo con un cliente la base borra o deja huérfano
+  /// al eliminarlo (2026-10-03: bicis y trabajos se borran en cascada, las
+  /// facturas y pedidos quedan sin cliente).
+  static const List<String> _customerActivityTables = [
+    'bikes',
+    'mechanic_jobs',
+    'sales_invoices',
+    'online_orders',
+    'orders',
+    'sales_orders',
+    'work_orders',
+    'vehicles',
+  ];
+
+  /// Elimina un cliente que no tiene nada: ni bicis, ni trabajos, ni
+  /// facturas, ni pedidos. Si tiene algo, lanza [CustomerHasActivityException]
+  /// y no borra: eliminarlo borraría sus bicis y trabajos y dejaría sus
+  /// facturas sin cliente (así quedaron 3 facturas por cobrar sin cliente).
   Future<void> deleteCustomer(String id) async {
-    try {
-      if (id.isEmpty) {
-        throw Exception('ID de cliente inválido');
-      }
-      await _db.delete('customers', id);
-      invalidateCustomersCache();
-      notifyListeners();
-    } catch (e) {
-      if (kDebugMode) print('Error deleting customer: $e');
-      rethrow;
+    if (id.isEmpty) {
+      throw Exception('ID de cliente inválido');
     }
+    final tenantId = await _requireTenantId();
+    final checks = await Future.wait([
+      for (final table in _customerActivityTables)
+        _db.supabase
+            .from(table)
+            .select('id')
+            .eq('tenant_id', tenantId)
+            .eq('customer_id', id)
+            .limit(1),
+    ]);
+    if (checks.any((rows) => rows.isNotEmpty)) {
+      throw const CustomerHasActivityException();
+    }
+    final deleted = await _db.supabase
+        .from('customers')
+        .delete()
+        .eq('id', id)
+        .eq('tenant_id', tenantId)
+        .select('id');
+    if (deleted.isEmpty) {
+      throw Exception('El cliente ya no existe en este taller.');
+    }
+    invalidateCustomersCache();
+    notifyListeners();
   }
 
   // Loyalty operations
@@ -703,4 +737,13 @@ class CustomerService extends ChangeNotifier {
     _customersChannel?.unsubscribe();
     super.dispose();
   }
+}
+
+/// Un cliente con bicis, trabajos, facturas o pedidos no se elimina.
+class CustomerHasActivityException implements Exception {
+  const CustomerHasActivityException();
+
+  @override
+  String toString() =>
+      'Este cliente tiene bicis, trabajos, facturas o pedidos: no se elimina.';
 }
