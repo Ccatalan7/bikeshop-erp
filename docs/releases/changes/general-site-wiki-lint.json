@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "general",
+  "id": "general-site-wiki-lint",
+  "scope": "internal",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "scripts/knowledge/lint_site_wiki.py",
+      "sha256": "a88f6ddc8762417d2e52af3e31d817bad4dbc97f38d5ed5db5ec7db6ba7bf5e5"
+    }
+  ]
+}

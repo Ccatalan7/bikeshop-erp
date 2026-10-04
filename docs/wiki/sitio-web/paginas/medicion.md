@@ -1,0 +1,77 @@
+---
+titulo: Medición (GA4, píxel de Meta y consolas)
+resumen: qué eventos manda la tienda a Google Analytics, con qué datos, qué falta del embudo recomendado y cómo leer las consolas
+fuentes: [ga4, consolas-google, repositorio, web-dev]
+archivos: [lib/public_store/services/ga4_commerce_events.dart, lib/public_store/services/ga4_bridge_web.dart, lib/public_store/services/meta_pixel_service.dart, lib/public_store/widgets/public_store_bootstrap.dart]
+tablas: [website_settings]
+revisado: 2026-10-03
+---
+
+# Medición (GA4, píxel de Meta y consolas)
+
+## Lo esencial
+
+La tienda manda eventos a GA4 (flujo web `G-FR5Q37BW43`, el ID se guarda en
+`seo_ga_id`) a través de `gtag`, desde un solo dueño:
+`lib/public_store/services/ga4_commerce_events.dart` `[Repo]`.
+
+## Eventos que se mandan
+
+| Evento | Cuándo | Parámetros |
+|---|---|---|
+| `view_item` | se abre una ficha | `currency` CLP, `value`, `items` |
+| `add_to_cart` | se agrega al carrito | `currency`, `value` (precio × cantidad), `items` |
+| `begin_checkout` | se entra al checkout | `currency`, `value`, `items` |
+| `purchase` | se confirma un pedido | `transaction_id` (id del pedido: GA4 descarta una segunda compra con el mismo id), `currency`, `value`, `items` |
+| `contact` | clic que saca al cliente para hablar con el local | `method`: `whatsapp`, `phone`, `email` o `directions` (mapa) |
+| `store_ready` | la tienda Flutter dibujó su primer cuadro armada | `value` (segundos), `load_ms`, `load_bucket`: `bueno_hasta_2_5s`, `mejorable_hasta_4s`, `lento_hasta_8s`, `muy_lento_mas_de_8s` (umbrales de LCP) |
+
+`[Repo]` `[WD]`
+
+`store_ready` existe porque el LCP del navegador no sirve en Flutter: el lienzo no
+es candidato y el LCP que reporta es el logo ([rendimiento](rendimiento.md)).
+`load_bucket` está registrado como dimensión personalizada «Tramo de carga» (24-sep)
+`[Consola]`.
+
+## Lo que falta del embudo recomendado
+
+GA4 recomienda `view_item_list`, `select_item`, `remove_from_cart`, `view_cart`,
+`add_shipping_info` y `add_payment_info` además de los que mandamos `[GA]`. Sin
+ellos no se ve qué listado vende ni dónde se abandona el checkout (envío o pago).
+Agregarlos va en el mismo dueño.
+
+## Eventos clave
+
+`purchase` ya es evento clave en GA4; `contact` hay que marcarlo con la estrella
+(no aparecía para marcar el 24-sep: un evento nuevo tarda ~24 h) `[Consola]` `[GA]`.
+
+## Píxel de Meta
+
+El código existe (`meta_pixel_service.dart`: `ViewContent`, `AddToCart`,
+`InitiateCheckout`, `Purchase`) pero **está apagado**: `seo_fb_pixel_id` está vacío
+(2026-10-03) `[Prod]`. Si se activa, no duplicar eventos ni mandar datos
+personales.
+
+## Consolas
+
+Search Console, GA4 y Merchant se leen en el Chrome del dueño con la cuenta de
+Viñabike (`/u/2`); trampas y mediciones archivadas en la
+[ficha de consolas](../fuentes/consolas-google.md).
+
+## Tarea programada
+
+`vinabike-store-ready-review` (8-oct-2026, 10:00 local) lee `store_ready` por
+tramo y recomienda si conviene la tienda HTML ([rendimiento](rendimiento.md)).
+
+## Trampas
+
+- Mandar `purchase` sin `transaction_id` o dos veces con ids distintos para el
+  mismo pedido (infla ventas).
+- Un evento con nombre propio no entra a los informes de comercio de GA4.
+- Medir rendimiento con el LCP del navegador en una página Flutter.
+
+## En el código y la base
+
+- Eventos: `ga4_commerce_events.dart` (y `ga4_bridge_web.dart` que llama a `gtag`).
+- Píxel: `meta_pixel_service.dart`, ID en `seo_fb_pixel_id`; GA en `seo_ga_id`
+  (lo carga `public_store_bootstrap.dart`).

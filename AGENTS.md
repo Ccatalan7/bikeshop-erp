@@ -118,6 +118,14 @@
   the bike sheet, spec keys and engine). Its `README.md` says how to query, ingest
   and lint it (`scripts/knowledge/lint_compat_wiki.py`); what you learn goes back
   into it in the same task.
+- For vinabike.cl and the site editor (storefront, Website Builder, SEO,
+  structured data, checkout, customer portal, Merchant, GA4, performance, the
+  store build), start at `docs/wiki/sitio-web/index.md` (a Karpathy «LLM wiki»:
+  the end-to-end map of owners plus Google/web.dev/Flutter expertise and the
+  dated live state). Its `README.md` says how to query, ingest and lint it
+  (`scripts/knowledge/lint_site_wiki.py`); `test/unit/site_wiki_contract_test.dart`
+  fails when a public route, GA4 event, site admin page or site Edge Function is
+  not in it. What you learn goes back into it in the same task.
 - For bike workshop architecture work, read `BIKE_WORKSHOP_MASTER_SCHEMA.md` first and update it in the same task when behavior/schema/data-flow changes.
 - For an implementation that will ship, author its reviewed release change in
   `docs/releases/changes/` alongside the verified source. Follow

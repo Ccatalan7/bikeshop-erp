@@ -20,6 +20,11 @@ Track the progressive architecture phases and their verified completion in
 Responsive ownership and phone authoring are tracked in
 [`WEBSITE_BUILDER_RESPONSIVE_AUTHORING_MASTER_PLAN_2026-08-03.md`](../development/WEBSITE_BUILDER_RESPONSIVE_AUTHORING_MASTER_PLAN_2026-08-03.md).
 
+The end-to-end map of the site (owners, store build, Google, Merchant,
+analytics, performance) and its dated live state live in the site wiki,
+[`docs/wiki/sitio-web/`](../wiki/sitio-web/index.md); this contract still
+wins where they disagree.
+
 The editor is not a mockup layered over a separate website. It is the CMS for
 the real website. A result is complete only when the saved editor state fully
 explains the editor canvas, Preview, and the published storefront.

@@ -176,6 +176,7 @@ para satisfacer una coincidencia de texto.
 | Colaboración entre agentes | `docs/development/CODEX_CLAUDE_COLLABORATION.md` |
 | Identidad de producto, duplicados, matching de catálogo | `docs/architecture/product-identity-matching-contract.md` |
 | Mecánica de bicicleta y compatibilidad de partes (oficio, normas, mapa al sistema) | `docs/wiki/compatibilidad/` (índice, páginas por tema, fuentes y `log.md`; método en su `README.md`) |
+| Sitio público y editor del sitio: mapa de dueños, SEO, datos estructurados, Merchant, GA4, rendimiento, estado y pendientes | `docs/wiki/sitio-web/` (índice, páginas por tema, fuentes y `log.md`; método en su `README.md`) |
 | Evidencia de un modelo concreto y sus límites (afirmaciones K) | `docs/architecture/bicycle-compatibility-knowledge.md` |
 | Arquitectura de fichas, prerrequisitos y cobertura de familias | `docs/architecture/product-technical-specifications-contract.md` y `docs/architecture/product-spec-family-matrix.md` |
 
