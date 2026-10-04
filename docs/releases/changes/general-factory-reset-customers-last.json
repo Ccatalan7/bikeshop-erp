@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "general",
+  "id": "general-factory-reset-customers-last",
+  "scope": "internal",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "scripts/factory_reset.sql",
+      "sha256": "5f97b8df403ee4f98beeeb50ccf7d6c8a9c79589a8f058dd814e71cf3263102f"
+    }
+  ]
+}

@@ -24,7 +24,7 @@
     },
     {
       "path": "lib/modules/crm/services/customer_service.dart",
-      "sha256": "8cea44644c753c9cf2dc7edc01915ff447548e28a2ad059c0191b18a267546ee"
+      "sha256": "854fd7e854114e4f8b7fcb380b5c91b144694144ba4e78d18761845b90076638"
     },
     {
       "path": "lib/modules/crm/services/client_data_draft.dart",

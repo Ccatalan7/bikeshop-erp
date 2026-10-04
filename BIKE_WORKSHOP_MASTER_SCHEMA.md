@@ -9110,3 +9110,20 @@ conversión, sin presumir posiciones sobrantes ni convertibilidad del cuadro.
 Fuentes, adjudicación de Claude y 82 regresiones del consumidor:
 [consumer-scope-integration-2026-09-07.md](docs/development/product-specs-research-2026-09-05/consumer-scope-integration-2026-09-07.md).
 Persisten los gates globales de saneamiento, publicación de metadatos y llenado.
+
+## Borrar un cliente no se lleva sus bicis ni sus trabajos (2026-10-03)
+
+`bikes.customer_id` y `mechanic_jobs.customer_id` borran en cascada: eliminar
+el cliente borraba su historial del taller entero, y la lista de clientes
+antigua ofrecía «Eliminar» en cada fila. Desde la migración `20261003220000`
+la base lo impide con `trg_guard_customer_delete_activity` (BEFORE DELETE en
+`customers`): si el cliente tiene una bici, un trabajo (también uno con
+`deleted_at`), un vehículo, una factura o un pedido, el borrado falla con
+`customer_has_activity` (23503). Revisar y borrar en dos consultas dejaba una
+ventana en la que una bici recién agregada se iba en la cascada; el disparador
+corre con la fila del cliente ya bloqueada y no la tiene. Borrar una empresa
+sigue en cascada (`pg_trigger_depth() > 1`). En la app, «Eliminar cliente»
+sólo aparece en la página de un cliente sin nada (`canonical-ui-surfaces.md`,
+«Client page»). Contrato y prueba de la carrera:
+`docs/development/AGENT_DATABASE_CONTRACT.md` («Borrar un cliente borra sus
+bicis y sus trabajos»); pgTAP `supabase/tests/customer_delete_activity_guard.sql`.

@@ -751,10 +751,22 @@ llaves foráneas **borran en cascada** `bikes`, `mechanic_jobs`, `vehicles`,
 «Eliminar» en cada fila con una confirmación, así que un clic podía llevarse
 las bicis y los trabajos de un cliente y dejar sus facturas sin dueño. Desde
 este día la app sólo ofrece eliminar en la página del cliente y sólo si no
-tiene bicis, trabajos ni facturas, y `CustomerService.deleteCustomer` vuelve
-a comprobarlo en la base antes de borrar. **La base todavía no lo impide:** un
-`DELETE` por SQL o desde otro camino sigue en cascada. Antes de borrar un
-cliente a mano, cuenta sus filas en esas tablas filtrando `tenant_id`.
+tiene bicis, trabajos ni facturas.
+
+**Desde `20261003220000` la base lo impide** (`trg_guard_customer_delete_activity`,
+BEFORE DELETE): borrar un cliente con bicis, trabajos —también uno con
+`deleted_at`—, vehículos, facturas o pedidos falla con `customer_has_activity`
+(SQLSTATE 23503, PostgREST 409; el detalle dice qué tiene), venga de la app,
+de SQL o de otra función. Revisar primero y borrar después, en dos consultas,
+**no** bastaba: la primera versión de la app lo hacía así y Codex mostró la
+ventana; se reprodujo en local con dos sesiones (una bici confirmada 50 ms
+antes del borrado se fue en la cascada) y con la guardia el borrado espera a la
+bici, la ve y se niega. Funciona porque Postgres bloquea la fila antes de un
+BEFORE DELETE y la llave de la fila hija pide `FOR KEY SHARE` sobre ella. El
+borrado en cascada desde otra tabla (`tenants`) pasa por
+`pg_trigger_depth() > 1`. `sales_orders` y `work_orders` no tienen acción y su
+propia llave ya devuelve 23503. En local `sales_orders` sí borra en cascada y
+`work_orders` no existe: el `--verify` de la llave sólo se cumple en producción.
 
 ## JSONB backup redaction preserves structure and derived metadata
 

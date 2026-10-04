@@ -88,8 +88,8 @@ BEGIN
   DELETE FROM loyalty WHERE tenant_id = v_tenant_id;
   RAISE NOTICE '   ✅ Deleted loyalty';
   
-  DELETE FROM customers WHERE tenant_id = v_tenant_id;
-  RAISE NOTICE '   ✅ Deleted customers';
+  -- customers se borra al final (sección 12b): la base rechaza borrar un
+  -- cliente con bicis, trabajos, vehículos, facturas o pedidos (2026-10-03).
   
   DELETE FROM suppliers WHERE tenant_id = v_tenant_id;
   RAISE NOTICE '   ✅ Deleted suppliers';
@@ -329,6 +329,15 @@ BEGIN
   
   DELETE FROM vehicles WHERE tenant_id = v_tenant_id;
   RAISE NOTICE '   ✅ Deleted vehicles';
+
+  -- ================================================================================================
+  -- 12b. CUSTOMERS, después de todo lo que los nombra
+  -- ================================================================================================
+  -- trg_guard_customer_delete_activity (20261003220000) rechaza borrar un
+  -- cliente que todavía tiene bicis, trabajos, vehículos, facturas o
+  -- pedidos; a esta altura ya no queda ninguno.
+  DELETE FROM customers WHERE tenant_id = v_tenant_id;
+  RAISE NOTICE '   ✅ Deleted customers';
 
   -- ================================================================================================
   -- 13. SETTINGS

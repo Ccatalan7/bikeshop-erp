@@ -416,47 +416,29 @@ class CustomerService extends ChangeNotifier {
     return tenantId;
   }
 
-  /// Las tablas cuyo vínculo con un cliente la base borra o deja huérfano
-  /// al eliminarlo (2026-10-03: bicis y trabajos se borran en cascada, las
-  /// facturas y pedidos quedan sin cliente).
-  static const List<String> _customerActivityTables = [
-    'bikes',
-    'mechanic_jobs',
-    'sales_invoices',
-    'online_orders',
-    'orders',
-    'sales_orders',
-    'work_orders',
-    'vehicles',
-  ];
-
   /// Elimina un cliente que no tiene nada: ni bicis, ni trabajos, ni
-  /// facturas, ni pedidos. Si tiene algo, lanza [CustomerHasActivityException]
-  /// y no borra: eliminarlo borraría sus bicis y trabajos y dejaría sus
-  /// facturas sin cliente (así quedaron 3 facturas por cobrar sin cliente).
+  /// facturas, ni pedidos. Lo decide la base, en el mismo borrado: sus
+  /// llaves borrarían en cascada sus bicis y trabajos, y un disparador
+  /// (`trg_guard_customer_delete_activity`, 2026-10-03) lo rechaza con
+  /// SQLSTATE 23503 si tiene algo, también si otro usuario se lo agregó un
+  /// instante antes. Ese rechazo llega como [CustomerHasActivityException].
   Future<void> deleteCustomer(String id) async {
     if (id.isEmpty) {
       throw Exception('ID de cliente inválido');
     }
     final tenantId = await _requireTenantId();
-    final checks = await Future.wait([
-      for (final table in _customerActivityTables)
-        _db.supabase
-            .from(table)
-            .select('id')
-            .eq('tenant_id', tenantId)
-            .eq('customer_id', id)
-            .limit(1),
-    ]);
-    if (checks.any((rows) => rows.isNotEmpty)) {
-      throw const CustomerHasActivityException();
+    final List<Map<String, dynamic>> deleted;
+    try {
+      deleted = await _db.supabase
+          .from('customers')
+          .delete()
+          .eq('id', id)
+          .eq('tenant_id', tenantId)
+          .select('id');
+    } on PostgrestException catch (error) {
+      if (error.code == '23503') throw const CustomerHasActivityException();
+      rethrow;
     }
-    final deleted = await _db.supabase
-        .from('customers')
-        .delete()
-        .eq('id', id)
-        .eq('tenant_id', tenantId)
-        .select('id');
     if (deleted.isEmpty) {
       throw Exception('El cliente ya no existe en este taller.');
     }
