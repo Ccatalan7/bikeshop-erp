@@ -4,7 +4,7 @@ resumen: cómo compra un cliente en vinabike.cl, qué pagos acepta, qué pasa co
 fuentes: [repositorio]
 archivos: [docs/runbooks/ONLINE_ORDER_OPERATIONS.md, docs/user-guides/WEBSITE_ONLINE_SALES_USER_GUIDE.md, lib/public_store/pages/checkout_page.dart, lib/public_store/pages/order_confirmation_page.dart, lib/public_store/providers/cart_provider.dart, lib/public_store/services/public_checkout_capability_service.dart, lib/modules/website/pages/online_orders_page.dart, lib/modules/website/services/mercadopago_service.dart]
 tablas: [online_orders, online_order_items, online_order_inventory_reservations, online_order_access_tokens, online_order_payment_preferences, online_order_events, online_order_official_documents, online_order_corrections, website_settings]
-revisado: 2026-10-03
+revisado: 2026-10-04
 ---
 
 # Carrito, checkout y pedidos online
@@ -49,6 +49,44 @@ tributario» `[Repo]`.
    (`get_public_online_order_by_access_token`); `noindex`. Correo transaccional
    por `send-transactional-order-email` (Resend).
 
+## Correos al cliente
+
+Cada cambio del pedido escribe un evento (`online_order_events`); un disparador
+(`enqueue_transactional_email_from_order_event`) lo convierte en un correo en
+`transactional_email_outbox`, y el worker `send-transactional-order-email` lo
+envía por Resend desde **Ventas Viñabike <ventas@vinabike.cl>**; los eventos de
+entrega vuelven por `resend-transactional-webhook` `[Repo]` `[Prod 2026-10-04]`.
+
+| Evento del pedido | Correo | Asunto |
+|---|---|---|
+| pedido creado | `order_received` | «Recibimos tu pedido …» |
+| pago a `paid` | `payment_confirmed` | «Pago confirmado · …» |
+| `processing` | `processing` | «Estamos preparando tu pedido …» |
+| `ready_for_pickup` | `ready_for_pickup` | «Tu pedido … está listo para retiro» |
+| `shipped` | `shipped` | «Tu pedido … ya fue enviado» (con seguimiento si hay URL) |
+| `delivered` | `delivered` | «Tu pedido … fue entregado» |
+| `cancelled` | `cancelled` | «Actualización de tu pedido …» |
+| reembolso | `refund_completed` | «Reembolso completado · …» |
+
+Estado real (2026-10-04) `[Prod]`: el worker está activo en `send`, corre cada
+minuto y no tiene errores. En producción sólo se han enviado `order_received` (3
+entregados, 1 fallido el 19-jul) y `cancelled` (5 entregados): **ningún pedido real
+llegó a pagarse desde que existe este sistema**, así que los correos de pago,
+preparación, retiro, envío y entrega no se han visto en vivo. El taller no recibe
+correo de un pedido nuevo: tiene el aviso dentro del ERP (`Sitio Web`, badge y
+notificaciones).
+
+## Cuentas de cliente
+
+- Se crean con correo (con confirmación: `mailer_autoconfirm` falso) o con Google;
+  el checkout ofrece crear la cuenta al comprar (casilla) y liga el pedido al
+  cliente si hay sesión `[Repo: checkout_page.dart]`.
+- Los 13 correos de cuenta (confirmación, recuperación, enlace de acceso,
+  invitación…) son plantillas propias del repo (`supabase/templates/`) y en
+  producción coinciden exactamente (`scripts/auth/sync_supabase_auth_email_templates.mjs`,
+  modo de sólo lectura, sin diferencias). Límite: 30 correos por hora, que
+  Supabase sólo permite con servidor de correo propio `[Prod 2026-10-04]`.
+
 ## Estados del pedido
 
 Pendiente → Confirmado → En preparación → Listo para retiro / Despachado →
@@ -64,6 +102,8 @@ se cancela: va por devolución, corrección o nota de crédito y reembolso
   (`20260923200000`) y se probó con un pedido real de $800 que luego se anuló
   `[Repo]`.
 - 72 pedidos y 75 líneas en total (aprox., 2026-10-03) `[Prod]`.
+- **Última venta web pagada: WEB-26-00015, el 2026-05-03.** Después sólo hay
+  pedidos de prueba, todos anulados (2026-10-04) `[Prod]`.
 
 ## Trampas
 

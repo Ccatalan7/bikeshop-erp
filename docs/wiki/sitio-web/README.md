@@ -14,6 +14,10 @@ sitio». Es a la vez el **mapa** (qué archivo, tabla, función o consola es due
 cada cosa) y el **criterio** (qué hace bien un sitio de comercio y qué pide
 Google).
 
+El objetivo del dueño (2026-10-04): una tienda **premium, moderna, segura y
+bien conectada**, con el flujo de venta —pedido, pago, correos y creación de
+cuenta— funcionando de forma impecable ([principios](paginas/principios.md)).
+
 La regla que manda sobre todas: **lo que un agente cambia en el sitio queda
 hecho como lo habría hecho una persona en el editor**, editable ahí sin ningún
 agente; nunca una implementación paralela

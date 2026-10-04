@@ -36,7 +36,9 @@ Se actualiza cada vez que algo cambia de estado; cada línea con su fecha.
 
 | Desde | Qué | Página |
 |---|---|---|
-| 2026-10-03 | JSON-LD de ficha: `description`, `shippingDetails`, `hasMerchantReturnPolicy` | [datos-estructurados](datos-estructurados.md) |
+| 2026-10-04 | Ver en vivo los correos de pago, preparación, retiro, envío y entrega: ningún pedido real los ha disparado (la última venta web pagada es del 3-may) | [checkout](checkout-y-pedidos.md) |
+| 2026-10-04 | Avisar al taller por correo o WhatsApp cuando entra un pedido web (hoy sólo el aviso dentro del ERP) | [checkout](checkout-y-pedidos.md) |
+| 2026-10-03 | JSON-LD: `description` en la ficha; envío (`hasShippingService`, desde los tramos reales) y devoluciones (`hasMerchantReturnPolicy`) declarados una vez para todo el negocio | [datos-estructurados](datos-estructurados.md) |
 | 2026-10-03 | `LocalBusiness` → `BikeStore`, con `geo` y horario | [datos-estructurados](datos-estructurados.md) |
 | 2026-10-03 | `robots.txt`: quitar `Disallow` de `/cuenta/` y `/pedido/` (la cabecera `noindex` ya los saca) | [rutas](rutas-y-navegacion.md) |
 | 2026-10-03 | Eventos GA4 que faltan: `view_item_list`, `select_item`, `remove_from_cart`, `view_cart`, `add_shipping_info`, `add_payment_info` | [medicion](medicion.md) |

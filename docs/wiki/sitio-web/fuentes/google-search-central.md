@@ -21,6 +21,8 @@ hace de verdad. Un blog de SEO que la contradice está equivocado o desactualiza
 | Robots meta y `X-Robots-Tag` | `/search/docs/crawling-indexing/robots-meta-tag` | la cabecera sirve para cualquier respuesta; **una URL bloqueada en robots.txt nunca deja leer su `noindex`** |
 | Informe de indexación de páginas | `support.google.com/webmasters/answer/7440203` | qué significa cada motivo de «no indexada» y cuáles no son error; filtrar por sitemap |
 | Datos estructurados de ficha de comercio (merchant listing) | `/search/docs/appearance/structured-data/merchant-listing` | `Product` + `Offer` (no `AggregateOffer`), precio > 0, moneda ISO; recomendados: disponibilidad, condición, envío, devolución, marca, GTIN/MPN, descripción; el marcado debe calzar con lo visible |
+| Política de devoluciones (actualizada 2026-09-08) | `/search/docs/appearance/structured-data/return-policy` | se declara una vez en `Organization`/`OnlineStore` con `hasMerchantReturnPolicy`: país + `returnPolicyCategory` (+ `merchantReturnDays` si es plazo finito) o sólo `merchantReturnLink`; recomendados método, costo y tipo de reembolso; prioridad: Merchant Center > ficha > organización |
+| Política de envío (actualizada 2026-09-08) | `/search/docs/appearance/structured-data/shipping-policy` | `hasShippingService` → `ShippingService` → `shippingConditions` con destino, tramo por `orderValue`, `shippingRate`, `transitTime`; retiro como `FulfillmentTypeCollectionPoint`; la de la ficha (`shippingDetails`) gana sobre la de la organización |
 | Datos estructurados de negocio local | `/search/docs/appearance/structured-data/local-business` | `name` y `address` obligatorios; recomendado geo, teléfono, horario, imagen; usar el subtipo más específico |
 
 ## Cómo leerla

@@ -38,7 +38,7 @@ dice otro precio o disponibilidad, es una discrepancia que Merchant castiga
 |---|---|
 | `availability`, `itemCondition`, `brand` | sí |
 | `description` | **no** — la ficha la tiene en la página pero no en el JSON-LD |
-| `shippingDetails` (envío) | **no** |
+| `shippingDetails` (envío) | **no** — la tienda sí despacha por tramos (2026-10-04: pedidos de $30.000 a $80.000 pagan $8.990, 3 a 12 días hábiles; `quote_public_online_shipping`). La clave `shipping_enabled = false` de `website_settings` es vieja y nadie la lee |
 | `hasMerchantReturnPolicy` (devoluciones) | **no** — hay página `/devoluciones`, pero no está declarada |
 | `priceValidUntil` | no (sólo importa si se declara una fecha) |
 | `gtin` / `mpn` | casi imposible hoy: 5 de 1.635 productos con EAN y ninguno con MPN (2026-10-02) |
@@ -53,6 +53,16 @@ Google pide `name` y `address` (los tenemos) y recomienda `geo`, `telephone`,
 `openingHoursSpecification`, `image` y usar **el subtipo más específico** `[GSC]`.
 Hoy: sin `geo` ni horario, y el tipo es el genérico `LocalBusiness`, cuando
 schema.org tiene **`BikeStore`** (LocalBusiness → Store → BikeStore) `[SO]`.
+
+## Envío y devoluciones para todo el negocio (Google, 2026-09-08)
+
+Google acepta las dos políticas declaradas **una sola vez** en la organización
+(no en cada ficha): `hasShippingService` con `ShippingService` →
+`shippingConditions` (destino, tramo por `orderValue`, `shippingRate`,
+`transitTime`) y `hasMerchantReturnPolicy` (país, categoría y días, o sólo
+`merchantReturnLink` a la página de la política). Orden de prioridad: lo
+configurado en Merchant Center gana, después lo declarado en la ficha, después lo
+de la organización `[GSC]`.
 
 ## Oportunidades (2026-10-03)
 

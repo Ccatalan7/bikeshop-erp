@@ -9,6 +9,15 @@ revisado: 2026-10-04
 
 # Cómo se juzga un cambio en el sitio
 
+## El objetivo (dueño, 2026-10-04)
+
+«El objetivo principal de todo esto es tener una página web premium, que cautive
+al usuario, con UI moderna, segura y con APIs de calidad y bien conectadas.
+También todo el flujo de venta con notificaciones vía email y creación de usuario
+tienen que estar funcionando de forma impecable» `[Dueño]`. Cada cambio del sitio
+se juzga contra eso: si no acerca a una tienda premium y a una venta que funciona
+sin fallas (pedido, pago, correo, cuenta), no es prioridad.
+
 ## Lo esencial
 
 vinabike.cl no es un sitio aparte del ERP: es **el ERP mostrado al público**. Los

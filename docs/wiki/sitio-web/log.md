@@ -4,6 +4,17 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-04 — consulta archivada — el dueño fijó el objetivo (tienda premium,
+  moderna, segura y bien conectada; venta, correos y creación de cuenta
+  impecables) y se revisó el flujo de venta en producción: correos del pedido
+  activos y sin errores, pero sólo `order_received` y `cancelled` se han enviado
+  en vivo; la última venta web pagada es del 3-may; los 13 correos de cuenta
+  coinciden con el repo y hay servidor de correo propio (30/h); el taller no
+  recibe correo de pedido nuevo; la tienda sí despacha por tramos y
+  `shipping_enabled` es una clave vieja. Ingesta de Google: políticas de
+  devolución y de envío a nivel de organización (2026-09-08). Anotado en
+  checkout, datos estructurados y pendientes.
+
 - 2026-10-04 — corrección — el dueño precisó la regla 1: si pide algo que el
   editor no puede representar, el agente es libre de crear primero la función o
   el componente en el editor y después aplicar el cambio, sin pedir permiso
