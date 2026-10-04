@@ -40,9 +40,11 @@ mantenerlo. El esquema completo está en `docs/wiki/sitio-web/README.md`.
   su control, cambiarse o borrarse por una persona sin ningún agente. Nada de
   contenido en constantes, CSS, ramas del renderizador para un caso, claves JSON
   que ningún control edita, rutas escritas a mano ni SQL directo como camino de
-  contenido. Si el editor no puede representarlo, primero se le agrega la
-  capacidad y después se usa. Se cierra con la prueba de ida y vuelta
-  (`paginas/principios.md`, regla 1).
+  contenido. **Si el editor no puede representarlo, el agente es libre de
+  construir esa capacidad en el editor (función, bloque, control, componente),
+  sin pedir permiso aparte** (dueño, 2026-10-04): reutilizable, con todos sus
+  consumidores, y recién con ella aplica lo pedido. Se cierra con la prueba de
+  ida y vuelta (`paginas/principios.md`, regla 1).
 - Mientras: un dato, un dueño; paridad Edit / Vista previa / público; lo que
   Google necesita va al snapshot HTML; la marca sale del tema del editor.
 - Después: actualizar «En el código y la base» de cada página tocada (y el mapa

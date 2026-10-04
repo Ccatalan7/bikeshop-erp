@@ -47,10 +47,19 @@ pedido del dueño
 | agregar primero al editor el control que falta, y recién después usarlo | estilizar una instancia en el código porque el editor no tiene el control |
 | migraciones para cambiar el esquema y backfills explícitos de compatibilidad | SQL directo como camino normal para crear o editar contenido |
 
-**Si el editor no puede representar lo pedido**, eso deja de ser «poner
-contenido»: primero se construye la capacidad que falta en el editor (esquema,
-control, guardado y todos los consumidores), se verifica, y recién con ella se
-crea el contenido. Lo mismo vale para el HTML que ve Google y para la página
+**Si el editor no puede representar lo pedido, el agente es libre de
+construirlo** `[Dueño 2026-10-04]`: «si el owner llega a pedir algo que el agente
+piensa que no podría replicar en el editor, es libre de crear la nueva función,
+componente, etc. primero en el editor y después aplicar el cambio». No pide
+permiso aparte, no responde «el editor no lo permite» y no lo hace por fuera:
+1. construye en el editor la capacidad que falta — un tipo de bloque, una capa,
+   un control del inspector, una función, un campo del tema — **reutilizable**,
+   no hecha a la medida de este pedido, con su esquema, su control, su guardado
+   y todos sus consumidores (Edit, Vista previa, tienda y, si Google lo lee, el
+   snapshot HTML);
+2. la verifica como cualquier capacidad del editor;
+3. recién con ella aplica lo pedido, como lo haría una persona, y cierra con la
+   prueba de ida y vuelta. Lo mismo vale para el HTML que ve Google y para la página
 instantánea: son **consumidores** de los dueños del editor, nunca un segundo CMS
 `[Repo: copilot-instructions.md «HTML-first storefront evolution is allowed»]`.
 

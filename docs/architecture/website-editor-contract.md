@@ -145,6 +145,13 @@ treating that part as simple content entry. Implement the missing reusable
 editor capability first, verify it across all consumers, and only then create
 the campaign with it.
 
+**Owner, 2026-10-04:** «si el owner llega a pedir algo que el agente piensa que
+no podría replicar en el editor, es libre de crear la nueva función, componente,
+etc. primero en el editor y después aplicar el cambio». Building that missing
+capability is in scope of the request: it needs no separate permission, and
+«the editor cannot do it» is never a reason to decline or to build it outside
+the editor.
+
 ### Campaign creative quality and product truth
 
 Editor-native does not mean visually generic. Campaigns should use the

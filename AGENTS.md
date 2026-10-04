@@ -129,8 +129,11 @@
   an agent's change to the site must be an editor operation — reopenable,
   visible and editable in its control by a person without any agent — never a
   parallel implementation (no hardcoded content, renderer-only branches, hidden
-  JSON keys or direct SQL as the content path); if the editor lacks the control,
-  add it first, then use it.
+  JSON keys or direct SQL as the content path). If the owner asks for something
+  the editor cannot represent yet, the agent is free — no separate permission
+  needed (owner, 2026-10-04) — to build the missing reusable capability in the
+  editor first (block, layer, inspector control, function, theme field, with all
+  its consumers) and then apply the request through it.
 - For bike workshop architecture work, read `BIKE_WORKSHOP_MASTER_SCHEMA.md` first and update it in the same task when behavior/schema/data-flow changes.
 - For an implementation that will ship, author its reviewed release change in
   `docs/releases/changes/` alongside the verified source. Follow

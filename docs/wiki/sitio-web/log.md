@@ -4,6 +4,13 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-04 — corrección — el dueño precisó la regla 1: si pide algo que el
+  editor no puede representar, el agente es libre de crear primero la función o
+  el componente en el editor y después aplicar el cambio, sin pedir permiso
+  aparte. Escrito como libertad explícita (no sólo como obligación) en
+  [principios](paginas/principios.md), la skill, `AGENTS.md`, el aviso de sesión
+  y `website-editor-contract.md`.
+
 - 2026-10-04 — corrección — el dueño preguntó si el wiki tenía «esa idea que si
   los agentes aplican cambios, esos no pueden ser implementaciones paralelas a lo
   que se podría hacer en el editor». Estaba en los contratos como invariante no
