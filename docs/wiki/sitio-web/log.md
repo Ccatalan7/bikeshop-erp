@@ -8,8 +8,14 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   local sobre datos reales: ficha técnica como `additionalProperty` en 1.232 de
   1.295 fichas, migas completas y un solo armado para snapshot y página (la
   página borraba las migas del snapshot al cargar); `BikeStore` con horario,
-  logo, mapa, envío por tramos (función nueva `get_public_online_shipping_tiers`)
-  y link a `/devoluciones` ([datos-estructurados](paginas/datos-estructurados.md)).
+  logo, mapa y link a `/devoluciones`
+  ([datos-estructurados](paginas/datos-estructurados.md)). El envío por tramos
+  se implementó (con la función nueva `get_public_online_shipping_tiers`) y se
+  retiró tras la revisión: schema.org no puede decir «Chile continental» y
+  declarar `CL` promete despacho a las islas, con Merchant suspendido por
+  información engañosa. Codex encontró además un horario mal tipado que tumbaba
+  `/contacto` y el build, un calendario lunes–viernes sin dueño y lecturas sin
+  plazo; corregidos.
   Tres afirmaciones anteriores eran falsas: «la ficha no declara
   `description`» (sí la declara; sólo 29 de 1.541 productos tienen texto), «quitar
   el bloqueo de `/pedido/` en robots» (protege el token del pedido; descartado en

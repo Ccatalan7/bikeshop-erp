@@ -3,7 +3,7 @@ titulo: Datos estructurados (JSON-LD)
 resumen: qué declara cada tipo de página de vinabike.cl, de qué dueño sale cada dato, qué pide Google para fichas de comercio y negocio local, y lo que falta
 fuentes: [google-search-central, schema-org, repositorio]
 archivos: [scripts/generate_product_seo_snapshots.dart, scripts/sync_seo_index.sh, lib/public_store/seo/public_product_structured_data.dart, lib/public_store/seo/public_business_structured_data.dart, lib/public_store/models/public_business_hours.dart, lib/public_store/utils/structured_data.dart]
-tablas: [products, website_settings, online_shipping_rate_tiers, spec_facts]
+tablas: [products, website_settings, spec_facts]
 revisado: 2026-10-04
 ---
 
@@ -65,12 +65,22 @@ El nodo tiene **dos escritores, cada propiedad uno** `[Repo]`:
 | `image` | `seo_og_image` |
 | `hasMap` | `seo_google_maps_url` (o sus alias) |
 | `openingHoursSpecification` | `business_hours_json` (ERP › «Horario del local»), leído por `parsePublicBusinessHours`, el mismo que usa `/contacto`; días con igual horario van juntos |
-| `hasShippingService` | despacho: un `ShippingConditions` por tramo activo de `online_shipping_rate_tiers` (lo que cobra el checkout), `maxValue` = tope − 1 porque Google lee ambos extremos como incluidos; retiro en tienda gratis (`FulfillmentTypeCollectionPoint`) |
 | `hasMerchantReturnPolicy` | **sólo** `merchantReturnLink` a `/devoluciones`, y sólo si esa página está publicada con contenido |
 
-Los tramos son de personal; el build los lee por
-`get_public_online_shipping_tiers` (20261004120000), lectura pública de las
-filas activas, igual que puede leerlos la página de envíos.
+**El envío no se declara, a propósito (2026-10-04).** La tienda despacha a
+«Chile continental» y schema.org no lo puede decir para Chile: `DefinedRegion`
+sólo acota regiones en EE. UU., Australia y Japón `[GSC]`, e Isla de Pascua y
+Juan Fernández son de la región de Valparaíso, así que ni un código de región
+las saca. `addressCountry: CL` prometería despacho a las islas, contra lo que
+dice `/envios`, en una cuenta de Merchant suspendida por «información
+engañosa». Tampoco el retiro gratis: una condición de envío a $0 se presta a
+leerse como «envío gratis». `google_merchant_identity_contract_test.dart`
+prohíbe `hasShippingService` y `shippingDetails` hasta que exista una forma
+exacta. Se implementó y se retiró el mismo día, después de la revisión; la
+función `get_public_online_shipping_tiers` (20261004120000, aplicada) quedó
+para que `/envios` lea los tramos de su dueño ([estado-y-pendientes](estado-y-pendientes.md)).
+El comentario de esa migración, congelada byte a byte, todavía dice que el
+build declara los tramos: es historia.
 
 **Devoluciones con link y nada más, a propósito.** Los términos (10 días, quién
 paga el envío, reembolso) viven como texto en la página del editor. Declararlos
@@ -94,7 +104,7 @@ Negocio local: `name` y `address`; recomendado `geo`, `telephone`, horario,
 `image` y **el subtipo más específico** (`BikeStore`: LocalBusiness → Store →
 BikeStore) `[GSC]` `[SO]`.
 
-Envío y devoluciones se declaran **una vez** en la organización desde el
+Envío y devoluciones se pueden declarar **una vez** en la organización desde el
 2026-09-08: `hasShippingService` → `ShippingService` → `shippingConditions`;
 `hasMerchantReturnPolicy` con país + categoría (+ días) **o sólo**
 `merchantReturnLink`. Prioridad: Merchant Center > ficha > organización `[GSC]`.
@@ -106,6 +116,8 @@ Envío y devoluciones se declaran **una vez** en la organización desde el
 3. `addressCountry` va como «Chile»; Google prefiere el código `CL`, y
    `seo_address_country_code` no tiene quien la escriba.
 4. Términos de devolución como campos del editor (ver arriba).
+5. Envío: sólo si Google llega a aceptar una región que excluya las islas, o
+   si Merchant Center lo configura por su lado (ahí sí hay más control).
 
 ## Trampas
 
@@ -128,6 +140,5 @@ Envío y devoluciones se declaran **una vez** en la organización desde el
 - Horario: `lib/public_store/models/public_business_hours.dart`.
 - En la app: `lib/public_store/utils/structured_data.dart` (y su versión web).
 - Base: `products`, `spec_facts` (vía `get_public_product_technical_specs`),
-  `online_shipping_rate_tiers` (vía `get_public_online_shipping_tiers`),
   `website_settings`.
 - Pruebas: `test/unit/public_structured_data_test.dart`.

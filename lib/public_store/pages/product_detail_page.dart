@@ -966,7 +966,9 @@ class _ProductDetailPageState extends State<ProductDetailPage>
               '$normalizedStoreUrl${link.href}',
             ),
       ],
-      specSheet: _technicalSpecs.isEmpty ? null : _specSheet(),
+      // The page always shows the sheet, even with only color or material;
+      // it is rewritten when the technical rows arrive.
+      specSheet: _specSheet(),
       model: product.model ?? '',
     );
     if (structuredData == null) {

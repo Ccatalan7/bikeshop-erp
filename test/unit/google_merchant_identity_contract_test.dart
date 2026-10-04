@@ -219,6 +219,17 @@ void main() {
     expect(publicSources.toLowerCase(), isNot(contains('todo el país')));
     expect(publicSources, isNot(contains('OfferShippingDetails')));
     expect(publicSources, isNot(contains("'shippingDetails'")));
+
+    // Nor once for the whole business (2026-10-04): schema.org cannot leave
+    // Easter Island and Juan Fernández out of Chile, so `addressCountry: CL`
+    // would promise what the shipping page denies.
+    final business = File(
+      'lib/public_store/seo/public_business_structured_data.dart',
+    ).readAsStringSync();
+    for (final source in [publicSources, business]) {
+      expect(source, isNot(contains("'hasShippingService'")));
+      expect(source, isNot(contains("'ShippingService'")));
+    }
   });
 
   test('policy renderer converts legacy escaped line breaks to paragraphs', () {

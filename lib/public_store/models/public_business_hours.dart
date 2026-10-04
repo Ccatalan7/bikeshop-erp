@@ -73,7 +73,10 @@ List<PublicBusinessHoursPeriod> parsePublicBusinessHours(String rawJson) {
       );
     }
     return List.unmodifiable(result);
-  } on FormatException {
+  } on Object {
+    // A malformed value (a string where Google sends a number) leaves the
+    // hours unknown, as `/contacto` always did; it never breaks the page or
+    // the store build.
     return const [];
   }
 }
@@ -92,11 +95,16 @@ String? _placesDay(Object? rawDay) {
   };
 }
 
+/// Google Business sends a `TimeOfDay` that omits a zero field (`{hours:
+/// 10}` is 10:00, `{}` is midnight); anything else that is not a whole hour
+/// and minute of the day is not a time.
 String? _businessTime(Object? rawTime) {
   if (rawTime is String) return _placesTime(rawTime);
   if (rawTime is! Map) return null;
-  final hours = (rawTime['hours'] as num?)?.toInt() ?? 0;
-  final minutes = (rawTime['minutes'] as num?)?.toInt() ?? 0;
+  final hours = rawTime['hours'] ?? 0;
+  final minutes = rawTime['minutes'] ?? 0;
+  if (hours is! int || minutes is! int) return null;
+  if (hours < 0 || hours > 24 || minutes < 0 || minutes > 59) return null;
   return '${hours.toString().padLeft(2, '0')}:'
       '${minutes.toString().padLeft(2, '0')}';
 }
@@ -104,8 +112,10 @@ String? _businessTime(Object? rawTime) {
 String? _placesTime(Object? rawTime) {
   final digits = rawTime?.toString().trim();
   if (digits == null || digits.isEmpty) return null;
-  if (digits.contains(':')) return digits;
-  if (digits.length < 3) return null;
+  if (RegExp(r'^\d{1,2}:\d{2}$').hasMatch(digits)) {
+    return digits.padLeft(5, '0');
+  }
+  if (!RegExp(r'^\d{3,4}$').hasMatch(digits)) return null;
   final padded = digits.padLeft(4, '0');
   return '${padded.substring(0, 2)}:${padded.substring(2, 4)}';
 }

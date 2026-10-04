@@ -4,7 +4,7 @@ resumen: por qué la cuenta de Merchant está suspendida, qué mira Google para 
 fuentes: [merchant-center, consolas-google, repositorio]
 archivos: [supabase/functions/google-merchant-feed/index.ts, supabase/functions/_shared/google_merchant_feed.ts, supabase/functions/google-business-reviews/index.ts, supabase/functions/google-public-data-refresh/index.ts, lib/modules/website/services/google_business_service.dart]
 tablas: [products, website_settings]
-revisado: 2026-10-03
+revisado: 2026-10-04
 ---
 
 # Google Merchant Center y perfil de Google
@@ -43,9 +43,11 @@ hábiles) o apelando; los casos graves se suspenden sin aviso y casi no vuelven
    la cuenta de Viñabike no tiene. Basta crear una cuenta de Ads gratis, sin
    campaña (decisión y acción del dueño) `[Consola]`. Si no, esperar a que la
    consola vuelva a mostrar «Solicitar revisión».
-2. **Declarar envío y devoluciones** también en los datos estructurados de cada
-   ficha ([datos-estructurados](datos-estructurados.md)): es lo que la política
-   pide que esté claro.
+2. ~~**Declarar envío y devoluciones** en los datos estructurados~~ — las
+   devoluciones se declaran desde el 2026-10-04 (link a la página publicada). El
+   envío **no**, a propósito: schema.org no puede decir «Chile continental» y
+   declarar todo Chile sería justamente información engañosa; en Merchant
+   Center se configura en su propia consola ([datos-estructurados](datos-estructurados.md)).
 3. **Ficha de Google y reseñas** al día (fotos, horario).
 4. Fotos de 16 productos antiguos (pendiente del dueño, 2026-09-24).
 

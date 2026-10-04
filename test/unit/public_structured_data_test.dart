@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -5,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/public_store/models/public_business_hours.dart';
 import 'package:vinabike_erp/public_store/models/public_commerce_product_projection.dart';
 import 'package:vinabike_erp/public_store/models/public_product_spec_sheet.dart';
+import 'package:vinabike_erp/public_store/models/storefront_logo_source.dart';
 import 'package:vinabike_erp/public_store/seo/public_business_structured_data.dart';
 import 'package:vinabike_erp/public_store/seo/public_product_structured_data.dart';
 
@@ -177,6 +179,27 @@ void main() {
       expect(business.single.day, 'SATURDAY');
       expect(business.single.opens, '10:30');
       expect(parsePublicBusinessHours('no es json'), isEmpty);
+      // Un tipo inesperado deja el horario sin declarar; no rompe /contacto
+      // ni el build (hallazgo de Codex, 2026-10-04).
+      expect(
+        parsePublicBusinessHours(jsonEncode({
+          'periods': [
+            {
+              'openDay': 'MONDAY',
+              'openTime': {'hours': '10'},
+              'closeTime': {'hours': 18},
+            },
+            {
+              'openDay': 'TUESDAY',
+              'openTime': {'hours': 10},
+              'closeTime': {'hours': 18, 'minutes': 30},
+            },
+          ],
+        })).map((p) => '${p.day} ${p.opens}-${p.closes}'),
+        ['TUESDAY 10:00-18:30'],
+      );
+      expect(parsePublicBusinessHours('{"periods": 3}'), isEmpty);
+      expect(parsePublicBusinessHours('[1, 2]'), isEmpty);
     });
 
     test('los días con el mismo horario van juntos', () {
@@ -198,59 +221,6 @@ void main() {
   });
 
   group('negocio', () {
-    final tiers = [
-      PublicShippingTier.fromRow({
-        'country_code': 'CL',
-        'min_order_gross': '0.00',
-        'max_order_gross': '30000.00',
-        'shipping_gross': '6990.00',
-        'estimated_min_business_days': 3,
-        'estimated_max_business_days': 12,
-      }),
-      PublicShippingTier.fromRow({
-        'country_code': 'CL',
-        'min_order_gross': '150000.00',
-        'max_order_gross': null,
-        'shipping_gross': '14990.00',
-        'estimated_min_business_days': 3,
-        'estimated_max_business_days': 12,
-      }),
-    ];
-
-    test('el envío sale de los tramos que cobra el checkout', () {
-      final node = completePublicBusinessStructuredData(
-        {'@type': 'BikeStore', 'name': 'Viñabike'},
-        logoUrl: '',
-        imageUrl: '',
-        mapUrl: '',
-        hours: const [],
-        shippingTiers: tiers,
-        currency: 'CLP',
-        pickupCountryCode: 'CL',
-        returnPolicyUrl: '',
-      );
-      final services = node['hasShippingService'] as List;
-      final delivery = services.first as Map;
-      final conditions = delivery['shippingConditions'] as List;
-
-      expect(conditions.first['orderValue'], {
-        '@type': 'MonetaryAmount',
-        'currency': 'CLP',
-        'minValue': 0,
-        'maxValue': 29999
-      });
-      expect(conditions.first['shippingRate']['value'], 6990);
-      expect(conditions.last['orderValue'].containsKey('maxValue'), isFalse);
-      expect(conditions.first['transitTime']['duration']['maxValue'], 12);
-      expect(services.last['fulfillmentType'],
-          'https://schema.org/FulfillmentTypeCollectionPoint');
-      expect(
-          services.last['shippingConditions'].single['shippingRate']['value'],
-          0);
-      expect(node.containsKey('hasMerchantReturnPolicy'), isFalse,
-          reason: 'sin página publicada no hay política que enlazar');
-    });
-
     test('la devolución enlaza la página publicada y nada más', () {
       final node = completePublicBusinessStructuredData(
         {'@type': 'BikeStore', 'name': 'Viñabike'},
@@ -258,9 +228,6 @@ void main() {
         imageUrl: '',
         mapUrl: 'https://maps.google.com/?cid=1',
         hours: const [],
-        shippingTiers: const [],
-        currency: 'CLP',
-        pickupCountryCode: '',
         returnPolicyUrl: '$storeUrl/devoluciones',
       );
 
@@ -270,7 +237,22 @@ void main() {
       });
       expect(node['logo'], '$storeUrl/assets/logo.webp');
       expect(node['hasMap'], 'https://maps.google.com/?cid=1');
+      expect(node.containsKey('image'), isFalse);
+      // «Chile continental» no se puede decir en schema.org para Chile.
       expect(node.containsKey('hasShippingService'), isFalse);
+    });
+
+    test('sin página publicada no hay política que enlazar', () {
+      final node = completePublicBusinessStructuredData(
+        {'@type': 'BikeStore', 'name': 'Viñabike'},
+        logoUrl: '',
+        imageUrl: '',
+        mapUrl: '',
+        hours: const [],
+        returnPolicyUrl: '',
+      );
+      expect(node.containsKey('hasMerchantReturnPolicy'), isFalse);
+      expect(node, {'@type': 'BikeStore', 'name': 'Viñabike'});
     });
 
     test('el build completa el nodo del shell sin tocar su identidad', () {
@@ -296,7 +278,6 @@ void main() {
         storeUrl: storeUrl,
         tenantId: 'otro-tenant',
         tenantLogoUrl: null,
-        shippingTiers: tiers,
         returnPolicyPublished: true,
       );
       final json = RegExp(r'<script[^>]*>(.*?)</script>', dotAll: true)
@@ -312,21 +293,71 @@ void main() {
           ['https://schema.org/Saturday']);
       expect(node['hasMerchantReturnPolicy']['merchantReturnLink'],
           '$storeUrl/devoluciones');
-      expect((node['hasShippingService'] as List), hasLength(2));
+    });
+
+    test('Viñabike sin logo propio declara el que pinta la tienda', () {
+      const shell = '<script type="application/ld+json">'
+          '{"@type":"BikeStore","name":"Viñabike"}</script>';
+      final html = snapshots.completeSeoBusinessJsonLd(
+        shell,
+        settings: const {},
+        storeUrl: storeUrl,
+        tenantId: VinabikeCanonicalTenant.id,
+        tenantLogoUrl: null,
+        returnPolicyPublished: false,
+      );
+      expect(
+          html,
+          contains(
+              '"logo":"$storeUrl/assets/assets/images/vinabike_logo.webp"'));
     });
 
     test('un shell sin negocio, o con dos, no se publica', () {
-      expect(
-        () => snapshots.completeSeoBusinessJsonLd(
-          '<html><head></head></html>',
-          settings: const {},
-          storeUrl: storeUrl,
-          tenantId: 't',
-          tenantLogoUrl: null,
-          shippingTiers: const [],
-          returnPolicyPublished: false,
+      for (final shell in [
+        '<html><head></head></html>',
+        '<script type="application/ld+json">{"@type":"BikeStore"}</script>'
+            '<script type="application/ld+json">{"@type":"LocalBusiness"}</script>',
+      ]) {
+        expect(
+          () => snapshots.completeSeoBusinessJsonLd(
+            shell,
+            settings: const {},
+            storeUrl: storeUrl,
+            tenantId: 't',
+            tenantLogoUrl: null,
+            returnPolicyPublished: false,
+          ),
+          throwsStateError,
+        );
+      }
+    });
+  });
+
+  group('lectura de fichas técnicas en el build', () {
+    test('reintenta y, si no puede, nombra el producto y tumba el build',
+        () async {
+      var calls = 0;
+      final sheets = await snapshots.fetchSeoSnapshotTechnicalSpecs(
+        productIds: const ['a', 'b', 'a', ''],
+        loadOne: (id) async {
+          calls++;
+          if (id == 'b' && calls < 3) throw const SocketException('reset');
+          return [
+            PublicProductSpecRow(
+                sectionKey: 'primary', key: 'k', label: 'Dato', value: id),
+          ];
+        },
+      );
+      expect(sheets.keys.toSet(), {'a', 'b'});
+      expect(sheets['b']!.single.value, 'b');
+
+      await expectLater(
+        snapshots.fetchSeoSnapshotTechnicalSpecs(
+          productIds: const ['roto'],
+          loadOne: (_) async => throw TimeoutException('sin respuesta'),
         ),
-        throwsStateError,
+        throwsA(isA<StateError>()
+            .having((e) => e.message, 'message', contains('roto'))),
       );
     });
   });

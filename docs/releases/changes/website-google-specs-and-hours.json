@@ -2,16 +2,16 @@
   "schema_version": 1,
   "source": "ai",
   "module": "website",
-  "id": "website-google-specs-hours-shipping",
+  "id": "website-google-specs-and-hours",
   "scope": "release",
   "platforms": [
     "web"
   ],
-  "title": "Google lee la ficha técnica, horario y envíos",
-  "summary": "Cada producto le declara a Google los mismos datos técnicos y el mismo recorrido de categorías que ve el cliente, y la tienda se presenta como tienda de bicicletas con su horario, logo, tarifas de despacho, retiro gratis y su página de devoluciones.",
+  "title": "Google lee la ficha técnica y el horario",
+  "summary": "Cada producto le declara a Google los mismos datos técnicos y el mismo recorrido de categorías que ve el cliente, y la tienda se presenta como tienda de bicicletas con su horario, logo, mapa y su página de devoluciones.",
   "items": [
     "Más de 1.200 productos le dicen a Google sus datos técnicos (velocidades, dientes, núcleo, material), los mismos de la ficha.",
-    "Viñabike aparece como tienda de bicicletas con horario de lunes a sábado, logo, mapa, despacho por tramo, retiro gratis y devoluciones.",
+    "Viñabike aparece como tienda de bicicletas con su horario de lunes a sábado, logo, mapa y el enlace a su política de devoluciones.",
     "Con un lector de pantalla, abrir un enlace de la tienda ya no recarga la página completa."
   ],
   "evidence": [
@@ -21,15 +21,15 @@
     },
     {
       "path": "lib/public_store/seo/public_business_structured_data.dart",
-      "sha256": "418f33179dc552fd63e1eea3a4bac57a9201fe6c9264ed9153e64e2483eefb31"
+      "sha256": "617b8f300894517b46b79682ae5168cd14cddacb7814b2ee810c78568cbf6dcf"
     },
     {
       "path": "lib/public_store/models/public_business_hours.dart",
-      "sha256": "139f631869d7bd6d47b70f7fca342efee1a3091db31585bc23eb9d51acf3af3c"
+      "sha256": "d2f651fe18e93992d94e977286b92b3c42f1dd1a9738b302b589326fbec6746a"
     },
     {
       "path": "lib/public_store/pages/product_detail_page.dart",
-      "sha256": "811cdec4512d5c31702a0c162996d2f145c565300170832b0823b8a6158d8308"
+      "sha256": "c52650a0cb759d4e251239195a0b37442a594dfbe0d6a91c0026df2a388d293f"
     },
     {
       "path": "lib/public_store/pages/contact_page.dart",
@@ -37,7 +37,7 @@
     },
     {
       "path": "scripts/generate_product_seo_snapshots.dart",
-      "sha256": "5252b597bd513af947b9b8ba891d0149aecdb4c56f3a94e8779792812e4b267b"
+      "sha256": "962f42d4b6a0765faa6feb4647e56f6ac9e658ba43b53ab9e45461b11cb1a4fe"
     },
     {
       "path": "scripts/sync_seo_index.sh",

@@ -328,18 +328,12 @@ void main(List<String> args) async {
     tenantId: tenantId,
     serviceRoleKey: serviceRoleKey,
   );
-  final shippingTiers = await _fetchActiveShippingTiers(
-    supabaseUrl: supabaseUrl,
-    tenantId: tenantId,
-    serviceRoleKey: serviceRoleKey,
-  );
   final businessBaseHtml = completeSeoBusinessJsonLd(
     baseIndexHtml,
     settings: settings,
     storeUrl: storeUrl,
     tenantId: tenantId,
     tenantLogoUrl: tenantLogoUrl,
-    shippingTiers: shippingTiers,
     returnPolicyPublished:
         eligibleStaticTrustPagePaths.contains(seoReturnPolicyPath),
   );
@@ -2621,8 +2615,13 @@ Future<Map<String, List<PublicProductSpecRow>>> fetchSeoSnapshotTechnicalSpecs({
         try {
           result[productId] = await loadOne(productId);
           break;
-        } on Object {
-          if (attempt >= attempts) rethrow;
+        } on Object catch (error) {
+          if (attempt >= attempts) {
+            throw StateError(
+              'No se pudo leer la ficha técnica del producto $productId '
+              'después de $attempts intentos: $error',
+            );
+          }
           await Future<void>.delayed(Duration(milliseconds: 400 * attempt));
         }
       }
@@ -2647,6 +2646,9 @@ Future<List<PublicProductSpecRow>> _fetchPublicProductTechnicalSpecs({
     ),
     headers: {'apikey': serviceRoleKey},
     body: {'p_tenant_id': tenantId, 'p_product_id': productId},
+    // One sheet answers in ~80 ms; a response that never ends must not hold
+    // the deploy open (it is retried).
+    timeout: const Duration(seconds: 30),
   );
   return [
     for (final row in jsonDecode(response) as List<dynamic>)
@@ -2850,8 +2852,8 @@ const String seoReturnPolicyPath = '/devoluciones';
 const Set<String> seoBusinessSchemaTypes = {'BikeStore', 'LocalBusiness'};
 
 /// Completes the business node the shell carries with what only the deploy
-/// can read: the hours, the logo the store paints, the shipping tiers and the
-/// published return policy ([completePublicBusinessStructuredData]).
+/// can read: the hours, the logo the store paints and the published return
+/// policy ([completePublicBusinessStructuredData]).
 ///
 /// The shell's node keeps its identity, written by `sync_seo_index.sh` from
 /// `website_settings`; this adds properties, it never rewrites one the shell
@@ -2862,7 +2864,6 @@ String completeSeoBusinessJsonLd(
   required String storeUrl,
   required String tenantId,
   required String? tenantLogoUrl,
-  required List<PublicShippingTier> shippingTiers,
   required bool returnPolicyPublished,
 }) {
   final scripts = RegExp(
@@ -2894,10 +2895,6 @@ String completeSeoBusinessJsonLd(
     tenantLogoUrl: tenantLogoUrl,
     tenantId: tenantId,
   );
-  final countries = {
-    for (final tier in shippingTiers)
-      if (tier.countryCode.isNotEmpty) tier.countryCode,
-  };
   final completed = completePublicBusinessStructuredData(
     identity,
     logoUrl: logo.isEmpty || logo.startsWith('https://')
@@ -2915,11 +2912,6 @@ String completeSeoBusinessJsonLd(
           _getSetting(settings, 'google_business_regular_hours') ??
           '',
     ),
-    shippingTiers: shippingTiers,
-    currency: (_getSetting(settings, 'currency') ?? 'CLP').toUpperCase(),
-    // The checkout offers pickup on every order it ships (the quote answers
-    // `pickup` without a tier), so it reaches the same customers.
-    pickupCountryCode: countries.length == 1 ? countries.single : '',
     returnPolicyUrl:
         returnPolicyPublished ? _joinUrl(storeUrl, seoReturnPolicyPath) : '',
   );
@@ -2929,24 +2921,6 @@ String completeSeoBusinessJsonLd(
     '${match.group(1)}\n  ${encodeStructuredDataForHtml(completed)}\n  '
     '${match.group(3)}',
   );
-}
-
-Future<List<PublicShippingTier>> _fetchActiveShippingTiers({
-  required String supabaseUrl,
-  required String tenantId,
-  required String serviceRoleKey,
-}) async {
-  // The table is staff-only; the store reads its public facts through the
-  // narrow function (20261004120000), as the shipping page can.
-  final response = await _httpPostJson(
-    Uri.parse('$supabaseUrl/rest/v1/rpc/get_public_online_shipping_tiers'),
-    headers: {'apikey': serviceRoleKey},
-    body: {'p_tenant_id': tenantId},
-  );
-  return [
-    for (final row in jsonDecode(response) as List<dynamic>)
-      PublicShippingTier.fromRow(Map<String, dynamic>.from(row as Map)),
-  ];
 }
 
 Future<SeoWebsiteSettingsSource> _fetchWebsiteSettingsSource({
@@ -3848,13 +3822,17 @@ Future<String> _httpGet(Uri url, {required Map<String, String> headers}) async {
   }
 }
 
+/// [timeout] bounds the whole exchange, connection to last byte: on expiry
+/// the client is closed and a [TimeoutException] lets the caller retry.
 Future<String> _httpPostJson(
   Uri url, {
   required Map<String, String> headers,
   required Map<String, dynamic> body,
+  Duration? timeout,
 }) async {
   final client = HttpClient();
-  try {
+  if (timeout != null) client.connectionTimeout = timeout;
+  Future<String> exchange() async {
     final req = await client.postUrl(url);
     headers.forEach(req.headers.set);
     req.headers.contentType = ContentType.json;
@@ -3867,6 +3845,12 @@ Future<String> _httpPostJson(
       );
     }
     return responseBody;
+  }
+
+  try {
+    return timeout == null
+        ? await exchange()
+        : await exchange().timeout(timeout);
   } finally {
     client.close(force: true);
   }

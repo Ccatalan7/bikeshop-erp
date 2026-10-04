@@ -31,7 +31,7 @@ HTML**.
 | Variantes (`ProductGroup`) | no | sí | no | no | no | no | sí | no |
 | Especificaciones (`additionalProperty`) | no | no | no | no | no | no | **sí** | **sí, 1.232 fichas, desde 2026-10-04** |
 | Valoraciones (`AggregateRating`) | no | no | no | no | sí | no | sí | no |
-| Negocio declarado como | Organization | Organization | Organization | — | Organization | Organization | Organization | **BikeStore** con horario, envío y devoluciones (2026-10-04) |
+| Negocio declarado como | Organization | Organization | Organization | — | Organization | Organization | Organization | **BikeStore** con horario y devoluciones (2026-10-04) |
 | Sitemaps (archivos) | 6 | 8 | 5 | 5 | 1 | 8 | 12 | 1 |
 | Blog o guías | sí | sí | no | no | sí | sí | — | **no** |
 
@@ -71,8 +71,10 @@ primero la capacidad al editor (regla 1, [principios](principios.md)).
    `model` y migas completas ([datos-estructurados](datos-estructurados.md)).
    La `description` y el `gtin` ya se declaraban cuando existen: lo que falta
    es **contenido** (29 descripciones y 5 códigos de barras de 1.541).
-3. ~~**Envío y devoluciones declarados una vez para todo el negocio**~~ — hecho
-   el 2026-10-04: los tramos reales y el link a `/devoluciones`.
+3. **Envío y devoluciones declarados una vez para todo el negocio** — las
+   devoluciones, hechas el 2026-10-04 (link a `/devoluciones`). El envío **no**:
+   «Chile continental» no se puede expresar para Chile y declarar `CL` promete
+   despacho a las islas ([datos-estructurados](datos-estructurados.md)).
 4. **Textos de categoría:** cada categoría visible con su presentación (título,
    texto, imagen) escrita y servida en HTML; hoy la descripción de categoría tiene
    50 caracteres. Se escriben en `Catálogo web > Categorías > Presentación`.

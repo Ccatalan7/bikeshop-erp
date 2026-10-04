@@ -52,7 +52,7 @@ El ERP también monta la tienda dentro de sí en `/tienda/*` para editarla en vi
 | `featured_products` | colección destacada | `Catálogo web > Portada` |
 | `website_backups` | respaldos del sitio | `WebsiteBackupService` |
 | `products`, `product_categories` | catálogo; `show_on_website`, textos y SEO por producto, presentación de categoría | ficha del producto en el ERP y `Catálogo web` |
-| `online_shipping_rate_tiers` | tramos de despacho por total del pedido (4 activos, $6.990 a $14.990, 3–12 días hábiles; 2026-10-04): lo que cobra `quote_online_shipping_internal` | sólo personal y sin control en el editor (pendiente); el sitio lo lee con `get_public_online_shipping_tiers` |
+| `online_shipping_rate_tiers` | tramos de despacho por total del pedido (4 activos, $6.990 a $14.990, 3–12 días hábiles; 2026-10-04): lo que cobra `quote_online_shipping_internal` | sólo personal y sin control en el editor (pendiente); lectura pública con `get_public_online_shipping_tiers`, que todavía nadie usa (la usará `/envios`) |
 | `online_orders`, `online_order_items` y `online_order_*` | pedidos web, pagos, reservas de stock, documentos, correcciones, tokens de acceso | checkout público + `Sitio Web > Pedidos online` |
 
 ## Lo que un visitante sin cuenta puede llamar
@@ -97,8 +97,8 @@ productos siguen por compatibilidad. Detalle en [seguridad](seguridad.md).
    se aborta en vez de publicar mezclado.
 5. `scripts/generate_product_seo_snapshots.dart`: HTML por ficha, categoría y
    página, `sitemap.xml`, `robots.txt` y redirecciones de URL viejas
-   ([seo-tecnico](seo-tecnico.md)); completa el nodo `BikeStore` y declara la
-   ficha técnica de cada producto ([datos-estructurados](datos-estructurados.md)).
+   ([seo-tecnico](seo-tecnico.md)); completa el nodo `BikeStore` (logo, horario,
+   devoluciones) y declara la ficha técnica de cada producto ([datos-estructurados](datos-estructurados.md)).
 6. Verifica los activos generados, sella la revisión, escribe `release.json`
    (`scripts/write_storefront_release_evidence.sh`), despliega el target `store`
    y comprueba la evidencia en los dos orígenes.

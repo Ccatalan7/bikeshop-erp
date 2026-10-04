@@ -62,7 +62,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 | Fecha | Qué | Página |
 |---|---|---|
 | 2026-10-04 | Ficha técnica (`additionalProperty`), `model` y migas completas en el JSON-LD de cada producto, con un solo armado para el snapshot y la página | [datos-estructurados](datos-estructurados.md) |
-| 2026-10-04 | `BikeStore` con logo, imagen, mapa, horario, envío por tramos, retiro gratis y link a la política de devoluciones | [datos-estructurados](datos-estructurados.md) |
+| 2026-10-04 | `BikeStore` con logo, imagen, mapa, horario y link a la política de devoluciones. El envío se dejó fuera: schema.org no puede decir «Chile continental» | [datos-estructurados](datos-estructurados.md) |
 | 2026-10-04 | El script que evita la doble navegación de un enlace de Flutter llega por fin a producción (estaba sólo en `web/index.html`, que el build regenera) | [publicacion](publicacion-y-despliegue.md) |
 | 2026-10-04 | Descartado: quitar `Disallow` de `/pedido/` en `robots.txt`. Esas URL llevan el token privado del pedido; con el bloqueo Google nunca las abre, y la cabecera `noindex` cubre el caso de que alguna se filtre | [rutas](rutas-y-navegacion.md) |
 

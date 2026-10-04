@@ -45,8 +45,9 @@ hora o plazo máximo `[Repo]`.
    redirecciones; si algo cambió, aborta en vez de publicar HTML, sitemap y
    redirecciones mezclados `[Repo: website-editor-contract.md]`. Fuera de esa
    revisión lee, una vez, la ficha técnica de cada producto
-   (`get_public_product_technical_specs`, 8 a la vez), los tramos de envío
-   (`get_public_online_shipping_tiers`) y el logo del tenant, y completa el nodo
+   (`get_public_product_technical_specs`, 8 a la vez, 30 s por respuesta y 3
+   intentos; si una no se puede leer, el build se cae nombrando el producto) y
+   el logo del tenant, y completa el nodo
    del negocio de `index.html` antes de derivar todas las páginas
    ([datos-estructurados](datos-estructurados.md)). Con 1.295 fichas, el paso
    tarda ~120 s `[Repo 2026-10-04]`.
