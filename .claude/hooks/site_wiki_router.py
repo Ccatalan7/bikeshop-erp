@@ -41,8 +41,10 @@ PROMPT_NOTE = (
     '(docs/wiki/sitio-web/index.md → páginas del tema → lo vivo: release.json, sitemap, '
     'scripts/db/query.sh, consolas). Lo nuevo que aprendas va a su página y a log.md en la misma tarea.')
 EDIT_NOTE = (
-    'Editaste {path}, que es parte de la tienda, el editor, el build o una función del sitio. En la '
-    'misma tarea: actualiza «En el código y la base» de la página del wiki que corresponde '
+    'Editaste {path}, que es parte de la tienda, el editor, el build o una función del sitio. '
+    'Regla 1 del wiki: lo que cambia un agente queda hecho como en el editor (reabrible y editable '
+    'en su control sin agentes), nunca una implementación paralela; si falta el control, se agrega '
+    'al editor primero. En la misma tarea: actualiza «En el código y la base» de la página del wiki que corresponde '
     '(docs/wiki/sitio-web/paginas/, y mapa-del-sistema.md si nace una tabla, función, ruta o evento) '
     'y corre `python3 scripts/knowledge/lint_site_wiki.py --db production`. '
     'test/unit/site_wiki_contract_test.dart falla si una ruta pública, un evento de GA4, una página '

@@ -35,6 +35,14 @@ mantenerlo. El esquema completo está en `docs/wiki/sitio-web/README.md`.
 - Antes: leer la página del tema, el contrato que manda
   (`docs/architecture/website-editor-contract.md` para el editor) y la fila de
   `docs/architecture/canonical-ui-surfaces.md`.
+- **Regla 1 (manda sobre todo): lo que hace un agente queda hecho como en el
+  editor, nunca en paralelo.** El resultado tiene que poder reabrirse, verse en
+  su control, cambiarse o borrarse por una persona sin ningún agente. Nada de
+  contenido en constantes, CSS, ramas del renderizador para un caso, claves JSON
+  que ningún control edita, rutas escritas a mano ni SQL directo como camino de
+  contenido. Si el editor no puede representarlo, primero se le agrega la
+  capacidad y después se usa. Se cierra con la prueba de ida y vuelta
+  (`paginas/principios.md`, regla 1).
 - Mientras: un dato, un dueño; paridad Edit / Vista previa / público; lo que
   Google necesita va al snapshot HTML; la marca sale del tema del editor.
 - Después: actualizar «En el código y la base» de cada página tocada (y el mapa

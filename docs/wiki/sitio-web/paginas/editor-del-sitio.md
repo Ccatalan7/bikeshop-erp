@@ -73,9 +73,12 @@ producción se usan 11 tipos en 25 bloques: `hero` 5, `faq` 4, `about` 4,
 tipo (exacta, mínima o intrínseca) la decide `WebsiteBlockCapabilityRegistry`, la
 misma regla para el inspector, Edit y público `[Repo]`.
 
-Las campañas en capas (Canvas) son operaciones reales del editor: un agente que
-arma una campaña usa los mismos valores por defecto, validaciones y guardado que
-una persona (equivalencia de acciones) `[Repo: website-builder-agent-handoff.md]`.
+Lo que arma un agente (campañas, banners, diapositivas, secciones) son
+operaciones reales del editor: mismos valores por defecto, validaciones, esquema
+y guardado que una persona, y el resultado se reabre y se edita en sus controles
+sin agentes. Si falta un control, primero se agrega al editor. Es la regla 1 de
+[principios](principios.md), con su prueba de ida y vuelta
+`[Repo: website-builder-agent-handoff.md]`.
 
 ## Guardar
 

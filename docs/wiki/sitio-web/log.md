@@ -4,6 +4,16 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-04 — corrección — el dueño preguntó si el wiki tenía «esa idea que si
+  los agentes aplican cambios, esos no pueden ser implementaciones paralelas a lo
+  que se podría hacer en el editor». Estaba en los contratos como invariante no
+  negociable, pero en el wiki sólo como una línea del editor y no salió en el
+  resumen. Pasa a ser la **regla 1** de [principios](paginas/principios.md), con
+  lo permitido y lo prohibido, la prueba de ida y vuelta y un precedente propio
+  (23-sep, textos SEO y bloque «MARCAS» por SQL directo); también en el README,
+  el índice, la página del editor, la skill, `AGENTS.md` y el aviso de inicio de
+  sesión.
+
 - 2026-10-03 — creación — el dueño pidió «una nueva carpeta de second brain…
   como una especie de master schema experto en nuestro sitio web y editor del
   sitio». Se escribieron 17 páginas y 8 fichas de fuente con lo que había

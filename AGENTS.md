@@ -125,7 +125,12 @@
   dated live state). Its `README.md` says how to query, ingest and lint it
   (`scripts/knowledge/lint_site_wiki.py`); `test/unit/site_wiki_contract_test.dart`
   fails when a public route, GA4 event, site admin page or site Edge Function is
-  not in it. What you learn goes back into it in the same task.
+  not in it. What you learn goes back into it in the same task. Its first rule:
+  an agent's change to the site must be an editor operation — reopenable,
+  visible and editable in its control by a person without any agent — never a
+  parallel implementation (no hardcoded content, renderer-only branches, hidden
+  JSON keys or direct SQL as the content path); if the editor lacks the control,
+  add it first, then use it.
 - For bike workshop architecture work, read `BIKE_WORKSHOP_MASTER_SCHEMA.md` first and update it in the same task when behavior/schema/data-flow changes.
 - For an implementation that will ship, author its reviewed release change in
   `docs/releases/changes/` alongside the verified source. Follow

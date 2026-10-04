@@ -6,9 +6,10 @@ qué pide Google y el oficio, qué está en vivo y qué falta. Cómo se mantiene
 
 ## Empezar aquí
 
-- [Cómo se juzga un cambio en el sitio](paginas/principios.md) — un dato un dueño,
-  paridad Edit/Preview/público, guardar ≠ publicar ≠ Google, HTML para Google,
-  marca desde el editor.
+- [Cómo se juzga un cambio en el sitio](paginas/principios.md) — **regla 1: lo
+  que hace un agente queda hecho como en el editor, nunca en paralelo** (y la
+  prueba de ida y vuelta); un dato un dueño, paridad Edit/Preview/público,
+  guardar ≠ publicar ≠ Google, HTML para Google, marca desde el editor.
 - [Mapa del sistema](paginas/mapa-del-sistema.md) — editor → base → build →
   Firebase → Worker → navegador, con cada tabla, función y archivo dueño.
 - [Estado y pendientes](paginas/estado-y-pendientes.md) — qué está en vivo, qué

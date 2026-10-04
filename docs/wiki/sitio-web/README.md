@@ -14,6 +14,11 @@ sitio». Es a la vez el **mapa** (qué archivo, tabla, función o consola es due
 cada cosa) y el **criterio** (qué hace bien un sitio de comercio y qué pide
 Google).
 
+La regla que manda sobre todas: **lo que un agente cambia en el sitio queda
+hecho como lo habría hecho una persona en el editor**, editable ahí sin ningún
+agente; nunca una implementación paralela
+([principios, regla 1](paginas/principios.md)).
+
 ## Las tres capas
 
 | Capa | Dónde | Quién la cambia |
