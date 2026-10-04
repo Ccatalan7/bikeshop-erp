@@ -4033,7 +4033,7 @@ https://vinabike.cl/productos/neumatico-vuelta-mtb-cb531-26x1-95-negro/N079
 Never hand-build public product URLs in new code.
 
 - Flutter/storefront and ERP UI:
-  `lib/public_store/utils/product_url.dart`
+  `packages/vinabike_public_core/lib/public_store/utils/product_url.dart`
   - `publicProductPath(product)`
   - `buildPublicProductPath(...)`
 - Supabase Edge Functions/external publishers:

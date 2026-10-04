@@ -31,6 +31,8 @@ on:
       - "assets/**"
       - "lib/**"
       - "packages/**"
+      - "services/storefront_html/**"
+      - ".github/workflows/erp-integrity-gate.yml"
       - "test/**"
       - "web/spreadsheet_engine/**"
       - "package.json"
@@ -176,6 +178,14 @@ jobs:
 
       - name: Analyze without increasing the existing warning baseline
         run: flutter analyze --no-fatal-infos --no-fatal-warnings lib test
+
+      # Plain Dart, no Flutter: the core the ERP and the HTML storefront share
+      # must keep compiling without it (storefront-html-migration-plan.md).
+      - name: Analyze and test the shared core and the HTML storefront
+        run: |
+          for dir in packages/vinabike_public_core services/storefront_html; do
+            (cd "$dir" && dart pub get && dart analyze --fatal-infos && dart test)
+          done
 
       - name: Compile ERP web release
         run: >-

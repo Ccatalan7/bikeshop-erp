@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/public_store/models/public_commerce_product_projection.dart';
-import 'package:vinabike_erp/public_store/services/public_inventory_service.dart';
 import 'package:vinabike_erp/shared/models/product.dart';
+import 'package:vinabike_public_core/public_store/models/public_product_brand_names.dart';
 
 void main() {
   group('PublicCommerceProductProjection', () {

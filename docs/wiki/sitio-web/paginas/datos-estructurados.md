@@ -2,7 +2,7 @@
 titulo: Datos estructurados (JSON-LD)
 resumen: qué declara cada tipo de página de vinabike.cl, de qué dueño sale cada dato, qué pide Google para fichas de comercio y negocio local, y lo que falta
 fuentes: [google-search-central, schema-org, repositorio]
-archivos: [scripts/generate_product_seo_snapshots.dart, scripts/sync_seo_index.sh, lib/public_store/seo/public_product_structured_data.dart, lib/public_store/seo/public_business_structured_data.dart, lib/public_store/models/public_business_hours.dart, lib/public_store/utils/structured_data.dart]
+archivos: [scripts/generate_product_seo_snapshots.dart, scripts/sync_seo_index.sh, packages/vinabike_public_core/lib/public_store/seo/public_product_structured_data.dart, packages/vinabike_public_core/lib/public_store/seo/public_business_structured_data.dart, packages/vinabike_public_core/lib/public_store/models/public_business_hours.dart, lib/public_store/utils/structured_data.dart]
 tablas: [products, website_settings, spec_facts]
 revisado: 2026-10-04
 ---
@@ -133,13 +133,13 @@ Envío y devoluciones se pueden declarar **una vez** en la organización desde e
 
 ## En el código y la base
 
-- Ficha de producto: `lib/public_store/seo/public_product_structured_data.dart`;
+- Ficha de producto: `packages/vinabike_public_core/lib/public_store/seo/public_product_structured_data.dart`;
   la página la llama en `_updateStructuredData` (al cargar el producto, la ficha
   técnica y el recorrido de categorías).
 - Negocio: identidad en `scripts/sync_seo_index.sh`; lo demás en
-  `lib/public_store/seo/public_business_structured_data.dart`, aplicado por
+  `packages/vinabike_public_core/lib/public_store/seo/public_business_structured_data.dart`, aplicado por
   `completeSeoBusinessJsonLd` en `scripts/generate_product_seo_snapshots.dart`.
-- Horario: `lib/public_store/models/public_business_hours.dart`.
+- Horario: `packages/vinabike_public_core/lib/public_store/models/public_business_hours.dart`.
 - En la app: `lib/public_store/utils/structured_data.dart` (y su versión web).
 - Base: `products`, `spec_facts` (vía `get_public_product_technical_specs`),
   `website_settings`.

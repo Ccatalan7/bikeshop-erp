@@ -2,7 +2,7 @@
 titulo: Mapa del sistema
 resumen: de punta a punta, quién es dueño de qué — editor, base, funciones, build, hosting, borde y navegador — con los nombres exactos de archivos, tablas y funciones
 fuentes: [repositorio]
-archivos: [lib/main_store.dart, lib/public_store/routes/public_store_router.dart, lib/public_store/widgets/public_store_bootstrap.dart, lib/modules/website/services/website_service.dart, lib/modules/website/services/website_save_coordinator.dart, scripts/generate_product_seo_snapshots.dart, scripts/sync_seo_index.sh, scripts/check_storefront_bundle_budget.sh, scripts/write_storefront_release_evidence.sh, .github/workflows/firebase-hosting-store.yml, firebase.json, web/index.html, cloudflare-worker/src/index.js]
+archivos: [lib/main_store.dart, services/storefront_html/lib/src/storefront_handler.dart, packages/vinabike_public_core/pubspec.yaml, lib/public_store/routes/public_store_router.dart, lib/public_store/widgets/public_store_bootstrap.dart, lib/modules/website/services/website_service.dart, lib/modules/website/services/website_save_coordinator.dart, scripts/generate_product_seo_snapshots.dart, scripts/sync_seo_index.sh, scripts/check_storefront_bundle_budget.sh, scripts/write_storefront_release_evidence.sh, .github/workflows/firebase-hosting-store.yml, firebase.json, web/index.html, cloudflare-worker/src/index.js]
 tablas: [website_settings, website_pages, website_blocks, website_navigation, website_content, website_banners, website_backups, featured_products, products, product_categories, online_orders, online_order_items, online_shipping_rate_tiers]
 revisado: 2026-10-04
 ---
@@ -40,6 +40,16 @@ Firebase Hosting, target `store` ─────┴──► navegador del visit
 El ERP también monta la tienda dentro de sí en `/tienda/*` para editarla en vivo
 ([rutas-y-navegacion](rutas-y-navegacion.md)) `[Repo]`.
 
+**Tercera pieza, en migración (fase 0, 2026-10-04):** el servidor HTML
+`services/storefront_html/` (Dart con Jaspr y `shelf`) arma la ficha en cada
+visita desde `get_public_storefront_shell_v1` y `get_public_product_page_v1`,
+con el mismo código Dart que la tienda Flutter: el paquete
+`packages/vinabike_public_core` (proyección comercial, ficha técnica, texto SEO,
+datos estructurados, rutas de categoría y menú, tema, horario). En la fase 0 no
+reemplaza ninguna ruta pública: va a vivir en Cloud Run (`southamerica-east1`)
+detrás de `/_html/**` en el target `store`, con `noindex`. Plan y fases en
+`docs/architecture/storefront-html-migration-plan.md` `[Repo]`.
+
 ## Dueños de datos (Supabase, `public`)
 
 | Tabla | Qué guarda | Quién la edita |
@@ -67,6 +77,9 @@ devuelven sólo lo publicable) `[Prod 2026-10-03]`:
 `search_public_products`, `resolve_public_product_url_alias`,
 `get_public_checkout_capabilities`, `quote_public_online_shipping`,
 `get_public_online_shipping_tiers` (2026-10-04),
+`get_public_storefront_shell_v1` y `get_public_product_page_v1` (2026-10-04:
+`SECURITY INVOKER`, componen las de arriba en una lectura por página para el
+servidor HTML),
 `create_public_online_order_with_access`,
 `get_public_online_order_by_access_token`. Las versiones `_v1` de facetas y
 productos siguen por compatibilidad. Detalle en [seguridad](seguridad.md).
@@ -123,6 +136,9 @@ Disparadores: push a `main` que toque `lib/**`, `web/**`, el generador o
 - Tienda: `lib/public_store/` (páginas, servicios, rutas, tema). Editor:
   `lib/modules/website/` (páginas de administración, servicios, modelos de
   bloques). Las dos comparten `lib/shared/models/public_product_visibility_policy.dart`.
+- Núcleo compartido (2026-10-04): `packages/vinabike_public_core/lib/`, Dart sin
+  Flutter. Las rutas viejas en `lib/` son una línea que lo reexporta; el código
+  nuevo importa el paquete. Servidor HTML: `services/storefront_html/`.
 - Guardado del editor: `WebsiteSaveCoordinator` (un solo «Guardar») →
   `WebsiteService`.
 - Borde: `cloudflare-worker/src/index.js` (`vinabike-edge-cache`), caché de 5

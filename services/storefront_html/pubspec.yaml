@@ -1,0 +1,20 @@
+name: vinabike_storefront_html
+description: >-
+  The public storefront rendered as HTML on the server, one page per visit,
+  from the same Dart core the ERP uses. Phase 0 of
+  docs/architecture/storefront-html-migration-plan.md.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.10.0
+
+dependencies:
+  jaspr: ^0.23.5
+  shelf: ^1.4.2
+  vinabike_public_core:
+    path: ../../packages/vinabike_public_core
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.25.0

@@ -14,7 +14,7 @@ void main() {
         File('scripts/generate_product_seo_snapshots.dart').readAsStringSync();
     final indexSync = File('scripts/sync_seo_index.sh').readAsStringSync();
     final business = File(
-      'lib/public_store/seo/public_business_structured_data.dart',
+      'packages/vinabike_public_core/lib/public_store/seo/public_business_structured_data.dart',
     ).readAsStringSync();
 
     // Since 2026-10-04 the business links its published «Política de

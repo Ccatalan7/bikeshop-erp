@@ -4,13 +4,21 @@
     {
       "name": "web-static",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8765", "--directory", "web"],
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8765",
+        "--directory",
+        "web"
+      ],
       "port": 8765
     },
     {
-      "name": "html-proto",
+      "name": "storefront-html",
       "runtimeExecutable": "bash",
-      "runtimeArgs": ["tool/storefront_html_prototype/run.sh"],
+      "runtimeArgs": [
+        "services/storefront_html/run_local.sh"
+      ],
       "port": 4325
     }
   ]

@@ -1,12 +1,12 @@
 # Migración del sitio y su editor a HTML
 
-**Estado:** propuesta del 2026-10-04, con una ficha de prueba construida y
-medida (`tool/storefront_html_prototype/`). Espera la decisión del dueño:
-reemplaza su decisión del 2026-09-24 («no rehacer las páginas públicas como
-HTML todavía»). Cumple el contrato «HTML-first storefront evolution is allowed»
-de `.github/copilot-instructions.md`: dueño → control → operación →
-consumidores, rutas que siguen en Flutter, traspaso, frescura, reversión y
-verificación.
+**Estado:** aprobado por el dueño el 2026-10-04 («ok, aprobado, arranca con la
+fase 0»); reemplaza su decisión del 2026-09-24 («no rehacer las páginas
+públicas como HTML todavía»). Fase 0 en curso: hecha en local y en la base,
+falta Cloud Run (ver «Fase 0: estado»). Cumple el contrato «HTML-first
+storefront evolution is allowed» de `.github/copilot-instructions.md`: dueño →
+control → operación → consumidores, rutas que siguen en Flutter, traspaso,
+frescura, reversión y verificación.
 
 ## Por qué
 
@@ -79,18 +79,25 @@ Por eso la recomendación es **renderizar en Dart en el servidor**:
 
 ### Datos y frescura
 
-- **Una lectura por página.** Hoy la ficha Flutter hace 6+ llamadas
+- **Un viaje por página.** Hoy la ficha Flutter hace 6+ llamadas
   (`get_public_products`, tres enriquecimientos, ficha técnica, recorrido,
-  datos de la tienda). Se agrega `get_public_product_page_v1(tenant, sku)`
-  (y su par de categoría) que devuelve todo en un viaje, con los mismos
-  filtros de publicación. La prueba hace 2 viajes: ~0,7 s desde Chile.
+  datos de la tienda). Desde el 2026-10-04 existen dos lecturas que el
+  servidor hace al mismo tiempo: `get_public_product_page_v1(tenant, sku)`
+  (producto con sus campos del sitio, filas de marca, ficha técnica y
+  relacionados) y `get_public_storefront_shell_v1(tenant)` (ajustes públicos,
+  menús, páginas, categorías, tramos de envío). Son `SECURITY INVOKER` y sólo
+  componen las lecturas públicas que ya existen, así que no pueden devolver
+  nada que la llave pública no lea hoy
+  (`20261004180000_public_storefront_page_reads.sql`).
 - **Servidor junto a la base:** Cloud Run en `southamerica-east1`, la misma
   región que Supabase (`sa-east-1`). Firebase Hosting le reenvía sólo las rutas
   migradas; el resto sigue en Flutter.
 - **Sin caché vieja:** el HTML se arma en cada visita (`Cache-Control:
-  no-store` en el borde). Lo que cambia poco (tema, menús, categorías,
-  presentación) vive en memoria del servidor y lo invalida Supabase Realtime al
-  cambiar la fila, en uno o dos segundos. Precio y stock se leen en cada visita.
+  no-store` en el borde), y en la fase 0 también lo compartido: leerlo cuesta
+  5 ms en la base, así que menús, tema y categorías están frescos en cada
+  visita sin invalidar nada. Una caché en memoria invalidada por Supabase
+  Realtime queda para cuando el tráfico lo pida. Precio y stock se leen en cada
+  visita.
 - **Prueba obligatoria por fase:** cambiar un dato en el ERP y ver el HTML
   público actualizado en ≤5 s (con un producto de prueba no publicado, nunca
   con uno real).
@@ -154,7 +161,7 @@ Costuras que la fase 1 tiene que cumplir:
 - Capturas reales en teléfono y escritorio; en la fase 2, el editor dentro del
   ERP en macOS, Android y web.
 
-## Lo que la prueba no resuelve todavía
+## Lo que la prueba no resolvía (2026-10-04)
 
 - **Primer byte:** 0,78 s desde un Mac en Chile hasta Supabase en São Paulo,
   sin CDN. Se resuelve con la lectura única y el servidor en la misma región.
@@ -180,11 +187,76 @@ Costuras que la fase 1 tiene que cumplir:
 - **Jaspr** es más chico que el ecosistema de TypeScript: se valida en la fase 0
   antes de comprometer el resto.
 
-## La prueba
+## Fase 0: estado (2026-10-04)
 
-`tool/storefront_html_prototype/` (cómo correrla en su `README.md`): un
-servidor Dart que arma la ficha en cada visita desde las funciones públicas de
-hoy (`get_public_products`, `get_public_product_technical_specs`,
-`get_public_store_data`, `website_navigation`, `product_categories`,
-`get_public_online_shipping_tiers`) e importa el núcleo Dart sin copiarlo.
-Sin dependencias nuevas; sólo lectura con la llave publicable.
+Hecho y verificado:
+
+- **Núcleo Dart** en `packages/vinabike_public_core`, Dart sin Flutter: 18
+  archivos movidos con `git mv` (proyección comercial, ficha técnica, texto
+  SEO, datos estructurados, URL de producto, presentación de categorías,
+  menús y destinos, origen canónico (`store_url`), tema, horario, `Product`, utilidades chilenas) y la regla
+  de marca de la tienda (`canonicalPublicProductBrandNames`). En cada ruta
+  vieja de `lib/` queda una línea que lo reexporta, para no tocar los 162
+  archivos que lo importan mientras otro agente puede estar editándolos; el
+  código nuevo importa el paquete. CI lo analiza y prueba con Dart puro.
+- **Lecturas de la página** desplegadas y verificadas en producción
+  (`20261004180000`), con pgTAP (`public_storefront_page_reads.sql`: borrador,
+  SKU desconocido, otra empresa, costo ausente, menús y páginas ocultos). La
+  revisión de Codex encontró que las marcas no se filtraban por empresa y que
+  los relacionados llegaban sin los campos del sitio que Flutter agrega a
+  cada tarjeta; `20261004190000` corrige las dos cosas, con pruebas que
+  fallaban antes.
+- **Revisión cruzada** (Codex, 2026-10-04): sin P0 ni P1; cinco P2 y tres P3,
+  corregidos. Además de lo anterior: menús con su visibilidad de teléfono y
+  escritorio, pie con la regla de Flutter (grupos con enlaces o una lista
+  «Enlaces»), canónica desde `store_url`, logo de la empresa que se pide (o su
+  nombre), el paso de CI se dispara también con cambios del servidor, y la
+  cobertura de los registros de versión incluye el núcleo y el servidor
+  (`requiresReviewedChange`): un cambio en el núcleo no tocaba el hash de su
+  reexportación.
+- **Servidor** `services/storefront_html/`: Jaspr 0.23.5 renderizando en el
+  servidor con `renderComponent` sobre `shelf`, sin componentes cliente. Los
+  menús se resuelven con los modelos de la tienda (`WebsiteNavigation.href`,
+  `WebsitePage.fullPath`, `WebsiteDestination.parse`); el texto SEO con
+  `PublicProductSeoCopyInput.fromSettings`, nuevo en el núcleo. Pruebas del
+  manejador (página completa, escape, 404, 502, 405, menús). La prueba de
+  `tool/` se retiró.
+- **Medido** (en local, celular lento): usable a los 2,6 s, 362 KB, igual que
+  la prueba. Armar la página compilada (AOT) tarda 5–7 ms. En la base:
+  `get_public_product_page_v1` 281 ms, `get_public_storefront_shell_v1` 5 ms.
+
+Falta para cerrar la fase 0:
+
+1. Iniciar sesión en Google Cloud en el Mac (`gcloud auth login`, el dueño) y
+   confirmar que el proyecto tiene facturación, que Cloud Run exige.
+2. `services/storefront_html/deploy_cloud_run.sh` (Cloud Build compila la
+   imagen; `min-instances 1` para no pagar arranques en frío en el primer byte).
+3. Recién entonces, la reescritura `/_html/**` → `storefront-html` en el
+   target `store` de `firebase.json`: si el servicio no existe, falla el
+   despliegue de Hosting.
+4. Medir desde `vinabike.cl/_html/...` y anotar el costo mensual real.
+
+Lo que encontró la fase 0, y la fase 1 resuelve antes de abrir rutas:
+
+- **La ficha técnica cuesta ~275 ms por lectura**:
+  `get_public_product_technical_specs` valida los datos en cada visita
+  (`spec_validate_draft_internal_v1`). La tienda Flutter paga lo mismo hoy, en
+  una llamada aparte. Se precalcula cuando cambian los datos, en su dueño.
+- La ficha Flutter y el generador pasan a `PublicProductSeoCopyInput.fromSettings`,
+  para que el título y la descripción salgan de un solo lugar.
+- Los enlaces de categoría de los menús usan la misma normalización que
+  `normalizePublicCatalogRouteForRuntime` (hoy en código Flutter).
+- La disponibilidad de los productos que son set (`preview_product_stock_impact`)
+  entra a la lectura de la página.
+- El nodo `BikeStore`, las fotos al tamaño justo (`srcset`) y los submenús
+  plegados en el teléfono.
+- `firebase.json` declara `Cache-Control: public, max-age=0, must-revalidate`
+  para `/productos/**` (pensado para el `index.html` de Flutter). Cuando esas
+  rutas pasen a Cloud Run, la regla se retira o se iguala al `no-store` del
+  servidor, para que el borde nunca guarde una ficha. `/_html/**` no coincide
+  con ninguna regla.
+- `products.sku` es único en toda la base, no por empresa
+  (`products_sku_key`): dos tiendas no pueden repetir un SKU. No afecta a
+  Viñabike hoy; se anota para el día que haya otra.
+
+Cómo correrlo, medirlo y desplegarlo: `services/storefront_html/README.md`.

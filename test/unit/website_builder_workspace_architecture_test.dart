@@ -617,7 +617,7 @@ void main() {
 
   test('category collection presentation is editor-owned and route-backed', () {
     final model = File(
-      'lib/modules/website/models/website_catalog_presentation.dart',
+      'packages/vinabike_public_core/lib/modules/website/models/website_catalog_presentation.dart',
     ).readAsStringSync();
     final workspace = File(
       'lib/modules/website/pages/product_website_visibility_page.dart',

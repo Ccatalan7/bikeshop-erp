@@ -90,11 +90,11 @@ void main() {
     final snapshots =
         File('scripts/generate_product_seo_snapshots.dart').readAsStringSync();
     final projection = File(
-      'lib/public_store/models/public_commerce_product_projection.dart',
+      'packages/vinabike_public_core/lib/public_store/models/public_commerce_product_projection.dart',
     ).readAsStringSync();
 
     final structuredData = File(
-      'lib/public_store/seo/public_product_structured_data.dart',
+      'packages/vinabike_public_core/lib/public_store/seo/public_product_structured_data.dart',
     ).readAsStringSync();
 
     // One builder for the snapshot and the hydrated page (2026-10-04).
@@ -182,8 +182,15 @@ void main() {
       'supabase/functions/google-product-diagnostics/index.ts',
     ).readAsStringSync();
 
+    // The rule lives in the shared core since 2026-10-04, so the HTML
+    // storefront applies the same one; the live store reads and calls it.
+    final brandRule = File(
+      'packages/vinabike_public_core/lib/public_store/models/'
+      'public_product_brand_names.dart',
+    ).readAsStringSync();
     expect(live, contains(".select('id,name,tenant_id,is_active')"));
-    expect(live, contains("row['is_active'] != true"));
+    expect(live, contains('canonicalPublicProductBrandNames('));
+    expect(brandRule, contains("row['is_active'] != true"));
     expect(snapshots, contains("'is_active': 'eq.true'"));
     expect(snapshots, contains("row['is_active'] == true"));
     expect(feed, contains('.eq("is_active", true)'));
@@ -224,7 +231,7 @@ void main() {
     // no way to leave Easter Island and Juan Fernández out of Chile, so
     // `addressCountry: CL` would promise what the shipping page denies.
     final business = File(
-      'lib/public_store/seo/public_business_structured_data.dart',
+      'packages/vinabike_public_core/lib/public_store/seo/public_business_structured_data.dart',
     ).readAsStringSync();
     for (final source in [publicSources, business]) {
       expect(source, isNot(contains("'hasShippingService'")));

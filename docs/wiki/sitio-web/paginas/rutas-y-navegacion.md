@@ -2,7 +2,7 @@
 titulo: Rutas, redirecciones y navegación
 resumen: cada URL pública de vinabike.cl, cuáles indexa Google, las redirecciones de URL viejas, el 404 y los menús
 fuentes: [repositorio, google-search-central]
-archivos: [lib/public_store/routes/public_store_router.dart, firebase.json, web/robots.txt, lib/public_store/utils/product_url.dart]
+archivos: [lib/public_store/routes/public_store_router.dart, firebase.json, web/robots.txt, packages/vinabike_public_core/lib/public_store/utils/product_url.dart]
 tablas: [website_navigation, website_pages, product_categories, product_url_aliases]
 revisado: 2026-10-04
 ---
@@ -98,7 +98,7 @@ está enlazada desde páginas públicas. El test
 
 - Router: `lib/public_store/routes/public_store_router.dart` (y
   `deferred_commerce_routes.dart`, `deferred_customer_routes.dart` para lo que se
-  carga diferido); URL de producto: `lib/public_store/utils/product_url.dart` y
+  carga diferido); URL de producto: `packages/vinabike_public_core/lib/public_store/utils/product_url.dart` y
   la función `product_public_url_path`.
 - Cabeceras y redirecciones: `firebase.json` (target `store`); robots:
   `web/robots.txt` (el build lo reescribe).

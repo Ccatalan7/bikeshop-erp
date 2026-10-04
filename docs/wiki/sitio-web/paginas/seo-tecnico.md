@@ -2,7 +2,7 @@
 titulo: SEO técnico
 resumen: cómo lee Google una tienda hecha en Flutter, qué hace Viñabike para que la entienda (snapshots, semántica, canonical, sitemap, robots) y cómo se mide sin engañarse
 fuentes: [google-search-central, flutter-web, repositorio, consolas-google]
-archivos: [scripts/generate_product_seo_snapshots.dart, scripts/sync_seo_index.sh, lib/public_store/services/crawler_semantics.dart, lib/public_store/widgets/public_link_semantics.dart, lib/modules/website/services/website_seo_center_service.dart, lib/modules/website/pages/seo_settings_page.dart, lib/public_store/models/public_product_seo_copy.dart]
+archivos: [scripts/generate_product_seo_snapshots.dart, scripts/sync_seo_index.sh, lib/public_store/services/crawler_semantics.dart, lib/public_store/widgets/public_link_semantics.dart, lib/modules/website/services/website_seo_center_service.dart, lib/modules/website/pages/seo_settings_page.dart, packages/vinabike_public_core/lib/public_store/models/public_product_seo_copy.dart]
 tablas: [website_settings, website_pages, products, product_categories]
 revisado: 2026-10-04
 ---

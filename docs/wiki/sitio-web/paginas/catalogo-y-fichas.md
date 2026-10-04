@@ -2,7 +2,7 @@
 titulo: Catálogo, categorías y fichas de producto
 resumen: qué producto sale en la tienda y por qué, cómo se arman categorías, facetas, búsqueda y la ficha pública, y qué pasa con los agotados
 fuentes: [repositorio, google-search-central]
-archivos: [lib/shared/models/public_product_visibility_policy.dart, lib/public_store/models/public_commerce_product_projection.dart, lib/public_store/models/public_product_seo_copy.dart, lib/public_store/pages/product_catalog_page.dart, lib/public_store/pages/product_detail_page.dart, lib/public_store/utils/public_spec_display.dart]
+archivos: [lib/shared/models/public_product_visibility_policy.dart, packages/vinabike_public_core/lib/public_store/models/public_commerce_product_projection.dart, packages/vinabike_public_core/lib/public_store/models/public_product_seo_copy.dart, lib/public_store/pages/product_catalog_page.dart, lib/public_store/pages/product_detail_page.dart, packages/vinabike_public_core/lib/public_store/utils/public_spec_display.dart]
 tablas: [products, product_categories, product_url_aliases, website_settings, featured_products]
 revisado: 2026-10-03
 ---

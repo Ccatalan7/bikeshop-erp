@@ -75,6 +75,10 @@ dependencies:
   csv: ^5.1.1
   excel:
     path: packages/excel_localized
+  # What a product looks like to the public, shared with the HTML storefront
+  # (docs/architecture/storefront-html-migration-plan.md).
+  vinabike_public_core:
+    path: packages/vinabike_public_core
   file_saver: ^0.2.8
   
   # Bluetooth & Barcode Scanning

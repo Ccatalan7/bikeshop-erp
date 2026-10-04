@@ -33,7 +33,7 @@ revisado: 2026-10-04
 | 2026-09-26 | primario del sitio a navy `#123F68` |
 | 2026-09-27 | el diseño de todo el ERP queda a criterio del agente |
 | 2026-10-03 | nace este wiki |
-| 2026-10-04 | plan de migración del sitio y su editor a HTML, con una ficha de prueba en Dart medida (2,6 s contra 23,9 s); espera la decisión del dueño |
+| 2026-10-04 | plan de migración del sitio y su editor a HTML, con una ficha de prueba en Dart medida (2,6 s contra 23,9 s); el dueño la aprueba el mismo día y empieza la fase 0 |
 
 `[Repo]` `[Consola]`
 
@@ -43,10 +43,11 @@ revisado: 2026-10-04
 |---|---|
 | 2026-09-23 | la ruta de Merchant es sanear y pedir revisión, nunca una cuenta nueva |
 | 2026-09-24 | el aspecto del sitio público lo decide el agente: serio, pro, con personalidad, nada «AI'ish» |
-| 2026-09-24 | **no** rehacer las páginas públicas como HTML todavía; medir `store_ready` y revisar el 8-oct. En revisión: el plan del 2026-10-04 (`docs/architecture/storefront-html-migration-plan.md`) propone reemplazarla |
+| 2026-09-24 | ~~no rehacer las páginas públicas como HTML todavía~~ — reemplazada el 2026-10-04 |
 | 2026-09-25 | sin ramas ni PR: push directo a `main` (publica la web) |
 | 2026-09-27 | el diseño de todo el ERP, incluido el editor, queda abierto; Design es para proponer, no un requisito |
 | 2026-10-03 | el conocimiento del sitio vive en este wiki y se escribe en la misma tarea |
+| 2026-10-04 | migrar el sitio y su editor a HTML por fases («ok, aprobado, arranca con la fase 0»); el editor sigue dentro del ERP y lo que cambia en el ERP se ve en segundos |
 
 `[Dueño]`
 

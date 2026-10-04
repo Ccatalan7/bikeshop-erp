@@ -34,9 +34,12 @@ function safePath(value) {
     !value.split("/").some((part) => !part || part === "." || part === "..");
 }
 
+// Since 2026-10-04 the public product rules live in a pure Dart package the
+// apps compile in, and the HTML storefront serves them: a change there leaves
+// the one-line reexport in lib/ untouched, so it must be covered on its own.
 export function requiresReviewedChange(file) {
   return file === "pubspec.yaml" ||
-    (/^(?:lib|android|macos|windows|ios|scripts|\.github\/workflows)\//u.test(file) &&
+    (/^(?:lib|android|macos|windows|ios|scripts|\.github\/workflows|packages\/vinabike_public_core|services\/storefront_html)\//u.test(file) &&
       !/(?:^|\/)(?:tests?|fixtures?|mocks?)(?:\/|$)|\.test\.mjs$/u.test(file) &&
       !isGeneratedReleasePath(file) && !isSensitiveReleasePath(file) && !isBinaryReleasePath(file));
 }

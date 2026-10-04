@@ -7,7 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { collectReviewedReleaseChanges, generateReviewedReleaseNotes } from "./reviewed_release_changes.mjs";
+import { collectReviewedReleaseChanges, generateReviewedReleaseNotes, requiresReviewedChange } from "./reviewed_release_changes.mjs";
 
 const CLI = fileURLToPath(new URL("./generate_release_notes.mjs", import.meta.url));
 const SOURCE = "lib/shared/search.dart";
@@ -124,4 +124,13 @@ test("symlinks and binary source cannot masquerade as reviewed application chang
   await rm(path.join(f.repoDir, SOURCE)); await f.put(SOURCE, Buffer.from([1, 0, 2]));
   f.record.evidence[0].sha256 = sha(Buffer.from([1, 0, 2])); await f.save(); to = f.commit();
   assert.throws(() => f.generate(to), /Binary content/u);
+});
+
+test("the shared public core and the HTML storefront need their own review, not just the lib/ reexport", () => {
+  assert.equal(requiresReviewedChange("packages/vinabike_public_core/lib/shared/models/product.dart"), true);
+  assert.equal(requiresReviewedChange("services/storefront_html/lib/src/storefront_handler.dart"), true);
+  assert.equal(requiresReviewedChange("services/storefront_html/Dockerfile"), true);
+  assert.equal(requiresReviewedChange("packages/vinabike_public_core/test/core_runs_without_flutter_test.dart"), false);
+  assert.equal(requiresReviewedChange("services/storefront_html/test/storefront_handler_test.dart"), false);
+  assert.equal(requiresReviewedChange("packages/excel_localized/lib/excel.dart"), false);
 });

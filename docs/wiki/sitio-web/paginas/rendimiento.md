@@ -2,7 +2,7 @@
 titulo: Rendimiento y carga
 resumen: cuánto pesa y tarda la tienda, la página instantánea que muestra contenido antes de Flutter, el borde, las imágenes y cómo se mide contra las Core Web Vitals
 fuentes: [web-dev, flutter-web, repositorio, consolas-google]
-archivos: [docs/architecture/storefront-instant-page.md, docs/architecture/storefront-html-migration-plan.md, tool/storefront_html_prototype/measure.mjs, scripts/storefront_instant_page/instant_page.js, scripts/storefront_instant_page/instant_page.css, web/index.html, cloudflare-worker/src/index.js, scripts/check_storefront_bundle_budget.sh, supabase/functions/website-optimize-image/index.ts]
+archivos: [docs/architecture/storefront-instant-page.md, docs/architecture/storefront-html-migration-plan.md, services/storefront_html/tool/measure.mjs, scripts/storefront_instant_page/instant_page.js, scripts/storefront_instant_page/instant_page.css, web/index.html, cloudflare-worker/src/index.js, scripts/check_storefront_bundle_budget.sh, supabase/functions/website-optimize-image/index.ts]
 tablas: [website_settings, website_blocks]
 revisado: 2026-10-04
 ---
@@ -57,12 +57,21 @@ un consumidor de los mismos dueños, nunca otro CMS `[Repo]`.
 lee `store_ready` en GA4 por tramo de carga y recomienda.
 
 **Ficha en HTML (2026-10-04):** la misma ficha (`H911`) servida como HTML desde
-un servidor Dart de prueba (`tool/storefront_html_prototype/`), medida con el
+un servidor Dart de prueba (retirado; hoy `services/storefront_html/`), medida con el
 mismo método: usable a los **2,6 s** contra 23,9 s, **342 KB** contra 4.384 KB,
 389 palabras y 67 enlaces sin JavaScript. Pierde en primer byte (0,78 s contra
 0,12 s) porque corre en un Mac en Chile y lee la base en São Paulo en cada
 visita, sin CDN. Plan y fases en `docs/architecture/storefront-html-migration-plan.md`
 `[Repo 2026-10-04]`.
+
+**Fase 0 (2026-10-04):** el servidor `services/storefront_html/` reemplaza a la
+prueba y mide lo mismo en local (usable a los 2,6 s, 362 KB). Por dentro, en
+producción y como `anon`: `get_public_product_page_v1` tarda **281 ms**, y
+**~275 ms** de eso es `get_public_product_technical_specs`, que valida la ficha
+técnica en cada lectura (`spec_validate_draft_internal_v1`); la tienda Flutter
+paga lo mismo hoy en una llamada aparte. `get_public_storefront_shell_v1` tarda
+5 ms (86 KB). Armar la página con Jaspr compilado (AOT) tarda 5–7 ms. La ficha
+técnica precalculada es requisito de la fase 1 `[Prod 2026-10-04]`.
 
 ## Borde y datos
 

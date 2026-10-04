@@ -4,6 +4,17 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-04 — corrección — el dueño aprobó la migración y empezó la fase 0:
+  núcleo Dart compartido en un paquete (los archivos se movieron y las rutas
+  viejas los reexportan), dos lecturas públicas `SECURITY INVOKER` en
+  producción, servidor Jaspr que reemplaza a la prueba. Medido en producción:
+  la ficha técnica cuesta ~275 ms por lectura, también en la tienda Flutter
+  ([rendimiento](paginas/rendimiento.md)). Falta Cloud Run, que espera el
+  inicio de sesión del dueño en Google Cloud ([estado](paginas/estado-y-pendientes.md)). La revisión de Codex
+  (sin P0/P1) encontró marcas sin filtro de empresa y relacionados sin los
+  campos del sitio en la lectura (corregido en `20261004190000`), y menús y pie
+  que no seguían la regla de Flutter.
+
 - 2026-10-04 — consulta archivada — el dueño preguntó si el sitio y el editor
   podían migrar a HTML sin perder el editor dentro del ERP ni la frescura de los
   datos. Ninguno de los dos requisitos necesitaba Flutter. Se escribió el plan

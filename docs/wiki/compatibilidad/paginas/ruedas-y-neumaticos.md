@@ -104,7 +104,7 @@ y del neumático [Fab][Taller].
   horquilla, `fork_tire_clearance_configurations` (aro y neumático más ancho).
 - **La tienda** muestra el BSD como el cliente lo pide («29" / 700c») con
   `wheelSizeLabelForBsd` y el ancho en pulgadas y milímetros con
-  `tireWidthLabel` (`lib/public_store/utils/public_spec_display.dart`).
+  `tireWidthLabel` (`packages/vinabike_public_core/lib/public_store/utils/public_spec_display.dart`).
 - **Motor:** `_assessRimFamilyCompatibility`, `_assessRimStripFamilyCompatibility`
   (fondo o cinta de llanta: mismo BSD y ancho para el ancho interior de la llanta)
   y las familias de neumático, cámara y tubeless comparan BSD; el ancho llanta↔neumático se juzga sólo cuando las dos
