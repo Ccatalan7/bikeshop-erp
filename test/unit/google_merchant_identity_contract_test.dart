@@ -220,9 +220,9 @@ void main() {
     expect(publicSources, isNot(contains('OfferShippingDetails')));
     expect(publicSources, isNot(contains("'shippingDetails'")));
 
-    // Nor once for the whole business (2026-10-04): schema.org cannot leave
-    // Easter Island and Juan Fernández out of Chile, so `addressCountry: CL`
-    // would promise what the shipping page denies.
+    // Nor once for the whole business (2026-10-04): Google Search documents
+    // no way to leave Easter Island and Juan Fernández out of Chile, so
+    // `addressCountry: CL` would promise what the shipping page denies.
     final business = File(
       'lib/public_store/seo/public_business_structured_data.dart',
     ).readAsStringSync();

@@ -198,6 +198,32 @@ void main() {
         })).map((p) => '${p.day} ${p.opens}-${p.closes}'),
         ['TUESDAY 10:00-18:30'],
       );
+      // Horas imposibles no se publican; 24:00 sí cierra a medianoche.
+      expect(
+        parsePublicBusinessHours(jsonEncode({
+          'periods': [
+            {
+              'openDay': 'MONDAY',
+              'openTime': {'hours': 10},
+              'closeTime': {'hours': 24, 'minutes': 30},
+            },
+            {
+              'open': {'day': 2, 'time': '99:99'},
+              'close': {'day': 2, 'time': '1900'},
+            },
+            {
+              'open': {'day': 3, 'time': '2560'},
+              'close': {'day': 3, 'time': '1900'},
+            },
+            {
+              'openDay': 'FRIDAY',
+              'openTime': {'hours': 18},
+              'closeTime': {'hours': 24},
+            },
+          ],
+        })).map((p) => '${p.day} ${p.opens}-${p.closes}'),
+        ['FRIDAY 18:00-24:00'],
+      );
       expect(parsePublicBusinessHours('{"periods": 3}'), isEmpty);
       expect(parsePublicBusinessHours('[1, 2]'), isEmpty);
     });
@@ -238,7 +264,7 @@ void main() {
       expect(node['logo'], '$storeUrl/assets/logo.webp');
       expect(node['hasMap'], 'https://maps.google.com/?cid=1');
       expect(node.containsKey('image'), isFalse);
-      // «Chile continental» no se puede decir en schema.org para Chile.
+      // Google no puede acotar «Chile continental»: no se declara envío.
       expect(node.containsKey('hasShippingService'), isFalse);
     });
 

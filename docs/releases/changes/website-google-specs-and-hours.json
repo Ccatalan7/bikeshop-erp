@@ -21,11 +21,11 @@
     },
     {
       "path": "lib/public_store/seo/public_business_structured_data.dart",
-      "sha256": "617b8f300894517b46b79682ae5168cd14cddacb7814b2ee810c78568cbf6dcf"
+      "sha256": "b3558da2330b8969863111dae310ceb12c3b9a7d12e7dc9f21268dd26231e8cc"
     },
     {
       "path": "lib/public_store/models/public_business_hours.dart",
-      "sha256": "d2f651fe18e93992d94e977286b92b3c42f1dd1a9738b302b589326fbec6746a"
+      "sha256": "7d3aaf04a18e90130da781648a0f6e74f82e680e7442f43ba9b8a40d5d833440"
     },
     {
       "path": "lib/public_store/pages/product_detail_page.dart",

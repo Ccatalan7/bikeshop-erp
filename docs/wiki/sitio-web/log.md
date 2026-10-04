@@ -11,11 +11,12 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   logo, mapa y link a `/devoluciones`
   ([datos-estructurados](paginas/datos-estructurados.md)). El envío por tramos
   se implementó (con la función nueva `get_public_online_shipping_tiers`) y se
-  retiró tras la revisión: schema.org no puede decir «Chile continental» y
+  retiró tras la revisión: Google no puede acotar «Chile continental» y
   declarar `CL` promete despacho a las islas, con Merchant suspendido por
   información engañosa. Codex encontró además un horario mal tipado que tumbaba
   `/contacto` y el build, un calendario lunes–viernes sin dueño y lecturas sin
-  plazo; corregidos.
+  plazo; corregidos, y en la segunda pasada horas imposibles (`24:30`,
+  `99:99`) que todavía pasaban.
   Tres afirmaciones anteriores eran falsas: «la ficha no declara
   `description`» (sí la declara; sólo 29 de 1.541 productos tienen texto), «quitar
   el bloqueo de `/pedido/` en robots» (protege el token del pedido; descartado en

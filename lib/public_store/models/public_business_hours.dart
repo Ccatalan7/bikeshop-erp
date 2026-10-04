@@ -64,12 +64,12 @@ List<PublicBusinessHoursPeriod> parsePublicBusinessHours(String rawJson) {
       }
       if (day == null ||
           !publicBusinessDays.contains(day) ||
-          opens == null ||
-          closes == null) {
+          !_isTimeOfDay(opens) ||
+          !_isTimeOfDay(closes)) {
         continue;
       }
       result.add(
-        PublicBusinessHoursPeriod(day: day, opens: opens, closes: closes),
+        PublicBusinessHoursPeriod(day: day, opens: opens!, closes: closes!),
       );
     }
     return List.unmodifiable(result);
@@ -79,6 +79,16 @@ List<PublicBusinessHoursPeriod> parsePublicBusinessHours(String rawJson) {
     // the store build.
     return const [];
   }
+}
+
+/// 00:00 to 23:59, or 24:00 for a span that closes at midnight (Google
+/// Business allows both ends of `00:00–24:00`).
+bool _isTimeOfDay(String? time) {
+  final match = RegExp(r'^(\d{2}):(\d{2})$').firstMatch(time ?? '');
+  if (match == null) return false;
+  final hours = int.parse(match.group(1)!);
+  final minutes = int.parse(match.group(2)!);
+  return (hours < 24 && minutes < 60) || (hours == 24 && minutes == 0);
 }
 
 String? _placesDay(Object? rawDay) {
@@ -103,8 +113,9 @@ String? _businessTime(Object? rawTime) {
   if (rawTime is! Map) return null;
   final hours = rawTime['hours'] ?? 0;
   final minutes = rawTime['minutes'] ?? 0;
-  if (hours is! int || minutes is! int) return null;
-  if (hours < 0 || hours > 24 || minutes < 0 || minutes > 59) return null;
+  if (hours is! int || minutes is! int || hours < 0 || minutes < 0) {
+    return null;
+  }
   return '${hours.toString().padLeft(2, '0')}:'
       '${minutes.toString().padLeft(2, '0')}';
 }

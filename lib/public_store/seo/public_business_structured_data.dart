@@ -10,12 +10,14 @@ import '../models/public_business_hours.dart';
 /// from the one the store paints.
 ///
 /// Shipping is deliberately not declared (2026-10-04). The store ships to
-/// «Chile continental», and Google's `DefinedRegion` cannot leave out Easter
-/// Island or Juan Fernández for Chile (regions only for US, AU and JP; and
-/// both islands belong to Valparaíso). `addressCountry: CL` would promise
-/// delivery the shipping page denies, on a Merchant account suspended for
-/// misleading information. `google_merchant_identity_contract_test.dart`
-/// keeps it out until there is a way to say it exactly.
+/// «Chile continental», and Google Search documents no way to leave Easter
+/// Island and Juan Fernández out of Chile: its `DefinedRegion` reads regions
+/// only for the US, Australia and Japan and postal codes only for Australia,
+/// Canada and the US (schema.org itself could list postal ranges; Google
+/// would not read them). `addressCountry: CL` would promise delivery the
+/// shipping page denies, on a Merchant account suspended for misleading
+/// information. `google_merchant_identity_contract_test.dart` keeps it out
+/// until there is a way to say it exactly.
 Map<String, dynamic> completePublicBusinessStructuredData(
   Map<String, dynamic> identity, {
   required String logoUrl,

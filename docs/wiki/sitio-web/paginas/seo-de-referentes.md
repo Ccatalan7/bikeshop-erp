@@ -73,7 +73,7 @@ primero la capacidad al editor (regla 1, [principios](principios.md)).
    es **contenido** (29 descripciones y 5 códigos de barras de 1.541).
 3. **Envío y devoluciones declarados una vez para todo el negocio** — las
    devoluciones, hechas el 2026-10-04 (link a `/devoluciones`). El envío **no**:
-   «Chile continental» no se puede expresar para Chile y declarar `CL` promete
+   «Chile continental» no se puede acotar para Google en Chile y declarar `CL` promete
    despacho a las islas ([datos-estructurados](datos-estructurados.md)).
 4. **Textos de categoría:** cada categoría visible con su presentación (título,
    texto, imagen) escrita y servida en HTML; hoy la descripción de categoría tiene

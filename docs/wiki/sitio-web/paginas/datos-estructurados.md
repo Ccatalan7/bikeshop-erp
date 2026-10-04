@@ -68,19 +68,21 @@ El nodo tiene **dos escritores, cada propiedad uno** `[Repo]`:
 | `hasMerchantReturnPolicy` | **sólo** `merchantReturnLink` a `/devoluciones`, y sólo si esa página está publicada con contenido |
 
 **El envío no se declara, a propósito (2026-10-04).** La tienda despacha a
-«Chile continental» y schema.org no lo puede decir para Chile: `DefinedRegion`
-sólo acota regiones en EE. UU., Australia y Japón `[GSC]`, e Isla de Pascua y
-Juan Fernández son de la región de Valparaíso, así que ni un código de región
-las saca. `addressCountry: CL` prometería despacho a las islas, contra lo que
-dice `/envios`, en una cuenta de Merchant suspendida por «información
-engañosa». Tampoco el retiro gratis: una condición de envío a $0 se presta a
-leerse como «envío gratis». `google_merchant_identity_contract_test.dart`
-prohíbe `hasShippingService` y `shippingDetails` hasta que exista una forma
-exacta. Se implementó y se retiró el mismo día, después de la revisión; la
-función `get_public_online_shipping_tiers` (20261004120000, aplicada) quedó
-para que `/envios` lea los tramos de su dueño ([estado-y-pendientes](estado-y-pendientes.md)).
-El comentario de esa migración, congelada byte a byte, todavía dice que el
-build declara los tramos: es historia.
+«Chile continental» y **Google Search no soporta esa delimitación para Chile**:
+su `DefinedRegion` lee regiones sólo en EE. UU., Australia y Japón y códigos
+postales sólo en Australia, Canadá y EE. UU. `[GSC]`. schema.org sí permitiría
+rangos postales, pero Google no los leería, e Isla de Pascua y Juan Fernández
+son de la región de Valparaíso. `addressCountry: CL` prometería despacho a las
+islas, contra lo que dice `/envios`, en una cuenta de Merchant suspendida por
+«información engañosa». El retiro gratis (`FulfillmentTypeCollectionPoint`, que
+Google distingue del despacho) salió con él: aporta poco solo y volverá cuando
+se declare el envío. `google_merchant_identity_contract_test.dart` prohíbe
+`hasShippingService` y `shippingDetails` hasta que exista una forma exacta. Se
+implementó y se retiró el mismo día, después de la revisión de Codex; la función
+`get_public_online_shipping_tiers` (20261004120000, aplicada) quedó para que
+`/envios` lea los tramos de su dueño ([estado-y-pendientes](estado-y-pendientes.md)).
+El comentario de esa migración, congelada byte a byte, todavía dice que el build
+declara los tramos: es historia.
 
 **Devoluciones con link y nada más, a propósito.** Los términos (10 días, quién
 paga el envío, reembolso) viven como texto en la página del editor. Declararlos

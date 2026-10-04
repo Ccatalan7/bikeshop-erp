@@ -45,7 +45,7 @@ hábiles) o apelando; los casos graves se suspenden sin aviso y casi no vuelven
    consola vuelva a mostrar «Solicitar revisión».
 2. ~~**Declarar envío y devoluciones** en los datos estructurados~~ — las
    devoluciones se declaran desde el 2026-10-04 (link a la página publicada). El
-   envío **no**, a propósito: schema.org no puede decir «Chile continental» y
+   envío **no**, a propósito: Google no puede acotar «Chile continental» y
    declarar todo Chile sería justamente información engañosa; en Merchant
    Center se configura en su propia consola ([datos-estructurados](datos-estructurados.md)).
 3. **Ficha de Google y reseñas** al día (fotos, horario).
