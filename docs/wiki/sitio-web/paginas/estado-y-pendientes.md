@@ -2,7 +2,7 @@
 titulo: Estado y pendientes
 resumen: qué está en vivo hoy, qué falta y de quién depende — la lista de trabajo del sitio, con fecha
 fuentes: [repositorio, consolas-google, google-search-central]
-archivos: [supabase/migrations/20260728223000_harden_website_navigation_seed.sql, supabase/migrations/20260728230000_add_storefront_publication_contract.sql, docs/architecture/storefront-instant-page.md]
+archivos: [supabase/migrations/20260728223000_harden_website_navigation_seed.sql, supabase/migrations/20260728230000_add_storefront_publication_contract.sql, docs/architecture/storefront-instant-page.md, docs/architecture/storefront-html-migration-plan.md]
 tablas: [website_navigation, website_settings, products, online_shipping_rate_tiers]
 revisado: 2026-10-04
 ---
@@ -31,6 +31,7 @@ Se actualiza cada vez que algo cambia de estado; cada línea con su fecha.
 | 2026-09-24 | Crear la GitHub App (APP_ID, INSTALLATION_ID, llave privada) | sin ella «Publicar» del editor no puede disparar el build ([publicacion](publicacion-y-despliegue.md)) |
 | 2026-09-24 | Marcar `contact` como evento clave en GA4 | es una configuración de la cuenta |
 | 2026-09-23 | Reconectar la cuenta Google del ERP con el permiso de Search Console | el centro SEO no ve Google hasta entonces |
+| 2026-10-04 | **Decidir la migración del sitio y su editor a HTML** (aprobar la fase 0, que no cambia nada público) | plan en `docs/architecture/storefront-html-migration-plan.md` con una ficha de prueba medida: lista a los 2,6 s contra 23,9 s en un celular lento. Reemplaza la decisión del 2026-09-24 ([historia](historia.md), [rendimiento](rendimiento.md)) |
 
 ## Lo puede hacer un agente
 
@@ -39,7 +40,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 
 | Desde | Qué | Página |
 |---|---|---|
-| 2026-10-04 | **Contenido real y visible en el HTML** de fichas, categorías y portada (hoy en `<noscript>`, ~100–150 palabras contra 700–2.500 de los referentes) | [seo-de-referentes](seo-de-referentes.md) |
+| 2026-10-04 | **Contenido real y visible en el HTML** de fichas, categorías y portada (hoy en `<noscript>`, ~100–150 palabras contra 700–2.500 de los referentes). Si el dueño aprueba la migración a HTML, la fase 1 lo resuelve y no se completa la página instantánea | [seo-de-referentes](seo-de-referentes.md) |
 | 2026-10-04 | **Descripciones de producto**: 29 de 1.541 publicados tienen texto; el JSON-LD y la página no tienen qué mostrar en el resto (contenido, no marcado) | [datos-estructurados](datos-estructurados.md) |
 | 2026-10-04 | Términos de devolución (días, quién paga, reembolso) como campos del editor, para declararlos además del link (regla 1: primero el control) | [datos-estructurados](datos-estructurados.md) |
 | 2026-10-04 | Los tramos de envío no tienen control en el editor y la página `/envios` los repite como texto: un cambio de tarifa hay que hacerlo en dos lados. Llevarlos al editor y que la página los lea de `get_public_online_shipping_tiers` | [checkout](checkout-y-pedidos.md) |
@@ -56,6 +57,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 | 2026-09-26 | Login `/cuenta/login` sin la dirección «Sendero» | [portal](portal-de-clientes.md) |
 | 2026-10-03 | Código muerto: `banners_management_page.dart`, `content_management_page.dart`, `customer_account_page.dart`, `premium_dashboard_widgets.dart`, ruta `/cuenta/mensajes`; clave `header_nav_links` | [editor](editor-del-sitio.md) |
 | 2026-10-08 | Leer el resultado de la tarea `vinabike-store-ready-review` | [rendimiento](rendimiento.md) |
+| 2026-10-04 | Paridad latente de la ficha técnica: el generador de snapshots arma la identidad con `color`, `size`, `material` y `weight` leídos de `products`, y la página pública no los recibe; un producto que los tenga mostraría en el snapshot filas que la página no. 0 productos afectados hoy | [datos-estructurados](datos-estructurados.md) |
 
 ## Hecho
 

@@ -1,0 +1,190 @@
+# Migración del sitio y su editor a HTML
+
+**Estado:** propuesta del 2026-10-04, con una ficha de prueba construida y
+medida (`tool/storefront_html_prototype/`). Espera la decisión del dueño:
+reemplaza su decisión del 2026-09-24 («no rehacer las páginas públicas como
+HTML todavía»). Cumple el contrato «HTML-first storefront evolution is allowed»
+de `.github/copilot-instructions.md`: dueño → control → operación →
+consumidores, rutas que siguen en Flutter, traspaso, frescura, reversión y
+verificación.
+
+## Por qué
+
+La tienda es una app Flutter web: dibuja en un lienzo con JavaScript. Flutter
+mismo dice que no sirve para contenido que necesita SEO
+(`docs/wiki/sitio-web/fuentes/flutter-web.md`). Medido el 2026-10-04 en la ficha
+de la horquilla Suntour Auron 35 (`H911`), en un celular lento (1,6 Mbps,
+150 ms, CPU ×4, mediana de 3 cargas, método de
+`docs/architecture/storefront-instant-page.md`):
+
+| | Tienda actual | Ficha HTML de prueba |
+|---|---|---|
+| Página completa y usable | 23,9 s | **2,6 s** |
+| Bytes transferidos | 4.384 KB | **342 KB** |
+| Primer contenido | 0,37 s | 0,93 s |
+| Foto principal (LCP) | 1,57 s | 2,56 s |
+| Primer byte | 0,12 s (CDN) | 0,78 s (servidor en un Mac en Chile, sin CDN) |
+| Palabras sin JavaScript | 16 visibles + 65 en `<noscript>` | **389** |
+| Enlaces sin JavaScript | 3 + 2 en `<noscript>` | **67** |
+
+La tienda actual llega antes al primer contenido porque la página instantánea
+es un archivo estático en el CDN; la prueba lee la base en cada visita desde
+Chile. En producción el servidor corre junto a la base (São Paulo, la región de
+Supabase) y el primer byte baja a decenas de milisegundos; ver «Lo que la
+prueba no resuelve todavía».
+
+Los referentes chilenos sirven 700–2.500 palabras en el HTML
+(`docs/wiki/sitio-web/paginas/seo-de-referentes.md`). Mantener la página
+instantánea completa además de Flutter duplica cada página; migrar la elimina.
+
+## Requisitos del dueño (2026-10-04)
+
+1. **El editor sigue dentro del ERP**, desde el mismo menú y con la misma
+   sesión: nada de una URL aparte. El lienzo pasa a ser el sitio HTML real en
+   un visor web integrado; el ERP ya integra visores web (WhatsApp Web y
+   portales de proveedores, `lib/shared/widgets/webview_module_page.dart`).
+2. **Lo que se configura en el ERP se ve en segundos en la página.** No hay
+   sincronización: el ERP y el sitio leen y escriben las mismas tablas. El
+   precio y el stock nunca salen de una caché vieja. Frescura igual o mejor que
+   hoy (hoy: la ficha abierta se relee cada ~30 s; portada y ajustes, hasta
+   5 min por el Worker; lo que lee Google, hasta el próximo despliegue).
+3. **Regla 1 del wiki:** todo lo que muestra el sitio se crea y se corrige en el
+   editor o en el ERP; el HTML es consumidor, nunca un segundo dueño.
+
+## Arquitectura
+
+### Un núcleo Dart, dos consumidores
+
+Lo que decide cómo se ve un producto ya es Dart puro y ya corre fuera de
+Flutter (el generador de snapshots lo usa con `dart run`): la proyección
+comercial (`PublicCommerceProductProjection`), la ficha técnica
+(`PublicProductSpecSheet`, `public_spec_display.dart`: rodados, anchos,
+unidades, números a la chilena), el texto SEO (`public_product_seo_copy.dart`),
+los datos para Google (`lib/public_store/seo/`), las rutas de categoría
+(`website_catalog_presentation.dart`), el tema (`website_theme_color_value.dart`),
+el horario (`public_business_hours.dart`) y los modelos de los 24 bloques del
+editor (`lib/modules/website/models/`). **La prueba los importa tal cual**: no
+se copió ni una regla a otro lenguaje.
+
+Por eso la recomendación es **renderizar en Dart en el servidor**:
+
+- **Fase 0 extrae ese núcleo a un paquete Dart puro**
+  (`packages/vinabike_public_core`), que importan el ERP y el sitio.
+- **Componentes con Jaspr** (SSR en Dart; con él están hechos dart.dev y
+  docs.flutter.dev), validado en la fase 0 portando la ficha de prueba. Plan B
+  si Jaspr no rinde: el mismo servidor Dart de la prueba con plantillas propias.
+- Alternativa descartada por ahora: Astro/Next.js en TypeScript. Tiene más
+  ecosistema, pero obliga a reescribir el núcleo en TypeScript o a mover cada
+  regla de presentación a SQL, y deja dos implementaciones que divergen.
+
+### Datos y frescura
+
+- **Una lectura por página.** Hoy la ficha Flutter hace 6+ llamadas
+  (`get_public_products`, tres enriquecimientos, ficha técnica, recorrido,
+  datos de la tienda). Se agrega `get_public_product_page_v1(tenant, sku)`
+  (y su par de categoría) que devuelve todo en un viaje, con los mismos
+  filtros de publicación. La prueba hace 2 viajes: ~0,7 s desde Chile.
+- **Servidor junto a la base:** Cloud Run en `southamerica-east1`, la misma
+  región que Supabase (`sa-east-1`). Firebase Hosting le reenvía sólo las rutas
+  migradas; el resto sigue en Flutter.
+- **Sin caché vieja:** el HTML se arma en cada visita (`Cache-Control:
+  no-store` en el borde). Lo que cambia poco (tema, menús, categorías,
+  presentación) vive en memoria del servidor y lo invalida Supabase Realtime al
+  cambiar la fila, en uno o dos segundos. Precio y stock se leen en cada visita.
+- **Prueba obligatoria por fase:** cambiar un dato en el ERP y ver el HTML
+  público actualizado en ≤5 s (con un producto de prueba no publicado, nunca
+  con uno real).
+
+### El editor
+
+- **El panel lateral se queda en Flutter, en el ERP**: pestañas, campos de cada
+  bloque, guardado (`WebsiteSaveCoordinator`, `replace_page_blocks`). Es la
+  mayor parte del editor y no se reescribe.
+- **El lienzo pasa a ser el sitio HTML real** en un visor web del ERP
+  (WKWebView en macOS, WebView en Android, WebView2 en Windows, iframe en el ERP
+  web). En modo edición, sólo para personal autenticado, el sitio marca cada
+  bloque y avisa al panel cuál se tocó; el panel guarda y el lienzo vuelve a
+  dibujar ese bloque. Se gana fidelidad: lo que se ve al editar es literalmente
+  la página pública.
+- Se reescriben los renderizadores de los 24 bloques (hoy widgets Flutter en
+  `lib/modules/website/widgets/`) como componentes HTML.
+- La sesión pasa del ERP al visor sin volver a entrar.
+
+### Lo que Google y los demás reciben
+
+Todo en HTML visible: título, precio, disponibilidad, ficha técnica, descripción,
+migas y relacionados como enlaces; JSON-LD del mismo armado compartido
+(`buildPublicProductStructuredData`, `completePublicBusinessStructuredData`);
+`sitemap.xml` y redirecciones siguen saliendo del build mientras convivan las
+dos tiendas.
+
+## Fases (cada una se revierte quitando sus reescrituras de Firebase)
+
+| Fase | Qué | Rutas | Sigue en Flutter |
+|---|---|---|---|
+| 0 | Núcleo Dart en paquete; Jaspr validado con esta ficha; `get_public_product_page_v1`; servicio en Cloud Run detrás de una ruta oculta; medición | ninguna pública | todo |
+| 1 | **Fichas y categorías** (casi todo el valor SEO; su contenido viene de la ficha del producto y de «Catálogo web», no de bloques) | `/productos/<slug>/<sku>`, `/productos/categoria/<slug>`, `/productos` | portada, páginas del editor, carrito, checkout, portal |
+| 2 | **Editor con lienzo HTML** + portada, páginas del editor, `/servicios`, `/contacto`, páginas legales | todas las de contenido | carrito, checkout, portal |
+| 3 | **Carrito, checkout, pedido y portal** en HTML con islas interactivas; pagos con los mismos RPC y Edge Functions; pagos de prueba antes de abrir | todas | nada: se retira `lib/main_store.dart` |
+
+Costuras que la fase 1 tiene que cumplir:
+
+- **Carrito:** «Agregar» en la ficha HTML escribe el mismo sobre versionado que
+  lee el carrito Flutter (`lib/public_store/services/cart_store.dart`:
+  `public_store_cart_v2.<tenant>`, `schemaVersion` 1, vigencia 7 días, candado de
+  almacenamiento). Un test de contrato compara los dos formatos.
+- **Tema, encabezado y pie** se dibujan en dos renderizadores hasta la fase 2:
+  el único período con doble dibujo. Por eso la fase 2 va inmediatamente
+  después.
+- **GA4 y el píxel:** los mismos eventos (`view_item`, `add_to_cart`…) desde un
+  script pequeño; nunca duplicados con Flutter en la misma ruta.
+- **`noindex`, canonical y redirecciones** iguales a las de hoy por ruta
+  (`docs/wiki/sitio-web/paginas/rutas-y-navegacion.md`).
+
+## Verificación por fase
+
+- Para el 100 % de las fichas publicadas, comparación automática entre la
+  versión Flutter y la HTML de título, precio, disponibilidad, fotos, ficha
+  técnica y migas: cero diferencias.
+- Celular lento: LCP ≤ 2,5 s y página usable ≤ 3 s en ficha y categoría;
+  PageSpeed móvil antes y después.
+- Sin JavaScript: el texto y los enlaces de la página completa.
+- Frescura ≤ 5 s (prueba de arriba) y Prueba de resultados enriquecidos sin
+  errores.
+- Capturas reales en teléfono y escritorio; en la fase 2, el editor dentro del
+  ERP en macOS, Android y web.
+
+## Lo que la prueba no resuelve todavía
+
+- **Primer byte:** 0,78 s desde un Mac en Chile hasta Supabase en São Paulo,
+  sin CDN. Se resuelve con la lectura única y el servidor en la misma región.
+- **Foto principal:** el JPG de 1.200 px de Supabase Storage es el mismo que usa
+  la tienda actual. Falta servirla en el tamaño justo (`srcset` con
+  transformación de imágenes) y subconjuntar las fuentes.
+- **Menú en el teléfono:** los submenús salen desplegados; se pliegan como en
+  la tienda actual.
+- **Carrito:** el botón todavía no escribe el carrito (lo hace la fase 1).
+- **Nodo `BikeStore`:** la prueba declara sólo la ficha y las migas.
+
+## Riesgos y costo
+
+- **Tamaño:** la tienda son ~65.600 líneas Dart (22 páginas, 60 rutas) y los
+  renderizadores del editor ~67.000. Se reescribe la capa que dibuja; se quedan
+  la base, sus reglas (pedidos, pagos, reservas, envío, correos), el modelo del
+  editor, el núcleo Dart, el feed de Merchant y el panel del editor.
+- **Pagos:** el checkout se rehace al final, con pagos de prueba.
+- **Dos tiendas por ruta durante la migración:** sólo encabezado, pie y tema se
+  dibujan dos veces, y sólo entre la fase 1 y la 2.
+- **Infraestructura nueva:** un servicio en Cloud Run (costo mensual bajo, se
+  mide en la fase 0) y Supabase Realtime para invalidar.
+- **Jaspr** es más chico que el ecosistema de TypeScript: se valida en la fase 0
+  antes de comprometer el resto.
+
+## La prueba
+
+`tool/storefront_html_prototype/` (cómo correrla en su `README.md`): un
+servidor Dart que arma la ficha en cada visita desde las funciones públicas de
+hoy (`get_public_products`, `get_public_product_technical_specs`,
+`get_public_store_data`, `website_navigation`, `product_categories`,
+`get_public_online_shipping_tiers`) e importa el núcleo Dart sin copiarlo.
+Sin dependencias nuevas; sólo lectura con la llave publicable.

@@ -4,7 +4,7 @@ resumen: cómo llegó vinabike.cl a ser lo que es — de Odoo a Flutter en Fireb
 fuentes: [repositorio, consolas-google]
 archivos: [docs/archive/2025-12/MIGRATE_DOMAIN_TO_FIREBASE.md, docs/development/WEBSITE_BUILDER_PROGRESSIVE_ARCHITECTURE_REFACTOR_PLAN_2026-07-29.md, docs/development/WEBSITE_BUILDER_RESPONSIVE_AUTHORING_MASTER_PLAN_2026-08-03.md]
 tablas: [website_settings]
-revisado: 2026-10-03
+revisado: 2026-10-04
 ---
 
 # Historia y decisiones
@@ -33,6 +33,7 @@ revisado: 2026-10-03
 | 2026-09-26 | primario del sitio a navy `#123F68` |
 | 2026-09-27 | el diseño de todo el ERP queda a criterio del agente |
 | 2026-10-03 | nace este wiki |
+| 2026-10-04 | plan de migración del sitio y su editor a HTML, con una ficha de prueba en Dart medida (2,6 s contra 23,9 s); espera la decisión del dueño |
 
 `[Repo]` `[Consola]`
 
@@ -42,7 +43,7 @@ revisado: 2026-10-03
 |---|---|
 | 2026-09-23 | la ruta de Merchant es sanear y pedir revisión, nunca una cuenta nueva |
 | 2026-09-24 | el aspecto del sitio público lo decide el agente: serio, pro, con personalidad, nada «AI'ish» |
-| 2026-09-24 | **no** rehacer las páginas públicas como HTML todavía; medir `store_ready` y revisar el 8-oct |
+| 2026-09-24 | **no** rehacer las páginas públicas como HTML todavía; medir `store_ready` y revisar el 8-oct. En revisión: el plan del 2026-10-04 (`docs/architecture/storefront-html-migration-plan.md`) propone reemplazarla |
 | 2026-09-25 | sin ramas ni PR: push directo a `main` (publica la web) |
 | 2026-09-27 | el diseño de todo el ERP, incluido el editor, queda abierto; Design es para proponer, no un requisito |
 | 2026-10-03 | el conocimiento del sitio vive en este wiki y se escribe en la misma tarea |

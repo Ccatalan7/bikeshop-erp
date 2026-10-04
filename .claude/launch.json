@@ -6,6 +6,12 @@
       "runtimeExecutable": "python3",
       "runtimeArgs": ["-m", "http.server", "8765", "--directory", "web"],
       "port": 8765
+    },
+    {
+      "name": "html-proto",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["tool/storefront_html_prototype/run.sh"],
+      "port": 4325
     }
   ]
 }

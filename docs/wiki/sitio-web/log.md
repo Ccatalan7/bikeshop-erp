@@ -4,6 +4,15 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-04 — consulta archivada — el dueño preguntó si el sitio y el editor
+  podían migrar a HTML sin perder el editor dentro del ERP ni la frescura de los
+  datos. Ninguno de los dos requisitos necesitaba Flutter. Se escribió el plan
+  (`docs/architecture/storefront-html-migration-plan.md`: núcleo Dart
+  compartido, servidor junto a la base, lienzo del editor como visor web en el
+  ERP, cuatro fases reversibles) y una ficha de prueba que importa el núcleo
+  Dart sin copiarlo, medida en [rendimiento](paginas/rendimiento.md). Espera la
+  decisión del dueño ([estado](paginas/estado-y-pendientes.md)).
+
 - 2026-10-04 — corrección — datos estructurados hechos y medidos con un build
   local sobre datos reales: ficha técnica como `additionalProperty` en 1.232 de
   1.295 fichas, migas completas y un solo armado para snapshot y página (la

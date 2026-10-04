@@ -2,9 +2,9 @@
 titulo: Rendimiento y carga
 resumen: cuánto pesa y tarda la tienda, la página instantánea que muestra contenido antes de Flutter, el borde, las imágenes y cómo se mide contra las Core Web Vitals
 fuentes: [web-dev, flutter-web, repositorio, consolas-google]
-archivos: [docs/architecture/storefront-instant-page.md, scripts/storefront_instant_page/instant_page.js, scripts/storefront_instant_page/instant_page.css, web/index.html, cloudflare-worker/src/index.js, scripts/check_storefront_bundle_budget.sh, supabase/functions/website-optimize-image/index.ts]
+archivos: [docs/architecture/storefront-instant-page.md, docs/architecture/storefront-html-migration-plan.md, tool/storefront_html_prototype/measure.mjs, scripts/storefront_instant_page/instant_page.js, scripts/storefront_instant_page/instant_page.css, web/index.html, cloudflare-worker/src/index.js, scripts/check_storefront_bundle_budget.sh, supabase/functions/website-optimize-image/index.ts]
 tablas: [website_settings, website_blocks]
-revisado: 2026-10-03
+revisado: 2026-10-04
 ---
 
 # Rendimiento y carga
@@ -55,6 +55,14 @@ un consumidor de los mismos dueños, nunca otro CMS `[Repo]`.
 **Decisión del dueño (2026-09-24):** no rehacer las páginas como HTML todavía
 `[Dueño]`. La tarea programada `vinabike-store-ready-review` (8-oct, 10:00 local)
 lee `store_ready` en GA4 por tramo de carga y recomienda.
+
+**Ficha en HTML (2026-10-04):** la misma ficha (`H911`) servida como HTML desde
+un servidor Dart de prueba (`tool/storefront_html_prototype/`), medida con el
+mismo método: usable a los **2,6 s** contra 23,9 s, **342 KB** contra 4.384 KB,
+389 palabras y 67 enlaces sin JavaScript. Pierde en primer byte (0,78 s contra
+0,12 s) porque corre en un Mac en Chile y lee la base en São Paulo en cada
+visita, sin CDN. Plan y fases en `docs/architecture/storefront-html-migration-plan.md`
+`[Repo 2026-10-04]`.
 
 ## Borde y datos
 
