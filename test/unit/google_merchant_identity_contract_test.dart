@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:vinabike_public_core/public_store/models/public_policy_content.dart';
 
 import '../support/library_source.dart';
 
@@ -246,10 +247,21 @@ void main() {
   });
 
   test('policy renderer converts legacy escaped line breaks to paragraphs', () {
-    final policyPage = File(
-      'lib/public_store/pages/static_policy_page.dart',
-    ).readAsStringSync();
+    // Old rows saved the two characters `\` `n` instead of a line break; the
+    // policy page (Flutter and HTML, one owner in the core) still splits them.
+    final sections = extractPublicPolicySections([
+      {
+        'block_type': 'about',
+        'block_data': {
+          'title': 'Identidad',
+          'content': r'Primer párrafo.\n\nSegundo párrafo.',
+        },
+      },
+    ]);
 
-    expect(policyPage, contains(".replaceAll(r'\\n', '\\n')"));
+    expect(sections.single.paragraphs, [
+      'Primer párrafo.',
+      'Segundo párrafo.',
+    ]);
   });
 }

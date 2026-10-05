@@ -178,7 +178,8 @@ class StorefrontShell {
   List<String> childrenOfCategory(String? id) {
     final children = [
       for (final row in categories.values)
-        if ((row['parent_id'] ?? '').toString() == (id ?? '')) row['id'].toString(),
+        if ((row['parent_id'] ?? '').toString() == (id ?? ''))
+          row['id'].toString(),
     ]..sort(compareCategories);
     return children;
   }
@@ -291,7 +292,7 @@ class StorefrontShell {
             ? path
             : Uri(path: path, queryParameters: rest).toString();
       default:
-        return _publicPath(destination.href);
+        return publicPath(destination.href);
     }
   }
 
@@ -300,9 +301,21 @@ class StorefrontShell {
     caseSensitive: false,
   );
 
+  /// Whether a block's link may be shown to a visitor: not to an editor
+  /// page or a category that is not public, as `PublicStoreLayout
+  /// .isHrefPubliclyEligible` decides for Flutter's blocks.
+  bool allowsHref(String href, {required String storeUrl}) {
+    final origin = Uri.tryParse(storeUrl);
+    return pagePublication.allowsHref(href) &&
+        publication.allowsHref(
+          href,
+          internalOrigins: [if (origin != null && origin.hasScheme) origin],
+        );
+  }
+
   /// `/tienda/...` is the ERP's mounted copy of the store; a public link
   /// never leads there.
-  static String _publicPath(String href) {
+  static String publicPath(String href) {
     if (href == '/tienda') return '/';
     if (href.startsWith('/tienda/') || href.startsWith('/tienda?')) {
       return href.substring('/tienda'.length);

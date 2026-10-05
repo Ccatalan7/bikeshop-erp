@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:vinabike_public_core/public_store/models/public_policy_content.dart';
 
 import 'website_block_content_presenters.dart';
 
@@ -21,6 +22,7 @@ class WebsiteContactBlockContent extends StatelessWidget {
     this.onNavigate,
     this.isNavigationEligible,
     this.presenters,
+    this.siteContact = const PublicWebsiteContactFacts(),
     this.padding = const EdgeInsets.symmetric(
       vertical: 64,
       horizontal: 24,
@@ -51,6 +53,10 @@ class WebsiteContactBlockContent extends StatelessWidget {
   final void Function(String route)? onNavigate;
   final bool Function(String href)? isNavigationEligible;
   final WebsiteBlockContentPresenters? presenters;
+
+  /// The store's contact data (Configuración → Contacto), shown when the
+  /// block has none of its own ([resolveWebsiteContactBlockFacts]).
+  final PublicWebsiteContactFacts siteContact;
   final EdgeInsetsGeometry padding;
 
   @override
@@ -60,9 +66,13 @@ class WebsiteContactBlockContent extends StatelessWidget {
     final title = rawTitle.trim().isEmpty ? 'Contáctanos' : rawTitle.trim();
     final rawSubtitle = (data['subtitle'] ?? '').toString();
     final subtitle = rawSubtitle.trim();
-    final phone = (data['phone'] ?? '').toString().trim();
-    final email = (data['email'] ?? '').toString().trim();
-    final address = (data['address'] ?? '').toString().trim();
+    final facts = resolveWebsiteContactBlockFacts(data, site: siteContact);
+    final phone = facts.phone;
+    final email = facts.email;
+    final address = facts.address;
+    // Only Edit (presenters) shows the card that asks for the data; a visitor
+    // never sees an empty card.
+    final showInfoCard = facts.hasAny || presenters != null;
     final mapUrl = (data['mapUrl'] ?? '').toString().trim();
     final showForm = data['showForm'] != false;
     final showMap = data['showMap'] == true;
@@ -100,17 +110,18 @@ class WebsiteContactBlockContent extends StatelessWidget {
               final textPresenter = presenters?.text;
 
               final cards = <_ContactCard>[
-                _ContactCard(
-                  key: infoCardKey,
-                  desktopWidth: 320,
-                  child: _ContactInfoCard(
-                    phone: phone,
-                    email: email,
-                    address: address,
-                    headingFont: headingFont,
-                    bodyFont: bodyFont,
+                if (showInfoCard)
+                  _ContactCard(
+                    key: infoCardKey,
+                    desktopWidth: 320,
+                    child: _ContactInfoCard(
+                      phone: phone,
+                      email: email,
+                      address: address,
+                      headingFont: headingFont,
+                      bodyFont: bodyFont,
+                    ),
                   ),
-                ),
                 if (showForm)
                   _ContactCard(
                     key: formCardKey,
@@ -200,14 +211,16 @@ class WebsiteContactBlockContent extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 36),
-                  KeyedSubtree(
-                    key: layoutKey,
-                    child: _ContactCardsLayout(
-                      layout: layout,
-                      cards: cards,
+                  if (cards.isNotEmpty) ...[
+                    const SizedBox(height: 36),
+                    KeyedSubtree(
+                      key: layoutKey,
+                      child: _ContactCardsLayout(
+                        layout: layout,
+                        cards: cards,
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               );
             },

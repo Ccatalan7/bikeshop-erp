@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'package:vinabike_public_core/modules/website/models/website_hero_content.dart';
+
 import '../models/website_action.dart';
 import '../models/website_block_surface_style.dart';
 import '../models/website_block_type.dart';
@@ -376,37 +378,8 @@ class WebsiteHeroBlockContent extends StatelessWidget {
     );
   }
 
-  static WebsiteActionValue? _resolveAction(Map<String, dynamic> data) {
-    final labelField = _firstPresentField(
-      data,
-      const <String>['ctaText', 'buttonText', 'label'],
-    );
-    final hrefField = _firstPresentField(
-      data,
-      const <String>['ctaLink', 'buttonLink', 'link'],
-    );
-    final resolved = WebsiteActionValue.resolvePrimary(
-      data,
-      labelKeys: const <String>['ctaText', 'buttonText', 'label'],
-      hrefKeys: const <String>['ctaLink', 'buttonLink', 'link'],
-      variantKeys: const <String>['actionVariant'],
-      defaultLabel: '',
-      defaultHref: '',
-      defaultVariant: WebsiteActionVariant.outline,
-    );
-    final label =
-        (labelField.present ? labelField.value : resolved?.label ?? '').trim();
-    if (label.isEmpty) return null;
-    final href =
-        (hrefField.present ? hrefField.value : resolved?.href ?? '').trim();
-    final variant = data.containsKey('actionVariant')
-        ? WebsiteActionVariant.fromStorage(
-            data['actionVariant']?.toString(),
-            fallback: WebsiteActionVariant.outline,
-          )
-        : resolved?.variant ?? WebsiteActionVariant.outline;
-    return WebsiteActionValue(label: label, href: href, variant: variant);
-  }
+  static WebsiteActionValue? _resolveAction(Map<String, dynamic> data) =>
+      resolveWebsiteHeroAction(data);
 
   static WebsiteActionValue? _visibleAction(
     WebsiteActionValue? action, {
@@ -440,18 +413,6 @@ class WebsiteHeroBlockContent extends StatelessWidget {
     return raw is Map
         ? TextFormatting.fromJson(Map<String, dynamic>.from(raw))
         : const TextFormatting();
-  }
-
-  static ({bool present, String value}) _firstPresentField(
-    Map<String, dynamic> data,
-    List<String> keys,
-  ) {
-    for (final key in keys) {
-      if (data.containsKey(key)) {
-        return (present: true, value: data[key]?.toString() ?? '');
-      }
-    }
-    return (present: false, value: '');
   }
 
   static String? _firstNonNullString(

@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 
+import 'website_block_definition.dart';
 import 'website_block_registry.dart';
 import 'website_block_type.dart';
 

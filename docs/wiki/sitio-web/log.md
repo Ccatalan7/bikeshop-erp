@@ -166,3 +166,13 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   `product_url_aliases`; `banners_management_page.dart`,
   `content_management_page.dart` y la clave `header_nav_links` ya no se usan.
   Anotado en sus páginas y en [estado y pendientes](paginas/estado-y-pendientes.md).
+
+## 2026-10-05 — Páginas de información en HTML (fase 2a)
+
+- Las cinco páginas de información las dibuja el servidor en `/_html/`; las
+  trampas medidas (normalización al cargar, espaciado heredado de Material 3,
+  líneas redondeadas, densidad −1, bandas de ancho, la llave sobrante de la
+  hoja) quedaron en el plan de migración.
+- El bloque de contacto mostraba al visitante el aviso del editor en tres
+  páginas públicas; ahora usa los datos de Configuración → Contacto. Anotado
+  en [estado y pendientes](paginas/estado-y-pendientes.md).

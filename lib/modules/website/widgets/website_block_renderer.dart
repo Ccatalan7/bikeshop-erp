@@ -6,7 +6,9 @@ import 'package:flutter/gestures.dart' show kMinFlingVelocity;
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:provider/provider.dart';
+import '../providers/website_edit_mode_provider.dart';
 import '../services/website_service.dart';
+import 'package:vinabike_public_core/public_store/models/public_policy_content.dart';
 
 import '../../../public_store/providers/public_store_tenant_provider.dart';
 import '../../../public_store/services/public_category_publication.dart';
@@ -368,6 +370,7 @@ class WebsiteBlockRenderer {
             onNavigate: onNavigate,
             isNavigationEligible: isNavigationEligible,
             presenters: contentPresenters,
+            siteContact: _siteContactFacts(context),
             padding: _surfacePadding(
               surfaceStyle,
               blockType: WebsiteBlockType.contact,
@@ -700,6 +703,37 @@ class WebsiteBlockRenderer {
     } catch (_) {
       return null;
     }
+  }
+
+  /// The store's contact data for a contact block that has none of its own:
+  /// the saved settings, or the editor's draft of them while editing, as the
+  /// footer reads them. Without the services (an isolated test) it is empty.
+  static PublicWebsiteContactFacts _siteContactFacts(BuildContext context) {
+    final WebsiteService service;
+    try {
+      service = Provider.of<WebsiteService>(context, listen: false);
+    } on ProviderNotFoundException {
+      return const PublicWebsiteContactFacts();
+    }
+    WebsiteEditModeProvider? editor;
+    try {
+      editor = Provider.of<WebsiteEditModeProvider>(context, listen: false);
+    } on ProviderNotFoundException {
+      editor = null;
+    }
+    String read(String key) {
+      final saved = service.getSetting(key, '');
+      final value = editor != null && editor.isInEditorContext
+          ? editor.getEffectiveFooterSetting(key, saved)
+          : saved;
+      return value.trim();
+    }
+
+    return PublicWebsiteContactFacts(
+      phone: read('contact_phone'),
+      email: read('contact_email'),
+      address: read('contact_address'),
+    );
   }
 
   static EdgeInsets _surfacePadding(

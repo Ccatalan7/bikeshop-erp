@@ -560,12 +560,83 @@ que conviene saber antes de tocarlo:
 - Se quitaron de la ficha la marca sobre el título, la línea «Código …» y la
   barra fija de compra del teléfono: Flutter no las tiene.
 
+## Fase 2a: páginas de información (2026-10-05)
+
+`/nosotros`, `/envios`, `/devoluciones`, `/terminos` y `/privacidad` las
+dibuja el servidor en la ruta oculta (`/_html/<slug>`, `noindex`); las rutas
+públicas siguen en Flutter hasta abrirlas. Lectura: `website_pages` con sus
+`website_blocks` (las cinco a la vez, `tenant_id` en las dos tablas, como
+`anon`, que sólo ve lo publicado y visible). Vista: `policy_page_model.dart`,
+`policy_page_view.dart`, `website_blocks_view.dart` (héroe y contacto, para
+la portada después), `block_composition.dart` y `website_page_css.dart`.
+
+**Un dueño, no copias.** Pasaron al núcleo las definiciones base de los
+bloques, la composición, la proyección por pantalla, la acción de un bloque,
+el documento de lienzo, el limpiador de datos, la **normalización de bloques
+al cargarlos** (era privada de `WebsiteService`, que ahora la llama), las
+reglas de las páginas de información (`public_policy_content.dart`: secciones,
+resumen, «tiene algo que leer», datos de contacto), los colores del tema
+(`website_theme_roles.dart`, con prueba de paridad contra
+`WebsiteThemeBuilder` a la décima) y el JSON-LD de la página.
+
+**Medición.** Los rectángulos de Flutter se leen de su árbol de semántica
+(`flt-semantics`, activado con el `flt-semantics-placeholder`), no de
+píxeles: posición y alto exactos de cada texto. Resultado a 1440 y 412 px en
+las cinco páginas: marco, héroe, secciones y contacto en los mismos píxeles;
+lo que difiere es a propósito (abajo) o es un rectángulo que Flutter recorta
+en el borde de la ventana.
+
+Lo que costó una vuelta cada uno:
+
+- **Flutter normaliza cada bloque al cargarlo**: los valores por defecto del
+  tipo bajo lo guardado. El héroe de `/envios` no guarda botón y Flutter
+  muestra «Ver catálogo» (del defecto); sin normalizar, el título quedaba
+  40 px más abajo.
+- **Espaciado de letras heredado de Material 3**: un texto cuyo estilo no
+  dice `letterSpacing` hereda el de su rol (bodyMedium 0,25; bodyLarge y
+  labelMedium 0,5; titleMedium 0,15; bodySmall 0,4; chips 0,1). Sin él un
+  párrafo de teléfono cortaba una línea menos (26 px) y la dirección del pie
+  de la fase 1 cortaba en otro lugar. Medir el ancho del texto en Chrome con
+  y sin el espaciado lo decide (411,1 px exactos con 0,25).
+- **Cada línea mide redondo**: alto = `round(tamaño × altura)` (21,28 → 21;
+  24,65 → 25); la hoja usa esos píxeles enteros.
+- **Densidad del tema −1** (`PublicStoreTheme`): el botón mediano del editor
+  (mínimo 44, relleno 12/20) queda en 40 de alto y 20 de relleno; el borde
+  va dentro (en CSS se resta 1 px al relleno).
+- **`PageComposition` centra cada bloque al ancho de su contenido**: un
+  párrafo largo llena la columna, las tarjetas de 500 quedan centradas. En
+  CSS: `width:fit-content`; la `Wrap` nunca pone dos tarjetas porque la
+  columna mide a lo más 720.
+- **Los datos se leen al ancho de la columna y la visibilidad al de la
+  ventana**: entre 816 y 991 px la columna mide menos de 640 y el bloque se
+  lee como teléfono. Por eso la composición se calcula en seis bandas de
+  ancho y un bloque sólo se repite si cambia en alguna.
+- **La hoja compartida terminaba con una llave de más**, que se comía la
+  primera regla de la hoja siguiente (el tema de la página nunca aplicaba).
+  Prueba: `every stylesheet closes what it opens`.
+- Jaspr parte el texto largo en líneas con sangría: `white-space:pre-line`
+  dibujaba una línea en blanco; los saltos simples van como `<br>`.
+
+**Arreglado en las dos tiendas.** El bloque de contacto mostraba al
+visitante «Completa tus datos de contacto desde el editor» en `/nosotros`,
+`/terminos` y `/privacidad`, con la dirección, el teléfono y el correo en
+Configuración: ahora usa esos datos cuando el bloque no trae los suyos
+(`resolveWebsiteContactBlockFacts`) y el aviso queda sólo en Edición. El
+chip de la página actual dibujaba un disco oscuro con un visto sobre el
+ícono (`showCheckmark: false`). El catálogo de bloques
+`assets/block_marketplace/` (que la app nunca carga) traía para el contacto
+un teléfono y una dirección inventados: quitados.
+
+Un bloque que el HTML aún no dibuja (ni como sección ni con su renderer) se
+omite y se nombra en `x-storefront-uncovered`; una página así no debe pasar
+a HTML al abrir las rutas.
+
 ### Pendiente
 
 - El costo real de Cloud Run en la facturación, después de unos días.
-- Fase 2: la portada y las páginas de información con la misma medición de
-  píxeles contra Flutter; la geometría de bloques ya está en el núcleo
-  (`website_block_geometry.dart`, `website_block_capabilities.dart`,
-  `website_block_type.dart`, `responsive_breakpoints.dart`).
+- Fase 2b: la portada (carrusel, productos, categorías, marcas, video,
+  reseñas) con la misma medición; después abrir `/` y las páginas de
+  información (reescritura en `firebase.json` y el generador deja de escribir
+  sus instantáneas, como en la fase 1).
 - Las copias de una foto reemplazada quedan en Storage (pocos KB cada una);
   una limpieza de las que ninguna fila nombra, si algún día pesan.

@@ -6,15 +6,19 @@ mismo código Dart que el ERP (`packages/vinabike_public_core`). Fases 0 y 1 de
 `/productos` (con búsqueda y filtros) y las páginas de categoría. Desde el
 2026-10-05 responde las rutas públicas que `firebase.json` le reescribe
 (`/productos`, `/productos/**`, `/producto/**`) y una copia con `noindex` en
-`/_html/...`. Portada, páginas del editor, carrito, checkout y portal siguen en
-Flutter.
+`/_html/...`. Las páginas de información (fase 2a) están sólo en la copia
+oculta. Portada, las demás páginas del editor, carrito, checkout y portal
+siguen en Flutter.
 
 - **Rutas** (`storefront_handler.dart`): `/productos`,
   `/productos/categoria/<slug>`, `/productos/<slug>/<sku>`; las viejas
   `/productos/<uuid>`, `/producto/<uuid>` y las de `product_url_aliases`
   redirigen con 301 a la ficha canónica, igual que otro nombre para el mismo
   SKU (la consulta se conserva). Una categoría desconocida o no publicada, y
-  un producto que no se ve, responden 404 con su página.
+  un producto que no se ve, responden 404 con su página. `/nosotros`,
+  `/envios`, `/devoluciones`, `/terminos` y `/privacidad`: la página del
+  editor con sus bloques; sin nada que leer, 404 con el mensaje de Flutter.
+  Un bloque que aún no se dibuja se nombra en `x-storefront-uncovered`.
 - **Datos:** lecturas públicas con la llave publicable, al mismo tiempo cuando
   no dependen una de otra: `get_public_storefront_shell_v1` (ajustes, menús,
   páginas, categorías con descripción, imagen y orden) y
@@ -25,7 +29,9 @@ Flutter.
   conteos por categoría y «Todas», como Flutter) y
   `get_public_spec_option_labels_v1`, y las copias de 400 y 800 px de las fotos
   de sus tarjetas con `get_public_image_thumbnails_v1`, en la misma vuelta que
-  completa las filas. No guarda nada entre visitas.
+  completa las filas; las páginas de información leen `website_pages` con sus
+  `website_blocks` (filtro `tenant_id` en las dos). No guarda nada entre
+  visitas.
 - **Fotos de tarjeta:** cada tarjeta ofrece en `srcset` las copias que hizo
   `scripts/generate_public_image_thumbnails.dart` (corre en cada publicación
   de la tienda y a mano para rellenar) y la foto original; una foto que el

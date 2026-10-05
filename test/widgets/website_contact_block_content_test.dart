@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_block_content_presenters.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_contact_block_content.dart';
+import 'package:vinabike_public_core/public_store/models/public_policy_content.dart';
 
 const _completeContact = <String, dynamic>{
   'title': 'Conversemos',
@@ -22,6 +23,7 @@ Future<void> _pumpContact(
   void Function(String route)? onNavigate,
   bool Function(String href)? isNavigationEligible,
   WebsiteBlockContentPresenters? presenters,
+  PublicWebsiteContactFacts siteContact = const PublicWebsiteContactFacts(),
 }) async {
   await tester.binding.setSurfaceSize(Size(width, 1800));
   addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -39,6 +41,7 @@ Future<void> _pumpContact(
             onNavigate: onNavigate,
             isNavigationEligible: isNavigationEligible,
             presenters: presenters,
+            siteContact: siteContact,
           ),
         ),
       ),
@@ -358,6 +361,78 @@ void main() {
         find.widgetWithText(ElevatedButton, 'Enviar consulta'),
       );
       expect(sendButton.onPressed, isNull);
+    });
+  });
+
+  group('WebsiteContactBlockContent contact data', () {
+    // /nosotros, /terminos and /privacidad (2026-10-05) showed visitors the
+    // card that asks the editor to fill in the data, while the settings had
+    // the store's address, phone and email.
+    const withoutOwnData = <String, dynamic>{
+      'title': 'Visítanos',
+      'subtitle': 'Atendemos de lunes a sábado.',
+      'showForm': false,
+      'showMap': false,
+    };
+    const site = PublicWebsiteContactFacts(
+      phone: '+56 9 9835 7797',
+      email: 'contacto@vinabike.cl',
+      address: 'Alvarez 32, Local 17, Viña del Mar, Chile',
+    );
+
+    testWidgets('a block without its own data shows the store settings',
+        (tester) async {
+      await _pumpContact(
+        tester,
+        width: 1440,
+        data: withoutOwnData,
+        siteContact: site,
+      );
+
+      expect(find.text('+56 9 9835 7797'), findsOneWidget);
+      expect(find.text('contacto@vinabike.cl'), findsOneWidget);
+      expect(
+        find.text('Alvarez 32, Local 17, Viña del Mar, Chile'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Completa tus datos de contacto desde el editor.'),
+        findsNothing,
+      );
+    });
+
+    testWidgets('the block own data wins over the settings', (tester) async {
+      await _pumpContact(
+        tester,
+        width: 1440,
+        data: {...withoutOwnData, 'email': 'privacidad@vinabike.cl'},
+        siteContact: site,
+      );
+
+      expect(find.text('privacidad@vinabike.cl'), findsOneWidget);
+      expect(find.text('contacto@vinabike.cl'), findsNothing);
+      expect(find.text('+56 9 9835 7797'), findsNothing);
+    });
+
+    testWidgets('without any data a visitor sees no card; Edit asks for it',
+        (tester) async {
+      await _pumpContact(tester, width: 1440, data: withoutOwnData);
+
+      expect(find.byKey(WebsiteContactBlockContent.infoCardKey), findsNothing);
+      expect(find.byKey(WebsiteContactBlockContent.layoutKey), findsNothing);
+      expect(find.text('Visítanos'), findsOneWidget);
+
+      await _pumpContact(
+        tester,
+        width: 1440,
+        data: withoutOwnData,
+        presenters: const WebsiteBlockContentPresenters(),
+      );
+
+      expect(
+        find.text('Completa tus datos de contacto desde el editor.'),
+        findsOneWidget,
+      );
     });
   });
 }

@@ -6,11 +6,14 @@ import 'package:jaspr/dom.dart';
 import 'package:jaspr/server.dart';
 import 'package:shelf/shelf.dart' show Middleware;
 import 'package:vinabike_public_core/modules/website/models/website_catalog_query.dart';
+import 'package:vinabike_public_core/public_store/models/public_policy_content.dart';
 import 'package:vinabike_public_core/public_store/utils/product_url.dart';
 import 'package:vinabike_public_core/shared/models/product.dart';
 
 import 'catalog_page_model.dart';
 import 'catalog_page_view.dart';
+import 'policy_page_model.dart';
+import 'policy_page_view.dart';
 import 'product_page_model.dart';
 import 'product_page_view.dart';
 import 'public_reads.dart';
@@ -88,6 +91,8 @@ Handler storefrontHandler({
         ['productos', final slug, final sku] => await route.product(slug, sku),
         ['productos', final id] => await route.legacyProduct(id),
         ['producto', final id] => await route.legacyProduct(id),
+        [final slug] when publicPolicySlugs.contains(slug) =>
+          await route.policy(slug),
         _ => await route.notFound(),
       };
     } on PublicReadException catch (error) {
@@ -253,6 +258,26 @@ class _Route {
     final context = _context(await reads.shell());
     if (!context.shell.sitePublished) return _unpublished(context);
     return _productNotFound(context);
+  }
+
+  /// `/nosotros`, `/envios`, `/devoluciones`, `/terminos`, `/privacidad`:
+  /// the editor page and its blocks. A page without public content answers
+  /// 404 with the same message Flutter shows.
+  Future<Response> policy(String slug) async {
+    final data = await reads.policyPages();
+    final context = _context((shell: data.shell, payments: data.payments));
+    if (!context.shell.sitePublished) return _unpublished(context);
+    final model = PolicyPageModel.build(page: context, slug: slug, reads: data);
+    final response = await _render(
+      policyPageDocument(model),
+      status: model.available ? 200 : 404,
+      indexable: model.meta.indexable,
+      dataMs: _watch.elapsedMilliseconds,
+    );
+    if (model.uncoveredTypes.isEmpty) return response;
+    return response.change(
+      headers: {'x-storefront-uncovered': model.uncoveredTypes.join(',')},
+    );
   }
 
   Future<Response> notFound() async {

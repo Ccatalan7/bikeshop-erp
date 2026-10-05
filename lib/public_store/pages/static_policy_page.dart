@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:vinabike_public_core/public_store/models/public_policy_content.dart';
 
 import '../../modules/website/models/website_editor_capability.dart';
 import '../../modules/website/models/website_page_composition.dart';
@@ -19,6 +20,12 @@ import '../../shared/utils/seo_helper.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../widgets/page_composition.dart';
 import '../widgets/public_store_layout.dart';
+
+export 'package:vinabike_public_core/public_store/models/public_policy_content.dart'
+    show
+        PublicWebsiteContactFacts,
+        hasMeaningfulPublicPolicyContent,
+        hasMeaningfulPublicWebsitePageContent;
 
 /// Policy page renderer that uses WebsiteService for caching.
 /// Much simpler than the old StaticPolicyPage - no duplicate DB logic!
@@ -149,126 +156,13 @@ class _PublicPolicyView extends StatelessWidget {
     );
   }
 
-  static List<_PolicySection> extractSections(
+  static List<PublicPolicySection> extractSections(
     List<Map<String, dynamic>> source,
-  ) {
-    final sections = <_PolicySection>[];
-    for (final block in source) {
-      final type = (block['block_type'] ?? '').toString().toLowerCase();
-      final data = block['block_data'] is Map
-          ? Map<String, dynamic>.from(block['block_data'] as Map)
-          : <String, dynamic>{};
+  ) =>
+      extractPublicPolicySections(source);
 
-      if (type == 'hero') continue;
-
-      final title = _clean(data['title']);
-      final subtitle = _clean(data['subtitle']);
-      final content = _clean(data['content']);
-
-      if (type == 'features') {
-        final items = <_PolicyItem>[];
-        final features = data['features'];
-        if (features is List) {
-          for (final feature in features) {
-            if (feature is! Map) continue;
-            final map = Map<String, dynamic>.from(feature);
-            final itemTitle = _clean(map['title']);
-            final itemBody = _clean(map['description']);
-            if (itemTitle.isEmpty && itemBody.isEmpty) continue;
-            items.add(_PolicyItem(itemTitle, itemBody));
-          }
-        }
-        if (items.isNotEmpty) {
-          sections.add(_PolicySection(
-            title.isEmpty ? 'Puntos importantes' : title,
-            const [],
-            items,
-          ));
-        }
-        continue;
-      }
-
-      if (type == 'faq') {
-        final items = <_PolicyItem>[];
-        final faqItems = data['items'];
-        if (faqItems is List) {
-          for (final item in faqItems) {
-            if (item is! Map) continue;
-            final map = Map<String, dynamic>.from(item);
-            final question = _clean(map['question']);
-            final answer = _clean(map['answer']);
-            if (question.isEmpty || answer.isEmpty) continue;
-            items.add(_PolicyItem(question, answer));
-          }
-        }
-        if (items.isNotEmpty) {
-          sections.add(_PolicySection(
-            title.isEmpty ? 'Preguntas frecuentes' : title,
-            const [],
-            items,
-          ));
-        }
-        continue;
-      }
-
-      final paragraphs = [
-        ..._paragraphs(subtitle),
-        ..._paragraphs(content),
-      ];
-      if (type == 'contact') {
-        final facts = _publicContactFactStrings(data);
-        if (facts.isNotEmpty) {
-          sections.add(_PolicySection(
-            title.isEmpty ? 'Información de contacto' : title,
-            facts,
-            const [],
-          ));
-        }
-        continue;
-      }
-      if (paragraphs.isNotEmpty) {
-        sections.add(_PolicySection(
-          title.isEmpty ? 'Detalle' : title,
-          paragraphs,
-          const [],
-        ));
-      }
-    }
-
-    return sections;
-  }
-
-  static String contentSummary(List<Map<String, dynamic>> source) {
-    final fragments = <String>[];
-    for (final section in extractSections(source)) {
-      fragments.addAll(section.paragraphs);
-      for (final item in section.items) {
-        if (item.title.isNotEmpty) fragments.add(item.title);
-        if (item.body.isNotEmpty) fragments.add(item.body);
-      }
-    }
-    final summary = fragments.join(' ').replaceAll(RegExp(r'\s+'), ' ').trim();
-    if (summary.length <= 320) return summary;
-    return summary.substring(0, 320).trimRight();
-  }
-
-  static String _clean(dynamic value) {
-    return (value ?? '')
-        .toString()
-        .replaceAll(r'\n', '\n')
-        .replaceAll(RegExp(r'[ \t]+'), ' ')
-        .trim();
-  }
-
-  static List<String> _paragraphs(String text) {
-    final clean = _clean(text);
-    if (clean.isEmpty) return const [];
-    return clean
-        .split(RegExp(r'\n\s*\n'))
-        .map((line) => line.trim())
-        .where((line) => line.isNotEmpty)
-        .toList(growable: false);
-  }
+  static String contentSummary(List<Map<String, dynamic>> source) =>
+      publicPolicyContentSummary(source);
 }
 
 class _PolicyHero extends StatelessWidget {
@@ -418,6 +312,9 @@ class _PolicyNav extends StatelessWidget {
                 constraints: const BoxConstraints(minHeight: 48),
                 child: ChoiceChip(
                   selected: currentSlug == slug,
+                  // The fill and the bold label mark the current page; the
+                  // default checkmark drew a dark disc over the icon.
+                  showCheckmark: false,
                   label: Text(_PolicyMeta.forSlug(slug, slug).navLabel),
                   avatar: Icon(
                     _PolicyMeta.forSlug(slug, slug).icon,
@@ -512,7 +409,7 @@ class _NavButton extends StatelessWidget {
 }
 
 class _PolicyContent extends StatelessWidget {
-  final List<_PolicySection> sections;
+  final List<PublicPolicySection> sections;
 
   const _PolicyContent({required this.sections});
 
@@ -569,7 +466,7 @@ class _PolicyContent extends StatelessWidget {
 }
 
 class _PolicyItemCard extends StatelessWidget {
-  final _PolicyItem item;
+  final PublicPolicyItem item;
 
   const _PolicyItemCard({required this.item});
 
@@ -679,173 +576,6 @@ class _PublicPolicyUnavailableView extends StatelessWidget {
   }
 }
 
-class PublicWebsiteContactFacts {
-  const PublicWebsiteContactFacts({
-    this.phone = '',
-    this.email = '',
-    this.address = '',
-  });
-
-  final String phone;
-  final String email;
-  final String address;
-
-  bool get hasAny =>
-      phone.trim().isNotEmpty ||
-      email.trim().isNotEmpty ||
-      address.trim().isNotEmpty;
-}
-
-/// Runtime counterpart of the deploy-time crawler-content gate.
-///
-/// A title, image, link or CTA is presentation, not a complete public page.
-/// Structured Features/FAQ blocks need real items, while Contacto may rely on
-/// factual contact data owned by website settings.
-bool hasMeaningfulPublicWebsitePageContent(
-  List<Map<String, dynamic>> blocks, {
-  bool isContactPage = false,
-  PublicWebsiteContactFacts contactFacts = const PublicWebsiteContactFacts(),
-}) {
-  if (isContactPage && contactFacts.hasAny) return true;
-  return WebsitePageComposition.projectPubliclyReachableBlocks(blocks)
-      .map((block) => block.sourceBlock)
-      .any(_hasMeaningfulPublicWebsiteBlockContent);
-}
-
-bool _hasMeaningfulPublicWebsiteBlockContent(Map<String, dynamic> block) {
-  final type = (block['block_type'] ?? '').toString().trim().toLowerCase();
-  final rawData = block['block_data'];
-  if (rawData is! Map) return false;
-  final data = Map<String, dynamic>.from(rawData);
-
-  if (type == 'cta') return false;
-  if (type == 'features') {
-    final features = data['features'];
-    if (features is! List) return false;
-    return features.whereType<Map>().any((rawItem) {
-      final item = Map<String, dynamic>.from(rawItem);
-      return _publicContentText(item['title']).isNotEmpty ||
-          _publicContentText(item['description']).isNotEmpty;
-    });
-  }
-  if (type == 'faq') {
-    final items = data['items'];
-    if (items is! List) return false;
-    return items.whereType<Map>().any((rawItem) {
-      final item = Map<String, dynamic>.from(rawItem);
-      return _publicContentText(item['question']).isNotEmpty &&
-          _publicContentText(item['answer']).isNotEmpty;
-    });
-  }
-  if (type == 'contact') {
-    return _publicContactFactStrings(data).isNotEmpty;
-  }
-
-  return _publicSemanticBodyFragments(data).isNotEmpty;
-}
-
-List<String> _publicSemanticBodyFragments(Map<String, dynamic> data) {
-  const semanticBodyKeys = <String>{
-    'answer',
-    'body',
-    'caption',
-    'comment',
-    'content',
-    'description',
-    'detail',
-    'details',
-    'html',
-    'quote',
-    'richtext',
-    'subtitle',
-    'text',
-  };
-  final fragments = <String>[];
-  final seen = <String>{};
-
-  void collect(dynamic value, {String? fieldName}) {
-    if (value is Map) {
-      for (final entry in value.entries) {
-        collect(entry.value, fieldName: entry.key.toString());
-      }
-      return;
-    }
-    if (value is List) {
-      for (final item in value) {
-        collect(item, fieldName: fieldName);
-      }
-      return;
-    }
-    if (value is! String || fieldName == null) return;
-    final normalizedField =
-        fieldName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
-    if (!semanticBodyKeys.contains(normalizedField)) return;
-    final text = _publicContentText(value);
-    if (text.isEmpty || !seen.add(text.toLowerCase())) return;
-    fragments.add(text);
-  }
-
-  collect(data);
-  return fragments;
-}
-
-List<String> _publicContactFactStrings(Map<String, dynamic> data) {
-  const factualKeys = <String>{
-    'address',
-    'contactaddress',
-    'email',
-    'contactemail',
-    'phone',
-    'telephone',
-    'contactphone',
-    'whatsapp',
-  };
-  final facts = <String>[];
-  final seen = <String>{};
-
-  void collect(dynamic value, {String? fieldName}) {
-    if (value is Map) {
-      for (final entry in value.entries) {
-        collect(entry.value, fieldName: entry.key.toString());
-      }
-      return;
-    }
-    if (value is List) {
-      for (final item in value) {
-        collect(item, fieldName: fieldName);
-      }
-      return;
-    }
-    if (value is! String || fieldName == null) return;
-    final normalizedField =
-        fieldName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
-    if (!factualKeys.contains(normalizedField)) return;
-    final fact = _publicContentText(value);
-    if (fact.isNotEmpty && seen.add(fact.toLowerCase())) facts.add(fact);
-  }
-
-  collect(data);
-  return facts;
-}
-
-String _publicContentText(dynamic value) {
-  return (value ?? '')
-      .toString()
-      .replaceAll(RegExp(r'<[^>]+>'), ' ')
-      .replaceAll(r'\n', '\n')
-      .replaceAll(RegExp(r'\s+'), ' ')
-      .trim();
-}
-
-bool hasMeaningfulPublicPolicyContent(
-  List<Map<String, dynamic>> blocks,
-) {
-  final projected = WebsitePageComposition.projectPubliclyReachableBlocks(
-    blocks,
-  ).map((block) => block.sourceBlock).toList(growable: false);
-  return _PublicPolicyView.extractSections(projected).isNotEmpty;
-}
-
 enum StaticPolicyRetainedProvenance {
   none,
   editor,
@@ -928,6 +658,7 @@ Set<String> availablePublicPolicySlugs(
   });
 }
 
+/// The words come from the core ([PublicPolicyMeta]); the icon is Flutter's.
 class _PolicyMeta {
   final String title;
   final String navLabel;
@@ -940,60 +671,20 @@ class _PolicyMeta {
   });
 
   static _PolicyMeta forSlug(String slug, String fallbackTitle) {
-    switch (slug) {
-      case 'nosotros':
-        return const _PolicyMeta(
-          title: 'Sobre nosotros',
-          navLabel: 'Nosotros',
-          icon: Icons.storefront_outlined,
-        );
-      case 'envios':
-        return const _PolicyMeta(
-          title: 'Envíos',
-          navLabel: 'Envíos',
-          icon: Icons.local_shipping_outlined,
-        );
-      case 'devoluciones':
-        return const _PolicyMeta(
-          title: 'Devoluciones',
-          navLabel: 'Devoluciones',
-          icon: Icons.assignment_return_outlined,
-        );
-      case 'terminos':
-        return const _PolicyMeta(
-          title: 'Términos y condiciones',
-          navLabel: 'Términos',
-          icon: Icons.gavel_outlined,
-        );
-      case 'privacidad':
-        return const _PolicyMeta(
-          title: 'Privacidad',
-          navLabel: 'Privacidad',
-          icon: Icons.shield_outlined,
-        );
-      default:
-        return _PolicyMeta(
-          title: fallbackTitle,
-          navLabel: fallbackTitle,
-          icon: Icons.info_outline,
-        );
-    }
+    final words = PublicPolicyMeta.forSlug(slug, fallbackTitle);
+    return _PolicyMeta(
+      title: words.title,
+      navLabel: words.navLabel,
+      icon: switch (slug) {
+        'nosotros' => Icons.storefront_outlined,
+        'envios' => Icons.local_shipping_outlined,
+        'devoluciones' => Icons.assignment_return_outlined,
+        'terminos' => Icons.gavel_outlined,
+        'privacidad' => Icons.shield_outlined,
+        _ => Icons.info_outline,
+      },
+    );
   }
-}
-
-class _PolicySection {
-  final String title;
-  final List<String> paragraphs;
-  final List<_PolicyItem> items;
-
-  const _PolicySection(this.title, this.paragraphs, this.items);
-}
-
-class _PolicyItem {
-  final String title;
-  final String body;
-
-  const _PolicyItem(this.title, this.body);
 }
 
 class _StaticPolicyPageState extends State<StaticPolicyPage>

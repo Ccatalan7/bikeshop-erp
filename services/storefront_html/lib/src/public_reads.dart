@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:vinabike_public_core/public_store/models/public_commerce_product_projection.dart';
+import 'package:vinabike_public_core/public_store/models/public_policy_content.dart';
 import 'package:vinabike_public_core/public_store/models/public_product_identity_columns.dart';
 
 import 'storefront_config.dart';
@@ -64,8 +65,18 @@ typedef CatalogReads = ({
   List<Object?> optionLabels,
 });
 
+/// The shell and the store's information pages ([publicPolicySlugs]) that
+/// are published, each with its visible blocks (`website_pages` and
+/// `website_blocks`, as the Flutter store reads them), in one round trip.
+typedef PolicyPagesReads = ({
+  Map<String, dynamic> shell,
+  Object? payments,
+  List<Object?> pages,
+});
+
 abstract interface class PublicReads {
   Future<ShellReads> shell();
+
   /// By [sku], or by [productId] for a product without one (its canonical
   /// route is `/productos/<uuid>`).
   Future<ProductPageReads> productPage({String? sku, String? productId});
@@ -76,6 +87,8 @@ abstract interface class PublicReads {
 
   /// The product an old URL path points to (`product_url_aliases`), if any.
   Future<String?> productIdForAlias(String path);
+
+  Future<PolicyPagesReads> policyPages();
 }
 
 class PublicReadException implements Exception {
@@ -128,6 +141,29 @@ class SupabasePublicReads implements PublicReads {
   }
 
   @override
+  Future<PolicyPagesReads> policyPages() async {
+    final results = await Future.wait([
+      _shell(),
+      _payments(),
+      _select('website_pages', {
+        'select':
+            'id,slug,title,meta_title,meta_description,meta_keywords,'
+            'og_image_url,is_published,'
+            'website_blocks(id,block_type,block_data,is_visible,order_index)',
+        'tenant_id': 'eq.${config.tenantId}',
+        'is_published': 'eq.true',
+        'slug': 'in.(${publicPolicySlugs.join(',')})',
+        'website_blocks.tenant_id': 'eq.${config.tenantId}',
+      }),
+    ]);
+    return (
+      shell: results[0] as Map<String, dynamic>,
+      payments: results[1],
+      pages: results[2] as List<Object?>,
+    );
+  }
+
+  @override
   Future<CatalogReads> catalog(CatalogRequest request) async {
     final filters = {
       'p_tenant_id': config.tenantId,
@@ -149,7 +185,9 @@ class SupabasePublicReads implements PublicReads {
         'p_offset': request.offset,
       }).then((rows) => _completeRows(list(rows))),
       _rpc('get_public_product_facets_v2', filters),
-      _rpc('get_public_spec_option_labels_v1', {'p_tenant_id': config.tenantId}),
+      _rpc('get_public_spec_option_labels_v1', {
+        'p_tenant_id': config.tenantId,
+      }),
     ]);
     final listing =
         results[0]!
@@ -195,9 +233,7 @@ class SupabasePublicReads implements PublicReads {
   /// their cards are named from and the smaller copies of their card photos.
   /// Like Flutter, a failed completion keeps the rows as the listing returned
   /// them; without copies a card shows the large photo.
-  Future<
-    ({List<Object?> rows, List<Object?> brands, List<Object?> thumbnails})
-  >
+  Future<({List<Object?> rows, List<Object?> brands, List<Object?> thumbnails})>
   _completeRows(List<Object?> rows) async {
     String ids(Iterable<Object?> values) => values
         .map((value) => value?.toString().trim() ?? '')
@@ -212,7 +248,9 @@ class SupabasePublicReads implements PublicReads {
         thumbnails: const <Object?>[],
       );
     }
-    final brandIds = ids(rows.map((row) => row is Map ? row['brand_id'] : null));
+    final brandIds = ids(
+      rows.map((row) => row is Map ? row['brand_id'] : null),
+    );
     // The identity columns carry no photo: the card's is the listing row's.
     final photos = {
       for (final row in rows)
@@ -266,7 +304,10 @@ class SupabasePublicReads implements PublicReads {
     return (
       rows: [
         for (final row in rows)
-          if (row is Map) {...row, ...?identity[row['id']?.toString()]} else row,
+          if (row is Map)
+            {...row, ...?identity[row['id']?.toString()]}
+          else
+            row,
       ],
       brands: completed[1],
       thumbnails: completed[2],
@@ -306,7 +347,10 @@ class SupabasePublicReads implements PublicReads {
       ..set('apikey', config.publishableKey)
       ..set('authorization', 'Bearer ${config.publishableKey}');
     final response = await request.close().timeout(_timeout);
-    final text = await response.transform(utf8.decoder).join().timeout(_timeout);
+    final text = await response
+        .transform(utf8.decoder)
+        .join()
+        .timeout(_timeout);
     if (response.statusCode >= 300) {
       throw PublicReadException('$table → ${response.statusCode}');
     }
@@ -345,10 +389,12 @@ class SupabasePublicReads implements PublicReads {
       ..set('apikey', config.publishableKey)
       ..set('authorization', 'Bearer ${config.publishableKey}')
       ..contentType = ContentType.json;
-    request.write(jsonEncode({
-      for (final entry in body.entries)
-        if (entry.value != null) entry.key: entry.value,
-    }));
+    request.write(
+      jsonEncode({
+        for (final entry in body.entries)
+          if (entry.value != null) entry.key: entry.value,
+      }),
+    );
     final response = await request.close().timeout(_timeout);
     final text = await response
         .transform(utf8.decoder)

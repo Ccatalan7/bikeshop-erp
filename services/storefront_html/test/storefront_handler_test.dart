@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:jaspr/server.dart';
 import 'package:test/test.dart';
+import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
 import 'package:vinabike_public_core/public_store/utils/product_url.dart';
 import 'package:vinabike_public_core/shared/models/product.dart';
 import 'package:vinabike_storefront_html/storefront_html.dart';
@@ -146,6 +147,7 @@ class _FakeReads implements PublicReads {
     this.facets = const [],
     this.aliases = const {},
     this.byId = const {},
+    this.policyRows = const [],
   }) : shellJson = shell;
 
   final Map<String, dynamic>? page;
@@ -157,6 +159,7 @@ class _FakeReads implements PublicReads {
   final List<Object?> facets;
   final Map<String, String> aliases;
   final Map<String, Map<String, dynamic>> byId;
+  final List<Object?> policyRows;
   final requested = <String>[];
   final catalogRequests = <CatalogRequest>[];
 
@@ -171,6 +174,12 @@ class _FakeReads implements PublicReads {
     requested.add(sku ?? 'id:$productId');
     if (fail) throw PublicReadException('down');
     return (shell: shellJson ?? _shell(), payments: null, page: page);
+  }
+
+  @override
+  Future<PolicyPagesReads> policyPages() async {
+    if (fail) throw PublicReadException('down');
+    return (shell: shellJson ?? _shell(), payments: null, pages: policyRows);
   }
 
   @override
@@ -574,10 +583,7 @@ void main() {
         html,
         contains('href="https://vinabike.cl/productos" rel="canonical"'),
       );
-      expect(
-        html,
-        contains('<h1 class="trail">PRODUCTOS</h1>'),
-      );
+      expect(html, contains('<h1 class="trail">PRODUCTOS</h1>'));
       expect(html, contains('Mostrando 1 - 2 de 2 productos'));
       expect(html, contains('href="/productos/horquilla-vecina/H912"'));
       // The tree starts at the published roots and counts their branch; an
@@ -980,5 +986,167 @@ void main() {
       expect(card, contains('src="$photo"'));
       expect(card, isNot(contains('srcset')));
     });
+  });
+
+  group('information pages', () {
+    Map<String, dynamic> row(String slug, List<Map<String, dynamic>> blocks) =>
+        {
+          'id': 'page-$slug',
+          'slug': slug,
+          'title': slug == 'envios' ? 'Información de Envíos' : '',
+          'meta_description': slug == 'envios'
+              ? 'Tarifas y plazos de despacho.'
+              : null,
+          'is_published': true,
+          'website_blocks': blocks,
+        };
+    Map<String, dynamic> block(
+      String id,
+      String type,
+      int order,
+      Map<String, dynamic> data,
+    ) => {
+      'id': id,
+      'block_type': type,
+      'order_index': order,
+      'is_visible': true,
+      'block_data': data,
+    };
+    final rows = [
+      row('envios', [
+        block('hero', 'hero', 0, {
+          'title': 'Información de Envíos',
+          'subtitle': 'Despachos a todo Chile continental',
+          'blockHeight': 280,
+        }),
+        block('features', 'features', 1, {
+          'title': 'Opciones de Despacho',
+          'features': [
+            {'title': 'Retiro en tienda', 'description': 'Sin costo.'},
+          ],
+          'visibility': {'mobile': false},
+        }),
+        block('contact', 'contact', 2, {
+          'title': 'Visítanos',
+          'showForm': false,
+        }),
+      ]),
+      row('nosotros', [
+        block('about', 'about', 0, {
+          'title': 'Identidad',
+          'content': 'Primera línea.\nSegunda línea.\n\nOtro párrafo.',
+        }),
+      ]),
+      // Published but with nothing to read: not linked, and a 404.
+      row('terminos', [
+        block('t-hero', 'hero', 0, {'title': 'Términos'}),
+      ]),
+    ];
+
+    test('a page draws its frame, its blocks and the other pages', () async {
+      final response = await _get(
+        _FakeReads(policyRows: rows),
+        '/_html/envios',
+      );
+      final html = await response.readAsString();
+
+      expect(response.statusCode, 200);
+      expect(response.headers['x-robots-tag'], 'noindex');
+      expect(html, contains('<h1>Información de Envíos</h1>'));
+      expect(html, contains('Tarifas y plazos de despacho.'));
+      // The hero's button comes from the block's defaults, as in Flutter.
+      expect(html, contains('<h2 class="hero-t">INFORMACIÓN DE ENVÍOS</h2>'));
+      expect(html, contains('href="/productos">VER CATÁLOGO</a>'));
+      expect(html, contains('style="--gap:64px;height:280px"'));
+      // A features block is read as the page's sections; hidden on phones.
+      expect(html, contains('<h2>Opciones de Despacho</h2>'));
+      expect(html, contains('<h3>Retiro en tienda</h3>'));
+      expect(html, contains('data-block="features" data-bands="1 2 3 4 5"'));
+      // The contact block without its own data shows the store's.
+      expect(html, contains('Alvarez 32, Viña del Mar'));
+      expect(html, isNot(contains('Completa tus datos')));
+      // The navigation names the pages with something to read.
+      expect(html, contains('<a aria-current="page" href="/envios">'));
+      expect(html, contains('href="/nosotros"'));
+      expect(html, isNot(contains('href="/terminos"><svg')));
+      expect(html, contains('"@type":"WebPage"'));
+      expect(html, contains('<title>Información de Envíos | Viñabike</title>'));
+      expect(response.headers['x-storefront-uncovered'], isNull);
+    });
+
+    test('a block the HTML does not draw yet is named, not guessed', () async {
+      final response = await _get(
+        _FakeReads(
+          policyRows: [
+            row('envios', [
+              ...(rows.first['website_blocks'] as List)
+                  .cast<Map<String, dynamic>>(),
+              block('logos', 'brandLogos', 5, {'logos': []}),
+            ]),
+          ],
+        ),
+        '/_html/envios',
+      );
+      expect(response.statusCode, 200);
+      expect(response.headers['x-storefront-uncovered'], 'brandLogos');
+    });
+
+    test('the public path is indexable and keeps single line breaks', () async {
+      final response = await _get(_FakeReads(policyRows: rows), '/nosotros');
+      final html = await response.readAsString();
+
+      expect(response.statusCode, 200);
+      expect(response.headers['x-robots-tag'], isNull);
+      expect(html, contains('<meta name="robots" content="index,follow"/>'));
+      expect(html, contains('"@type":"AboutPage"'));
+      expect(html, contains('<h1>Sobre nosotros</h1>'));
+      expect(html, contains('Primera línea.<br/>'));
+      expect(html, contains('Otro párrafo.'));
+    });
+
+    test(
+      'a page without public content is a 404 with Flutter\'s message',
+      () async {
+        for (final path in ['/terminos', '/privacidad']) {
+          final response = await _get(_FakeReads(policyRows: rows), path);
+          final html = await response.readAsString();
+          expect(response.statusCode, 404, reason: path);
+          expect(html, contains('no tiene contenido público disponible'));
+          expect(
+            html,
+            contains('<meta name="robots" content="noindex,follow"/>'),
+          );
+        }
+      },
+    );
+  });
+
+  test('every stylesheet closes what it opens', () {
+    // A stray «}» at the end of the shared stylesheet swallowed the first
+    // rule of the next one (2026-10-05): the page theme never applied.
+    void balanced(String name, String css) {
+      var depth = 0;
+      for (final char
+          in css.replaceAll(RegExp(r'/\*.*?\*/', dotAll: true), '').split('')) {
+        if (char == '{') depth++;
+        if (char == '}') depth--;
+        expect(depth, greaterThanOrEqualTo(0), reason: '$name closes early');
+      }
+      expect(depth, 0, reason: '$name leaves a rule open');
+    }
+
+    balanced(
+      'storefrontCss',
+      storefrontCss(
+        primary: '#123f68',
+        accent: '#ff6f00',
+        headingFont: 'Oswald',
+        bodyFont: 'Barlow',
+      ),
+    );
+    balanced(
+      'policyPageCss',
+      policyPageCss(WebsiteThemeRoles.resolve((_) => '')),
+    );
   });
 }

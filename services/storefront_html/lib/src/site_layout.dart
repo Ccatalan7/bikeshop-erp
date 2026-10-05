@@ -29,6 +29,7 @@ class PageMeta {
     this.preloadImage,
     this.structuredData = const [],
     this.preloadHeadingFont = false,
+    this.styles = '',
   });
 
   final String title;
@@ -44,6 +45,10 @@ class PageMeta {
   /// at first sight; a catalog page uses only the body font, and preloading
   /// the other one took bandwidth from its first photo (2026-10-05).
   final bool preloadHeadingFont;
+
+  /// The page's own rules after the shared stylesheet: an editor page's
+  /// theme colors and its blocks.
+  final String styles;
 }
 
 /// Request facts every page needs.
@@ -135,6 +140,7 @@ Component sitePage({
               bodyFont: s.bodyFont,
             ),
           ),
+          if (meta.styles.isNotEmpty) RawText(meta.styles),
         ],
       ),
       for (final data in [business, ...meta.structuredData])
@@ -546,7 +552,16 @@ class SiteFooter extends StatelessComponent {
               ul([
                 for (final link in column.links)
                   li([
-                    a(href: s.hrefFor(link)!, [.text(link.label)]),
+                    // Bold for the page being read, as Flutter's desktop
+                    // footer (`matchedLocation == href`).
+                    a(
+                      href: s.hrefFor(link)!,
+                      attributes: {
+                        if (s.hrefFor(link) == page.path)
+                          'aria-current': 'page',
+                      },
+                      [.text(link.label)],
+                    ),
                   ]),
               ]),
             ]),

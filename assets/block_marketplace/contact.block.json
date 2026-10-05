@@ -10,10 +10,6 @@
   "defaultData": {
     "title": "Contáctanos",
     "subtitle": "Resolvemos dudas y agendamos servicios en menos de 24h.",
-    "phone": "+56 9 1234 5678",
-    "email": "contacto@vinabike.cl",
-    "address": "Av. Providencia 1234, Santiago",
-    "mapUrl": "https://maps.google.com",
     "showForm": true,
     "showMap": false
   },

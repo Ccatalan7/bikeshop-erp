@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-contact-block-store-data",
+  "scope": "release",
+  "platforms": [
+    "web",
+    "macos",
+    "windows",
+    "android"
+  ],
+  "title": "Contacto con los datos reales de la tienda",
+  "summary": "En Nosotros, Términos y Privacidad el recuadro de contacto mostraba a los visitantes «Completa tus datos de contacto desde el editor». Ahora muestra el teléfono, el correo y la dirección guardados en la configuración del sitio.",
+  "items": [
+    "Si un bloque de contacto trae su propio teléfono, correo o dirección, se muestran esos; si no, los de la configuración del sitio.",
+    "El aviso para completar los datos aparece sólo al editar la página, nunca a un visitante.",
+    "En el teléfono, el botón de la página que estás viendo (Nosotros, Envíos y las demás) ya no tapa su ícono con un círculo oscuro."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/website/widgets/website_block_renderer.dart",
+      "sha256": "1eb9c16ffab867c2b350f30a483488f55163fec50d8babc60388ffd959a2711b"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_contact_block_content.dart",
+      "sha256": "6fc26c5fb60e7157213282a81e189b6185e916274a5b0948e6c0200a906f1e09"
+    },
+    {
+      "path": "lib/public_store/pages/static_policy_page.dart",
+      "sha256": "39303239634126d3e20a6111d9ecd411ac5e8c484ecdaf9c6babf3a544e7d01e"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/public_policy_content.dart",
+      "sha256": "dec8fafbaa8fd8ac5cb6bd066617084ef7ccaad9d6f12f7a17fa1cf1f3328433"
+    }
+  ]
+}

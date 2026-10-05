@@ -317,7 +317,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,su
 .foot-social a{display:grid;place-items:center;width:40px;height:40px;border-radius:50%}
 .foot-social a:hover{background:rgba(255,255,255,.08)}
 .foot-title{margin:0 0 16px;font:400 16px/1.5 var(--head);letter-spacing:.15px;color:#fff}
-.foot-col li{padding-bottom:8px;font-size:14px;line-height:21px}
+.foot-col li{padding-bottom:8px;font-size:14px;line-height:21px;letter-spacing:.4px}
+.foot-col a[aria-current]{font-weight:700}
 .foot .contact li{display:flex;align-items:flex-start;gap:8px;padding-bottom:12px}
 .foot .contact svg{flex:none}
 .payments{margin-top:32px;text-align:center}
@@ -326,7 +327,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,su
 .pay-logo{display:block;width:150px;height:60px;object-fit:contain}
 .pay-chip{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 10px;border-radius:6px;border:1px solid rgba(255,255,255,.24);background:rgba(255,255,255,.1);color:rgba(255,255,255,.7);font:600 11px var(--body)}
 .foot-rule{margin:0;border:0;border-top:1px solid rgba(255,255,255,.24)}
-.legal{margin:24px 0 0;font-size:14px;line-height:1.4;text-align:center}
+.legal{margin:24px 0 0;font-size:14px;line-height:21px;letter-spacing:.4px;text-align:center}
 .foot-narrow{display:none;padding:32px 16px 24px}
 @media (max-width:799px){
 .foot-wide{display:none}.foot-narrow{display:block}
@@ -337,7 +338,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,su
 .foot-sec>ul{padding:0 0 16px 16px}
 .foot-sec li>a,.foot-sec li>span{display:inline-block;padding:8px 0;font-size:16px;line-height:1.5}
 .foot-sec .contact li{gap:12px;padding:0}.foot-sec .contact svg{width:18px;height:18px;margin-top:11px}
-.follow{margin:32px 0 16px;padding:0 16px;font:400 14px/1.4 var(--head);letter-spacing:1px;color:#fff}
+.follow{margin:32px 0 16px;padding:0 16px;font:400 14px/20px var(--head);letter-spacing:1px;color:#fff}
 .foot-social.round{margin:0;padding:0 16px}
 .foot-social.round a{width:48px;height:48px;background:rgba(255,255,255,.1);color:#fff}
 .foot-narrow .legal{margin-top:32px;color:rgba(255,255,255,.54)}
@@ -433,6 +434,5 @@ body:has(.sheet-check:checked){overflow:hidden}
 }
 @media (max-width:760px){
 body{font-size:16px}.wrap{padding-inline:16px}
-}
 }
 ''';
