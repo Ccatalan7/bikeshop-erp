@@ -379,6 +379,13 @@ int? _toInt(dynamic value) {
   return int.tryParse((value ?? '').toString());
 }
 
+/// The photo a product card shows: the first of the projection's
+/// `imageUrls` (the web photo before the catalog's, each one's optimized copy
+/// before its original), so every card shows the copy its smaller versions
+/// were cut from.
+String? publicProductPrimaryImageUrl(Product product) =>
+    _productImageUrls(product).firstOrNull;
+
 List<String> _productImageUrls(Product product) {
   final websitePrimaryVariants = [
     product.websiteImageUrlOptimized,

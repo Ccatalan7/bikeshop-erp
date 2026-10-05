@@ -4,6 +4,8 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-05 — corrección — [rendimiento](paginas/rendimiento.md): «Productos
+  destacados» baja la copia pequeña de la foto optimizada, no el original.
 - 2026-10-05 — corrección — [rutas](paginas/rutas-y-navegacion.md): los
   enlaces `?category=<id>` de los bloques salen con la ruta limpia, sin 301.
 - 2026-10-05 — corrección — [rutas](paginas/rutas-y-navegacion.md): desde el

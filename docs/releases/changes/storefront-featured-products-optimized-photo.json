@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "storefront-featured-products-optimized-photo",
+  "scope": "internal",
+  "platforms": [
+    "web"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/public_commerce_product_projection.dart",
+      "sha256": "16849be4b5a0bcabbf49269b8470ac1d869765b991daeac34cb5ab08936b19ce"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_block_renderer.dart",
+      "sha256": "38f7c0b49e87f82712c52bd94d0ccc2c07ac772f2ff2ea83e24faa1910179082"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_products_view.dart",
+      "sha256": "9cc709a788580db8cc5d9154331c1a0622b20a0b0e39db0389f9326aee180373"
+    },
+    {
+      "path": "services/storefront_html/test/storefront_handler_test.dart",
+      "sha256": "475c7dac188d764f4aba26d581157d3ae05a0250fdf704f9000f3338f8f6c891"
+    }
+  ]
+}

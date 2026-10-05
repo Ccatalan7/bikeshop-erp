@@ -3,6 +3,7 @@ import 'package:jaspr/server.dart';
 import 'package:vinabike_public_core/modules/website/models/website_action.dart';
 import 'package:vinabike_public_core/modules/website/models/website_block_base_definitions.dart';
 import 'package:vinabike_public_core/modules/website/models/website_responsive_authoring.dart';
+import 'package:vinabike_public_core/public_store/models/public_commerce_product_projection.dart';
 import 'package:vinabike_public_core/public_store/utils/product_url.dart';
 import 'package:vinabike_public_core/shared/models/product.dart';
 import 'package:vinabike_public_core/shared/utils/chilean_utils.dart';
@@ -109,7 +110,7 @@ class ProductsBlockView extends StatelessComponent {
     WebsiteProductsBlockContract contract, {
     required bool canonical,
   }) {
-    final image = product.imageUrl?.trim() ?? '';
+    final image = publicProductPrimaryImageUrl(product) ?? '';
     final copies = image.isEmpty ? null : context.thumbnails[image];
     final brand = product.brand?.trim() ?? '';
     final sku = product.sku.trim();

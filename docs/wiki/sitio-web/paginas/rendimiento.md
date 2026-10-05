@@ -131,6 +131,12 @@ tarjeta»).
   grilla; la precarga de la primera tarjeta lleva los mismos candidatos. En 40
   fotos al azar: 120 KB la original, 19,6 KB la de 400 px, 64 KB la de 800 px
   `[Prod 2026-10-05]`. La tienda Flutter todavía baja la de 1.200 px.
+- **«Productos destacados» mostraba la foto original** (`product.imageUrl`),
+  no la optimizada de la que salen las copias: en la portada, una captura de
+  pantalla en PNG de 267 KB compitiendo con la foto principal en el teléfono
+  lento. Desde el 2026-10-05 el bloque usa `publicProductPrimaryImageUrl`
+  (la misma primera foto que el catálogo) en el servidor y en el editor: las
+  dos primeras tarjetas bajaron de 308 a 47 KB en un teléfono `[Prod 2026-10-05]`.
 - El editor guarda una versión web optimizada (`website-optimize-image`) y, al
   elegir una imagen vieja de la biblioteca, la optimiza (`<nombre>-src<hash>-<uuid>-web.webp`,
   reutilizada si ya existe; WebP > 300 KB también) `[Repo]`.

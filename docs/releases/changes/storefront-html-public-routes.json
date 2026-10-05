@@ -25,7 +25,7 @@
     },
     {
       "path": ".github/workflows/firebase-hosting-store.yml",
-      "sha256": "dce6988ee9dacd3c63f9f57b54b9ea23b89e2bbd38150f5ed862890a55ae25ec"
+      "sha256": "32e95b7c435842a78d496fb697a5955e84dff13e3bb7ee39c50d12b535db074e"
     },
     {
       "path": "scripts/releases/check_storefront_html_routes.mjs",

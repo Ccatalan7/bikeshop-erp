@@ -8,6 +8,7 @@ import 'dart:convert';
 import 'package:provider/provider.dart';
 import '../providers/website_edit_mode_provider.dart';
 import '../services/website_service.dart';
+import 'package:vinabike_public_core/public_store/models/public_commerce_product_projection.dart';
 import 'package:vinabike_public_core/public_store/models/public_policy_content.dart';
 import 'package:vinabike_public_core/modules/website/models/website_google_reviews.dart';
 import 'package:vinabike_public_core/modules/website/models/website_hero_content.dart';
@@ -3727,7 +3728,8 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
                                   productBrand: product.brand,
                                   name: product.name,
                                   price: product.price,
-                                  imageUrl: product.imageUrl,
+                                  imageUrl:
+                                      publicProductPrimaryImageUrl(product),
                                   bodyFont: widget.bodyFont,
                                   showPrice: contract.showPrice,
                                   showSku: contract.showSku,
@@ -3758,7 +3760,7 @@ class _ProductsBlockWidgetState extends State<_ProductsBlockWidget> {
                           productBrand: product.brand,
                           name: product.name,
                           price: product.price,
-                          imageUrl: product.imageUrl,
+                          imageUrl: publicProductPrimaryImageUrl(product),
                           bodyFont: widget.bodyFont,
                           showPrice: contract.showPrice,
                           showSku: contract.showSku,
@@ -4135,7 +4137,7 @@ class _MobileProductAutoCarouselState
                   productBrand: product.brand,
                   name: product.name,
                   price: product.price,
-                  imageUrl: product.imageUrl,
+                  imageUrl: publicProductPrimaryImageUrl(product),
                   bodyFont: widget.bodyFont,
                   showPrice: widget.showPrice,
                   showSku: widget.showSku,

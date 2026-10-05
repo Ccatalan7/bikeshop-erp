@@ -1514,6 +1514,47 @@ void main() {
       };
 
     test(
+      'a picked product shows the copy its smaller photos come from',
+      () async {
+        const original = 'https://example.invalid/c8.png';
+        const optimized = 'https://example.invalid/c8_optimized.jpg';
+        final response = await _get(
+          _FakeReads(
+            homeRow: home([blocks[1]]),
+            shell: shell,
+            products: [
+              {
+                ...second,
+                'image_url': original,
+                'image_url_optimized': optimized,
+              },
+            ],
+            thumbnails: [
+              {
+                'source_url': optimized,
+                'source_width': 1200,
+                'source_height': 900,
+                'variants': [
+                  {
+                    'width': 400,
+                    'height': 300,
+                    'url': 'https://example.invalid/c8-400.jpg',
+                  },
+                ],
+              },
+            ],
+          ),
+          '/_html/',
+        );
+        final html = await response.readAsString();
+
+        expect(html, contains('src="https://example.invalid/c8-400.jpg"'));
+        expect(html, contains('$optimized 1200w'));
+        expect(html, isNot(contains(original)));
+      },
+    );
+
+    test(
       'draws every block under the header that floats over the first',
       () async {
         final response = await _get(
