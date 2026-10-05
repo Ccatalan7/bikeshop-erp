@@ -68,9 +68,9 @@ Handler storefrontHandler({
 
     final List<String> segments;
     try {
-      segments = Uri(path: path).pathSegments
-          .where((segment) => segment.isNotEmpty)
-          .toList();
+      segments = Uri(
+        path: path,
+      ).pathSegments.where((segment) => segment.isNotEmpty).toList();
     } on Object {
       return _plainNotFound();
     }
@@ -97,6 +97,10 @@ Handler storefrontHandler({
       stderr.writeln('read timed out for $path: $error');
       return _readFailed();
     } on SocketException catch (error) {
+      stderr.writeln('read failed for $path: $error');
+      return _readFailed();
+    } on HttpException catch (error) {
+      // A connection the other side closed, even after one retry.
       stderr.writeln('read failed for $path: $error');
       return _readFailed();
     }
@@ -143,11 +147,7 @@ class _Route {
       final results = await Future.wait<Object>([
         reads.shell(),
         reads.catalog(
-          catalogRequestFor(
-            shell: null,
-            categoryId: null,
-            query: parsed.query,
-          ),
+          catalogRequestFor(shell: null, categoryId: null, query: parsed.query),
         ),
       ]);
       final context = _context(results[0] as ShellReads);
@@ -339,7 +339,8 @@ class _Route {
       _render(unpublishedPage(context), indexable: false);
 
   Response _redirect(String target, {String query = ''}) {
-    final location = '${hidden ? hiddenRoutePrefix : ''}$target'
+    final location =
+        '${hidden ? hiddenRoutePrefix : ''}$target'
         '${query.isEmpty ? '' : '?$query'}';
     return Response(
       301,
@@ -554,12 +555,21 @@ Response _plainNotFound() => Response.notFound(
 );
 
 Future<Response> _localAsset(String root, String relative) async {
-  final file = File('$root/$relative');
-  if (relative.contains('..') || !await file.exists()) {
-    return Response.notFound(null);
+  if (relative.contains('..')) return Response.notFound(null);
+  // A package's asset (`packages/font_awesome_flutter/lib/fonts/x.ttf`) is in
+  // that package's folder, which the repository's package config names.
+  var path = '$root/$relative';
+  final package = RegExp(r'^packages/([^/]+)/(.+)$').firstMatch(relative);
+  if (package != null) {
+    final packageRoot = await _packageRoot(root, package.group(1)!);
+    if (packageRoot == null) return Response.notFound(null);
+    path = '$packageRoot/${package.group(2)}';
   }
+  final file = File(path);
+  if (!await file.exists()) return Response.notFound(null);
   final type = switch (relative.split('.').last) {
     'ttf' => 'font/ttf',
+    'otf' => 'font/otf',
     'webp' => 'image/webp',
     'png' => 'image/png',
     'svg' => 'image/svg+xml',
@@ -572,4 +582,19 @@ Future<Response> _localAsset(String root, String relative) async {
       'cache-control': 'public, max-age=31536000, immutable',
     },
   );
+}
+
+Future<String?> _packageRoot(String repository, String name) async {
+  final config = File('$repository/.dart_tool/package_config.json');
+  if (!await config.exists()) return null;
+  final packages =
+      (jsonDecode(await config.readAsString()) as Map)['packages'] as List;
+  for (final entry in packages.cast<Map>()) {
+    if (entry['name'] != name) continue;
+    final uri = Uri.parse(entry['rootUri'] as String);
+    return uri.isAbsolute
+        ? uri.toFilePath()
+        : Uri.file('$repository/.dart_tool/').resolveUri(uri).toFilePath();
+  }
+  return null;
 }

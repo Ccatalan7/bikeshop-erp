@@ -12,6 +12,7 @@ import 'package:vinabike_public_core/public_store/seo/public_business_structured
 import 'package:vinabike_public_core/public_store/seo/public_product_structured_data.dart';
 import 'package:vinabike_public_core/public_store/utils/social_url.dart';
 
+import 'material_icons.dart';
 import 'storefront_css.dart';
 import 'storefront_script.dart';
 import 'storefront_shell.dart';
@@ -220,8 +221,17 @@ class SiteHeader extends StatelessComponent {
     final banner = s.setting('header_show_top_banner') == 'true'
         ? s.setting('top_banner_text')
         : '';
+    final items = s.topLevel(MenuLocation.header);
     return header(classes: 'top', [
       if (banner.isNotEmpty) p(classes: 'banner', [.text(banner)]),
+      // Without JavaScript a checkbox opens the phone menu (a sheet from the
+      // bottom, as Flutter's); it comes before the sheet for `~`.
+      Component.element(
+        tag: 'input',
+        id: 'menu-toggle',
+        classes: 'menu-toggle',
+        attributes: {'type': 'checkbox', 'aria-label': 'Abrir el menú'},
+      ),
       div(classes: 'wrap bar', [
         a(classes: 'logo', href: '/', [
           // No logo of its own: the store writes its name, as in Flutter.
@@ -235,46 +245,28 @@ class SiteHeader extends StatelessComponent {
               height: 40,
             ),
         ]),
-        // Without JavaScript a checkbox opens the menu on a phone; on a
-        // desktop the menu is always visible.
-        Component.element(
-          tag: 'input',
-          id: 'menu-toggle',
-          classes: 'menu-toggle',
-          attributes: {'type': 'checkbox', 'aria-label': 'Abrir el menú'},
+        // The full menu, from 1.080 px (`PublicStoreHeaderGeometry`).
+        nav(
+          classes: 'menu',
+          attributes: {'aria-label': 'Principal'},
+          [
+            ul([
+              for (final item in items) ?_menuItem(item, s.childrenOf(item)),
+            ]),
+          ],
         ),
-        Component.element(
-          tag: 'label',
-          classes: 'menu-button',
-          attributes: {'for': 'menu-toggle', 'aria-hidden': 'true'},
-          children: [span([]), span([]), span([])],
-        ),
-        div(classes: 'menu', [
-          nav(
-            attributes: {'aria-label': 'Principal'},
-            [
-              ul([
-                for (final item in s.topLevel(MenuLocation.header))
-                  ?_menuItem(item, s.childrenOf(item)),
-              ]),
-            ],
-          ),
-          a(classes: 'menu-login', href: '/cuenta/login', [
-            .text('Iniciar sesión'),
-          ]),
-        ]),
         div(classes: 'tools', [
           a(
             href: '/productos#buscar',
             attributes: {'aria-label': 'Buscar productos'},
-            [const RawText(_searchIcon)],
+            [RawText(materialIcon(mdSearch))],
           ),
           a(
             classes: 'cart-link',
             href: '/carrito',
             attributes: {'aria-label': 'Carrito'},
             [
-              const RawText(_cartIcon),
+              RawText(materialIcon(mdCartOutlined)),
               span(
                 classes: 'cart-count',
                 attributes: {'data-cart-count': '', 'hidden': ''},
@@ -283,19 +275,101 @@ class SiteHeader extends StatelessComponent {
             ],
           ),
           a(classes: 'login', href: '/cuenta/login', [
-            const RawText(_personIcon),
+            RawText(materialIcon(mdPersonOutline)),
             .text('Iniciar sesión'),
           ]),
+          Component.element(
+            tag: 'label',
+            classes: 'menu-button',
+            attributes: {'for': 'menu-toggle', 'title': 'Menú'},
+            children: [RawText(materialIcon(mdMenu))],
+          ),
         ]),
+      ]),
+      Component.element(
+        tag: 'label',
+        classes: 'sheet-scrim',
+        attributes: {'for': 'menu-toggle', 'aria-hidden': 'true'},
+      ),
+      div(classes: 'menu-sheet', [
+        span(classes: 'sheet-handle', []),
+        a(classes: 'sheet-item sheet-login', href: '/cuenta/login', [
+          RawText(materialIcon(mdLoginRounded)),
+          span([.text('Iniciar Sesión')]),
+        ]),
+        hr(),
+        nav(
+          attributes: {'aria-label': 'Menú del teléfono'},
+          [
+            for (final item in items)
+              if (item.showOnMobile)
+                ?_sheetItem(item, s.childrenOf(item), depth: 0),
+          ],
+        ),
       ]),
     ]);
   }
 
-  bool _current(String href) {
-    final path = Uri.parse(href).path;
-    if (path == '/') return page.path == '/';
-    return page.path == path || page.path.startsWith('$path/');
+  /// One row of the phone sheet, as `_buildMobileNavigationNode` draws it:
+  /// an item with children opens in place with «Ver todo …» first.
+  Component? _sheetItem(
+    WebsiteNavigation item,
+    List<WebsiteNavigation> children, {
+    required int depth,
+  }) {
+    final href = page.shell.hrefFor(item);
+    final visible = [
+      for (final child in children)
+        if (child.showOnMobile) child,
+    ];
+    final indent = 'padding-left:${24 + depth * 14}px';
+    if (visible.isEmpty) {
+      if (href == null) return null;
+      return a(
+        classes: 'sheet-item',
+        href: href,
+        attributes: {
+          'style': indent,
+          if (_current(href)) 'aria-current': 'page',
+        },
+        [
+          RawText(
+            materialIcon(depth == 0 ? mdArrowForward : mdSubdirectoryRight),
+          ),
+          span([.text(item.label)]),
+          RawText(materialIcon(mdChevronRight, size: 20, classes: 'go')),
+        ],
+      );
+    }
+    return details(classes: 'sheet-group', [
+      summary(
+        classes: 'sheet-item',
+        attributes: {'style': indent},
+        [
+          RawText(materialIcon(mdFolderOutlined)),
+          span([.text(item.label)]),
+          RawText(materialIcon(mdExpandMore, classes: 'go')),
+        ],
+      ),
+      if (href != null)
+        a(
+          classes: 'sheet-item sheet-all',
+          href: href,
+          attributes: {'style': 'padding-left:${24 + (depth + 1) * 14}px'},
+          [
+            RawText(materialIcon(mdArrowForward)),
+            span([.text('Ver todo ${item.label}')]),
+            RawText(materialIcon(mdChevronRight, size: 20, classes: 'go')),
+          ],
+        ),
+      for (final child in visible)
+        ?_sheetItem(child, page.shell.childrenOf(child), depth: depth + 1),
+    ]);
   }
+
+  /// Flutter marks an item only on its own page (`matchedLocation == href`),
+  /// never a parent of it: `/productos` is not current on a category.
+  bool _current(String href) => Uri.parse(href).path == page.path;
 
   Component? _menuItem(
     WebsiteNavigation item,
@@ -344,6 +418,7 @@ class SiteFooter extends StatelessComponent {
       configuredUrl: s.settings['logo_url'] ?? '',
       tenantId: page.tenantId,
     );
+    // Font Awesome's brand glyphs, from the font Flutter already serves.
     final socials = <(String, String?, String)>[
       (
         'Facebook',
@@ -351,7 +426,7 @@ class SiteFooter extends StatelessComponent {
           s.setting('facebook', s.setting('facebook_handle')),
           'https://facebook.com/',
         ),
-        _facebookIcon,
+        '\u{f09a}',
       ),
       (
         'Instagram',
@@ -359,7 +434,7 @@ class SiteFooter extends StatelessComponent {
           s.setting('instagram', s.setting('instagram_handle')),
           'https://instagram.com/',
         ),
-        _instagramIcon,
+        '\u{f16d}',
       ),
       (
         'X',
@@ -367,7 +442,7 @@ class SiteFooter extends StatelessComponent {
           s.setting('twitter', s.setting('twitter_handle')),
           'https://twitter.com/',
         ),
-        _xIcon,
+        '\u{e61b}',
       ),
       (
         'YouTube',
@@ -376,83 +451,151 @@ class SiteFooter extends StatelessComponent {
           'https://youtube.com/',
           keepAtPrefix: true,
         ),
-        _youtubeIcon,
+        '\u{f167}',
       ),
       (
         'WhatsApp',
-        s.whatsappDigits.isEmpty ? null : 'https://wa.me/${s.whatsappDigits}',
-        _whatsappIcon,
+        s.whatsappDigits.isEmpty
+            ? null
+            : 'https://wa.me/${s.whatsappDigits}?text='
+                  '${Uri.encodeComponent('Hola ${s.storeName}, vengo desde el sitio web')}',
+        '\u{f232}',
       ),
     ];
-    return footer(classes: 'foot', [
-      div(classes: 'wrap foot-grid', [
-        div(classes: 'foot-brand', [
-          a(href: '/', classes: 'foot-logo', [
-            if (logo.isEmpty)
-              span(classes: 'foot-name', [.text(s.storeName)])
-            else
-              img(
-                src: logo.startsWith('http') ? logo : '/$logo',
-                alt: s.storeName,
-                width: 180,
-                height: 48,
-                loading: MediaLoading.lazy,
-              ),
-          ]),
-          if (s.storeDescription.isNotEmpty) p([.text(s.storeDescription)]),
-          ul(classes: 'socials', [
-            for (final (label, url, icon) in socials)
-              if (url != null)
-                li([
-                  a(
-                    href: url,
-                    attributes: {
-                      'aria-label': label,
-                      'rel': 'noopener',
-                      'target': '_blank',
-                    },
-                    [RawText(icon)],
+    Component logoLink(int height) => a(href: '/', classes: 'foot-logo', [
+      if (logo.isEmpty)
+        span(classes: 'foot-name', [.text(s.storeName)])
+      else
+        img(
+          src: logo.startsWith('http') ? logo : '/$logo',
+          alt: s.storeName,
+          height: height,
+          loading: MediaLoading.lazy,
+        ),
+    ]);
+    Component socialLinks({required bool round}) =>
+        div(classes: round ? 'foot-social round' : 'foot-social', [
+          for (final (label, url, glyph) in socials)
+            if (url != null)
+              a(
+                href: url,
+                attributes: {
+                  'aria-label': label,
+                  'title': label,
+                  'rel': 'noopener',
+                  'target': '_blank',
+                },
+                [
+                  span(
+                    classes: 'fab',
+                    attributes: {'aria-hidden': 'true'},
+                    [.text(glyph)],
                   ),
-                ]),
-          ]),
+                ],
+              ),
+        ]);
+    final hasContact =
+        address.isNotEmpty || phone.isNotEmpty || email.isNotEmpty;
+    Component contactList() => ul(classes: 'contact', [
+      if (address.isNotEmpty)
+        li([
+          RawText(materialIcon(mdLocationOnOutlined, size: 20)),
+          span([.text(address)]),
         ]),
-        ..._footerColumns(s),
-        if (address.isNotEmpty || phone.isNotEmpty || email.isNotEmpty)
-          div([
-            p(classes: 'foot-title', [.text('Contacto')]),
-            ul(classes: 'contact', [
-              if (address.isNotEmpty)
-                li([const RawText(_pinIcon), span([.text(address)])]),
-              if (phone.isNotEmpty)
-                li([
-                  const RawText(_phoneIcon),
-                  a(href: 'tel:${phone.replaceAll(' ', '')}', [.text(phone)]),
-                ]),
-              if (email.isNotEmpty)
-                li([
-                  const RawText(_mailIcon),
-                  a(href: 'mailto:$email', [.text(email)]),
-                ]),
-            ]),
+      if (phone.isNotEmpty)
+        li([
+          RawText(materialIcon(mdPhoneOutlined, size: 20)),
+          a(href: 'tel:${phone.replaceAll(' ', '')}', [.text(phone)]),
+        ]),
+      if (email.isNotEmpty)
+        li([
+          RawText(materialIcon(mdEmailOutlined, size: 20)),
+          a(href: 'mailto:$email', [.text(email)]),
+        ]),
+    ]);
+    final legal = p(classes: 'legal', [
+      .text(
+        '© ${DateTime.now().year}${s.storeName.isNotEmpty ? ' ${s.storeName}' : ''}. '
+        'Todos los derechos reservados.',
+      ),
+    ]);
+    Component collapsible(String title, Component body) =>
+        details(classes: 'foot-sec', [
+          summary([
+            span([.text(title.toUpperCase())]),
+            RawText(materialIcon(mdExpandMore)),
           ]),
-      ]),
-      if (s.paymentClaims.isNotEmpty)
-        div(
-          classes: 'wrap payments',
-          attributes: {'role': 'group', 'aria-label': 'Medios de pago aceptados'},
-          [
-            p([.text('Medios de Pago')]),
-            ul([
-              for (final code in s.paymentClaims)
-                li([_paymentBadge(code)]),
+          body,
+        ]);
+    final mobileColumns = _footerFor(s, desktop: false);
+
+    // Flutter draws one footer from 800 px up and another below; so does
+    // this page, with the same breakpoint.
+    return footer(classes: 'foot', [
+      div(classes: 'foot-wide', [
+        div(classes: 'foot-grid', [
+          div(classes: 'foot-brand', [
+            logoLink(60),
+            if (s.storeDescription.isNotEmpty)
+              p(classes: 'foot-about', [.text(s.storeDescription)]),
+            socialLinks(round: false),
+          ]),
+          for (final column in _footerFor(s, desktop: true))
+            div(classes: 'foot-col', [
+              p(classes: 'foot-title', [.text(column.title)]),
+              ul([
+                for (final link in column.links)
+                  li([
+                    a(href: s.hrefFor(link)!, [.text(link.label)]),
+                  ]),
+              ]),
             ]),
-          ],
-        ),
-      p(classes: 'wrap legal', [
-        .text(
-          '© ${DateTime.now().year}${s.storeName.isNotEmpty ? ' ${s.storeName}' : ''}. '
-          'Todos los derechos reservados.',
-        ),
+          if (hasContact)
+            div(classes: 'foot-col', [
+              p(classes: 'foot-title', [.text('Contacto')]),
+              contactList(),
+            ]),
+        ]),
+        if (s.paymentClaims.isNotEmpty)
+          div(
+            classes: 'payments',
+            attributes: {
+              'role': 'group',
+              'aria-label': 'Medios de pago aceptados',
+            },
+            [
+              p([.text('Medios de Pago')]),
+              ul([
+                for (final code in s.paymentClaims) li([_paymentBadge(code)]),
+              ]),
+            ],
+          ),
+        hr(classes: 'foot-rule'),
+        legal,
+      ]),
+      div(classes: 'foot-narrow', [
+        logoLink(50),
+        for (final column in mobileColumns) ...[
+          collapsible(
+            column.title,
+            ul([
+              for (final link in column.links)
+                li([
+                  a(href: s.hrefFor(link)!, [.text(link.label)]),
+                ]),
+            ]),
+          ),
+          hr(classes: 'foot-rule'),
+        ],
+        if (hasContact) ...[
+          collapsible('Contacto', contactList()),
+          hr(classes: 'foot-rule'),
+        ],
+        if (socials.any((entry) => entry.$2 != null)) ...[
+          p(classes: 'follow', [.text('¡SÍGUENOS!')]),
+          socialLinks(round: true),
+        ],
+        legal,
       ]),
     ]);
   }
@@ -460,42 +603,24 @@ class SiteFooter extends StatelessComponent {
   static Component _paymentBadge(PublicCheckoutPaymentCode code) {
     final claim = kPublicStorePaymentClaims[code]!;
     if (claim.imageUrl case final url?) {
-      return span(classes: 'pay-badge', [
-        img(
-          src: url,
-          alt: claim.label,
-          width: 72,
-          height: 24,
-          loading: MediaLoading.lazy,
-        ),
-      ]);
+      return img(
+        classes: 'pay-logo',
+        src: url,
+        alt: claim.label,
+        attributes: {'title': claim.label},
+        loading: MediaLoading.lazy,
+      );
     }
     return span(classes: 'pay-chip', [
-      const RawText(_bankIcon),
+      RawText(materialIcon(mdAccountBalanceOutlined, size: 15)),
       .text(claim.label),
     ]);
   }
 
-  /// The Flutter footer's rule, worked out once per audience like its
-  /// desktop and mobile footers: among the roots shown to that audience, the
-  /// ones with navigable descendants are columns (a structural item without a
-  /// destination passes its published children up); when none has, every
-  /// navigable root is a link under «Enlaces». When both audiences get the
-  /// same footer it is drawn once, otherwise each with its device class.
-  static List<Component> _footerColumns(StorefrontShell shell) {
-    final desktop = _footerFor(shell, desktop: true);
-    final mobile = _footerFor(shell, desktop: false);
-    String key(List<_FooterColumn> columns) => [
-      for (final column in columns)
-        '${column.title}:${column.links.map((l) => l.id).join(',')}',
-    ].join('|');
-    if (key(desktop) == key(mobile)) return _renderFooter(shell, desktop);
-    return [
-      ..._renderFooter(shell, desktop, classes: 'nav-no-mobile'),
-      ..._renderFooter(shell, mobile, classes: 'nav-no-desktop'),
-    ];
-  }
-
+  /// The Flutter footer's rule for one audience: among the roots shown to
+  /// it, the ones with navigable descendants are columns (a structural item
+  /// without a destination passes its published children up); when none
+  /// has, every navigable root is a link under «Enlaces».
   static List<_FooterColumn> _footerFor(
     StorefrontShell shell, {
     required bool desktop,
@@ -537,23 +662,6 @@ class SiteFooter extends StatelessComponent {
     ];
     return flat.isEmpty ? const [] : [_FooterColumn('Enlaces', flat)];
   }
-
-  static List<Component> _renderFooter(
-    StorefrontShell shell,
-    List<_FooterColumn> columns, {
-    String? classes,
-  }) => [
-    for (final column in columns)
-      div(classes: classes, [
-        p(classes: 'foot-title', [.text(column.title)]),
-        ul([
-          for (final link in column.links)
-            li([
-              a(href: shell.hrefFor(link)!, [.text(link.label)]),
-            ]),
-        ]),
-      ]),
-  ];
 }
 
 class _FooterColumn {
@@ -731,79 +839,8 @@ Component _preload(String href, String as) => Component.element(
 String _fontFile(String family) =>
     family == 'Oswald' ? 'Oswald-wght.ttf' : 'Barlow-SemiBold.ttf';
 
-const _searchIcon =
-    '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">'
-    '<circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/>'
-    '<path d="M20 20l-4-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
-
-const _cartIcon =
-    '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">'
-    '<path d="M3 4h2l2.4 11.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.5L21 8H6.2" '
-    'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" '
-    'stroke-linejoin="round"/><circle cx="10" cy="20" r="1.4" fill="currentColor"/>'
-    '<circle cx="17" cy="20" r="1.4" fill="currentColor"/></svg>';
-
-const _personIcon =
-    '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">'
-    '<circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" stroke-width="2"/>'
-    '<path d="M4 21c1.6-4 4.5-6 8-6s6.4 2 8 6" fill="none" stroke="currentColor" '
-    'stroke-width="2" stroke-linecap="round"/></svg>';
-
 const _chatIcon =
     '<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">'
     '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H9l-5 4z" '
     'fill="currentColor"/><path d="M8 8h8M8 11.5h5" stroke="#1e293b" stroke-width="1.8" '
     'stroke-linecap="round"/></svg>';
-
-const _pinIcon =
-    '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">'
-    '<path d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0C18.5 15 12 21 12 21z" fill="none" '
-    'stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="10" r="2.3" fill="none" '
-    'stroke="currentColor" stroke-width="1.8"/></svg>';
-
-const _phoneIcon =
-    '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">'
-    '<path d="M6.6 3.5l3 3.2-1.8 2.1a12 12 0 0 0 7.4 7.4l2.1-1.8 3.2 3-1.6 2.6c-.6.9-1.7 1.2-2.7.9'
-    'C9.6 19 5 14.4 3.1 7.8c-.3-1 0-2.1.9-2.7z" fill="none" stroke="currentColor" '
-    'stroke-width="1.8" stroke-linejoin="round"/></svg>';
-
-const _mailIcon =
-    '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">'
-    '<rect x="3" y="5" width="18" height="14" rx="2" fill="none" stroke="currentColor" '
-    'stroke-width="1.8"/><path d="M4 7l8 6 8-6" fill="none" stroke="currentColor" '
-    'stroke-width="1.8" stroke-linejoin="round"/></svg>';
-
-const _bankIcon =
-    '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">'
-    '<path d="M3 9.5L12 4l9 5.5M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18" fill="none" '
-    'stroke="currentColor" stroke-width="1.7" stroke-linecap="round" '
-    'stroke-linejoin="round"/></svg>';
-
-const _instagramIcon =
-    '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">'
-    '<rect x="3.5" y="3.5" width="17" height="17" rx="5" fill="none" stroke="currentColor" '
-    'stroke-width="1.8"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" '
-    'stroke-width="1.8"/><circle cx="17.2" cy="6.8" r="1.2" fill="currentColor"/></svg>';
-
-const _facebookIcon =
-    '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">'
-    '<path d="M13.5 21v-7.5h2.6l.4-3h-3V8.7c0-.9.3-1.5 1.6-1.5h1.6V4.5a20 20 0 0 0-2.4-.1'
-    'c-2.4 0-4 1.4-4 4.1v2h-2.6v3h2.6V21z" fill="currentColor"/></svg>';
-
-const _xIcon =
-    '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">'
-    '<path d="M4 4l16 16M20 4L4 20" stroke="currentColor" stroke-width="2" '
-    'stroke-linecap="round"/></svg>';
-
-const _youtubeIcon =
-    '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">'
-    '<rect x="2.5" y="5.5" width="19" height="13" rx="4" fill="none" stroke="currentColor" '
-    'stroke-width="1.8"/><path d="M10 9v6l5-3z" fill="currentColor"/></svg>';
-
-const _whatsappIcon =
-    '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">'
-    '<path d="M12 3.5a8.5 8.5 0 0 0-7.3 12.8L3.5 20.5l4.3-1.1A8.5 8.5 0 1 0 12 3.5z" '
-    'fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>'
-    '<path d="M9 8.2c.3-.4.7-.4 1-.1l.9 1.6c.2.3.1.6-.1.9l-.5.5a5.5 5.5 0 0 0 2.6 2.6l.5-.5'
-    'c.3-.2.6-.3.9-.1l1.6.9c.3.3.3.7-.1 1-.9.9-2 1.2-3.3.6a8.6 8.6 0 0 1-3.9-3.9'
-    'c-.6-1.3-.3-2.4.6-3.3z" fill="currentColor"/></svg>';

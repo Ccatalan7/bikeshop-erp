@@ -278,28 +278,31 @@ void main() {
     },
   );
 
-  test('the public path is indexable; a filter or the hidden copy is not', () async {
-    final public = await _get(
-      _FakeReads(page: _page()),
-      '/productos/horquilla-suntour-29-auron-35/H911',
-    );
-    expect(public.statusCode, 200);
-    expect(public.headers['x-robots-tag'], isNull);
-    expect(
-      await public.readAsString(),
-      contains('<meta name="robots" content="index,follow"/>'),
-    );
-    final tracked = await _get(
-      _FakeReads(page: _page()),
-      '/productos/horquilla-suntour-29-auron-35/H911?utm_source=ig',
-    );
-    expect(tracked.headers['x-robots-tag'], isNull);
-    final sorted = await _get(
-      _FakeReads(page: _page()),
-      '/productos/horquilla-suntour-29-auron-35/H911?sort=price_asc',
-    );
-    expect(sorted.headers['x-robots-tag'], 'noindex');
-  });
+  test(
+    'the public path is indexable; a filter or the hidden copy is not',
+    () async {
+      final public = await _get(
+        _FakeReads(page: _page()),
+        '/productos/horquilla-suntour-29-auron-35/H911',
+      );
+      expect(public.statusCode, 200);
+      expect(public.headers['x-robots-tag'], isNull);
+      expect(
+        await public.readAsString(),
+        contains('<meta name="robots" content="index,follow"/>'),
+      );
+      final tracked = await _get(
+        _FakeReads(page: _page()),
+        '/productos/horquilla-suntour-29-auron-35/H911?utm_source=ig',
+      );
+      expect(tracked.headers['x-robots-tag'], isNull);
+      final sorted = await _get(
+        _FakeReads(page: _page()),
+        '/productos/horquilla-suntour-29-auron-35/H911?sort=price_asc',
+      );
+      expect(sorted.headers['x-robots-tag'], 'noindex');
+    },
+  );
 
   test(
     'catalog text is escaped in the page and in the structured data',
@@ -329,7 +332,7 @@ void main() {
       final response = await _get(_FakeReads(page: _page()), _canonical());
       final html = await response.readAsString();
       final crumbs = RegExp(
-        r'<nav class="crumbs wrap".*?</nav>',
+        r'<nav class="crumbs".*?</nav>',
         dotAll: true,
       ).firstMatch(html)!.group(0)!;
       expect(crumbs, contains('href="/productos/categoria/componentes"'));
@@ -491,15 +494,18 @@ void main() {
         ],
       },
     );
-    expect(
-      html,
-      contains('<div class="nav-no-mobile"><p class="foot-title">Grupo</p>'),
+    // Flutter's two footers: columns from 800 px up, collapsible sections
+    // below, each with its own audience.
+    final wide = html.substring(
+      html.indexOf('<div class="foot-wide">'),
+      html.indexOf('<div class="foot-narrow">'),
     );
-    expect(
-      html,
-      contains('<div class="nav-no-desktop"><p class="foot-title">Enlaces</p>'),
-    );
-    expect(html, contains('<a href="/contacto">Suelto</a>'));
+    final narrow = html.substring(html.indexOf('<div class="foot-narrow">'));
+    expect(wide, contains('<p class="foot-title">Grupo</p>'));
+    expect(wide, isNot(contains('Suelto')));
+    expect(narrow, contains('<span>ENLACES</span>'));
+    expect(narrow, contains('<a href="/contacto">Suelto</a>'));
+    expect(narrow, isNot(contains('GRUPO')));
   });
 
   test(
@@ -550,14 +556,12 @@ void main() {
       {'facet_key': 'category', 'value_id': _child, 'item_count': 2},
       {'facet_key': 'category', 'value_id': _hidden, 'item_count': 5},
     ];
-    _FakeReads reads({
-      int total = 2,
-      Map<String, dynamic>? shell,
-    }) => _FakeReads(
-      products: rows(total: total),
-      facets: facets,
-      shell: shell,
-    );
+    _FakeReads reads({int total = 2, Map<String, dynamic>? shell}) =>
+        _FakeReads(
+          products: rows(total: total),
+          facets: facets,
+          shell: shell,
+        );
 
     test('/productos lists the catalog with its filters, indexable', () async {
       final fake = reads();
@@ -570,7 +574,10 @@ void main() {
         html,
         contains('href="https://vinabike.cl/productos" rel="canonical"'),
       );
-      expect(html, contains('<h1 class="trail"><strong>PRODUCTOS</strong></h1>'));
+      expect(
+        html,
+        contains('<h1 class="trail">PRODUCTOS</h1>'),
+      );
       expect(html, contains('Mostrando 1 - 2 de 2 productos'));
       expect(html, contains('href="/productos/horquilla-vecina/H912"'));
       // The tree starts at the published roots and counts their branch; an
@@ -580,7 +587,7 @@ void main() {
       expect(html, contains('<h2>Categorías</h2>'));
       // «Todas» is the facet summary, which also counts what has no
       // published category.
-      expect(html, contains('<span>Todas</span><span class="n">9</span>'));
+      expect(html, contains('<span>Todas (9)</span>'));
       expect(html, contains('"@type":"CollectionPage"'));
       expect(html, contains('"@type":"ItemList"'));
       expect(fake.catalogRequests.single.categoryIds, isNull);
@@ -605,57 +612,64 @@ void main() {
       );
       final html = await (await _get(fake, '/productos')).readAsString();
       final card = RegExp(
-        r'<li class="card">.*?</li>',
+        r'<li class="card[^"]*">.*?</li>',
         dotAll: true,
       ).firstMatch(html)!.group(0)!;
       expect(card, contains('Nombre comercial'));
-      expect(card, contains('<p class="maker">Suntour</p>'));
+      expect(card, contains('<span class="maker">Suntour</span>'));
       expect(card, isNot(contains('nombre viejo')));
     });
 
-    test('a category reads its whole branch, with its hero and trail', () async {
-      final fake = reads();
-      final response = await _get(fake, '/productos/categoria/componentes');
-      final html = await response.readAsString();
-      expect(response.statusCode, 200);
-      expect(
-        fake.catalogRequests.single.categoryIds,
-        unorderedEquals([_parent, _child]),
-      );
-      expect(html, contains('<h1>Componentes</h1>'));
-      expect(html, contains('<nav class="subcats"'));
-      expect(html, contains('<h2>Subcategorías</h2>'));
-      expect(
-        html,
-        contains('<nav class="trail" aria-label="Ruta"><a href="/productos">'),
-      );
-      expect(
-        html,
-        contains(
-          'href="https://vinabike.cl/productos/categoria/componentes" '
-          'rel="canonical"',
-        ),
-      );
-    });
+    test(
+      'a category reads its whole branch, with its hero and trail',
+      () async {
+        final fake = reads();
+        final response = await _get(fake, '/productos/categoria/componentes');
+        final html = await response.readAsString();
+        expect(response.statusCode, 200);
+        expect(
+          fake.catalogRequests.single.categoryIds,
+          unorderedEquals([_parent, _child]),
+        );
+        expect(html, contains('<h1>Componentes</h1>'));
+        expect(html, contains('<nav class="subcats"'));
+        expect(html, contains('<h2>Subcategorías</h2>'));
+        expect(
+          html,
+          contains(
+            '<nav class="trail" aria-label="Ruta"><a href="/productos">',
+          ),
+        );
+        expect(
+          html,
+          contains(
+            'href="https://vinabike.cl/productos/categoria/componentes" '
+            'rel="canonical"',
+          ),
+        );
+      },
+    );
 
-    test('a name shared with a hidden category opens the published one',
-        () async {
-      final shell = _shell();
-      shell['categories'] = [
-        ...shell['categories'] as List,
-        {
-          'id': 'c0000000-0000-4000-8000-000000000004',
-          'name': 'Horquillas',
-          'parent_id': _hidden,
-          'full_path': 'Interna > Horquillas',
-          'show_on_website': false,
-        },
-      ];
-      final fake = reads(shell: shell);
-      final response = await _get(fake, '/productos/categoria/horquillas');
-      expect(response.statusCode, 200);
-      expect(fake.catalogRequests.single.categoryIds, [_child]);
-    });
+    test(
+      'a name shared with a hidden category opens the published one',
+      () async {
+        final shell = _shell();
+        shell['categories'] = [
+          ...shell['categories'] as List,
+          {
+            'id': 'c0000000-0000-4000-8000-000000000004',
+            'name': 'Horquillas',
+            'parent_id': _hidden,
+            'full_path': 'Interna > Horquillas',
+            'show_on_website': false,
+          },
+        ];
+        final fake = reads(shell: shell);
+        final response = await _get(fake, '/productos/categoria/horquillas');
+        expect(response.statusCode, 200);
+        expect(fake.catalogRequests.single.categoryIds, [_child]);
+      },
+    );
 
     test('an unknown or unpublished category is a 404', () async {
       for (final path in [
@@ -701,8 +715,10 @@ void main() {
     });
 
     test('pages link to each other and say which one they are', () async {
-      final first = await (await _get(reads(total: 45), '/productos'))
-          .readAsString();
+      final first = await (await _get(
+        reads(total: 45),
+        '/productos',
+      )).readAsString();
       expect(first, contains('href="/productos?page=2"'));
       expect(first, contains('rel="next"'));
       final second = await _get(reads(total: 45), '/productos?page=2');
@@ -724,18 +740,20 @@ void main() {
       );
     });
 
-    test('an old ?category= Flutter cannot resolve becomes its search',
-        () async {
-      final fake = reads();
-      final response = await _get(
-        fake,
-        '/productos?category=texto-inexistente&cat=$_child',
-      );
-      // `category` wins over `cat` even when it does not resolve.
-      expect(response.statusCode, 200);
-      expect(fake.catalogRequests.single.searchQuery, 'texto-inexistente');
-      expect(fake.catalogRequests.single.categoryIds, isNull);
-    });
+    test(
+      'an old ?category= Flutter cannot resolve becomes its search',
+      () async {
+        final fake = reads();
+        final response = await _get(
+          fake,
+          '/productos?category=texto-inexistente&cat=$_child',
+        );
+        // `category` wins over `cat` even when it does not resolve.
+        expect(response.statusCode, 200);
+        expect(fake.catalogRequests.single.searchQuery, 'texto-inexistente');
+        expect(fake.catalogRequests.single.categoryIds, isNull);
+      },
+    );
 
     test('a page past the end shows the last one, counted right', () async {
       final response = await _get(
@@ -744,7 +762,7 @@ void main() {
       );
       final html = await response.readAsString();
       expect(html, contains('Mostrando 21 - 25 de 25 productos'));
-      expect(html, contains('<span aria-current="page">2</span>'));
+      expect(html, contains('<span class="num" aria-current="page">2</span>'));
       expect(html, contains('· página 2</title>'));
     });
 
@@ -788,39 +806,40 @@ void main() {
       expect(alias.headers['location'], _canonical());
 
       for (final path in ['/producto/$id911', '/productos/$id911']) {
-        final legacy = await _get(
-          _FakeReads(byId: {id911: _product()}),
-          path,
-        );
+        final legacy = await _get(_FakeReads(byId: {id911: _product()}), path);
         expect(legacy.statusCode, 301, reason: path);
         expect(legacy.headers['location'], _canonical(), reason: path);
       }
-      expect(
-        (await _get(_FakeReads(), '/producto/$id911')).statusCode,
-        404,
-      );
+      expect((await _get(_FakeReads(), '/producto/$id911')).statusCode, 404);
     });
 
-    test('measurement: only public pages, and the browser checks the mark',
-        () async {
-      final shell = {
-        ..._shell(),
-        'settings': {..._shell()['settings'], 'seo_ga_id': 'G-TEST123'},
-      };
-      Future<String> html(String path, {Map<String, String>? headers}) async =>
-          (await _get(
-            reads(shell: shell),
-            path,
-            headers: headers ?? const {},
-          )).readAsString();
-      // Firebase Hosting strips the `vb_sin_medir` cookie on the way here,
-      // so the page's own script reads the mark before loading anything.
-      final public = await html('/productos');
-      expect(public, contains('G-TEST123'));
-      expect(public, contains("var markName = 'vb_sin_medir';"));
-      expect(public, contains('if (readMark()) { writeMark(true); return; }'));
-      expect(await html('/_html/productos'), isNot(contains('G-TEST123')));
-    });
+    test(
+      'measurement: only public pages, and the browser checks the mark',
+      () async {
+        final shell = {
+          ..._shell(),
+          'settings': {..._shell()['settings'], 'seo_ga_id': 'G-TEST123'},
+        };
+        Future<String> html(
+          String path, {
+          Map<String, String>? headers,
+        }) async => (await _get(
+          reads(shell: shell),
+          path,
+          headers: headers ?? const {},
+        )).readAsString();
+        // Firebase Hosting strips the `vb_sin_medir` cookie on the way here,
+        // so the page's own script reads the mark before loading anything.
+        final public = await html('/productos');
+        expect(public, contains('G-TEST123'));
+        expect(public, contains("var markName = 'vb_sin_medir';"));
+        expect(
+          public,
+          contains('if (readMark()) { writeMark(true); return; }'),
+        );
+        expect(await html('/_html/productos'), isNot(contains('G-TEST123')));
+      },
+    );
 
     test('an unpublished site shows the holding page', () async {
       final response = await _get(
@@ -867,14 +886,23 @@ void main() {
   test('a product without a SKU is drawn at its UUID route', () async {
     const id = '6f1d2a3e-0000-4000-8000-000000000912';
     final product = {..._product(), 'id': id, 'sku': null};
-    final fake = _FakeReads(page: _page(product: product), byId: {id: product});
+    final fake = _FakeReads(
+      page: _page(product: product),
+      byId: {id: product},
+    );
     final response = await _get(fake, '/productos/$id');
     expect(response.statusCode, 200);
     expect(fake.requested, ['id:$id']);
     final html = await response.readAsString();
-    expect(html, contains('href="https://vinabike.cl/productos/$id" rel="canonical"'));
+    expect(
+      html,
+      contains('href="https://vinabike.cl/productos/$id" rel="canonical"'),
+    );
 
-    final singular = await _get(_FakeReads(byId: {id: product}), '/producto/$id');
+    final singular = await _get(
+      _FakeReads(byId: {id: product}),
+      '/producto/$id',
+    );
     expect(singular.statusCode, 301);
     expect(singular.headers['location'], '/productos/$id');
   });
@@ -903,14 +931,22 @@ void main() {
             'source_width': 1200,
             'source_height': 900,
             'variants': [
-              {'width': 800, 'height': 600, 'url': 'https://example.invalid/t-800.jpg'},
-              {'width': 400, 'height': 300, 'url': 'https://example.invalid/t-400.jpg'},
+              {
+                'width': 800,
+                'height': 600,
+                'url': 'https://example.invalid/t-800.jpg',
+              },
+              {
+                'width': 400,
+                'height': 300,
+                'url': 'https://example.invalid/t-400.jpg',
+              },
             ],
           },
         ],
       );
       final card = RegExp(
-        r'<li class="card">.*?</li>',
+        r'<li class="card[^"]*">.*?</li>',
         dotAll: true,
       ).firstMatch(html)!.group(0)!;
       const srcset =
@@ -918,10 +954,19 @@ void main() {
           'https://example.invalid/t-800.jpg 800w, $photo 1200w';
       expect(card, contains('src="https://example.invalid/t-400.jpg"'));
       expect(card, contains('srcset="$srcset"'));
-      expect(card, contains('sizes="(max-width: 760px) 46vw, (max-width: 1180px) 30vw, 300px"'));
-      final preload = RegExp(r'<link[^>]*rel="preload"[^>]*as="image"[^>]*>')
-          .firstMatch(html)!
-          .group(0)!;
+      expect(
+        card,
+        contains(
+          'sizes="(max-width: 599px) calc(50vw - 49px), '
+          '(max-width: 699px) calc(33vw - 49px), '
+          '(max-width: 899px) calc(50vw - 199px), '
+          '(max-width: 1191px) calc(33vw - 149px), '
+          '(max-width: 1559px) calc(25vw - 128px), 257px"',
+        ),
+      );
+      final preload = RegExp(
+        r'<link[^>]*rel="preload"[^>]*as="image"[^>]*>',
+      ).firstMatch(html)!.group(0)!;
       expect(preload, contains('imagesrcset="$srcset"'));
       expect(preload, contains('imagesizes='));
     });
@@ -929,7 +974,7 @@ void main() {
     test('without copies a card keeps the photo', () async {
       final html = await page();
       final card = RegExp(
-        r'<li class="card">.*?</li>',
+        r'<li class="card[^"]*">.*?</li>',
         dotAll: true,
       ).firstMatch(html)!.group(0)!;
       expect(card, contains('src="$photo"'));

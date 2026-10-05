@@ -55,7 +55,9 @@ class CatalogPageModel {
     final shell = page.shell;
     final presentation = categoryId == null
         ? shell.presentations.forCatalogRoot(WebsiteCatalogRoot.products) ??
-              WebsiteCatalogPresentation.catalogRoot(WebsiteCatalogRoot.products)
+              WebsiteCatalogPresentation.catalogRoot(
+                WebsiteCatalogRoot.products,
+              )
         : shell.presentationFor(categoryId);
     final category = categoryId == null ? null : shell.categories[categoryId];
     final displayTitle = categoryId == null
@@ -93,13 +95,13 @@ class CatalogPageModel {
         presentation,
         (category?['description'] ?? '').toString(),
       ),
-      heroImage: [
-        presentation.heroImageUrl,
-        (category?['image_url'] ?? '').toString(),
-      ].map((url) => url.trim()).firstWhere(
-            (url) => url.startsWith('https://'),
-            orElse: () => '',
-          ),
+      heroImage:
+          [presentation.heroImageUrl, (category?['image_url'] ?? '').toString()]
+              .map((url) => url.trim())
+              .firstWhere(
+                (url) => url.startsWith('https://'),
+                orElse: () => '',
+              ),
       products: [
         for (final row in rows)
           if (PublicCommerceProductProjection.fromJson(
@@ -115,7 +117,9 @@ class CatalogPageModel {
                   : thumbnails[commerce.imageUrls.first],
             ),
       ],
-      total: rows.isEmpty ? 0 : (rows.first['total_count'] as num?)?.toInt() ?? rows.length,
+      total: rows.isEmpty
+          ? 0
+          : (rows.first['total_count'] as num?)?.toInt() ?? rows.length,
       facets: facets,
       directCounts: facets.directCategoryCounts,
       queryError: queryError,
@@ -153,11 +157,13 @@ class CatalogPageModel {
   int get currentPage => query.page.clamp(1, pageCount);
 
   /// `/productos` or the category's public path.
-  String get basePath => categoryId == null ? '/productos' : shell.categoryPath(categoryId!);
+  String get basePath =>
+      categoryId == null ? '/productos' : shell.categoryPath(categoryId!);
 
   /// Products in a category and everything under it.
-  int countOf(String id) =>
-      shell.subtreeOf(id).fold(0, (sum, child) => sum + (directCounts[child] ?? 0));
+  int countOf(String id) => shell
+      .subtreeOf(id)
+      .fold(0, (sum, child) => sum + (directCounts[child] ?? 0));
 
   /// «Todas»: the facet read's summary, every product the other filters
   /// leave, with or without a category.
@@ -226,16 +232,19 @@ class CatalogPageModel {
   }
 
   /// The hero's links to the category's published children with products.
-  List<CatalogLink> get subcategories => presentation.showSubcategories && categoryId != null
+  List<CatalogLink> get subcategories =>
+      presentation.showSubcategories && categoryId != null
       ? [for (final child in visibleChildren(categoryId!)) linkTo(child)]
       : const [];
 
   /// The technical filters offered here, as the Flutter catalog picks them.
-  List<PublicCatalogSpecFacet> get specFacets =>
-      offeredPublicSpecFacets(facets.specFacets, selected: {
-        for (final entry in query.specFilters.entries)
-          entry.key: entry.value.toSet(),
-      });
+  List<PublicCatalogSpecFacet> get specFacets => offeredPublicSpecFacets(
+    facets.specFacets,
+    selected: {
+      for (final entry in query.specFilters.entries)
+        entry.key: entry.value.toSet(),
+    },
+  );
 
   String specValueLabel(PublicCatalogSpecFacet facet, String value) =>
       publicSpecValueLabel(
@@ -266,23 +275,36 @@ class CatalogPageModel {
 
   String pageHref(int number) => hrefWith(_copy(page: number));
 
-  WebsiteCatalogQuery _copy({int? page}) => WebsiteCatalogQuery(
+  /// The same results in another order, from page 1 (the phone's «Ordenar
+  /// por» sheet).
+  String sortHref(WebsiteCatalogSort sort) =>
+      hrefWith(_copy(page: 1, sort: sort));
+
+  /// The same results without the price range («Quitar rango de precio»).
+  String get priceClearedHref => hrefWith(_copy(page: 1, clearPrice: true));
+
+  WebsiteCatalogQuery _copy({
+    int? page,
+    WebsiteCatalogSort? sort,
+    bool clearPrice = false,
+  }) => WebsiteCatalogQuery(
     searchQuery: query.searchQuery,
     productType: query.productType,
     categoryScope: query.categoryScope,
     brandIds: query.brandIds,
     specFilters: query.specFilters,
-    minPrice: query.minPrice,
-    maxPrice: query.maxPrice,
+    minPrice: clearPrice ? null : query.minPrice,
+    maxPrice: clearPrice ? null : query.maxPrice,
     stock: query.stock,
-    sort: query.sort,
+    sort: sort ?? query.sort,
     page: page ?? query.page,
     pageSize: query.pageSize,
   );
 
   PageMeta get meta {
     final storeName = shell.storeName;
-    final published = categoryId == null || shell.isPublishedCategory(categoryId!);
+    final published =
+        categoryId == null || shell.isPublishedCategory(categoryId!);
     final route = projectStorefrontSeoRoute(
       uri.replace(path: basePath),
       isErpMounted: false,

@@ -224,11 +224,11 @@
     },
     {
       "path": "services/storefront_html/lib/src/product_page_view.dart",
-      "sha256": "86b8a986d0b65fcd168cd27a549f10d906f0c7e72f39031ec3b44e591479b956"
+      "sha256": "40882aeaa7f726946dce0727b7cd32843ec751faf66890458f77e99574b34d70"
     },
     {
       "path": "services/storefront_html/lib/src/public_reads.dart",
-      "sha256": "db2456a7d2f11d835feb985414798b4776345c802b19e014e9241e0110abe7e6"
+      "sha256": "533acbef4da26f8eecf5109858ea04b7417939986793f1cdc57cf444a6430659"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_config.dart",
@@ -236,11 +236,11 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_css.dart",
-      "sha256": "4d380a48a10cbb0ac32cae6b8a718ed489d34f55c56affae8c33f2915f66367d"
+      "sha256": "fffb613c68e2bbbb7daf87aba806a7efdb83634ce764ed01fffbcff287b92239"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
-      "sha256": "78f6a6ac29663cb318e6535b7346f0ca1b5f198899a8924c47819294c1233d20"
+      "sha256": "28dfef561561191966af18ae4b2514dd83cea780c6cda8f7c4d02ed55d502084"
     },
     {
       "path": "services/storefront_html/lib/storefront_html.dart",
@@ -265,6 +265,58 @@
     {
       "path": "supabase/migrations/20261004190000_public_product_page_related_identity.sql",
       "sha256": "6eb688d4ce8643e27fe456530e1766aa1e164cb81a47a3c24b36e64b97480675"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/shared/utils/responsive_breakpoints.dart",
+      "sha256": "5825fb4a83c52551fbf2fb9e70c1f06f530f097c292ff3a555f43fc733c8d110"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_geometry.dart",
+      "sha256": "e2b3e715379bc45b904c1879baf5d73e44b1d7f1dba428e0a74a4caf2176c7ca"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_capabilities.dart",
+      "sha256": "25af75d91cb0a1d0dc7f22f0b7fc8b96fc0491acf181ec4dbfd3d54b4b372e01"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_public_visibility.dart",
+      "sha256": "317a79f717daa4e940b894d1e8122bb805b76987083921dfe39e0f3c80de2e52"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_responsive_authoring.dart",
+      "sha256": "bbb479dff5b33eeb62b3316e5ad0a76a3cfae7e04cf32ebeaa0c7090284bd1c5"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_type.dart",
+      "sha256": "4f7f2874c7290fc43a286688cfea44db768a4ea05c0cd5d5400572a4a7cbc355"
+    },
+    {
+      "path": "lib/shared/utils/responsive_breakpoints.dart",
+      "sha256": "22df3be8c74aa970cf37ed72094d5d88801eccbfe17fb560b0528391759aa9c9"
+    },
+    {
+      "path": "lib/modules/website/models/website_block_geometry.dart",
+      "sha256": "0ed44ab5bf7068ba0a8360b9cf18955dba0e9cf47955f3fc58b5984c8e5c4592"
+    },
+    {
+      "path": "lib/modules/website/models/website_block_capabilities.dart",
+      "sha256": "0568e0ff6c4a25acf2dac48bbb33e15776d490745278dfdabe3b3e586252d50c"
+    },
+    {
+      "path": "lib/modules/website/models/website_block_public_visibility.dart",
+      "sha256": "f1293ad5beab406780f439d13493d8bd4b33a74ff19c89deab4b85158420505f"
+    },
+    {
+      "path": "lib/modules/website/models/website_responsive_authoring.dart",
+      "sha256": "e15771d81d9c5821b843b3bcaed72d22e49ca1494a203b84392b46225c590f4c"
+    },
+    {
+      "path": "lib/modules/website/models/website_block_type.dart",
+      "sha256": "6b199fc52e2e2fee73049682319b8c417e1e7fe969822e74394035af973c922a"
+    },
+    {
+      "path": "lib/modules/website/models/website_page_composition.dart",
+      "sha256": "3890e40f4ab8e4b03efd66780197c2a56fab9710ecce72e9a67480d6ff13bec5"
     }
   ]
 }

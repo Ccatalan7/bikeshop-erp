@@ -164,7 +164,30 @@ const storefrontScript = r'''
     pixel('ViewContent', { content_ids: [item.item_id], content_name: item.item_name, content_type: 'product', value: item.price, currency: 'CLP' });
   }
 
-  function onAdd(event, source) {
+  var addButton = document.querySelector('form.cart button.add');
+  var addLabel = addButton && addButton.querySelector('[data-add-label]');
+  var doneTimer = null;
+
+  function inCart() {
+    try {
+      var doc = readCart(Date.now()).doc;
+      return !!(doc && product && doc.lines.some(function (l) { return l.id === product.dataset.productId && l.q > 0; }));
+    } catch (e) { return false; }
+  }
+
+  // Flutter's buy column: «Ya tienes este producto en el carrito.» with «Ver
+  // carrito», and the button offers «Añadir otra unidad».
+  function showInCart() {
+    var note = document.getElementById('cart-note');
+    if (!note || !inCart()) return;
+    note.hidden = false;
+    note.dataset.state = 'in';
+    note.querySelector('[data-note-text]').textContent = 'Ya tienes este producto en el carrito.';
+    if (addLabel && !(addButton.classList.contains('is-done'))) addLabel.textContent = 'Añadir otra unidad';
+  }
+  showInCart();
+
+  function onAdd(event, then) {
     event.preventDefault();
     if (!product) return;
     var qtyInput = document.querySelector('form.cart input[name=cantidad]');
@@ -179,12 +202,27 @@ const storefrontScript = r'''
         track('add_to_cart', { currency: 'CLP', value: item.price * added, items: [item] });
         pixel('AddToCart', { content_ids: [item.item_id], content_name: item.item_name, content_type: 'product', value: item.price * added, currency: 'CLP' });
         warmCart();
+        if (qtyInput) qtyInput.value = '1';
+      }
+      if (then === 'checkout' && (added > 0 || inCart())) {
+        location.href = '/checkout';
+        return;
+      }
+      if (added > 0 && addButton) {
+        // The button itself acknowledges the click, where the eye already is.
+        addButton.classList.add('is-done');
+        if (addLabel) addLabel.textContent = 'Agregado al carrito';
+        clearTimeout(doneTimer);
+        doneTimer = setTimeout(function () {
+          addButton.classList.remove('is-done');
+          showInCart();
+        }, 2600);
       }
       if (note) {
         note.hidden = false;
-        note.dataset.state = added > 0 ? 'ok' : 'max';
+        note.dataset.state = added > 0 ? 'in' : 'max';
         note.querySelector('[data-note-text]').textContent = added > 0
-          ? (added === 1 ? 'Agregaste 1 unidad al carrito.' : 'Agregaste ' + added + ' unidades al carrito.')
+          ? 'Ya tienes este producto en el carrito.'
           : 'Ya tienes en el carrito todo el stock disponible.';
       }
     }).catch(function () {
@@ -198,10 +236,22 @@ const storefrontScript = r'''
   }
 
   document.querySelectorAll('form.cart').forEach(function (form) {
-    form.addEventListener('submit', function (e) { onAdd(e, 'form'); });
-  });
-  document.querySelectorAll('[data-add-to-cart]').forEach(function (button) {
-    button.addEventListener('click', function (e) { onAdd(e, 'bar'); });
+    form.addEventListener('submit', function (e) {
+      var submitter = e.submitter;
+      onAdd(e, submitter && submitter.hasAttribute('data-buy-now') ? 'checkout' : null);
+    });
+    // The − and + of the quantity, bounded like Flutter's selector.
+    form.querySelectorAll('[data-step]').forEach(function (step) {
+      step.addEventListener('click', function () {
+        var input = form.querySelector('input[name=cantidad]');
+        if (!input) return;
+        var max = Number(input.max || 0);
+        var next = (Math.floor(Number(input.value) || 1)) + Number(step.dataset.step);
+        if (next < 1) next = 1;
+        if (max > 0 && next > max) next = max;
+        input.value = String(next);
+      });
+    });
   });
 
   document.querySelectorAll('.thumbs button').forEach(function (thumb) {
@@ -252,6 +302,18 @@ const storefrontScript = r'''
       input.disabled = false;
       input.removeAttribute('data-was-empty');
     });
+    closeSheets();
+  });
+
+  // The phone's sheets (menu, filters, order) are checkboxes: Escape closes
+  // them, and so does coming back to the page.
+  function closeSheets() {
+    document.querySelectorAll('#menu-toggle:checked, .sheet-check:checked').forEach(function (box) {
+      box.checked = false;
+    });
+  }
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape') closeSheets();
   });
 
   // Same classification as Ga4CommerceEvents.contactMethodFor.

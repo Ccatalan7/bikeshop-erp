@@ -120,15 +120,15 @@
     },
     {
       "path": "services/storefront_html/lib/src/catalog_page_model.dart",
-      "sha256": "beae27841ba1372e416bead85413d6fdfc85f2a1c891cc770b8e49197b03842b"
+      "sha256": "cc778dead1cd71e69c045ed19cb22f8e36736e2b4adb30c52bb5866de01aef32"
     },
     {
       "path": "services/storefront_html/lib/src/catalog_page_view.dart",
-      "sha256": "9d8cd48efb92fa2ed3559ab69b10e4abe4096dfb7f134c7b3c8b99fe0f9314a3"
+      "sha256": "67d950bd1c66b837bf84bc01e7fa972da6b23a69d0e06bef784ee886f9f0d4d8"
     },
     {
       "path": "services/storefront_html/lib/src/product_card.dart",
-      "sha256": "894fa2d77d9ad2d611bdcc7e6cd55c1c9e8a723556fbe06d8483d3e09f091a31"
+      "sha256": "efd8a5a4b83486c72d2ad43e7eb241ebccc72f29ff6bf901d9ba724a7634fcd4"
     },
     {
       "path": "services/storefront_html/lib/src/product_images.dart",
@@ -136,11 +136,11 @@
     },
     {
       "path": "services/storefront_html/lib/src/site_layout.dart",
-      "sha256": "e91a99d4401429c67d1e415b5bc072661f76f591edb572852a2e77ed54c247d4"
+      "sha256": "6ef391801319c470e11c8fc6a462e548491828231753a6516d3f1308d54c3e20"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_script.dart",
-      "sha256": "d671848332d9ceab311d8519107df0d28b44483b0a3e4986e59ca140c16e7625"
+      "sha256": "0d6391f714f069125fdb9d59c7435665cf5d91fd7d95f70e3d0cad63f8926438"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_shell.dart",

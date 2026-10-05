@@ -46,16 +46,8 @@ class WebsitePageBlockGeometryProfile {
     return WebsitePageBlockGeometryProfile(
       heightBehavior:
           WebsiteBlockCapabilityRegistry.profileFor(type).heightBehavior,
-      defaultFullBleed: registeredFullBleed ??
-          switch (type) {
-            WebsiteBlockType.hero ||
-            WebsiteBlockType.carousel ||
-            WebsiteBlockType.categoryGrid ||
-            WebsiteBlockType.videoBanner ||
-            WebsiteBlockType.partnersBanner =>
-              true,
-            _ => false,
-          },
+      defaultFullBleed:
+          registeredFullBleed ?? websiteBlockDefaultFullBleed(type),
     );
   }
 }

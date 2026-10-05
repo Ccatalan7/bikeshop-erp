@@ -92,7 +92,10 @@ class SupabasePublicReads implements PublicReads {
           client ??
           (HttpClient()
             ..connectionTimeout = const Duration(seconds: 5)
-            ..idleTimeout = const Duration(seconds: 60));
+            // Supabase's edge drops a kept-alive connection after a short
+            // quiet spell, and the next read on it fails with «Connection
+            // reset by peer» (seen 2026-10-05 after ~40 s): close them first.
+            ..idleTimeout = const Duration(seconds: 10));
 
   final StorefrontConfig config;
   final HttpClient _client;
@@ -275,7 +278,23 @@ class SupabasePublicReads implements PublicReads {
     caseSensitive: false,
   );
 
-  Future<List<Object?>> _select(
+  /// Every read here is idempotent, so one that fails on the connection
+  /// itself (a kept-alive socket the other side already closed) is asked
+  /// again once, on a fresh connection, before the visitor sees an error.
+  Future<T> _retrying<T>(Future<T> Function() read) async {
+    try {
+      return await read();
+    } on HttpException {
+      return read();
+    } on SocketException {
+      return read();
+    }
+  }
+
+  Future<List<Object?>> _select(String table, Map<String, String> query) =>
+      _retrying(() => _selectOnce(table, query));
+
+  Future<List<Object?>> _selectOnce(
     String table,
     Map<String, String> query,
   ) async {
@@ -316,7 +335,10 @@ class SupabasePublicReads implements PublicReads {
     }
   }
 
-  Future<Object?> _rpc(String function, Map<String, Object?> body) async {
+  Future<Object?> _rpc(String function, Map<String, Object?> body) =>
+      _retrying(() => _rpcOnce(function, body));
+
+  Future<Object?> _rpcOnce(String function, Map<String, Object?> body) async {
     final uri = Uri.parse('${config.supabaseUrl}/rest/v1/rpc/$function');
     final request = await _client.postUrl(uri).timeout(_timeout);
     request.headers

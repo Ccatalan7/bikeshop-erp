@@ -20,7 +20,7 @@ void main() {
     rightToolbarSource =
         File('lib/shared/widgets/right_toolbar.dart').readAsStringSync();
     breakpointsSource = File(
-      'lib/shared/utils/responsive_breakpoints.dart',
+      'packages/vinabike_public_core/lib/shared/utils/responsive_breakpoints.dart',
     ).readAsStringSync();
     responsiveViewportSource = File(
       'lib/shared/utils/responsive_viewport.dart',

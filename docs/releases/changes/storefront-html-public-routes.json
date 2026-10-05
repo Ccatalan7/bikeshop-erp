@@ -12,7 +12,7 @@
   "items": [
     "Al abrir un producto desde Google o un enlace, en un teléfono lento se ve en 1 segundo y se puede usar en unos 2; antes la tienda tardaba unos 20.",
     "Categorías, búsqueda y filtros funcionan sin JavaScript, se pueden compartir como enlace y el botón atrás vuelve a la misma lista.",
-    "En las listas, cada foto baja en el tamaño de su tarjeta: en un teléfono pesa unos 20 KB en vez de 120 KB."
+    "Las páginas nuevas se ven como la tienda de siempre (tarjetas, filtros, menú, ficha y pie) y cada foto de las listas pesa unos 20 KB en vez de 120."
   ],
   "evidence": [
     {
@@ -41,7 +41,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
-      "sha256": "78f6a6ac29663cb318e6535b7346f0ca1b5f198899a8924c47819294c1233d20"
+      "sha256": "28dfef561561191966af18ae4b2514dd83cea780c6cda8f7c4d02ed55d502084"
     },
     {
       "path": "services/storefront_html/deploy_cloud_run.sh",
@@ -61,19 +61,19 @@
     },
     {
       "path": "services/storefront_html/lib/src/catalog_page_model.dart",
-      "sha256": "beae27841ba1372e416bead85413d6fdfc85f2a1c891cc770b8e49197b03842b"
+      "sha256": "cc778dead1cd71e69c045ed19cb22f8e36736e2b4adb30c52bb5866de01aef32"
     },
     {
       "path": "services/storefront_html/lib/src/catalog_page_view.dart",
-      "sha256": "9d8cd48efb92fa2ed3559ab69b10e4abe4096dfb7f134c7b3c8b99fe0f9314a3"
+      "sha256": "67d950bd1c66b837bf84bc01e7fa972da6b23a69d0e06bef784ee886f9f0d4d8"
     },
     {
       "path": "services/storefront_html/lib/src/product_card.dart",
-      "sha256": "894fa2d77d9ad2d611bdcc7e6cd55c1c9e8a723556fbe06d8483d3e09f091a31"
+      "sha256": "efd8a5a4b83486c72d2ad43e7eb241ebccc72f29ff6bf901d9ba724a7634fcd4"
     },
     {
       "path": "services/storefront_html/lib/src/public_reads.dart",
-      "sha256": "db2456a7d2f11d835feb985414798b4776345c802b19e014e9241e0110abe7e6"
+      "sha256": "533acbef4da26f8eecf5109858ea04b7417939986793f1cdc57cf444a6430659"
     },
     {
       "path": "scripts/generate_public_image_thumbnails.dart",
@@ -82,6 +82,26 @@
     {
       "path": "supabase/migrations/20261005130000_public_card_thumbnails_and_page_by_id.sql",
       "sha256": "82484e6dd8a647879201de3bb15e0a99da2ef671c33682242772138649c633c2"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_page_view.dart",
+      "sha256": "40882aeaa7f726946dce0727b7cd32843ec751faf66890458f77e99574b34d70"
+    },
+    {
+      "path": "services/storefront_html/lib/src/site_layout.dart",
+      "sha256": "6ef391801319c470e11c8fc6a462e548491828231753a6516d3f1308d54c3e20"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_css.dart",
+      "sha256": "fffb613c68e2bbbb7daf87aba806a7efdb83634ce764ed01fffbcff287b92239"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_script.dart",
+      "sha256": "0d6391f714f069125fdb9d59c7435665cf5d91fd7d95f70e3d0cad63f8926438"
+    },
+    {
+      "path": "services/storefront_html/lib/src/material_icons.dart",
+      "sha256": "b3034c345adee280a848d26d68fe87012397dbdd5105573f0df464b38f1def84"
     }
   ]
 }

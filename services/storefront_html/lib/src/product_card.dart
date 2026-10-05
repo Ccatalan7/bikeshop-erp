@@ -5,6 +5,8 @@ import 'package:vinabike_public_core/public_store/models/public_commerce_product
 import 'package:vinabike_public_core/public_store/models/public_image_thumbnail.dart';
 import 'package:vinabike_public_core/shared/utils/chilean_utils.dart';
 
+import 'material_icons.dart';
+
 /// A product in a grid, as the Flutter catalog's card shows it: the photo,
 /// the brand, the name and the price, all one link to the product page.
 class ProductCard extends StatelessComponent {
@@ -40,7 +42,12 @@ class ProductCard extends StatelessComponent {
   Component build(BuildContext context) {
     final image = commerce.imageUrls.isEmpty ? null : commerce.imageUrls.first;
     final copies = thumbnail?.sourceUrl == image ? thumbnail : null;
-    return li(classes: 'card', [
+    final hasBrand = commerce.brand.trim().isNotEmpty;
+    final inStock = commerce.availability == PublicCommerceAvailability.inStock;
+    // `_CatalogProductCard`: the photo over a fixed 90 px block with the name
+    // and price; the brand sits on the photo and, on hover, a bar with the
+    // brand and the stock rises from its bottom edge.
+    return li(classes: hasBrand ? 'card has-brand' : 'card', [
       a(href: path, [
         div(classes: 'shot', [
           if (image != null)
@@ -65,26 +72,52 @@ class ProductCard extends StatelessComponent {
                     ? 'auto'
                     : 'low',
               },
-            ),
+            )
+          else
+            span(classes: 'no-photo', [
+              RawText(materialIcon(mdPedalBikeOutlined, size: 48)),
+            ]),
+          if (hasBrand) span(classes: 'maker', [.text(commerce.brand)]),
+          span(
+            classes: 'hover-bar',
+            attributes: {'aria-hidden': 'true'},
+            [
+              span([.text(hasBrand ? commerce.brand : '')]),
+              span([.text(inStock ? 'EN STOCK' : 'AGOTADO')]),
+            ],
+          ),
         ]),
-        if (commerce.brand.isNotEmpty) p(classes: 'maker', [.text(commerce.brand)]),
-        span(classes: 'name', [.text(commerce.title)]),
-        span(classes: 'p', [.text(publicPrice(commerce.price))]),
+        div(classes: 'info', [
+          span(classes: 'name', [.text(commerce.title)]),
+          span(classes: 'p', [.text(publicPrice(commerce.price))]),
+        ]),
       ]),
     ]);
   }
 }
 
-/// How wide a grid shows each card's photo, for `sizes`: two columns up to
-/// 760 px, three up to 1.180 px, then four (three in the editorial grid, five
-/// in the compact one) in a page at most 1.560 px wide
-/// (`storefront_css.dart`).
-String cardImageSizes(WebsiteCatalogGridDensity density) =>
-    '(max-width: 760px) 46vw, (max-width: 1180px) 30vw, ${switch (density) {
-      WebsiteCatalogGridDensity.compact => 240,
-      WebsiteCatalogGridDensity.editorial => 400,
-      WebsiteCatalogGridDensity.balanced => 300,
-    }}px';
+/// How wide a card shows its photo, for `sizes`. A phone (under 700 px)
+/// gives the grid the width minus 16 px sides, a wider page the width minus
+/// the 236 px rail, its 40 px gap and 28 px sides (at most 1228 px); the grid
+/// takes 2 columns under 568 px, 3 under 860 (3 also under 988 in the
+/// editorial grid), then 4 (5 in the compact one); the photo is the card
+/// minus 24 px.
+String cardImageSizes(WebsiteCatalogGridDensity density) {
+  final wide = switch (density) {
+    WebsiteCatalogGridDensity.editorial =>
+      '(max-width: 1319px) calc(33vw - 153px), '
+          '(max-width: 1559px) calc(25vw - 132px), 257px',
+    WebsiteCatalogGridDensity.compact =>
+      '(max-width: 1319px) calc(25vw - 128px), '
+          '(max-width: 1559px) calc(20vw - 111px), 201px',
+    WebsiteCatalogGridDensity.balanced =>
+      '(max-width: 1559px) calc(25vw - 128px), 257px',
+  };
+  return '(max-width: 599px) calc(50vw - 49px), '
+      '(max-width: 699px) calc(33vw - 49px), '
+      '(max-width: 899px) calc(50vw - 199px), '
+      '(max-width: 1191px) calc(33vw - 149px), $wide';
+}
 
 /// A price as the store writes it, or «Consultar» when it has none.
 String publicPrice(double value) =>
@@ -94,3 +127,5 @@ String publicPrice(double value) =>
 /// Flutter's `_formatHeroPrice` draws it.
 String publicHeroPrice(double value) =>
     publicPrice(value).replaceFirst(r'$ ', r'$');
+
+/// `Icons.pedal_bike_outlined`, the card's placeholder without a photo.
