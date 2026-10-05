@@ -31,6 +31,8 @@ Se actualiza cada vez que algo cambia de estado; cada línea con su fecha.
 | 2026-09-24 | Crear la GitHub App (APP_ID, INSTALLATION_ID, llave privada) | sin ella «Publicar» del editor no puede disparar el build ([publicacion](publicacion-y-despliegue.md)) |
 | 2026-09-24 | Marcar `contact` como evento clave en GA4 | es una configuración de la cuenta |
 | 2026-09-23 | Reconectar la cuenta Google del ERP con el permiso de Search Console | el centro SEO no ve Google hasta entonces |
+| 2026-10-05 | **Abrir las rutas públicas a la tienda HTML** (fase 1): aprobar el costo, centavos al mes de salida de datos de Cloud Run; Cloud Run y Hosting quedan en su cuota gratis | regla del dueño: costo antes de encender (`storefront-html-migration-plan.md`, «Costo de abrir las rutas») |
+| 2026-10-05 | **Miniaturas de las fotos de tarjeta** para el LCP del catálogo: transformación de Supabase (~US$5–6 al mes) o guardar una de ~400 px al subir cada foto (gratis, más trabajo) | `/productos` y categorías con fotos pesadas quedan en LCP ~4,3 s en celular lento ([rendimiento](rendimiento.md)) |
 
 ## Lo puede hacer un agente
 
@@ -57,13 +59,17 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 | 2026-10-03 | Código muerto: `banners_management_page.dart`, `content_management_page.dart`, `customer_account_page.dart`, `premium_dashboard_widgets.dart`, ruta `/cuenta/mensajes`; clave `header_nav_links` | [editor](editor-del-sitio.md) |
 | 2026-10-08 | Leer el resultado de la tarea `vinabike-store-ready-review` | [rendimiento](rendimiento.md) |
 | 2026-10-04 | **Fase 0 de la migración a HTML:** anotar el costo mensual real de Cloud Run (`storefront-html`) después de unos días; lo demás está hecho y medido ([rendimiento](rendimiento.md)) | `docs/architecture/storefront-html-migration-plan.md` |
-| 2026-10-04 | Requisitos de la fase 1 que encontró la fase 0: ficha técnica precalculada (hoy ~275 ms por lectura); la ficha Flutter y el generador usan `PublicProductSeoCopyInput.fromSettings`; menús de categoría con la misma normalización que `normalizePublicCatalogRouteForRuntime`; disponibilidad de los productos-set (`preview_product_stock_impact`) en la lectura de la página; nodo `BikeStore`; submenús plegados en el teléfono | `docs/architecture/storefront-html-migration-plan.md` |
+| 2026-10-05 | Precalcular los valores técnicos de las facetas (`spec_public_facet_values_internal_v1`, ~270 ms de los ~410 ms de `get_public_product_facets_v2` en cada visita al catálogo, Flutter y HTML) | [rendimiento](rendimiento.md) |
+| 2026-10-05 | La instantánea Flutter de las 5 fichas con espacio en el SKU sirve la portada (título y canónica de la portada); se arregla sola al abrir las rutas HTML, o en el generador si eso no ocurre | [rutas](rutas-y-navegacion.md) |
+| 2026-10-05 | Regla de limpieza de imágenes viejas en Artifact Registry (cada despliegue del servidor HTML guarda 5,5 MB; la cuota gratis es 0,5 GB) | `storefront-html-migration-plan.md` |
 | 2026-10-04 | Paridad latente de la ficha técnica: el generador de snapshots arma la identidad con `color`, `size`, `material` y `weight` leídos de `products`, y la página pública no los recibe; un producto que los tenga mostraría en el snapshot filas que la página no. 0 productos afectados hoy | [datos-estructurados](datos-estructurados.md) |
 
 ## Hecho
 
 | Fecha | Qué | Página |
 |---|---|---|
+| 2026-10-05 | **Fase 1 de la migración a HTML** en la ruta oculta: `/productos`, categorías y fichas con encabezado, pie, carrito compatible con Flutter, GA4/píxel, `noindex`/canónica/301/404; las 1.290 fichas comparables idénticas a la instantánea Flutter (las otras 5 son un defecto de la instantánea) y las 12 colecciones salvo el orden de su lista; revisión de Codex (1 P1, 4 P2, 1 P3) corregida con pruebas. Requisitos de la fase 0 resueltos: ficha técnica en una pasada (`20261005090000`), `BikeStore`, menús, submenús, set availability en la lectura | `docs/architecture/storefront-html-migration-plan.md` |
+| 2026-10-05 | Filtros técnicos `spec.<clave>` en la URL ahora son `noindex` también en Flutter; categorías con nombre repetido abren igual en Flutter y HTML (regla en el núcleo) | [catalogo](catalogo-y-fichas.md) |
 | 2026-10-04 | Servidor HTML en Cloud Run (`storefront-html`, `southamerica-east1`) detrás de la reescritura `/_html/**` del target `store`. El dueño instaló `gcloud`, inició sesión y dio `roles/run.builder` a la cuenta de compilación | [mapa](mapa-del-sistema.md) |
 | 2026-10-04 | El dueño aprobó la migración del sitio y su editor a HTML. Fase 0 en local y en la base: núcleo Dart en `packages/vinabike_public_core` (18 archivos movidos, sin copiar), `get_public_storefront_shell_v1` + `get_public_product_page_v1` desplegadas y verificadas (`20261004180000`, `20261004190000` tras la revisión de Codex), servidor Jaspr con pruebas | [mapa](mapa-del-sistema.md) |
 | 2026-10-04 | Ficha técnica (`additionalProperty`), `model` y migas completas en el JSON-LD de cada producto, con un solo armado para el snapshot y la página | [datos-estructurados](datos-estructurados.md) |

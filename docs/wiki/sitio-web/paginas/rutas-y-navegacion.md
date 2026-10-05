@@ -2,9 +2,9 @@
 titulo: Rutas, redirecciones y navegación
 resumen: cada URL pública de vinabike.cl, cuáles indexa Google, las redirecciones de URL viejas, el 404 y los menús
 fuentes: [repositorio, google-search-central]
-archivos: [lib/public_store/routes/public_store_router.dart, firebase.json, web/robots.txt, packages/vinabike_public_core/lib/public_store/utils/product_url.dart]
+archivos: [lib/public_store/routes/public_store_router.dart, firebase.json, web/robots.txt, packages/vinabike_public_core/lib/public_store/utils/product_url.dart, services/storefront_html/lib/src/storefront_handler.dart]
 tablas: [website_navigation, website_pages, product_categories, product_url_aliases]
-revisado: 2026-10-04
+revisado: 2026-10-05
 ---
 
 # Rutas, redirecciones y navegación
@@ -76,6 +76,32 @@ renderiza el detalle de un pedido aunque alguien filtre el enlace, y la cabecera
 sigue cubriendo a quien llegue sin pasar por robots.txt. Ninguna de esas URL
 está enlazada desde páginas públicas. El test
 `google_merchant_identity_contract_test.dart` exige las dos líneas.
+
+## Tienda en HTML (fase 1, todavía en la ruta oculta)
+
+Desde el 2026-10-05 el servidor HTML (`services/storefront_html`) responde
+`/productos`, `/productos/categoria/<slug>` y `/productos/<slug>/<sku>` bajo
+`/_html/...` con `noindex` `[Repo]` `[Prod 2026-10-05]`. Las rutas públicas
+siguen en Flutter hasta que el dueño apruebe el cambio de `firebase.json`
+(costo, ver [rendimiento](rendimiento.md)). Lo que decide cada ruta es el mismo
+código que usa Flutter (`packages/vinabike_public_core`), con estas respuestas
+de servidor que Flutter sólo podía imitar en el navegador:
+
+- **301** a la ficha canónica cuando el nombre en la ruta no es el del producto
+  (manda el SKU), desde `/productos/<uuid>`, `/producto/<uuid>` y desde una ruta
+  vieja de `product_url_aliases`; la consulta se conserva. Un slug viejo de
+  categoría (alias de «Catálogo web») y el viejo `/productos?category=<id>`
+  también redirigen a la ruta limpia.
+- **404** con la página de la tienda para una categoría desconocida o no
+  publicada («Esta colección no está disponible») y para un producto que no se
+  ve (borrador, sin foto con la regla «exigir foto»). Flutter respondía 200 con
+  `noindex`.
+- `noindex,follow` (meta y `X-Robots-Tag`) para búsqueda, orden, página y
+  filtros, incluidos los técnicos (`spec.<clave>`), con la canónica limpia.
+- Las fichas cuyo SKU tiene un espacio (5 el 2026-10-05, p. ej. `RDM41 LD`) hoy
+  reciben de Firebase la portada con su título, porque la instantánea del
+  build no calza con la ruta codificada; el servidor HTML las sirve bien
+  `[Prod 2026-10-05]`.
 
 ## Menús y destinos
 

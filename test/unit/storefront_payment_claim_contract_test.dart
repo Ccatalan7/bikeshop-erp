@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/public_store/models/public_checkout_capabilities.dart';
 import 'package:vinabike_erp/public_store/widgets/public_store_layout.dart';
+import 'package:vinabike_public_core/public_store/models/public_payment_claims.dart';
 import '../support/library_source.dart';
 
 /// The footer may only claim payment methods the server confirmed.

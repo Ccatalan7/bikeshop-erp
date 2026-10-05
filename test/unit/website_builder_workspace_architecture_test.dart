@@ -510,7 +510,8 @@ void main() {
       'lib/public_store/services/public_inventory_service.dart',
     ).readAsStringSync();
     final publication = File(
-      'lib/public_store/services/public_category_publication.dart',
+      'packages/vinabike_public_core/lib/public_store/services/'
+      'public_category_publication.dart',
     ).readAsStringSync();
 
     // The full hierarchy is still fetched; publication never narrows the
@@ -530,7 +531,18 @@ void main() {
     // Consumers gate on that single-owner set.
     expect(catalog, contains('publication.publishedIds'));
     expect(catalog, contains('child.isPublished &&'));
-    expect(catalog, contains('_isPublishedCategory(trimmed) ? trimmed : null'));
+    // The route rule lives in the shared core since 2026-10-05, so the HTML
+    // storefront opens the same category; the catalog delegates to it.
+    final routeRule = File(
+      'packages/vinabike_public_core/lib/public_store/models/'
+      'public_category_route.dart',
+    ).readAsStringSync();
+    expect(catalog, contains('resolvePublishedCategoryRouteValue('));
+    expect(catalog, contains('isPublished: _isPublishedCategory(node.id)'));
+    expect(
+      routeRule,
+      contains('return published.containsKey(trimmed) ? trimmed : null;'),
+    );
   });
 
   test('a menu destination cannot lose its category on the way to the URL', () {
@@ -578,15 +590,17 @@ void main() {
     final catalog = File(
       'lib/public_store/pages/product_catalog_page.dart',
     ).readAsStringSync();
-    final inventory = File(
-      'lib/public_store/services/public_inventory_service.dart',
+    // The facet rows are read by the shared core since 2026-10-05, the same
+    // rule for the Flutter catalog and the HTML storefront.
+    final facets = File(
+      'packages/vinabike_public_core/lib/public_store/models/public_catalog_facets.dart',
     ).readAsStringSync();
     final migration = File(
       'supabase/migrations/20260722200000_add_public_catalog_facets.sql',
     ).readAsStringSync();
 
-    expect(inventory, contains("case 'category':"));
-    expect(inventory, contains("case 'summary':"));
+    expect(facets, contains("case 'category':"));
+    expect(facets, contains("case 'summary':"));
     expect(catalog, contains('facetSnapshot.directCategoryCounts'));
     expect(catalog, contains('facetSnapshot.filteredTotalCount'));
     expect(migration, contains("'category'::text as facet_key"));
@@ -633,8 +647,10 @@ void main() {
     final sharedPresentation = File(
       'lib/public_store/widgets/catalog_collection_presentation.dart',
     ).readAsStringSync();
-    final seoHelper =
-        File('lib/shared/utils/seo_helper.dart').readAsStringSync();
+    // The route rule moved to the core on 2026-10-05; seo_helper reexports it.
+    final seoHelper = File(
+      'packages/vinabike_public_core/lib/public_store/seo/storefront_seo_route.dart',
+    ).readAsStringSync();
     final seoHelperWeb =
         File('lib/shared/utils/seo_helper_web.dart').readAsStringSync();
     final storeLayout =
@@ -734,8 +750,12 @@ void main() {
     expect(catalog, contains('ownerIsPublished:'));
     expect(catalog, contains('hasEligibleContent:'));
     expect(catalog, contains('_replaceResolvedCategoryAlias('));
-    expect(catalog, contains('categorySlugClaimCount(trimmed)'));
-    expect(catalog, contains('return matches.length == 1 ? matches.single'));
+    final routeRule = File(
+      'packages/vinabike_public_core/lib/public_store/models/'
+      'public_category_route.dart',
+    ).readAsStringSync();
+    expect(routeRule, contains('categorySlugClaimCount(trimmed)'));
+    expect(routeRule, contains('return matches.length == 1 ? matches.single'));
     expect(
       workspace,
       contains('CatalogCollectionPresentationHeader('),

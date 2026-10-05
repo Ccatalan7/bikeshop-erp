@@ -4,7 +4,7 @@ resumen: cuánto pesa y tarda la tienda, la página instantánea que muestra con
 fuentes: [web-dev, flutter-web, repositorio, consolas-google]
 archivos: [docs/architecture/storefront-instant-page.md, docs/architecture/storefront-html-migration-plan.md, services/storefront_html/tool/measure.mjs, scripts/storefront_instant_page/instant_page.js, scripts/storefront_instant_page/instant_page.css, web/index.html, cloudflare-worker/src/index.js, scripts/check_storefront_bundle_budget.sh, supabase/functions/website-optimize-image/index.ts]
 tablas: [website_settings, website_blocks]
-revisado: 2026-10-04
+revisado: 2026-10-05
 ---
 
 # Rendimiento y carga
@@ -85,6 +85,27 @@ servidor despierto (primer byte 1,29 s contra 0,83 s, celular lento). El
 binario nativo arranca en ~0,15 s; el resto es la primera lectura
 `[Prod 2026-10-05]`.
 
+**Fase 1, catálogo y categorías en HTML** (2026-10-05, por `/_html/`, celular
+lento, mediana de 3): ficha LCP **1,13 s** (primer byte 0,76 s; la lectura de la
+ficha bajó a 108–145 ms con la ficha técnica en una pasada); categoría
+`camaras` LCP **1,6–1,9 s**; `/productos` LCP **4,4 s** y `componentes` **4,2 s**,
+contra la categoría Flutter usable a los **22,2 s** con 4.012 KB. Lo que frena
+el catálogo son las fotos de tarjeta de 1.200 px (75–120 KB cada una, ~690 KB
+por página): el teléfono baja ~16 a la vez porque Chrome carga lo `lazy` hasta
+2.500 px por debajo con una conexión lenta. Sin miniaturas no se cumple el LCP
+de 2,5 s en esas páginas `[Prod 2026-10-05]`. Detalle y opciones en
+`docs/architecture/storefront-html-migration-plan.md` («Fase 1: estado»).
+
+- La página HTML viajaba sin comprimir (64 KB): ni Cloud Run ni Firebase
+  Hosting comprimen una respuesta reenviada. El servidor la manda en gzip
+  (15 KB) `[Prod 2026-10-05]`.
+- Las fuentes no pesan lo que parece: Hosting ya manda los TTF en brotli
+  (Barlow 104 → 43 KB) `[Prod 2026-10-05]`.
+- El catálogo lee ~450–700 ms: `get_public_product_facets_v2` ~410 ms en la
+  base, de eso ~270 ms en `spec_public_facet_values_internal_v1` (valores
+  técnicos de todo el catálogo, en cada visita) y ~190 ms en el universo de
+  `get_public_products`. Lo paga igual la tienda Flutter `[Prod 2026-10-05]`.
+
 ## Borde y datos
 
 - `web/index.html` precarga `get_public_store_data` desde el Worker de Cloudflare
@@ -117,6 +138,9 @@ sin que nadie lo decida.
 - Un `<canvas>` no cuenta como LCP: el LCP de una página Flutter pura es el logo
   o la imagen HTML que haya.
 - Precargar `main.dart.js` compite con la foto del LCP.
+- Creer que `fetchpriority="low"` en las fotos de abajo deja pasar a la del LCP:
+  con fotos de 100 KB igual se reparten el ancho de banda (medido 2026-10-05,
+  sin cambio apreciable). El arreglo es el tamaño, no la prioridad.
 
 ## En el código y la base
 

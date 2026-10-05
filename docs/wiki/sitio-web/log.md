@@ -4,6 +4,15 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-05 — corrección — fase 1 de la tienda HTML en la ruta oculta:
+  catálogo, categorías y fichas; reglas movidas al núcleo; dos defectos de
+  Flutter corregidos al compartirlas (filtros técnicos indexables, categorías
+  de nombre repetido); la cookie `vb_sin_medir` no llega a Cloud Run; la página
+  reenviada viajaba sin comprimir; LCP del catálogo frenado por fotos de
+  1.200 px ([rutas](paginas/rutas-y-navegacion.md),
+  [catalogo](paginas/catalogo-y-fichas.md), [medicion](paginas/medicion.md),
+  [rendimiento](paginas/rendimiento.md)).
+
 - 2026-10-05 — corrección — marca por navegador: `?sin_medir` deja de contar
   un navegador propio en GA4 y el píxel, `?medir` la saca; cookie del dominio
   más `localStorage` ([medicion](paginas/medicion.md)).

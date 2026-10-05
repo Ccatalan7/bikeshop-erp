@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/modules/website/models/website_page_models.dart';
 import 'package:vinabike_erp/public_store/services/public_page_publication.dart';
-import 'package:vinabike_erp/public_store/widgets/public_store_layout.dart';
+import 'package:vinabike_public_core/public_store/utils/social_url.dart';
 import '../support/library_source.dart';
 
 /// The storefront may only state what its owner actually configured.

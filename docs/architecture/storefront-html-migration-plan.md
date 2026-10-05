@@ -93,7 +93,9 @@ Por eso la recomendación es **renderizar en Dart en el servidor**:
   región que Supabase (`sa-east-1`). Firebase Hosting le reenvía sólo las rutas
   migradas; el resto sigue en Flutter.
 - **Sin caché vieja:** el HTML se arma en cada visita (`Cache-Control:
-  no-store` en el borde), y en la fase 0 también lo compartido: leerlo cuesta
+  private, no-cache` desde el 2026-10-05: el borde no la guarda y el navegador
+  pregunta cada vez, pero el botón «atrás» puede usar su copia; con `no-store`
+  no podía), y en la fase 0 también lo compartido: leerlo cuesta
   5 ms en la base, así que menús, tema y categorías están frescos en cada
   visita sin invalidar nada. Una caché en memoria invalidada por Supabase
   Realtime queda para cuando el tráfico lo pida. Precio y stock se leen en cada
@@ -283,15 +285,156 @@ Lo que encontró la fase 0, y la fase 1 resuelve antes de abrir rutas:
   plegados en el teléfono.
 - `firebase.json` declara `Cache-Control: public, max-age=0, must-revalidate`
   para `/productos/**` (pensado para el `index.html` de Flutter). Cuando esas
-  rutas pasen a Cloud Run, la regla se retira o se iguala al `no-store` del
-  servidor, para que el borde nunca guarde una ficha. `/_html/**` no coincide
+  rutas pasen a Cloud Run, la regla se retira y manda la del servidor
+  (`private, no-cache`), para que el borde nunca guarde una ficha. `/_html/**` no coincide
   con ninguna regla.
 - La medición sigue las dos reglas de `scripts/sync_seo_index.sh`: GA4 y el
   píxel sólo en el dominio de la tienda y nunca en un navegador con la marca
-  `vb_sin_medir` (cookie del dominio, puesta con `?sin_medir`). El servidor la
-  lee en la petición y ni siquiera escribe la etiqueta.
+  `vb_sin_medir` (cookie del dominio, puesta con `?sin_medir`). **Corrección
+  2026-10-05:** el servidor no puede leerla: Firebase Hosting borra toda cookie
+  salvo `__session` antes de reenviar a Cloud Run. La revisa el script de la
+  página antes de cargar nada, como en `index.html`.
 - `products.sku` es único en toda la base, no por empresa
   (`products_sku_key`): dos tiendas no pueden repetir un SKU. No afecta a
   Viñabike hoy; se anota para el día que haya otra.
 
 Cómo correrlo, medirlo y desplegarlo: `services/storefront_html/README.md`.
+
+## Fase 1: estado (2026-10-05)
+
+Hecho y verificado, todavía en la ruta oculta (`vinabike.cl/_html/...`); las rutas públicas siguen en Flutter hasta que el
+dueño apruebe el cambio de `firebase.json` (ver «Costo de abrir las rutas»):
+
+- **Páginas:** `/productos` (con búsqueda), `/productos/categoria/<slug>` y la
+  ficha, con encabezado, pie, menús y tema de la tienda. Rutas, 301 y 404 en
+  `services/storefront_html/README.md` y en el wiki
+  (`docs/wiki/sitio-web/paginas/rutas-y-navegacion.md`).
+- **Una regla, un dueño:** se movieron al núcleo la lectura de facetas
+  (`public_catalog_facets.dart`), qué filtros técnicos se ofrecen, qué
+  categoría abre una URL (`public_category_route.dart`; Flutter delega en ella),
+  títulos y descripciones de colección (`public_catalog_seo.dart`, también los
+  usa el generador), `noindex`/canónica (`storefront_seo_route.dart`), el nodo
+  `BikeStore` (`public_business_identity.dart`, el mismo armado que
+  `sync_seo_index.sh`), los medios de pago del pie y la publicación de
+  categorías y páginas. El servidor no tiene reglas propias.
+- **Dos defectos de Flutter que aparecieron al compartir las reglas**, ya
+  corregidos en el núcleo: un filtro técnico en la URL (`spec.<clave>`) no
+  contaba como estado del visitante y la categoría filtrada decía
+  `index,follow`; y el servidor resolvía las categorías con el resolvedor de
+  menús, que mira también las no publicadas, así que «Cambios» y «Frenos»
+  (nombres repetidos) daban 404 en HTML mientras Flutter las abría.
+- **Carrito:** «Agregar» escribe el documento que lee Flutter, bajo el mismo
+  candado; `test/unit/storefront_html_cart_contract_test.dart` corre el script
+  de la página en Node y lo decodifica con `PersistedCart` en los dos
+  sentidos (carrito nuevo, carrito Flutter existente con su límite de stock,
+  carrito vencido).
+- **Paridad automática** (`tool/parity.py`, 2026-10-05, después de la
+  revisión de Codex): de las 1.307 páginas del sitemap, las **1.290 fichas
+  comparables son idénticas** a la instantánea Flutter en título, descripción,
+  robots, canónica, h1, `Product` (nombre, SKU, fotos, marca, categoría,
+  precio, disponibilidad, ficha técnica, GTIN, modelo), migas y `BikeStore`.
+  Las otras 5 fichas tienen un espacio en el SKU y su instantánea Flutter sirve
+  la portada (defecto de la instantánea; el HTML sirve la ficha). Las 12
+  colecciones coinciden en todo salvo el orden de su `ItemList`: la
+  instantánea toma los primeros productos de su propia consulta y el HTML los
+  que el visitante ve en esa página (orden por nombre), con el mismo nombre
+  comercial; y el h1 de `/productos` («PRODUCTOS», como lo dibuja Flutter,
+  contra el título SEO de la instantánea). Con `--skus`, los 1.541 SKU
+  publicados: las 1.295 fichas con foto abren en su ruta canónica; las 246 sin
+  foto dan 404 en las dos tiendas (la regla del sitio exige foto).
+- **Revisión cruzada de Codex** (2026-10-05, sólo lectura): sin P0; 1 P1, 4 P2
+  y 1 P3, todos corregidos con prueba. P1: un carrito que todavía estaba en la
+  clave vieja compartida (`public_store_cart_v1`) quedaba oculto para Flutter
+  tras agregar desde HTML; ahora la página lo migra como Flutter. P2: los ids de
+  escrituras ya aplicadas en el primer formato de Flutter se perdían; las
+  tarjetas mostraban el nombre web y no el comercial (las filas del listado se
+  completan con `publicProductIdentityColumns`, la misma lista que usa Flutter);
+  un `?category=` sin resolver abría todo el catálogo en vez de buscarlo, y la
+  precedencia de `category`/`category_id`/`cat` no era la de Flutter; una
+  página fuera de rango contaba mal. P3: gzip ignoraba `q=0`. La segunda
+  pasada confirmó las seis correcciones y encontró dos P2 en ellas, también
+  corregidos con prueba: si el navegador no dejaba borrar la clave vieja, el
+  «Agregar» ya aplicado se informaba como fallido (y un reintento sumaba dos
+  veces); y una falla al leer las marcas descartaba también los títulos
+  comerciales. Ahora el retiro es de mejor esfuerzo (Flutter lee primero la
+  clave de la tienda) y cada capa cae por separado, como en Flutter.
+- **Sin JavaScript:** filtros y orden son formularios GET; menú y filtros del
+  teléfono se abren con una casilla; «Agregar» lleva al carrito.
+- **Frescura:** con la base local, el precio cambiado aparece en la ficha y en
+  la categoría **0,07 s** después del commit: no hay caché entre la base y la
+  página.
+- **Compresión:** ni Cloud Run ni Firebase Hosting comprimían la página
+  reenviada (64 KB viajaban así); el servidor la manda en gzip (15 KB).
+- **Datos estructurados:** los nodos salen de los mismos armadores que la
+  tienda Flutter y la comparación los dio idénticos en las 1.294 fichas con
+  instantánea; la Prueba de resultados enriquecidos sobre una URL `/_html` no se
+  corrió (es un formulario de Google: queda para el dueño o para cuando se
+  abran las rutas).
+
+Medido en el celular lento (`measure.mjs`, 2026-10-05, mediana de 3, Cloud
+Run despierto):
+
+| Página | Primer byte | LCP | Carga completa | Transferido |
+|---|---|---|---|---|
+| Ficha HTML | 0,76 s | **1,13 s** | 2,3 s | 285 KB |
+| Categoría sin foto de portada pesada (`camaras`) HTML | 0,97–1,16 s | **1,64–1,88 s** | 4,8 s | 699 KB |
+| `/productos` HTML | 1,0–1,1 s | **4,4–4,5 s** | 4,6 s | 694 KB |
+| Categoría `componentes` HTML | 1,0 s | **4,2 s** | 4,3 s | 647 KB |
+| Categoría `camaras` Flutter | 0,15 s | 0,41 s (instantánea) | 22,2 s | 4.012 KB |
+
+**No se cumple todavía «LCP ≤ 2,5 s» en `/productos` ni en las categorías
+cuyas primeras tarjetas tienen fotos pesadas.** La causa son las fotos de
+tarjeta: son la versión de 1.200 px (75–120 KB cada una) que también usa
+Flutter, y el teléfono baja ~16 a la vez (Chrome carga lo `lazy` hasta 2.500 px
+por debajo con una conexión lenta). Ya se probó, sin efecto apreciable, quitar
+la precarga de la fuente de títulos en el catálogo, cargar de inmediato sólo la
+primera fila y bajar la prioridad del resto. Lo que falta es una miniatura de
+~400 px; decisión del dueño (ver «Pendiente del dueño»). Las fuentes no son el
+problema: Hosting ya las manda en brotli (104 → 43 KB).
+
+Lecturas (en la base, 2026-10-05): la ficha bajó de ~300 a **108–145 ms**
+(ficha técnica en una pasada, `20261005090000`). El catálogo tarda ~450–700 ms:
+`get_public_product_facets_v2` ~410 ms, de eso ~270 ms en
+`spec_public_facet_values_internal_v1` (valores técnicos de todo el catálogo en
+cada visita) y ~190 ms en el universo de `get_public_products`. Es la misma
+lectura que paga Flutter; precalcular los valores técnicos es la mejora
+siguiente si el primer byte del catálogo importa.
+
+### Costo de abrir las rutas (2026-10-05)
+
+Tráfico real: Search Console contó **8.090 peticiones de Googlebot en 90 días**
+(43 % HTML, ~1.200 páginas al mes) y GA4 **1.185 vistas en 28 días** en todo el
+sitio. Con 10.000 páginas al mes (holgado) y 100.000 (diez veces más):
+
+- **Cloud Run:** cuota gratis mensual de 2 millones de peticiones, 180.000
+  vCPU-s y 360.000 GiB-s. Una página ocupa ~0,6 s → 6.000 vCPU-s con 10.000
+  páginas, 60.000 con 100.000: dentro de la cuota (US$0).
+- **Salida de datos de Cloud Run:** ~15 KB por página en gzip → 0,15 GB al mes
+  (1,5 GB con 100.000). La cuota gratis de 1 GiB es sólo para Norteamérica; desde
+  São Paulo se cobra por GB (del orden de US$0,1–0,2), o sea **centavos al mes**.
+  Es el único costo que no es claramente cero.
+- **Firebase Hosting:** baja. Cada visita nueva a una página Flutter baja ~4 MB;
+  la HTML ~0,3 MB. Googlebot bajó 2,4 GB en 90 días, en buena parte JavaScript
+  de Flutter.
+- **Compilaciones:** cada despliegue usa unos minutos de Cloud Build (cuota
+  gratis) y guarda una imagen de 5,5 MB (cuota gratis de 0,5 GB en Artifact
+  Registry; conviene una regla que borre las viejas).
+- `min-instances 0` se mantiene: primera visita tras un rato sin tráfico,
+  +0,3–0,5 s.
+
+Para abrir las rutas faltan, en un mismo commit: reescrituras `/productos`,
+`/productos/categoria/**` y `/productos/**` → `storefront-html` en
+`firebase.json` (target `store`), retirar ahí la regla `Cache-Control` de
+`/productos/**`, y que el generador deje de escribir instantáneas de fichas y
+categorías (en Hosting un archivo estático tapa a la reescritura); el sitemap y
+las redirecciones siguen saliendo del build.
+
+### Pendiente del dueño
+
+- Aprobar el costo de arriba (centavos al mes de salida de datos) para abrir
+  las rutas.
+- Miniaturas de las fotos de tarjeta, para cumplir el LCP del catálogo:
+  (a) transformación de imágenes de Supabase: ~1.300 fotos de origen al mes,
+  ~US$5–6 al mes sobre la cuota del plan; (b) gratis: guardar una miniatura
+  de ~400 px junto a la versión de 1.200 px al subir cada foto (todas las
+  rutas que suben fotos de producto) y generar una vez las ~1.300 que existen.

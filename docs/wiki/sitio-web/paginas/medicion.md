@@ -2,7 +2,7 @@
 titulo: Medición (GA4, píxel de Meta y consolas)
 resumen: qué eventos manda la tienda a Google Analytics, con qué datos, qué falta del embudo recomendado y cómo leer las consolas
 fuentes: [ga4, consolas-google, repositorio, web-dev]
-archivos: [scripts/sync_seo_index.sh, services/storefront_html/tool/measure.mjs, lib/public_store/services/ga4_commerce_events.dart, lib/public_store/services/ga4_bridge_web.dart, lib/public_store/services/meta_pixel_service.dart, lib/public_store/widgets/public_store_bootstrap.dart]
+archivos: [scripts/sync_seo_index.sh, services/storefront_html/tool/measure.mjs, services/storefront_html/lib/src/storefront_script.dart, lib/public_store/services/ga4_commerce_events.dart, lib/public_store/services/ga4_bridge_web.dart, lib/public_store/services/meta_pixel_service.dart, lib/public_store/widgets/public_store_bootstrap.dart]
 tablas: [website_settings]
 revisado: 2026-10-05
 ---
@@ -64,6 +64,16 @@ los agentes abren perfiles nuevos y por eso bloquean la analítica en el
 script (abajo). Lo anterior a la marca no se corrige: GA4 no es retroactivo
 `[Repo]` `[Dueño 2026-10-05]`.
 
+**La marca la lee el navegador, nunca el servidor** (2026-10-05). Firebase
+Hosting borra toda cookie salvo `__session` antes de reenviar una petición a
+Cloud Run, así que la tienda HTML no ve `vb_sin_medir`: escribe la etiqueta y
+su script (el mismo de `index.html`) revisa la marca antes de cargar nada. La
+fase 0 la leía también en el servidor; ese camino nunca funcionaba detrás de
+Hosting y se quitó `[Repo]` `[firebase.google.com/docs/hosting/manage-cache]`.
+La tienda HTML manda los mismos eventos que Flutter (`view_item`,
+`add_to_cart`, `contact`, `store_ready`) y nunca mide en la ruta oculta
+`/_html`.
+
 Las herramientas que abren el sitio real con un navegador bloquean Google
 Analytics y el píxel de Meta (`services/storefront_html/tool/measure.mjs`): cada
 carga abre un perfil nuevo y contaría como un usuario más. Un script nuevo de
@@ -124,6 +134,8 @@ tramo y recomienda si conviene la tienda HTML ([rendimiento](rendimiento.md)).
   mismo pedido (infla ventas).
 - Un evento con nombre propio no entra a los informes de comercio de GA4.
 - Medir rendimiento con el LCP del navegador en una página Flutter.
+- Leer en el servidor una cookie que puso la página: detrás de Firebase Hosting
+  sólo llega `__session`.
 
 ## En el código y la base
 

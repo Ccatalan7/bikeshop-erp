@@ -15,6 +15,7 @@ import 'package:vinabike_erp/public_store/models/public_product_seo_copy.dart';
 import 'package:vinabike_erp/public_store/models/storefront_logo_source.dart';
 import 'package:vinabike_erp/public_store/seo/public_business_structured_data.dart';
 import 'package:vinabike_erp/public_store/seo/public_product_structured_data.dart';
+import 'package:vinabike_public_core/public_store/seo/public_catalog_seo.dart';
 import 'package:vinabike_erp/shared/config/supabase_config.dart';
 import 'package:vinabike_erp/shared/models/public_product_visibility_policy.dart';
 import 'package:vinabike_erp/shared/utils/chilean_utils.dart';
@@ -598,15 +599,15 @@ void main(List<String> args) async {
   );
 
   final catalogUrl = _joinUrl(storeUrl, '/productos');
-  final catalogTitle = catalogPresentation.seoTitle.trim().isNotEmpty
-      ? catalogPresentation.seoTitle.trim()
-      : 'Productos para bicicletas | $storeName'
-          '${storeLocality.isEmpty ? '' : ' $storeLocality'}';
-  final catalogDescription =
-      catalogPresentation.seoDescription.trim().isNotEmpty
-          ? catalogPresentation.seoDescription.trim()
-          : 'Catálogo de productos publicados por $storeName con precios '
-              'informados en CLP.';
+  final catalogTitle = publicCatalogSeoTitle(
+    presentation: catalogPresentation,
+    storeName: storeName,
+    storeLocality: storeLocality,
+  );
+  final catalogDescription = publicCatalogSeoDescription(
+    presentation: catalogPresentation,
+    storeName: storeName,
+  );
   await File(pathJoin(outDir.path, 'index.html')).writeAsString(
     _buildCategoryHtml(
       baseHtml: baseHtml,
@@ -4629,34 +4630,29 @@ String _buildProductFallbackHtml({
   </main>''';
 }
 
+// The words live in vinabike_public_core (public_catalog_seo.dart) since
+// 2026-10-05: the HTML storefront serves these pages with the same ones.
 String _buildCategorySeoTitle({
   required SeoCategoryProjection category,
   required String storeName,
-}) {
-  if (category.seoTitle.trim().isNotEmpty) return category.seoTitle.trim();
-  final cleanStoreName = _cleanText(storeName);
-  return cleanStoreName.isEmpty
-      ? category.displayTitle
-      : '${category.displayTitle} | $cleanStoreName';
-}
+}) =>
+    publicCategorySeoTitle(
+      seoTitle: category.seoTitle,
+      displayTitle: category.displayTitle,
+      storeName: storeName,
+    );
 
 String _buildCategorySeoDescription({
   required SeoCategoryProjection category,
   required String storeName,
-}) {
-  if (category.seoDescription.trim().isNotEmpty) {
-    return category.seoDescription.trim();
-  }
-  if (category.description.isNotEmpty) return category.description;
-
-  // This is a factual fallback projected from canonical owners and is also
-  // rendered in the snapshot body. It deliberately does not infer technical
-  // attributes or buying claims from product titles.
-  return _cleanText(
-    '${category.productCount} productos publicados en '
-    '${category.displayTitle}${storeName.trim().isEmpty ? '' : ' de $storeName'}.',
-  );
-}
+}) =>
+    publicCategorySeoDescription(
+      seoDescription: category.seoDescription,
+      intro: category.description,
+      productCount: category.productCount,
+      displayTitle: category.displayTitle,
+      storeName: storeName,
+    );
 
 String _buildCategoryFallbackHtml({
   required String title,

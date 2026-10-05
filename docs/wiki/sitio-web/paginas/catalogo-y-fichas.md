@@ -2,9 +2,9 @@
 titulo: Catálogo, categorías y fichas de producto
 resumen: qué producto sale en la tienda y por qué, cómo se arman categorías, facetas, búsqueda y la ficha pública, y qué pasa con los agotados
 fuentes: [repositorio, google-search-central]
-archivos: [lib/shared/models/public_product_visibility_policy.dart, packages/vinabike_public_core/lib/public_store/models/public_commerce_product_projection.dart, packages/vinabike_public_core/lib/public_store/models/public_product_seo_copy.dart, lib/public_store/pages/product_catalog_page.dart, lib/public_store/pages/product_detail_page.dart, packages/vinabike_public_core/lib/public_store/utils/public_spec_display.dart]
+archivos: [packages/vinabike_public_core/lib/shared/models/public_product_visibility_policy.dart, packages/vinabike_public_core/lib/public_store/models/public_category_route.dart, packages/vinabike_public_core/lib/public_store/models/public_catalog_facets.dart, services/storefront_html/lib/src/catalog_page_model.dart, packages/vinabike_public_core/lib/public_store/models/public_commerce_product_projection.dart, packages/vinabike_public_core/lib/public_store/models/public_product_seo_copy.dart, lib/public_store/pages/product_catalog_page.dart, lib/public_store/pages/product_detail_page.dart, packages/vinabike_public_core/lib/public_store/utils/public_spec_display.dart]
 tablas: [products, product_categories, product_url_aliases, website_settings, featured_products]
-revisado: 2026-10-03
+revisado: 2026-10-05
 ---
 
 # Catálogo, categorías y fichas de producto
@@ -58,7 +58,26 @@ la misma URL con la disponibilidad correcta `[GSC]`.
   al diseño compartido; nunca despublica `[Repo: website-editor-contract.md]`.
 - Facetas: marca y, desde el 2026-09-16, filtros técnicos (válvula, aro,
   velocidades…) cuando la especificación describe al menos el 30 % de la
-  colección (`get_public_product_facets_v2`) `[Repo]`.
+  colección (`get_public_product_facets_v2`) `[Repo]`. Desde el 2026-10-05 esa
+  regla (`offeredPublicSpecFacets`) y la lectura de las filas
+  (`PublicCatalogFacetSnapshot.fromRows`) viven en el núcleo y las usan Flutter
+  y la tienda HTML.
+- **Qué categoría abre una URL** (`resolvePublishedCategoryRouteValue`, núcleo,
+  2026-10-05): un UUID sólo si está publicada; un slug o alias guardado en
+  «Catálogo web» sólo su categoría (si no está publicada o lo reclaman dos, nada
+  abre); si no, el nombre o la ruta completa entre las **publicadas**, y dos
+  iguales no abren ninguna. Importa porque hay nombres repetidos: «Cambios» y
+  «Frenos» existen dos veces cada una, una publicada y otra no
+  `[Prod 2026-10-05]`.
+- Los conteos de la lista de categorías y «Todas» salen de la misma lectura de
+  facetas (filas `category` y `summary`), no de
+  `get_public_product_category_counts`: respetan los demás filtros y la regla de
+  stock del sitio; «Todas» cuenta también lo que no tiene categoría publicada
+  (539 contra 533 sumando categorías, 2026-10-05) `[Repo]` `[Prod]`.
+- Un filtro técnico en la URL (`spec.valve_standard=…`, o `s.`) es estado del
+  visitante como una marca: `noindex,follow` con la canónica limpia. Hasta el
+  2026-10-05 faltaba en la lista y una categoría filtrada así decía
+  `index,follow` (`storefront_seo_route.dart`) `[Repo]`.
 
 ## La ficha pública
 
@@ -96,10 +115,16 @@ la misma URL con la disponibilidad correcta `[GSC]`.
 
 ## En el código y la base
 
-- Política: `lib/shared/models/public_product_visibility_policy.dart`
+- Política: `packages/vinabike_public_core/lib/shared/models/public_product_visibility_policy.dart`
   (compartida por tienda y editor) y las claves `product_visibility_*`.
 - Funciones: `get_public_products`, `get_public_products_faceted_v2`,
   `get_public_product_facets_v2`, `get_public_product_category_counts`,
   `search_public_products`, `get_public_featured_products`.
 - Páginas: `product_catalog_page.dart`, `product_detail_page.dart`; editor:
   `product_website_visibility_page.dart`, `featured_products_page.dart`.
+- Tienda HTML (fase 1, ruta oculta): `services/storefront_html/lib/src/`
+  `catalog_page_model.dart` y `catalog_page_view.dart` (catálogo, categoría,
+  búsqueda), `product_page_model.dart` y `product_page_view.dart` (ficha). Los
+  filtros son formularios GET: el servidor junta los valores repetidos de una
+  casilla (`brand=a&brand=b`) y descarta los campos vacíos antes de
+  `WebsiteCatalogQuery.tryParse`.

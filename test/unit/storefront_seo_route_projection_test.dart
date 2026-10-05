@@ -104,6 +104,26 @@ void main() {
     expect(projection.robots, 'noindex,follow');
   });
 
+  test('a technical filter is visitor state like a brand', () {
+    for (final key in ['spec.valve_standard', 's.valve_standard']) {
+      final projection = projectStorefrontSeoRoute(
+        Uri.parse('/productos/categoria/camaras?$key=Presta'),
+        isErpMounted: false,
+      );
+      expect(projection.canonicalPath, '/productos/categoria/camaras');
+      expect(projection.robots, 'noindex,follow', reason: key);
+    }
+    // A tracking parameter is not a filter: the copy stays indexable and
+    // canonical to the clean path.
+    expect(
+      projectStorefrontSeoRoute(
+        Uri.parse('/productos/categoria/camaras?utm_source=ig'),
+        isErpMounted: false,
+      ).robots,
+      'index,follow',
+    );
+  });
+
   test('direct category scope canonicalizes to the inclusive collection', () {
     final projection = projectStorefrontSeoRoute(
       Uri.parse(

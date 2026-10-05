@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:vinabike_public_core/public_store/models/public_category_route.dart';
 // import '../theme/public_store_theme.dart'; // Unused
 import '../models/catalog_filter_rail_policy.dart';
 import '../providers/public_store_tenant_provider.dart';
@@ -535,51 +536,24 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   bool _isPublishedCategory(String? categoryId) =>
       categoryId != null && _publishedCategoryIds.contains(categoryId);
 
+  /// Route identity never overrides category publication: before categories
+  /// load this returns null so the value remains pending; afterwards only a
+  /// published category can become route context. The rule is shared with
+  /// the HTML storefront (`resolvePublishedCategoryRouteValue`).
   String? _resolveCategoryIdFromValue(String raw) {
-    final trimmed = raw.trim();
-    if (trimmed.isEmpty) return null;
-
-    // Route identity never overrides category publication. Before categories
-    // load this returns null so the value remains pending; afterwards only a
-    // published category can become route context.
-    if (_looksLikeUuid(trimmed)) {
-      return _isPublishedCategory(trimmed) ? trimmed : null;
-    }
-
-    final registryClaimCount =
-        _presentationRegistry.categorySlugClaimCount(trimmed);
-    if (registryClaimCount > 0) {
-      final presentation = _presentationRegistry.forSlug(trimmed);
-      if (presentation != null &&
-          _isPublishedCategory(presentation.categoryId)) {
-        return presentation.categoryId;
-      }
-      // A stored but ambiguous/unpublished route must not fall through to a
-      // similarly named category and silently select a different owner.
-      return null;
-    }
-
-    final wanted = _normalizeForSearch(trimmed);
-    if (wanted.isEmpty) return null;
-
-    final matches = <String>{};
-    for (final entry in _allCategoriesById.entries) {
-      if (!entry.value.isPublished) continue;
-      final normalizedName = _normalizeForSearch(entry.value.name);
-      final normalizedPath = _normalizeForSearch(entry.value.fullPath);
-      if (normalizedName == wanted ||
-          normalizedPath == wanted ||
-          websiteCategorySlug(entry.value.name) ==
-              websiteCategorySlug(trimmed) ||
-          websiteCategorySlug(entry.value.fullPath) ==
-              websiteCategorySlug(trimmed)) {
-        matches.add(entry.key);
-      }
-    }
-
-    // Legacy categories without a saved presentation may still resolve by
-    // name/full path, but duplicate leaf slugs fail closed.
-    return matches.length == 1 ? matches.single : null;
+    return resolvePublishedCategoryRouteValue(
+      raw,
+      presentations: _presentationRegistry,
+      categories: [
+        for (final node in _allCategoriesById.values)
+          (
+            id: node.id,
+            name: node.name,
+            fullPath: node.fullPath,
+            isPublished: _isPublishedCategory(node.id),
+          ),
+      ],
+    );
   }
 
   bool _isAliasForCategory(String rawSlug, String categoryId) {
@@ -2197,23 +2171,8 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     }
   }
 
-  String _normalizeForSearch(String input) {
-    var s = input.toLowerCase();
-
-    // Fast accent/diacritic normalization for Spanish.
-    s = s
-        .replaceAll('á', 'a')
-        .replaceAll('é', 'e')
-        .replaceAll('í', 'i')
-        .replaceAll('ó', 'o')
-        .replaceAll('ú', 'u')
-        .replaceAll('ü', 'u')
-        .replaceAll('ñ', 'n');
-
-    // Normalize punctuation to spaces (keeps token boundaries consistent).
-    s = s.replaceAll(RegExp(r'[^a-z0-9]+'), ' ');
-    return s.trim();
-  }
+  String _normalizeForSearch(String input) =>
+      normalizePublicCatalogText(input);
 
   List<String> _tokenizeSearchQuery(String query) {
     final normalized = _normalizeForSearch(query);
@@ -3373,30 +3332,15 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     );
   }
 
-  /// A spec facet is offered when it describes most of what the visitor is
-  /// looking at (the tubes of «Cámaras» all have a valve; on the home
-  /// collection a valve describes a corner), or when one of its values is
-  /// already selected. At most [_maxOfferedSpecFacets], best coverage first.
-  static const double _minSpecFacetCoverage = 0.3;
-  static const int _maxOfferedSpecFacets = 8;
-
-  List<PublicCatalogSpecFacet> _offeredSpecFacets() {
-    final offered = <PublicCatalogSpecFacet>[];
-    for (final facet in _catalogFacets.specFacets) {
-      final selected = _selectedSpecFilters[facet.key]?.isNotEmpty == true;
-      if (!selected && facet.coverage < _minSpecFacetCoverage) continue;
-      if (!selected && facet.values.length < 2) continue;
-      offered.add(facet);
-    }
-    offered.sort((a, b) {
-      final aSelected = _selectedSpecFilters[a.key]?.isNotEmpty == true;
-      final bSelected = _selectedSpecFilters[b.key]?.isNotEmpty == true;
-      if (aSelected != bSelected) return aSelected ? -1 : 1;
-      final byCoverage = b.productCount.compareTo(a.productCount);
-      return byCoverage != 0 ? byCoverage : a.label.compareTo(b.label);
-    });
-    return offered.take(_maxOfferedSpecFacets).toList(growable: false);
-  }
+  /// The rule (coverage, selection, at most eight) lives in
+  /// vinabike_public_core since 2026-10-05; the HTML catalog offers the same.
+  List<PublicCatalogSpecFacet> _offeredSpecFacets() => offeredPublicSpecFacets(
+        _catalogFacets.specFacets,
+        selected: {
+          for (final entry in _selectedSpecFilters.entries)
+            entry.key: entry.value.toSet(),
+        },
+      );
 
   Widget _buildSpecFacet(
     PublicCatalogSpecFacet facet,
@@ -3410,24 +3354,11 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     }
     // A measure reads in its own order (aro 20", 24", 26", 27.5", 29"; largo
     // 33, 35, 48, 60 mm); an option list, by how many products carry it.
-    final numeric = facet.dataType == 'number';
-    final values = List<PublicCatalogSpecFacetValue>.from(facet.values)
-      ..sort((a, b) {
-        final aSelected = selected.contains(a.value);
-        final bSelected = selected.contains(b.value);
-        if (aSelected != bSelected) return aSelected ? -1 : 1;
-        if (numeric) {
-          final aNumber = double.tryParse(a.value.replaceAll(',', '.'));
-          final bNumber = double.tryParse(b.value.replaceAll(',', '.'));
-          if (aNumber != null && bNumber != null && aNumber != bNumber) {
-            return aNumber.compareTo(bNumber);
-          }
-        }
-        final byCount = b.itemCount.compareTo(a.itemCount);
-        if (byCount != 0) return byCount;
-        return _specValueLabel(facet.key, a.value)
-            .compareTo(_specValueLabel(facet.key, b.value));
-      });
+    final values = orderedPublicSpecFacetValues(
+      facet,
+      selected: selected.toSet(),
+      labelOf: (value) => _specValueLabel(facet.key, value),
+    );
     final expanded = _expandedSpecFacets.contains(facet.key);
     final visible = expanded ? values : values.take(6).toList();
     return Column(

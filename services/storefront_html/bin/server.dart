@@ -1,9 +1,10 @@
 // The public storefront rendered as HTML, one page per visit.
 //
-// Phase 0 of docs/architecture/storefront-html-migration-plan.md: product
-// pages on a hidden route (`/_html/productos/<slug>/<sku>`), next to the
-// Flutter store they mirror. Run it locally with
-// services/storefront_html/run_local.sh; deploy with deploy_cloud_run.sh.
+// Phases 0 and 1 of docs/architecture/storefront-html-migration-plan.md:
+// product pages, `/productos` and its categories, on a hidden route
+// (`/_html/...`) next to the Flutter store they mirror until the public routes
+// point here. Run it locally with services/storefront_html/run_local.sh;
+// deploy with deploy_cloud_run.sh.
 import 'dart:io';
 
 import 'package:jaspr/server.dart';

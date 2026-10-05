@@ -1,0 +1,154 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "storefront-html-phase-1-catalog",
+  "scope": "internal",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "lib/modules/website/models/website_font_registry.dart",
+      "sha256": "9f79d9411fab3c6d7dc2af826d84025f97899915ff96461e878f46358ead0754"
+    },
+    {
+      "path": "lib/public_store/models/catalog_filter_rail_policy.dart",
+      "sha256": "0fa9e581dda189670665efeaf834bf694c2579d9c3417f3d2959eed9cb55a9a7"
+    },
+    {
+      "path": "lib/public_store/models/public_checkout_capabilities.dart",
+      "sha256": "fc2d9ddde46a98eabdfeacfdde43ed6489329e032be1dc90aa67bb78eba2e8f8"
+    },
+    {
+      "path": "lib/public_store/pages/product_catalog_page.dart",
+      "sha256": "01f25afda90d723ca0b15ea247c49d7bff9e40fefa03a431e827cc921ec0b8e0"
+    },
+    {
+      "path": "lib/public_store/services/public_category_publication.dart",
+      "sha256": "92b624d4b66dccc270c41d42dc6ff3b44a82fdaf353f3dc3749646c1fca31435"
+    },
+    {
+      "path": "lib/public_store/services/public_page_publication.dart",
+      "sha256": "79f53c6daabaaf5888dd20d098a1eaf62536c210ac9d61d79f1eb81e1dc5aa62"
+    },
+    {
+      "path": "lib/public_store/widgets/public_store_layout.dart",
+      "sha256": "36a5c0386dbea7f3e46dac4dc32902350a918727f1dcaca6c3901435ea254724"
+    },
+    {
+      "path": "lib/public_store/widgets/store_layout/layout_helpers.dart",
+      "sha256": "f5c5991d17aa8fd36146980c3bd246eafa491195184cee7982bed8fc26718ec3"
+    },
+    {
+      "path": "lib/public_store/widgets/store_layout/scroll_and_chrome.dart",
+      "sha256": "ef27244d7d70e122e3c7ada054cd5dcea76e838bdc5f40323600866a00272958"
+    },
+    {
+      "path": "lib/shared/models/public_product_visibility_policy.dart",
+      "sha256": "e8ed339205508ee9090b72edaf7144dc4b5abccd8e0adac1dc21faa82bf286f4"
+    },
+    {
+      "path": "lib/shared/utils/seo_helper.dart",
+      "sha256": "741e4c2ab2f55a0052f064e573df435ac3ac8a0e4dde8437db96b59643736935"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_font_registry.dart",
+      "sha256": "a3552a470087cd01db0d54de804296fcf9fcf40c8a8fcf7f34f52e903446d901"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/catalog_filter_rail_policy.dart",
+      "sha256": "b6ec74b28c947770aa71baa3ee1dbbe646da3104a095be1c85ce5aaeb6318bc3"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/public_catalog_facets.dart",
+      "sha256": "c1cd34e3f50810f991c928dcc8d096e4f9a31a2601c624806270a7938067df49"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/public_category_route.dart",
+      "sha256": "6bb1b87015eeea93303b7fd6d386aefbe22ada8e9eb36a1b6d5e56a1de47a01b"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/public_checkout_capabilities.dart",
+      "sha256": "e4c02d7246fef5d034215bd243352e3cf2eb54c09d91d0c9bfcc7a4bce7c4e97"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/public_payment_claims.dart",
+      "sha256": "633856b2c825182a8a763e0939204ee716a7385e404e62c5f86c1f3cd75d1e79"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/public_product_identity_columns.dart",
+      "sha256": "95e574017a01e6b594f3769d2059249283bb4e4bea4a5af0ec7ddaf5d021b979"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/seo/public_business_identity.dart",
+      "sha256": "821e3547d8add8f88250512cf3660cb84cf146876cf9a577e14cd82b4bc63ba2"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/seo/public_catalog_seo.dart",
+      "sha256": "49e20baabe293caa253c421e0d35d53eee647d87d1a00a85f5738a896cb40c63"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/seo/storefront_seo_route.dart",
+      "sha256": "ba04857fa23e4aad9d5c6c00d26efd4a538273ed80d8196ca74f5d3d5c3e47dd"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/services/public_category_publication.dart",
+      "sha256": "6660fb34449565fc653b94b09f36eaa6834fd958c693d5f7899fa3f0cbd07eb6"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/services/public_page_publication.dart",
+      "sha256": "4b87fbffce773e6c0c762e459315dac8d4bf99ad7d9dc2c8da86abe6fd4904ae"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/utils/social_url.dart",
+      "sha256": "fe9763fe49aa7962a13824b1df101e6a2a74a32ae257a38bf952ae4da0bd3d29"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/shared/models/public_product_visibility_policy.dart",
+      "sha256": "6c3a389ada9987f65fe4ab9a4578ae342aa268d7376454d787bc40d8f5251cde"
+    },
+    {
+      "path": "scripts/generate_product_seo_snapshots.dart",
+      "sha256": "b7cc18f4042a8f228fc1046e40c1e9711b284cc14b93260986f4de76d3e46ac0"
+    },
+    {
+      "path": "services/storefront_html/lib/src/catalog_page_model.dart",
+      "sha256": "fd628a919c35ba15d0a93863ecd2098f361ce4f042cdcd3f067704ed41c00cae"
+    },
+    {
+      "path": "services/storefront_html/lib/src/catalog_page_view.dart",
+      "sha256": "b2b8fbfafd2cfaef37624e85d60d33dfa71e162efe627c1686d5c77690389144"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_card.dart",
+      "sha256": "79f3023f26e49e5dcddcae4e4c32c6710ccce3b815c613c4e4080eda7224f804"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_images.dart",
+      "sha256": "f3bef5c099b3d32637692197fb11ba22ba38bbd8a989e5a7e1fc68d9df33153a"
+    },
+    {
+      "path": "services/storefront_html/lib/src/site_layout.dart",
+      "sha256": "e91a99d4401429c67d1e415b5bc072661f76f591edb572852a2e77ed54c247d4"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_script.dart",
+      "sha256": "d671848332d9ceab311d8519107df0d28b44483b0a3e4986e59ca140c16e7625"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_shell.dart",
+      "sha256": "1c7e213571900b5167b9f07dd5344dc62fccd764db408577a62d7eac395cee24"
+    },
+    {
+      "path": "services/storefront_html/tool/parity.py",
+      "sha256": "2b7db3e6b0633fa96a22928e0c34c0cc08af572a78f24aed8a95e641da9848d0"
+    }
+  ]
+}
