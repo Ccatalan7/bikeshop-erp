@@ -13,6 +13,9 @@ on:
       - main
     paths:
       - "lib/**"
+      # La tienda Flutter se compila con el núcleo compartido: un cambio que
+      # sólo lo toca a él también cambia la tienda publicada.
+      - "packages/vinabike_public_core/**"
       - "web/**"
       - "assets/**"
       - "pubspec.yaml"

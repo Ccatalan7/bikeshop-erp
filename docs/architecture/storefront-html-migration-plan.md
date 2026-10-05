@@ -857,6 +857,20 @@ los escribe con la ruta limpia de la categoría publicada
 visitante ni Google siguen una redirección. Lo guardado en el editor no
 cambia.
 
+Dos trampas de la publicación, del mismo día:
+
+- **Un commit que sólo toca el servidor no dispara la publicación de la
+  tienda** (el filtro de rutas no incluye `services/storefront_html/lib`):
+  se publica con `deploy_cloud_run.sh` y nada lo revisa hasta la próxima
+  publicación. Tampoco la disparaba un cambio sólo del núcleo, con el que se
+  compila la tienda Flutter; ahora `packages/vinabike_public_core/**` está
+  en el filtro, como en los flujos de macOS, Windows y la compuerta.
+- **Publicar el servidor con una publicación de la tienda pendiente la hace
+  fallar**: la revisión de rutas compara Cloud Run con la fuente de *su*
+  commit, y corre después de publicar Hosting. Si ya se publicó, se cancela
+  esa corrida (mientras siga en las compuertas no publicó nada) y se empuja
+  un commit que la dispare sobre el `HEAD` que corre Cloud Run.
+
 ### Pendiente
 
 - El costo real de Cloud Run en la facturación, después de unos días.
