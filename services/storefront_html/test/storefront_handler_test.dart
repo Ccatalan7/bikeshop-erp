@@ -558,6 +558,38 @@ void main() {
   });
 
   test(
+    'the wide footer is as wide as its widest row, as Flutter\'s Wrap',
+    () async {
+      final html = await _html(
+        shell: {
+          ..._shell(),
+          'navigation': [
+            _nav('a', 'Enlaces', location: 'footer', value: ''),
+            _nav('a1', 'Uno', location: 'footer', parent: 'a'),
+            _nav('b', 'Información', location: 'footer', value: ''),
+            _nav('b1', 'Dos', location: 'footer', parent: 'b'),
+          ],
+        },
+      );
+      // Brand 250 + two columns + «Contacto», 200 each, 32 apart: 946 px in
+      // one row; below that «Contacto» starts a row of its own under the
+      // logo and the rows are 714 px wide, centered.
+      expect(
+        html,
+        contains('.foot-grid{justify-content:flex-start;width:946px;'),
+      );
+      expect(
+        html,
+        contains('@container foot (width<946px){.foot-grid{width:714px}}'),
+      );
+      expect(
+        html,
+        contains('@container foot (width<714px){.foot-grid{width:482px}}'),
+      );
+    },
+  );
+
+  test(
     'a footer item without a destination passes its published children up',
     () async {
       final html = await _html(
@@ -1238,7 +1270,17 @@ void main() {
           {
             'title': 'Cámaras',
             'useComposition': true,
+            'imageUrl': 'https://example.invalid/s2.png',
             'elements': [
+              {
+                'id': 'i',
+                'type': 'image',
+                'imageUrl': 'https://example.invalid/layer.webp',
+                'x': 700,
+                'y': 120,
+                'w': 400,
+                'h': 300,
+              },
               {
                 'id': 't',
                 'type': 'text',
@@ -1348,6 +1390,18 @@ void main() {
         expect(html, contains('class="cl cl-a-fadeUp cl-text al-left"'));
         expect(html, contains('>VER CÁMARAS</a>'));
         expect(html, contains('document.querySelectorAll("[data-car]")'));
+        // A later slide's photos wait for their turn: only the first slide's
+        // photo is fetched with the page.
+        expect(html, contains('data-src="https://example.invalid/s2.png"'));
+        expect(html, contains('data-src="https://example.invalid/layer.webp"'));
+        expect(
+          html,
+          isNot(contains(RegExp(r'[^-]src="https://example.invalid/s2'))),
+        );
+        expect(
+          html,
+          isNot(contains(RegExp(r'[^-]src="https://example.invalid/layer'))),
+        );
         // The picked products in the author's order, the sold-out one left out.
         final cassette = html.indexOf('CASSETTE ECLIPSE 8V');
         final fork = html.indexOf('HORQUILLA SUNTOUR 29 AURON 35');

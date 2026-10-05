@@ -323,8 +323,10 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,su
 .foot a{color:inherit;text-decoration:none}.foot a:hover{color:#fff}
 .foot ul{list-style:none;margin:0;padding:0}
 .foot-wide{max-width:1248px;margin:0 auto;padding:24px}
-.foot-grid{display:flex;flex-wrap:wrap;justify-content:center;gap:24px 32px}
-.foot-brand{width:250px}.foot-col{width:200px}
+/* Its width (Flutter's `Wrap`, as wide as its widest run) is
+   `SiteFooter.wrapCss`, computed from the columns the store has. */
+.foot-grid{display:flex;flex-wrap:wrap;gap:24px 32px}
+.foot-brand{flex:none;width:250px}.foot-col{flex:none;width:200px}
 .foot-logo{display:flex}.foot-logo img{height:60px;width:auto;max-width:250px;object-fit:contain;filter:brightness(0) invert(1)}
 .foot-name{font:400 26px var(--head);color:#fff;text-transform:uppercase}
 .foot-about{margin:16px 0 0;font-size:16px;line-height:1.5}
@@ -336,6 +338,9 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,su
 .foot-col a[aria-current]{font-weight:700}
 .foot .contact li{display:flex;align-items:flex-start;gap:8px;padding-bottom:12px}
 .foot .contact svg{flex:none}
+/* Flutter leaves 12 px under the address and the phone, none under the
+   email: it shows when «Contacto» wraps to a row of its own. */
+.foot-col .contact .mail{padding-bottom:0}
 .payments{margin-top:32px;text-align:center}
 /* The label's line is 16 px in Flutter (`bodySmall` at 11 px), and the
    badges sit at the top of their row, as a `Wrap` lays them out. */

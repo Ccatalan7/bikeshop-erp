@@ -146,6 +146,7 @@ Component sitePage({
               bodyFont: s.bodyFont,
             ),
           ),
+          RawText(SiteFooter.wrapCss(s)),
           if (meta.styles.isNotEmpty) RawText(meta.styles),
         ],
       ),
@@ -518,8 +519,7 @@ class SiteFooter extends StatelessComponent {
                 ],
               ),
         ]);
-    final hasContact =
-        address.isNotEmpty || phone.isNotEmpty || email.isNotEmpty;
+    final hasContact = _hasContact(s);
     Component contactList() => ul(classes: 'contact', [
       if (address.isNotEmpty)
         li([
@@ -532,7 +532,7 @@ class SiteFooter extends StatelessComponent {
           a(href: 'tel:${phone.replaceAll(' ', '')}', [.text(phone)]),
         ]),
       if (email.isNotEmpty)
-        li([
+        li(classes: 'mail', [
           RawText(materialIcon(mdEmailOutlined, size: 20)),
           a(href: 'mailto:$email', [.text(email)]),
         ]),
@@ -631,6 +631,62 @@ class SiteFooter extends StatelessComponent {
         legal,
       ]),
     ]);
+  }
+
+  static bool _hasContact(StorefrontShell shell) =>
+      shell.setting('contact_address').isNotEmpty ||
+      shell.setting('contact_phone').isNotEmpty ||
+      shell.setting('contact_email').isNotEmpty;
+
+  /// Flutter lays the wide footer's columns out in a `Wrap` as wide as its
+  /// widest run, centered, each run starting at its left edge: between 800
+  /// and about 1000 px the «Contacto» column drops under the logo, not under
+  /// the middle. A wrapping flex line cannot shrink to its widest run, so
+  /// the width the `Wrap` takes is worked out here for every width the
+  /// footer's inside can have (the 250 px brand, 200 px columns, 32 px
+  /// apart, as Flutter wraps them) and set with container queries.
+  static String wrapCss(StorefrontShell shell) {
+    final widths = [
+      250,
+      for (final _ in _footerFor(shell, desktop: true)) 200,
+      if (_hasContact(shell)) 200,
+    ];
+    const spacing = 32;
+    int widest(int available) {
+      var widest = 0;
+      var run = 0;
+      var count = 0;
+      for (final width in widths) {
+        if (count > 0 && run + spacing + width > available) {
+          if (run > widest) widest = run;
+          run = width;
+          count = 1;
+        } else {
+          run = count == 0 ? width : run + spacing + width;
+          count++;
+        }
+      }
+      return run > widest ? run : widest;
+    }
+
+    // The footer's inside is at most 1200 px; each rule below holds until
+    // the next narrower one takes over.
+    final rules = StringBuffer(
+      '.foot-wide{container:foot/inline-size}'
+      '.foot-grid{justify-content:flex-start;width:${widest(1200)}px;'
+      'max-width:100%;margin:0 auto}',
+    );
+    var current = widest(1200);
+    for (var available = 1199; available >= 250; available--) {
+      final width = widest(available);
+      if (width == current) continue;
+      rules.write(
+        '@container foot (width<${available + 1}px){'
+        '.foot-grid{width:${width}px}}',
+      );
+      current = width;
+    }
+    return rules.toString();
   }
 
   static Component _paymentBadge(PublicCheckoutPaymentCode code) {

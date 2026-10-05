@@ -72,10 +72,19 @@ List<WebsiteViewport> _viewportsOf(Map<String, dynamic> document) =>
 /// the width of the canvas (a container query): the stylesheet does the
 /// scaling with container units, so the same HTML is right at every width.
 class CanvasLayersView extends StatelessComponent {
-  const CanvasLayersView(this.document, this.context, {super.key});
+  const CanvasLayersView(
+    this.document,
+    this.context, {
+    this.deferImages = false,
+    super.key,
+  });
 
   final Map<String, dynamic> document;
   final BlockRenderContext context;
+
+  /// Images name their file in `data-src`, for a script to load when they
+  /// are about to show (a carousel's later slides).
+  final bool deferImages;
 
   @override
   Component build(BuildContext _) {
@@ -271,11 +280,12 @@ class CanvasLayersView extends StatelessComponent {
         const [],
       );
     }
-    return img(
+    return Component.element(
+      tag: 'img',
       classes: [...classes, 'cl-img'].join(' '),
-      src: url,
-      alt: (layer['altText'] ?? '').toString(),
       attributes: {
+        if (deferImages) 'data-src': url else 'src': url,
+        'alt': (layer['altText'] ?? '').toString(),
         'loading': 'lazy',
         'decoding': 'async',
         'style': [

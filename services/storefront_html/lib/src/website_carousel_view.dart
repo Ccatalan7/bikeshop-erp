@@ -184,21 +184,27 @@ class CarouselBlockView extends StatelessComponent {
       },
       [
         if (image.isNotEmpty)
-          img(
+          // A later slide's photo waits for its turn (`data-src`, set by the
+          // script before the slide shows): stacked under the first one, a
+          // lazy photo is still «in view» and was fetched with it, and a
+          // 2 MB third slide took the phone's bandwidth from an 82 KB first
+          // photo (5 s to see it on a slow phone, 2026-10-05).
+          Component.element(
+            tag: 'img',
             classes: 'car-img',
-            src: image,
-            alt: alt,
             attributes: {
+              if (first) 'src': image else 'data-src': image,
+              'alt': alt,
               'style':
                   'object-position:${cssNum(fx * 100)}% ${cssNum(fy * 100)}%',
-              if (first) 'fetchpriority': 'high' else 'loading': 'lazy',
+              if (first) 'fetchpriority': 'high',
               'decoding': first ? 'sync' : 'async',
             },
           ),
         if (carouselSlideUsesComposition(slide)) ...[
           if (overlay != null)
             div(classes: 'car-ov', attributes: {'style': overlay}, const []),
-          CanvasLayersView(_slideDocument(slide), context),
+          CanvasLayersView(_slideDocument(slide), context, deferImages: !first),
         ] else
           div(
             classes: 'car-in',
@@ -288,13 +294,14 @@ class CarouselBlockView extends StatelessComponent {
 /// Plays every carousel on the page as `_WebsiteCarouselBlockContentState`:
 /// the next slide every interval (none when the visitor asks for less
 /// motion), arrows, dots and a swipe. A slide is shown once its images are
-/// ready, and the one after it is fetched while it shows.
+/// ready, and the one after it is fetched while it shows; the second one
+/// only once the page has loaded, so it never competes with the first.
 const carouselScript = r'''
 document.querySelectorAll("[data-car]").forEach(function(c){
 var slides=[].slice.call(c.querySelectorAll(":scope>.car-slide")),dots=[].slice.call(c.querySelectorAll(".car-dot"));
 var n=slides.length,cur=0,want=-1,timer=0,ms=+c.dataset.interval||0;
 var still=matchMedia("(prefers-reduced-motion: reduce)").matches;
-function ready(i){return Promise.all([].map.call(slides[i].querySelectorAll("img"),function(m){m.loading="eager";return m.decode?m.decode().catch(function(){}):0}))}
+function ready(i){return Promise.all([].map.call(slides[i].querySelectorAll("img"),function(m){if(m.dataset.src){m.src=m.dataset.src;m.removeAttribute("data-src")}m.loading="eager";return m.decode?m.decode().catch(function(){}):0}))}
 function restart(){clearInterval(timer);if(ms&&!still&&n>1)timer=setInterval(function(){go(cur+1)},ms)}
 function show(i){var old=slides[cur];old.classList.remove("on");old.inert=true;slides[i].classList.add("on");slides[i].inert=false;dots.forEach(function(d,k){d.setAttribute("aria-pressed",k===i?"true":"false")});cur=i;ready((i+1)%n);restart()}
 function go(i){i=(i%n+n)%n;if(i===cur){want=-1;restart();return}clearInterval(timer);want=i;ready(i).then(function(){if(want===i){want=-1;show(i)}})}
@@ -302,6 +309,8 @@ c.addEventListener("click",function(e){var b=e.target.closest("button");if(!b||!
 var x0=null,y0=0,t0=0;
 c.addEventListener("touchstart",function(e){if(e.touches.length!==1){x0=null;return}x0=e.touches[0].clientX;y0=e.touches[0].clientY;t0=Date.now()},{passive:true});
 c.addEventListener("touchend",function(e){if(x0===null||n<2)return;var t=e.changedTouches[0],dx=t.clientX-x0,dy=t.clientY-y0,dt=Math.max(1,Date.now()-t0);x0=null;if(Math.abs(dx)<18||Math.abs(dx)<Math.abs(dy))return;if(Math.abs(dx)>=c.clientWidth/4||Math.abs(dx)/dt*1000>=50)go(dx<0?cur+1:cur-1)},{passive:true});
-if(n>1)ready(1);restart();
+function warm(){if(n>1)ready(1)}
+if(document.readyState==="complete")warm();else addEventListener("load",warm);
+restart();
 });
 ''';
