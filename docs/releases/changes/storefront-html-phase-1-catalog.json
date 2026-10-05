@@ -120,15 +120,15 @@
     },
     {
       "path": "services/storefront_html/lib/src/catalog_page_model.dart",
-      "sha256": "fd628a919c35ba15d0a93863ecd2098f361ce4f042cdcd3f067704ed41c00cae"
+      "sha256": "beae27841ba1372e416bead85413d6fdfc85f2a1c891cc770b8e49197b03842b"
     },
     {
       "path": "services/storefront_html/lib/src/catalog_page_view.dart",
-      "sha256": "b2b8fbfafd2cfaef37624e85d60d33dfa71e162efe627c1686d5c77690389144"
+      "sha256": "9d8cd48efb92fa2ed3559ab69b10e4abe4096dfb7f134c7b3c8b99fe0f9314a3"
     },
     {
       "path": "services/storefront_html/lib/src/product_card.dart",
-      "sha256": "79f3023f26e49e5dcddcae4e4c32c6710ccce3b815c613c4e4080eda7224f804"
+      "sha256": "894fa2d77d9ad2d611bdcc7e6cd55c1c9e8a723556fbe06d8483d3e09f091a31"
     },
     {
       "path": "services/storefront_html/lib/src/product_images.dart",

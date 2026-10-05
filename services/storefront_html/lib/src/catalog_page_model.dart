@@ -3,6 +3,7 @@ import 'package:vinabike_public_core/modules/website/models/website_catalog_quer
 import 'package:vinabike_public_core/public_store/models/catalog_filter_rail_policy.dart';
 import 'package:vinabike_public_core/public_store/models/public_catalog_facets.dart';
 import 'package:vinabike_public_core/public_store/models/public_commerce_product_projection.dart';
+import 'package:vinabike_public_core/public_store/models/public_image_thumbnail.dart';
 import 'package:vinabike_public_core/public_store/models/public_product_brand_names.dart';
 import 'package:vinabike_public_core/public_store/seo/public_catalog_seo.dart';
 import 'package:vinabike_public_core/public_store/seo/storefront_seo_route.dart';
@@ -11,6 +12,7 @@ import 'package:vinabike_public_core/public_store/utils/public_spec_display.dart
 import 'package:vinabike_public_core/shared/models/product.dart';
 import 'package:vinabike_public_core/shared/models/public_product_visibility_policy.dart';
 
+import 'product_card.dart';
 import 'public_reads.dart';
 import 'site_layout.dart';
 import 'storefront_shell.dart';
@@ -18,6 +20,7 @@ import 'storefront_shell.dart';
 typedef CatalogProduct = ({
   PublicCommerceProductProjection commerce,
   String path,
+  PublicImageThumbnail? thumbnail,
 });
 
 typedef CatalogLink = ({String id, String label, String path, int count});
@@ -68,6 +71,7 @@ class CatalogPageModel {
       optionDisplayByKey: publicSpecOptionDisplayFromRows(reads.optionLabels),
     );
     final rows = rowsOf(reads.products);
+    final thumbnails = PublicImageThumbnail.byUrl(reads.thumbnails);
     // Each card's brand by the store's rule (`_attachCanonicalBrandNames`).
     final brandNames = canonicalPublicProductBrandNames(
       rows: rowsOf(reads.brandRows),
@@ -98,13 +102,18 @@ class CatalogPageModel {
           ),
       products: [
         for (final row in rows)
-          (
-            commerce: PublicCommerceProductProjection.fromJson(
-              row,
-              resolvedBrand: brandNames[(row['brand_id'] ?? '').toString()],
+          if (PublicCommerceProductProjection.fromJson(
+                row,
+                resolvedBrand: brandNames[(row['brand_id'] ?? '').toString()],
+              )
+              case final commerce)
+            (
+              commerce: commerce,
+              path: publicProductPath(Product.fromJson(row)),
+              thumbnail: commerce.imageUrls.isEmpty
+                  ? null
+                  : thumbnails[commerce.imageUrls.first],
             ),
-            path: publicProductPath(Product.fromJson(row)),
-          ),
       ],
       total: rows.isEmpty ? 0 : (rows.first['total_count'] as num?)?.toInt() ?? rows.length,
       facets: facets,
@@ -320,12 +329,24 @@ class CatalogPageModel {
       canonicalUrl: canonicalUrl,
       indexable: route.isIndexable,
       imageUrl: image,
-      // The largest paint: a category's hero photo, otherwise the first card.
+      // The largest paint: a category's hero photo, otherwise the first card,
+      // with the same candidates the card offers so it is fetched once.
       preloadImage: categoryId != null && heroImage.isNotEmpty
           ? (src: heroImage, srcset: null, sizes: null)
           : products.isEmpty || products.first.commerce.imageUrls.isEmpty
           ? null
-          : (src: products.first.commerce.imageUrls.first, srcset: null, sizes: null),
+          : switch (products.first.thumbnail) {
+              final copies? when copies.variants.isNotEmpty => (
+                src: copies.smallestUrl,
+                srcset: copies.srcset,
+                sizes: cardImageSizes(presentation.gridDensity),
+              ),
+              _ => (
+                src: products.first.commerce.imageUrls.first,
+                srcset: null,
+                sizes: null,
+              ),
+            },
       structuredData: [
         {
           '@context': 'https://schema.org',

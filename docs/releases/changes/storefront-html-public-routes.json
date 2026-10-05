@@ -7,12 +7,12 @@
   "platforms": [
     "web"
   ],
-  "title": "Las fichas de producto cargan mucho más rápido",
-  "summary": "Productos, categorías y búsqueda de vinabike.cl llegan armados desde el servidor: quien entra desde Google o un enlace ve la ficha en un segundo en un teléfono lento, con el precio y el stock del momento.",
+  "title": "Productos y catálogo cargan mucho más rápido",
+  "summary": "Productos, categorías y búsqueda de vinabike.cl llegan armados desde el servidor, con el precio y el stock del momento y las fotos de cada lista en el tamaño de su tarjeta: quien entra desde Google ve la ficha en un segundo en un teléfono lento.",
   "items": [
     "Al abrir un producto desde Google o un enlace, en un teléfono lento se ve en 1 segundo y se puede usar en unos 2; antes la tienda tardaba unos 20.",
     "Categorías, búsqueda y filtros funcionan sin JavaScript, se pueden compartir como enlace y el botón atrás vuelve a la misma lista.",
-    "El precio y el stock se leen en cada visita, y «Agregar» deja el producto en el mismo carrito de siempre."
+    "En las listas, cada foto baja en el tamaño de su tarjeta: en un teléfono pesa unos 20 KB en vez de 120 KB."
   ],
   "evidence": [
     {
@@ -25,7 +25,7 @@
     },
     {
       "path": ".github/workflows/firebase-hosting-store.yml",
-      "sha256": "cc2f8e062518cd9ed64898d6b9bcc4c840f1de1b867aa3976996cc23cde46332"
+      "sha256": "dce6988ee9dacd3c63f9f57b54b9ea23b89e2bbd38150f5ed862890a55ae25ec"
     },
     {
       "path": "scripts/releases/check_storefront_html_routes.mjs",
@@ -41,7 +41,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
-      "sha256": "fd5c21ba5a7bbb6d49aa90034fb2fc9375f8ec90bb6802644e5634cafb03f751"
+      "sha256": "78f6a6ac29663cb318e6535b7346f0ca1b5f198899a8924c47819294c1233d20"
     },
     {
       "path": "services/storefront_html/deploy_cloud_run.sh",
@@ -50,6 +50,38 @@
     {
       "path": "services/storefront_html/tool/source_id.sh",
       "sha256": "1194059d4c3b60294be6e159a5c812ea9fd97845783f18367edc4b96f40880b8"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/shared/models/product.dart",
+      "sha256": "55ca3c006d7ed343c9cc5ab5c3b23e3bf10e22bde0e0e8355fda242b3f3130d1"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/public_image_thumbnail.dart",
+      "sha256": "44e0d578b1e6b5c198f93ce3a4b433fe69d9d1cc3470501f38291a2d41839d36"
+    },
+    {
+      "path": "services/storefront_html/lib/src/catalog_page_model.dart",
+      "sha256": "beae27841ba1372e416bead85413d6fdfc85f2a1c891cc770b8e49197b03842b"
+    },
+    {
+      "path": "services/storefront_html/lib/src/catalog_page_view.dart",
+      "sha256": "9d8cd48efb92fa2ed3559ab69b10e4abe4096dfb7f134c7b3c8b99fe0f9314a3"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_card.dart",
+      "sha256": "894fa2d77d9ad2d611bdcc7e6cd55c1c9e8a723556fbe06d8483d3e09f091a31"
+    },
+    {
+      "path": "services/storefront_html/lib/src/public_reads.dart",
+      "sha256": "db2456a7d2f11d835feb985414798b4776345c802b19e014e9241e0110abe7e6"
+    },
+    {
+      "path": "scripts/generate_public_image_thumbnails.dart",
+      "sha256": "b3542bd2e5d2227fec3ca5a9526296cee41912c456214f80ad8e211a5dcb39ab"
+    },
+    {
+      "path": "supabase/migrations/20261005130000_public_card_thumbnails_and_page_by_id.sql",
+      "sha256": "82484e6dd8a647879201de3bb15e0a99da2ef671c33682242772138649c633c2"
     }
   ]
 }

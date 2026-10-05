@@ -502,6 +502,8 @@ class _Results extends StatelessComponent {
               ProductCard(
                 commerce: product.commerce,
                 path: product.path,
+                thumbnail: product.thumbnail,
+                sizes: cardImageSizes(page.presentation.gridDensity),
                 eager: i < 2,
                 first: i == 0,
               ),

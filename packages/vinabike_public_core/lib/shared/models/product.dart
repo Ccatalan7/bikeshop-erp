@@ -208,7 +208,9 @@ class Product {
     return Product(
       id: json['id'] as String,
       name: websiteName ?? json['name'] as String,
-      sku: json['sku'] as String,
+      // `products.sku` may be null; such a product keeps its UUID route
+      // (`buildPublicProductPath`) instead of failing every page it is on.
+      sku: json['sku'] as String? ?? '',
       barcode: json['barcode'] as String?,
       price: websitePrice ?? (json['price'] as num).toDouble(),
       cost: (json['cost'] as num?)?.toDouble() ?? 0,

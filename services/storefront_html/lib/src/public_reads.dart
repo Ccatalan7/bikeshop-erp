@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:vinabike_public_core/public_store/models/public_commerce_product_projection.dart';
 import 'package:vinabike_public_core/public_store/models/public_product_identity_columns.dart';
 
 import 'storefront_config.dart';
@@ -11,7 +12,7 @@ import 'storefront_config.dart';
 typedef ShellReads = ({Map<String, dynamic> shell, Object? payments});
 
 /// A product page: the shell and the page read
-/// (`20261004180000_public_storefront_page_reads.sql`), in one round trip.
+/// (`get_public_product_page_v2`, by SKU or by id), in one round trip.
 typedef ProductPageReads = ({
   Map<String, dynamic> shell,
   Object? payments,
@@ -50,20 +51,24 @@ class CatalogRequest {
 
 /// The listing (`get_public_products_faceted_v2`), its rows completed like
 /// the Flutter catalog completes them (`publicProductIdentityColumns` and the
-/// `product_brands` rows of their brands), its filters with the per-category
-/// counts (`get_public_product_facets_v2`) and the option names
+/// `product_brands` rows of their brands), the smaller copies of their card
+/// photos (`get_public_image_thumbnails_v1`), its filters with the
+/// per-category counts (`get_public_product_facets_v2`) and the option names
 /// (`get_public_spec_option_labels_v1`). The facets read takes longest and
-/// runs beside the other three.
+/// runs beside the others.
 typedef CatalogReads = ({
   List<Object?> products,
   List<Object?> brandRows,
+  List<Object?> thumbnails,
   List<Object?> facets,
   List<Object?> optionLabels,
 });
 
 abstract interface class PublicReads {
   Future<ShellReads> shell();
-  Future<ProductPageReads> productPage(String sku);
+  /// By [sku], or by [productId] for a product without one (its canonical
+  /// route is `/productos/<uuid>`).
+  Future<ProductPageReads> productPage({String? sku, String? productId});
   Future<CatalogReads> catalog(CatalogRequest request);
 
   /// A published product's row by id, for the old `/productos/<uuid>` links.
@@ -101,13 +106,14 @@ class SupabasePublicReads implements PublicReads {
   }
 
   @override
-  Future<ProductPageReads> productPage(String sku) async {
+  Future<ProductPageReads> productPage({String? sku, String? productId}) async {
     final results = await Future.wait([
       _shell(),
       _payments(),
-      _rpc('get_public_product_page_v1', {
+      _rpc('get_public_product_page_v2', {
         'p_tenant_id': config.tenantId,
-        'p_sku': sku,
+        'p_sku': ?sku,
+        'p_product_id': ?productId,
       }),
     ]);
     final page = results[2];
@@ -142,10 +148,17 @@ class SupabasePublicReads implements PublicReads {
       _rpc('get_public_product_facets_v2', filters),
       _rpc('get_public_spec_option_labels_v1', {'p_tenant_id': config.tenantId}),
     ]);
-    final listing = results[0]! as ({List<Object?> rows, List<Object?> brands});
+    final listing =
+        results[0]!
+            as ({
+              List<Object?> rows,
+              List<Object?> brands,
+              List<Object?> thumbnails,
+            });
     return (
       products: listing.rows,
       brandRows: listing.brands,
+      thumbnails: listing.thumbnails,
       facets: list(results[1]),
       optionLabels: list(results[2]),
     );
@@ -175,22 +188,38 @@ class SupabasePublicReads implements PublicReads {
     return text.isEmpty ? null : text;
   }
 
-  /// A listing's rows with their public identity columns, and the brand rows
-  /// their cards are named from. Like Flutter, a failed completion keeps the
-  /// rows as the listing returned them.
-  Future<({List<Object?> rows, List<Object?> brands})> _completeRows(
-    List<Object?> rows,
-  ) async {
+  /// A listing's rows with their public identity columns, the brand rows
+  /// their cards are named from and the smaller copies of their card photos.
+  /// Like Flutter, a failed completion keeps the rows as the listing returned
+  /// them; without copies a card shows the large photo.
+  Future<
+    ({List<Object?> rows, List<Object?> brands, List<Object?> thumbnails})
+  >
+  _completeRows(List<Object?> rows) async {
     String ids(Iterable<Object?> values) => values
         .map((value) => value?.toString().trim() ?? '')
         .where(_uuid.hasMatch)
         .toSet()
         .join(',');
     final productIds = ids(rows.map((row) => row is Map ? row['id'] : null));
-    if (productIds.isEmpty) return (rows: rows, brands: const <Object?>[]);
+    if (productIds.isEmpty) {
+      return (
+        rows: rows,
+        brands: const <Object?>[],
+        thumbnails: const <Object?>[],
+      );
+    }
     final brandIds = ids(rows.map((row) => row is Map ? row['brand_id'] : null));
-    // Two layers, each falling back on its own, as in Flutter: a failed brand
-    // read keeps the commercial titles, and the other way round.
+    // The identity columns carry no photo: the card's is the listing row's.
+    final photos = {
+      for (final row in rows)
+        if (row is Map)
+          ...PublicCommerceProductProjection.fromJson(
+            Map<String, dynamic>.from(row),
+          ).imageUrls.take(1),
+    }.toList();
+    // Each layer falls back on its own, as in Flutter: a failed brand read
+    // keeps the commercial titles, and the other way round.
     Future<List<Object?>> layer(String name, Future<List<Object?>> read) =>
         read.catchError((Object error) {
           stderr.writeln('listing $name unavailable: $error');
@@ -216,6 +245,16 @@ class SupabasePublicReads implements PublicReads {
             'is_active': 'eq.true',
           }),
         ),
+      if (photos.isEmpty)
+        Future.value(const <Object?>[])
+      else
+        layer(
+          'thumbnails',
+          _rpc('get_public_image_thumbnails_v1', {
+            'p_tenant_id': config.tenantId,
+            'p_urls': photos,
+          }).then((value) => value is List ? value : const <Object?>[]),
+        ),
     ]);
     final identity = {
       for (final row in completed[0])
@@ -227,6 +266,7 @@ class SupabasePublicReads implements PublicReads {
           if (row is Map) {...row, ...?identity[row['id']?.toString()]} else row,
       ],
       brands: completed[1],
+      thumbnails: completed[2],
     );
   }
 

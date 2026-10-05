@@ -142,6 +142,7 @@ class _FakeReads implements PublicReads {
     Map<String, dynamic>? shell,
     this.products = const [],
     this.brandRows = const [],
+    this.thumbnails = const [],
     this.facets = const [],
     this.aliases = const {},
     this.byId = const {},
@@ -152,6 +153,7 @@ class _FakeReads implements PublicReads {
   final Map<String, dynamic>? shellJson;
   final List<Object?> products;
   final List<Object?> brandRows;
+  final List<Object?> thumbnails;
   final List<Object?> facets;
   final Map<String, String> aliases;
   final Map<String, Map<String, dynamic>> byId;
@@ -165,8 +167,8 @@ class _FakeReads implements PublicReads {
   }
 
   @override
-  Future<ProductPageReads> productPage(String sku) async {
-    requested.add(sku);
+  Future<ProductPageReads> productPage({String? sku, String? productId}) async {
+    requested.add(sku ?? 'id:$productId');
     if (fail) throw PublicReadException('down');
     return (shell: shellJson ?? _shell(), payments: null, page: page);
   }
@@ -178,6 +180,7 @@ class _FakeReads implements PublicReads {
     return (
       products: products,
       brandRows: brandRows,
+      thumbnails: thumbnails,
       facets: facets,
       optionLabels: const <Object?>[],
     );
@@ -859,5 +862,78 @@ void main() {
       }).source,
       isNull,
     );
+  });
+
+  test('a product without a SKU is drawn at its UUID route', () async {
+    const id = '6f1d2a3e-0000-4000-8000-000000000912';
+    final product = {..._product(), 'id': id, 'sku': null};
+    final fake = _FakeReads(page: _page(product: product), byId: {id: product});
+    final response = await _get(fake, '/productos/$id');
+    expect(response.statusCode, 200);
+    expect(fake.requested, ['id:$id']);
+    final html = await response.readAsString();
+    expect(html, contains('href="https://vinabike.cl/productos/$id" rel="canonical"'));
+
+    final singular = await _get(_FakeReads(byId: {id: product}), '/producto/$id');
+    expect(singular.statusCode, 301);
+    expect(singular.headers['location'], '/productos/$id');
+  });
+
+  group('card photos', () {
+    const photo = 'https://example.invalid/h911.jpg';
+    final facets = [
+      {'facet_key': 'summary', 'item_count': 1},
+    ];
+    Future<String> page({List<Object?> thumbnails = const []}) async {
+      final fake = _FakeReads(
+        products: [
+          {..._product(), 'total_count': 1},
+        ],
+        thumbnails: thumbnails,
+        facets: facets,
+      );
+      return (await _get(fake, '/productos')).readAsString();
+    }
+
+    test('offer the smaller copies and preload the same candidates', () async {
+      final html = await page(
+        thumbnails: [
+          {
+            'source_url': photo,
+            'source_width': 1200,
+            'source_height': 900,
+            'variants': [
+              {'width': 800, 'height': 600, 'url': 'https://example.invalid/t-800.jpg'},
+              {'width': 400, 'height': 300, 'url': 'https://example.invalid/t-400.jpg'},
+            ],
+          },
+        ],
+      );
+      final card = RegExp(
+        r'<li class="card">.*?</li>',
+        dotAll: true,
+      ).firstMatch(html)!.group(0)!;
+      const srcset =
+          'https://example.invalid/t-400.jpg 400w, '
+          'https://example.invalid/t-800.jpg 800w, $photo 1200w';
+      expect(card, contains('src="https://example.invalid/t-400.jpg"'));
+      expect(card, contains('srcset="$srcset"'));
+      expect(card, contains('sizes="(max-width: 760px) 46vw, (max-width: 1180px) 30vw, 300px"'));
+      final preload = RegExp(r'<link[^>]*rel="preload"[^>]*as="image"[^>]*>')
+          .firstMatch(html)!
+          .group(0)!;
+      expect(preload, contains('imagesrcset="$srcset"'));
+      expect(preload, contains('imagesizes='));
+    });
+
+    test('without copies a card keeps the photo', () async {
+      final html = await page();
+      final card = RegExp(
+        r'<li class="card">.*?</li>',
+        dotAll: true,
+      ).firstMatch(html)!.group(0)!;
+      expect(card, contains('src="$photo"'));
+      expect(card, isNot(contains('srcset')));
+    });
   });
 }

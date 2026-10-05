@@ -212,8 +212,10 @@ class _Route {
 
   /// `/productos/<slug>/<sku>`. Another slug for the same SKU, or an old path
   /// kept in `product_url_aliases`, answers with a permanent redirect.
-  Future<Response> product(String slug, String sku) async {
-    final data = await reads.productPage(sku);
+  Future<Response> product(String slug, String sku) async =>
+      _productPage(await reads.productPage(sku: sku));
+
+  Future<Response> _productPage(ProductPageReads data) async {
     final context = _context((shell: data.shell, payments: data.payments));
     if (!context.shell.sitePublished) return _unpublished(context);
     final read = data.page;
@@ -239,6 +241,10 @@ class _Route {
     String? target;
     if (_uuid.hasMatch(id)) {
       target = await _productPath(id);
+      // A product without a SKU lives at its UUID route: it is drawn here.
+      if (target != null && _samePath(target, path)) {
+        return _productPage(await reads.productPage(productId: id));
+      }
     }
     target ??= await _aliasTarget(path);
     if (target != null && !_samePath(target, path)) {

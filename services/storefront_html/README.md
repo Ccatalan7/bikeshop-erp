@@ -19,10 +19,18 @@ Flutter.
   no dependen una de otra: `get_public_storefront_shell_v1` (ajustes, menús,
   páginas, categorías con descripción, imagen y orden) y
   `get_public_checkout_capabilities`; la ficha con
-  `get_public_product_page_v1`; el catálogo con
+  `get_public_product_page_v2` (por SKU, o por id para un producto sin SKU,
+  que vive en `/productos/<uuid>`); el catálogo con
   `get_public_products_faceted_v2`, `get_public_product_facets_v2` (también los
   conteos por categoría y «Todas», como Flutter) y
-  `get_public_spec_option_labels_v1`. No guarda nada entre visitas.
+  `get_public_spec_option_labels_v1`, y las copias de 400 y 800 px de las fotos
+  de sus tarjetas con `get_public_image_thumbnails_v1`, en la misma vuelta que
+  completa las filas. No guarda nada entre visitas.
+- **Fotos de tarjeta:** cada tarjeta ofrece en `srcset` las copias que hizo
+  `scripts/generate_public_image_thumbnails.dart` (corre en cada publicación
+  de la tienda y a mano para rellenar) y la foto original; una foto que el
+  trabajo todavía no copió se muestra grande. La precarga de la primera
+  tarjeta lleva los mismos candidatos, para que se baje una sola vez.
 - **Reglas:** ninguna propia. Lo que decide qué categoría abre una URL, qué
   filtros técnicos se ofrecen, títulos y descripciones, `noindex` y canónica,
   el nodo `BikeStore`, los medios de pago del pie y el texto SEO de la ficha
@@ -103,7 +111,10 @@ publicación de la tienda (`scripts/releases/check_storefront_html_routes.mjs`)
 falla si Cloud Run corre otra fuente que la del commit que publica: el núcleo
 lo comparten la tienda Flutter, que se publica sola con cada push, y este
 servidor, que no; sin republicarlo, las dos tiendas dejan de decir lo mismo.
-Orden: commit, `deploy_cloud_run.sh`, push.
+Orden: commit, `deploy_cloud_run.sh`, push. Y nunca mientras una
+publicación anterior de la tienda no haya pasado su revisión del servidor:
+esa revisión compara Cloud Run con *su* commit, y fallaría con el servidor
+nuevo (2026-10-05).
 
 **Costo: tiene que ser gratis** (requisito del dueño, 2026-10-04). Por eso
 `min-instances 0`: Cloud Run cobra sólo mientras responde, dentro de su cuota

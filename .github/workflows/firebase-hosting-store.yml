@@ -20,6 +20,7 @@ on:
       - "analysis_options.yaml"
       - "firebase.json"
       - "scripts/generate_product_seo_snapshots.dart"
+      - "scripts/generate_public_image_thumbnails.dart"
       - "scripts/storefront_instant_page/**"
       - "scripts/generated_product_redirects.json"
       - "scripts/check_storefront_bundle_budget.sh"
@@ -290,6 +291,41 @@ jobs:
         run: >-
           node scripts/releases/storefront_publication_workflow.mjs
           complete-success
+
+  # The 400/800 px copies of new or changed card photos, which the HTML
+  # storefront offers in each card's srcset. Apart from the publication: a
+  # photo without copies keeps the large photo on its card.
+  card_thumbnails:
+    needs:
+      - publication_context
+      - integrity
+    if: >-
+      ${{
+        needs.publication_context.outputs.should_run == 'true' &&
+        needs.integrity.result == 'success'
+      }}
+    runs-on: ubuntu-latest
+    environment: Production
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.38.5"
+          channel: "stable"
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Make the copies of new or changed card photos
+        env:
+          SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+          SUPABASE_URL: https://xzdvtzdqjeyqxnkqprtf.supabase.co
+        run: >-
+          dart run scripts/generate_public_image_thumbnails.dart
+          --tenant-id 5443b130-cc28-45af-a420-cd500b288890
 
   publication_finalize:
     needs:
