@@ -366,14 +366,17 @@ void main(List<String> args) async {
   final canonicalPathByProductId = buildSeoProductCanonicalPathLedger(
     publishedProducts: publishedProductOwners,
   );
+  final serverRoutes = await readSeoServerRenderedRoutes(
+    File(parsed['firebase-config'] ?? 'firebase.json'),
+  );
   final outDir = Directory(pathJoin(buildDir.path, 'productos'));
   // This directory is generated output. Recreate it so a product removed from
   // the current public visibility policy cannot survive as a stale soft-404
-  // snapshot or sitemap destination from an earlier build.
+  // snapshot or sitemap destination from an earlier build. Nothing is written
+  // under a path the HTML server owns: Hosting would serve the file instead.
   if (outDir.existsSync()) {
     outDir.deleteSync(recursive: true);
   }
-  outDir.createSync(recursive: true);
 
   final instantTheme = SeoInstantPageTheme.fromSettings(
     settings,
@@ -412,8 +415,15 @@ void main(List<String> args) async {
       'ℹ️  Portada sin instantánea: su primer bloque no se dibuja igual',
     );
   }
+  String productPathOf(Map<String, dynamic> product) =>
+      canonicalPathByProductId[(product['id'] ?? '').toString().trim()] ??
+      _publicProductPath(product);
   final technicalSpecsByProductId = await fetchSeoSnapshotTechnicalSpecs(
-    productIds: products.map((product) => (product['id'] ?? '').toString()),
+    // The technical sheet only feeds the product snapshot; the HTML server
+    // reads it per visit for the products it answers.
+    productIds: products
+        .where((product) => !serverRoutes.owns(productPathOf(product)))
+        .map((product) => (product['id'] ?? '').toString()),
     loadOne: (productId) => _fetchPublicProductTechnicalSpecs(
       supabaseUrl: supabaseUrl,
       tenantId: tenantId,
@@ -424,11 +434,13 @@ void main(List<String> args) async {
   stdout.writeln(
     '✅ Fichas técnicas: '
     '${technicalSpecsByProductId.values.where((rows) => rows.isNotEmpty).length}'
-    ' de ${products.length} productos con datos publicados',
+    ' de ${technicalSpecsByProductId.length} productos con instantánea '
+    'con datos publicados',
   );
 
   final productHtmlById = <String, String>{};
   var written = 0;
+  var serverRenderedProducts = 0;
   for (final product in products) {
     final productCategoryId = (product['category_id'] ?? '').toString().trim();
     final commerce = projectSeoSnapshotCommerceProduct(
@@ -452,8 +464,7 @@ void main(List<String> args) async {
     final imageUrls = commerce.imageUrls;
     final imageUrl = imageUrls.isEmpty ? '' : imageUrls.first;
 
-    final productPath =
-        canonicalPathByProductId[id] ?? _publicProductPath(product);
+    final productPath = productPathOf(product);
     final productUrl = _joinUrl(storeUrl, productPath);
 
     final seoTitleOverride =
@@ -485,6 +496,26 @@ void main(List<String> args) async {
     );
     final title = seoCopy.title;
     final description = seoCopy.description;
+
+    if (serverRoutes.owns(productPath)) {
+      // The HTML server answers the product and its old `/productos/<uuid>`
+      // URL. An alias outside its routes (`/tienda/producto/…`) still sends
+      // the visitor there through a light noindex page that names it.
+      productHtmlById[id] = _buildProductHtml(
+        baseHtml: baseHtml,
+        title: title.isNotEmpty ? title : productName,
+        description: description.isNotEmpty
+            ? description
+            : _truncate(fallbackSeoDescription, 320),
+        canonicalUrl: productUrl,
+        ogImageUrl: imageUrl,
+        jsonLdProduct: null,
+        fallbackHtml: '',
+        isProduct: true,
+      );
+      serverRenderedProducts++;
+      continue;
+    }
 
     final seoHtml = _buildProductHtml(
       baseHtml: baseHtml,
@@ -553,7 +584,8 @@ void main(List<String> args) async {
     // Keep old indexed/shared UUID URLs crawlable while signaling the clean
     // product URL as canonical inside the generated HTML.
     final legacyOutFile = File(pathJoin(outDir.path, id));
-    if (legacyOutFile.path != canonicalOutFile.path) {
+    if (legacyOutFile.path != canonicalOutFile.path &&
+        !serverRoutes.owns('/productos/$id')) {
       await legacyOutFile.writeAsString(
         _buildLegacyProductRedirectHtml(
           html: html,
@@ -576,6 +608,8 @@ void main(List<String> args) async {
   );
   var aliasSnapshotsWritten = 0;
   for (final redirect in redirectAliases) {
+    // Hosting's exact 301 rules and the HTML server answer these.
+    if (serverRoutes.owns(redirect.aliasPath)) continue;
     final html = productHtmlById[redirect.productId];
     final canonicalPath = canonicalPathByProductId[redirect.productId];
     if (html == null || canonicalPath == null) continue;
@@ -608,34 +642,41 @@ void main(List<String> args) async {
     presentation: catalogPresentation,
     storeName: storeName,
   );
-  await File(pathJoin(outDir.path, 'index.html')).writeAsString(
-    _buildCategoryHtml(
-      baseHtml: baseHtml,
-      title: catalogTitle,
-      description: catalogDescription,
-      canonicalUrl: catalogUrl,
-      ogImageUrl: catalogPresentation.socialImageUrl,
-      allowIndexing: catalogIndexable,
-      jsonLd: _buildCatalogJsonLd(
-        products: listingProducts,
-        storeUrl: storeUrl,
-        storeName: storeName,
-        catalogUrl: catalogUrl,
-        description: catalogDescription,
-        resolvedBrandNamesById: resolvedBrandNamesById,
-      ),
-      fallbackHtml: _buildCatalogFallbackHtml(
-        products: listingProducts,
+  if (!serverRoutes.owns('/productos')) {
+    outDir.createSync(recursive: true);
+    await File(pathJoin(outDir.path, 'index.html')).writeAsString(
+      _buildCategoryHtml(
+        baseHtml: baseHtml,
         title: catalogTitle,
         description: catalogDescription,
+        canonicalUrl: catalogUrl,
+        ogImageUrl: catalogPresentation.socialImageUrl,
+        allowIndexing: catalogIndexable,
+        jsonLd: _buildCatalogJsonLd(
+          products: listingProducts,
+          storeUrl: storeUrl,
+          storeName: storeName,
+          catalogUrl: catalogUrl,
+          description: catalogDescription,
+          resolvedBrandNamesById: resolvedBrandNamesById,
+        ),
+        fallbackHtml: _buildCatalogFallbackHtml(
+          products: listingProducts,
+          title: catalogTitle,
+          description: catalogDescription,
+        ),
       ),
-    ),
-  );
+    );
+  }
   final categoryOutDir = Directory(pathJoin(outDir.path, 'categoria'));
-  categoryOutDir.createSync(recursive: true);
   var categoryPagesWritten = 0;
   var categoryAliasPagesWritten = 0;
+  var serverRenderedCategories = 0;
   for (final category in categories) {
+    if (serverRoutes.owns(category.canonicalPath)) {
+      serverRenderedCategories++;
+      continue;
+    }
     final categoryUrl = _joinUrl(storeUrl, category.canonicalPath);
     final title = _buildCategorySeoTitle(
       category: category,
@@ -674,11 +715,14 @@ void main(List<String> args) async {
       ),
       preloadImageUrl: category.imageUrl,
     );
+    categoryOutDir.createSync(recursive: true);
     await File(pathJoin(categoryOutDir.path, category.slug))
         .writeAsString(html);
     categoryPagesWritten++;
   }
   for (final redirect in categoryRedirectAliases) {
+    // Hosting's exact 301 rules and the HTML server answer these.
+    if (serverRoutes.owns(redirect.aliasPath)) continue;
     final categoryUrl = _joinUrl(storeUrl, redirect.canonicalPath);
     final title = '${redirect.name} | $storeName';
     final description = redirect.description.isNotEmpty
@@ -709,6 +753,13 @@ void main(List<String> args) async {
   }
 
   stdout.writeln('✅ Product SEO snapshots generated: $written');
+  if (!serverRoutes.isEmpty) {
+    stdout.writeln(
+      '✅ Answered by the HTML server (no snapshot): '
+      '$serverRenderedProducts products, $serverRenderedCategories categories'
+      '${serverRoutes.owns('/productos') ? ', /productos' : ''}',
+    );
+  }
   stdout.writeln('✅ Product alias snapshots generated: $aliasSnapshotsWritten');
   stdout.writeln('✅ Category SEO pages generated: $categoryPagesWritten');
   stdout.writeln(
@@ -774,6 +825,7 @@ void main(List<String> args) async {
     staticTrustPagePaths: staticTrustPagePaths,
     expectedLocalBusinessIdentity:
         buildExpectedLocalBusinessIdentity(settings, storeUrl: storeUrl),
+    serverRoutes: serverRoutes,
   );
   stdout.writeln('✅ Generated SEO artifact contract validated');
   await assertSeoOwnerSourceSnapshotIsCurrent(
@@ -5410,6 +5462,7 @@ Future<void> validateGeneratedSeoArtifacts({
   required String storeUrl,
   required Set<String> staticTrustPagePaths,
   Map<String, String>? expectedLocalBusinessIdentity,
+  SeoServerRenderedRoutes serverRoutes = SeoServerRenderedRoutes.none,
 }) async {
   final files = <String, File>{};
 
@@ -5433,6 +5486,24 @@ Future<void> validateGeneratedSeoArtifacts({
   }
 
   final failures = <String>[];
+  if (!serverRoutes.isEmpty && buildDir.existsSync()) {
+    // Hosting serves a static file before any rewrite: one left under a
+    // server route would answer instead of the live page, frozen.
+    final root = buildDir.absolute.path;
+    for (final entity in buildDir.listSync(recursive: true)) {
+      if (entity is! File) continue;
+      final publicPath = entity.absolute.path
+          .substring(root.length)
+          .replaceAll(Platform.pathSeparator, '/')
+          .replaceFirst(RegExp(r'/index\.html$'), '');
+      if (serverRoutes.owns(publicPath.isEmpty ? '/' : publicPath)) {
+        failures.add(
+          '$publicPath es un archivo estático en una ruta del servidor HTML; '
+          'Hosting lo serviría en vez de la página.',
+        );
+      }
+    }
+  }
   final normalizedStoreUrl = storeUrl.replaceAll(RegExp(r'/+$'), '');
   final normalizedStoreOrigin = _urlOrigin(normalizedStoreUrl);
   final sitemapFile = File(pathJoin(buildDir.path, 'sitemap.xml'));
@@ -5458,6 +5529,9 @@ Future<void> validateGeneratedSeoArtifacts({
       }
       final encodedPath = value.substring(normalizedStoreOrigin.length);
       final path = encodedPath.isEmpty ? '/' : encodedPath;
+      // The HTML server builds these per visit; their canonical and robots
+      // are its own contract (`services/storefront_html`).
+      if (serverRoutes.owns(path)) continue;
       final file = _snapshotFileForPublicPath(buildDir, path);
       if (!file.existsSync()) {
         failures.add('$path aparece en sitemap.xml sin snapshot generado.');
@@ -5574,7 +5648,7 @@ Future<void> validateGeneratedSeoArtifacts({
             linkedPath = encodedPath.isEmpty ? '/' : encodedPath;
           }
         }
-        if (linkedPath == null) continue;
+        if (linkedPath == null || serverRoutes.owns(linkedPath)) continue;
         final linkedFile = _snapshotFileForPublicPath(buildDir, linkedPath);
         if (!linkedFile.existsSync()) {
           failures.add(
@@ -5824,6 +5898,98 @@ String _unescapeXml(String text) {
       .replaceAll('&gt;', '>')
       .replaceAll('&lt;', '<')
       .replaceAll('&amp;', '&');
+}
+
+/// The Cloud Run service that answers store routes in HTML
+/// (`services/storefront_html`).
+const seoStorefrontHtmlServiceId = 'storefront-html';
+
+/// Public paths the store target of `firebase.json` rewrites to the HTML
+/// server.
+///
+/// Hosting serves a static file before any rewrite, so the build writes no
+/// snapshot under these paths. `firebase.json` is the only list: removing a
+/// rewrite there brings the snapshots back on the next build, which is how a
+/// phase of `docs/architecture/storefront-html-migration-plan.md` is
+/// reverted.
+class SeoServerRenderedRoutes {
+  const SeoServerRenderedRoutes._(this.exactPaths, this.prefixes);
+
+  static const none = SeoServerRenderedRoutes._({}, {});
+
+  /// Rewrite sources without wildcards (`/productos`).
+  final Set<String> exactPaths;
+
+  /// Sources of the form `<prefix>/**`, kept as `<prefix>/`.
+  final Set<String> prefixes;
+
+  bool get isEmpty => exactPaths.isEmpty && prefixes.isEmpty;
+
+  bool owns(String publicPath) {
+    final path = publicPath.length > 1 && publicPath.endsWith('/')
+        ? publicPath.replaceFirst(RegExp(r'/+$'), '')
+        : publicPath;
+    if (exactPaths.contains(path)) return true;
+    return prefixes.any(path.startsWith);
+  }
+
+  /// Reads the `run` rewrites to [seoStorefrontHtmlServiceId] of the store
+  /// target. A source this class cannot read exactly fails the build rather
+  /// than guessing which snapshots to leave out.
+  factory SeoServerRenderedRoutes.fromFirebaseConfig(Object? config) {
+    final hosting = config is Map ? config['hosting'] : null;
+    final store = hosting is List
+        ? hosting.whereType<Map>().where((entry) => entry['target'] == 'store')
+        : const <Map>[];
+    if (store.length != 1) {
+      throw const FormatException(
+        'firebase.json debe declarar exactamente un target de hosting "store".',
+      );
+    }
+    final exact = <String>{};
+    final prefixes = <String>{};
+    final rewrites = store.single['rewrites'];
+    for (final rewrite in rewrites is List ? rewrites : const []) {
+      if (rewrite is! Map) continue;
+      final run = rewrite['run'];
+      if (run is! Map || run['serviceId'] != seoStorefrontHtmlServiceId) {
+        continue;
+      }
+      final source = rewrite['source'];
+      if (source is! String || !source.startsWith('/')) {
+        throw FormatException(
+          'La reescritura a $seoStorefrontHtmlServiceId debe usar "source" '
+          'con una ruta: $rewrite',
+        );
+      }
+      if (source.endsWith('/**') &&
+          !source.substring(0, source.length - 3).contains('*')) {
+        prefixes.add(source.substring(0, source.length - 2));
+      } else if (!source.contains('*') && !source.contains('{')) {
+        exact.add(source);
+      } else {
+        throw FormatException(
+          'No sé qué rutas cubre la reescritura "$source" a '
+          '$seoStorefrontHtmlServiceId; usa una ruta exacta o "<ruta>/**".',
+        );
+      }
+    }
+    return SeoServerRenderedRoutes._(
+      Set.unmodifiable(exact),
+      Set.unmodifiable(prefixes),
+    );
+  }
+}
+
+Future<SeoServerRenderedRoutes> readSeoServerRenderedRoutes(File file) async {
+  if (!file.existsSync()) {
+    throw StateError(
+      'No existe la configuración Firebase requerida: ${file.path}.',
+    );
+  }
+  return SeoServerRenderedRoutes.fromFirebaseConfig(
+    jsonDecode(await file.readAsString()),
+  );
 }
 
 File _snapshotFileForPublicPath(Directory buildDir, String publicPath) {

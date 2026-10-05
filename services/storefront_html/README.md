@@ -3,10 +3,11 @@
 La tienda pública armada como HTML en el servidor, una página por visita, con el
 mismo código Dart que el ERP (`packages/vinabike_public_core`). Fases 0 y 1 de
 `docs/architecture/storefront-html-migration-plan.md`: fichas de producto,
-`/productos` (con búsqueda y filtros) y las páginas de categoría, hoy en una
-ruta oculta (`/_html/...`) junto a las páginas Flutter que copian, con
-`noindex`. Las mismas páginas responden sin el prefijo el día que
-`firebase.json` les mande las rutas públicas.
+`/productos` (con búsqueda y filtros) y las páginas de categoría. Desde el
+2026-10-05 responde las rutas públicas que `firebase.json` le reescribe
+(`/productos`, `/productos/**`, `/producto/**`) y una copia con `noindex` en
+`/_html/...`. Portada, páginas del editor, carrito, checkout y portal siguen en
+Flutter.
 
 - **Rutas** (`storefront_handler.dart`): `/productos`,
   `/productos/categoria/<slug>`, `/productos/<slug>/<sku>`; las viejas
@@ -92,6 +93,17 @@ página antes.
 ```bash
 bash services/storefront_html/deploy_cloud_run.sh
 ```
+
+**Se publica desde un commit, y cada cambio del núcleo lo vuelve a pedir.**
+El script se niega si hay cambios sin commit en lo que compila la imagen
+(`tool/source_id.sh`: `lib` y `pubspec.yaml` del núcleo; `bin`, `lib`,
+`pubspec.*` y `Dockerfile` de este servicio) y estampa ese nombre en
+`STOREFRONT_SOURCE`; cada respuesta lo trae en `x-storefront-source`. La
+publicación de la tienda (`scripts/releases/check_storefront_html_routes.mjs`)
+falla si Cloud Run corre otra fuente que la del commit que publica: el núcleo
+lo comparten la tienda Flutter, que se publica sola con cada push, y este
+servidor, que no; sin republicarlo, las dos tiendas dejan de decir lo mismo.
+Orden: commit, `deploy_cloud_run.sh`, push.
 
 **Costo: tiene que ser gratis** (requisito del dueño, 2026-10-04). Por eso
 `min-instances 0`: Cloud Run cobra sólo mientras responde, dentro de su cuota

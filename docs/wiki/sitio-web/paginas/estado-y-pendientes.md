@@ -4,7 +4,7 @@ resumen: qué está en vivo hoy, qué falta y de quién depende — la lista de 
 fuentes: [repositorio, consolas-google, google-search-central]
 archivos: [supabase/migrations/20260728223000_harden_website_navigation_seed.sql, supabase/migrations/20260728230000_add_storefront_publication_contract.sql, docs/architecture/storefront-instant-page.md, docs/architecture/storefront-html-migration-plan.md]
 tablas: [website_navigation, website_settings, products, online_shipping_rate_tiers]
-revisado: 2026-10-04
+revisado: 2026-10-05
 ---
 
 # Estado y pendientes
@@ -31,8 +31,6 @@ Se actualiza cada vez que algo cambia de estado; cada línea con su fecha.
 | 2026-09-24 | Crear la GitHub App (APP_ID, INSTALLATION_ID, llave privada) | sin ella «Publicar» del editor no puede disparar el build ([publicacion](publicacion-y-despliegue.md)) |
 | 2026-09-24 | Marcar `contact` como evento clave en GA4 | es una configuración de la cuenta |
 | 2026-09-23 | Reconectar la cuenta Google del ERP con el permiso de Search Console | el centro SEO no ve Google hasta entonces |
-| 2026-10-05 | **Abrir las rutas públicas a la tienda HTML** (fase 1): aprobar el costo, centavos al mes de salida de datos de Cloud Run; Cloud Run y Hosting quedan en su cuota gratis | regla del dueño: costo antes de encender (`storefront-html-migration-plan.md`, «Costo de abrir las rutas») |
-| 2026-10-05 | **Miniaturas de las fotos de tarjeta** para el LCP del catálogo: transformación de Supabase (~US$5–6 al mes) o guardar una de ~400 px al subir cada foto (gratis, más trabajo) | `/productos` y categorías con fotos pesadas quedan en LCP ~4,3 s en celular lento ([rendimiento](rendimiento.md)) |
 
 ## Lo puede hacer un agente
 
@@ -60,7 +58,8 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 | 2026-10-08 | Leer el resultado de la tarea `vinabike-store-ready-review` | [rendimiento](rendimiento.md) |
 | 2026-10-04 | **Fase 0 de la migración a HTML:** anotar el costo mensual real de Cloud Run (`storefront-html`) después de unos días; lo demás está hecho y medido ([rendimiento](rendimiento.md)) | `docs/architecture/storefront-html-migration-plan.md` |
 | 2026-10-05 | Precalcular los valores técnicos de las facetas (`spec_public_facet_values_internal_v1`, ~270 ms de los ~410 ms de `get_public_product_facets_v2` en cada visita al catálogo, Flutter y HTML) | [rendimiento](rendimiento.md) |
-| 2026-10-05 | La instantánea Flutter de las 5 fichas con espacio en el SKU sirve la portada (título y canónica de la portada); se arregla sola al abrir las rutas HTML, o en el generador si eso no ocurre | [rutas](rutas-y-navegacion.md) |
+| 2026-10-05 | **Miniaturas de las fotos de tarjeta** (el dueño eligió la opción gratis): guardar una de ~400 px junto a la de 1.200 px y generar una vez las ~1.300 que existen; `/productos` y las categorías con fotos pesadas quedan en LCP ~4,3 s en celular lento | [rendimiento](rendimiento.md) |
+| 2026-10-05 | Ficha de un producto publicado **sin SKU**: su canónica es `/productos/<uuid>` y el servidor HTML la lee por SKU, así que daría 404. Hoy 0 de 1.682 (el ERP genera el SKU); va con la lectura por id en la migración de las miniaturas | `storefront-html-migration-plan.md` («Rutas abiertas») |
 | 2026-10-05 | Regla de limpieza de imágenes viejas en Artifact Registry (cada despliegue del servidor HTML guarda 5,5 MB; la cuota gratis es 0,5 GB) | `storefront-html-migration-plan.md` |
 | 2026-10-04 | Paridad latente de la ficha técnica: el generador de snapshots arma la identidad con `color`, `size`, `material` y `weight` leídos de `products`, y la página pública no los recibe; un producto que los tenga mostraría en el snapshot filas que la página no. 0 productos afectados hoy | [datos-estructurados](datos-estructurados.md) |
 
@@ -68,6 +67,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 
 | Fecha | Qué | Página |
 |---|---|---|
+| 2026-10-05 | **Rutas públicas abiertas a la tienda HTML** con el sí del dueño al costo (alerta de presupuesto de CLP 4.800 ≈ US$5): `/productos`, categorías, fichas y `/producto/<uuid>` las responde Cloud Run; el build deja de escribir sus instantáneas (`SeoServerRenderedRoutes`) y la publicación de la tienda revisa el servidor en los dos orígenes, incluida su fuente (`check_storefront_html_routes.mjs`). Las 5 fichas con espacio en el SKU, que la instantánea servía con la portada, quedan bien | [rutas](rutas-y-navegacion.md) |
 | 2026-10-05 | **Fase 1 de la migración a HTML** en la ruta oculta: `/productos`, categorías y fichas con encabezado, pie, carrito compatible con Flutter, GA4/píxel, `noindex`/canónica/301/404; las 1.290 fichas comparables idénticas a la instantánea Flutter (las otras 5 son un defecto de la instantánea) y las 12 colecciones salvo el orden de su lista; revisión de Codex (1 P1, 4 P2, 1 P3) corregida con pruebas. Requisitos de la fase 0 resueltos: ficha técnica en una pasada (`20261005090000`), `BikeStore`, menús, submenús, set availability en la lectura | `docs/architecture/storefront-html-migration-plan.md` |
 | 2026-10-05 | Filtros técnicos `spec.<clave>` en la URL ahora son `noindex` también en Flutter; categorías con nombre repetido abren igual en Flutter y HTML (regla en el núcleo) | [catalogo](catalogo-y-fichas.md) |
 | 2026-10-04 | Servidor HTML en Cloud Run (`storefront-html`, `southamerica-east1`) detrás de la reescritura `/_html/**` del target `store`. El dueño instaló `gcloud`, inició sesión y dio `roles/run.builder` a la cuenta de compilación | [mapa](mapa-del-sistema.md) |

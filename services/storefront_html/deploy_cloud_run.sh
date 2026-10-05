@@ -22,6 +22,11 @@ if ! command -v gcloud >/dev/null 2>&1; then
   exit 2
 fi
 
+# The store publication checks that Cloud Run answers with the source of the
+# commit it publishes; this stops on uncommitted changes in the service or
+# the core.
+SOURCE="$("$REPO/services/storefront_html/tool/source_id.sh")"
+
 STAGE="$(mktemp -d "${TMPDIR:-/tmp}/storefront-html-XXXXXX")"
 cleanup() { rm -r "$STAGE"; }
 trap cleanup EXIT
@@ -50,9 +55,10 @@ gcloud run deploy "$SERVICE" \
   --min-instances 0 \
   --max-instances 4 \
   --cpu-boost \
-  --set-env-vars "SUPABASE_PUBLISHABLE_KEY=$KEY" \
+  --set-env-vars "SUPABASE_PUBLISHABLE_KEY=$KEY,STOREFRONT_SOURCE=$SOURCE" \
   --labels "app=vinabike,part=storefront-html" \
   --quiet
 
 gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" \
   --format 'value(status.url)'
+echo "Fuente publicada: $SOURCE"

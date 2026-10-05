@@ -27,6 +27,8 @@ on:
       - "scripts/write_storefront_release_evidence.sh"
       - "scripts/releases/storefront_publication_workflow.mjs"
       - "scripts/releases/storefront_publication_workflow.test.mjs"
+      - "scripts/releases/check_storefront_html_routes.mjs"
+      - "services/storefront_html/tool/source_id.sh"
       - ".firebaserc"
       - ".github/workflows/firebase-hosting-store.yml"
   # Guardar en el editor o cambiar stock en el ERP no toca este repositorio,
@@ -250,6 +252,20 @@ jobs:
           OWNER_SOURCE_SHA256: ${{ steps.seal_publication.outputs.owner_source_sha256 }}
           BUILD_INPUT_SHA256: ${{ steps.seal_publication.outputs.build_input_sha256 }}
         run: node scripts/releases/storefront_publication_workflow.mjs verify
+
+      # `/productos`, its categories and products come from Cloud Run
+      # (`storefront-html`), published on its own; release.json says nothing
+      # about them. A server left behind the shared core fails here.
+      - name: Verify the HTML server routes on both live origins
+        if: >-
+          ${{
+            needs.publication_context.outputs.is_publication != 'true' ||
+            steps.seal_publication.outputs.deploy == 'true'
+          }}
+        env:
+          EXPECTED_FIREBASE_ORIGIN: ${{ needs.publication_context.outputs.expected_firebase_origin }}
+          EXPECTED_STORE_ORIGIN: ${{ needs.publication_context.outputs.expected_store_origin }}
+        run: node scripts/releases/check_storefront_html_routes.mjs
 
       - name: Complete durable publication
         id: complete_publication

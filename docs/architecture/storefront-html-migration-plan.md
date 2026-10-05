@@ -302,8 +302,9 @@ Cómo correrlo, medirlo y desplegarlo: `services/storefront_html/README.md`.
 
 ## Fase 1: estado (2026-10-05)
 
-Hecho y verificado, todavía en la ruta oculta (`vinabike.cl/_html/...`); las rutas públicas siguen en Flutter hasta que el
-dueño apruebe el cambio de `firebase.json` (ver «Costo de abrir las rutas»):
+Hecho y verificado primero en la ruta oculta (`vinabike.cl/_html/...`); las
+rutas públicas se abrieron el mismo día con el sí del dueño (ver «Rutas
+abiertas»):
 
 - **Páginas:** `/productos` (con búsqueda), `/productos/categoria/<slug>` y la
   ficha, con encabezado, pie, menús y tema de la tienda. Rutas, 301 y 404 en
@@ -389,7 +390,7 @@ Flutter, y el teléfono baja ~16 a la vez (Chrome carga lo `lazy` hasta 2.500 px
 por debajo con una conexión lenta). Ya se probó, sin efecto apreciable, quitar
 la precarga de la fuente de títulos en el catálogo, cargar de inmediato sólo la
 primera fila y bajar la prioridad del resto. Lo que falta es una miniatura de
-~400 px; decisión del dueño (ver «Pendiente del dueño»). Las fuentes no son el
+~400 px; el dueño eligió la opción gratis (ver «Pendiente»). Las fuentes no son el
 problema: Hosting ya las manda en brotli (104 → 43 KB).
 
 Lecturas (en la base, 2026-10-05): la ficha bajó de ~300 a **108–145 ms**
@@ -431,19 +432,60 @@ sitio. Con 10.000 páginas al mes (holgado) y 100.000 (diez veces más):
 - `min-instances 0` se mantiene: primera visita tras un rato sin tráfico,
   +0,3–0,5 s.
 
-Para abrir las rutas faltan, en un mismo commit: reescrituras `/productos`,
-`/productos/categoria/**` y `/productos/**` → `storefront-html` en
-`firebase.json` (target `store`), retirar ahí la regla `Cache-Control` de
-`/productos/**`, y que el generador deje de escribir instantáneas de fichas y
-categorías (en Hosting un archivo estático tapa a la reescritura); el sitemap y
-las redirecciones siguen saliendo del build.
+El dueño lo aprobó el 2026-10-05 («has todo lo recomendado, pero pon una
+alerta de 5 usd»). La alerta es el presupuesto «Sitio vinabike.cl - alerta 5
+USD» del proyecto `project-vinabike`: **CLP 4.800** (≈ US$5), avisos al 50, 90 y 100 %
+del gasto y al 100 % del pronóstico. La cuenta de facturación
+(`01BD16-FAC1FF-F6EA02`, compartida con otros proyectos) está en pesos
+chilenos y no acepta un monto en dólares (`INVALID_ARGUMENT`); el presupuesto
+anterior de CLP 2 («Viñabike Firebase») quedó como estaba.
 
-### Pendiente del dueño
+### Rutas abiertas (2026-10-05)
 
-- Aprobar el costo de arriba (centavos al mes de salida de datos) para abrir
-  las rutas.
+- `firebase.json`, target `store`: reescrituras `/productos`, `/productos/**` y
+  `/producto/**` → `storefront-html` antes de `**`; se retiraron las reglas
+  `headers` de `/productos` y `/productos/**` (el servidor manda las suyas).
+- **Hosting sirve un archivo estático antes que una reescritura** (sus 301
+  exactos van antes que ambos). El generador lee de `firebase.json` qué rutas
+  son del servidor (`SeoServerRenderedRoutes` en
+  `scripts/generate_product_seo_snapshots.dart`) y no escribe nada bajo ellas;
+  su validación acepta esas entradas del sitemap y esos enlaces sin
+  instantánea, y falla si queda un archivo ahí. Quitar una reescritura devuelve
+  las instantáneas en el build siguiente: así se revierte la fase. Corrida con
+  datos reales: 0 instantáneas de fichas, 1.295 fichas, 11 categorías y
+  `/productos` al servidor; las 1.296 de `/tienda/producto/<uuid>` siguen como
+  página `noindex` liviana que manda a la ficha; el sitemap mantiene sus 1.307
+  URL de productos y los 301 exactos siguen saliendo del build.
+- **La publicación revisa el servidor.** Cloud Run se publica aparte
+  (`deploy_cloud_run.sh`) y `release.json` no dice nada de él. Cada respuesta
+  trae `x-storefront-source` (lo que compila la imagen, según
+  `services/storefront_html/tool/source_id.sh`, que el script de despliegue
+  estampa y que se niega a publicar con cambios sin commit), y el flujo de la
+  tienda (`scripts/releases/check_storefront_html_routes.mjs`) pide en los dos
+  orígenes `/productos`, cada categoría y una muestra de fichas del sitemap
+  recién armado, dos enlaces UUID viejos y una categoría inexistente. Falla si
+  una página no es 200 con su canónica e indexable, si un enlace viejo no es
+  301 a la ficha, si lo desconocido no es un 404 del servidor, o si Cloud Run
+  corre otra fuente que la del commit: **cambiar el núcleo compartido obliga a
+  republicar el servidor**, porque si no las dos tiendas dejan de decir lo
+  mismo.
+- **Revisión de Codex de la apertura** (2026-10-05, sólo lectura): sin P0;
+  tres P2. (1) Dentro de una visita que ya cargó Flutter, tocar un producto
+  sigue dibujando la ficha Flutter en el navegador: se deja así hasta la fase
+  2, porque forzar una carga de página en cada clic obligaría a volver a
+  arrancar Flutter (~4 MB) al volver a la portada, y la portada pasa a HTML en
+  la fase 2. (2) La publicación no revisaba el servidor: corregido con lo de
+  arriba. (3) Un producto publicado sin SKU tiene su ficha canónica en
+  `/productos/<uuid>` y el servidor no la sabe dibujar (la lectura de la ficha
+  va por SKU): hoy 0 de 1.682 productos no tienen SKU y el ERP lo genera al
+  crear; se corrige con la lectura por id en la misma migración de las
+  miniaturas.
+
+### Pendiente
+
 - Miniaturas de las fotos de tarjeta, para cumplir el LCP del catálogo:
-  (a) transformación de imágenes de Supabase: ~1.300 fotos de origen al mes,
-  ~US$5–6 al mes sobre la cuota del plan; (b) gratis: guardar una miniatura
-  de ~400 px junto a la versión de 1.200 px al subir cada foto (todas las
-  rutas que suben fotos de producto) y generar una vez las ~1.300 que existen.
+  el dueño eligió la opción gratis (2026-10-05): guardar una miniatura de
+  ~400 px junto a la versión de 1.200 px y generar una vez las ~1.300 que
+  existen. La opción descartada era la transformación de imágenes de Supabase
+  (~US$5–6 al mes sobre la cuota del plan).
+- El costo real de Cloud Run en la facturación, después de unos días.

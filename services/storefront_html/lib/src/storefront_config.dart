@@ -11,6 +11,7 @@ class StorefrontConfig {
     this.tenantId = VinabikeCanonicalTenant.id,
     this.storeOrigin = 'https://vinabike.cl',
     this.assetsDir,
+    this.source,
   });
 
   factory StorefrontConfig.fromEnvironment(Map<String, String> env) {
@@ -24,6 +25,7 @@ class StorefrontConfig {
     }
 
     final assets = env['STOREFRONT_ASSETS_DIR']?.trim() ?? '';
+    final source = env['STOREFRONT_SOURCE']?.trim() ?? '';
     return StorefrontConfig(
       supabaseUrl: value(
         'SUPABASE_URL',
@@ -33,6 +35,7 @@ class StorefrontConfig {
       tenantId: value('STOREFRONT_TENANT_ID', VinabikeCanonicalTenant.id),
       storeOrigin: value('STOREFRONT_ORIGIN', 'https://vinabike.cl'),
       assetsDir: assets.isEmpty ? null : assets,
+      source: source.isEmpty ? null : source,
     );
   }
 
@@ -46,4 +49,10 @@ class StorefrontConfig {
   /// Local development only: the repository root, so `/assets/...` (fonts,
   /// logo) can be served the way Firebase Hosting serves them in production.
   final String? assetsDir;
+
+  /// Which source this build was made from, as `tool/source_id.sh` prints
+  /// it; `deploy_cloud_run.sh` sets it. Every response carries it in
+  /// `x-storefront-source` so a store publication can tell a server that
+  /// lags behind the shared core.
+  final String? source;
 }

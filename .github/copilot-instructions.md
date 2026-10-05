@@ -4070,6 +4070,15 @@ Any product-link change is incomplete until all of these are checked:
    - canonical clean product snapshot exists
    - legacy UUID snapshot remains crawlable but declares and redirects to the
      clean canonical URL.
+   - **Since 2026-10-05 the public `/productos/**` and `/producto/**` are
+     answered by the HTML server** (`services/storefront_html`, Cloud Run,
+     rewrites in `firebase.json`), so the generator writes no snapshot there
+     (Hosting would serve a static file before the rewrite) and the 301/404
+     come from the server. It compiles `packages/vinabike_public_core`: a
+     change to the core, or to the server, is published with
+     `bash services/storefront_html/deploy_cloud_run.sh` from a commit, before
+     the push; the store publication fails while Cloud Run runs another
+     source (`scripts/releases/check_storefront_html_routes.mjs`).
 5. Google Merchant feed:
    `supabase/functions/google-merchant-feed/index.ts`
 6. WhatsApp/Meta catalog publishers:

@@ -49,10 +49,12 @@ la fase 1, `/productos`, la búsqueda y las categorías
 el mismo código Dart que la tienda Flutter: el paquete
 `packages/vinabike_public_core` (proyección comercial, ficha técnica, texto SEO,
 datos estructurados, facetas, qué categoría abre una URL, `noindex` y canónica,
-nodo `BikeStore`, menús, tema, horario). Todavía no reemplaza ninguna ruta
-pública: vive en Cloud Run (`storefront-html`, `southamerica-east1`) detrás de
-`/_html/**` en el target `store`, con `noindex`, hasta que el dueño apruebe
-abrir las rutas. Plan y fases en
+nodo `BikeStore`, menús, tema, horario). Vive en Cloud Run (`storefront-html`,
+`southamerica-east1`, `min-instances 0`) y desde el 2026-10-05 responde las
+rutas públicas `/productos`, `/productos/**` y `/producto/**` (reescrituras del
+target `store`), además de la copia `noindex` en `/_html/**`; el build deja de
+escribir instantáneas bajo esas rutas. Portada, páginas del editor, carrito,
+checkout y portal siguen en Flutter. Plan y fases en
 `docs/architecture/storefront-html-migration-plan.md` `[Repo]`.
 
 ## Dueños de datos (Supabase, `public`)

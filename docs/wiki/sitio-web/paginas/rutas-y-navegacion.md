@@ -12,10 +12,16 @@ revisado: 2026-10-05
 ## Lo esencial
 
 La tienda usa rutas limpias con la History API (sin `#`), que es lo que Google
-sabe seguir `[GSC]`. Firebase reescribe toda ruta desconocida a `index.html` y
-Flutter la resuelve en `public_store_router.dart`; por eso el 404 real lo decide
-la app, y una ruta inexistente responde «Página no encontrada» con `noindex`
-para no ser un soft 404 `[Repo]` `[GSC]`.
+sabe seguir `[GSC]`. Desde el 2026-10-05, `/productos`, sus categorías, las
+fichas y `/producto/<uuid>` las responde el **servidor HTML** (Cloud Run
+`storefront-html`, reescrituras del target `store` en `firebase.json`): su 404 y
+sus 301 son respuestas reales del servidor `[Repo]`. Toda otra ruta desconocida
+Firebase la reescribe a `index.html` y Flutter la resuelve en
+`public_store_router.dart`; ahí el 404 lo decide la app, y una ruta inexistente
+responde «Página no encontrada» con `noindex` para no ser un soft 404 `[Repo]`
+`[GSC]`. Dentro de una visita que ya cargó Flutter (por ejemplo desde la
+portada), tocar un producto sigue dibujando la ficha Flutter en el navegador,
+sin pedir la página al servidor; hasta la fase 2 conviven las dos.
 
 ## Rutas públicas (tienda)
 
@@ -25,7 +31,7 @@ para no ser un soft 404 `[Repo]` `[GSC]`.
 | `/productos` | catálogo raíz | sí |
 | `/productos/categoria/:category` | categoría de productos (slug limpio) | sí, si está publicada y tiene productos elegibles |
 | `/productos/:slug/:sku` | **ficha canónica** de un producto | sí |
-| `/productos/:id`, `/producto/:id` | ficha por UUID (histórica): el snapshot apunta al canonical | no (canonical a la ficha) |
+| `/productos/:id`, `/producto/:id` | ficha por UUID (histórica): 301 a la ficha canónica (Hosting o el servidor HTML) | no |
 | `/servicios` | servicios del taller (57 con precio, 2026-09-23) | sí |
 | `/servicios/categoria/:category` | categoría de servicios | sí, con las mismas reglas |
 | `/pagina/:slug` | página CMS dinámica | según su publicación |
@@ -37,7 +43,7 @@ para no ser un soft 404 `[Repo]` `[GSC]`.
 | `/shop/:slug` | URL de la tienda vieja | redirige 301 |
 | (cualquier otra) | «Página no encontrada» | no |
 
-`[Repo: public_store_router.dart, firebase.json, 2026-10-03]`
+`[Repo: public_store_router.dart, firebase.json, 2026-10-05]`
 
 **`/tienda/*`** repite todas las rutas para la tienda montada **dentro del ERP**
 (el editor la usa para editar en vivo). En el target público, `/tienda` y
@@ -77,15 +83,23 @@ sigue cubriendo a quien llegue sin pasar por robots.txt. Ninguna de esas URL
 está enlazada desde páginas públicas. El test
 `google_merchant_identity_contract_test.dart` exige las dos líneas.
 
-## Tienda en HTML (fase 1, todavía en la ruta oculta)
+## Tienda en HTML (fase 1)
 
-Desde el 2026-10-05 el servidor HTML (`services/storefront_html`) responde
-`/productos`, `/productos/categoria/<slug>` y `/productos/<slug>/<sku>` bajo
-`/_html/...` con `noindex` `[Repo]` `[Prod 2026-10-05]`. Las rutas públicas
-siguen en Flutter hasta que el dueño apruebe el cambio de `firebase.json`
-(costo, ver [rendimiento](rendimiento.md)). Lo que decide cada ruta es el mismo
-código que usa Flutter (`packages/vinabike_public_core`), con estas respuestas
-de servidor que Flutter sólo podía imitar en el navegador:
+El servidor HTML (`services/storefront_html`) responde `/productos`,
+`/productos/categoria/<slug>`, `/productos/<slug>/<sku>`, `/productos/<uuid>` y
+`/producto/<uuid>`: primero bajo `/_html/...` con `noindex` (2026-10-05), y
+desde ese mismo día en las rutas públicas, con el sí del dueño al costo
+([rendimiento](rendimiento.md)) `[Repo]` `[Dueño 2026-10-05]`. Firebase
+Hosting resuelve primero sus 301 exactos (`redirects`, los genera el build),
+después un archivo estático y recién después la reescritura: por eso el
+generador ya no escribe instantáneas bajo esas rutas y el build falla si queda
+un archivo ahí (`SeoServerRenderedRoutes` en
+`scripts/generate_product_seo_snapshots.dart`, que lee las reescrituras de
+`firebase.json`; quitar una reescritura devuelve las instantáneas en el build
+siguiente). `/tienda/producto/<uuid>` sigue como instantánea `noindex` que
+manda a la ficha. Lo que decide cada ruta es el mismo código que usa Flutter
+(`packages/vinabike_public_core`), con estas respuestas de servidor que
+Flutter sólo podía imitar en el navegador:
 
 - **301** a la ficha canónica cuando el nombre en la ruta no es el del producto
   (manda el SKU), desde `/productos/<uuid>`, `/producto/<uuid>` y desde una ruta
@@ -98,9 +112,9 @@ de servidor que Flutter sólo podía imitar en el navegador:
   `noindex`.
 - `noindex,follow` (meta y `X-Robots-Tag`) para búsqueda, orden, página y
   filtros, incluidos los técnicos (`spec.<clave>`), con la canónica limpia.
-- Las fichas cuyo SKU tiene un espacio (5 el 2026-10-05, p. ej. `RDM41 LD`) hoy
-  reciben de Firebase la portada con su título, porque la instantánea del
-  build no calza con la ruta codificada; el servidor HTML las sirve bien
+- Las fichas cuyo SKU tiene un espacio (5 el 2026-10-05, p. ej. `RDM41 LD`)
+  recibían de Firebase la portada con su título, porque la instantánea del
+  build no calzaba con la ruta codificada; el servidor HTML las sirve bien
   `[Prod 2026-10-05]`.
 
 ## Menús y destinos

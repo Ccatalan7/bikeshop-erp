@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "storefront-html-public-routes",
+  "scope": "release",
+  "platforms": [
+    "web"
+  ],
+  "title": "Las fichas de producto cargan mucho más rápido",
+  "summary": "Productos, categorías y búsqueda de vinabike.cl llegan armados desde el servidor: quien entra desde Google o un enlace ve la ficha en un segundo en un teléfono lento, con el precio y el stock del momento.",
+  "items": [
+    "Al abrir un producto desde Google o un enlace, en un teléfono lento se ve en 1 segundo y se puede usar en unos 2; antes la tienda tardaba unos 20.",
+    "Categorías, búsqueda y filtros funcionan sin JavaScript, se pueden compartir como enlace y el botón atrás vuelve a la misma lista.",
+    "El precio y el stock se leen en cada visita, y «Agregar» deja el producto en el mismo carrito de siempre."
+  ],
+  "evidence": [
+    {
+      "path": "firebase.json",
+      "sha256": "ee92db41d0b4130510f62c732eedb9938d37dddd68078f16352d07ed28e8f64e"
+    },
+    {
+      "path": "scripts/generate_product_seo_snapshots.dart",
+      "sha256": "ca15dffbef10f08bf3c46072f63e38e84a90ff81607cdbbc039f703e58a59412"
+    },
+    {
+      "path": ".github/workflows/firebase-hosting-store.yml",
+      "sha256": "cc2f8e062518cd9ed64898d6b9bcc4c840f1de1b867aa3976996cc23cde46332"
+    },
+    {
+      "path": "scripts/releases/check_storefront_html_routes.mjs",
+      "sha256": "e53d72e12f2316009ad17687670f9d1a4abededcca4e89e48d94df96e8aabdf1"
+    },
+    {
+      "path": "services/storefront_html/bin/server.dart",
+      "sha256": "f86a052612f74ea124851a717a67a8291a7f39272814c9ab438902e938be9b18"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_config.dart",
+      "sha256": "159af781717fb4fe524e7bcf6e83fe07fb2fccd879a430e6c8fa1d12aa4e1607"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_handler.dart",
+      "sha256": "fd5c21ba5a7bbb6d49aa90034fb2fc9375f8ec90bb6802644e5634cafb03f751"
+    },
+    {
+      "path": "services/storefront_html/deploy_cloud_run.sh",
+      "sha256": "7f619becaf65dc2b89cb71b31633c0799b7b79eec0da251ae513592e7884f9de"
+    },
+    {
+      "path": "services/storefront_html/tool/source_id.sh",
+      "sha256": "1194059d4c3b60294be6e159a5c812ea9fd97845783f18367edc4b96f40880b8"
+    }
+  ]
+}

@@ -116,7 +116,7 @@
     },
     {
       "path": "scripts/generate_product_seo_snapshots.dart",
-      "sha256": "b7cc18f4042a8f228fc1046e40c1e9711b284cc14b93260986f4de76d3e46ac0"
+      "sha256": "ca15dffbef10f08bf3c46072f63e38e84a90ff81607cdbbc039f703e58a59412"
     },
     {
       "path": "services/storefront_html/lib/src/catalog_page_model.dart",

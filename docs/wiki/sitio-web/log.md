@@ -4,6 +4,14 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-05 — corrección — rutas públicas abiertas a la tienda HTML:
+  `/productos`, categorías, fichas y `/producto/<uuid>` en Cloud Run; Hosting
+  sirve un archivo estático antes que una reescritura, así que el build ya no
+  escribe instantáneas ahí y la publicación revisa el servidor y su fuente
+  ([rutas](paginas/rutas-y-navegacion.md),
+  [mapa](paginas/mapa-del-sistema.md),
+  [estado](paginas/estado-y-pendientes.md)).
+
 - 2026-10-05 — corrección — fase 1 de la tienda HTML en la ruta oculta:
   catálogo, categorías y fichas; reglas movidas al núcleo; dos defectos de
   Flutter corregidos al compartirlas (filtros técnicos indexables, categorías

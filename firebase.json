@@ -326,32 +326,6 @@
           ]
         },
         {
-          "source": "/productos",
-          "headers": [
-            {
-              "key": "Content-Type",
-              "value": "text/html; charset=utf-8"
-            },
-            {
-              "key": "Cache-Control",
-              "value": "public, max-age=0, must-revalidate"
-            }
-          ]
-        },
-        {
-          "source": "/productos/**",
-          "headers": [
-            {
-              "key": "Content-Type",
-              "value": "text/html; charset=utf-8"
-            },
-            {
-              "key": "Cache-Control",
-              "value": "public, max-age=0, must-revalidate"
-            }
-          ]
-        },
-        {
           "source": "/robots.txt",
           "headers": [
             {
@@ -693,6 +667,27 @@
         },
         {
           "source": "/_html/**",
+          "run": {
+            "serviceId": "storefront-html",
+            "region": "southamerica-east1"
+          }
+        },
+        {
+          "source": "/productos",
+          "run": {
+            "serviceId": "storefront-html",
+            "region": "southamerica-east1"
+          }
+        },
+        {
+          "source": "/productos/**",
+          "run": {
+            "serviceId": "storefront-html",
+            "region": "southamerica-east1"
+          }
+        },
+        {
+          "source": "/producto/**",
           "run": {
             "serviceId": "storefront-html",
             "region": "southamerica-east1"

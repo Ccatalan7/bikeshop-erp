@@ -1,10 +1,10 @@
 // The public storefront rendered as HTML, one page per visit.
 //
 // Phases 0 and 1 of docs/architecture/storefront-html-migration-plan.md:
-// product pages, `/productos` and its categories, on a hidden route
-// (`/_html/...`) next to the Flutter store they mirror until the public routes
-// point here. Run it locally with services/storefront_html/run_local.sh;
-// deploy with deploy_cloud_run.sh.
+// product pages, `/productos` and its categories, on the public routes that
+// `firebase.json` rewrites here and on the hidden copy (`/_html/...`). Run it
+// locally with services/storefront_html/run_local.sh; deploy with
+// deploy_cloud_run.sh.
 import 'dart:io';
 
 import 'package:jaspr/server.dart';
@@ -17,6 +17,7 @@ Future<void> main() async {
   final config = StorefrontConfig.fromEnvironment(Platform.environment);
   final handler = const Pipeline()
       .addMiddleware(logRequests())
+      .addMiddleware(storefrontSourceHeader(config.source))
       .addHandler(
         storefrontHandler(config: config, reads: SupabasePublicReads(config)),
       );

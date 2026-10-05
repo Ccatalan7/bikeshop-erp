@@ -4,7 +4,7 @@ resumen: cuándo lo guardado en el editor llega al HTML que ve Google, cómo se 
 fuentes: [repositorio, flutter-web]
 archivos: [.github/workflows/firebase-hosting-store.yml, scripts/sync_seo_index.sh, scripts/generate_product_seo_snapshots.dart, scripts/check_storefront_bundle_budget.sh, scripts/write_storefront_release_evidence.sh, supabase/functions/dispatch-storefront-publication/index.ts, lib/modules/website/services/storefront_publication_service.dart, supabase/migrations/20260728230000_add_storefront_publication_contract.sql]
 tablas: [website_settings, website_pages, website_blocks, products]
-revisado: 2026-10-04
+revisado: 2026-10-05
 ---
 
 # Publicación y despliegue de la tienda
@@ -50,10 +50,20 @@ hora o plazo máximo `[Repo]`.
    el logo del tenant, y completa el nodo
    del negocio de `index.html` antes de derivar todas las páginas
    ([datos-estructurados](datos-estructurados.md)). Con 1.295 fichas, el paso
-   tarda ~120 s `[Repo 2026-10-04]`.
+   tarda ~120 s `[Repo 2026-10-04]`. Desde el 2026-10-05 no escribe nada bajo
+   las rutas que `firebase.json` reescribe al servidor HTML (`/productos/**`,
+   `/producto/**`): ni las escribe ni pide su ficha técnica, y falla si queda un
+   archivo ahí, porque Hosting lo serviría antes que la reescritura `[Repo]`.
 6. Verifica los activos, sella la revisión, escribe `release.json`, despliega el
    target `store` y comprueba la evidencia en `vinabike.cl` y
    `vinabike-store.web.app`.
+7. `scripts/releases/check_storefront_html_routes.mjs` pide en los dos orígenes
+   `/productos`, cada categoría, una muestra de fichas, dos enlaces UUID viejos
+   y una categoría inexistente al servidor HTML, y compara su
+   `x-storefront-source` con lo que compila este commit
+   (`services/storefront_html/tool/source_id.sh`). Cloud Run se publica aparte
+   (`services/storefront_html/deploy_cloud_run.sh`): si el núcleo compartido
+   cambió y el servidor no se republicó, la publicación falla aquí `[Repo]`.
 
 ## ¿Qué está en vivo?
 
@@ -106,7 +116,8 @@ build diario cubre `[Prod]` `[Repo]`.
 ## En el código y la base
 
 - Workflow: `.github/workflows/firebase-hosting-store.yml` (y
-  `scripts/releases/storefront_publication_workflow.mjs`).
+  `scripts/releases/storefront_publication_workflow.mjs`,
+  `scripts/releases/check_storefront_html_routes.mjs`).
 - Evidencia: `scripts/write_storefront_release_evidence.sh` → `release.json`.
 - Publicación desde el editor: `storefront_publication_service.dart`,
   `supabase/functions/dispatch-storefront-publication/`, migración sin aplicar.

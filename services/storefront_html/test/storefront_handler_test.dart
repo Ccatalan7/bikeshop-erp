@@ -833,4 +833,31 @@ void main() {
       expect(await response.readAsString(), contains('no está publicado'));
     });
   });
+
+  test('every response names the source the server was built from', () async {
+    Future<Response> inner(Request request) async => Response.notFound('');
+    final request = Request('GET', Uri.parse('http://localhost/productos'));
+
+    final stamped = await storefrontSourceHeader(
+      'core-aaaaaaaaaaaa.server-bbbbbbbbbbbb',
+    )(inner)(request);
+    expect(
+      stamped.headers['x-storefront-source'],
+      'core-aaaaaaaaaaaa.server-bbbbbbbbbbbb',
+    );
+    final plain = await storefrontSourceHeader(null)(inner)(request);
+    expect(plain.headers.containsKey('x-storefront-source'), isFalse);
+
+    final config = StorefrontConfig.fromEnvironment({
+      'SUPABASE_PUBLISHABLE_KEY': 'sb_publishable_x',
+      'STOREFRONT_SOURCE': ' core-a.server-b ',
+    });
+    expect(config.source, 'core-a.server-b');
+    expect(
+      StorefrontConfig.fromEnvironment({
+        'SUPABASE_PUBLISHABLE_KEY': 'sb_publishable_x',
+      }).source,
+      isNull,
+    );
+  });
 }

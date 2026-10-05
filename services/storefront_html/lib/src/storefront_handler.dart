@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:jaspr/dom.dart';
 import 'package:jaspr/server.dart';
+import 'package:shelf/shelf.dart' show Middleware;
 import 'package:vinabike_public_core/modules/website/models/website_catalog_query.dart';
 import 'package:vinabike_public_core/public_store/utils/product_url.dart';
 import 'package:vinabike_public_core/shared/models/product.dart';
@@ -26,6 +27,15 @@ final _uuid = RegExp(
   r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
   caseSensitive: false,
 );
+
+/// Adds `x-storefront-source` to every response when the build knows its
+/// source ([StorefrontConfig.source]).
+Middleware storefrontSourceHeader(String? source) =>
+    (Handler inner) => (Request request) async {
+      final response = await inner(request);
+      if (source == null) return response;
+      return response.change(headers: {'x-storefront-source': source});
+    };
 
 /// Serves `/productos`, its categories and searches, and product pages,
 /// built per visit from the public reads.
