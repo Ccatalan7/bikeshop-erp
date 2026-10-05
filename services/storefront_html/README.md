@@ -41,7 +41,12 @@ Flutter.
   «Agregar al carrito» lleva al carrito. Con JavaScript, `storefront_script.dart`
   escribe el carrito que lee la tienda Flutter (la prueba
   `test/unit/storefront_html_cart_contract_test.dart` corre ese script en Node
-  y lo lee con `PersistedCart`), aplica un filtro al marcarlo, cambia la foto y
+  y lo lee con `PersistedCart`; vive en la raíz, no en este paquete, así que
+  `dart test` de aquí no la corre: tras tocar el guion se corre a mano. Su DOM
+  es mínimo —`document.querySelector`/`querySelectorAll` y un formulario que
+  sólo tiene `addEventListener`—, así que el guion busca siempre desde
+  `document`; un `form.querySelectorAll` tumbó las cuatro compuertas de la
+  publicación 48f43cfc el 2026-10-05), aplica un filtro al marcarlo, cambia la foto y
   manda a GA4 y al píxel los eventos de Flutter (`view_item`, `add_to_cart`,
   `contact`, `store_ready`). Jaspr avisa al arrancar que no hay
   `.client.dart`: es a propósito.
