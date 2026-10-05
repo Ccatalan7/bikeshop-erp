@@ -164,7 +164,8 @@ Costuras que la fase 1 tiene que cumplir:
 ## Lo que la prueba no resolvía (2026-10-04)
 
 - **Primer byte:** 0,78 s desde un Mac en Chile hasta Supabase en São Paulo,
-  sin CDN. Se resuelve con la lectura única y el servidor en la misma región.
+  sin CDN. La lectura única y el servidor en la misma región no alcanzaron
+  (0,90 s medido en vinabike.cl): manda la ficha técnica, ver «Fase 0: estado».
 - **Foto principal:** el JPG de 1.200 px de Supabase Storage es el mismo que usa
   la tienda actual. Falta servirla en el tamaño justo (`srcset` con
   transformación de imágenes) y subconjuntar las fuentes.
@@ -234,8 +235,19 @@ eso 310–460 ms de lectura en São Paulo (la ficha técnica) y 6–16 ms de arm
 La reescritura `/_html/**` → `storefront-html` del target `store` va en el
 mismo commit que este texto.
 
-Falta: medir desde `vinabike.cl/_html/...` cuando publique el build de la
-tienda, y anotar el costo mensual real después de unos días.
+Medido a través de `vinabike.cl/_html/...` (2026-10-04, celular lento, mediana
+de 3): usable a los **2,6 s** contra 24,1 s de la ficha Flutter, **338 KB**
+contra 4.384 KB; foto principal 2,64 s contra 1,58 s; primer byte **0,90 s**
+contra 0,14 s. El borde no guarda la página (`x-cache: MISS`, `no-store`).
+
+**El primer byte no bajó a «decenas de milisegundos» como decía este plan.**
+Poner el servidor junto a la base quitó el viaje Chile–São Paulo de las
+lecturas, pero la lectura misma tarda ~300 ms, y casi todo es la ficha técnica
+validándose en cada visita. Precalcularla es lo primero de la fase 1; sin eso,
+el primer byte del HTML queda por sobre el de la página instantánea, aunque la
+página completa llegue nueve veces antes.
+
+Falta: anotar el costo mensual real de Cloud Run después de unos días.
 
 Lo que encontró la fase 0, y la fase 1 resuelve antes de abrir rutas:
 

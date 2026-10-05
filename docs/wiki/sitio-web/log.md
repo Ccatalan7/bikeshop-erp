@@ -4,6 +4,11 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-04 — corrección — medido en vivo por `vinabike.cl/_html/`: usable a
+  los 2,6 s contra 24,1 s, pero el primer byte (0,90 s) no bajó como prometía
+  el plan; lo fija la ficha técnica (~300 ms por lectura). Corregido en el plan
+  y en [rendimiento](paginas/rendimiento.md).
+
 - 2026-10-04 — corrección — el servidor HTML corre en Cloud Run y
   `vinabike.cl/_html/**` lo alcanza. Dos trampas del primer despliegue en
   `services/storefront_html/README.md`: la cuenta de compilación necesita

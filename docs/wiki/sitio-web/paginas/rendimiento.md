@@ -73,6 +73,12 @@ paga lo mismo hoy en una llamada aparte. `get_public_storefront_shell_v1` tarda
 5 ms (86 KB). Armar la página con Jaspr compilado (AOT) tarda 5–7 ms. La ficha
 técnica precalculada es requisito de la fase 1 `[Prod 2026-10-04]`.
 
+**En vivo por `vinabike.cl/_html/` (2026-10-04, Cloud Run en São Paulo):**
+usable a los 2,6 s contra 24,1 s de la ficha Flutter, 338 KB contra 4.384 KB,
+foto principal 2,64 s contra 1,58 s y primer byte 0,90 s contra 0,14 s. El
+primer byte lo fija la lectura (~300 ms, la ficha técnica), no la distancia
+`[Prod 2026-10-04]`.
+
 ## Borde y datos
 
 - `web/index.html` precarga `get_public_store_data` desde el Worker de Cloudflare
