@@ -4,6 +4,12 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-05 — corrección — miniaturas de tarjeta: un trabajo copia a 400 y
+  800 px la foto de cada tarjeta (de cualquier origen) y la anota en
+  `public_image_thumbnails`; las tarjetas HTML las ofrecen en `srcset`; un HEAD
+  a Storage dice `no-cache` aunque el GET traiga un año
+  ([rendimiento](paginas/rendimiento.md), [mapa](paginas/mapa-del-sistema.md)).
+
 - 2026-10-05 — corrección — rutas públicas abiertas a la tienda HTML:
   `/productos`, categorías, fichas y `/producto/<uuid>` en Cloud Run; Hosting
   sirve un archivo estático antes que una reescritura, así que el build ya no

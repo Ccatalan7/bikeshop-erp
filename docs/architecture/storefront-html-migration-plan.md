@@ -468,7 +468,12 @@ anterior de CLP 2 («Viñabike Firebase») quedó como estaba.
   301 a la ficha, si lo desconocido no es un 404 del servidor, o si Cloud Run
   corre otra fuente que la del commit: **cambiar el núcleo compartido obliga a
   republicar el servidor**, porque si no las dos tiendas dejan de decir lo
-  mismo.
+  mismo. Su primera corrida en vivo (run 37279240730) falló en las 36 páginas
+  con «canonical (ninguna)» aunque estaban bien: buscaba `rel` antes que
+  `href` y Jaspr escribe `href` primero, y su prueba usaba el orden que yo
+  supuse. La prueba ahora usa el HTML como lo escribe el servidor; un
+  verificador se prueba contra la salida real, no contra la que uno imagina
+  (costó una corrida de 23 min marcada en rojo; el sitio estaba bien).
 - **Revisión de Codex de la apertura** (2026-10-05, sólo lectura): sin P0;
   tres P2. (1) Dentro de una visita que ya cargó Flutter, tocar un producto
   sigue dibujando la ficha Flutter en el navegador: se deja así hasta la fase
@@ -478,14 +483,48 @@ anterior de CLP 2 («Viñabike Firebase») quedó como estaba.
   arriba. (3) Un producto publicado sin SKU tiene su ficha canónica en
   `/productos/<uuid>` y el servidor no la sabe dibujar (la lectura de la ficha
   va por SKU): hoy 0 de 1.682 productos no tienen SKU y el ERP lo genera al
-  crear; se corrige con la lectura por id en la misma migración de las
-  miniaturas.
+  crear. Corregido con `get_public_product_page_v2` (por SKU o por id); la
+  prueba del servidor encontró además que `Product.fromJson` se caía con un
+  SKU nulo, lo que habría tumbado también cualquier catálogo que lo listara.
+
+### Miniaturas de tarjeta (2026-10-05)
+
+El dueño eligió la opción gratis: una copia de 400 y otra de 800 px de cada
+foto de tarjeta, en vez de la transformación de imágenes de Supabase (~US$5–6
+al mes). No se hacen al subir: el ERP sube fotos de producto desde una docena
+de lugares y algunas están en AliExpress, así que un solo trabajo
+(`scripts/generate_public_image_thumbnails.dart`) copia la foto que muestra cada
+tarjeta, venga de donde venga, y la anota en `public_image_thumbnails`
+(`20261005130000`, con la firma de la foto para rehacerla si cambia en la misma
+URL). Corre en el job `card_thumbnails` de cada publicación de la tienda; una
+foto todavía sin copia sale grande en su tarjeta. El servidor lee las copias en
+la misma vuelta que completa las filas (`get_public_image_thumbnails_v1`) y las
+ofrece en `srcset`, con la precarga de la primera tarjeta con los mismos
+candidatos.
+
+- **Resultado** (`measure.mjs`, celular lento, mediana de 3, rutas públicas,
+  revisión `storefront-html-00010`, 2026-10-05):
+
+  | Página | LCP antes | LCP con copias | Transferido |
+  |---|---|---|---|
+  | `/productos` | 4,4 s | **2,0 s** | 694 → 409 KB |
+  | categoría `componentes` | 4,2 s | **2,1 s** | 647 → 413 KB |
+  | categoría `camaras` | 1,6–1,9 s | **1,6 s** | 699 → 419 KB |
+  | categoría `frenos` | — | **2,0 s** | 497 KB |
+  | ficha `camara-maxxis-700x23…` | — | **2,2 s** | 319 KB |
+
+  Todas bajo la vara de 2,5 s.
+- Relleno inicial: 1.294 fotos sin fallas; 984 con copias, 310 ya de 400 px o
+  menos (casi todas de AliExpress, de 220 px). En 40 fotos al azar: original
+  **120 KB**, copia de 400 px **19,6 KB**, de 800 px **64 KB**. Una corrida
+  sin fotos nuevas tarda ~2 min (sólo pregunta la firma de cada foto).
+- Trampa: un `HEAD` a Supabase Storage responde `cache-control: no-cache`; el
+  `GET` trae el `max-age` guardado al subir (un año) y el CDN la sirve en `HIT`.
+- Un uso nuevo de `SUPABASE_SECRET_KEY` en el flujo de la tienda sube el conteo
+  revisado de `test/scripts/supabase_cli_safety_test.sh` (ocho desde hoy).
 
 ### Pendiente
 
-- Miniaturas de las fotos de tarjeta, para cumplir el LCP del catálogo:
-  el dueño eligió la opción gratis (2026-10-05): guardar una miniatura de
-  ~400 px junto a la versión de 1.200 px y generar una vez las ~1.300 que
-  existen. La opción descartada era la transformación de imágenes de Supabase
-  (~US$5–6 al mes sobre la cuota del plan).
 - El costo real de Cloud Run en la facturación, después de unos días.
+- Las copias de una foto reemplazada quedan en Storage (pocos KB cada una);
+  una limpieza de las que ninguna fila nombra, si algún día pesan.

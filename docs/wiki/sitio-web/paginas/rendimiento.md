@@ -2,8 +2,8 @@
 titulo: Rendimiento y carga
 resumen: cuánto pesa y tarda la tienda, la página instantánea que muestra contenido antes de Flutter, el borde, las imágenes y cómo se mide contra las Core Web Vitals
 fuentes: [web-dev, flutter-web, repositorio, consolas-google]
-archivos: [docs/architecture/storefront-instant-page.md, docs/architecture/storefront-html-migration-plan.md, services/storefront_html/tool/measure.mjs, scripts/storefront_instant_page/instant_page.js, scripts/storefront_instant_page/instant_page.css, web/index.html, cloudflare-worker/src/index.js, scripts/check_storefront_bundle_budget.sh, supabase/functions/website-optimize-image/index.ts]
-tablas: [website_settings, website_blocks]
+archivos: [scripts/generate_public_image_thumbnails.dart, docs/architecture/storefront-instant-page.md, docs/architecture/storefront-html-migration-plan.md, services/storefront_html/tool/measure.mjs, scripts/storefront_instant_page/instant_page.js, scripts/storefront_instant_page/instant_page.css, web/index.html, cloudflare-worker/src/index.js, scripts/check_storefront_bundle_budget.sh, supabase/functions/website-optimize-image/index.ts]
+tablas: [website_settings, website_blocks, public_image_thumbnails]
 revisado: 2026-10-05
 ---
 
@@ -92,9 +92,12 @@ ficha bajó a 108–145 ms con la ficha técnica en una pasada); categoría
 contra la categoría Flutter usable a los **22,2 s** con 4.012 KB. Lo que frena
 el catálogo son las fotos de tarjeta de 1.200 px (75–120 KB cada una, ~690 KB
 por página): el teléfono baja ~16 a la vez porque Chrome carga lo `lazy` hasta
-2.500 px por debajo con una conexión lenta. Sin miniaturas no se cumple el LCP
-de 2,5 s en esas páginas `[Prod 2026-10-05]`. Detalle y opciones en
-`docs/architecture/storefront-html-migration-plan.md` («Fase 1: estado»).
+2.500 px por debajo con una conexión lenta `[Prod 2026-10-05]`. **Con las
+copias de 400/800 px** (ver «Imágenes»), ya en las rutas públicas: `/productos`
+LCP **2,0 s** (409 KB), `componentes` **2,1 s**, `camaras` **1,6 s**, `frenos`
+**2,0 s** y una ficha **2,2 s**, todas bajo 2,5 s `[Prod 2026-10-05]`. Detalle en
+`docs/architecture/storefront-html-migration-plan.md` («Miniaturas de
+tarjeta»).
 
 - La página HTML viajaba sin comprimir (64 KB): ni Cloud Run ni Firebase
   Hosting comprimen una respuesta reenviada. El servidor la manda en gzip
@@ -116,6 +119,13 @@ de 2,5 s en esas páginas `[Prod 2026-10-05]`. Detalle y opciones en
 
 ## Imágenes
 
+- **Fotos de tarjeta en su tamaño (2026-10-05).** Cada foto de tarjeta pública
+  tiene copias de 400 y 800 px (`public_image_thumbnails`, las hace
+  `scripts/generate_public_image_thumbnails.dart` en cada publicación de la
+  tienda) y las tarjetas HTML las ofrecen en `srcset` con `sizes` según la
+  grilla; la precarga de la primera tarjeta lleva los mismos candidatos. En 40
+  fotos al azar: 120 KB la original, 19,6 KB la de 400 px, 64 KB la de 800 px
+  `[Prod 2026-10-05]`. La tienda Flutter todavía baja la de 1.200 px.
 - El editor guarda una versión web optimizada (`website-optimize-image`) y, al
   elegir una imagen vieja de la biblioteca, la optimiza (`<nombre>-src<hash>-<uuid>-web.webp`,
   reutilizada si ya existe; WebP > 300 KB también) `[Repo]`.
