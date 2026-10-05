@@ -24,14 +24,16 @@ insert into public.website_settings (tenant_id, key, value) values
    'all');
 
 insert into public.product_categories
-  (id, tenant_id, name, full_path, is_active, show_on_website)
+  (id, tenant_id, name, full_path, is_active, show_on_website, description,
+   image_url, sort_order)
 values
   ('b4a90000-0000-4000-8000-000000000201',
    'b4a90000-0000-4000-8000-000000000001', 'Horquillas', 'Horquillas',
-   true, true),
+   true, true, 'Suspensiones delanteras',
+   'https://example.com/horquillas.webp', 3),
   ('b4a90000-0000-4000-8000-000000000202',
    'b4a90000-0000-4000-8000-000000000001', 'Archivada', 'Archivada',
-   false, true);
+   false, true, null, null, 0);
 
 insert into public.product_brands (id, tenant_id, name, is_active) values
   ('b4a90000-0000-4000-8000-000000000301', null, 'Suntour', true),
@@ -207,6 +209,15 @@ select is(
        'b4a90000-0000-4000-8000-000000000001') -> 'categories') item),
   array['Horquillas'],
   'sólo las categorías activas');
+select is(
+  (select item - 'id' - 'parent_id'
+     from jsonb_array_elements(public.get_public_storefront_shell_v1(
+       'b4a90000-0000-4000-8000-000000000001') -> 'categories') item),
+  jsonb_build_object(
+    'name', 'Horquillas', 'full_path', 'Horquillas', 'show_on_website', true,
+    'description', 'Suspensiones delanteras',
+    'image_url', 'https://example.com/horquillas.webp', 'sort_order', 3),
+  'cada categoría trae su descripción, su imagen y su orden');
 select is(
   jsonb_array_length(public.get_public_storefront_shell_v1(
     'b4a90000-0000-4000-8000-000000000002') -> 'navigation'),
