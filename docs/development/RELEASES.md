@@ -262,6 +262,12 @@ correrlo. Sin eso valida la versión anterior y dice «verified» igual; el
 2026-10-02 un ítem de 186 letras pasó así y se commiteó, y el error recién
 apareció al volver a validar después del commit.
 
+Se valida antes de **cada** commit, también uno «sólo de CI» o de
+configuración: si toca un archivo que un registro abierto cita como evidencia
+(un flujo de `.github/workflows/`, `firebase.json`), ese registro necesita su
+hash nuevo. El 2026-10-05 un cambio al filtro del flujo de la tienda salió sin
+validar y con la huella vieja; lo atrapó la validación del commit siguiente.
+
 ```bash
 node scripts/releases/generate_release_notes.mjs \
   --check-index --from-commit <base-publicada-exacta>
