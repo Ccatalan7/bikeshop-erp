@@ -111,10 +111,16 @@ void main() {
     expect(projection, contains('product.websiteMerchantDescription'));
     expect(projection, contains('product.websiteMerchantBrand'));
     expect(projection, contains('product.websiteMerchantMpn'));
-    expect(publicInventory, contains('website_seo_title'));
-    expect(publicInventory, contains('website_seo_description'));
-    expect(publicInventory, contains('website_merchant_title'));
-    expect(publicInventory, contains('website_merchant_description'));
+    // The card identity columns are one list in the core since 2026-10-05,
+    // read by this service and by the HTML storefront.
+    final identityColumns = File(
+      'packages/vinabike_public_core/lib/public_store/models/public_product_identity_columns.dart',
+    ).readAsStringSync();
+    expect(publicInventory, contains('.select(publicProductIdentityColumns)'));
+    expect(identityColumns, contains('website_seo_title'));
+    expect(identityColumns, contains('website_seo_description'));
+    expect(identityColumns, contains('website_merchant_title'));
+    expect(identityColumns, contains('website_merchant_description'));
     expect(publicInventory, contains('full_path,parent_id,level,description'));
     expect(publicInventory, contains('show_on_website,sort_order'));
     expect(snapshots, contains('commerce: commerce'));
