@@ -833,6 +833,23 @@ cambios sin commit en el servicio o el núcleo. Se copian esos archivos al
 scratchpad, se dejan los de `HEAD` (`git show HEAD:<ruta> > <ruta>`), se
 publica y se devuelven con `cmp` de cada uno.
 
+## Fase 2f: Flutter deja la página a las rutas HTML (2026-10-05)
+
+Desde la fase 2c, Flutter sólo arranca en el carrito, el checkout, la cuenta
+y el portal. Un clic suyo dentro de la tienda (el menú, el logo, un enlace
+del pie) navegaba con `go_router` y dibujaba su propia copia de la portada,
+del catálogo o de una página de información: la visita seguía en Flutter
+y no veía la página que ve Google. Ahora `_navigateToHref`
+(`public_store_layout.dart`) hace una carga completa cuando la ruta de
+destino la responde el servidor (`storefrontHtmlServes`, en el núcleo), sólo
+en la tienda pública en un navegador: nunca en el editor ni en su vista
+previa, ni en la tienda que el ERP monta en `/tienda`.
+
+La lista de rutas del servidor existe dos veces: las reescrituras de
+`firebase.json` y `storefrontHtmlRouteSources`. Una prueba
+(`product_seo_snapshot_server_routes_test.dart`) las compara: una ruta nueva
+del servidor se agrega en los dos lados en el mismo commit.
+
 ### Pendiente
 
 - El costo real de Cloud Run en la facturación, después de unos días.

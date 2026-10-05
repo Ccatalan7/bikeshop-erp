@@ -4,6 +4,9 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-05 — corrección — [rutas](paginas/rutas-y-navegacion.md): desde el
+  carrito o la cuenta, un clic de Flutter hacia una ruta del servidor recarga
+  la página (fase 2f); ya no dibuja su copia de la portada o del catálogo.
 - 2026-10-05 — corrección — [rutas](paginas/rutas-y-navegacion.md): `/contacto`
   pasa al servidor HTML (fase 2e); Instagram de Contacto ya no es un enlace roto.
 - 2026-10-05 — corrección — [rutas](paginas/rutas-y-navegacion.md): `/servicios`

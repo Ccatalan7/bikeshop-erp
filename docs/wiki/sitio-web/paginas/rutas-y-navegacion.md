@@ -23,9 +23,10 @@ Firebase la reescribe a `app.html` (la página de Flutter; no se llama
 `index.html` para que `/` sea del servidor) y Flutter la resuelve en
 `public_store_router.dart`; ahí el 404 lo decide la app, y una ruta inexistente
 responde «Página no encontrada» con `noindex` para no ser un soft 404 `[Repo]`
-`[GSC]`. Dentro de una visita que ya cargó Flutter (por ejemplo desde la
-portada), tocar un producto sigue dibujando la ficha Flutter en el navegador,
-sin pedir la página al servidor; hasta la fase 2 conviven las dos.
+`[GSC]`. Flutter sólo arranca en el carrito, el checkout, la cuenta y el
+portal; un clic suyo hacia una ruta del servidor hace una carga completa
+(`storefrontHtmlServes` en el núcleo, comparada con `firebase.json` por una
+prueba), salvo en el editor, su vista previa y `/tienda` `[Repo]`.
 
 ## Rutas públicas (tienda)
 
