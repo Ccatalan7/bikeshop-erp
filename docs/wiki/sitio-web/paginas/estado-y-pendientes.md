@@ -11,10 +11,11 @@ revisado: 2026-10-05
 
 Se actualiza cada vez que algo cambia de estado; cada línea con su fecha.
 
-## En vivo (2026-10-03) `[Prod]`
+## En vivo (2026-10-05) `[Prod]`
 
-- Build de la tienda: commit `c4ed2fde`, `built_at` 2026-10-04T05:20:54Z
-  (`release.json`).
+- Build de la tienda: commit `8399d0fd`, `built_at` 2026-10-05T21:49:01Z
+  (`release.json`); servidor HTML `core-8b226393aabf.server-2aedfaac04f1`.
+  Flutter sólo arranca en el carrito, el checkout, la cuenta y el portal.
 - Sitemap: 1.315 URL. La tienda lista 539 productos con stock y 59 servicios.
 - Checkout con Mercado Pago y transferencia funcionando (desde el 2026-09-23).
 - Página instantánea en fichas, categorías y portada; semántica para rastreadores.
@@ -65,6 +66,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 
 | Fecha | Qué | Página |
 |---|---|---|
+| 2026-10-05 | **Flutter deja la página a las rutas HTML** (fase 2f): desde el carrito o la cuenta, «Inicio», «Productos» o el pie cargan la página del servidor; los enlaces `?category=<id>` de los bloques salen con la ruta limpia (sin 301); «Productos destacados» baja la copia pequeña de la foto optimizada. Portada en un teléfono lento: foto principal 2,7 s, carga 2,8 s | [rendimiento](rendimiento.md) |
 | 2026-10-05 | **`/contacto` en el servidor HTML** (fase 2e): datos, horario, WhatsApp, redes y el formulario con los mensajes de Flutter, medidos al píxel a 1440 y 412 px. Arreglado en las dos tiendas: el botón de Instagram de Contacto llevaba a `instagram.com/https://…` porque el ajuste guarda la dirección completa | [rutas](rutas-y-navegacion.md) |
 | 2026-10-05 | **`/servicios` en el servidor HTML** (fase 2d): el catálogo de servicios del taller con el mismo título para Google que la instantánea y cada servicio con su precio en el JSON-LD; el generador deja de escribir su archivo. En todo el catálogo, la columna de resultados sube 2 px a la posición de Flutter | [rutas](rutas-y-navegacion.md) |
 | 2026-10-05 | **Portada `/` abierta al servidor HTML** (fase 2c): la entrada de Flutter pasa a `app.html` (destino de `**`) y el generador borra el `index.html` raíz, que Hosting servía antes que la reescritura. En un teléfono lento la portada muestra su texto en ~1 s y la foto principal en ~4,8 s; Flutter dibujaba su primer cuadro a los ~20 s. Las fotos de las diapositivas siguientes esperan su turno y el pie en tableta sigue el `Wrap` de Flutter | [rutas](rutas-y-navegacion.md) |

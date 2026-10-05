@@ -4,6 +4,8 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-05 — consulta archivada — [rendimiento](paginas/rendimiento.md):
+  portada en vivo, teléfono lento: foto principal 2,7 s, carga 2,8 s.
 - 2026-10-05 — corrección — [rendimiento](paginas/rendimiento.md): «Productos
   destacados» baja la copia pequeña de la foto optimizada, no el original.
 - 2026-10-05 — corrección — [rutas](paginas/rutas-y-navegacion.md): los

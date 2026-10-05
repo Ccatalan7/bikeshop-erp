@@ -137,6 +137,11 @@ tarjeta»).
   lento. Desde el 2026-10-05 el bloque usa `publicProductPrimaryImageUrl`
   (la misma primera foto que el catálogo) en el servidor y en el editor: las
   dos primeras tarjetas bajaron de 308 a 47 KB en un teléfono `[Prod 2026-10-05]`.
+- **Medido en vivo tras publicar las dos cosas** (teléfono lento: CPU ×4,
+  1,6 Mbps, 150 ms; caché fría; 2026-10-05, release `8399d0fd`): portada
+  texto 0,9 s, foto principal 2,7 s (antes 4,0), carga completa 2,8 s (antes
+  5,2); `/contacto` 0,7 s; `/servicios` 1,4 s `[Prod 2026-10-05]`. La portada
+  Flutter tardaba ~20 s en su primer cuadro.
 - El editor guarda una versión web optimizada (`website-optimize-image`) y, al
   elegir una imagen vieja de la biblioteca, la optimiza (`<nombre>-src<hash>-<uuid>-web.webp`,
   reutilizada si ya existe; WebP > 300 KB también) `[Repo]`.
