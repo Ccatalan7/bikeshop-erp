@@ -136,7 +136,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/site_layout.dart",
-      "sha256": "5952e58f846bc23af1c8f8e4e6f6c5d1879ecd76397e79c6f6aa31aa528fb988"
+      "sha256": "63ba5bae496591372a4b27c967ab44b01285b16929ccc4799cd8f7b3037e4828"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_script.dart",

@@ -532,6 +532,17 @@ void main() {
     },
   );
 
+  test('the heading font is preloaded as its Latin subset', () async {
+    final html = await _html();
+    final preload = RegExp(
+      r'<link[^>]*rel="preload"[^>]*as="font"[^>]*>',
+    ).firstMatch(html)!.group(0)!;
+    expect(preload, contains('.latin.woff2"'));
+    expect(preload, contains('type="font/woff2"'));
+    expect(preload, contains('crossorigin'));
+    expect(html, contains('format("woff2")'));
+  });
+
   test('each audience gets its own footer, as Flutter decides it', () async {
     final html = await _html(
       shell: {

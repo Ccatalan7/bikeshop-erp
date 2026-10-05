@@ -14,6 +14,7 @@ import 'package:vinabike_public_core/public_store/utils/social_url.dart';
 
 import 'material_icons.dart';
 import 'storefront_css.dart';
+import 'storefront_fonts.dart';
 import 'storefront_script.dart';
 import 'storefront_shell.dart';
 
@@ -122,7 +123,7 @@ Component sitePage({
       _name('twitter:description', meta.description),
       if (meta.imageUrl.isNotEmpty) _name('twitter:image', meta.imageUrl),
       if (meta.preloadHeadingFont)
-        _preload('/assets/assets/fonts/${_fontFile(s.headingFont)}', 'font'),
+        _preload(storefrontLatinFontUrl(_fontFile(s.headingFont)), 'font'),
       if (meta.preloadImage case final image?)
         Component.element(
           tag: 'link',
@@ -919,11 +920,11 @@ Component _preload(String href, String as) => Component.element(
     'rel': 'preload',
     'href': href,
     'as': as,
-    'type': 'font/ttf',
+    'type': 'font/woff2',
     'crossorigin': '',
   },
 );
 
-/// The bundled font file Firebase serves for a family.
+/// The face of a heading family the page preloads (its Latin subset).
 String _fontFile(String family) =>
-    family == 'Oswald' ? 'Oswald-wght.ttf' : 'Barlow-SemiBold.ttf';
+    family == 'Oswald' ? 'Oswald-wght' : 'Barlow-SemiBold';

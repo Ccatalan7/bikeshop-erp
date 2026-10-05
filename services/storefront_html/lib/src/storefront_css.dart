@@ -1,7 +1,10 @@
+import 'storefront_fonts.dart';
+
 /// The storefront's stylesheet. Colors and fonts come from the editor's theme
 /// (`theme_primary_color`, `theme_accent_color`, `theme_heading_font`,
-/// `theme_body_font` through `WebsiteFontRegistry`); the fonts and the logo
-/// are the files Firebase Hosting already serves for the Flutter store.
+/// `theme_body_font` through `WebsiteFontRegistry`); the logo and the full
+/// fonts are the files Firebase Hosting already serves for the Flutter store,
+/// with a Latin subset of each font in front (`storefront_fonts.dart`).
 ///
 /// Header, footer and theme are drawn twice (here and in Flutter) only until
 /// phase 2 moves the editor canvas to this renderer, so they follow the
@@ -14,12 +17,7 @@ String storefrontCss({
   required String bodyFont,
 }) =>
     '''
-@font-face{font-family:Oswald;src:url(/assets/assets/fonts/Oswald-wght.ttf) format("truetype");font-weight:200 700;font-display:swap}
-@font-face{font-family:Barlow;src:url(/assets/assets/fonts/Barlow-Regular.ttf) format("truetype");font-weight:400;font-display:swap}
-@font-face{font-family:Barlow;src:url(/assets/assets/fonts/Barlow-Medium.ttf) format("truetype");font-weight:500;font-display:swap}
-@font-face{font-family:Barlow;src:url(/assets/assets/fonts/Barlow-SemiBold.ttf) format("truetype");font-weight:600;font-display:swap}
-@font-face{font-family:Barlow;src:url(/assets/assets/fonts/Barlow-Bold.ttf) format("truetype");font-weight:700;font-display:swap}
-@font-face{font-family:Barlow;src:url(/assets/assets/fonts/Barlow-ExtraBold.ttf) format("truetype");font-weight:800 900;font-display:swap}
+${storefrontFontFacesCss()}
 :root{--primary:$primary;--accent:$accent;--ink:#1e293b;--on-variant:#475569;--outline-variant:#cbd5e1;--chevron:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z'/%3E%3C/svg%3E");--muted:#5b6b7f;--faint:#94a3b8;--line:#e2e8f0;--soft:#f4f6f9;--ok:#15803d;--bad:#b42318;--foot:#1e293b;--r:14px;--c-line:#e8e2d8;--c-2nd:#666d7a;--c-muted:#93989f;--c-soft:#f6f6f6;--c-ok:#10b981;
 --head:"$headingFont","Arial Narrow",Arial,sans-serif;--body:"$bodyFont","Segoe UI",Roboto,Arial,sans-serif}
 [hidden]{display:none!important}*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}

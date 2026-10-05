@@ -2,7 +2,7 @@
 titulo: Rendimiento y carga
 resumen: cuánto pesa y tarda la tienda, la página instantánea que muestra contenido antes de Flutter, el borde, las imágenes y cómo se mide contra las Core Web Vitals
 fuentes: [web-dev, flutter-web, repositorio, consolas-google]
-archivos: [scripts/generate_public_image_thumbnails.dart, docs/architecture/storefront-instant-page.md, docs/architecture/storefront-html-migration-plan.md, services/storefront_html/tool/measure.mjs, scripts/storefront_instant_page/instant_page.js, scripts/storefront_instant_page/instant_page.css, web/index.html, cloudflare-worker/src/index.js, scripts/check_storefront_bundle_budget.sh, supabase/functions/website-optimize-image/index.ts]
+archivos: [scripts/fonts/subset_storefront_fonts.sh, services/storefront_html/lib/src/storefront_fonts.dart, scripts/generate_public_image_thumbnails.dart, docs/architecture/storefront-instant-page.md, docs/architecture/storefront-html-migration-plan.md, services/storefront_html/tool/measure.mjs, scripts/storefront_instant_page/instant_page.js, scripts/storefront_instant_page/instant_page.css, web/index.html, cloudflare-worker/src/index.js, scripts/check_storefront_bundle_budget.sh, supabase/functions/website-optimize-image/index.ts]
 tablas: [website_settings, website_blocks, public_image_thumbnails]
 revisado: 2026-10-05
 ---
@@ -102,8 +102,13 @@ tarjeta»).
 - La página HTML viajaba sin comprimir (64 KB): ni Cloud Run ni Firebase
   Hosting comprimen una respuesta reenviada. El servidor la manda en gzip
   (15 KB) `[Prod 2026-10-05]`.
-- Las fuentes no pesan lo que parece: Hosting ya manda los TTF en brotli
-  (Barlow 104 → 43 KB) `[Prod 2026-10-05]`.
+- Las fuentes sí pesaban (corrige lo que decía esta línea): Hosting manda
+  los TTF en brotli (Barlow 104 → 43 KB), pero la portada pide seis antes de
+  su foto principal y comparten el ancho de banda con ella. Un WOFF2 con el
+  rango latino pesa 21 KB (Oswald 28 contra 91): la foto principal de la
+  portada HTML bajó de 4,8 a 3,7 s en el teléfono lento, con el mismo texto
+  al píxel `[Repo 2026-10-05]`. El TTF completo queda detrás para cualquier
+  otro carácter, y como segunda fuente si falta el WOFF2.
 - El catálogo lee ~450–700 ms: `get_public_product_facets_v2` ~410 ms en la
   base, de eso ~270 ms en `spec_public_facet_values_internal_v1` (valores
   técnicos de todo el catálogo, en cada visita) y ~190 ms en el universo de
@@ -159,3 +164,7 @@ sin que nadie lo decida.
 - Medición en el sitio: evento GA4 `store_ready` con `load_ms` y `load_bucket`
   ([medicion](medicion.md)).
 - Borde: `cloudflare-worker/`. Presupuesto: `scripts/check_storefront_bundle_budget.sh`.
+- Fuentes de la tienda HTML: `scripts/fonts/subset_storefront_fonts.sh` corta
+  `web/fonts/*.latin.woff2` (Hosting los sirve en `/fonts/`);
+  `services/storefront_html/lib/src/storefront_fonts.dart` los declara con el
+  mismo rango y precarga la del título.

@@ -755,14 +755,18 @@ Lo que costó una vuelta:
   se encoge a su fila más ancha, así que el servidor calcula ese ancho con
   las columnas de la tienda y lo aplica con container queries
   (`SiteFooter.wrapCss`). Entre 800 y ~1000 px «Contacto» baja bajo el logo.
+- **Las fuentes pesaban**: seis TTF (Barlow ~50 KB comprimido cada uno,
+  Oswald 91) compartían el ancho de banda con la foto principal. Cada cara
+  se declara ahora dos veces sin rangos que se crucen: su subconjunto latino
+  en WOFF2 (`web/fonts/`, 21–28 KB, `scripts/fonts/subset_storefront_fonts.sh`)
+  y el TTF completo para el resto de Unicode; el TTF va también como segunda
+  fuente del WOFF2, porque el servidor se publica antes que Hosting y un
+  archivo que aún no existe no puede dejar el texto en la letra del sistema.
+  Foto principal 4,8 → 3,7 s; el texto mide igual al píxel.
 
 ### Pendiente
 
 - El costo real de Cloud Run en la facturación, después de unos días.
-- Las fuentes viajan como TTF completos (Barlow ~45 KB comprimido por peso,
-  cuatro antes de la foto principal; Oswald 75 KB). Un WOFF2 con el rango
-  latino pesa ~15 KB: es la siguiente mejora de la foto principal en todas
-  las páginas HTML.
 - El PNG de 2,1 MB de la tercera diapositiva debería volver a subirse por el
   editor (que lo optimiza a WebP): hoy sólo dejó de estorbar a la primera.
 - Navegar dentro de la tienda HTML sin volver a Flutter (enlaces de la

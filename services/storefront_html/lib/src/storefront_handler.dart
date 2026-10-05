@@ -76,6 +76,10 @@ Handler storefrontHandler({
       // `/assets/assets/fonts/x.ttf`; the key is a path in the repository.
       return _localAsset(config.assetsDir!, path.substring('/assets/'.length));
     }
+    if (path.startsWith('/fonts/') && config.assetsDir != null) {
+      // Hosting serves `web/` at the root: the fonts' Latin subsets.
+      return _localAsset(config.assetsDir!, 'web$path');
+    }
 
     final List<String> segments;
     try {
@@ -679,6 +683,7 @@ Future<Response> _localAsset(String root, String relative) async {
   if (!await file.exists()) return Response.notFound(null);
   final type = switch (relative.split('.').last) {
     'ttf' => 'font/ttf',
+    'woff2' => 'font/woff2',
     'otf' => 'font/otf',
     'webp' => 'image/webp',
     'png' => 'image/png',

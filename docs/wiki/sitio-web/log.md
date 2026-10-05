@@ -4,6 +4,9 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-05 — corrección — [rendimiento](paginas/rendimiento.md): las fuentes
+  sí pesaban; WOFF2 latino (21 KB) delante del TTF, foto principal de la
+  portada 4,8 → 3,7 s en el teléfono lento.
 - 2026-10-05 — corrección — `/` abierta al servidor HTML: Flutter entra por
   `app.html`, el `index.html` raíz se borra en el build; medidas de la portada
   en un teléfono lento (texto ~1 s, foto ~4,8 s, Flutter ~20 s) en el plan de

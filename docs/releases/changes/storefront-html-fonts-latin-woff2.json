@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "storefront-html-fonts-latin-woff2",
+  "scope": "internal",
+  "platforms": [
+    "web"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "scripts/fonts/subset_storefront_fonts.sh",
+      "sha256": "a098727347c2e28e4f653d867058d55715006c15173e4cc3723614da09d73859"
+    },
+    {
+      "path": "services/storefront_html/lib/src/site_layout.dart",
+      "sha256": "63ba5bae496591372a4b27c967ab44b01285b16929ccc4799cd8f7b3037e4828"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_css.dart",
+      "sha256": "fc3e5df4cb92483ed375c903798ab07f51ce04530aff8abf28260a8fd174d508"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_fonts.dart",
+      "sha256": "a1c489c78b8128778b5bcd0d80a8502f6d8b9eedcbb508543fd8e28b84e29282"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_handler.dart",
+      "sha256": "360b55c73d9b30a3eab11c8088877e3dd224bacfada4e33beb73536f0df26710"
+    },
+    {
+      "path": "services/storefront_html/test/storefront_fonts_test.dart",
+      "sha256": "d820b318981cd5d663859172fe83e49f5ddb291ae8f85f71361f6c8bc5ef37ff"
+    },
+    {
+      "path": "services/storefront_html/test/storefront_handler_test.dart",
+      "sha256": "5b4b80c86c281eb30f8e5da75a38eb198071d8a560fd98c3bf5dcf49fe712a63"
+    }
+  ]
+}
