@@ -5,7 +5,8 @@
 // Hosting publishes the sitemap and drops the snapshots of those routes, but
 // the pages come from a service published on its own
 // (services/storefront_html/deploy_cloud_run.sh). `release.json` matching
-// says nothing about them, so this asks the live origins for `/productos`,
+// says nothing about them, so this asks the live origins for `/productos` and
+// the other exact routes the sitemap publishes (the information pages),
 // every category and a sample of products from the sitemap just built, two old
 // UUID links and an unknown category, and fails when:
 //   - a page is not a 200 with its sitemap URL as canonical and indexable;
@@ -36,10 +37,21 @@ function unescapeXml(value) {
 
 // Which pages and links to ask for, from the sitemap and the redirect
 // manifest of this build.
+// The exact sources (`/productos`, `/nosotros`…) the store target of
+// `firebase.json` rewrites to the HTML server.
+export function exactServerRoutes(firebaseConfig) {
+  const store = (firebaseConfig?.hosting ?? []).find((entry) => entry.target === "store");
+  return (store?.rewrites ?? [])
+    .filter((rewrite) => rewrite.run?.serviceId === "storefront-html" &&
+      typeof rewrite.source === "string" && !rewrite.source.includes("*"))
+    .map((rewrite) => rewrite.source);
+}
+
 export function selectStorefrontHtmlChecks({
   sitemapXml,
   redirectManifest,
   storeOrigin,
+  exactRoutes = ["/productos"],
   productSample = 6,
   legacySample = 2,
 }) {
@@ -73,8 +85,13 @@ export function selectStorefrontHtmlChecks({
   if (sampled.length === 0) {
     throw new Error("sitemap.xml no trae fichas de producto.");
   }
+  // Every other exact route the sitemap publishes (the information pages);
+  // an unpublished one is not in the sitemap and answers 404 by design.
+  const exact = exactRoutes.filter(
+    (path) => path !== "/productos" && paths.includes(path),
+  );
   return {
-    pages: ["/productos", ...categories, ...sampled].map((path) => ({
+    pages: ["/productos", ...exact, ...categories, ...sampled].map((path) => ({
       path,
       canonical: `${base}${path}`,
     })),
@@ -223,6 +240,9 @@ async function main() {
       ),
     ),
     storeOrigin: process.env.CANONICAL_STORE_ORIGIN ?? "https://vinabike.cl",
+    exactRoutes: exactServerRoutes(
+      JSON.parse(readFileSync(process.env.FIREBASE_CONFIG ?? "firebase.json", "utf8")),
+    ),
   });
   const expectedSource = execFileSync(
     "bash",

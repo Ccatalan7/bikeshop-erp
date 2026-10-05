@@ -10,18 +10,18 @@
   "title": "Productos y catálogo cargan mucho más rápido",
   "summary": "Productos, categorías y búsqueda de vinabike.cl llegan armados desde el servidor, con el precio y el stock del momento y las fotos de cada lista en el tamaño de su tarjeta: quien entra desde Google ve la ficha en un segundo en un teléfono lento.",
   "items": [
-    "Al abrir un producto desde Google o un enlace, en un teléfono lento se ve en 1 segundo y se puede usar en unos 2; antes la tienda tardaba unos 20.",
+    "Productos, categorías y páginas como Nosotros o Envíos llegan armadas: en un teléfono lento se ven en 1 segundo, cuando la tienda tardaba de 15 a 20.",
     "Categorías y filtros funcionan sin JavaScript, se comparten como enlace y cada foto de las listas pesa unos 20 KB en vez de 120.",
     "En Nosotros, Términos y Privacidad el contacto muestra el teléfono, el correo y la dirección de la tienda, no un aviso para el editor."
   ],
   "evidence": [
     {
       "path": "firebase.json",
-      "sha256": "ee92db41d0b4130510f62c732eedb9938d37dddd68078f16352d07ed28e8f64e"
+      "sha256": "efbe6d0246c36955f6211d23d96eec149992930d772155ff663a019ec9b7223c"
     },
     {
       "path": "scripts/generate_product_seo_snapshots.dart",
-      "sha256": "ca15dffbef10f08bf3c46072f63e38e84a90ff81607cdbbc039f703e58a59412"
+      "sha256": "124ed8b50a8b7941e47f1c24c3cef8e3cb97b0dcc78ea81edbdb3c28f12797fc"
     },
     {
       "path": ".github/workflows/firebase-hosting-store.yml",
@@ -29,7 +29,7 @@
     },
     {
       "path": "scripts/releases/check_storefront_html_routes.mjs",
-      "sha256": "c51c09cfa5d87e451b8252cce14bf71a08b0792ec9efb61e9fffb5331ec59926"
+      "sha256": "1d08cd7421fc5bbb2ea5054bc6fe48ab03abf68b5010328347db51a2432ed912"
     },
     {
       "path": "services/storefront_html/bin/server.dart",

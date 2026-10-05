@@ -694,6 +694,41 @@
           }
         },
         {
+          "source": "/nosotros",
+          "run": {
+            "serviceId": "storefront-html",
+            "region": "southamerica-east1"
+          }
+        },
+        {
+          "source": "/envios",
+          "run": {
+            "serviceId": "storefront-html",
+            "region": "southamerica-east1"
+          }
+        },
+        {
+          "source": "/devoluciones",
+          "run": {
+            "serviceId": "storefront-html",
+            "region": "southamerica-east1"
+          }
+        },
+        {
+          "source": "/terminos",
+          "run": {
+            "serviceId": "storefront-html",
+            "region": "southamerica-east1"
+          }
+        },
+        {
+          "source": "/privacidad",
+          "run": {
+            "serviceId": "storefront-html",
+            "region": "southamerica-east1"
+          }
+        },
+        {
           "source": "**",
           "destination": "/index.html"
         }

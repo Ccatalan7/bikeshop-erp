@@ -27,7 +27,8 @@ void main() {
         },
       };
 
-  test('the repository config hands the product routes to the server', () {
+  test('the repository config hands the product and information routes to '
+      'the server', () {
     final routes = snapshots.SeoServerRenderedRoutes.fromFirebaseConfig(
       jsonDecode(File('firebase.json').readAsStringSync()),
     );
@@ -38,6 +39,12 @@ void main() {
       '/productos/pastillas-shimano/1161022',
       '/productos/46a51a87-aa3a-430c-a6e1-af48c8d74541',
       '/producto/46a51a87-aa3a-430c-a6e1-af48c8d74541',
+      // The information pages (phase 2a, 2026-10-05).
+      '/nosotros',
+      '/envios',
+      '/devoluciones',
+      '/terminos',
+      '/privacidad',
     ]) {
       expect(routes.owns(path), isTrue, reason: path);
     }
@@ -48,6 +55,8 @@ void main() {
       '/productosx',
       '/producto',
       '/tienda/producto/46a51a87-aa3a-430c-a6e1-af48c8d74541',
+      '/nosotros/equipo',
+      '/contacto',
     ]) {
       expect(routes.owns(path), isFalse, reason: path);
     }
@@ -134,6 +143,8 @@ void main() {
     // Trust pages are missing from the fixture; only the route lines matter.
     var report = await failures();
     expect(report, contains('/contacto aparece en sitemap.xml sin snapshot'));
+    // Without the rewrite, an information page needs its snapshot.
+    expect(report, contains('/nosotros no tiene snapshot'));
     expect(report, isNot(contains('/productos/bici-ruta/123')));
     expect(report, isNot(contains('/productos/categoria/frenos')));
 
@@ -151,6 +162,53 @@ void main() {
     expect(
       report,
       contains('/productos es un archivo estático en una ruta del servidor'),
+    );
+  });
+
+  test(
+      'an information page the server draws needs no snapshot, and one left '
+      'there would hide it', () async {
+    final buildDir = await Directory.systemTemp.createTemp(
+      'storefront-seo-server-policies-',
+    );
+    addTearDown(() async {
+      if (await buildDir.exists()) await buildDir.delete(recursive: true);
+    });
+    final routes = snapshots.SeoServerRenderedRoutes.fromFirebaseConfig(
+      config([
+        for (final slug in [
+          'nosotros',
+          'envios',
+          'devoluciones',
+          'terminos',
+          'privacidad',
+        ])
+          toServer('/$slug'),
+      ]),
+    );
+    Future<String> report() async {
+      try {
+        await snapshots.validateGeneratedSeoArtifacts(
+          buildDir: buildDir,
+          storeUrl: 'https://taller-norte.example',
+          staticTrustPagePaths: const {'/nosotros'},
+          serverRoutes: routes,
+        );
+      } on Object catch (error) {
+        return error.toString();
+      }
+      return '';
+    }
+
+    var failures = await report();
+    for (final slug in ['nosotros', 'envios', 'privacidad']) {
+      expect(failures, isNot(contains('/$slug no tiene snapshot')));
+    }
+    await File('${buildDir.path}/nosotros').writeAsString('<html></html>');
+    failures = await report();
+    expect(
+      failures,
+      contains('/nosotros es un archivo estático en una ruta del servidor'),
     );
   });
 }

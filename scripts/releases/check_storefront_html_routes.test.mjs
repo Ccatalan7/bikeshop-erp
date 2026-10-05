@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 
 import {
+  exactServerRoutes,
   checkStorefrontHtmlRoutes,
   selectStorefrontHtmlChecks,
   tagAttributes,
@@ -126,4 +128,24 @@ test("fails on a noindex page and on a route Hosting answers itself", async () =
   assert.equal(failures.length, 2);
   assert.match(failures[0], /categoria\/frenos: robots/);
   assert.match(failures[1], /esperaba el 404 del servidor HTML, llegó 200/);
+});
+
+test("checks every exact server route the sitemap publishes, from firebase.json", () => {
+  const routes = exactServerRoutes(JSON.parse(readFileSync("firebase.json", "utf8")));
+  for (const path of ["/productos", "/nosotros", "/envios", "/devoluciones", "/terminos", "/privacidad"]) {
+    assert.ok(routes.includes(path), path);
+  }
+  const withPolicies = sitemapXml.replace(
+    "</urlset>",
+    `<url><loc>${store}/nosotros</loc></url><url><loc>${store}/envios</loc></url></urlset>`,
+  );
+  const selected = selectStorefrontHtmlChecks({
+    sitemapXml: withPolicies,
+    redirectManifest,
+    storeOrigin: store,
+    exactRoutes: routes,
+  }).pages.map((entry) => entry.path);
+  // Published information pages are checked; one not in the sitemap is not.
+  assert.deepEqual(selected.slice(0, 3), ["/productos", "/nosotros", "/envios"]);
+  assert.ok(!selected.includes("/terminos"));
 });

@@ -631,6 +631,15 @@ Un bloque que el HTML aún no dibuja (ni como sección ni con su renderer) se
 omite y se nombra en `x-storefront-uncovered`; una página así no debe pasar
 a HTML al abrir las rutas.
 
+**Rutas abiertas.** Las cinco pasan al servidor con reescrituras exactas en
+`firebase.json`. El generador ya no escribe sus instantáneas (Hosting serviría
+el archivo antes que la reescritura) y su validación no las exige; el sitemap
+las sigue nombrando cuando están publicadas. La revisión de la publicación
+lee de `firebase.json` las rutas exactas del servidor y pide las que el
+sitemap publica (`exactServerRoutes` en `check_storefront_html_routes.mjs`).
+Ninguna de las cinco tiene hoy un bloque sin cubrir. Para revertir, se quitan
+las cinco reescrituras.
+
 ### Pendiente
 
 - El costo real de Cloud Run en la facturación, después de unos días.

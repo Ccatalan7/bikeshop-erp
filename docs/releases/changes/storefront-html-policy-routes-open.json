@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "storefront-html-policy-routes-open",
+  "scope": "internal",
+  "platforms": [
+    "web"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "scripts/generate_product_seo_snapshots.dart",
+      "sha256": "124ed8b50a8b7941e47f1c24c3cef8e3cb97b0dcc78ea81edbdb3c28f12797fc"
+    },
+    {
+      "path": "scripts/releases/check_storefront_html_routes.mjs",
+      "sha256": "1d08cd7421fc5bbb2ea5054bc6fe48ab03abf68b5010328347db51a2432ed912"
+    }
+  ]
+}

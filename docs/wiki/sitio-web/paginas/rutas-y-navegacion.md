@@ -13,7 +13,9 @@ revisado: 2026-10-05
 
 La tienda usa rutas limpias con la History API (sin `#`), que es lo que Google
 sabe seguir `[GSC]`. Desde el 2026-10-05, `/productos`, sus categorías, las
-fichas y `/producto/<uuid>` las responde el **servidor HTML** (Cloud Run
+fichas, `/producto/<uuid>` y las páginas de información (`/nosotros`,
+`/envios`, `/devoluciones`, `/terminos`, `/privacidad`) las responde el
+**servidor HTML** (Cloud Run
 `storefront-html`, reescrituras del target `store` en `firebase.json`): su 404 y
 sus 301 son respuestas reales del servidor `[Repo]`. Toda otra ruta desconocida
 Firebase la reescribe a `index.html` y Flutter la resuelve en
@@ -35,7 +37,7 @@ sin pedir la página al servidor; hasta la fase 2 conviven las dos.
 | `/servicios` | servicios del taller (57 con precio, 2026-09-23) | sí |
 | `/servicios/categoria/:category` | categoría de servicios | sí, con las mismas reglas |
 | `/pagina/:slug` | página CMS dinámica | según su publicación |
-| `/contacto`, `/nosotros`, `/terminos`, `/privacidad`, `/devoluciones`, `/envios` | páginas fijas con su página CMS | sí, si su página está publicada; si no, `noindex,follow` |
+| `/contacto`, `/nosotros`, `/terminos`, `/privacidad`, `/devoluciones`, `/envios` | páginas fijas con su página CMS; las cinco de información las dibuja el servidor HTML (sin nada que leer: 404 con `noindex`) | sí, si su página está publicada y tiene algo que leer; si no, `noindex,follow` |
 | `/carrito`, `/checkout` | compra | no (`X-Robots-Tag`) |
 | `/pedido/:id` | confirmación de un pedido (con token de acceso) | no |
 | `/cuenta`, `/cuenta/login`, `/cuenta/perfil`, `/cuenta/direcciones`, `/cuenta/pedidos`, `/cuenta/bicicletas`, `/cuenta/servicios`, `/cuenta/chats`, `/cuenta/chats/:id`, `/cuenta/mensajes`, `/cuenta/mensajes/:id`, `/cuenta/descargas/android` | portal de clientes ([portal-de-clientes](portal-de-clientes.md)) | no |

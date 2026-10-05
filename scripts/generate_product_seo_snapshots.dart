@@ -773,6 +773,7 @@ void main(List<String> args) async {
     pages: pages,
     pageBlocks: pageBlocks,
     availablePublicPaths: publicFallbackPaths,
+    serverRoutes: serverRoutes,
   );
   stdout.writeln(
       '✅ Trust/policy SEO pages generated: ${staticTrustPagePaths.length}');
@@ -2034,6 +2035,7 @@ Future<Set<String>> _writeStaticTrustPages({
   required List<Map<String, dynamic>> pages,
   required Map<String, List<Map<String, dynamic>>> pageBlocks,
   required Set<String> availablePublicPaths,
+  SeoServerRenderedRoutes serverRoutes = SeoServerRenderedRoutes.none,
 }) async {
   final definitions = _trustPageDefinitions();
   final publishedPaths = buildPublishedStaticTrustPagePaths(
@@ -2043,6 +2045,9 @@ Future<Set<String>> _writeStaticTrustPages({
 
   for (final entry in definitions.entries) {
     final slug = entry.key;
+    // The HTML server draws this page per visit; a file here would hide it.
+    // It stays in the sitemap when published.
+    if (serverRoutes.owns('/$slug')) continue;
     final page = _findPageBySlug(pages, slug);
     final blocks = page == null
         ? const <Map<String, dynamic>>[]
@@ -5692,6 +5697,8 @@ Future<void> validateGeneratedSeoArtifacts({
 
   for (final entry in _trustPageDefinitions().entries) {
     final path = '/${entry.key}';
+    // Its canonical and robots are the HTML server's own contract.
+    if (serverRoutes.owns(path)) continue;
     final file = File(pathJoin(buildDir.path, entry.key));
     if (!file.existsSync()) {
       failures.add('$path no tiene snapshot neutral/indexable.');
