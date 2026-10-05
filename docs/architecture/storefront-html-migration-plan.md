@@ -870,6 +870,11 @@ Dos trampas de la publicación, del mismo día:
   commit, y corre después de publicar Hosting. Si ya se publicó, se cancela
   esa corrida (mientras siga en las compuertas no publicó nada) y se empuja
   un commit que la dispare sobre el `HEAD` que corre Cloud Run.
+- **Un `publication_context` «cancelado» sin pasos, 15 a 19 minutos después
+  de crearse, no es una prueba**: GitHub no consiguió máquina («The job was
+  not acquired by Runner of type hosted even after multiple attempts», en
+  las anotaciones del trabajo). Le pasó a dos corridas seguidas durante el
+  incidente de Actions del 2026-10-05; se repite con `gh run rerun <id>`.
 
 ### Pendiente
 
