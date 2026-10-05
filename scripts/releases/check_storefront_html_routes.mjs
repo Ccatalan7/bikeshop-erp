@@ -90,6 +90,21 @@ export function selectStorefrontHtmlChecks({
   };
 }
 
+// The attributes of each `<tag …>` in a page, whatever their order: Jaspr
+// writes `href` before `rel` (a search that assumed the other order failed
+// the first live check, 2026-10-05).
+export function tagAttributes(html, tag) {
+  return [...html.matchAll(new RegExp(`<${tag}\\b([^>]*)>`, "gi"))].map(
+    (match) =>
+      Object.fromEntries(
+        [...match[1].matchAll(/([a-zA-Z:-]+)\s*=\s*"([^"]*)"/g)].map((attr) => [
+          attr[1].toLowerCase(),
+          unescapeXml(attr[2]),
+        ]),
+      ),
+  );
+}
+
 async function request(origin, path, { attempts = 3, timeoutMs = 30000 } = {}) {
   let lastError;
   for (let attempt = 1; attempt <= attempts; attempt++) {
@@ -136,15 +151,17 @@ export async function checkStorefrontHtmlRoutes({
       const response = await request(origin, page.path, requestOptions);
       const problems = [];
       if (response.status !== 200) problems.push(`HTTP ${response.status}`);
-      const canonical = response.body.match(
-        /<link[^>]*rel="canonical"[^>]*href="([^"]*)"/i,
-      )?.[1];
-      if (canonical === undefined || unescapeXml(canonical) !== page.canonical) {
+      const canonical = tagAttributes(response.body, "link").find(
+        (link) => link.rel?.toLowerCase() === "canonical",
+      )?.href;
+      if (canonical !== page.canonical) {
         problems.push(`canonical ${canonical ?? "(ninguna)"}`);
       }
       const robots = [
         response.headers.get("x-robots-tag") ?? "",
-        response.body.match(/<meta[^>]*name="robots"[^>]*content="([^"]*)"/i)?.[1] ?? "",
+        tagAttributes(response.body, "meta").find(
+          (meta) => meta.name?.toLowerCase() === "robots",
+        )?.content ?? "",
       ].join(" ");
       if (/noindex/i.test(robots)) problems.push(`robots «${robots.trim()}»`);
       const source = sourceProblem(origin, page.path, response.headers, expectedSource);

@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   checkStorefrontHtmlRoutes,
   selectStorefrontHtmlChecks,
+  tagAttributes,
 } from "./check_storefront_html_routes.mjs";
 
 const store = "https://taller-norte.example";
@@ -27,9 +28,10 @@ const redirectManifest = {
 };
 const source = "core-aaaaaaaaaaaa.server-bbbbbbbbbbbb";
 
+// The order Jaspr writes them: `href` before `rel`, `name` before `content`.
 function page(path, { robots = "index,follow" } = {}) {
-  return `<!doctype html><html><head><link rel="canonical" href="${store}${path}">` +
-    `<meta name="robots" content="${robots}"></head><body><main><h1>x</h1></main></body></html>`;
+  return `<!doctype html><html><head><link href="${store}${path}" rel="canonical"/>` +
+    `<meta name="robots" content="${robots}"/></head><body><main><h1>x</h1></main></body></html>`;
 }
 
 async function withServer(answer, run) {
@@ -74,6 +76,17 @@ test("picks the catalog, every category, products and the old UUID links", () =>
     { path: `/productos/${uuid}`, location: "/productos/pastillas-shimano/1161022" },
     { path: `/producto/${uuid}`, location: "/productos/pastillas-shimano/1161022" },
   ]);
+});
+
+test("reads attributes in any order", () => {
+  const html = '<link rel="canonical" href="https://a.example/x?y=1&amp;z=2">' +
+    '<link href="https://a.example/x.css" rel="stylesheet"/>' +
+    '<meta content="noindex" name="robots">';
+  assert.equal(
+    tagAttributes(html, "link").find((link) => link.rel === "canonical").href,
+    "https://a.example/x?y=1&z=2",
+  );
+  assert.equal(tagAttributes(html, "meta")[0].name, "robots");
 });
 
 test("a sitemap without the catalog has nothing to check and says so", () => {

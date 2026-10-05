@@ -29,7 +29,7 @@
     },
     {
       "path": "scripts/releases/check_storefront_html_routes.mjs",
-      "sha256": "e53d72e12f2316009ad17687670f9d1a4abededcca4e89e48d94df96e8aabdf1"
+      "sha256": "c51c09cfa5d87e451b8252cce14bf71a08b0792ec9efb61e9fffb5331ec59926"
     },
     {
       "path": "services/storefront_html/bin/server.dart",
