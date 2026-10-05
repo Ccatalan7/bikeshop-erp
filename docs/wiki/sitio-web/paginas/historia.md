@@ -48,6 +48,7 @@ revisado: 2026-10-04
 | 2026-09-27 | el diseño de todo el ERP, incluido el editor, queda abierto; Design es para proponer, no un requisito |
 | 2026-10-03 | el conocimiento del sitio vive en este wiki y se escribe en la misma tarea |
 | 2026-10-04 | migrar el sitio y su editor a HTML por fases («ok, aprobado, arranca con la fase 0»); el editor sigue dentro del ERP y lo que cambia en el ERP se ve en segundos |
+| 2026-10-04 | **el sitio tiene que ser gratis**: nada que cobre un costo mensual (por ejemplo, Cloud Run con una instancia siempre despierta) se enciende sin su decisión explícita; el servidor HTML corre con `min-instances 0`, dentro de la cuota gratis |
 
 `[Dueño]`
 

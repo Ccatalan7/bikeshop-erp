@@ -204,7 +204,7 @@
     },
     {
       "path": "services/storefront_html/README.md",
-      "sha256": "a2bdc20676b8b0c967767d6d9e9a22b834a76e95b5712bbf1fcca67cc9adfe13"
+      "sha256": "5852dd0558785b78b2866c108ea93c57f5e33ec506f1e51e0ed2f85e7912afa7"
     },
     {
       "path": "services/storefront_html/analysis_options.yaml",
@@ -216,7 +216,7 @@
     },
     {
       "path": "services/storefront_html/deploy_cloud_run.sh",
-      "sha256": "f3927b78286821c91085d8adecfed9c16f2b59e6ec58ae2626946d676da84ea8"
+      "sha256": "cad8d0cbff6e4b8d797e44a58f258a6cf29cca781fbc6ff88d6d130f1b1f7306"
     },
     {
       "path": "services/storefront_html/lib/src/product_page_model.dart",

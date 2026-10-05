@@ -33,7 +33,11 @@ rsync -a --exclude .dart_tool --exclude build \
   "$REPO/services/storefront_html" "$STAGE/services/"
 cp "$REPO/services/storefront_html/Dockerfile" "$STAGE/Dockerfile"
 
-# min-instances 1: a cold start would show up as the page's first byte.
+# min-instances 0: the owner's requirement is a free site (2026-10-04). An
+# always-warm instance costs ~US$10–15 a month whether anyone visits or not;
+# at zero, Cloud Run bills only while it answers, inside its monthly free
+# allowance, at the price of a cold start for the first visit after a quiet
+# spell. Change it only with the owner's explicit decision.
 gcloud run deploy "$SERVICE" \
   --project "$PROJECT" \
   --region "$REGION" \
@@ -43,7 +47,7 @@ gcloud run deploy "$SERVICE" \
   --cpu 1 \
   --memory 512Mi \
   --concurrency 80 \
-  --min-instances 1 \
+  --min-instances 0 \
   --max-instances 4 \
   --cpu-boost \
   --set-env-vars "SUPABASE_PUBLISHABLE_KEY=$KEY" \

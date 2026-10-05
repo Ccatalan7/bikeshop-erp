@@ -183,8 +183,13 @@ Costuras que la fase 1 tiene que cumplir:
 - **Pagos:** el checkout se rehace al final, con pagos de prueba.
 - **Dos tiendas por ruta durante la migración:** sólo encabezado, pie y tema se
   dibujan dos veces, y sólo entre la fase 1 y la 2.
-- **Infraestructura nueva:** un servicio en Cloud Run (costo mensual bajo, se
-  mide en la fase 0) y Supabase Realtime para invalidar.
+- **Infraestructura nueva:** un servicio en Cloud Run. **El sitio tiene que
+  ser gratis** (dueño, 2026-10-04): corre con `min-instances 0`, que cobra sólo
+  mientras responde y cabe en la cuota gratis mensual de Cloud Run al tráfico
+  de Viñabike. Una instancia siempre despierta (~US$10–15 al mes) estuvo
+  encendida unas horas el 2026-10-04 y se apagó al saberse el requisito. El
+  costo de esa decisión es un arranque en frío para la primera visita después
+  de un rato sin tráfico; se mide antes de abrir rutas en la fase 1.
 - **Jaspr** es más chico que el ecosistema de TypeScript: se valida en la fase 0
   antes de comprometer el resto.
 
@@ -229,8 +234,8 @@ Hecho y verificado:
 Cloud Run (2026-10-04): el dueño instaló `gcloud`, inició sesión y dio a la
 cuenta de compilación el rol `roles/run.builder`; el proyecto ya tenía
 facturación. Se habilitaron Cloud Run, Cloud Build y Artifact Registry y el
-servicio `storefront-html` corre en `southamerica-east1` (`min-instances 1`,
-512 MiB). Medido directo contra Cloud Run desde Chile: primer byte ~0,7 s, de
+servicio `storefront-html` corre en `southamerica-east1` (512 MiB; primero con
+`min-instances 1`, en 0 desde que el dueño recordó que el sitio debe ser gratis). Medido directo contra Cloud Run desde Chile: primer byte ~0,7 s, de
 eso 310–460 ms de lectura en São Paulo (la ficha técnica) y 6–16 ms de armado.
 La reescritura `/_html/**` → `storefront-html` del target `store` va en el
 mismo commit que este texto.
@@ -247,7 +252,11 @@ validándose en cada visita. Precalcularla es lo primero de la fase 1; sin eso,
 el primer byte del HTML queda por sobre el de la página instantánea, aunque la
 página completa llegue nueve veces antes.
 
-Falta: anotar el costo mensual real de Cloud Run después de unos días.
+Costo: el sitio tiene que ser gratis (requisito del dueño, 2026-10-04). El
+servicio quedó con `min-instances 0`, la imagen guardada pesa 5,5 MB (la cuota
+gratis es de 500 MB) y cada compilación tarda unos minutos dentro de la cuota
+gratis de Cloud Build. Falta confirmar en la facturación, después de unos días,
+que el costo es US$0, y medir el arranque en frío antes de la fase 1.
 
 Lo que encontró la fase 0, y la fase 1 resuelve antes de abrir rutas:
 

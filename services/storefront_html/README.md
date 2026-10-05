@@ -49,6 +49,11 @@ página antes.
 bash services/storefront_html/deploy_cloud_run.sh
 ```
 
+**Costo: tiene que ser gratis** (requisito del dueño, 2026-10-04). Por eso
+`min-instances 0`: Cloud Run cobra sólo mientras responde, dentro de su cuota
+gratis mensual, que a este tráfico no se acerca. Una instancia siempre
+despierta costaría ~US$10–15 al mes; sólo con una decisión explícita del dueño.
+
 Cloud Run en `southamerica-east1`, junto a Supabase. Necesita `gcloud` con la
 sesión de un dueño del proyecto y facturación activa. Desplegado por primera vez
 el 2026-10-04 (`storefront-html-00001`).
