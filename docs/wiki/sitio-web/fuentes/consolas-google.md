@@ -2,7 +2,7 @@
 titulo: Consolas de Google (Search Console, GA4, Merchant)
 resumen: lo que Google dice del sitio, medido con fecha; cómo entrar y cómo no leerlas mal
 tipo: interna
-revisado: 2026-10-03
+revisado: 2026-10-04
 ---
 
 # Consolas de Google `[Consola]`
@@ -10,8 +10,10 @@ revisado: 2026-10-03
 Search Console (propiedad de dominio `vinabike.cl`), Google Analytics 4 (flujo
 web con `G-FR5Q37BW43`) y Merchant Center (cuenta 5635601285). Las administra la
 cuenta Google de Viñabike, que en el Chrome del dueño está en el índice `/u/2`
-(la `/u/0` es otra cuenta sin propiedades). Se leen con la extensión Claude in
-Chrome; el navegador integrado sirve para páginas públicas.
+(la `/u/0` es otra cuenta sin propiedades). En GA4 se entra con
+`?authuser=2`: con `authuser=1` abre «Welcome to Google Analytics», que parece
+falta de acceso y es sólo la cuenta equivocada (2026-10-04). Se leen con la
+extensión Claude in Chrome; el navegador integrado sirve para páginas públicas.
 
 ## Mediciones archivadas
 
@@ -24,6 +26,7 @@ Chrome; el navegador integrado sirve para páginas públicas.
 | 2026-09-23 | Search Console | sitemap reenviado (lee 1.309 URL); indexación pedida para `/` y `/servicios` (éste «Rastreada: sin indexar», último rastreo 7-may) |
 | 2026-09-23 | GA4 | llegan `view_item`, `add_to_cart`, `begin_checkout`, `contact`; `purchase` probado con un pedido de prueba (anulado) |
 | 2026-09-24 | GA4 | dimensión personalizada «Tramo de carga» = `load_bucket` registrada |
+| 2026-10-04 | GA4 (6-sep→3-oct) | 1.185 vistas: 279 fuera de vinabike.cl, 515 de vinabike.cl desde Estados Unidos (Seattle = el Mac del dueño y los agentes), 391 de clientes; ver [medicion](../paginas/medicion.md) |
 | 2026-09-23 | Merchant | «Información engañosa»; apelación del 27-dic-2025 rechazada; consola en período de bloqueo sin fecha; información de empresa igual a la web; feed «PRODUCTS SOURCE 2» 66/66 con precio y stock iguales a `get_public_products` |
 | 2026-09-24 | PageSpeed Insights (móvil, portada) | 62 → 38 tras la portada instantánea (LCP simulado 18,2 s con la foto pintada a 1,3 s en la traza); ver [rendimiento](../paginas/rendimiento.md) |
 
@@ -34,6 +37,11 @@ Chrome; el navegador integrado sirve para páginas públicas.
   publicación, filtrar **al sitemap enviado** y anotar la fecha del informe junto
   a la del build (`/release.json`). Sumar las filas de motivos en vez de leer la
   tarjeta redondeada.
+- **GA4, de dónde vienen:** «Seattle, Estados Unidos» es el Mac del dueño y
+  todo lo que corre en él, no clientes. Un aviso automático de GA4 de «alza de
+  tráfico de Estados Unidos» casi seguro es una ronda de trabajo en el sitio.
+  Agregar «Nombre de host» o «Ciudad» como dimensión secundaria antes de
+  concluir.
 - **Render:** la Prueba de resultados enriquecidos (pestaña HTML, lupa) muestra
   lo que Google pintó; Chrome con user agent de Googlebot no es lo mismo.
 - **Filas por página** en Search Console: el selector no toma clics en la

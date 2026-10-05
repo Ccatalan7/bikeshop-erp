@@ -4,6 +4,16 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-05 — consulta archivada — arranque en frío del servidor HTML con
+  `min-instances 0`: usable a los 3,0 s contra 2,5 s despierto; despertar suma
+  ~0,3–0,5 s ([rendimiento](paginas/rendimiento.md)).
+
+- 2026-10-04 — consulta archivada — GA4 por nombre de host y ciudad (6-sep→3-oct):
+  de 1.185 vistas, 279 no eran de vinabike.cl y 515 eran de vinabike.cl desde
+  Seattle, que es el Mac del dueño y los agentes; quedan 391 de clientes. El
+  «alza de Estados Unidos» del 24-sep fue nuestra ([medicion](paginas/medicion.md),
+  [consolas](fuentes/consolas-google.md)).
+
 - 2026-10-04 — corrección — GA4 contaba como usuarios de la tienda las
   sesiones del ERP web, las vistas previas y `localhost`, que comparten la
   página de la tienda; y las mediciones de los agentes, que abren un perfil

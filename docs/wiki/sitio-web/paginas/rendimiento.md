@@ -79,6 +79,12 @@ foto principal 2,64 s contra 1,58 s y primer byte 0,90 s contra 0,14 s. El
 primer byte lo fija la lectura (~300 ms, la ficha técnica), no la distancia
 `[Prod 2026-10-04]`.
 
+**Despertar el servidor** (2026-10-05, `min-instances 0`, tras 20 min sin
+visitas): la primera visita queda usable a los 3,0 s contra 2,5 s con el
+servidor despierto (primer byte 1,29 s contra 0,83 s, celular lento). El
+binario nativo arranca en ~0,15 s; el resto es la primera lectura
+`[Prod 2026-10-05]`.
+
 ## Borde y datos
 
 - `web/index.html` precarga `get_public_store_data` desde el Worker de Cloudflare

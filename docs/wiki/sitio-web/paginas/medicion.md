@@ -30,6 +30,26 @@ eventos de la app se encolan sin enviarse. Los filtros de GA4 no son
 retroactivos: para ver lo anterior sin ese ruido, se filtra por la dimensión
 «Nombre de host» = `vinabike.cl`.
 
+**«Seattle, Estados Unidos» somos nosotros.** GA4 ubica en Seattle la conexión
+del Mac del dueño, y con ella todo lo que corre ahí: su Chrome, Claude in
+Chrome, el navegador integrado y los Playwright de los agentes. Prueba: todas
+las vistas en `localhost` y `127.0.0.1` (sólo pueden salir de ese Mac; ningún
+flujo de CI abre el sitio en un navegador) están en Seattle. Del 6-sep al 3-oct
+`[Consola 2026-10-04]`:
+
+| Origen | Vistas | Parte |
+|---|---|---|
+| Total | 1.185 | 100 % |
+| Fuera de vinabike.cl (`localhost` 128, `127.0.0.1` 85, ERP web 63, otros 3) | 279 | 24 % |
+| vinabike.cl desde Estados Unidos (casi todo Seattle) | 515 | 43 % |
+| vinabike.cl desde Chile y otros países | 391 | 33 % |
+
+El «pico» del 24-sep, y el aviso de GA4 «United States traffic surge» (de 4 a 86
+vistas en una semana), fue nuestro: ese día se publicó el portal por etapas y la
+portada instantánea, y casi todas las vistas de `/cuenta/*` son de Seattle. El
+arreglo de dominio de arriba no quita esas visitas, porque son del dominio real.
+Para leer clientes, comparar con País = Chile o excluir la ciudad Seattle.
+
 Las herramientas que abren el sitio real con un navegador bloquean Google
 Analytics y el píxel de Meta (`services/storefront_html/tool/measure.mjs`): cada
 carga abre un perfil nuevo y contaría como un usuario más. Un script nuevo de

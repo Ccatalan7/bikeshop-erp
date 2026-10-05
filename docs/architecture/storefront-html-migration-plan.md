@@ -256,7 +256,16 @@ Costo: el sitio tiene que ser gratis (requisito del dueño, 2026-10-04). El
 servicio quedó con `min-instances 0`, la imagen guardada pesa 5,5 MB (la cuota
 gratis es de 500 MB) y cada compilación tarda unos minutos dentro de la cuota
 gratis de Cloud Build. Falta confirmar en la facturación, después de unos días,
-que el costo es US$0, y medir el arranque en frío antes de la fase 1.
+que el costo es US$0.
+
+Arranque en frío medido (2026-10-05, después de 20 minutos sin visitas; el
+registro de Cloud Run confirma «Starting new instance» en cada caso): el
+binario nativo sobre una imagen vacía queda listo en ~0,15 s y despertar le
+suma ~0,3–0,5 s a la primera visita. Con curl, primer byte 1,16 s en frío contra
+0,84–0,89 s despierto. En el celular lento, usable a los **3,0 s** en frío
+contra 2,5 s despierto (primer byte 1,29 s contra 0,83 s). Incluso la peor
+visita queda ocho veces por delante de los 24,1 s de la ficha Flutter: con
+`min-instances 0` el sitio sigue siendo gratis sin un costo visible.
 
 Lo que encontró la fase 0, y la fase 1 resuelve antes de abrir rutas:
 
