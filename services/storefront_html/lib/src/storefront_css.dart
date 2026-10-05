@@ -23,7 +23,8 @@ String storefrontCss({
 :root{--primary:$primary;--accent:$accent;--ink:#1e293b;--on-variant:#475569;--outline-variant:#cbd5e1;--chevron:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z'/%3E%3C/svg%3E");--muted:#5b6b7f;--faint:#94a3b8;--line:#e2e8f0;--soft:#f4f6f9;--ok:#15803d;--bad:#b42318;--foot:#1e293b;--r:14px;--c-line:#e8e2d8;--c-2nd:#666d7a;--c-muted:#93989f;--c-soft:#f6f6f6;--c-ok:#10b981;
 --head:"$headingFont","Arial Narrow",Arial,sans-serif;--body:"$bodyFont","Segoe UI",Roboto,Arial,sans-serif}
 [hidden]{display:none!important}*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
-body{margin:0;background:#fff;color:var(--ink);font:400 17px/1.55 var(--body)}
+body{margin:0;background:#fff;color:var(--ink);font:400 17px/1.55 var(--body);display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}
+#contenido{flex:1 0 auto}
 img{max-width:100%;display:block}a{color:var(--primary)}
 .wrap{max-width:1280px;margin:0 auto;padding-inline:24px}
 .skip{position:absolute;left:-999px}.skip:focus{left:16px;top:8px;z-index:20;background:#fff;padding:8px 12px}
@@ -197,8 +198,9 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,su
 .hero h1{margin:0;font:900 48px/.98 var(--body);letter-spacing:.8px;text-transform:uppercase;color:#fff}
 .hero-intro{margin:16px 0 0;font-size:16px;line-height:1.5;color:rgba(255,255,255,.92);display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
 .subcats{border-block:1px solid #eee}
-.subcats ul{display:flex;gap:22px;list-style:none;margin:0;padding:13px 0;overflow-x:auto;scrollbar-width:none}
-.subcats a{display:block;padding:8px 0;font:800 11px/1.2 var(--body);letter-spacing:.7px;text-transform:uppercase;color:rgba(0,0,0,.87);text-decoration:none;white-space:nowrap}
+/* Flutter pads each link 22 px on its right, the last one too, and centers the row. */
+.subcats ul{display:flex;width:max-content;max-width:100%;list-style:none;margin:0 auto;padding:12px 0;overflow-x:auto;scrollbar-width:none}.subcats li{padding-right:22px}
+.subcats a{display:block;padding:5px 0;font:800 11px/1.2 var(--body);letter-spacing:.7px;text-transform:uppercase;color:rgba(0,0,0,.87);text-decoration:none;white-space:nowrap}
 .subcats a:hover{color:var(--primary)}
 .top .wrap,.catalog.wrap,.subcats .wrap{max-width:1560px;padding-inline:28px}
 .catalog{display:grid;grid-template-columns:236px minmax(0,1fr);gap:40px;padding-block:33px 30px;align-items:start}
@@ -397,7 +399,7 @@ summary.sheet-item::-webkit-details-marker{display:none}
 }
 @media (max-width:699px){
 .hero{height:var(--hero-phone,130px)}.hero .wrap{padding:16px 22px}.hero h1{font-size:32px}.hero-intro{font-size:14px;-webkit-line-clamp:3}
-.subcats .wrap,.catalog.wrap{padding-inline:16px}.subcats ul{padding:10px 0}
+.subcats .wrap,.catalog.wrap{padding-inline:16px}.subcats ul{padding:9px 0}
 .catalog{display:block;padding-block:22px 16px}
 .results-head{grid-template-columns:minmax(0,1fr);grid-template-areas:"h" "n" "s" "c"}
 .trail{font-size:18px}
