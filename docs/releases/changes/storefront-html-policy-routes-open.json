@@ -13,11 +13,11 @@
   "evidence": [
     {
       "path": "scripts/generate_product_seo_snapshots.dart",
-      "sha256": "124ed8b50a8b7941e47f1c24c3cef8e3cb97b0dcc78ea81edbdb3c28f12797fc"
+      "sha256": "7d31c209b3c0dcfa29ad87911c3dc556bb500598f96c83955f0cab30eed01fbf"
     },
     {
       "path": "scripts/releases/check_storefront_html_routes.mjs",
-      "sha256": "1d08cd7421fc5bbb2ea5054bc6fe48ab03abf68b5010328347db51a2432ed912"
+      "sha256": "7e219a29ffd1111c8450a3437c8322897a6ff4f6b0e606f9e6d4a5446b7d5818"
     }
   ]
 }

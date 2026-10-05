@@ -12,13 +12,14 @@ revisado: 2026-10-05
 ## Lo esencial
 
 La tienda usa rutas limpias con la History API (sin `#`), que es lo que Google
-sabe seguir `[GSC]`. Desde el 2026-10-05, `/productos`, sus categorías, las
-fichas, `/producto/<uuid>` y las páginas de información (`/nosotros`,
-`/envios`, `/devoluciones`, `/terminos`, `/privacidad`) las responde el
-**servidor HTML** (Cloud Run
+sabe seguir `[GSC]`. Desde el 2026-10-05, la portada `/`, `/productos`, sus
+categorías, las fichas, `/producto/<uuid>` y las páginas de información
+(`/nosotros`, `/envios`, `/devoluciones`, `/terminos`, `/privacidad`) las
+responde el **servidor HTML** (Cloud Run
 `storefront-html`, reescrituras del target `store` en `firebase.json`): su 404 y
 sus 301 son respuestas reales del servidor `[Repo]`. Toda otra ruta desconocida
-Firebase la reescribe a `index.html` y Flutter la resuelve en
+Firebase la reescribe a `app.html` (la página de Flutter; no se llama
+`index.html` para que `/` sea del servidor) y Flutter la resuelve en
 `public_store_router.dart`; ahí el 404 lo decide la app, y una ruta inexistente
 responde «Página no encontrada» con `noindex` para no ser un soft 404 `[Repo]`
 `[GSC]`. Dentro de una visita que ya cargó Flutter (por ejemplo desde la
@@ -29,7 +30,7 @@ sin pedir la página al servidor; hasta la fase 2 conviven las dos.
 
 | Ruta | Qué es | ¿Indexable? |
 |---|---|---|
-| `/` | portada (página CMS `inicio`) | sí |
+| `/` | portada (página CMS `inicio`); la dibuja el servidor HTML y, si tiene un bloque que el HTML aún no dibuja, responde la página de Flutter con la cabeza de la portada | sí |
 | `/productos` | catálogo raíz | sí |
 | `/productos/categoria/:category` | categoría de productos (slug limpio) | sí, si está publicada y tiene productos elegibles |
 | `/productos/:slug/:sku` | **ficha canónica** de un producto | sí |

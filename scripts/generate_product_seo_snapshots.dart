@@ -358,6 +358,11 @@ void main(List<String> args) async {
     publicFallbackPaths: publicFallbackPaths,
   );
   await baseIndexFile.writeAsString(baseHtml);
+  // Every route Flutter draws loads this page (`**` in firebase.json): the
+  // same page without the instant home, under a name the HTML server's home
+  // cannot shadow.
+  await File(pathJoin(buildDir.path, seoFlutterEntryFileName))
+      .writeAsString(baseHtml);
 
   // Redirect identity follows owner publication, not transient catalog
   // availability. A product can leave the current snapshot/sitemap because it
@@ -401,7 +406,15 @@ void main(List<String> args) async {
           firstBlock: homeFirstBlock,
           eligibleHrefs: {'/', ...publicFallbackPaths},
         );
-  if (homeTemplate != null) {
+  if (serverRoutes.owns('/')) {
+    // The HTML server answers `/`: Hosting serves a file before any rewrite,
+    // so the root page must not exist.
+    await baseIndexFile.delete();
+    stdout.writeln(
+      '✅ La portada la responde el servidor HTML; Flutter entra por '
+      '$seoFlutterEntryFileName',
+    );
+  } else if (homeTemplate != null) {
     await baseIndexFile.writeAsString(
       injectSeoInstantPage(
         baseHtml,
@@ -5484,6 +5497,7 @@ Future<void> validateGeneratedSeoArtifacts({
   }
 
   addFile(File(pathJoin(buildDir.path, 'index.html')));
+  addFile(File(pathJoin(buildDir.path, seoFlutterEntryFileName)));
   addDirectory('productos');
   addDirectory('pagina');
   for (final slug in _trustPageDefinitions().keys) {
@@ -5501,9 +5515,10 @@ Future<void> validateGeneratedSeoArtifacts({
           .substring(root.length)
           .replaceAll(Platform.pathSeparator, '/')
           .replaceFirst(RegExp(r'/index\.html$'), '');
-      if (serverRoutes.owns(publicPath.isEmpty ? '/' : publicPath)) {
+      final routePath = publicPath.isEmpty ? '/' : publicPath;
+      if (serverRoutes.owns(routePath)) {
         failures.add(
-          '$publicPath es un archivo estático en una ruta del servidor HTML; '
+          '$routePath es un archivo estático en una ruta del servidor HTML; '
           'Hosting lo serviría en vez de la página.',
         );
       }
@@ -5910,6 +5925,11 @@ String _unescapeXml(String text) {
 /// The Cloud Run service that answers store routes in HTML
 /// (`services/storefront_html`).
 const seoStorefrontHtmlServiceId = 'storefront-html';
+
+/// The page every Flutter route of the store loads (`**` in the store's
+/// rewrites). It is not `index.html` so that `/` can belong to the HTML
+/// server: Hosting serves an existing file before any rewrite.
+const seoFlutterEntryFileName = 'app.html';
 
 /// Public paths the store target of `firebase.json` rewrites to the HTML
 /// server.

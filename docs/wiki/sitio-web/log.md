@@ -4,6 +4,10 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-05 — corrección — `/` abierta al servidor HTML: Flutter entra por
+  `app.html`, el `index.html` raíz se borra en el build; medidas de la portada
+  en un teléfono lento (texto ~1 s, foto ~4,8 s, Flutter ~20 s) en el plan de
+  migración; pendientes nuevos: fuentes WOFF2 y el PNG de 2 MB del carrusel.
 - 2026-10-05 — corrección — la tienda HTML se ve como la Flutter: tarjetas,
   grilla, riel de filtros, hojas «Filtro / Ordenar por» del teléfono,
   paginador, pie de escritorio y de teléfono y ficha de producto medidos a

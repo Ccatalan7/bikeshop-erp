@@ -27,8 +27,9 @@ void main() {
         },
       };
 
-  test('the repository config hands the product and information routes to '
-      'the server', () {
+  test(
+      'the repository config hands the product and information routes and '
+      'the home to the server', () {
     final routes = snapshots.SeoServerRenderedRoutes.fromFirebaseConfig(
       jsonDecode(File('firebase.json').readAsStringSync()),
     );
@@ -45,11 +46,13 @@ void main() {
       '/devoluciones',
       '/terminos',
       '/privacidad',
+      // The home (phase 2b): Flutter enters by app.html.
+      '/',
     ]) {
       expect(routes.owns(path), isTrue, reason: path);
     }
     for (final path in [
-      '/',
+      '/app.html',
       '/carrito',
       '/servicios',
       '/productosx',
@@ -209,6 +212,52 @@ void main() {
     expect(
       failures,
       contains('/nosotros es un archivo estático en una ruta del servidor'),
+    );
+  });
+
+  test(
+      'with the home on the server, Flutter enters by app.html and a root '
+      'index.html would hide the home', () async {
+    final buildDir = await Directory.systemTemp.createTemp(
+      'storefront-seo-server-home-',
+    );
+    addTearDown(() async {
+      if (await buildDir.exists()) await buildDir.delete(recursive: true);
+    });
+    final repository =
+        jsonDecode(File('firebase.json').readAsStringSync()) as Map;
+    final store = (repository['hosting'] as List)
+        .cast<Map>()
+        .singleWhere((entry) => entry['target'] == 'store');
+    expect(
+      (store['rewrites'] as List).last,
+      {'source': '**', 'destination': '/${snapshots.seoFlutterEntryFileName}'},
+    );
+    final routes = snapshots.SeoServerRenderedRoutes.fromFirebaseConfig(
+      config([toServer('/')]),
+    );
+    Future<String> report() async {
+      try {
+        await snapshots.validateGeneratedSeoArtifacts(
+          buildDir: buildDir,
+          storeUrl: 'https://taller-norte.example',
+          staticTrustPagePaths: const {},
+          serverRoutes: routes,
+        );
+      } on Object catch (error) {
+        return error.toString();
+      }
+      return '';
+    }
+
+    expect(
+      await report(),
+      isNot(contains('/ es un archivo estático')),
+    );
+    await File('${buildDir.path}/index.html').writeAsString('<html></html>');
+    expect(
+      await report(),
+      contains('/ es un archivo estático en una ruta del servidor'),
     );
   });
 }

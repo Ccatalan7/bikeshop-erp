@@ -59,9 +59,10 @@ export function selectStorefrontHtmlChecks({
   const urls = [...sitemapXml.matchAll(/<loc>(.*?)<\/loc>/g)].map((match) =>
     unescapeXml(match[1].trim()),
   );
+  // The home is the bare origin in the sitemap and in its canonical.
   const paths = urls
-    .filter((url) => url.startsWith(`${base}/`))
-    .map((url) => url.slice(base.length));
+    .filter((url) => url === base || url.startsWith(`${base}/`))
+    .map((url) => (url === base ? "/" : url.slice(base.length)));
   const categories = paths.filter((path) =>
     path.startsWith("/productos/categoria/"),
   );
@@ -93,7 +94,7 @@ export function selectStorefrontHtmlChecks({
   return {
     pages: ["/productos", ...exact, ...categories, ...sampled].map((path) => ({
       path,
-      canonical: `${base}${path}`,
+      canonical: path === "/" ? base : `${base}${path}`,
     })),
     redirects: legacy.flatMap((redirect) => [
       // Hosting's exact rule, and the server's answer for the singular route.

@@ -8,20 +8,20 @@
     "web"
   ],
   "title": "Productos y catálogo cargan mucho más rápido",
-  "summary": "Productos, categorías y búsqueda de vinabike.cl llegan armados desde el servidor, con el precio y el stock del momento y las fotos de cada lista en el tamaño de su tarjeta: quien entra desde Google ve la ficha en un segundo en un teléfono lento.",
+  "summary": "La portada, productos, categorías y búsqueda de vinabike.cl llegan armados desde el servidor, con el precio y el stock del momento y las fotos de cada lista en el tamaño de su tarjeta: quien entra desde Google ve la ficha en un segundo en un teléfono lento.",
   "items": [
-    "Productos, categorías y páginas como Nosotros o Envíos llegan armadas: en un teléfono lento se ven en 1 segundo, cuando la tienda tardaba de 15 a 20.",
+    "La portada, productos, categorías y páginas como Envíos llegan armadas: en un teléfono lento se leen en 1 segundo, cuando la tienda tardaba de 15 a 20.",
     "Categorías y filtros funcionan sin JavaScript, se comparten como enlace y cada foto de las listas pesa unos 20 KB en vez de 120.",
     "En Nosotros, Términos y Privacidad el contacto muestra el teléfono, el correo y la dirección de la tienda, no un aviso para el editor."
   ],
   "evidence": [
     {
       "path": "firebase.json",
-      "sha256": "efbe6d0246c36955f6211d23d96eec149992930d772155ff663a019ec9b7223c"
+      "sha256": "7167bab44b8ab730cef580234dbe0b29ea86a2f1e5f8596610d7986c966da92f"
     },
     {
       "path": "scripts/generate_product_seo_snapshots.dart",
-      "sha256": "124ed8b50a8b7941e47f1c24c3cef8e3cb97b0dcc78ea81edbdb3c28f12797fc"
+      "sha256": "7d31c209b3c0dcfa29ad87911c3dc556bb500598f96c83955f0cab30eed01fbf"
     },
     {
       "path": ".github/workflows/firebase-hosting-store.yml",
@@ -29,7 +29,7 @@
     },
     {
       "path": "scripts/releases/check_storefront_html_routes.mjs",
-      "sha256": "1d08cd7421fc5bbb2ea5054bc6fe48ab03abf68b5010328347db51a2432ed912"
+      "sha256": "7e219a29ffd1111c8450a3437c8322897a6ff4f6b0e606f9e6d4a5446b7d5818"
     },
     {
       "path": "services/storefront_html/bin/server.dart",

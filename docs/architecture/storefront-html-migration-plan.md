@@ -691,8 +691,7 @@ Lo que costó una vuelta, para el que siga:
 **Red de seguridad para las rutas abiertas.** El editor publica al
 instante, sin pasar por CI: si el dueño agrega a una página abierta un tipo
 de bloque que el HTML aún no dibuja, el servidor no lo omite, responde la
-página de Flutter (`app.html` de Hosting, que hoy cae en el `index.html` de
-toda ruta) con la cabeza de esa página (título, descripción, canónica,
+página de Flutter (`app.html` de Hosting) con la cabeza de esa página (título, descripción, canónica,
 robots, sociales, JSON-LD) y su texto en el `<noscript>`, y lo marca con
 `x-storefront-fallback: flutter` (`flutter_shell.dart`). Sin eso Google
 leería la portada en `/envios`. La copia oculta sigue mostrando lo que el
@@ -707,16 +706,58 @@ quedan 1–2 px más arriba que en Flutter (su reparto del interlineado no es
 el de CSS) y la etiqueta «Iniciar sesión» de Flutter cae en la letra por
 defecto del motor porque su estilo no nombra familia (4 px más ancha).
 
+## Fase 2c: `/` en el servidor (2026-10-05)
+
+Hosting sirve un archivo que calza exacto antes que cualquier reescritura, y
+`/` calzaba con el `index.html` de Flutter. El generador
+(`generate_product_seo_snapshots.dart`) ahora copia la entrada de Flutter a
+`app.html`, la usa como destino de `**` (carrito, checkout, portal, servicios)
+y, cuando `/` es del servidor, borra el `index.html` raíz; el validador falla
+si queda un archivo en una ruta del servidor. No hay service worker
+(`--pwa-strategy=none`) ni script que busque `index.html` por nombre; el
+`<base href="/">` es el mismo. `app.html` tiene su regla de caché
+(`max-age=0, must-revalidate`), como tenía `index.html`. La red de seguridad
+lee `app.html`: una portada con un bloque que el HTML no dibuja la responde
+Flutter con la cabeza de la portada. Revertir = quitar la reescritura de `/`
+(el generador vuelve a dejar el `index.html`).
+
+Medido en un teléfono lento (4× CPU, 1,6 Mbps, 150 ms; caché fría), la
+portada:
+
+| | Flutter (`/` hasta hoy) | HTML |
+|---|---|---|
+| Primer cuadro con contenido | 19,9 s (`flutter-first-frame`) | 1,0–1,3 s (texto y encabezado) |
+| Foto principal | después de eso | 4,8 s |
+| LCP que reporta el navegador | 1,8 s (la pantalla de carga, no la tienda) | 4,8 s |
+
+El LCP de Flutter que ve Google es el de su pantalla de carga: el número de
+Core Web Vitals de la portada va a «empeorar» al abrirla aunque la tienda se
+vea 15 s antes. No es una regresión.
+
+Lo que costó una vuelta:
+
+- **Una foto lazy apilada bajo otra igual se descarga**: está «a la vista»
+  para el navegador aunque su diapositiva esté oculta. La tercera diapositiva
+  es un PNG de 2,1 MB subido sin pasar por la optimización del editor; se
+  bajaba junto a la primera (82 KB) y le quitaba el ancho de banda (carga
+  completa 16 s). Ahora una diapositiva posterior nombra su foto en
+  `data-src` y el script la pide antes de mostrarla, la segunda cuando la
+  página terminó de cargar (6 s).
+- **El `Wrap` de Flutter mide lo que su fila más ancha**: centrado en el
+  pie, con cada fila empezando a la izquierda. Una línea flex que se parte no
+  se encoge a su fila más ancha, así que el servidor calcula ese ancho con
+  las columnas de la tienda y lo aplica con container queries
+  (`SiteFooter.wrapCss`). Entre 800 y ~1000 px «Contacto» baja bajo el logo.
+
 ### Pendiente
 
 - El costo real de Cloud Run en la facturación, después de unos días.
-- Abrir `/`. Una reescritura no basta: Hosting sirve un archivo que calza
-  exacto antes que cualquier reescritura, y `/` calza con el `index.html` de
-  Flutter, que además es el destino de `**` para carrito, checkout y portal.
-  Hay que mover la entrada de Flutter a otro archivo (y su `**`), revisar
-  que el service worker y el arranque no la busquen por nombre, y que el
-  HTML del servidor traiga lo que hoy trae la portada instantánea (JSON-LD
-  del negocio, enlaces). Sólo con `x-storefront-uncovered` vacío.
+- Las fuentes viajan como TTF completos (Barlow ~45 KB comprimido por peso,
+  cuatro antes de la foto principal; Oswald 75 KB). Un WOFF2 con el rango
+  latino pesa ~15 KB: es la siguiente mejora de la foto principal en todas
+  las páginas HTML.
+- El PNG de 2,1 MB de la tercera diapositiva debería volver a subirse por el
+  editor (que lo optimiza a WebP): hoy sólo dejó de estorbar a la primera.
 - Navegar dentro de la tienda HTML sin volver a Flutter (enlaces de la
   portada a `/productos?category=…`).
 - Las copias de una foto reemplazada quedan en Storage (pocos KB cada una);
