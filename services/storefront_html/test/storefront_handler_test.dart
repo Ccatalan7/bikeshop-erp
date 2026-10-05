@@ -1275,6 +1275,13 @@ void main() {
         expect(response.statusCode, 200);
         expect(response.headers['x-storefront-uncovered'], isNull);
         expect(html, contains('<header class="top over">'));
+        // The first slide's photo is the largest paint: fetched first.
+        expect(
+          html,
+          contains(
+            'href="https://example.invalid/s1.webp" fetchpriority="high"',
+          ),
+        );
         expect(html, contains('h.classList.toggle("clear",scrollY<=50)'));
         // The carousel: the first slide's title is the page's heading, the
         // composed slide is drawn as layers, and the page script plays it.

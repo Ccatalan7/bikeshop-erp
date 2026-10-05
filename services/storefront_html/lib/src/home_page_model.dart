@@ -9,6 +9,7 @@ import 'block_composition.dart';
 import 'public_reads.dart';
 import 'site_layout.dart';
 import 'website_blocks_view.dart';
+import 'website_carousel_view.dart';
 import 'website_page_css.dart';
 
 /// The home's blocks span the window (`PublicHomePage` composes at the
@@ -59,6 +60,29 @@ List<Map<String, dynamic>> _rows(Map<String, dynamic>? page) =>
         for (final block in blocks)
           if (block is Map) Map<String, dynamic>.from(block),
     ]);
+
+/// The photo of the first slide when the page opens with a carousel: the
+/// largest paint, fetched before the stylesheet's fonts.
+String? _firstSlideImage(List<Map<String, dynamic>> rows) {
+  final first = rows
+      .where((row) => row['is_visible'] != false)
+      .fold<Map<String, dynamic>?>(
+        null,
+        (best, row) =>
+            best == null ||
+                ((row['order_index'] as num?) ?? 0) <
+                    ((best['order_index'] as num?) ?? 0)
+            ? row
+            : best,
+      );
+  if (first == null || first['block_type'] != 'carousel') return null;
+  final data = first['block_data'];
+  if (data is! Map) return null;
+  final slides = carouselSlides(Map<String, dynamic>.from(data));
+  if (slides.isEmpty) return null;
+  final image = (slides.first['imageUrl'] ?? '').toString().trim();
+  return image.isEmpty ? null : image;
+}
 
 /// The store's home, as Flutter's `PublicHomePage` composes it.
 class HomePageModel {
@@ -111,6 +135,10 @@ class HomePageModel {
         imageUrl: shell.setting('seo_og_image', shell.setting('logo_url')),
         styles: homePageCss(theme),
         overlayHeader: true,
+        preloadImage: switch (_firstSlideImage(rows)) {
+          final src? => (src: src, srcset: null, sizes: null),
+          null => null,
+        },
       ),
       blocks: composeBlocks(
         rows: rows,
