@@ -4,6 +4,7 @@ library;
 
 export 'src/catalog_page_model.dart';
 export 'src/catalog_page_view.dart';
+export 'src/flutter_shell.dart';
 export 'src/home_page_model.dart';
 export 'src/home_page_view.dart' show homePageDocument;
 export 'src/policy_page_model.dart';

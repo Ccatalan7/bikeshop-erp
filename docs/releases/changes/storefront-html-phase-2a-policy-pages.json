@@ -132,7 +132,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
-      "sha256": "824401676721c4217c8178cf4789ab1a5cf3e852eabf2270172eedaa17c34353"
+      "sha256": "9bc60ef3e6b2aacd5e314f09c231676fb9c06edd8f4b62d43a51dc4f3782f3fe"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_shell.dart",
@@ -148,7 +148,7 @@
     },
     {
       "path": "services/storefront_html/lib/storefront_html.dart",
-      "sha256": "0d5d6e5535e7cf0672a241136a74046ec70311c24c2a3c0f122f47e8a62ac5d8"
+      "sha256": "f8b67d9cf031cc4b8f53c8a0ed6d37182e62ff9b6cd8db3d24dfbaa6d8133935"
     }
   ]
 }

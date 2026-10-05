@@ -688,6 +688,16 @@ Lo que costó una vuelta, para el que siga:
 - **Un `Wrap` alinea arriba**: en el pie, el chip de transferencia quedaba
   centrado con el logo de 60 px; arreglado en todas las páginas.
 
+**Red de seguridad para las rutas abiertas.** El editor publica al
+instante, sin pasar por CI: si el dueño agrega a una página abierta un tipo
+de bloque que el HTML aún no dibuja, el servidor no lo omite, responde la
+página de Flutter (`app.html` de Hosting, que hoy cae en el `index.html` de
+toda ruta) con la cabeza de esa página (título, descripción, canónica,
+robots, sociales, JSON-LD) y su texto en el `<noscript>`, y lo marca con
+`x-storefront-fallback: flutter` (`flutter_shell.dart`). Sin eso Google
+leería la portada en `/envios`. La copia oculta sigue mostrando lo que el
+HTML dibuja.
+
 Para capturar otra diapositiva de Flutter se hace clic en su punto por
 coordenada y sin activar la semántica: con ella activa el clic no cambió la
 diapositiva (observado, sin buscar la causa).

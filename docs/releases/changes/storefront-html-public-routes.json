@@ -33,7 +33,7 @@
     },
     {
       "path": "services/storefront_html/bin/server.dart",
-      "sha256": "f86a052612f74ea124851a717a67a8291a7f39272814c9ab438902e938be9b18"
+      "sha256": "8da7ac687500e2eb039b4a7c64a68aed8ffc8595db33a9cafeb8efcafc938916"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_config.dart",
@@ -41,7 +41,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
-      "sha256": "824401676721c4217c8178cf4789ab1a5cf3e852eabf2270172eedaa17c34353"
+      "sha256": "9bc60ef3e6b2aacd5e314f09c231676fb9c06edd8f4b62d43a51dc4f3782f3fe"
     },
     {
       "path": "services/storefront_html/deploy_cloud_run.sh",

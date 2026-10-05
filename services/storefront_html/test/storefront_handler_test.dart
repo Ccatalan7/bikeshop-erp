@@ -234,11 +234,30 @@ Future<Response> _get(
   String method = 'GET',
   StorefrontConfig config = _config,
   Map<String, String> headers = const {},
+  FlutterShell? flutterShell,
 }) => Future.value(
-  storefrontHandler(config: config, reads: reads)(
+  storefrontHandler(config: config, reads: reads, flutterShell: flutterShell)(
     Request(method, Uri.parse('http://localhost$path'), headers: headers),
   ),
 );
+
+/// The Flutter store's page, as Hosting would serve it.
+class _FakeFlutterShell implements FlutterShell {
+  final requested = <String>[];
+
+  @override
+  Future<String?> html(String storeUrl) async {
+    requested.add(storeUrl);
+    return '<!DOCTYPE html><html><head><title>Tienda | Viñabike</title>\n'
+        '<meta name="description" content="La portada.">\n'
+        '<link rel="canonical" href="https://vinabike.cl">\n'
+        '<meta property="og:url" content="https://vinabike.cl">\n'
+        '<meta name="robots" content="index,follow">\n'
+        '</head><body><noscript><main class="storefront-nojs-fallback">'
+        '<h1>Tienda</h1></main></noscript>'
+        '<script src="flutter_bootstrap.js"></script></body></html>';
+  }
+}
 
 Map<String, dynamic> _nav(
   String id,
@@ -1095,6 +1114,44 @@ void main() {
       expect(response.headers['x-storefront-uncovered'], isNull);
     });
 
+    test('an open information page with a block the HTML does not draw '
+        'yet is drawn by Flutter', () async {
+      final response = await _get(
+        _FakeReads(
+          policyRows: [
+            row('envios', [
+              ...(rows.first['website_blocks'] as List)
+                  .cast<Map<String, dynamic>>(),
+              block('logos', 'brandLogos', 5, {'logos': []}),
+            ]),
+          ],
+        ),
+        '/envios',
+        flutterShell: _FakeFlutterShell(),
+      );
+      expect(response.statusCode, 200);
+      expect(response.headers['x-storefront-fallback'], 'flutter');
+      expect(response.headers['x-robots-tag'], isNull);
+      final html = await response.readAsString();
+      expect(html, contains('flutter_bootstrap.js'));
+      // The page's own head and words, not the home's.
+      expect(html, contains('<title>Información de Envíos | Viñabike</title>'));
+      expect(
+        html,
+        contains('<link rel="canonical" href="https://vinabike.cl/envios">'),
+      );
+      expect(
+        html,
+        contains(
+          '<meta property="og:url" content="https://vinabike.cl/envios">',
+        ),
+      );
+      expect(html, isNot(contains('La portada.')));
+      expect(html, contains('<h1>Información de Envíos</h1>'));
+      expect(html, isNot(contains('<h1>Tienda</h1>')));
+      expect(html, contains('"@type":"WebPage"'));
+    });
+
     test('a block the HTML does not draw yet is named, not guessed', () async {
       final response = await _get(
         _FakeReads(
@@ -1313,19 +1370,28 @@ void main() {
       },
     );
 
-    test('a block the HTML does not draw yet is named', () async {
-      final response = await _get(
-        _FakeReads(
-          homeRow: home([
-            ...blocks,
-            block('faq', 'faq', 6, {'title': 'Preguntas'}),
-          ]),
-          shell: shell,
-        ),
-        '/_html/',
+    test('a block the HTML does not draw yet is named; on the public path '
+        'Flutter draws the page', () async {
+      final reads = _FakeReads(
+        homeRow: home([
+          ...blocks,
+          block('faq', 'faq', 6, {'title': 'Preguntas'}),
+        ]),
+        shell: shell,
       );
-      expect(response.statusCode, 200);
-      expect(response.headers['x-storefront-uncovered'], 'faq');
+      final flutter = _FakeFlutterShell();
+      final hidden = await _get(reads, '/_html/', flutterShell: flutter);
+      expect(hidden.statusCode, 200);
+      expect(hidden.headers['x-storefront-uncovered'], 'faq');
+      expect(await hidden.readAsString(), contains('TALLER DE BICICLETAS'));
+      expect(flutter.requested, isEmpty);
+
+      final public = await _get(reads, '/', flutterShell: flutter);
+      expect(public.statusCode, 200);
+      expect(public.headers['x-storefront-fallback'], 'flutter');
+      expect(public.headers['x-storefront-uncovered'], 'faq');
+      expect(await public.readAsString(), contains('flutter_bootstrap.js'));
+      expect(flutter.requested, ['https://vinabike.cl']);
     });
 
     test('a store without a published home answers 404', () async {

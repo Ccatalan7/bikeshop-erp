@@ -35,8 +35,16 @@
       "sha256": "7e5ed5f6dc4bb440602f4975eaaa28397c31fc7fdfa8f0965aaeeeb1ce09960c"
     },
     {
+      "path": "services/storefront_html/bin/server.dart",
+      "sha256": "8da7ac687500e2eb039b4a7c64a68aed8ffc8595db33a9cafeb8efcafc938916"
+    },
+    {
       "path": "services/storefront_html/lib/src/css_values.dart",
       "sha256": "e47bbc7979f7c4531637ce6faed9d0e6ee093629145c7fbd5f357627cb97419d"
+    },
+    {
+      "path": "services/storefront_html/lib/src/flutter_shell.dart",
+      "sha256": "bd1cb7d99aa2770b3be0c8c0b0d70fcba74dc2e98e1d07a572f4103549a5373c"
     },
     {
       "path": "services/storefront_html/lib/src/home_page_model.dart",
@@ -68,7 +76,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
-      "sha256": "824401676721c4217c8178cf4789ab1a5cf3e852eabf2270172eedaa17c34353"
+      "sha256": "9bc60ef3e6b2aacd5e314f09c231676fb9c06edd8f4b62d43a51dc4f3782f3fe"
     },
     {
       "path": "services/storefront_html/lib/src/website_blocks_view.dart",
@@ -108,11 +116,11 @@
     },
     {
       "path": "services/storefront_html/lib/storefront_html.dart",
-      "sha256": "0d5d6e5535e7cf0672a241136a74046ec70311c24c2a3c0f122f47e8a62ac5d8"
+      "sha256": "f8b67d9cf031cc4b8f53c8a0ed6d37182e62ff9b6cd8db3d24dfbaa6d8133935"
     },
     {
       "path": "services/storefront_html/test/storefront_handler_test.dart",
-      "sha256": "94eef7aaf309f910d7135f85024422cd382e315f10dc40f88aaa484f582655eb"
+      "sha256": "52ac1af7d6dac05701215513e13ccf411c39f900ecb64a54653ff9e139060c2a"
     }
   ]
 }

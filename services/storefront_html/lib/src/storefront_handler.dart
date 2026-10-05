@@ -12,6 +12,7 @@ import 'package:vinabike_public_core/shared/models/product.dart';
 
 import 'catalog_page_model.dart';
 import 'catalog_page_view.dart';
+import 'flutter_shell.dart';
 import 'home_page_model.dart';
 import 'home_page_view.dart';
 import 'policy_page_model.dart';
@@ -48,9 +49,14 @@ Middleware storefrontSourceHeader(String? source) =>
 /// Pages are `private, no-cache`: the CDN never keeps a copy and the browser
 /// asks again on every visit, so price and stock are as fresh as the base,
 /// while the back button can still restore the page from memory.
+///
+/// [flutterShell] answers an opened editor page that has a block the HTML
+/// does not draw yet ([FlutterShell]); without it such a page is drawn
+/// without that block.
 Handler storefrontHandler({
   required StorefrontConfig config,
   required PublicReads reads,
+  FlutterShell? flutterShell,
 }) {
   return (Request request) async {
     final requested = request.requestedUri;
@@ -85,6 +91,7 @@ Handler storefrontHandler({
       request: request,
       path: path,
       hidden: hidden,
+      flutterShell: flutterShell,
     );
     try {
       return switch (segments) {
@@ -122,6 +129,7 @@ class _Route {
     required this.request,
     required this.path,
     required this.hidden,
+    required this.flutterShell,
   });
 
   final StorefrontConfig config;
@@ -129,6 +137,7 @@ class _Route {
   final Request request;
   final String path;
   final bool hidden;
+  final FlutterShell? flutterShell;
   final _watch = Stopwatch()..start();
 
   Uri get _uri => request.requestedUri;
@@ -271,6 +280,17 @@ class _Route {
     final context = _context((shell: data.shell, payments: data.payments));
     if (!context.shell.sitePublished) return _unpublished(context);
     final model = PolicyPageModel.build(page: context, slug: slug, reads: data);
+    if (model.available) {
+      if (await _flutterFallback(
+            context,
+            model.uncoveredTypes,
+            meta: model.meta,
+            document: policyPageDocument(model),
+          )
+          case final fallback?) {
+        return fallback;
+      }
+    }
     final response = await _render(
       policyPageDocument(model),
       status: model.available ? 200 : 404,
@@ -290,6 +310,15 @@ class _Route {
     if (!context.shell.sitePublished) return _unpublished(context);
     if (data.page == null) return notFound();
     final model = HomePageModel.build(page: context, reads: data);
+    if (await _flutterFallback(
+          context,
+          model.uncoveredTypes,
+          meta: model.meta,
+          document: homePageDocument(model),
+        )
+        case final fallback?) {
+      return fallback;
+    }
     final response = await _render(
       homePageDocument(model),
       indexable: model.meta.indexable,
@@ -394,6 +423,41 @@ class _Route {
         'location': location,
         'cache-control': 'public, max-age=300',
         if (hidden) 'x-robots-tag': 'noindex',
+      },
+    );
+  }
+
+  /// On a public path, a page with blocks the HTML does not draw yet is
+  /// answered with the Flutter store, which draws it whole, carrying this
+  /// page's head and words for crawlers ([adaptFlutterShell]); the hidden
+  /// copy shows what the HTML draws, to measure it.
+  Future<Response?> _flutterFallback(
+    PageContext context,
+    Set<String> uncovered, {
+    required PageMeta meta,
+    required Component document,
+  }) async {
+    if (uncovered.isEmpty || hidden) return null;
+    final shell = await flutterShell?.html(context.storeUrl);
+    if (shell == null) return null;
+    final rendered = await renderComponent(document, request: request);
+    final html = adaptFlutterShell(
+      shell,
+      meta,
+      main: mainContentOf(utf8.decode(rendered.body)),
+    );
+    final gzipped = _acceptsGzip(request)
+        ? gzip.encode(utf8.encode(html))
+        : null;
+    return Response(
+      200,
+      body: gzipped ?? html,
+      headers: {
+        ..._pageHeaders(noindex: !meta.indexable),
+        'vary': 'accept-encoding',
+        'content-encoding': ?(gzipped == null ? null : 'gzip'),
+        'x-storefront-uncovered': uncovered.join(','),
+        'x-storefront-fallback': 'flutter',
       },
     );
   }

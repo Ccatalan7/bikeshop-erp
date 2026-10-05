@@ -19,7 +19,11 @@ Future<void> main() async {
       .addMiddleware(logRequests())
       .addMiddleware(storefrontSourceHeader(config.source))
       .addHandler(
-        storefrontHandler(config: config, reads: SupabasePublicReads(config)),
+        storefrontHandler(
+          config: config,
+          reads: SupabasePublicReads(config),
+          flutterShell: HostedFlutterShell(),
+        ),
       );
   final port = int.parse(Platform.environment['PORT'] ?? '8080');
   final server = await shelf_io.serve(
