@@ -5,10 +5,10 @@ mismo código Dart que el ERP (`packages/vinabike_public_core`). Fases 0 y 1 de
 `docs/architecture/storefront-html-migration-plan.md`: fichas de producto,
 `/productos` (con búsqueda y filtros) y las páginas de categoría. Desde el
 2026-10-05 responde las rutas públicas que `firebase.json` le reescribe
-(`/productos`, `/productos/**`, `/producto/**`) y una copia con `noindex` en
-`/_html/...`. Las páginas de información (fase 2a) están sólo en la copia
-oculta. Portada, las demás páginas del editor, carrito, checkout y portal
-siguen en Flutter.
+(`/productos`, `/productos/**`, `/producto/**` y, desde la fase 2a, las cinco
+páginas de información) y una copia con `noindex` en `/_html/...`. La
+portada se dibuja en `/_html/`, pero `/` sigue en Flutter hasta abrirla; las
+demás páginas del editor, carrito, checkout y portal siguen en Flutter.
 
 - **Rutas** (`storefront_handler.dart`): `/productos`,
   `/productos/categoria/<slug>`, `/productos/<slug>/<sku>`; las viejas
@@ -18,7 +18,10 @@ siguen en Flutter.
   un producto que no se ve, responden 404 con su página. `/nosotros`,
   `/envios`, `/devoluciones`, `/terminos` y `/privacidad`: la página del
   editor con sus bloques; sin nada que leer, 404 con el mensaje de Flutter.
-  Un bloque que aún no se dibuja se nombra en `x-storefront-uncovered`.
+  `/`: la portada del editor (`is_home`) con su encabezado sobre el primer
+  bloque, y los productos que sus bloques eligen (`get_public_products` con
+  `p_product_ids` y sólo con stock); sin portada publicada, 404. Un bloque que
+  aún no se dibuja se nombra en `x-storefront-uncovered`.
 - **Datos:** lecturas públicas con la llave publicable, al mismo tiempo cuando
   no dependen una de otra: `get_public_storefront_shell_v1` (ajustes, menús,
   páginas, categorías con descripción, imagen y orden) y

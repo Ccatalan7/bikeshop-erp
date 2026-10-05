@@ -74,6 +74,18 @@ typedef PolicyPagesReads = ({
   List<Object?> pages,
 });
 
+/// The home: the shell, the published page with `is_home` and its visible
+/// blocks, and the products its product blocks pick by hand, completed like
+/// a catalog listing (only those in stock, as Flutter's block asks).
+typedef HomePageReads = ({
+  Map<String, dynamic> shell,
+  Object? payments,
+  Map<String, dynamic>? page,
+  List<Object?> products,
+  List<Object?> brandRows,
+  List<Object?> thumbnails,
+});
+
 abstract interface class PublicReads {
   Future<ShellReads> shell();
 
@@ -89,6 +101,12 @@ abstract interface class PublicReads {
   Future<String?> productIdForAlias(String path);
 
   Future<PolicyPagesReads> policyPages();
+
+  /// [productIds] reads the products the page's blocks pick (a function of
+  /// the page, so it runs after it).
+  Future<HomePageReads> homePage(
+    List<String> Function(Map<String, dynamic> page) productIds,
+  );
 }
 
 class PublicReadException implements Exception {
@@ -160,6 +178,56 @@ class SupabasePublicReads implements PublicReads {
       shell: results[0] as Map<String, dynamic>,
       payments: results[1],
       pages: results[2] as List<Object?>,
+    );
+  }
+
+  @override
+  Future<HomePageReads> homePage(
+    List<String> Function(Map<String, dynamic> page) productIds,
+  ) async {
+    final results = await Future.wait([
+      _shell(),
+      _payments(),
+      _select('website_pages', {
+        'select':
+            'id,slug,title,meta_title,meta_description,meta_keywords,'
+            'og_image_url,is_published,'
+            'website_blocks(id,block_type,block_data,is_visible,order_index)',
+        'tenant_id': 'eq.${config.tenantId}',
+        'is_home': 'eq.true',
+        'is_published': 'eq.true',
+        'website_blocks.tenant_id': 'eq.${config.tenantId}',
+        'limit': '1',
+      }),
+    ]);
+    final pages = results[2] as List<Object?>;
+    final page = pages.isNotEmpty && pages.first is Map
+        ? Map<String, dynamic>.from(pages.first as Map)
+        : null;
+    final ids = page == null ? const <String>[] : productIds(page);
+    var listing = (
+      rows: const <Object?>[],
+      brands: const <Object?>[],
+      thumbnails: const <Object?>[],
+    );
+    if (ids.isNotEmpty) {
+      final rows = await _rpc('get_public_products', {
+        'p_tenant_id': config.tenantId,
+        'p_product_ids': ids,
+        'p_only_in_stock': true,
+        'p_sort_by': 'name',
+        'p_limit': ids.length,
+        'p_offset': 0,
+      });
+      listing = await _completeRows(rows is List ? rows : const []);
+    }
+    return (
+      shell: results[0] as Map<String, dynamic>,
+      payments: results[1],
+      page: page,
+      products: listing.rows,
+      brandRows: listing.brands,
+      thumbnails: listing.thumbnails,
     );
   }
 

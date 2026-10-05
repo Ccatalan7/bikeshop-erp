@@ -1,9 +1,13 @@
+import 'dart:convert';
+
 // The core runs on the plain Dart VM: `dart test` here has no Flutter SDK, so
 // this file fails to compile the day a core file imports Flutter. The rules
 // themselves are covered by the ERP's unit tests (test/unit/public_*).
 import 'package:test/test.dart';
 import 'package:vinabike_public_core/modules/website/models/website_block_base_definitions.dart';
 import 'package:vinabike_public_core/modules/website/models/website_block_type.dart';
+import 'package:vinabike_public_core/modules/website/models/website_google_reviews.dart';
+import 'package:vinabike_public_core/modules/website/models/website_hero_content.dart';
 import 'package:vinabike_public_core/modules/website/models/website_page_composition.dart';
 import 'package:vinabike_public_core/modules/website/models/website_responsive_authoring.dart';
 import 'package:vinabike_public_core/modules/website/models/website_responsive_projection.dart';
@@ -149,6 +153,64 @@ void main() {
         storeName: 'Viñabike',
       )['@type'],
       'WebPage',
+    );
+  });
+
+  test('the home blocks read their content the same in Flutter and HTML', () {
+    // A slide's button: its own fields, outlined unless it says otherwise.
+    final action = resolveWebsiteCarouselSlideAction({
+      'ctaText': 'Ver cámaras',
+      'ctaLink': '/productos',
+      'actionVariant': 'filled',
+      'label': 'ignorado',
+    });
+    expect(action?.label, 'Ver cámaras');
+    expect(action?.variant.storageValue, 'filled');
+    expect(resolveWebsiteCarouselSlideAction({'ctaText': ' '}), isNull);
+
+    expect(
+      websiteYouTubeVideoId('https://youtu.be/BnJCsaH5Ybs?si=x'),
+      'BnJCsaH5Ybs',
+    );
+    expect(websiteYouTubeVideoId('https://www.youtube.com/watch?v=abc'), 'abc');
+    expect(websiteYouTubeVideoId('https://www.youtube.com/embed/xyz'), 'xyz');
+    expect(websiteYouTubeVideoId('https://vimeo.com/1'), isNull);
+
+    // Reviews: the store's synced ones when the block has none, filtered by
+    // the block, and the aggregate over the whole list.
+    final settings = {
+      'google_reviews_data': jsonEncode([
+        {'author_name': 'Mia', 'rating': 5},
+        {
+          'reviewer': {'displayName': 'Ana'},
+          'starRating': 'FOUR',
+        },
+        {'author_name': 'Juan', 'rating': 2},
+        {'author_name': 'Sin nota'},
+      ]),
+      'google_reviews_total': '36',
+    };
+    final data = WebsiteGoogleReviewsContent.withSyncedReviews({
+      'minRating': 4,
+    }, (key) => settings[key] ?? '');
+    final content = WebsiteGoogleReviewsContent.fromData(data);
+    expect(
+      [
+        for (final review in content.reviews)
+          WebsiteGoogleReviewsContent.authorName(review.data),
+      ],
+      ['Mia', 'Ana'],
+    );
+    expect(content.rating, closeTo(11 / 3, 1e-9));
+    expect(content.totalReviews, 36);
+    expect(
+      WebsiteGoogleReviewsContent.text(content.reviews.first.data),
+      'Calificación publicada en Google.',
+    );
+    expect(
+      WebsiteGoogleReviewsContent.fromData(const {}).rating,
+      isNull,
+      reason: 'without reviews there is no score to show',
     );
   });
 }

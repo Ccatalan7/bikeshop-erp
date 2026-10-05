@@ -42,7 +42,9 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,su
 .menu>ul{display:flex;gap:24px;list-style:none;margin:0;padding:0}
 .menu>ul>li{position:relative;display:flex;align-items:center;height:56px}
 .menu>ul>li>a{display:flex;align-items:center;padding:5px 0;font:400 14px/20px var(--body);letter-spacing:.1px;text-transform:uppercase;color:var(--ink);text-decoration:none;border-bottom:2px solid transparent;white-space:nowrap}
-.menu>ul>li>a[aria-current]{color:var(--primary);font-weight:600;border-bottom-color:var(--primary)}
+/* The current item takes the header's own text color (`_buildNavItemLink`
+   gets `textColor`), not the brand's. */
+.menu>ul>li>a[aria-current]{color:rgb(0 0 0 / .87);font-weight:600;border-bottom-color:rgb(0 0 0 / .87)}
 .has-sub>a{font-weight:600!important;border-bottom-color:transparent!important;border-radius:4px;transition:background .25s}
 .has-sub:hover>a,.has-sub:focus-within>a{background:color-mix(in srgb,var(--primary) 8%,transparent)}
 .has-sub>a::after{content:"";width:18px;height:18px;margin-left:4px;background:currentColor;-webkit-mask:var(--chevron) center/18px no-repeat;mask:var(--chevron) center/18px no-repeat;transition:transform .25s}
@@ -53,9 +55,22 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,su
 .tools{display:flex;align-items:center;gap:2px;margin-left:auto;color:var(--ink)}.tools>a{color:inherit;display:flex;align-items:center;justify-content:center;width:40px;height:40px}.tools>a svg{width:22px;height:22px}
 .cart-link{position:relative}
 .cart-count{position:absolute;top:-8px;right:-10px;min-width:19px;height:19px;padding:0 5px;border-radius:999px;background:var(--accent);color:#fff;font:700 11px/19px var(--body);text-align:center}
-.tools>a.login{width:auto;height:auto;margin-left:10px;gap:8px;border:1.2px solid rgba(203,213,225,.9);border-radius:10px;padding:9px 14px;background:rgba(255,255,255,.92);font:600 13px/18px var(--body)!important;letter-spacing:.15px;text-transform:uppercase;text-decoration:none;white-space:nowrap}
+.tools>a.login{width:auto;height:auto;min-height:40px;margin-left:10px;gap:8px;border:1.2px solid rgba(203,213,225,.9);border-radius:10px;padding:9px 14px;background:rgba(255,255,255,.92);font:600 13px/18px var(--body)!important;letter-spacing:.15px;text-transform:uppercase;text-decoration:none;white-space:nowrap}
 .tools>a.login svg{width:17px;height:17px}
 .login:hover{background:rgba(30,41,59,.05)}
+/* The home's header over its first block (`_StickyHeaderScaffold` with
+   `allowOverlayAtTop`): fixed, clear under a dark veil with a white logo and
+   white words while the page is at the top, solid after 50 px of scroll or
+   while a menu is open. The color fades in 300 ms (`AnimatedPhysicalModel`);
+   the veil and the words switch at once, as in Flutter. */
+.top.over{position:fixed;top:0;left:0;right:0;transition:background-color .3s ease-in-out}
+.top.over:not(.clear) .banner{display:none}
+.top.over.clear:not(:has(.has-sub:hover,.has-sub:focus-within)){background-color:transparent;background-image:linear-gradient(rgb(0 0 0 / .52),rgb(0 0 0 / .24))}
+.top.over.clear:not(:has(.has-sub:hover,.has-sub:focus-within)) .logo img{filter:brightness(0) invert(1)}
+.top.over.clear:not(:has(.has-sub:hover,.has-sub:focus-within)) .logo-name,.top.over.clear:not(:has(.has-sub:hover,.has-sub:focus-within)) .menu>ul>li>a,.top.over.clear:not(:has(.has-sub:hover,.has-sub:focus-within)) .tools,.top.over.clear:not(:has(.has-sub:hover,.has-sub:focus-within)) .menu-button{color:#fff}
+.top.over.clear:not(:has(.has-sub:hover,.has-sub:focus-within)) .menu>ul>li>a[aria-current]{color:#fff;border-bottom-color:#fff}
+.top.over.clear:not(:has(.has-sub:hover,.has-sub:focus-within)) .tools>a.login{background:rgb(0 0 0 / .18);border-color:rgb(255 255 255 / .36)}
+.top.over.clear:not(:has(.has-sub:hover,.has-sub:focus-within)) .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rgb(255 255 255 / .08)),rgb(0 0 0 / .18)}
 
 /* Product page: product_detail_page.dart and product_spec_sheet_view.dart.
    Its colors are the store theme's commerce roles: text #1e293b, accent the
@@ -322,8 +337,10 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,su
 .foot .contact li{display:flex;align-items:flex-start;gap:8px;padding-bottom:12px}
 .foot .contact svg{flex:none}
 .payments{margin-top:32px;text-align:center}
-.payments p{margin:0 0 16px;font-size:11px;line-height:1.4;letter-spacing:.5px;color:rgba(255,255,255,.6)}
-.payments ul{display:flex;justify-content:center;align-items:center;flex-wrap:wrap;gap:12px}
+/* `bodySmall` keeps its 1.5 line at 11 px, and the badges sit at the top
+   of their row, as a `Wrap` lays them out. */
+.payments p{margin:0 0 16px;font-size:11px;line-height:1.5;letter-spacing:.5px;color:rgba(255,255,255,.6)}
+.payments ul{display:flex;justify-content:center;align-items:flex-start;flex-wrap:wrap;gap:12px}
 .pay-logo{display:block;width:150px;height:60px;object-fit:contain}
 .pay-chip{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 10px;border-radius:6px;border:1px solid rgba(255,255,255,.24);background:rgba(255,255,255,.1);color:rgba(255,255,255,.7);font:600 11px var(--body)}
 .foot-rule{margin:0;border:0;border-top:1px solid rgba(255,255,255,.24)}

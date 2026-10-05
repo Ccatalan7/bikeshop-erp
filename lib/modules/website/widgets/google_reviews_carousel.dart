@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:vinabike_public_core/modules/website/models/website_google_reviews.dart';
 
 import 'text_formatting_toolbar.dart';
-
-/// One review that passed the block's own filters, with the rating already
-/// read once. Filter and stars therefore agree by construction.
-typedef _VisibleReview = ({Map<String, dynamic> data, int rating});
 
 /// The only two colours in this block that are NOT the storefront's.
 ///
@@ -77,17 +74,12 @@ class GoogleReviewsCarousel extends StatelessWidget {
     final subTextColor = ink.mutedInk;
 
     // 2. Reviews: only what Google really returned, filtered by the block's
-    // own settings. An empty source stays empty — no sample people.
-    final reviews = _visibleReviews();
-    // The aggregate is business truth: an explicit value wins, and the
-    // computed fallback reads the COMPLETE real list, so narrowing the cards
-    // with `minRating`/`maxItems` cannot inflate the score.
-    final displayedRating = _readDouble(data['rating']) ??
-        _readDouble(data['google_rating']) ??
-        _averageRating(_sourceReviews());
-    final totalReviews = _readInt(data['totalReviews']) ??
-        _readInt(data['user_ratings_total']) ??
-        _readInt(data['reviewsTotal']);
+    // own settings, and the aggregate (`WebsiteGoogleReviewsContent`, shared
+    // with the HTML storefront).
+    final content = WebsiteGoogleReviewsContent.fromData(data);
+    final reviews = content.reviews;
+    final displayedRating = content.rating;
+    final totalReviews = content.totalReviews;
 
     return Container(
       width: double.infinity,
@@ -202,78 +194,6 @@ class GoogleReviewsCarousel extends StatelessWidget {
     );
   }
 
-  /// Every review Google really returned, in the order it returned them.
-  ///
-  /// The source is never sorted, never mutated and never completed with
-  /// samples: an empty or absent list is an empty list.
-  List<Map<String, dynamic>> _sourceReviews() {
-    final rawList = data['reviews'];
-    if (rawList is! List) return const <Map<String, dynamic>>[];
-    return rawList
-        .whereType<Map>()
-        .map((review) => Map<String, dynamic>.from(review))
-        .toList(growable: false);
-  }
-
-  /// The reviews this block actually shows.
-  ///
-  /// `minRating` and `maxItems` are the block's own business filters: keep the
-  /// reviews that reach the minimum score, in source order, up to the visible
-  /// limit. A review whose rating cannot be read is not shown, because nothing
-  /// proves it reaches the minimum the shop asked for.
-  List<_VisibleReview> _visibleReviews() {
-    final minRating = _clampedSetting(
-      data['minRating'],
-      fallback: 4,
-      min: 1,
-      max: 5,
-    );
-    final maxItems = _clampedSetting(
-      data['maxItems'],
-      fallback: 8,
-      min: 1,
-      max: 20,
-    );
-
-    final visible = <_VisibleReview>[];
-    for (final review in _sourceReviews()) {
-      final rating = _ratingOf(review);
-      if (rating == null || rating < minRating) continue;
-      visible.add((data: review, rating: rating));
-      if (visible.length == maxItems) break;
-    }
-    return List<_VisibleReview>.unmodifiable(visible);
-  }
-
-  /// Average of the ratings that can be read, over the COMPLETE real list.
-  ///
-  /// Returns null when there is no readable rating: an average of nothing is
-  /// not zero stars.
-  double? _averageRating(List<Map<String, dynamic>> reviews) {
-    var total = 0;
-    var counted = 0;
-    for (final review in reviews) {
-      final rating = _ratingOf(review);
-      if (rating == null) continue;
-      total += rating;
-      counted++;
-    }
-    if (counted == 0) return null;
-    return total / counted;
-  }
-
-  static int _clampedSetting(
-    Object? raw, {
-    required int fallback,
-    required int min,
-    required int max,
-  }) {
-    final value = _readInt(raw) ?? fallback;
-    if (value < min) return min;
-    if (value > max) return max;
-    return value;
-  }
-
   static TextFormatting _resolveFormatting(Object? raw) {
     if (raw is! Map) return const TextFormatting();
     return TextFormatting.fromJson(Map<String, dynamic>.from(raw));
@@ -293,48 +213,6 @@ class GoogleReviewsCarousel extends StatelessWidget {
     }
   }
 
-  static double? _readDouble(dynamic value) {
-    if (value is num) return value.toDouble();
-    if (value is String) return double.tryParse(value.trim());
-    return null;
-  }
-
-  static int? _readInt(dynamic value) {
-    if (value is int) return value;
-    if (value is num) return value.round();
-    if (value is String) return int.tryParse(value.trim());
-    return null;
-  }
-
-  /// The star rating of ONE review, or null when the payload has none we can
-  /// read.
-  ///
-  /// Both payload shapes are supported — the numeric `rating` and the Google
-  /// Business enum `starRating` (`FIVE`…`ONE`). An unrecognised value stays
-  /// unknown: promoting it to five stars would publish a score nobody gave.
-  static int? _ratingOf(Map<String, dynamic> review) =>
-      _parseRating(review['rating'] ?? review['starRating']);
-
-  static int? _parseRating(Object? raw) {
-    if (raw is num) return raw.round();
-    if (raw is String) {
-      switch (raw.trim().toUpperCase()) {
-        case 'FIVE':
-          return 5;
-        case 'FOUR':
-          return 4;
-        case 'THREE':
-          return 3;
-        case 'TWO':
-          return 2;
-        case 'ONE':
-          return 1;
-      }
-      final numeric = num.tryParse(raw.trim());
-      if (numeric != null) return numeric.round();
-    }
-    return null;
-  }
 }
 
 class _ReviewCard extends StatelessWidget {
@@ -358,45 +236,13 @@ class _ReviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Handle both mock format and real Google API format
-    // Mock: author_name, photo_url, relative_time, rating, text
-    // Google API: reviewer.displayName, reviewer.profilePhotoUrl, createTime, starRating (FIVE/FOUR/etc), comment
-
-    // Extract author name
-    final String authorName = review['author_name'] ??
-        (review['reviewer'] as Map<String, dynamic>?)?['displayName'] ??
-        'Usuario';
-
-    // Extract photo URL (with fallback for missing photos)
-    final String? photoUrl = review['photo_url'] ??
-        (review['reviewer'] as Map<String, dynamic>?)?['profilePhotoUrl'];
-
-    // Extract relative time or format create time
-    String relativeTime = review['relative_time'] ?? '';
-    if (relativeTime.isEmpty) {
-      final createTime = review['createTime'] ?? review['updateTime'];
-      if (createTime != null) {
-        try {
-          final date = DateTime.parse(createTime);
-          final diff = DateTime.now().difference(date);
-          if (diff.inDays > 30) {
-            relativeTime = 'hace ${diff.inDays ~/ 30} meses';
-          } else if (diff.inDays > 0) {
-            relativeTime = 'hace ${diff.inDays} días';
-          } else {
-            relativeTime = 'hace ${diff.inHours} horas';
-          }
-        } catch (_) {
-          relativeTime = '';
-        }
-      }
-    }
-
-    // Extract review text
-    final String reviewText =
-        (review['text'] ?? review['comment'] ?? '').toString().trim().isNotEmpty
-            ? (review['text'] ?? review['comment']).toString().trim()
-            : 'Calificación publicada en Google.';
+    // Both payloads (the synced Google Business one and the older mock one)
+    // are read by the shared owner.
+    final authorName = WebsiteGoogleReviewsContent.authorName(review);
+    final photoUrl = WebsiteGoogleReviewsContent.photoUrl(review);
+    final relativeTime =
+        WebsiteGoogleReviewsContent.relativeTime(review, DateTime.now());
+    final reviewText = WebsiteGoogleReviewsContent.text(review);
 
     // Same geometry and the same shadow strength as before; only the source of
     // each colour changed, from literal to the storefront's own scheme.

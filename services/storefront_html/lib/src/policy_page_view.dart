@@ -69,7 +69,9 @@ Component? _block(ComposedBlock composed, BlockRenderContext render) {
       child: Component.fragment([for (final s in sections) _section(s)]),
     );
   }
-  final shared = sharedBlock(composed, render);
+  final shared = sharedBlockCovers(composed, coveredSharedBlockTypes)
+      ? sharedBlock(composed, render)
+      : null;
   if (shared == null) {
     render.uncovered.add(composed.block.blockType);
     return null;

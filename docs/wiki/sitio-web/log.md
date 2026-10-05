@@ -176,3 +176,11 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 - El bloque de contacto mostraba al visitante el aviso del editor en tres
   páginas públicas; ahora usa los datos de Configuración → Contacto. Anotado
   en [estado y pendientes](paginas/estado-y-pendientes.md).
+
+## 2026-10-05 — Portada en HTML (fase 2b)
+
+- La portada completa la dibuja el servidor en `/_html/`, medida contra
+  Flutter; las trampas (encabezado que no reserva alto, lienzo que no escala
+  el texto, altura mínima, `Wrap` arriba, color del ítem actual) quedaron en
+  el plan de migración. Abrir `/` queda en
+  [estado y pendientes](paginas/estado-y-pendientes.md).

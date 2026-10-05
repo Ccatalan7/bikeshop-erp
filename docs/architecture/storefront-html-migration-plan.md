@@ -640,12 +640,68 @@ sitemap publica (`exactServerRoutes` en `check_storefront_html_routes.mjs`).
 Ninguna de las cinco tiene hoy un bloque sin cubrir. Para revertir, se quitan
 las cinco reescrituras.
 
+## Fase 2b: la portada (2026-10-05)
+
+`/_html/` dibuja la portada completa (`home_page_model.dart`,
+`home_page_view.dart`): encabezado sobre el primer bloque, carrusel (fotos y
+la diapositiva compuesta de «Cámaras»), productos elegidos a mano, grilla de
+categorías, marcas, video de YouTube y reseñas de Google. Medida contra el
+árbol de semántica de Flutter a 1440 y 412 px: todos los textos, botones,
+tarjetas, flechas y puntos en las mismas coordenadas (dentro de 1 px); el
+recorrido (encabezado al bajar, avance automático, flechas, deslizar, páginas
+de marcas en el teléfono) probado en Chrome. `/` sigue en Flutter: falta
+abrirla.
+
+**Un dueño, no copias.** Pasaron al núcleo el botón de una diapositiva
+(`resolveWebsiteCarouselSlideAction`), el id de un enlace de YouTube
+(`websiteYouTubeVideoId`) y las reseñas (`WebsiteGoogleReviewsContent`:
+las sincronizadas cuando el bloque no trae, filtro por estrellas y cantidad,
+promedio sobre la lista completa). Flutter las llama desde ahí.
+
+Lo que costó una vuelta, para el que siga:
+
+- **El encabezado de la portada no reserva su alto** (`allowOverlayAtTop`):
+  flota fijo sobre el carrusel, transparente con un velo negro 52→24 % y el
+  logo y las palabras en blanco; pasados 50 px de scroll se vuelve sólido
+  (el color en 300 ms, el resto de golpe), y también mientras un menú está
+  abierto. Un script en línea dentro del encabezado pone el estado antes de
+  pintar nada debajo; sin scripts queda sólido.
+- **El ítem actual del menú usa el color del texto del encabezado**, no el
+  de la marca (`_buildNavItemLink` recibe `textColor`): negro 87 % sobre
+  blanco, blanco sobre la foto. Las páginas del servidor lo pintaban azul
+  desde la fase 1; corregido en todas.
+- **El lienzo (`CanvasBlock`) escala cajas, radios, bordes y la letra de
+  los botones, pero no el texto**: escala = ancho/ancho de diseño, nunca
+  mayor que 1, centrado si sobra. En CSS con unidades de contenedor
+  (`--s:min(100cqw / var(--dw),1px)`), así el mismo HTML sirve a cualquier
+  ancho; un juego de capas por pantalla que dibuje distinto (legado: teléfono
+  bajo 600 y el resto; canónico: 600/900).
+- **El cruce entre diapositivas usa la misma curva al entrar y al salir**:
+  `AnimatedSwitcher` reproduce la saliente al revés con su curva de salida,
+  y en el tiempo eso es `easeOutCubic` también.
+- **Una altura mínima no es una altura**: con `minimumHeight` Flutter no da
+  alto al bloque (las marcas ponen su relleno de 48/16 y además 16 de la
+  fila) y lo centra dentro de los 510; con altura exacta, nada de eso.
+- **Las listas en una fila sin alto toman la altura 1,5 de `bodyMedium`**
+  (el `DefaultTextStyle` de la tienda), sin redondear: tarjetas de
+  categoría, título de productos (33 px de 22), reseñas.
+- **Un `Wrap` alinea arriba**: en el pie, el chip de transferencia quedaba
+  centrado con el logo de 60 px; arreglado en todas las páginas.
+
+Lo que queda distinto, medido: los textos de capa con altura de línea 1,0
+quedan 1–2 px más arriba que en Flutter (su reparto del interlineado no es
+el de CSS) y la etiqueta «Iniciar sesión» de Flutter cae en la letra por
+defecto del motor porque su estilo no nombra familia (4 px más ancha).
+
 ### Pendiente
 
 - El costo real de Cloud Run en la facturación, después de unos días.
-- Fase 2b: la portada (carrusel, productos, categorías, marcas, video,
-  reseñas) con la misma medición; después abrir `/` y las páginas de
-  información (reescritura en `firebase.json` y el generador deja de escribir
-  sus instantáneas, como en la fase 1).
+- Abrir `/`: reescritura exacta en `firebase.json`, y el generador deja de
+  escribir la portada instantánea (`index.html` con la portada pre-armada y
+  su JSON-LD) en una ruta que el servidor responde; revisar antes qué de esa
+  instantánea (datos estructurados, enlaces) falta en el HTML del servidor.
+  Sólo con `x-storefront-uncovered` vacío.
+- Navegar dentro de la tienda HTML sin volver a Flutter (enlaces de la
+  portada a `/productos?category=…`).
 - Las copias de una foto reemplazada quedan en Storage (pocos KB cada una);
   una limpieza de las que ninguna fila nombra, si algún día pesan.

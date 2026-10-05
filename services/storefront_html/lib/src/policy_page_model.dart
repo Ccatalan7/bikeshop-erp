@@ -214,7 +214,7 @@ class PolicyPageModel {
   late final Set<String> uncoveredTypes = {
     for (final composed in blocks)
       if (extractPublicPolicySections([composed.block.sourceBlock]).isEmpty &&
-          !coveredSharedBlockTypes.contains(composed.block.type))
+          !sharedBlockCovers(composed, coveredSharedBlockTypes))
         composed.block.blockType,
   };
 }

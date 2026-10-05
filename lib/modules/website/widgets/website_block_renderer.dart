@@ -9,6 +9,8 @@ import 'package:provider/provider.dart';
 import '../providers/website_edit_mode_provider.dart';
 import '../services/website_service.dart';
 import 'package:vinabike_public_core/public_store/models/public_policy_content.dart';
+import 'package:vinabike_public_core/modules/website/models/website_google_reviews.dart';
+import 'package:vinabike_public_core/modules/website/models/website_hero_content.dart';
 
 import '../../../public_store/providers/public_store_tenant_provider.dart';
 import '../../../public_store/services/public_category_publication.dart';
@@ -474,37 +476,15 @@ class WebsiteBlockRenderer {
             isNavigationEligible: isNavigationEligible,
           );
         case WebsiteBlockType.googleReviews:
-          // Inject synced Google review truth when the block has no custom reviews.
+          // Inject synced Google review truth when the block has no custom
+          // reviews (`WebsiteGoogleReviewsContent`, shared with HTML).
           var effectiveData = data;
           try {
-            // Access service safely (without listen to avoid redundant rebuilds here, parent handles it)
             final service = Provider.of<WebsiteService>(context, listen: false);
-            final jsonStr = service.getSetting('google_reviews_data');
-            final syncedRating = service.getSetting('google_reviews_rating');
-            final syncedTotal = service.getSetting('google_reviews_total');
-
-            if ((data['reviews'] as List?)?.isEmpty ?? true) {
-              if (jsonStr.isNotEmpty) {
-                final list = jsonDecode(jsonStr) as List;
-                final reviews =
-                    list.map((e) => Map<String, dynamic>.from(e)).toList();
-
-                // Create new map to avoid mutating original
-                effectiveData = Map<String, dynamic>.from(data);
-                effectiveData['reviews'] = reviews;
-              }
-            }
-
-            if (syncedRating.isNotEmpty || syncedTotal.isNotEmpty) {
-              effectiveData = Map<String, dynamic>.from(effectiveData);
-              if (syncedRating.isNotEmpty && effectiveData['rating'] == null) {
-                effectiveData['rating'] = syncedRating;
-              }
-              if (syncedTotal.isNotEmpty &&
-                  effectiveData['totalReviews'] == null) {
-                effectiveData['totalReviews'] = syncedTotal;
-              }
-            }
+            effectiveData = WebsiteGoogleReviewsContent.withSyncedReviews(
+              data,
+              service.getSetting,
+            );
           } catch (e) {
             debugPrint('Error injecting reviews: $e');
           }
@@ -995,46 +975,9 @@ class WebsiteBlockRenderer {
     );
   }
 
-  /// Extract YouTube video ID from various URL formats
-  static String? _extractYouTubeVideoId(String url) {
-    // Handle various YouTube URL formats:
-    // - https://www.youtube.com/watch?v=VIDEO_ID
-    // - https://youtu.be/VIDEO_ID
-    // - https://www.youtube.com/embed/VIDEO_ID
-    // - https://www.youtube.com/v/VIDEO_ID
-
-    final uri = Uri.tryParse(url);
-    if (uri == null) return null;
-
-    // youtube.com/watch?v=VIDEO_ID
-    if (uri.host.contains('youtube.com')) {
-      final videoId = uri.queryParameters['v'];
-      if (videoId != null && videoId.isNotEmpty) return videoId;
-
-      // youtube.com/embed/VIDEO_ID or youtube.com/v/VIDEO_ID
-      final pathSegments = uri.pathSegments;
-      if (pathSegments.isNotEmpty) {
-        final embedIndex = pathSegments.indexOf('embed');
-        final vIndex = pathSegments.indexOf('v');
-        if (embedIndex != -1 && embedIndex + 1 < pathSegments.length) {
-          return pathSegments[embedIndex + 1];
-        }
-        if (vIndex != -1 && vIndex + 1 < pathSegments.length) {
-          return pathSegments[vIndex + 1];
-        }
-      }
-    }
-
-    // youtu.be/VIDEO_ID
-    if (uri.host.contains('youtu.be')) {
-      final pathSegments = uri.pathSegments;
-      if (pathSegments.isNotEmpty) {
-        return pathSegments.first;
-      }
-    }
-
-    return null;
-  }
+  /// Extract YouTube video ID from various URL formats.
+  static String? _extractYouTubeVideoId(String url) =>
+      websiteYouTubeVideoId(url);
 
   // ============================================================================
   // PARTNERS BANNER BLOCK
@@ -2955,47 +2898,8 @@ class _WebsiteCarouselBlockContentState
     );
   }
 
-  WebsiteActionValue? _resolveSlideAction(Map<String, dynamic> slide) {
-    ({bool present, String value}) firstPresent(List<String> keys) {
-      for (final key in keys) {
-        if (slide.containsKey(key)) {
-          return (
-            present: true,
-            value: slide[key]?.toString().trim() ?? '',
-          );
-        }
-      }
-      return (present: false, value: '');
-    }
-
-    final labelField = firstPresent(const <String>['ctaText', 'buttonText']);
-    final hrefField = firstPresent(const <String>['ctaLink', 'buttonLink']);
-    final resolved = WebsiteActionValue.resolvePrimary(
-      slide,
-      labelKeys: const <String>['ctaText', 'buttonText'],
-      hrefKeys: const <String>['ctaLink', 'buttonLink'],
-      variantKeys: const <String>['actionVariant'],
-      defaultLabel: '',
-      defaultHref: '',
-      defaultVariant: WebsiteActionVariant.outline,
-    );
-    final label =
-        (labelField.present ? labelField.value : resolved?.label ?? '').trim();
-    if (label.isEmpty) return null;
-    final href =
-        (hrefField.present ? hrefField.value : resolved?.href ?? '').trim();
-    final variant = slide.containsKey('actionVariant')
-        ? WebsiteActionVariant.fromStorage(
-            slide['actionVariant']?.toString(),
-            fallback: WebsiteActionVariant.outline,
-          )
-        : resolved?.variant ?? WebsiteActionVariant.outline;
-    return WebsiteActionValue(
-      label: label,
-      href: href,
-      variant: variant,
-    );
-  }
+  WebsiteActionValue? _resolveSlideAction(Map<String, dynamic> slide) =>
+      resolveWebsiteCarouselSlideAction(slide);
 
   Widget _buildTransition(Widget child, Animation<double> animation) {
     switch (_animation) {

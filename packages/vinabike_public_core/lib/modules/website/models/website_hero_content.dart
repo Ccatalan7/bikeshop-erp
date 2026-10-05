@@ -4,9 +4,29 @@ import 'website_action.dart';
 /// `label` and `ctaLink`/`buttonLink`/`link`) when present, otherwise the
 /// first navigate action; outlined unless the block says otherwise. `null`
 /// when it has no label. Flutter's hero and the HTML storefront read it here.
-WebsiteActionValue? resolveWebsiteHeroAction(Map<String, dynamic> data) {
-  const labelKeys = <String>['ctaText', 'buttonText', 'label'];
-  const hrefKeys = <String>['ctaLink', 'buttonLink', 'link'];
+WebsiteActionValue? resolveWebsiteHeroAction(Map<String, dynamic> data) =>
+    _resolveVisibleFieldAction(
+      data,
+      labelKeys: const <String>['ctaText', 'buttonText', 'label'],
+      hrefKeys: const <String>['ctaLink', 'buttonLink', 'link'],
+    );
+
+/// A carousel slide's button, by the hero's rule with the slide's fields
+/// (`ctaText`/`buttonText` and `ctaLink`/`buttonLink`). Flutter's carousel
+/// and the HTML storefront read it here.
+WebsiteActionValue? resolveWebsiteCarouselSlideAction(
+  Map<String, dynamic> slide,
+) => _resolveVisibleFieldAction(
+  slide,
+  labelKeys: const <String>['ctaText', 'buttonText'],
+  hrefKeys: const <String>['ctaLink', 'buttonLink'],
+);
+
+WebsiteActionValue? _resolveVisibleFieldAction(
+  Map<String, dynamic> data, {
+  required List<String> labelKeys,
+  required List<String> hrefKeys,
+}) {
   ({bool present, String value}) firstPresent(List<String> keys) {
     for (final key in keys) {
       if (data.containsKey(key)) {
@@ -39,4 +59,30 @@ WebsiteActionValue? resolveWebsiteHeroAction(Map<String, dynamic> data) {
         )
       : resolved?.variant ?? WebsiteActionVariant.outline;
   return WebsiteActionValue(label: label, href: href, variant: variant);
+}
+
+/// The YouTube video id in a `youtube.com/watch?v=`, `youtube.com/embed/`,
+/// `youtube.com/v/` or `youtu.be/` link, or `null`. Flutter's video banner
+/// and carousel and the HTML storefront read it here.
+String? websiteYouTubeVideoId(String url) {
+  final uri = Uri.tryParse(url);
+  if (uri == null) return null;
+  if (uri.host.contains('youtube.com')) {
+    final videoId = uri.queryParameters['v'];
+    if (videoId != null && videoId.isNotEmpty) return videoId;
+    final segments = uri.pathSegments;
+    if (segments.isNotEmpty) {
+      final embed = segments.indexOf('embed');
+      final v = segments.indexOf('v');
+      if (embed != -1 && embed + 1 < segments.length) {
+        return segments[embed + 1];
+      }
+      if (v != -1 && v + 1 < segments.length) return segments[v + 1];
+    }
+  }
+  if (uri.host.contains('youtu.be')) {
+    final segments = uri.pathSegments;
+    if (segments.isNotEmpty) return segments.first;
+  }
+  return null;
 }

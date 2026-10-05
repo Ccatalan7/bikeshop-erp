@@ -4,11 +4,19 @@ import 'package:vinabike_public_core/modules/website/models/website_block_type.d
 import 'package:vinabike_public_core/modules/website/models/website_hero_content.dart';
 import 'package:vinabike_public_core/modules/website/theme/website_theme_color_value.dart';
 import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
+import 'package:vinabike_public_core/public_store/models/public_image_thumbnail.dart';
 import 'package:vinabike_public_core/public_store/models/public_policy_content.dart';
+import 'package:vinabike_public_core/shared/models/product.dart';
 
 import 'block_composition.dart';
 import 'material_icons.dart';
 import 'storefront_shell.dart';
+import 'website_brand_logos_view.dart';
+import 'website_carousel_view.dart';
+import 'website_category_grid_view.dart';
+import 'website_products_view.dart';
+import 'website_reviews_view.dart';
+import 'website_video_banner_view.dart';
 
 /// Draws the editor's blocks as Flutter's `WebsiteBlockRenderer` does, for
 /// the block types the HTML storefront already covers. A block it does not
@@ -18,11 +26,19 @@ class BlockRenderContext {
     required this.shell,
     required this.theme,
     required this.storeUrl,
+    this.products = const {},
+    this.thumbnails = const {},
   });
 
   final StorefrontShell shell;
   final WebsiteThemeRoles theme;
   final String storeUrl;
+
+  /// The public, in-stock products the page's blocks pick, by id.
+  final Map<String, Product> products;
+
+  /// Smaller copies of product photos, by the photo's URL.
+  final Map<String, PublicImageThumbnail> thumbnails;
   final uncovered = <String>{};
 
   /// A link a visitor may follow, as the public path; `null` hides the
@@ -42,8 +58,8 @@ class BlockRenderContext {
 }
 
 /// The wrapper every block gets from `PageComposition`: the theme's side
-/// padding unless full-bleed, its exact height, the space after it and the
-/// bands it is drawn in. [fill] takes the canvas width (a widget that
+/// padding unless full-bleed, its exact or minimum height, the space after
+/// it and the bands it is drawn in. [fill] takes the canvas width (a widget that
 /// expands); otherwise the block is as wide as its content and centered.
 Component composedBlock(
   ComposedBlock composed, {
@@ -51,37 +67,66 @@ Component composedBlock(
   required bool fill,
 }) {
   final geometry = composed.block.geometry;
+  final exact = geometry.exactHeight;
+  // A minimum height lets the block grow and gives it no height of its own:
+  // its content lays out as with none, inside at least this much.
+  final minimum = exact == null ? geometry.minimumHeight : null;
   return div(
     classes: [
       'blk',
       if (fill) 'fill',
       if (geometry.fullBleed) 'bleed',
+      if (minimum != null) 'minh',
     ].join(' '),
     attributes: {
       'data-block': composed.block.blockType,
       if (composed.bands case final bands?) 'data-bands': bands.join(' '),
-      if (composed.gapAfter > 0 || geometry.exactHeight != null)
+      if (composed.gapAfter > 0 || exact != null || minimum != null)
         'style': [
           if (composed.gapAfter > 0) '--gap:${_px(composed.gapAfter)}',
-          if (geometry.exactHeight case final height?) 'height:${_px(height)}',
+          if (exact != null) 'height:${_px(exact)}',
+          if (minimum != null) 'min-height:${_px(minimum)}',
         ].join(';'),
     },
     [child],
   );
 }
 
-/// The block types [sharedBlock] draws.
+/// The block types an information page draws with [sharedBlock].
 const coveredSharedBlockTypes = {
   WebsiteBlockType.hero,
   WebsiteBlockType.contact,
 };
 
+/// Whether a page that draws [types] draws this block: its type, and what
+/// the block holds (a carousel with a video slide is not drawn yet).
+bool sharedBlockCovers(ComposedBlock composed, Set<WebsiteBlockType> types) {
+  final type = composed.block.type;
+  if (type == null || !types.contains(type)) return false;
+  return switch (type) {
+    WebsiteBlockType.carousel => carouselIsCovered(composed.data),
+    WebsiteBlockType.products => productsBlockIsCovered(composed.data),
+    WebsiteBlockType.categoryGrid => categoryGridIsCovered(composed.data),
+    WebsiteBlockType.brandLogos => brandLogosIsCovered(composed.data),
+    WebsiteBlockType.videoBanner => videoBannerIsCovered(composed.data),
+    WebsiteBlockType.googleReviews => googleReviewsIsCovered(composed.data),
+    _ => true,
+  };
+}
+
 /// A block drawn by its shared renderer, or `null` when the HTML storefront
-/// does not cover its type yet.
+/// does not cover its type yet. The page decides which types it draws
+/// ([sharedBlockCovers]): each one brings its stylesheet.
 Component? sharedBlock(ComposedBlock composed, BlockRenderContext context) {
   return switch (composed.block.type) {
     WebsiteBlockType.hero => _HeroBlock(composed, context),
     WebsiteBlockType.contact => _ContactBlock(composed, context),
+    WebsiteBlockType.carousel => CarouselBlockView(composed, context),
+    WebsiteBlockType.products => ProductsBlockView(composed, context),
+    WebsiteBlockType.categoryGrid => CategoryGridView(composed, context),
+    WebsiteBlockType.brandLogos => BrandLogosView(composed, context),
+    WebsiteBlockType.videoBanner => VideoBannerView(composed, context),
+    WebsiteBlockType.googleReviews => GoogleReviewsView(composed, context),
     _ => null,
   };
 }

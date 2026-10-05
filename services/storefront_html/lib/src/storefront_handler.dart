@@ -12,6 +12,8 @@ import 'package:vinabike_public_core/shared/models/product.dart';
 
 import 'catalog_page_model.dart';
 import 'catalog_page_view.dart';
+import 'home_page_model.dart';
+import 'home_page_view.dart';
 import 'policy_page_model.dart';
 import 'policy_page_view.dart';
 import 'product_page_model.dart';
@@ -86,6 +88,7 @@ Handler storefrontHandler({
     );
     try {
       return switch (segments) {
+        [] => await route.home(),
         ['productos'] => await route.catalog(null),
         ['productos', 'categoria', final slug] => await route.catalog(slug),
         ['productos', final slug, final sku] => await route.product(slug, sku),
@@ -271,6 +274,24 @@ class _Route {
     final response = await _render(
       policyPageDocument(model),
       status: model.available ? 200 : 404,
+      indexable: model.meta.indexable,
+      dataMs: _watch.elapsedMilliseconds,
+    );
+    if (model.uncoveredTypes.isEmpty) return response;
+    return response.change(
+      headers: {'x-storefront-uncovered': model.uncoveredTypes.join(',')},
+    );
+  }
+
+  /// `/`: the editor's home page and its blocks.
+  Future<Response> home() async {
+    final data = await reads.homePage(homeProductIds);
+    final context = _context((shell: data.shell, payments: data.payments));
+    if (!context.shell.sitePublished) return _unpublished(context);
+    if (data.page == null) return notFound();
+    final model = HomePageModel.build(page: context, reads: data);
+    final response = await _render(
+      homePageDocument(model),
       indexable: model.meta.indexable,
       dataMs: _watch.elapsedMilliseconds,
     );

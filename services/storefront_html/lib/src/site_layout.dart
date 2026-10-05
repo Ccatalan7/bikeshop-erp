@@ -30,6 +30,7 @@ class PageMeta {
     this.structuredData = const [],
     this.preloadHeadingFont = false,
     this.styles = '',
+    this.overlayHeader = false,
   });
 
   final String title;
@@ -49,6 +50,11 @@ class PageMeta {
   /// The page's own rules after the shared stylesheet: an editor page's
   /// theme colors and its blocks.
   final String styles;
+
+  /// The header floats over the page's first block, clear with a dark veil
+  /// until the page scrolls 50 px (`_StickyHeaderScaffold` with
+  /// `allowOverlayAtTop`, which the store gives only to its home).
+  final bool overlayHeader;
 }
 
 /// Request facts every page needs.
@@ -160,7 +166,7 @@ Component sitePage({
     ],
     body: Component.fragment([
       a(classes: 'skip', href: '#contenido', [.text('Ir al contenido')]),
-      SiteHeader(context),
+      SiteHeader(context, overlay: meta.overlayHeader),
       main_(id: 'contenido', content),
       SiteFooter(context),
       ...afterFooter,
@@ -212,10 +218,18 @@ Map<String, dynamic> _businessNode(PageContext context) {
   );
 }
 
+const _overlayHeaderScript =
+    '(function(h){function f(){h.classList.toggle("clear",scrollY<=50)}'
+    'f();addEventListener("scroll",f,{passive:true})})'
+    '(document.currentScript.parentNode)';
+
 class SiteHeader extends StatelessComponent {
-  const SiteHeader(this.page, {super.key});
+  const SiteHeader(this.page, {this.overlay = false, super.key});
 
   final PageContext page;
+
+  /// See [PageMeta.overlayHeader].
+  final bool overlay;
 
   @override
   Component build(BuildContext context) {
@@ -228,7 +242,7 @@ class SiteHeader extends StatelessComponent {
         ? s.setting('top_banner_text')
         : '';
     final items = s.topLevel(MenuLocation.header);
-    return header(classes: 'top', [
+    return header(classes: overlay ? 'top over' : 'top', [
       if (banner.isNotEmpty) p(classes: 'banner', [.text(banner)]),
       // Without JavaScript a checkbox opens the phone menu (a sheet from the
       // bottom, as Flutter's); it comes before the sheet for `~`.
@@ -313,6 +327,10 @@ class SiteHeader extends StatelessComponent {
           ],
         ),
       ]),
+      // Run while the page is parsed, before anything under the header is
+      // painted: clear at the top, solid after 50 px of scroll. Without
+      // scripts the header stays solid, which is always readable.
+      if (overlay) script(content: _overlayHeaderScript),
     ]);
   }
 

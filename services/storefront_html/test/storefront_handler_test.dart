@@ -148,6 +148,7 @@ class _FakeReads implements PublicReads {
     this.aliases = const {},
     this.byId = const {},
     this.policyRows = const [],
+    this.homeRow,
   }) : shellJson = shell;
 
   final Map<String, dynamic>? page;
@@ -160,6 +161,7 @@ class _FakeReads implements PublicReads {
   final Map<String, String> aliases;
   final Map<String, Map<String, dynamic>> byId;
   final List<Object?> policyRows;
+  final Map<String, dynamic>? homeRow;
   final requested = <String>[];
   final catalogRequests = <CatalogRequest>[];
 
@@ -174,6 +176,25 @@ class _FakeReads implements PublicReads {
     requested.add(sku ?? 'id:$productId');
     if (fail) throw PublicReadException('down');
     return (shell: shellJson ?? _shell(), payments: null, page: page);
+  }
+
+  @override
+  Future<HomePageReads> homePage(
+    List<String> Function(Map<String, dynamic> page) productIds,
+  ) async {
+    if (fail) throw PublicReadException('down');
+    final ids = homeRow == null ? const <String>[] : productIds(homeRow!);
+    return (
+      shell: shellJson ?? _shell(),
+      payments: null,
+      page: homeRow,
+      products: [
+        for (final row in products)
+          if (row is Map && ids.contains(row['id'])) row,
+      ],
+      brandRows: brandRows,
+      thumbnails: thumbnails,
+    );
   }
 
   @override
@@ -1121,6 +1142,191 @@ void main() {
     );
   });
 
+  group('home', () {
+    Map<String, dynamic> block(
+      String id,
+      String type,
+      int order,
+      Map<String, dynamic> data,
+    ) => {
+      'id': id,
+      'block_type': type,
+      'order_index': order,
+      'is_visible': true,
+      'block_data': data,
+    };
+    final second = {
+      ..._product(name: 'Cassette Eclipse 8v', sku: 'C8'),
+      'id': '6f1d2a3e-0000-4000-8000-000000000008',
+    };
+    Map<String, dynamic> home(List<Map<String, dynamic>> blocks) => {
+      'id': 'home',
+      'slug': 'inicio',
+      'is_published': true,
+      'website_blocks': blocks,
+    };
+    final blocks = [
+      block('car', 'carousel', 0, {
+        'blockHeight': 750,
+        'animation': 'fade',
+        'intervalSeconds': 8,
+        'slides': [
+          {
+            'title': 'Taller de bicicletas',
+            'subtitle': 'Repuestos y accesorios',
+            'imageUrl': 'https://example.invalid/s1.webp',
+            'ctaText': 'Ver catálogo',
+            'ctaLink': '/productos',
+          },
+          {
+            'title': 'Cámaras',
+            'useComposition': true,
+            'elements': [
+              {
+                'id': 't',
+                'type': 'text',
+                'text': 'CÁMARAS',
+                'x': 88,
+                'y': 150,
+                'w': 610,
+                'h': 92,
+                'fontSize': 72,
+                'anim': 'fadeUp',
+              },
+              {
+                'id': 'b',
+                'type': 'button',
+                'label': 'Ver cámaras',
+                'link': '/productos',
+                'style': 'filled',
+                'inheritTheme': false,
+                'uppercase': true,
+                'x': 88,
+                'y': 470,
+                'w': 220,
+                'h': 54,
+              },
+            ],
+          },
+        ],
+      }),
+      block('prod', 'products', 1, {
+        'title': 'Productos destacados',
+        'productSource': 'manual',
+        // The second one is out of stock: the read does not return it.
+        'selectedProducts': [second['id'], 'agotado', _product()['id']],
+      }),
+      block('cats', 'categoryGrid', 2, {
+        'categories': [
+          {
+            'title': 'Horquillas',
+            'size': 'large',
+            'imageFit': 'contain',
+            'imageUrl': 'https://example.invalid/fork.jpg',
+            'link': '/productos?category=$_child',
+          },
+          {
+            'title': 'Interna',
+            'size': 'large',
+            'imageUrl': 'https://example.invalid/x.jpg',
+            'link': '/productos?category=$_hidden',
+          },
+        ],
+      }),
+      block('brands', 'brandLogos', 3, {
+        'title': 'Marcas',
+        'blockHeight': 510,
+        'brands': [
+          {'name': 'Shimano', 'imageUrl': 'https://example.invalid/s.png'},
+        ],
+      }),
+      block('video', 'videoBanner', 4, {
+        'title': 'Vive la Aventura',
+        'videoUrl': 'https://youtu.be/BnJCsaH5Ybs?si=x',
+        'ctaText': 'Descubrir más',
+        'ctaLink': '/tienda/productos',
+      }),
+      block('reviews', 'googleReviews', 5, {'title': 'Reseñas'}),
+    ];
+    final shell = _shell()
+      ..['settings'] = {
+        ...(_shell()['settings'] as Map),
+        'google_reviews_rating': '4.4',
+        'google_reviews_total': '36',
+        'google_reviews_data': jsonEncode([
+          {'author_name': 'Mia', 'rating': 5, 'text': 'Excelente'},
+          {'author_name': 'Juan', 'rating': 3, 'text': 'Pasable'},
+        ]),
+      };
+
+    test(
+      'draws every block under the header that floats over the first',
+      () async {
+        final response = await _get(
+          _FakeReads(
+            homeRow: home(blocks),
+            shell: shell,
+            products: [_product(), second],
+          ),
+          '/_html/',
+        );
+        final html = await response.readAsString();
+
+        expect(response.statusCode, 200);
+        expect(response.headers['x-storefront-uncovered'], isNull);
+        expect(html, contains('<header class="top over">'));
+        expect(html, contains('h.classList.toggle("clear",scrollY<=50)'));
+        // The carousel: the first slide's title is the page's heading, the
+        // composed slide is drawn as layers, and the page script plays it.
+        expect(html, contains('<h1 class="car-t"'));
+        expect(html, contains('TALLER DE BICICLETAS'));
+        expect(html, contains('data-interval="8000"'));
+        expect(html, contains('class="cl cl-a-fadeUp cl-text al-left"'));
+        expect(html, contains('>VER CÁMARAS</a>'));
+        expect(html, contains('document.querySelectorAll("[data-car]")'));
+        // The picked products in the author's order, the sold-out one left out.
+        final cassette = html.indexOf('CASSETTE ECLIPSE 8V');
+        final fork = html.indexOf('HORQUILLA SUNTOUR 29 AURON 35');
+        expect(cassette, greaterThan(0));
+        expect(fork, greaterThan(cassette));
+        // A category card whose category is not published is not drawn.
+        expect(html, contains('>HORQUILLAS</span>'));
+        expect(html, isNot(contains('>INTERNA</span>')));
+        // The brand row keeps its 510 px as a minimum, centered.
+        expect(html, contains('min-height:510px'));
+        expect(
+          html,
+          contains('https://www.youtube.com/embed/BnJCsaH5Ybs?autoplay=1'),
+        );
+        expect(html, contains('href="/productos">Descubrir más</a>'));
+        // The store's synced reviews, only those that reach 4 stars.
+        expect(html, contains('en Google (36 reseñas)'));
+        expect(html, contains('Excelente'));
+        expect(html, isNot(contains('Pasable')));
+      },
+    );
+
+    test('a block the HTML does not draw yet is named', () async {
+      final response = await _get(
+        _FakeReads(
+          homeRow: home([
+            ...blocks,
+            block('faq', 'faq', 6, {'title': 'Preguntas'}),
+          ]),
+          shell: shell,
+        ),
+        '/_html/',
+      );
+      expect(response.statusCode, 200);
+      expect(response.headers['x-storefront-uncovered'], 'faq');
+    });
+
+    test('a store without a published home answers 404', () async {
+      final response = await _get(_FakeReads(), '/_html/');
+      expect(response.statusCode, 404);
+    });
+  });
+
   test('every stylesheet closes what it opens', () {
     // A stray «}» at the end of the shared stylesheet swallowed the first
     // rule of the next one (2026-10-05): the page theme never applied.
@@ -1148,5 +1354,6 @@ void main() {
       'policyPageCss',
       policyPageCss(WebsiteThemeRoles.resolve((_) => '')),
     );
+    balanced('homePageCss', homePageCss(WebsiteThemeRoles.resolve((_) => '')));
   });
 }
