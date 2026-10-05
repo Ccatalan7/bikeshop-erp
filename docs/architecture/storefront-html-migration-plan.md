@@ -688,6 +688,10 @@ Lo que costó una vuelta, para el que siga:
 - **Un `Wrap` alinea arriba**: en el pie, el chip de transferencia quedaba
   centrado con el logo de 60 px; arreglado en todas las páginas.
 
+Para capturar otra diapositiva de Flutter se hace clic en su punto por
+coordenada y sin activar la semántica: con ella activa el clic no cambió la
+diapositiva (observado, sin buscar la causa).
+
 Lo que queda distinto, medido: los textos de capa con altura de línea 1,0
 quedan 1–2 px más arriba que en Flutter (su reparto del interlineado no es
 el de CSS) y la etiqueta «Iniciar sesión» de Flutter cae en la letra por
@@ -696,11 +700,13 @@ defecto del motor porque su estilo no nombra familia (4 px más ancha).
 ### Pendiente
 
 - El costo real de Cloud Run en la facturación, después de unos días.
-- Abrir `/`: reescritura exacta en `firebase.json`, y el generador deja de
-  escribir la portada instantánea (`index.html` con la portada pre-armada y
-  su JSON-LD) en una ruta que el servidor responde; revisar antes qué de esa
-  instantánea (datos estructurados, enlaces) falta en el HTML del servidor.
-  Sólo con `x-storefront-uncovered` vacío.
+- Abrir `/`. Una reescritura no basta: Hosting sirve un archivo que calza
+  exacto antes que cualquier reescritura, y `/` calza con el `index.html` de
+  Flutter, que además es el destino de `**` para carrito, checkout y portal.
+  Hay que mover la entrada de Flutter a otro archivo (y su `**`), revisar
+  que el service worker y el arranque no la busquen por nombre, y que el
+  HTML del servidor traiga lo que hoy trae la portada instantánea (JSON-LD
+  del negocio, enlaces). Sólo con `x-storefront-uncovered` vacío.
 - Navegar dentro de la tienda HTML sin volver a Flutter (enlaces de la
   portada a `/productos?category=…`).
 - Las copias de una foto reemplazada quedan en Storage (pocos KB cada una);

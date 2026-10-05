@@ -337,9 +337,9 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,su
 .foot .contact li{display:flex;align-items:flex-start;gap:8px;padding-bottom:12px}
 .foot .contact svg{flex:none}
 .payments{margin-top:32px;text-align:center}
-/* `bodySmall` keeps its 1.5 line at 11 px, and the badges sit at the top
-   of their row, as a `Wrap` lays them out. */
-.payments p{margin:0 0 16px;font-size:11px;line-height:1.5;letter-spacing:.5px;color:rgba(255,255,255,.6)}
+/* The label's line is 16 px in Flutter (`bodySmall` at 11 px), and the
+   badges sit at the top of their row, as a `Wrap` lays them out. */
+.payments p{margin:0 0 16px;font-size:11px;line-height:16px;letter-spacing:.5px;color:rgba(255,255,255,.6)}
 .payments ul{display:flex;justify-content:center;align-items:flex-start;flex-wrap:wrap;gap:12px}
 .pay-logo{display:block;width:150px;height:60px;object-fit:contain}
 .pay-chip{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 10px;border-radius:6px;border:1px solid rgba(255,255,255,.24);background:rgba(255,255,255,.1);color:rgba(255,255,255,.7);font:600 11px var(--body)}
