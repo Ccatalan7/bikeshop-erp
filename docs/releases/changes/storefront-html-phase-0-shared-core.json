@@ -204,7 +204,7 @@
     },
     {
       "path": "services/storefront_html/README.md",
-      "sha256": "5852dd0558785b78b2866c108ea93c57f5e33ec506f1e51e0ed2f85e7912afa7"
+      "sha256": "806675444262f007cf80d6093cfa6d3374fef0d834ccc58848f1610dbbdf8091"
     },
     {
       "path": "services/storefront_html/analysis_options.yaml",
@@ -256,7 +256,7 @@
     },
     {
       "path": "services/storefront_html/tool/measure.mjs",
-      "sha256": "374a7c2616b33bcca50b1907e1526047d0ccd0aa51996f69ea07c8134ae86748"
+      "sha256": "7c70d622408d8bb6d975c7eeeb7a1dc8a893c69e4749ac62ca3f3d5cfcb14858"
     },
     {
       "path": "supabase/migrations/20261004180000_public_storefront_page_reads.sql",

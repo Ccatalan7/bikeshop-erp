@@ -567,10 +567,20 @@ cat > "$INDEX_FILE" << HEREDOC
   <script>
     window.dataLayer = window.dataLayer || [];
     function gtag() { dataLayer.push(arguments); }
-    gtag('js', new Date());
-    gtag('config', $GA_ID_JSON);
 
     (function () {
+      // Only the store's own domain is measured (owner, 2026-10-04). The ERP's
+      // web build, Firebase's default domains, previews and localhost are
+      // built from this same page; their visits are staff and agents, not
+      // customers, and inflated the store's users. Elsewhere gtag() still
+      // exists, so the app's events queue harmlessly and are never sent.
+      var host = (window.location.host || '').toLowerCase();
+      if (host.startsWith('www.')) host = host.substring(4);
+      if (host !== $CANONICAL_HOST_JSON) return;
+
+      gtag('js', new Date());
+      gtag('config', $GA_ID_JSON);
+
       var loaded = false;
       function loadGoogleAnalytics() {
         if (loaded) return;

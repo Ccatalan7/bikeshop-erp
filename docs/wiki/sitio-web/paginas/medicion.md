@@ -2,9 +2,9 @@
 titulo: Medición (GA4, píxel de Meta y consolas)
 resumen: qué eventos manda la tienda a Google Analytics, con qué datos, qué falta del embudo recomendado y cómo leer las consolas
 fuentes: [ga4, consolas-google, repositorio, web-dev]
-archivos: [lib/public_store/services/ga4_commerce_events.dart, lib/public_store/services/ga4_bridge_web.dart, lib/public_store/services/meta_pixel_service.dart, lib/public_store/widgets/public_store_bootstrap.dart]
+archivos: [scripts/sync_seo_index.sh, services/storefront_html/tool/measure.mjs, lib/public_store/services/ga4_commerce_events.dart, lib/public_store/services/ga4_bridge_web.dart, lib/public_store/services/meta_pixel_service.dart, lib/public_store/widgets/public_store_bootstrap.dart]
 tablas: [website_settings]
-revisado: 2026-10-03
+revisado: 2026-10-04
 ---
 
 # Medición (GA4, píxel de Meta y consolas)
@@ -14,6 +14,27 @@ revisado: 2026-10-03
 La tienda manda eventos a GA4 (flujo web `G-FR5Q37BW43`, el ID se guarda en
 `seo_ga_id`) a través de `gtag`, desde un solo dueño:
 `lib/public_store/services/ga4_commerce_events.dart` `[Repo]`.
+
+## Quién cuenta como visita (2026-10-04)
+
+Sólo el dominio de la tienda. Hasta el 2026-10-04 el ERP web
+(`project-vinabike.web.app`), los dominios por defecto de Firebase, las vistas
+previas y `localhost` cargaban la misma etiqueta (`G-FR5Q37BW43`), porque se
+construyen desde la misma página (`web/index.html`, generada por
+`scripts/sync_seo_index.sh`). Cada vez que alguien abría el ERP en el
+navegador, o un agente probaba la tienda en local, GA4 lo contaba como un
+usuario de vinabike.cl. El dueño lo notó en el pico de fines de septiembre
+`[Dueño 2026-10-04]`. Desde entonces el fragmento de GA4 se activa sólo si el
+host, sin `www.`, es el de `store_url`; en otro host `gtag()` existe igual y los
+eventos de la app se encolan sin enviarse. Los filtros de GA4 no son
+retroactivos: para ver lo anterior sin ese ruido, se filtra por la dimensión
+«Nombre de host» = `vinabike.cl`.
+
+Las herramientas que abren el sitio real con un navegador bloquean Google
+Analytics y el píxel de Meta (`services/storefront_html/tool/measure.mjs`): cada
+carga abre un perfil nuevo y contaría como un usuario más. Un script nuevo de
+un agente que abra vinabike.cl hace lo mismo con
+`context.route(/(google-analytics\.com|googletagmanager\.com|analytics\.google\.com|connect\.facebook\.net|facebook\.com\/tr)/, (r) => r.abort())`.
 
 ## Eventos que se mandan
 

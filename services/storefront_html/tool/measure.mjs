@@ -20,6 +20,13 @@ for (let i = 0; i < runs; i++) {
     hasTouch: true,
     userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Mobile Safari/537.36',
   });
+  // A measurement is not a visitor (owner, 2026-10-04): every load opens a
+  // clean profile, so Analytics and the Meta Pixel would count each one as a
+  // new user of the store. Block them; the page itself loads unchanged.
+  await context.route(
+    /(google-analytics\.com|googletagmanager\.com|analytics\.google\.com|connect\.facebook\.net|facebook\.com\/tr)/,
+    (route) => route.abort(),
+  );
   const page = await context.newPage();
   const cdp = await context.newCDPSession(page);
   await cdp.send('Network.enable');

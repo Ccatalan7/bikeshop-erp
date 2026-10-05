@@ -37,6 +37,10 @@ cd services/storefront_html && ../../.fvm/flutter_sdk/bin/dart test
 node services/storefront_html/tool/measure.mjs "<url>" <etiqueta> 3
 ```
 
+`measure.mjs` bloquea Google Analytics y el píxel de Meta (2026-10-04): cada
+carga abre un perfil nuevo y contaría como un usuario más de la tienda. Las
+mediciones anteriores a esa fecha incluían bajar `gtag.js`.
+
 `measure.mjs` simula un celular lento (1,6 Mbps, 150 ms, CPU ×4, 412×823,
 perfil nuevo por carga) y da la mediana. Con una URL de vinabike.cl mide la
 tienda Flutter: «lista» es cuando retira la página instantánea. Una captura de
