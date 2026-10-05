@@ -800,7 +800,9 @@ void main(List<String> args) async {
     catalogOwnedPaths: {if (servicesCatalogIndexable) '/servicios'},
   );
   stdout.writeln('✅ Dynamic CMS SEO pages generated: $dynamicCmsPagesWritten');
-  if (servicesCatalogIndexable) {
+  // Served by the HTML storefront once Firebase hands it `/servicios`: a
+  // file there would hide it.
+  if (servicesCatalogIndexable && !serverRoutes.owns('/servicios')) {
     await _writeServicesCatalogSnapshot(
       buildDir: buildDir,
       baseHtml: baseHtml,
@@ -4809,16 +4811,17 @@ Future<void> _writeServicesCatalogSnapshot({
   required Map<String, String> activeCategoryPathsById,
 }) async {
   final servicesUrl = _joinUrl(storeUrl, '/servicios');
-  final locality = _cleanText(storeLocality);
-  final title = presentation.seoTitle.trim().isNotEmpty
-      ? presentation.seoTitle.trim()
-      : 'Servicios y precios del taller de bicicletas | $storeName'
-          '${locality.isEmpty ? '' : ' $locality'}';
-  final description = presentation.seoDescription.trim().isNotEmpty
-      ? presentation.seoDescription.trim()
-      : 'Mantenciones, ajustes y reparaciones de bicicletas en el taller de '
-          '$storeName${locality.isEmpty ? '' : ' en $locality'}, '
-          'con precios en CLP.';
+  // The HTML storefront says the same (`public_catalog_seo.dart`).
+  final title = publicServicesCatalogSeoTitle(
+    presentation: presentation,
+    storeName: storeName,
+    storeLocality: storeLocality,
+  );
+  final description = publicServicesCatalogSeoDescription(
+    presentation: presentation,
+    storeName: storeName,
+    storeLocality: storeLocality,
+  );
   final entries = buildSeoServiceCatalogEntries(
     services: services,
     activeCategoryPathsById: activeCategoryPathsById,

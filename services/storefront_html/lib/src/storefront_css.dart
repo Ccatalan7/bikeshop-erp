@@ -216,8 +216,10 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,su
 .subcats a{display:block;padding:5px 0;font:800 11px/1.2 var(--body);letter-spacing:.7px;text-transform:uppercase;color:rgba(0,0,0,.87);text-decoration:none;white-space:nowrap}
 .subcats a:hover{color:var(--primary)}
 .top .wrap,.catalog.wrap,.subcats .wrap{max-width:1560px;padding-inline:28px}
-.catalog{display:grid;grid-template-columns:236px minmax(0,1fr);gap:40px;padding-block:33px 30px;align-items:start}
+.catalog{display:grid;grid-template-columns:236px minmax(0,1fr);gap:40px;padding-block:30px;align-items:start}
 .filters-panel,.results{min-width:0}
+/* The rail's words were placed on their glyphs from 33 px down. */
+.filters-panel{padding-top:3px}
 .filters{display:flex;flex-direction:column}
 .sheet-head .grab,.sheet-close,.sheet-dim,.sort-sheet,.sheet-check,.bar-button{display:none}
 .side-title{margin:0 0 20px;font:600 16px/1.3 var(--body);letter-spacing:.2px;color:rgba(0,0,0,.87)}
@@ -283,10 +285,13 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,su
 .results-head{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"h c" "n n" "s s";column-gap:24px;align-items:center}
 .results-head>.trail{grid-area:h}
 .controls{grid-area:c;display:flex;align-items:center}
-.count{grid-area:n;margin:11px 0 0;font-size:13px;line-height:1.4;color:#757575}.count .narrow{display:none}
+/* Flutter's heading row is its title's 1.5 line (30 px), then 8 px, the
+   count's line (19.5, which Flutter's text rounds up to 20) and 28 px to the
+   grid. Laid out on those boxes the column was 2 px low (2026-10-05). */
+.count{grid-area:n;margin:8px 0 0;font-size:13px;line-height:20px;color:#757575}.count .narrow{display:none}
 .scope{grid-area:s;display:flex;flex-wrap:wrap;gap:4px 10px;margin:5px 0 0;font-size:12.5px;color:#475569}.scope a{font-weight:700;text-decoration:none}
 @container (max-width:819px){.results-head{grid-template-columns:minmax(0,1fr);grid-template-areas:"h" "c" "n" "s"}.controls{justify-self:end;margin-top:12px}}
-.trail{position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;margin:0;padding-left:16px;font:700 20px/1.2 var(--body);letter-spacing:.5px;color:#000}
+.trail{position:relative;display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;margin:0;padding-left:16px;font:700 20px/1.5 var(--body);letter-spacing:.5px;color:#000}
 .trail::before{content:"";position:absolute;left:0;top:50%;width:4px;height:24px;margin-top:-12px;background:#000}
 .trail a{padding:2px 0;color:#616161;font-weight:600;text-decoration:none}.trail a:hover{color:#000}
 .trail strong{padding:2px 0;color:#000;font-weight:800}
@@ -295,7 +300,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,su
 .order label{display:flex;align-items:center;gap:8px;font-size:13px;color:#757575}
 .order select{appearance:none;-webkit-appearance:none;height:26px;border:1px solid #e0e0e0;border-radius:0;padding:0 36px 0 12px;font:400 13px var(--body);color:rgba(0,0,0,.87);background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23616161' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E") no-repeat right 12px center/24px;cursor:pointer}
 .notice{margin:12px 0 0;padding:10px 14px;border-radius:8px;background:#fff4e5;color:#7a3e00;font-size:14px}
-.cards-box,.empty{margin-top:30px}
+.cards-box,.empty{margin-top:28px}
 .empty{display:grid;justify-items:center;padding:64px;text-align:center;color:#757575;font-size:13px}
 .empty svg{margin-bottom:16px;color:#bdbdbd}.empty p{margin:0}
 .empty-title{margin-bottom:8px!important;font:500 16px/1.4 var(--body);color:rgba(0,0,0,.54)}
@@ -422,11 +427,13 @@ summary.sheet-item::-webkit-details-marker{display:none}
 @media (max-width:699px){
 .hero{height:var(--hero-phone,130px)}.hero .wrap{padding:16px 22px}.hero h1{font-size:32px}.hero-intro{font-size:14px;-webkit-line-clamp:3}
 .subcats .wrap,.catalog.wrap{padding-inline:16px}.subcats ul{padding:9px 0}
-.catalog{display:block;padding-block:22px 16px}
+/* Flutter's phone heading: 18 px on its 1.5 line (27), 6 px, the count's
+   20 px line, the bar 12 px below. */
+.catalog{display:block;padding-block:20px 16px}.filters-panel{padding-top:0}
 .results-head{grid-template-columns:minmax(0,1fr);grid-template-areas:"h" "n" "s" "c"}
 .trail{font-size:18px}
-.count{margin-top:9px}.count .wide{display:none}.count .narrow{display:inline}
-.controls{justify-self:stretch;gap:24px;margin:14px -16px 0;padding:12px 16px;border-bottom:1px solid #eee}
+.count{margin-top:6px}.count .wide{display:none}.count .narrow{display:inline}
+.controls{justify-self:stretch;gap:24px;margin:12px -16px 0;padding:12px 16px;border-bottom:1px solid #eee}
 .order{display:none}
 .bar-button{display:inline-flex;align-items:center;gap:6px;font:400 14px/20px var(--body);letter-spacing:.2px;color:#616161;cursor:pointer}
 .bar-button:last-of-type{gap:4px}

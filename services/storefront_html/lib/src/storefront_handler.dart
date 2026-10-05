@@ -102,6 +102,11 @@ Handler storefrontHandler({
         [] => await route.home(),
         ['productos'] => await route.catalog(null),
         ['productos', 'categoria', final slug] => await route.catalog(slug),
+        ['servicios'] => await route.catalog(null, services: true),
+        ['servicios', 'categoria', final slug] => await route.catalog(
+          slug,
+          services: true,
+        ),
         ['productos', final slug, final sku] => await route.product(slug, sku),
         ['productos', final id] => await route.legacyProduct(id),
         ['producto', final id] => await route.legacyProduct(id),
@@ -159,16 +164,25 @@ class _Route {
   );
 
   /// `/productos` or a category, with the visitor's search and filters.
-  Future<Response> catalog(String? slug) async {
+  /// `/productos` or, with [services], `/servicios`: the same catalog for the
+  /// workshop's services, as Flutter's `_defaultProductTypeForRoute`.
+  Future<Response> catalog(String? slug, {bool services = false}) async {
     final parsed = parseCatalogQuery(_uri);
     final legacy = slug == null ? _legacyCategoryValue() : null;
-    if (legacy != null) return _legacyCategoryCatalog(legacy, parsed);
+    if (legacy != null) {
+      return _legacyCategoryCatalog(legacy, parsed, services: services);
+    }
     if (slug == null) {
       // The listing does not depend on the shell: read both at once.
       final results = await Future.wait<Object>([
         reads.shell(),
         reads.catalog(
-          catalogRequestFor(shell: null, categoryId: null, query: parsed.query),
+          catalogRequestFor(
+            shell: null,
+            categoryId: null,
+            query: parsed.query,
+            services: services,
+          ),
         ),
       ]);
       final context = _context(results[0] as ShellReads);
@@ -179,6 +193,7 @@ class _Route {
         parsed,
         results[1] as CatalogReads,
         dataMs: _watch.elapsedMilliseconds,
+        services: services,
       );
     }
 
@@ -187,9 +202,12 @@ class _Route {
     final shell = context.shell;
     final resolved = shell.resolveCategorySlug(slug);
     if (resolved == null) {
-      return _render(unavailableCategoryDocument(context), status: 404);
+      return _render(
+        unavailableCategoryDocument(context, services: services),
+        status: 404,
+      );
     }
-    final canonical = shell.categoryPath(resolved.id);
+    final canonical = shell.categoryPath(resolved.id, services: services);
     if (resolved.alias || canonical != path) {
       return _redirect(canonical, query: _uri.query);
     }
@@ -198,6 +216,7 @@ class _Route {
         shell: shell,
         categoryId: resolved.id,
         query: parsed.query,
+        services: services,
       ),
     );
     return _catalogPage(
@@ -206,6 +225,7 @@ class _Route {
       parsed,
       catalog,
       dataMs: _watch.elapsedMilliseconds,
+      services: services,
     );
   }
 
@@ -215,6 +235,7 @@ class _Route {
     ParsedCatalogQuery parsed,
     CatalogReads catalog, {
     required int dataMs,
+    bool services = false,
   }) {
     final model = CatalogPageModel.build(
       page: context,
@@ -223,6 +244,7 @@ class _Route {
       queryError: parsed.error,
       categoryId: categoryId,
       reads: catalog,
+      services: services,
     );
     return _render(
       catalogPageDocument(model),
@@ -379,14 +401,15 @@ class _Route {
   /// already searches, as the Flutter catalog does.
   Future<Response> _legacyCategoryCatalog(
     String value,
-    ParsedCatalogQuery parsed,
-  ) async {
+    ParsedCatalogQuery parsed, {
+    bool services = false,
+  }) async {
     final context = _context(await reads.shell());
     if (!context.shell.sitePublished) return _unpublished(context);
     final id = context.shell.resolveCategorySlug(value)?.id;
     if (id != null) {
       return _redirect(
-        context.shell.categoryPath(id),
+        context.shell.categoryPath(id, services: services),
         query: _withoutKeys(_uri, const {'category', 'category_id', 'cat'}),
       );
     }
@@ -394,7 +417,12 @@ class _Route {
         ? (query: _withSearch(parsed.query, value), error: parsed.error)
         : parsed;
     final catalog = await reads.catalog(
-      catalogRequestFor(shell: null, categoryId: null, query: query.query),
+      catalogRequestFor(
+        shell: null,
+        categoryId: null,
+        query: query.query,
+        services: services,
+      ),
     );
     return _catalogPage(
       context,
@@ -402,6 +430,7 @@ class _Route {
       query,
       catalog,
       dataMs: _watch.elapsedMilliseconds,
+      services: services,
     );
   }
 

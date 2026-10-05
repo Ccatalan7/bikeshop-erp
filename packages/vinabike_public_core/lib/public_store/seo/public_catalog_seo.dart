@@ -1,4 +1,5 @@
-/// Title and description of the catalog root and of a category page.
+/// Title and description of the catalog roots (`/productos`, `/servicios`)
+/// and of a category page.
 ///
 /// One owner for both renderers of those pages: the SEO generator wrote them
 /// into the snapshots Google indexed until 2026-10-05, and the HTML storefront
@@ -86,4 +87,32 @@ String publicCatalogSeoDescription({
   }
   return 'Catálogo de productos publicados por $storeName con precios '
       'informados en CLP.';
+}
+
+/// `/servicios`: the workshop's services and their prices.
+String publicServicesCatalogSeoTitle({
+  required WebsiteCatalogPresentation presentation,
+  required String storeName,
+  required String storeLocality,
+}) {
+  if (presentation.seoTitle.trim().isNotEmpty) {
+    return presentation.seoTitle.trim();
+  }
+  final locality = cleanPublicSeoText(storeLocality);
+  return 'Servicios y precios del taller de bicicletas | $storeName'
+      '${locality.isEmpty ? '' : ' $locality'}';
+}
+
+String publicServicesCatalogSeoDescription({
+  required WebsiteCatalogPresentation presentation,
+  required String storeName,
+  required String storeLocality,
+}) {
+  if (presentation.seoDescription.trim().isNotEmpty) {
+    return presentation.seoDescription.trim();
+  }
+  final locality = cleanPublicSeoText(storeLocality);
+  return 'Mantenciones, ajustes y reparaciones de bicicletas en el taller de '
+      '$storeName${locality.isEmpty ? '' : ' en $locality'}, '
+      'con precios en CLP.';
 }

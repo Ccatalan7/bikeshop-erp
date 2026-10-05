@@ -683,6 +683,62 @@ void main() {
       expect(fake.catalogRequests.single.limit, 20);
     });
 
+    test(
+      '/servicios is the same catalog for the workshop\'s services',
+      () async {
+        final fake = _FakeReads(
+          products: [
+            {
+              ..._product(name: 'Ajuste de dirección', sku: 'NNV3'),
+              'product_type': 'service',
+              'price': 3000,
+              'total_count': 1,
+            },
+          ],
+          facets: const [
+            {'facet_key': 'summary', 'item_count': 1},
+          ],
+        );
+        final response = await _get(fake, '/servicios');
+        final html = await response.readAsString();
+        expect(response.statusCode, 200);
+        // The services, not the products, under the snapshot's own title.
+        expect(fake.catalogRequests.single.services, isTrue);
+        expect(
+          html,
+          contains(
+            '<title>Servicios y precios del taller de bicicletas | Viñabike',
+          ),
+        );
+        expect(
+          html,
+          contains('href="https://vinabike.cl/servicios" rel="canonical"'),
+        );
+        expect(html, contains('<h1 class="trail">SERVICIOS</h1>'));
+        expect(html, contains('Mostrando 1 - 1 de 1 servicios'));
+        expect(html, contains('placeholder="Buscar servicios"'));
+        expect(html, contains('href="/servicios"'));
+        // Each service with its price, as Google read them until today.
+        expect(html, contains('"@type":"Service"'));
+        expect(html, contains('"price":"3000","priceCurrency":"CLP"'));
+        // /productos still asks for products.
+        final products = _FakeReads(products: rows(), facets: facets);
+        await _get(products, '/productos');
+        expect(products.catalogRequests.single.services, isFalse);
+      },
+    );
+
+    test(
+      'an unknown service category answers 404 back to /servicios',
+      () async {
+        final response = await _get(reads(), '/servicios/categoria/no-existe');
+        expect(response.statusCode, 404);
+        final html = await response.readAsString();
+        expect(html, contains('Ver todos los servicios'));
+        expect(html, contains('href="/servicios"'));
+      },
+    );
+
     test('cards use the commercial title and the canonical brand', () async {
       final fake = _FakeReads(
         products: [

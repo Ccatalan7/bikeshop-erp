@@ -120,7 +120,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/public_reads.dart",
-      "sha256": "afad72350be6150e196f1244cced9e6c2d771e26c4764186c9a101e8eda8faab"
+      "sha256": "66a5e67a971773d23f8c16b227df6042e309e20d5bb9082088fd835f54276361"
     },
     {
       "path": "services/storefront_html/lib/src/site_layout.dart",
@@ -128,11 +128,11 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_css.dart",
-      "sha256": "fc3e5df4cb92483ed375c903798ab07f51ce04530aff8abf28260a8fd174d508"
+      "sha256": "2c901c4f78314441f46e29f781d2be8fdec4c916865eb8929b9d7d07e8e99d65"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
-      "sha256": "360b55c73d9b30a3eab11c8088877e3dd224bacfada4e33beb73536f0df26710"
+      "sha256": "20b73104044bba9fee81abc7d706b55483560d37c9c51219d8c99462a1080355"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_shell.dart",

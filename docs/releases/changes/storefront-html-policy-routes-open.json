@@ -13,7 +13,7 @@
   "evidence": [
     {
       "path": "scripts/generate_product_seo_snapshots.dart",
-      "sha256": "7d31c209b3c0dcfa29ad87911c3dc556bb500598f96c83955f0cab30eed01fbf"
+      "sha256": "bdf0305e3b45ec456800a999e64965b64d0d599f6a8ab6ec2ec0a7952c2cb080"
     },
     {
       "path": "scripts/releases/check_storefront_html_routes.mjs",

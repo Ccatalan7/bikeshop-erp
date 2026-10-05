@@ -764,6 +764,35 @@ Lo que costó una vuelta:
   archivo que aún no existe no puede dejar el texto en la letra del sistema.
   Foto principal 4,8 → 3,7 s; el texto mide igual al píxel.
 
+## Fase 2d: `/servicios` (2026-10-05)
+
+`/servicios` no es una página del editor: Flutter la dibuja con el mismo
+catálogo que `/productos` y `product_type = service`
+(`_defaultProductTypeForRoute`). El servidor hace lo mismo: las rutas
+`/servicios` y `/servicios/categoria/<slug>` van al catálogo con
+`CatalogRequest.services`, que pide `p_product_type = service` a la lista y
+a las facetas; el modelo cambia la raíz de presentación
+(`WebsiteCatalogRoot.services`), el título («SERVICIOS»), el sustantivo
+(«Mostrando 1 - 20 de 59 servicios», «Buscar servicios»), las migas y la
+canónica. El título y la descripción para Google son los que la instantánea
+ya publicaba («Servicios y precios del taller de bicicletas | …»), ahora en el
+núcleo (`publicServicesCatalogSeoTitle`/`Description`) para el generador y el
+servidor; el JSON-LD lista cada servicio como `Service` con su precio. Con la
+reescritura en `firebase.json`, el generador deja de escribir el archivo
+`servicios` y el validador falla si queda uno.
+
+Medido contra Flutter en píxeles (bandas de filas oscuras) a 1440, 800 y
+412 px: título, conteo, barra «Filtro / Ordenar por» y tarjetas dentro de
+1 px. De paso se corrigió el catálogo entero: **la columna de resultados
+quedaba 2 px más abajo** que la de Flutter, que suma la línea 1,5 del título
+(30 px), 8 px, la línea del conteo (19,5 que su texto redondea a 20) y 28 px
+hasta la grilla; en el teléfono, 27, 6 y 12. El riel ya calzaba y conserva su
+posición.
+
+A 800 px Flutter pone tres tarjetas de 141 px y el HTML dos: es la decisión
+de la fase 1 (Flutter mide la ventana, el HTML la columna de resultados), no
+un descuido; se mantiene.
+
 ### Pendiente
 
 - El costo real de Cloud Run en la facturación, después de unos días.

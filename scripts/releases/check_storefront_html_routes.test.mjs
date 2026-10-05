@@ -132,7 +132,7 @@ test("fails on a noindex page and on a route Hosting answers itself", async () =
 
 test("checks every exact server route the sitemap publishes, from firebase.json", () => {
   const routes = exactServerRoutes(JSON.parse(readFileSync("firebase.json", "utf8")));
-  for (const path of ["/", "/productos", "/nosotros", "/envios", "/devoluciones", "/terminos", "/privacidad"]) {
+  for (const path of ["/", "/productos", "/servicios", "/nosotros", "/envios", "/devoluciones", "/terminos", "/privacidad"]) {
     assert.ok(routes.includes(path), path);
   }
   const withPolicies = sitemapXml.replace(
@@ -147,9 +147,10 @@ test("checks every exact server route the sitemap publishes, from firebase.json"
     exactRoutes: routes,
   }).pages;
   const selected = pages.map((entry) => entry.path);
-  // Published information pages and the home are checked; one not in the
-  // sitemap is not. The home's canonical is the bare origin.
-  assert.deepEqual(selected.slice(0, 4), ["/productos", "/nosotros", "/envios", "/"]);
-  assert.equal(pages[3].canonical, store);
+  // The services catalog, published information pages and the home are
+  // checked; one not in the sitemap is not. The home's canonical is the bare
+  // origin.
+  assert.deepEqual(selected.slice(0, 5), ["/productos", "/servicios", "/nosotros", "/envios", "/"]);
+  assert.equal(pages[4].canonical, store);
   assert.ok(!selected.includes("/terminos"));
 });

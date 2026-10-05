@@ -25,10 +25,12 @@ typedef CatalogProduct = ({
 
 typedef CatalogLink = ({String id, String label, String path, int count});
 
-/// `/productos`, a category page, or a search: the listing, its filters and
-/// how the page presents itself, from the public reads and the shared core.
+/// `/productos`, `/servicios`, a category page, or a search: the listing,
+/// its filters and how the page presents itself, from the public reads and
+/// the shared core.
 class CatalogPageModel {
   CatalogPageModel._({
+    required this.services,
     required this.page,
     required this.uri,
     required this.query,
@@ -51,18 +53,22 @@ class CatalogPageModel {
     required String? categoryId,
     required CatalogReads reads,
     String? queryError,
+    bool services = false,
   }) {
     final shell = page.shell;
+    final root = services
+        ? WebsiteCatalogRoot.services
+        : WebsiteCatalogRoot.products;
     final presentation = categoryId == null
-        ? shell.presentations.forCatalogRoot(WebsiteCatalogRoot.products) ??
-              WebsiteCatalogPresentation.catalogRoot(
-                WebsiteCatalogRoot.products,
-              )
+        ? shell.presentations.forCatalogRoot(root) ??
+              WebsiteCatalogPresentation.catalogRoot(root)
         : shell.presentationFor(categoryId);
     final category = categoryId == null ? null : shell.categories[categoryId];
     final displayTitle = categoryId == null
         ? (presentation.heroTitle.trim().isNotEmpty
               ? presentation.heroTitle.trim()
+              : services
+              ? 'Servicios'
               : 'Productos')
         : publicCategoryDisplayTitle(
             presentation,
@@ -85,6 +91,7 @@ class CatalogPageModel {
       ],
     );
     return CatalogPageModel._(
+      services: services,
       page: page,
       uri: uri,
       query: query,
@@ -126,11 +133,13 @@ class CatalogPageModel {
     );
   }
 
+  /// `/servicios` and its categories: the workshop's services.
+  final bool services;
   final PageContext page;
   final Uri uri;
   final WebsiteCatalogQuery query;
 
-  /// `null` on `/productos`.
+  /// `null` on `/productos` and `/servicios`.
   final String? categoryId;
   final WebsiteCatalogPresentation presentation;
   final String displayTitle;
@@ -156,9 +165,19 @@ class CatalogPageModel {
   /// last one, and the Flutter catalog clamps the same way.
   int get currentPage => query.page.clamp(1, pageCount);
 
-  /// `/productos` or the category's public path.
-  String get basePath =>
-      categoryId == null ? '/productos' : shell.categoryPath(categoryId!);
+  /// `/productos` or `/servicios`.
+  String get rootPath => services ? '/servicios' : '/productos';
+
+  /// «Productos» or «Servicios»: the catalog's name.
+  String get rootLabel => services ? 'Servicios' : 'Productos';
+
+  /// What it lists, in plural («productos», «servicios»).
+  String get noun => services ? 'servicios' : 'productos';
+
+  /// The root or the category's public path.
+  String get basePath => categoryId == null
+      ? rootPath
+      : shell.categoryPath(categoryId!, services: services);
 
   /// Products in a category and everything under it.
   int countOf(String id) => shell
@@ -215,7 +234,7 @@ class CatalogPageModel {
   CatalogLink linkTo(String id) => (
     id: id,
     label: shell.categoryName(id),
-    path: shell.categoryPath(id),
+    path: shell.categoryPath(id, services: services),
     count: countOf(id),
   );
 
@@ -311,29 +330,42 @@ class CatalogPageModel {
       ownerAllowsIndexing: presentation.allowIndexing,
       ownerIsPublished: published,
       hasEligibleContent: total > 0,
-      unavailableCanonicalPath: '/productos',
+      unavailableCanonicalPath: rootPath,
     );
     final storeUrl = page.storeUrl;
     final canonicalUrl = '$storeUrl${route.canonicalPath}';
+    final locality = shell.setting(
+      'seo_address_city',
+      shell.setting('seo_address_locality'),
+    );
     final title = categoryId == null
-        ? publicCatalogSeoTitle(
-            presentation: presentation,
-            storeName: storeName,
-            storeLocality: shell.setting(
-              'seo_address_city',
-              shell.setting('seo_address_locality'),
-            ),
-          )
+        ? (services
+              ? publicServicesCatalogSeoTitle(
+                  presentation: presentation,
+                  storeName: storeName,
+                  storeLocality: locality,
+                )
+              : publicCatalogSeoTitle(
+                  presentation: presentation,
+                  storeName: storeName,
+                  storeLocality: locality,
+                ))
         : publicCategorySeoTitle(
             seoTitle: presentation.seoTitle,
             displayTitle: displayTitle,
             storeName: storeName,
           );
     final description = categoryId == null
-        ? publicCatalogSeoDescription(
-            presentation: presentation,
-            storeName: storeName,
-          )
+        ? (services
+              ? publicServicesCatalogSeoDescription(
+                  presentation: presentation,
+                  storeName: storeName,
+                  storeLocality: locality,
+                )
+              : publicCatalogSeoDescription(
+                  presentation: presentation,
+                  storeName: storeName,
+                ))
         : publicCategorySeoDescription(
             seoDescription: presentation.seoDescription,
             intro: intro,
@@ -376,7 +408,9 @@ class CatalogPageModel {
             {
               '@type': 'CollectionPage',
               'name': categoryId == null
-                  ? 'Productos para bicicletas en $storeName'
+                  ? services
+                        ? 'Servicios del taller de $storeName'
+                        : 'Productos para bicicletas en $storeName'
                   : displayTitle,
               'url': canonicalUrl,
               'description': description,
@@ -387,7 +421,7 @@ class CatalogPageModel {
               'itemListElement': [
                 for (final (i, crumb) in [
                   ('Inicio', storeUrl),
-                  ('Productos', '$storeUrl/productos'),
+                  (rootLabel, '$storeUrl$rootPath'),
                   if (categoryId != null) (displayTitle, canonicalUrl),
                 ].indexed)
                   {
@@ -401,17 +435,38 @@ class CatalogPageModel {
             {
               '@type': 'ItemList',
               'name': categoryId == null
-                  ? 'Catálogo de $storeName'
+                  ? services
+                        ? 'Servicios de $storeName'
+                        : 'Catálogo de $storeName'
                   : '$displayTitle en $storeName',
               'numberOfItems': total,
               'itemListElement': [
                 for (final (i, product) in listed.indexed)
-                  {
-                    '@type': 'ListItem',
-                    'position': i + 1,
-                    'url': '$storeUrl${product.path}',
-                    'name': cleanPublicSeoText(product.commerce.title),
-                  },
+                  if (services)
+                    // A service with its price, as the services page Google
+                    // indexed from the snapshot listed them.
+                    {
+                      '@type': 'ListItem',
+                      'position': i + 1,
+                      'item': {
+                        '@type': 'Service',
+                        'name': cleanPublicSeoText(product.commerce.title),
+                        'url': '$storeUrl${product.path}',
+                        if (product.commerce.price > 0)
+                          'offers': {
+                            '@type': 'Offer',
+                            'price': product.commerce.price.toStringAsFixed(0),
+                            'priceCurrency': 'CLP',
+                          },
+                      },
+                    }
+                  else
+                    {
+                      '@type': 'ListItem',
+                      'position': i + 1,
+                      'url': '$storeUrl${product.path}',
+                      'name': cleanPublicSeoText(product.commerce.title),
+                    },
               ],
             },
           ],
@@ -428,7 +483,9 @@ CatalogRequest catalogRequestFor({
   required StorefrontShell? shell,
   required String? categoryId,
   required WebsiteCatalogQuery query,
+  bool services = false,
 }) => CatalogRequest(
+  services: services,
   categoryIds: categoryId == null
       ? null
       : query.categoryScope == WebsiteCatalogCategoryScope.direct

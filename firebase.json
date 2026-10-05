@@ -703,6 +703,20 @@
           }
         },
         {
+          "source": "/servicios",
+          "run": {
+            "serviceId": "storefront-html",
+            "region": "southamerica-east1"
+          }
+        },
+        {
+          "source": "/servicios/**",
+          "run": {
+            "serviceId": "storefront-html",
+            "region": "southamerica-east1"
+          }
+        },
+        {
           "source": "/nosotros",
           "run": {
             "serviceId": "storefront-html",

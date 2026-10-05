@@ -28,12 +28,16 @@ Component catalogPageDocument(CatalogPageModel page) => sitePage(
 
 /// A category URL that is unknown or not published: the Flutter catalog's
 /// «Esta colección no está disponible», answered with a 404.
-Component unavailableCategoryDocument(PageContext context) => sitePage(
+Component unavailableCategoryDocument(
+  PageContext context, {
+  bool services = false,
+}) => sitePage(
   context: context,
   meta: PageMeta(
     title: 'Colección no disponible · ${context.shell.storeName}',
     description: 'Esta colección no está disponible.',
-    canonicalUrl: '${context.storeUrl}/productos',
+    canonicalUrl:
+        '${context.storeUrl}${services ? '/servicios' : '/productos'}',
     indexable: false,
   ),
   content: [
@@ -45,8 +49,8 @@ Component unavailableCategoryDocument(PageContext context) => sitePage(
           'navegación pública o ya no existir.',
         ),
       ]),
-      a(classes: 'primary-link', href: '/productos', [
-        .text('Ver todos los productos'),
+      a(classes: 'primary-link', href: services ? '/servicios' : '/productos', [
+        .text(services ? 'Ver todos los servicios' : 'Ver todos los productos'),
       ]),
     ]),
   ],
@@ -175,7 +179,7 @@ class _Filters extends StatelessComponent {
                 label(
                   classes: 'sr',
                   attributes: {'for': 'buscar'},
-                  [.text('Buscar productos')],
+                  [.text('Buscar ${page.noun}')],
                 ),
                 Component.element(
                   tag: 'input',
@@ -184,7 +188,7 @@ class _Filters extends StatelessComponent {
                     'type': 'search',
                     'name': 'q',
                     'value': q.searchQuery,
-                    'placeholder': 'Buscar productos',
+                    'placeholder': 'Buscar ${page.noun}',
                     'autocomplete': 'off',
                     'enterkeyhint': 'search',
                   },
@@ -263,7 +267,7 @@ class _Filters extends StatelessComponent {
       ul(classes: 'tree', [
         li(classes: 'all', [
           _categoryRow(
-            href: '/productos',
+            href: page.rootPath,
             text: 'Todas (${page.allCount})',
             current: page.categoryId == null,
             depth: 0,
@@ -589,7 +593,7 @@ class _Results extends StatelessComponent {
     final pageSizes = {20, 50, 100, q.pageSize}.toList()..sort();
     return section(
       classes: 'results',
-      attributes: {'aria-label': 'Productos'},
+      attributes: {'aria-label': page.rootLabel},
       [
         div(classes: 'results-head', [
           _heading(),
@@ -605,7 +609,7 @@ class _Results extends StatelessComponent {
                 .text('Filtro'),
               ],
             ),
-            _sheetToggle('orden', 'Ordenar los productos'),
+            _sheetToggle('orden', 'Ordenar los ${page.noun}'),
             Component.element(
               tag: 'label',
               classes: 'bar-button',
@@ -646,11 +650,11 @@ class _Results extends StatelessComponent {
           p(classes: 'count', [
             if (page.total > 0) ...[
               span(classes: 'wide', [
-                .text('Mostrando $first - $last de ${page.total} productos'),
+                .text('Mostrando $first - $last de ${page.total} ${page.noun}'),
               ]),
-              span(classes: 'narrow', [.text('${page.total} productos')]),
+              span(classes: 'narrow', [.text('${page.total} ${page.noun}')]),
             ] else
-              .text('0 productos encontrados'),
+              .text('0 ${page.noun} encontrados'),
           ]),
           if (q.categoryScope == WebsiteCatalogCategoryScope.direct &&
               page.categoryId != null)
@@ -687,7 +691,9 @@ class _Results extends StatelessComponent {
         if (page.products.isEmpty)
           div(classes: 'empty', [
             RawText(materialIcon(mdInventory, size: 48)),
-            p(classes: 'empty-title', [.text('No se encontraron productos')]),
+            p(classes: 'empty-title', [
+              .text('No se encontraron ${page.noun}'),
+            ]),
             p([.text('Intenta ajustar los filtros de búsqueda')]),
           ])
         else
@@ -728,20 +734,22 @@ class _Results extends StatelessComponent {
     },
   );
 
-  /// «PRODUCTOS», or the category's trail when its presentation shows it.
-  /// On `/productos` it is the page's title; a category's is in the hero.
+  /// «PRODUCTOS» («SERVICIOS»), or the category's trail when its
+  /// presentation shows it. On the root it is the page's title; a
+  /// category's is in the hero.
   Component _heading() {
+    final title = page.rootLabel.toUpperCase();
     if (page.categoryId == null) {
-      return h1(classes: 'trail', [.text('PRODUCTOS')]);
+      return h1(classes: 'trail', [.text(title)]);
     }
     if (!page.presentation.showBreadcrumbs) {
-      return p(classes: 'trail', [.text('PRODUCTOS')]);
+      return p(classes: 'trail', [.text(title)]);
     }
     return nav(
       classes: 'trail',
       attributes: {'aria-label': 'Ruta'},
       [
-        a(href: '/productos', [.text('Productos')]),
+        a(href: page.rootPath, [.text(page.rootLabel)]),
         for (final crumb in page.trail)
           if (crumb.id == page.categoryId)
             strong(attributes: {'aria-current': 'page'}, [.text(crumb.label)])

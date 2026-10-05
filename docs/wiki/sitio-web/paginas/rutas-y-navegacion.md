@@ -13,7 +13,8 @@ revisado: 2026-10-05
 
 La tienda usa rutas limpias con la History API (sin `#`), que es lo que Google
 sabe seguir `[GSC]`. Desde el 2026-10-05, la portada `/`, `/productos`, sus
-categorías, las fichas, `/producto/<uuid>` y las páginas de información
+categorías, las fichas, `/producto/<uuid>`, `/servicios` (y sus categorías)
+y las páginas de información
 (`/nosotros`, `/envios`, `/devoluciones`, `/terminos`, `/privacidad`) las
 responde el **servidor HTML** (Cloud Run
 `storefront-html`, reescrituras del target `store` en `firebase.json`): su 404 y
@@ -35,8 +36,8 @@ sin pedir la página al servidor; hasta la fase 2 conviven las dos.
 | `/productos/categoria/:category` | categoría de productos (slug limpio) | sí, si está publicada y tiene productos elegibles |
 | `/productos/:slug/:sku` | **ficha canónica** de un producto | sí |
 | `/productos/:id`, `/producto/:id` | ficha por UUID (histórica): 301 a la ficha canónica (Hosting o el servidor HTML) | no |
-| `/servicios` | servicios del taller (57 con precio, 2026-09-23) | sí |
-| `/servicios/categoria/:category` | categoría de servicios | sí, con las mismas reglas |
+| `/servicios` | servicios del taller (59 publicados, 2026-10-05): el mismo catálogo que `/productos` con `p_product_type = service`, dibujado por el servidor HTML; cada servicio en el JSON-LD con su precio | sí |
+| `/servicios/categoria/:category` | categoría de servicios (servidor HTML) | sí, con las mismas reglas |
 | `/pagina/:slug` | página CMS dinámica | según su publicación |
 | `/contacto`, `/nosotros`, `/terminos`, `/privacidad`, `/devoluciones`, `/envios` | páginas fijas con su página CMS; las cinco de información las dibuja el servidor HTML (sin nada que leer: 404 con `noindex`) | sí, si su página está publicada y tiene algo que leer; si no, `noindex,follow` |
 | `/carrito`, `/checkout` | compra | no (`X-Robots-Tag`) |

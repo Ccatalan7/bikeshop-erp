@@ -33,6 +33,7 @@ class CatalogRequest {
     required this.sortBy,
     required this.limit,
     required this.offset,
+    this.services = false,
   });
 
   final List<String>? categoryIds;
@@ -48,6 +49,9 @@ class CatalogRequest {
   final String sortBy;
   final int limit;
   final int offset;
+
+  /// `/servicios`: the workshop's services instead of the products.
+  final bool services;
 }
 
 /// The listing (`get_public_products_faceted_v2`), its rows completed like
@@ -237,7 +241,7 @@ class SupabasePublicReads implements PublicReads {
       'p_tenant_id': config.tenantId,
       'p_category_ids': request.categoryIds,
       'p_search_term': request.searchQuery.isEmpty ? null : request.searchQuery,
-      'p_product_type': 'product',
+      'p_product_type': request.services ? 'service' : 'product',
       'p_only_in_stock': request.onlyInStock,
       'p_brand_ids': request.brandIds.isEmpty ? null : request.brandIds,
       'p_spec_filters': request.specFilters,

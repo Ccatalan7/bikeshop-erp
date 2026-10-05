@@ -28,8 +28,8 @@ void main() {
       };
 
   test(
-      'the repository config hands the product and information routes and '
-      'the home to the server', () {
+      'the repository config hands the product, services and information '
+      'routes and the home to the server', () {
     final routes = snapshots.SeoServerRenderedRoutes.fromFirebaseConfig(
       jsonDecode(File('firebase.json').readAsStringSync()),
     );
@@ -48,13 +48,17 @@ void main() {
       '/privacidad',
       // The home (phase 2b): Flutter enters by app.html.
       '/',
+      // The services catalog and its categories (phase 2d).
+      '/servicios',
+      '/servicios/categoria/mantencion',
     ]) {
       expect(routes.owns(path), isTrue, reason: path);
     }
     for (final path in [
       '/app.html',
       '/carrito',
-      '/servicios',
+      '/cuenta/servicios',
+      '/serviciosx',
       '/productosx',
       '/producto',
       '/tienda/producto/46a51a87-aa3a-430c-a6e1-af48c8d74541',
@@ -185,6 +189,8 @@ void main() {
           'devoluciones',
           'terminos',
           'privacidad',
+          // The services catalog (phase 2d): the generator stops writing it.
+          'servicios',
         ])
           toServer('/$slug'),
       ]),
@@ -212,6 +218,11 @@ void main() {
     expect(
       failures,
       contains('/nosotros es un archivo estático en una ruta del servidor'),
+    );
+    await File('${buildDir.path}/servicios').writeAsString('<html></html>');
+    expect(
+      await report(),
+      contains('/servicios es un archivo estático en una ruta del servidor'),
     );
   });
 
