@@ -342,8 +342,9 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,su
 .foot-social.round a{width:48px;height:48px;background:rgba(255,255,255,.1);color:#fff}
 .foot-narrow .legal{margin-top:32px;color:rgba(255,255,255,.54)}
 }
-.chat-fab{position:fixed;right:20px;bottom:20px;z-index:9;display:grid;place-items:center;width:58px;height:58px;border-radius:16px;background:#111827;color:#fff;box-shadow:0 10px 30px rgba(15,23,42,.3)}
-.chat-fab:hover{background:#000}
+/* Flutter's FloatingActionButton: 56 px, radius 16, black, elevation 6. */
+.chat-fab{position:fixed;right:20px;bottom:20px;z-index:9;display:grid;place-items:center;width:56px;height:56px;border-radius:16px;background:#000;color:#fff;box-shadow:0 3px 5px -1px rgba(0,0,0,.2),0 6px 10px rgba(0,0,0,.14),0 1px 18px rgba(0,0,0,.12)}
+.chat-fab:hover{background:#2a2a2a}
 .mark-note{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:30;max-width:calc(100% - 32px);padding:12px 16px;border-radius:10px;background:#1f2328;color:#fff;font:500 14px/1.4 var(--body);box-shadow:0 6px 24px rgba(0,0,0,.25);text-align:center}
 .holding{min-height:100vh;display:grid;place-content:center;gap:8px;padding:24px;text-align:center}
 .notfound{padding-block:72px 96px;max-width:640px}.notfound h1{margin:0 0 12px;font:400 32px/1.15 var(--head);text-transform:uppercase;color:var(--ink)}.notfound p{color:var(--muted)}

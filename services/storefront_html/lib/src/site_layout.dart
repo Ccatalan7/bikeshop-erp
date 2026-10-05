@@ -162,7 +162,7 @@ Component sitePage({
         classes: 'chat-fab',
         href: '/cuenta/chats',
         attributes: {'aria-label': 'Conversar con ${s.storeName}'},
-        [const RawText(_chatIcon)],
+        [RawText(materialIcon(mdChat))],
       ),
       script(content: _bodyData(context)),
       script(content: storefrontScript),
@@ -838,9 +838,3 @@ Component _preload(String href, String as) => Component.element(
 /// The bundled font file Firebase serves for a family.
 String _fontFile(String family) =>
     family == 'Oswald' ? 'Oswald-wght.ttf' : 'Barlow-SemiBold.ttf';
-
-const _chatIcon =
-    '<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">'
-    '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H9l-5 4z" '
-    'fill="currentColor"/><path d="M8 8h8M8 11.5h5" stroke="#1e293b" stroke-width="1.8" '
-    'stroke-linecap="round"/></svg>';

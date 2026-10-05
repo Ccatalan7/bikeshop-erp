@@ -204,7 +204,7 @@
     },
     {
       "path": "services/storefront_html/README.md",
-      "sha256": "f575e2a73016c05f7f47bde3ef56642ff0c4c631eae4161ccec80c7bee8a11e4"
+      "sha256": "8c854fcc271ea6ffd15ef1aa3caff26417fed73f0338fd05d752bb265156cd08"
     },
     {
       "path": "services/storefront_html/analysis_options.yaml",
@@ -236,7 +236,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_css.dart",
-      "sha256": "fcb6dabc79fb44e26ced85e7654092bda3a6d09dc1853c01f4266fea50f1c231"
+      "sha256": "c65955957e1accbc2b00a0a7131ed7dd0ef72d04ff2fdadab98b5378ebd8b6a8"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
