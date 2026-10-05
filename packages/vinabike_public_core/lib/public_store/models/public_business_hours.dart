@@ -130,3 +130,59 @@ String? _placesTime(Object? rawTime) {
   final padded = digits.padLeft(4, '0');
   return '${padded.substring(0, 2)}:${padded.substring(2, 4)}';
 }
+
+/// One row of the hours the contact page lists: consecutive days with the
+/// same hours together («Lunes a Viernes», «Todos los días»), several spans
+/// of a day joined with « / », and «Cerrado» for a day without any.
+typedef PublicBusinessHourRow = ({String days, String hours, bool open});
+
+const _publicBusinessDayLabels = {
+  'MONDAY': 'Lunes',
+  'TUESDAY': 'Martes',
+  'WEDNESDAY': 'Miércoles',
+  'THURSDAY': 'Jueves',
+  'FRIDAY': 'Viernes',
+  'SATURDAY': 'Sábado',
+  'SUNDAY': 'Domingo',
+};
+
+/// The rows Flutter's contact page and the HTML storefront show for
+/// [rawJson] (see [parsePublicBusinessHours]); empty when nothing is
+/// readable.
+List<PublicBusinessHourRow> publicBusinessHourRows(String rawJson) {
+  final periods = parsePublicBusinessHours(rawJson);
+  if (periods.isEmpty) return const [];
+  final hoursByDay = {for (final day in publicBusinessDays) day: <String>[]};
+  for (final period in periods) {
+    hoursByDay[period.day]!.add('${period.opens} - ${period.closes}');
+  }
+  final schedules = {
+    for (final day in publicBusinessDays)
+      day: hoursByDay[day]!.isEmpty ? 'Cerrado' : hoursByDay[day]!.join(' / '),
+  };
+  String range(String first, String last) {
+    final start = _publicBusinessDayLabels[first]!;
+    final end = _publicBusinessDayLabels[last]!;
+    if (start == end) return start;
+    if (start == 'Lunes' && end == 'Domingo') return 'Todos los días';
+    return '$start a $end';
+  }
+
+  final rows = <PublicBusinessHourRow>[];
+  var start = 0;
+  while (start < publicBusinessDays.length) {
+    final schedule = schedules[publicBusinessDays[start]]!;
+    var end = start;
+    while (end + 1 < publicBusinessDays.length &&
+        schedules[publicBusinessDays[end + 1]] == schedule) {
+      end++;
+    }
+    rows.add((
+      days: range(publicBusinessDays[start], publicBusinessDays[end]),
+      hours: schedule,
+      open: schedule != 'Cerrado',
+    ));
+    start = end + 1;
+  }
+  return List.unmodifiable(rows);
+}

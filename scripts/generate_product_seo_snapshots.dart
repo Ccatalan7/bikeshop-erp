@@ -790,14 +790,23 @@ void main(List<String> args) async {
   );
   stdout.writeln(
       '✅ Trust/policy SEO pages generated: ${staticTrustPagePaths.length}');
+  // A page the HTML server draws (`/contacto`, `/servicios`) gets no file:
+  // it would hide the server. It stays in the sitemap when published.
   final dynamicCmsPagesWritten = await _writeStaticDynamicCmsPages(
     buildDir: buildDir,
     baseHtml: baseHtml,
     storeUrl: storeUrl,
     storeName: storeName,
-    pages: dynamicCmsPages,
+    pages: [
+      for (final page in dynamicCmsPages)
+        if (!serverRoutes.owns(page.canonicalPath)) page,
+    ],
     availablePublicPaths: publicFallbackPaths,
-    catalogOwnedPaths: {if (servicesCatalogIndexable) '/servicios'},
+    catalogOwnedPaths: {
+      if (servicesCatalogIndexable) '/servicios',
+      for (final slug in websiteDynamicDirectPageSlugs)
+        if (serverRoutes.owns('/$slug')) '/$slug',
+    },
   );
   stdout.writeln('✅ Dynamic CMS SEO pages generated: $dynamicCmsPagesWritten');
   // Served by the HTML storefront once Firebase hands it `/servicios`: a

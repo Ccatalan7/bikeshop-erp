@@ -29,7 +29,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
-      "sha256": "20b73104044bba9fee81abc7d706b55483560d37c9c51219d8c99462a1080355"
+      "sha256": "499b3c5ff9a9bf3ac02656bc4e775450ece369ba65df455ca5d158464378b4f9"
     },
     {
       "path": "services/storefront_html/test/storefront_fonts_test.dart",
@@ -37,7 +37,7 @@
     },
     {
       "path": "services/storefront_html/test/storefront_handler_test.dart",
-      "sha256": "f1ec13106ad027b6319874d65818d13918819a4c05beaf1656f06e561a738f8f"
+      "sha256": "60cbb0a7b32dbebc8a42218d77928a5ab3a6194f7310a47a2601973505a7a2b7"
     }
   ]
 }

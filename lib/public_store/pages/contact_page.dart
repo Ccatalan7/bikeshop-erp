@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:vinabike_public_core/public_store/utils/social_url.dart';
 
 import '../../modules/website/services/website_service.dart';
 import '../models/public_business_hours.dart';
@@ -18,18 +19,6 @@ class ContactPage extends StatefulWidget {
 
   @override
   State<ContactPage> createState() => _ContactPageState();
-}
-
-class _BusinessHourRowData {
-  const _BusinessHourRowData({
-    required this.dayLabel,
-    required this.hoursLabel,
-    required this.isOpen,
-  });
-
-  final String dayLabel;
-  final String hoursLabel;
-  final bool isOpen;
 }
 
 class _ContactPageState extends State<ContactPage>
@@ -572,7 +561,14 @@ class _ContactPageState extends State<ContactPage>
     required String googleMapsUrl,
     required Color primaryColor,
   }) {
-    final businessHourRows = _parseBusinessHours(businessHoursJson);
+    // The same rows the HTML storefront lists (vinabike_public_core).
+    final businessHourRows = publicBusinessHourRows(businessHoursJson);
+    // A saved value may be a handle or a full URL; prefixing a full URL made
+    // the button open `instagram.com/https://…` (2026-10-05).
+    final instagramUrl =
+        normalizeSocialUrl(instagramHandle, 'https://instagram.com/');
+    final facebookUrl =
+        normalizeSocialUrl(facebookHandle, 'https://facebook.com/');
     final colorScheme = Theme.of(context).colorScheme;
 
     return Column(
@@ -708,7 +704,7 @@ class _ContactPageState extends State<ContactPage>
         const SizedBox(height: 24),
 
         // Social Media
-        if (instagramHandle.isNotEmpty || facebookHandle.isNotEmpty)
+        if (instagramUrl != null || facebookUrl != null)
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(28),
@@ -730,23 +726,21 @@ class _ContactPageState extends State<ContactPage>
                 const SizedBox(height: 16),
                 Row(
                   children: [
-                    if (instagramHandle.isNotEmpty)
+                    if (instagramUrl != null)
                       _buildSocialButton(
                         icon: Icons.camera_alt_outlined,
                         label: 'Instagram',
                         color: const Color(0xFFE4405F),
-                        onTap: () => _launchUrl(
-                            'https://instagram.com/$instagramHandle'),
+                        onTap: () => _launchUrl(instagramUrl),
                       ),
-                    if (instagramHandle.isNotEmpty && facebookHandle.isNotEmpty)
+                    if (instagramUrl != null && facebookUrl != null)
                       const SizedBox(width: 12),
-                    if (facebookHandle.isNotEmpty)
+                    if (facebookUrl != null)
                       _buildSocialButton(
                         icon: Icons.facebook,
                         label: 'Facebook',
                         color: const Color(0xFF1877F2),
-                        onTap: () =>
-                            _launchUrl('https://facebook.com/$facebookHandle'),
+                        onTap: () => _launchUrl(facebookUrl),
                       ),
                   ],
                 ),
@@ -758,7 +752,7 @@ class _ContactPageState extends State<ContactPage>
   }
 
   Widget _buildBusinessHoursCard({
-    required List<_BusinessHourRowData> businessHourRows,
+    required List<PublicBusinessHourRow> businessHourRows,
     required String googleMapsUrl,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -803,7 +797,7 @@ class _ContactPageState extends State<ContactPage>
           const SizedBox(height: 24),
           if (businessHourRows.isNotEmpty) ...[
             for (final row in businessHourRows)
-              _buildHourRow(row.dayLabel, row.hoursLabel, row.isOpen),
+              _buildHourRow(row.days, row.hours, row.open),
             if (googleMapsUrl.isNotEmpty) ...[
               const SizedBox(height: 18),
               Divider(color: colorScheme.outlineVariant),
@@ -850,69 +844,6 @@ class _ContactPageState extends State<ContactPage>
         ),
       ),
     );
-  }
-
-  List<_BusinessHourRowData> _parseBusinessHours(String rawJson) {
-    final periods = parsePublicBusinessHours(rawJson);
-    if (periods.isEmpty) return const [];
-
-    const dayLabels = {
-      'MONDAY': 'Lunes',
-      'TUESDAY': 'Martes',
-      'WEDNESDAY': 'Miércoles',
-      'THURSDAY': 'Jueves',
-      'FRIDAY': 'Viernes',
-      'SATURDAY': 'Sábado',
-      'SUNDAY': 'Domingo',
-    };
-    const dayOrder = publicBusinessDays;
-
-    final hoursByDay = {
-      for (final day in dayOrder) day: <String>[],
-    };
-    for (final period in periods) {
-      hoursByDay[period.day]!.add('${period.opens} - ${period.closes}');
-    }
-
-    final daySchedules = <String, String>{
-      for (final day in dayOrder)
-        day:
-            hoursByDay[day]!.isEmpty ? 'Cerrado' : hoursByDay[day]!.join(' / '),
-    };
-
-    final rows = <_BusinessHourRowData>[];
-    var start = 0;
-
-    while (start < dayOrder.length) {
-      final schedule = daySchedules[dayOrder[start]]!;
-      var end = start;
-
-      while (end + 1 < dayOrder.length &&
-          daySchedules[dayOrder[end + 1]] == schedule) {
-        end++;
-      }
-
-      rows.add(
-        _BusinessHourRowData(
-          dayLabel: _formatDayRange(
-            dayLabels[dayOrder[start]]!,
-            dayLabels[dayOrder[end]]!,
-          ),
-          hoursLabel: schedule,
-          isOpen: schedule != 'Cerrado',
-        ),
-      );
-
-      start = end + 1;
-    }
-
-    return rows;
-  }
-
-  String _formatDayRange(String start, String end) {
-    if (start == end) return start;
-    if (start == 'Lunes' && end == 'Domingo') return 'Todos los días';
-    return '$start a $end';
   }
 
   Widget _buildHourRow(String day, String hours, bool isOpen) {

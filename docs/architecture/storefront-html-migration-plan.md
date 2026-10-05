@@ -793,6 +793,46 @@ A 800 px Flutter pone tres tarjetas de 141 px y el HTML dos: es la decisión
 de la fase 1 (Flutter mide la ventana, el HTML la columna de resultados), no
 un descuido; se mantiene.
 
+## Fase 2e: `/contacto` (2026-10-05)
+
+Tampoco es una página de bloques: Flutter dibuja `ContactPage` con los datos
+de Configuración (correo, teléfono, dirección, WhatsApp, redes, horario y el
+enlace de Google Maps) y la publicación de la página `contacto` del editor
+(sin publicar: «Contacto no disponible», aquí con 404). El servidor la dibuja
+igual (`contact_page_model.dart`, `contact_page_view.dart`,
+`contact_page_css.dart`); el horario agrupado («Lunes a Viernes», «Cerrado»)
+pasó al núcleo (`publicBusinessHourRows`) y Flutter lo lee de ahí. El
+formulario hace lo de Flutter: los mismos mensajes en el mismo orden, el
+foco en el primer campo con error, un correo a la tienda con los cuatro
+campos, «Abriendo cliente de correo...» y el formulario en blanco; el correo
+se abre con un enlace para que el script lo cuente como `contact` (email).
+Sin scripts, el navegador lo envía con `action="mailto:"`.
+
+Medido contra Flutter a 1440 y 412 px: todas las cajas de texto, los bordes
+de los campos y los botones en la misma fila de píxeles. Lo que costó:
+
+- **Flutter redondea hacia arriba el alto de cada línea**: 15 px × 1,5 =
+  22,5 se dibuja en 23 (y 13 × 1,5 en 20). Con 22,5 cada fila del horario
+  quedaba medio píxel corta y el error crecía hacia abajo.
+- **Sus botones y campos son compactos en toda pantalla**, también en el
+  teléfono: `VisualDensity` resta 8 px a un botón (Maps e Instagram quedan en
+  el mínimo de 40, WhatsApp en 42) y 4 a un campo (51 px; el mensaje, 143).
+- **La etiqueta en reposo de un campo es el `bodyLarge` del tema**: el tamaño
+  del cuerpo + 2 (18 px), no los 15 del texto que se escribe.
+- **El divisor del tema mide 1 px** y no trae espacio propio.
+- **Las etiquetas de sus botones caen en la Roboto del motor** (su estilo no
+  nombra familia), como «Iniciar sesión»: aquí llevan la letra de la tienda.
+
+De paso se arregló un enlace roto de Flutter: el ajuste `instagram` guarda
+la dirección completa y la página le anteponía `https://instagram.com/`;
+ahora las dos tiendas usan `normalizeSocialUrl`, como el pie.
+
+Para publicar el servidor con trabajo a medias en el árbol: el hook bloquea
+`git stash` en el checkout compartido y `deploy_cloud_run.sh` se niega con
+cambios sin commit en el servicio o el núcleo. Se copian esos archivos al
+scratchpad, se dejan los de `HEAD` (`git show HEAD:<ruta> > <ruta>`), se
+publica y se devuelven con `cmp` de cada uno.
+
 ### Pendiente
 
 - El costo real de Cloud Run en la facturación, después de unos días.

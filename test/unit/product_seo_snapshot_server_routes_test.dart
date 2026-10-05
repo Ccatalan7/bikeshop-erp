@@ -51,6 +51,8 @@ void main() {
       // The services catalog and its categories (phase 2d).
       '/servicios',
       '/servicios/categoria/mantencion',
+      // The contact page (phase 2e).
+      '/contacto',
     ]) {
       expect(routes.owns(path), isTrue, reason: path);
     }
@@ -63,7 +65,7 @@ void main() {
       '/producto',
       '/tienda/producto/46a51a87-aa3a-430c-a6e1-af48c8d74541',
       '/nosotros/equipo',
-      '/contacto',
+      '/contacto/x',
     ]) {
       expect(routes.owns(path), isFalse, reason: path);
     }
@@ -189,8 +191,10 @@ void main() {
           'devoluciones',
           'terminos',
           'privacidad',
-          // The services catalog (phase 2d): the generator stops writing it.
+          // The services catalog (phase 2d) and the contact page (2e): the
+          // generator stops writing them.
           'servicios',
+          'contacto',
         ])
           toServer('/$slug'),
       ]),
@@ -223,6 +227,11 @@ void main() {
     expect(
       await report(),
       contains('/servicios es un archivo estático en una ruta del servidor'),
+    );
+    await File('${buildDir.path}/contacto').writeAsString('<html></html>');
+    expect(
+      await report(),
+      contains('/contacto es un archivo estático en una ruta del servidor'),
     );
   });
 

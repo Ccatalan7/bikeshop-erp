@@ -17,11 +17,11 @@
     },
     {
       "path": "scripts/generate_product_seo_snapshots.dart",
-      "sha256": "bdf0305e3b45ec456800a999e64965b64d0d599f6a8ab6ec2ec0a7952c2cb080"
+      "sha256": "d49d680b85027d43f3f7889650b2066591aa0a6ec0a54954d4484c4050bfdd9a"
     },
     {
       "path": "scripts/releases/check_storefront_html_routes.test.mjs",
-      "sha256": "edf94eb0217736a6cb829ee178a04074089f769bc95174abebd56998a5c68a7c"
+      "sha256": "d68dee71de198201ee63fbe42cbf7d42bb7c0f7fe46879fbdb09c83464db1ca3"
     },
     {
       "path": "services/storefront_html/lib/src/catalog_page_model.dart",
@@ -33,7 +33,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/public_reads.dart",
-      "sha256": "66a5e67a971773d23f8c16b227df6042e309e20d5bb9082088fd835f54276361"
+      "sha256": "c89486550979f644367237f2df51c9adf8a5b65f2a240916fd2ff51dbf2376a8"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_css.dart",
@@ -41,11 +41,11 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
-      "sha256": "20b73104044bba9fee81abc7d706b55483560d37c9c51219d8c99462a1080355"
+      "sha256": "499b3c5ff9a9bf3ac02656bc4e775450ece369ba65df455ca5d158464378b4f9"
     },
     {
       "path": "services/storefront_html/test/storefront_handler_test.dart",
-      "sha256": "f1ec13106ad027b6319874d65818d13918819a4c05beaf1656f06e561a738f8f"
+      "sha256": "60cbb0a7b32dbebc8a42218d77928a5ab3a6194f7310a47a2601973505a7a2b7"
     }
   ]
 }

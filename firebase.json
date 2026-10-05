@@ -752,6 +752,13 @@
           }
         },
         {
+          "source": "/contacto",
+          "run": {
+            "serviceId": "storefront-html",
+            "region": "southamerica-east1"
+          }
+        },
+        {
           "source": "/",
           "run": {
             "serviceId": "storefront-html",

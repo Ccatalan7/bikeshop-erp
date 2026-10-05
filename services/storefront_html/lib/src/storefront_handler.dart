@@ -14,6 +14,8 @@ import 'catalog_page_model.dart';
 import 'catalog_page_view.dart';
 import 'flutter_shell.dart';
 import 'home_page_model.dart';
+import 'contact_page_model.dart';
+import 'contact_page_view.dart';
 import 'home_page_view.dart';
 import 'policy_page_model.dart';
 import 'policy_page_view.dart';
@@ -112,6 +114,7 @@ Handler storefrontHandler({
         ['producto', final id] => await route.legacyProduct(id),
         [final slug] when publicPolicySlugs.contains(slug) =>
           await route.policy(slug),
+        ['contacto'] => await route.contact(),
         _ => await route.notFound(),
       };
     } on PublicReadException catch (error) {
@@ -326,6 +329,21 @@ class _Route {
     if (model.uncoveredTypes.isEmpty) return response;
     return response.change(
       headers: {'x-storefront-uncovered': model.uncoveredTypes.join(',')},
+    );
+  }
+
+  /// `/contacto`: the store's contact page, or «Contacto no disponible»
+  /// with a 404 while the editor has it unpublished.
+  Future<Response> contact() async {
+    final data = await reads.contactPage();
+    final context = _context((shell: data.shell, payments: data.payments));
+    if (!context.shell.sitePublished) return _unpublished(context);
+    final model = ContactPageModel.build(page: context, reads: data);
+    return _render(
+      contactPageDocument(model),
+      status: model.available ? 200 : 404,
+      indexable: model.meta.indexable,
+      dataMs: _watch.elapsedMilliseconds,
     );
   }
 

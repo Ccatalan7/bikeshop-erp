@@ -78,6 +78,14 @@ typedef PolicyPagesReads = ({
   List<Object?> pages,
 });
 
+/// `/contacto`: the shell and the published `contacto` page, `null` when it
+/// is not published (Flutter then shows «Contacto no disponible»).
+typedef ContactPageReads = ({
+  Map<String, dynamic> shell,
+  Object? payments,
+  Map<String, dynamic>? page,
+});
+
 /// The home: the shell, the published page with `is_home` and its visible
 /// blocks, and the products its product blocks pick by hand, completed like
 /// a catalog listing (only those in stock, as Flutter's block asks).
@@ -105,6 +113,8 @@ abstract interface class PublicReads {
   Future<String?> productIdForAlias(String path);
 
   Future<PolicyPagesReads> policyPages();
+
+  Future<ContactPageReads> contactPage();
 
   /// [productIds] reads the products the page's blocks pick (a function of
   /// the page, so it runs after it).
@@ -182,6 +192,29 @@ class SupabasePublicReads implements PublicReads {
       shell: results[0] as Map<String, dynamic>,
       payments: results[1],
       pages: results[2] as List<Object?>,
+    );
+  }
+
+  @override
+  Future<ContactPageReads> contactPage() async {
+    final results = await Future.wait([
+      _shell(),
+      _payments(),
+      _select('website_pages', {
+        'select':
+            'id,slug,title,meta_title,meta_description,og_image_url,'
+            'is_published',
+        'tenant_id': 'eq.${config.tenantId}',
+        'is_published': 'eq.true',
+        'slug': 'eq.contacto',
+      }),
+    ]);
+    final rows = results[2] as List<Object?>;
+    final page = rows.isEmpty ? null : rows.first;
+    return (
+      shell: results[0] as Map<String, dynamic>,
+      payments: results[1],
+      page: page is Map ? Map<String, dynamic>.from(page) : null,
     );
   }
 

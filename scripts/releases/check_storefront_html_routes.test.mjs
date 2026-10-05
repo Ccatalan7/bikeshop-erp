@@ -132,7 +132,7 @@ test("fails on a noindex page and on a route Hosting answers itself", async () =
 
 test("checks every exact server route the sitemap publishes, from firebase.json", () => {
   const routes = exactServerRoutes(JSON.parse(readFileSync("firebase.json", "utf8")));
-  for (const path of ["/", "/productos", "/servicios", "/nosotros", "/envios", "/devoluciones", "/terminos", "/privacidad"]) {
+  for (const path of ["/", "/productos", "/servicios", "/nosotros", "/envios", "/devoluciones", "/terminos", "/privacidad", "/contacto"]) {
     assert.ok(routes.includes(path), path);
   }
   const withPolicies = sitemapXml.replace(

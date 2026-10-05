@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "storefront-html-phase-2e-contact",
+  "scope": "internal",
+  "platforms": [
+    "web"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "lib/public_store/pages/contact_page.dart",
+      "sha256": "5e9acc0b3cfe93ba1d37c580eb4624edd9eab9256da9eac7f38d591952111fc9"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/public_business_hours.dart",
+      "sha256": "4211884d4f8d3c63e06dfa86fecb8c3074993ef8caf859ed6733983c6e8591c7"
+    },
+    {
+      "path": "packages/vinabike_public_core/test/public_business_hour_rows_test.dart",
+      "sha256": "1f95dd8d1a7eb4c7c53c5f3e6c5e135fb339f65bcdb5681386a8b0136807600b"
+    },
+    {
+      "path": "scripts/generate_product_seo_snapshots.dart",
+      "sha256": "d49d680b85027d43f3f7889650b2066591aa0a6ec0a54954d4484c4050bfdd9a"
+    },
+    {
+      "path": "scripts/releases/check_storefront_html_routes.test.mjs",
+      "sha256": "d68dee71de198201ee63fbe42cbf7d42bb7c0f7fe46879fbdb09c83464db1ca3"
+    },
+    {
+      "path": "services/storefront_html/lib/src/contact_page_css.dart",
+      "sha256": "53f64fbed94703e87b520f364971e80ce1fe4637f44a9b41de19f3e7486df8b0"
+    },
+    {
+      "path": "services/storefront_html/lib/src/contact_page_model.dart",
+      "sha256": "5dc8b5f33b951bb2529b4b2e4ab12965963968fa66dc5ff40ede56265e146355"
+    },
+    {
+      "path": "services/storefront_html/lib/src/contact_page_view.dart",
+      "sha256": "18c6791a7b39e5a4642e8ca85a6c374f2ad751e11abf34e3d6112bd92141292b"
+    },
+    {
+      "path": "services/storefront_html/lib/src/material_icons.dart",
+      "sha256": "d261cccc9257de2cd7a6b38dda87b0aa739f0acc9ce31e248241487b0a151754"
+    },
+    {
+      "path": "services/storefront_html/lib/src/public_reads.dart",
+      "sha256": "c89486550979f644367237f2df51c9adf8a5b65f2a240916fd2ff51dbf2376a8"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_handler.dart",
+      "sha256": "499b3c5ff9a9bf3ac02656bc4e775450ece369ba65df455ca5d158464378b4f9"
+    },
+    {
+      "path": "services/storefront_html/lib/storefront_html.dart",
+      "sha256": "6bbdd107c52eaff322de5fb0ee8f80e429fba7f9283af8ad337410aae096e5b1"
+    },
+    {
+      "path": "services/storefront_html/test/storefront_handler_test.dart",
+      "sha256": "60cbb0a7b32dbebc8a42218d77928a5ab3a6194f7310a47a2601973505a7a2b7"
+    }
+  ]
+}

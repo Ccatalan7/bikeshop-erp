@@ -4,6 +4,8 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-05 — corrección — [rutas](paginas/rutas-y-navegacion.md): `/contacto`
+  pasa al servidor HTML (fase 2e); Instagram de Contacto ya no es un enlace roto.
 - 2026-10-05 — corrección — [rutas](paginas/rutas-y-navegacion.md): `/servicios`
   y sus categorías pasan al servidor HTML (fase 2d).
 - 2026-10-05 — corrección — [rendimiento](paginas/rendimiento.md): las fuentes

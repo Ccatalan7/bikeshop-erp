@@ -149,6 +149,7 @@ class _FakeReads implements PublicReads {
     this.byId = const {},
     this.policyRows = const [],
     this.homeRow,
+    this.contactRow,
   }) : shellJson = shell;
 
   final Map<String, dynamic>? page;
@@ -162,6 +163,7 @@ class _FakeReads implements PublicReads {
   final Map<String, Map<String, dynamic>> byId;
   final List<Object?> policyRows;
   final Map<String, dynamic>? homeRow;
+  final Map<String, dynamic>? contactRow;
   final requested = <String>[];
   final catalogRequests = <CatalogRequest>[];
 
@@ -201,6 +203,12 @@ class _FakeReads implements PublicReads {
   Future<PolicyPagesReads> policyPages() async {
     if (fail) throw PublicReadException('down');
     return (shell: shellJson ?? _shell(), payments: null, pages: policyRows);
+  }
+
+  @override
+  Future<ContactPageReads> contactPage() async {
+    if (fail) throw PublicReadException('down');
+    return (shell: shellJson ?? _shell(), payments: null, page: contactRow);
   }
 
   @override
@@ -531,6 +539,86 @@ void main() {
       expect(html, contains('<span class="logo-name">Viñabike</span>'));
     },
   );
+
+  group('contact', () {
+    Map<String, dynamic> shell() => {
+      ..._shell(),
+      'settings': {
+        ...(_shell()['settings'] as Map),
+        'contact_email': 'hola@taller.example',
+        'contact_phone': '+56 9 1111 2222',
+        'whatsapp': '+56 9 1111 2222',
+        // A full address saved where a handle was expected.
+        'instagram': 'https://www.instagram.com/taller.norte',
+        'business_hours_json':
+            '{"periods":[${[for (var day = 1; day <= 5; day++) '{"open":{"day":$day,"time":"1030"},"close":{"day":$day,"time":"1900"}}'].join(',')},'
+            '{"open":{"day":6,"time":"1030"},"close":{"day":6,"time":"1530"}}]}',
+      },
+    };
+
+    test(
+      '/contacto draws the store\'s contact page from its settings',
+      () async {
+        final response = await _get(
+          _FakeReads(
+            shell: shell(),
+            contactRow: const {
+              'slug': 'contacto',
+              'title': 'Contacto',
+              'meta_title': 'Contacto y Ubicación - Taller',
+              'meta_description': 'Ubícanos en Viña del Mar.',
+            },
+          ),
+          '/contacto',
+        );
+        final html = await response.readAsString();
+        expect(response.statusCode, 200);
+        expect(html, contains('<title>Contacto y Ubicación - Taller</title>'));
+        expect(html, contains('"@type":"ContactPage"'));
+        expect(html, contains('<h1>Contáctanos</h1>'));
+        // The form writes to the store's mailbox, with Flutter's checks.
+        expect(html, contains('data-mail="hola@taller.example"'));
+        expect(html, contains('data-required="Por favor ingresa tu nombre"'));
+        expect(html, contains('data-min="El mensaje debe tener al menos'));
+        // Hours grouped as Flutter shows them.
+        expect(html, contains('<span>Lunes a Viernes</span>'));
+        expect(html, contains('<span class="ct-time">10:30 - 19:00</span>'));
+        expect(html, contains('<span>Domingo</span>'));
+        expect(html, contains('<span class="ct-time">Cerrado</span>'));
+        expect(html, contains('https://wa.me/56911112222?text='));
+        // The saved full address is the link, not instagram.com/https://…
+        expect(html, contains('href="https://www.instagram.com/taller.norte"'));
+        expect(html, isNot(contains('instagram.com/https')));
+        expect(html, isNot(contains('Facebook')));
+      },
+    );
+
+    test('an unpublished /contacto is «Contacto no disponible», 404', () async {
+      final response = await _get(_FakeReads(shell: shell()), '/contacto');
+      expect(response.statusCode, 404);
+      final html = await response.readAsString();
+      expect(html, contains('Contacto no disponible'));
+      // No form and no contact cards (the footer keeps its contact column).
+      expect(html, isNot(contains('<form class="ct-form"')));
+      expect(html, isNot(contains('class="ct-card')));
+      expect(html, contains('<meta name="robots" content="noindex'));
+    });
+
+    test('without a mailbox the form cannot send', () async {
+      final settings = Map<String, dynamic>.from(shell()['settings'] as Map)
+        ..remove('contact_email');
+      final response = await _get(
+        _FakeReads(
+          shell: {...shell(), 'settings': settings},
+          contactRow: const {'slug': 'contacto'},
+        ),
+        '/contacto',
+      );
+      final html = await response.readAsString();
+      expect(html, contains('<button class="ct-send" type="submit" disabled'));
+      expect(html, isNot(contains('action="mailto:')));
+    });
+  });
 
   test('the heading font is preloaded as its Latin subset', () async {
     final html = await _html();

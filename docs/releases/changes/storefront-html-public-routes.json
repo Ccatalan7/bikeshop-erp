@@ -17,11 +17,11 @@
   "evidence": [
     {
       "path": "firebase.json",
-      "sha256": "b31cedae62f8fdd196db9bdb8be74f43b545ab73d69886676a7d4abdd4308642"
+      "sha256": "f412e9f0fdc156ad2a5f75953bff5334be33f7183a690f32252052954984af53"
     },
     {
       "path": "scripts/generate_product_seo_snapshots.dart",
-      "sha256": "bdf0305e3b45ec456800a999e64965b64d0d599f6a8ab6ec2ec0a7952c2cb080"
+      "sha256": "d49d680b85027d43f3f7889650b2066591aa0a6ec0a54954d4484c4050bfdd9a"
     },
     {
       "path": ".github/workflows/firebase-hosting-store.yml",
@@ -41,7 +41,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
-      "sha256": "20b73104044bba9fee81abc7d706b55483560d37c9c51219d8c99462a1080355"
+      "sha256": "499b3c5ff9a9bf3ac02656bc4e775450ece369ba65df455ca5d158464378b4f9"
     },
     {
       "path": "services/storefront_html/deploy_cloud_run.sh",
@@ -73,7 +73,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/public_reads.dart",
-      "sha256": "66a5e67a971773d23f8c16b227df6042e309e20d5bb9082088fd835f54276361"
+      "sha256": "c89486550979f644367237f2df51c9adf8a5b65f2a240916fd2ff51dbf2376a8"
     },
     {
       "path": "scripts/generate_public_image_thumbnails.dart",
@@ -101,7 +101,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/material_icons.dart",
-      "sha256": "df0533aaf537eaf4ef74f196a7dec07ba3605304c13f5a90544d3ccd83d5a2a0"
+      "sha256": "d261cccc9257de2cd7a6b38dda87b0aa739f0acc9ce31e248241487b0a151754"
     }
   ]
 }
