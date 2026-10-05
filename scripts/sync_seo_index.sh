@@ -574,9 +574,72 @@ cat > "$INDEX_FILE" << HEREDOC
       // built from this same page; their visits are staff and agents, not
       // customers, and inflated the store's users. Elsewhere gtag() still
       // exists, so the app's events queue harmlessly and are never sent.
+      var storeHost = $CANONICAL_HOST_JSON;
       var host = (window.location.host || '').toLowerCase();
       if (host.startsWith('www.')) host = host.substring(4);
-      if (host !== $CANONICAL_HOST_JSON) return;
+      window.vinabikeMeasurementAllowed = false;
+      if (host !== storeHost) return;
+
+      // A browser can opt out of being counted (owner, 2026-10-05): any store
+      // address opened with ?sin_medir marks it, ?medir removes the mark. The
+      // owner's and the agents' own visits were 43% of the store's views. The
+      // mark is a cookie on the store domain, which also covers www. and a
+      // future server-rendered page, plus localStorage, because Safari expires
+      // cookies written by a script after seven days. It also silences the
+      // Meta Pixel (vinabikeMetaPixelInit below).
+      var markName = 'vb_sin_medir';
+      function readMark() {
+        if (('; ' + document.cookie + ';').indexOf('; ' + markName + '=1;') !== -1) {
+          return true;
+        }
+        try { return window.localStorage.getItem(markName) === '1'; } catch (e) { return false; }
+      }
+      function writeMark(on) {
+        document.cookie = markName + '=' + (on ? '1' : '') + '; Domain=' + storeHost +
+          '; Path=/; Max-Age=' + (on ? 34560000 : 0) + '; SameSite=Lax; Secure';
+        try {
+          if (on) { window.localStorage.setItem(markName, '1'); }
+          else { window.localStorage.removeItem(markName); }
+        } catch (e) { /* the cookie alone still works */ }
+      }
+      function showNote(text) {
+        function place() {
+          var note = document.createElement('div');
+          note.setAttribute('role', 'status');
+          note.textContent = text;
+          note.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);' +
+            'bottom:calc(16px + env(safe-area-inset-bottom, 0px));z-index:2147483647;' +
+            'max-width:calc(100% - 32px);box-sizing:border-box;padding:12px 16px;' +
+            'border-radius:10px;background:#1f2328;color:#ffffff;' +
+            'font:500 14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;' +
+            'box-shadow:0 6px 24px rgba(0,0,0,.25);text-align:center;';
+          document.body.appendChild(note);
+          window.setTimeout(function () { note.remove(); }, 7000);
+        }
+        if (document.body) { place(); } else {
+          document.addEventListener('DOMContentLoaded', place, { once: true });
+        }
+      }
+      try {
+        var params = new URLSearchParams(window.location.search || '');
+        var asked = params.has('sin_medir') ? true : params.has('medir') ? false : null;
+        if (asked !== null) {
+          writeMark(asked);
+          params.delete('sin_medir');
+          params.delete('medir');
+          var query = params.toString();
+          window.history.replaceState(window.history.state, '',
+            window.location.pathname + (query ? '?' + query : '') + window.location.hash);
+          showNote(asked
+            ? 'Listo: las visitas de este navegador ya no se cuentan en Google Analytics.'
+            : 'Listo: las visitas de este navegador vuelven a contarse en Google Analytics.');
+        }
+      } catch (e) { /* an old browser keeps whatever mark it had */ }
+      // Each visit renews the mark, so it never reaches Chrome's 400-day cap
+      // or Safari's seven days while the store is still being opened, and a
+      // cleared cookie comes back from localStorage (and the other way).
+      if (readMark()) { writeMark(true); return; }
+      window.vinabikeMeasurementAllowed = true;
 
       gtag('js', new Date());
       gtag('config', $GA_ID_JSON);
@@ -610,6 +673,9 @@ cat > "$INDEX_FILE" << HEREDOC
   <script>
     (function (window, document) {
       window.vinabikeMetaPixelInit = function (pixelId) {
+        // Same rule as Google Analytics: only the store's domain, never a
+        // browser marked with ?sin_medir.
+        if (!window.vinabikeMeasurementAllowed) return false;
         var id = String(pixelId || '').trim();
         if (!/^\d+\$/.test(id)) return false;
 

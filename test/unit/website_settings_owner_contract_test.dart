@@ -12,7 +12,8 @@ void main() {
   final settingsPage = File(
     'lib/modules/website/pages/website_settings_page.dart',
   ).readAsStringSync();
-  final websiteService = readLibrarySource('lib/modules/website/services/website_service.dart');
+  final websiteService =
+      readLibrarySource('lib/modules/website/services/website_service.dart');
   final companyProfile = File(
     'lib/modules/settings/services/company_profile_service.dart',
   ).readAsStringSync();
@@ -114,6 +115,60 @@ void main() {
       expect(settingsPage, contains(r"RegExp(r'^G-[A-Z0-9]+$')"));
       expect(syncScript, contains(r'^G-[A-Z0-9]+$'));
       expect(syncScript, contains('require_nonempty_setting "seo_ga_id"'));
+    });
+  });
+
+  group('only customers are measured', () {
+    // The ERP web build ships the committed web/index.html; the store build
+    // regenerates it from the script. Both must keep the same two gates in
+    // front of every tag: the store's own host, then the ?sin_medir mark.
+    final index = File('web/index.html').readAsStringSync();
+
+    for (final (name, page) in [
+      ('web/index.html', index),
+      ('sync script', syncScript)
+    ]) {
+      test('$name configures GA4 only after both gates', () {
+        final denied =
+            page.indexOf('window.vinabikeMeasurementAllowed = false;');
+        final hostGate = page.indexOf('if (host !== storeHost) return;');
+        final markGate =
+            page.indexOf('if (readMark()) { writeMark(true); return; }');
+        final allowed =
+            page.indexOf('window.vinabikeMeasurementAllowed = true;');
+        // The script also names the call once as a --check expectation; the
+        // generated page must configure the tag exactly once.
+        final config = page.lastIndexOf("gtag('config',");
+        expect(
+          [denied, hostGate, markGate, allowed, config].every((i) => i >= 0),
+          isTrue,
+          reason: 'a gate was removed from $name',
+        );
+        expect(denied < hostGate && hostGate < markGate, isTrue);
+        expect(markGate < allowed && allowed < config, isTrue);
+      });
+
+      test('$name keeps the Meta Pixel behind the same rule', () {
+        final init = page.indexOf('window.vinabikeMetaPixelInit = function');
+        final gate = page.indexOf(
+          'if (!window.vinabikeMeasurementAllowed) return false;',
+          init,
+        );
+        final firstEffect = page.indexOf("String(pixelId || '')", init);
+        expect(init >= 0 && gate > init && gate < firstEffect, isTrue);
+      });
+    }
+
+    test('web/index.html configures GA4 in one place', () {
+      expect("gtag('config',".allMatches(index).length, 1);
+    });
+
+    test('the mark covers www. and outlives Safari script storage', () {
+      expect(syncScript, contains("'; Domain=' + storeHost"));
+      expect(
+          syncScript, contains("window.localStorage.setItem(markName, '1')"));
+      expect(syncScript, contains("params.has('sin_medir')"));
+      expect(syncScript, contains("params.has('medir')"));
     });
   });
 

@@ -4,6 +4,10 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-05 — corrección — marca por navegador: `?sin_medir` deja de contar
+  un navegador propio en GA4 y el píxel, `?medir` la saca; cookie del dominio
+  más `localStorage` ([medicion](paginas/medicion.md)).
+
 - 2026-10-05 — consulta archivada — arranque en frío del servidor HTML con
   `min-instances 0`: usable a los 3,0 s contra 2,5 s despierto; despertar suma
   ~0,3–0,5 s ([rendimiento](paginas/rendimiento.md)).

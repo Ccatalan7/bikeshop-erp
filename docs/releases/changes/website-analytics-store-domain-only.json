@@ -13,11 +13,11 @@
   "evidence": [
     {
       "path": "scripts/sync_seo_index.sh",
-      "sha256": "35364a9985c1d8e02e450b636e2b4370bd85c8c67f9724243c704d80e2829c23"
+      "sha256": "8009ab6b074d7badc8b9e9cba16bbae69aa08a2aff0004fed934a349f941fed0"
     },
     {
       "path": "web/index.html",
-      "sha256": "fd1e1ee1a9f84318fee48943b6576f20bddf13303e875a3e0e68975af4e12d19"
+      "sha256": "c04df2b7560c51382bee3f970f8f3ff586d5401a5bcc22f228ff8bd7fd52b1e6"
     }
   ]
 }

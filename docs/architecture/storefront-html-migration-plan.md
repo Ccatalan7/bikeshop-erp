@@ -286,6 +286,10 @@ Lo que encontró la fase 0, y la fase 1 resuelve antes de abrir rutas:
   rutas pasen a Cloud Run, la regla se retira o se iguala al `no-store` del
   servidor, para que el borde nunca guarde una ficha. `/_html/**` no coincide
   con ninguna regla.
+- La medición sigue las dos reglas de `scripts/sync_seo_index.sh`: GA4 y el
+  píxel sólo en el dominio de la tienda y nunca en un navegador con la marca
+  `vb_sin_medir` (cookie del dominio, puesta con `?sin_medir`). El servidor la
+  lee en la petición y ni siquiera escribe la etiqueta.
 - `products.sku` es único en toda la base, no por empresa
   (`products_sku_key`): dos tiendas no pueden repetir un SKU. No afecta a
   Viñabike hoy; se anota para el día que haya otra.

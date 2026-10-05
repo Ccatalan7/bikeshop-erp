@@ -4,7 +4,7 @@ resumen: qué eventos manda la tienda a Google Analytics, con qué datos, qué f
 fuentes: [ga4, consolas-google, repositorio, web-dev]
 archivos: [scripts/sync_seo_index.sh, services/storefront_html/tool/measure.mjs, lib/public_store/services/ga4_commerce_events.dart, lib/public_store/services/ga4_bridge_web.dart, lib/public_store/services/meta_pixel_service.dart, lib/public_store/widgets/public_store_bootstrap.dart]
 tablas: [website_settings]
-revisado: 2026-10-04
+revisado: 2026-10-05
 ---
 
 # Medición (GA4, píxel de Meta y consolas)
@@ -49,6 +49,20 @@ vistas en una semana), fue nuestro: ese día se publicó el portal por etapas y 
 portada instantánea, y casi todas las vistas de `/cuenta/*` son de Seattle. El
 arreglo de dominio de arriba no quita esas visitas, porque son del dominio real.
 Para leer clientes, comparar con País = Chile o excluir la ciudad Seattle.
+
+**Marca por navegador (2026-10-05).** Para que esas visitas dejen de contarse,
+cada navegador propio se marca una vez abriendo cualquier dirección de la
+tienda con `?sin_medir` (por ejemplo `https://vinabike.cl/?sin_medir`); la
+página confirma con un aviso abajo y quita el parámetro de la dirección.
+`?medir` saca la marca. Desde ahí ese navegador no carga Google Analytics ni
+el píxel de Meta, en ninguna página. La marca es la cookie `vb_sin_medir` del
+dominio (cubre `www.`; 400 días, el máximo de Chrome) más una copia en
+`localStorage`, y cada visita la renueva. Safari borra en 7 días lo que
+escribe un script si el sitio no se visita: en un iPhone que pasó una semana
+sin abrir la tienda, se vuelve a abrir el enlace. Cada navegador y cada teléfono es aparte; los Playwright de
+los agentes abren perfiles nuevos y por eso bloquean la analítica en el
+script (abajo). Lo anterior a la marca no se corrige: GA4 no es retroactivo
+`[Repo]` `[Dueño 2026-10-05]`.
 
 Las herramientas que abren el sitio real con un navegador bloquean Google
 Analytics y el píxel de Meta (`services/storefront_html/tool/measure.mjs`): cada
