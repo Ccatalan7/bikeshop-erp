@@ -523,8 +523,49 @@ candidatos.
 - Un uso nuevo de `SUPABASE_SECRET_KEY` en el flujo de la tienda sube el conteo
   revisado de `test/scripts/supabase_cli_safety_test.sh` (ocho desde hoy).
 
+### Paridad con Flutter (2026-10-05)
+
+El dueño vio tarjetas rotas en `/productos` (fotos desbordadas, nombre y
+precio cortados) y pidió forma, tamaños, espacio y animaciones perfectos. Se
+midió cada página contra la tienda Flutter en vivo a 1440, 1280, 1100, 1000,
+800, 700, 650, 412 y 360 px (posición de cada texto y línea con un muestreo de
+píxeles, no a ojo) y quedó a 1 px en catálogo, ficha y pie (`3f12435c`). Lo
+que conviene saber antes de tocarlo:
+
+- **La grilla de Flutter lee la ventana, no la grilla**
+  (`MediaQueryLayoutBuilder` en `_buildProductGrid`): a 1000 px pone cuatro
+  columnas de 146 px junto al riel. La HTML aplica las mismas columnas,
+  proporciones y separaciones de `websiteCatalogGridMetrics`, pero sobre el
+  ancho de la grilla (consultas de contenedor) con umbrales que dejan un
+  escritorio completo y un teléfono en los números exactos de Flutter; en los
+  anchos intermedios no repite el defecto.
+- **Flutter dibuja Oswald «bold» con el peso 400 engordado** (la fuente
+  variable se dibuja en su instancia por defecto y Skia engrosa el contorno):
+  los anchos de letra son los del 400. La HTML usa `400` con
+  `-webkit-text-stroke:.032em`; con `700` los títulos cortaban otra línea.
+- Cortes: cabecera 1080 px, catálogo de teléfono bajo 700 (barra «Filtro /
+  Ordenar por» con hojas inferiores sin JavaScript), ficha bajo 1100 y 768,
+  pie de teléfono bajo 800 (secciones plegables, sin medios de pago, como
+  Flutter).
+- Los íconos de marca del pie son los de Font Awesome, de la fuente que el
+  build Flutter ya publica (`/assets/packages/font_awesome_flutter/...`); el
+  subconjunto que deja Flutter trae los cinco. Cuando la fase 3 quite Flutter
+  hay que copiar la fuente (y Barlow/Oswald) a la tienda HTML.
+- Diferencias a propósito: la ficha HTML conserva la tarjeta «Despacho a
+  domicilio» con la tarifa más barata real del checkout (Flutter sólo muestra
+  promesas escritas en la configuración); la foto de un relacionado se
+  centra (en Flutter queda pegada a la izquierda por un `Stack` sin
+  alineación); el paginador del teléfono deja sólo las flechas (en Flutter
+  «Siguiente» se sale de la pantalla).
+- Se quitaron de la ficha la marca sobre el título, la línea «Código …» y la
+  barra fija de compra del teléfono: Flutter no las tiene.
+
 ### Pendiente
 
 - El costo real de Cloud Run en la facturación, después de unos días.
+- Fase 2: la portada y las páginas de información con la misma medición de
+  píxeles contra Flutter; la geometría de bloques ya está en el núcleo
+  (`website_block_geometry.dart`, `website_block_capabilities.dart`,
+  `website_block_type.dart`, `responsive_breakpoints.dart`).
 - Las copias de una foto reemplazada quedan en Storage (pocos KB cada una);
   una limpieza de las que ninguna fila nombra, si algún día pesan.

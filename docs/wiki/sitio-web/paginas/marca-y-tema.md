@@ -28,6 +28,12 @@ instantánea leen los mismos valores `[Repo]`.
 | `theme_section_spacing` / `theme_container_padding` | 64 / 24 |
 | `header_style`, `header_bg_color`, `header_color_mode` | `sticky`, blanco, `auto` |
 
+Flutter dibuja Oswald, que es una fuente variable, en su instancia por
+defecto: un título «bold» sale con los anchos de letra del 400 y el trazo
+engordado por Skia. La tienda HTML lo imita (`400` y `-webkit-text-stroke`);
+con un `700` real los títulos de la ficha cortaban una línea antes
+`[Repo 2026-10-05]`.
+
 Los colores se guardan como enteros ARGB (p. ej. `4279385960` = `#FF123F68`) y los
 lee `parseWebsiteThemeColorValue`, el mismo lector para tema, tienda e instantánea
 `[Prod]` `[Repo]`.

@@ -4,6 +4,13 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-05 — corrección — la tienda HTML se ve como la Flutter: tarjetas,
+  grilla, riel de filtros, hojas «Filtro / Ordenar por» del teléfono,
+  paginador, pie de escritorio y de teléfono y ficha de producto medidos a
+  1 px contra vinabike.cl; Flutter dibuja Oswald «bold» con el peso 400
+  engordado ([marca y tema](paginas/marca-y-tema.md),
+  [estado](paginas/estado-y-pendientes.md)).
+
 - 2026-10-05 — corrección — miniaturas de tarjeta: un trabajo copia a 400 y
   800 px la foto de cada tarjeta (de cualquier origen) y la anota en
   `public_image_thumbnails`; las tarjetas HTML las ofrecen en `srcset`; un HEAD
