@@ -40,7 +40,7 @@
     },
     {
       "path": "lib/public_store/widgets/public_store_layout.dart",
-      "sha256": "36a5c0386dbea7f3e46dac4dc32902350a918727f1dcaca6c3901435ea254724"
+      "sha256": "5c71241f0b31667858683e2b5be95f8085d2b289d4a04b0546f587e74b30b95e"
     },
     {
       "path": "lib/public_store/widgets/store_layout/layout_helpers.dart",

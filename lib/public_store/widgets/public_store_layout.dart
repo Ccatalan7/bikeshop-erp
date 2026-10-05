@@ -35,6 +35,7 @@ import '../theme/public_header_contrast.dart';
 import '../../shared/models/public_product_visibility_policy.dart';
 import '../models/public_checkout_capabilities.dart';
 import 'package:vinabike_public_core/public_store/models/public_payment_claims.dart';
+import 'package:vinabike_public_core/public_store/seo/storefront_html_routes.dart';
 import 'package:vinabike_public_core/public_store/utils/social_url.dart';
 import '../models/storefront_logo_source.dart';
 import '../services/public_checkout_capability_service.dart';
@@ -7575,6 +7576,29 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         return;
       } catch (_) {
         // Fall through to normal navigation outside a browser runtime.
+      }
+    }
+
+    // A page the HTML storefront answers (`storefrontHtmlServes`, the same
+    // routes as the store's Cloud Run rewrites) is left with a full load:
+    // Flutter only draws the cart, the checkout and the portal now, and a
+    // visitor who came for those reads the same pages as everyone else. Only
+    // in the public store in a browser: never in the editor or its preview,
+    // nor in the store the ERP mounts at `/tienda`, where those routes are
+    // Flutter's (2026-10-05).
+    final currentPath = GoRouterState.of(context).uri.path;
+    if (kIsWeb &&
+        editorMode == WebsiteEditorMode.public &&
+        !currentPath.startsWith('/tienda') &&
+        !targetPath.startsWith('/tienda') &&
+        current != target &&
+        storefrontHtmlServes(targetPath)) {
+      try {
+        if (!editorDecision.commit()) return;
+        web.window.location.assign(target);
+        return;
+      } catch (_) {
+        // Fall through to in-app navigation outside a browser runtime.
       }
     }
 

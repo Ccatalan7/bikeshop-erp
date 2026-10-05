@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "storefront-flutter-leaves-for-html-routes",
+  "scope": "internal",
+  "platforms": [
+    "web"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "lib/public_store/widgets/public_store_layout.dart",
+      "sha256": "5c71241f0b31667858683e2b5be95f8085d2b289d4a04b0546f587e74b30b95e"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/seo/storefront_html_routes.dart",
+      "sha256": "21667fbce7ece5fd448f85fe9dbb23ffed2e8bcb9c20870de79f37dfe91d4db8"
+    }
+  ]
+}

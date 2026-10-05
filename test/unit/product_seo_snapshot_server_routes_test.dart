@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:vinabike_public_core/public_store/seo/storefront_html_routes.dart';
 
 import '../../scripts/generate_product_seo_snapshots.dart' as snapshots;
 
@@ -68,6 +69,36 @@ void main() {
       '/contacto/x',
     ]) {
       expect(routes.owns(path), isFalse, reason: path);
+    }
+  });
+
+  test('Flutter leaves for exactly the routes Firebase hands the server', () {
+    final config = jsonDecode(File('firebase.json').readAsStringSync()) as Map;
+    final store = (config['hosting'] as List)
+        .cast<Map>()
+        .firstWhere((entry) => entry['target'] == 'store');
+    final sources = [
+      for (final rewrite in (store['rewrites'] as List).cast<Map>())
+        if ((rewrite['run'] as Map?)?['serviceId'] ==
+                snapshots.seoStorefrontHtmlServiceId &&
+            rewrite['source'] != '/_html/**')
+          rewrite['source'] as String,
+    ];
+    // A route opened to the server and not listed here would keep Flutter's
+    // in-app copy for visitors coming from the cart or the portal.
+    expect(sources.toSet(), storefrontHtmlRouteSources.toSet());
+    for (final path in [
+      '/',
+      '/productos',
+      '/productos/categoria/frenos',
+      '/producto/46a51a87-aa3a-430c-a6e1-af48c8d74541',
+      '/servicios',
+      '/contacto',
+    ]) {
+      expect(storefrontHtmlServes(path), isTrue, reason: path);
+    }
+    for (final path in ['/carrito', '/checkout', '/cuenta', '/productosx']) {
+      expect(storefrontHtmlServes(path), isFalse, reason: path);
     }
   });
 
