@@ -140,7 +140,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_script.dart",
-      "sha256": "0d6391f714f069125fdb9d59c7435665cf5d91fd7d95f70e3d0cad63f8926438"
+      "sha256": "1a3ae6bb943da25cf38c6719134c50040447c7e8c109df0370c9a6ddf76dfda5"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_shell.dart",

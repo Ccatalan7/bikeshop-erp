@@ -240,17 +240,17 @@ const storefrontScript = r'''
       var submitter = e.submitter;
       onAdd(e, submitter && submitter.hasAttribute('data-buy-now') ? 'checkout' : null);
     });
-    // The − and + of the quantity, bounded like Flutter's selector.
-    form.querySelectorAll('[data-step]').forEach(function (step) {
-      step.addEventListener('click', function () {
-        var input = form.querySelector('input[name=cantidad]');
-        if (!input) return;
-        var max = Number(input.max || 0);
-        var next = (Math.floor(Number(input.value) || 1)) + Number(step.dataset.step);
-        if (next < 1) next = 1;
-        if (max > 0 && next > max) next = max;
-        input.value = String(next);
-      });
+  });
+  // The − and + of the quantity, bounded like Flutter's selector.
+  document.querySelectorAll('form.cart [data-step]').forEach(function (step) {
+    step.addEventListener('click', function () {
+      var input = document.querySelector('form.cart input[name=cantidad]');
+      if (!input) return;
+      var max = Number(input.max || 0);
+      var next = (Math.floor(Number(input.value) || 1)) + Number(step.dataset.step);
+      if (next < 1) next = 1;
+      if (max > 0 && next > max) next = max;
+      input.value = String(next);
     });
   });
 
