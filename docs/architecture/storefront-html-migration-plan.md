@@ -657,6 +657,13 @@ abrirla.
 (`websiteYouTubeVideoId`) y las reseñas (`WebsiteGoogleReviewsContent`:
 las sincronizadas cuando el bloque no trae, filtro por estrellas y cantidad,
 promedio sobre la lista completa). Flutter las llama desde ahí.
+Antes de mover lógica de un widget al núcleo hay que buscar en `test/` los
+contratos que leen el código del widget como texto (`sourceOf(...)`):
+`website_collections_responsive_policies_test.dart` buscaba
+`data['minRating']` en el carrusel de reseñas, fallaron tres en la
+integridad de la publicación y la tienda de `ddf3cfba` no se desplegó (una
+vuelta de CI, ~25 min). El contrato se apunta al dueño nuevo y además se
+comprueba que el widget lo consume.
 
 Lo que costó una vuelta, para el que siga:
 

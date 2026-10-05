@@ -58,6 +58,12 @@ void main() {
       sourceOf('lib/modules/website/widgets/website_faq_block_content.dart');
   final reviewsSource =
       sourceOf('lib/modules/website/widgets/google_reviews_carousel.dart');
+  // Qué reseñas se muestran y su nota lo decide el núcleo, que lee igual la
+  // tienda Flutter y la HTML; el carrusel lo consume.
+  final reviewsContentSource = sourceOf(
+    'packages/vinabike_public_core/lib/modules/website/models/'
+    'website_google_reviews.dart',
+  );
   final rendererSource =
       sourceOf('lib/modules/website/widgets/website_block_renderer.dart');
 
@@ -267,7 +273,10 @@ void main() {
       expect(reviewsSource, contains('height: 280'));
       // Y el rating agregado se lee del negocio, o se calcula de la lista
       // completa: filtrar cards no puede inflar la nota.
-      expect(reviewsSource, contains('_averageRating(_sourceReviews())'));
+      expect(reviewsSource, contains('WebsiteGoogleReviewsContent.fromData('));
+      expect(reviewsContentSource,
+          contains('final source = sourceReviews(data);'));
+      expect(reviewsContentSource, contains('_average(source)'));
     });
 
     test('ninguna colección del lote se volvió responsive entera', () {
@@ -325,7 +334,7 @@ void main() {
       // no puede mostrar reseñas distintas según el dispositivo.
       for (final key in const <String>['minRating', 'maxItems']) {
         expect(
-          reviewsSource,
+          reviewsContentSource,
           contains("data['$key']"),
           reason: '$key sin consumer volvería a ser un control falso',
         );
@@ -337,7 +346,9 @@ void main() {
       }
       // Y el cableado sigue entrando por la misma inyección de verdad Google.
       expect(rendererSource,
-          contains("service.getSetting('google_reviews_data')"));
+          contains('WebsiteGoogleReviewsContent.withSyncedReviews('));
+      expect(rendererSource, contains('service.getSetting,'));
+      expect(reviewsContentSource, contains("setting('google_reviews_data')"));
     });
 
     test('el título declara formato y el consumer lo pinta', () {
@@ -381,14 +392,16 @@ void main() {
         'Felipe Andrés',
         'Return Mocks',
       ]) {
-        expect(
-          reviewsSource,
-          isNot(contains(invented)),
-          reason: 'la tienda no publica gente que no existe',
-        );
+        for (final source in [reviewsSource, reviewsContentSource]) {
+          expect(
+            source,
+            isNot(contains(invented)),
+            reason: 'la tienda no publica gente que no existe',
+          );
+        }
       }
       // La fuente visible es sólo la real.
-      expect(reviewsSource, contains("data['reviews']"));
+      expect(reviewsContentSource, contains("data['reviews']"));
       expect(
         flatFieldsOf(WebsiteBlockType.googleReviews).containsKey('reviews'),
         isFalse,
