@@ -850,12 +850,17 @@ La lista de rutas del servidor existe dos veces: las reescrituras de
 (`product_seo_snapshot_server_routes_test.dart`) las compara: una ruta nueva
 del servidor se agrega en los dos lados en el mismo commit.
 
+Los enlaces de los bloques guardados como `/productos?category=<id>` (diez
+en la portada) pasaban por un 301 antes de la categoría. Ahora el servidor
+los escribe con la ruta limpia de la categoría publicada
+(`StorefrontShell.categoryHref`, el mismo que ya usaban los menús): ni el
+visitante ni Google siguen una redirección. Lo guardado en el editor no
+cambia.
+
 ### Pendiente
 
 - El costo real de Cloud Run en la facturación, después de unos días.
 - El PNG de 2,1 MB de la tercera diapositiva debería volver a subirse por el
   editor (que lo optimiza a WebP): hoy sólo dejó de estorbar a la primera.
-- Navegar dentro de la tienda HTML sin volver a Flutter (enlaces de la
-  portada a `/productos?category=…`).
 - Las copias de una foto reemplazada quedan en Storage (pocos KB cada una);
   una limpieza de las que ninguna fila nombra, si algún día pesan.

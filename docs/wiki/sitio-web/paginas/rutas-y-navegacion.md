@@ -110,7 +110,9 @@ Flutter sólo podía imitar en el navegador:
   (manda el SKU), desde `/productos/<uuid>`, `/producto/<uuid>` y desde una ruta
   vieja de `product_url_aliases`; la consulta se conserva. Un slug viejo de
   categoría (alias de «Catálogo web») y el viejo `/productos?category=<id>`
-  también redirigen a la ruta limpia.
+  también redirigen a la ruta limpia. Los enlaces de menús y bloques
+  guardados así ya salen escritos con la ruta limpia
+  (`StorefrontShell.categoryHref`), sin pasar por el 301.
 - **404** con la página de la tienda para una categoría desconocida o no
   publicada («Esta colección no está disponible») y para un producto que no se
   ve (borrador, sin foto con la regla «exigir foto»). Flutter respondía 200 con

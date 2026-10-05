@@ -80,7 +80,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_blocks_view.dart",
-      "sha256": "fd5467921dfd606ab2e9e5f8c28b435f60a78fa8ab7ab155054b97570b296ebb"
+      "sha256": "44bc660f3e1877f00a077cefc9b73f42f56a21e43bd5c1adabdb7e5969450c96"
     },
     {
       "path": "services/storefront_html/lib/src/website_brand_logos_view.dart",
@@ -120,7 +120,7 @@
     },
     {
       "path": "services/storefront_html/test/storefront_handler_test.dart",
-      "sha256": "60cbb0a7b32dbebc8a42218d77928a5ab3a6194f7310a47a2601973505a7a2b7"
+      "sha256": "04924adc939a2b0bbe41662fea61e8555dc92a186c67b9eaf4b7610429fe99ed"
     }
   ]
 }

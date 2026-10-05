@@ -136,11 +136,11 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_shell.dart",
-      "sha256": "ed6aad8cd73d9286d17099e220e0f5e8321e9b14ee85a52bb7bfca0c992199ab"
+      "sha256": "cb34bf766a1a7b93fe7a594919eaa5401547671539658635b8a009efb8cbf91c"
     },
     {
       "path": "services/storefront_html/lib/src/website_blocks_view.dart",
-      "sha256": "fd5467921dfd606ab2e9e5f8c28b435f60a78fa8ab7ab155054b97570b296ebb"
+      "sha256": "44bc660f3e1877f00a077cefc9b73f42f56a21e43bd5c1adabdb7e5969450c96"
     },
     {
       "path": "services/storefront_html/lib/src/website_page_css.dart",

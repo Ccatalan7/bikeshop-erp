@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "storefront-html-category-links-direct",
+  "scope": "internal",
+  "platforms": [
+    "web"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "services/storefront_html/lib/src/storefront_shell.dart",
+      "sha256": "cb34bf766a1a7b93fe7a594919eaa5401547671539658635b8a009efb8cbf91c"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_blocks_view.dart",
+      "sha256": "44bc660f3e1877f00a077cefc9b73f42f56a21e43bd5c1adabdb7e5969450c96"
+    },
+    {
+      "path": "services/storefront_html/test/storefront_handler_test.dart",
+      "sha256": "04924adc939a2b0bbe41662fea61e8555dc92a186c67b9eaf4b7610429fe99ed"
+    }
+  ]
+}

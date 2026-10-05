@@ -1565,6 +1565,9 @@ void main() {
         // A category card whose category is not published is not drawn.
         expect(html, contains('>HORQUILLAS</span>'));
         expect(html, isNot(contains('>INTERNA</span>')));
+        // Its `?category=<id>` link goes straight to the clean path.
+        expect(html, contains('href="/productos/categoria/horquillas"'));
+        expect(html, isNot(contains('?category=')));
         // The brand row keeps its 510 px as a minimum, centered.
         expect(html, contains('min-height:510px'));
         expect(

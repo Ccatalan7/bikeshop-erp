@@ -144,7 +144,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_shell.dart",
-      "sha256": "ed6aad8cd73d9286d17099e220e0f5e8321e9b14ee85a52bb7bfca0c992199ab"
+      "sha256": "cb34bf766a1a7b93fe7a594919eaa5401547671539658635b8a009efb8cbf91c"
     },
     {
       "path": "services/storefront_html/tool/parity.py",

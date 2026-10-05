@@ -279,21 +279,26 @@ class StorefrontShell {
       case WebsiteDestinationKind.none:
         return null;
       case WebsiteDestinationKind.category:
-        final id = destination.reference ?? '';
-        if (!categories.containsKey(id)) return destination.href;
-        final uri = Uri.parse(destination.href);
-        final rest = Map<String, String>.of(uri.queryParameters)
-          ..remove('category');
-        final path = categoryPath(
-          id,
-          services: uri.path.startsWith('/servicios'),
-        );
-        return rest.isEmpty
-            ? path
-            : Uri(path: path, queryParameters: rest).toString();
+        return categoryHref(destination) ?? destination.href;
       default:
         return publicPath(destination.href);
     }
+  }
+
+  /// A link to a published category by id (`/productos?category=<id>`) as
+  /// the category's clean path, with any other filter kept, so the visitor
+  /// and Google follow no redirect; `null` when [destination] is not one.
+  String? categoryHref(WebsiteDestination destination) {
+    if (destination.kind != WebsiteDestinationKind.category) return null;
+    final id = destination.reference ?? '';
+    if (!categories.containsKey(id)) return null;
+    final uri = Uri.parse(destination.href);
+    final rest = Map<String, String>.of(uri.queryParameters)
+      ..remove('category');
+    final path = categoryPath(id, services: uri.path.startsWith('/servicios'));
+    return rest.isEmpty
+        ? path
+        : Uri(path: path, queryParameters: rest).toString();
   }
 
   static final _uuid = RegExp(

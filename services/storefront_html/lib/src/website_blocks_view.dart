@@ -2,6 +2,7 @@ import 'package:jaspr/dom.dart';
 import 'package:jaspr/server.dart';
 import 'package:vinabike_public_core/modules/website/models/website_block_type.dart';
 import 'package:vinabike_public_core/modules/website/models/website_hero_content.dart';
+import 'package:vinabike_public_core/modules/website/models/website_destination.dart';
 import 'package:vinabike_public_core/modules/website/theme/website_theme_color_value.dart';
 import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
 import 'package:vinabike_public_core/public_store/models/public_image_thumbnail.dart';
@@ -47,7 +48,13 @@ class BlockRenderContext {
     final trimmed = href.trim();
     if (trimmed.isEmpty) return null;
     if (!shell.allowsHref(trimmed, storeUrl: storeUrl)) return null;
-    return StorefrontShell.publicPath(trimmed);
+    final origin = Uri.tryParse(storeUrl);
+    final destination = WebsiteDestination.parse(
+      trimmed,
+      internalOrigins: [if (origin != null && origin.hasScheme) origin],
+    );
+    return shell.categoryHref(destination) ??
+        StorefrontShell.publicPath(trimmed);
   }
 
   PublicWebsiteContactFacts get siteContact => PublicWebsiteContactFacts(
