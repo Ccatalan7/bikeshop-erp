@@ -400,6 +400,15 @@ cada visita) y ~190 ms en el universo de `get_public_products`. Es la misma
 lectura que paga Flutter; precalcular los valores técnicos es la mejora
 siguiente si el primer byte del catálogo importa.
 
+**Al mover código al núcleo, buscar quién lee su texto** (2026-10-05, costó una
+vuelta de CI con el despliegue de la tienda bloqueado). Muchos contratos del
+repo leen el código fuente como texto (`File('lib/...').readAsStringSync()`) y
+buscan identificadores; al mover algo al núcleo, el reexport de `lib/` compila
+igual pero el texto ya no está ahí. Antes de publicar:
+`grep -rl '<archivo movido o tocado>' test/` y correr esos archivos, no sólo los
+del módulo. Así falló `google_merchant_identity_contract_test.dart` cuando las
+columnas de las tarjetas pasaron a `public_product_identity_columns.dart`.
+
 ### Costo de abrir las rutas (2026-10-05)
 
 Tráfico real: Search Console contó **8.090 peticiones de Googlebot en 90 días**
