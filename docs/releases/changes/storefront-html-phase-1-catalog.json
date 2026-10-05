@@ -136,7 +136,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/site_layout.dart",
-      "sha256": "a83705055233418b6fc8c524c53ad3fca0eb3937ffd204fc629d3d092db9ea07"
+      "sha256": "632c152301c2774cb2255e39d01346c7cb81d85b706558095293515c687f26c5"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_script.dart",
@@ -144,7 +144,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_shell.dart",
-      "sha256": "1c7e213571900b5167b9f07dd5344dc62fccd764db408577a62d7eac395cee24"
+      "sha256": "ed6aad8cd73d9286d17099e220e0f5e8321e9b14ee85a52bb7bfca0c992199ab"
     },
     {
       "path": "services/storefront_html/tool/parity.py",

@@ -204,7 +204,7 @@
     },
     {
       "path": "services/storefront_html/README.md",
-      "sha256": "8c854fcc271ea6ffd15ef1aa3caff26417fed73f0338fd05d752bb265156cd08"
+      "sha256": "e59df1bc1f54cd894b403faac3584d52ddeeb0e02b9550d6bba7c145de757c00"
     },
     {
       "path": "services/storefront_html/analysis_options.yaml",
@@ -228,7 +228,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/public_reads.dart",
-      "sha256": "533acbef4da26f8eecf5109858ea04b7417939986793f1cdc57cf444a6430659"
+      "sha256": "faa2d23d0b839a685881f0ba8f0b8c6d6a8c5f59fb4e6dd492b7f09055cf195c"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_config.dart",
@@ -236,15 +236,15 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_css.dart",
-      "sha256": "c65955957e1accbc2b00a0a7131ed7dd0ef72d04ff2fdadab98b5378ebd8b6a8"
+      "sha256": "e9d93f73ff1af3824340b11a80f6f36d586c25eef0b1beb26520403e887da1ba"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
-      "sha256": "28dfef561561191966af18ae4b2514dd83cea780c6cda8f7c4d02ed55d502084"
+      "sha256": "26389132ed627af1b22383b90fd06d445e36bcd339d8f33c0ac381922a7c0bed"
     },
     {
       "path": "services/storefront_html/lib/storefront_html.dart",
-      "sha256": "e7ab52fa2b9090f933c7b32b47594529d280fe1c9cc65c419d4f05fce5a74802"
+      "sha256": "992c10f293c84acb785fbbe9d021edbe71b808f031609e0d28f6bd409a416b47"
     },
     {
       "path": "services/storefront_html/pubspec.yaml",
@@ -316,7 +316,7 @@
     },
     {
       "path": "lib/modules/website/models/website_page_composition.dart",
-      "sha256": "3890e40f4ab8e4b03efd66780197c2a56fab9710ecce72e9a67480d6ff13bec5"
+      "sha256": "aab0519ac9fe9105565c27cb6850967af463e3b234073705cc03d8c1ba2217bb"
     }
   ]
 }

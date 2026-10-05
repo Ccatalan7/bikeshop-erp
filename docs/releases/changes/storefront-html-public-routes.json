@@ -11,8 +11,8 @@
   "summary": "Productos, categorías y búsqueda de vinabike.cl llegan armados desde el servidor, con el precio y el stock del momento y las fotos de cada lista en el tamaño de su tarjeta: quien entra desde Google ve la ficha en un segundo en un teléfono lento.",
   "items": [
     "Al abrir un producto desde Google o un enlace, en un teléfono lento se ve en 1 segundo y se puede usar en unos 2; antes la tienda tardaba unos 20.",
-    "Categorías, búsqueda y filtros funcionan sin JavaScript, se pueden compartir como enlace y el botón atrás vuelve a la misma lista.",
-    "Las páginas nuevas se ven como la tienda de siempre (tarjetas, filtros, menú, ficha y pie) y cada foto de las listas pesa unos 20 KB en vez de 120."
+    "Categorías y filtros funcionan sin JavaScript, se comparten como enlace y cada foto de las listas pesa unos 20 KB en vez de 120.",
+    "En Nosotros, Términos y Privacidad el contacto muestra el teléfono, el correo y la dirección de la tienda, no un aviso para el editor."
   ],
   "evidence": [
     {
@@ -41,7 +41,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
-      "sha256": "28dfef561561191966af18ae4b2514dd83cea780c6cda8f7c4d02ed55d502084"
+      "sha256": "26389132ed627af1b22383b90fd06d445e36bcd339d8f33c0ac381922a7c0bed"
     },
     {
       "path": "services/storefront_html/deploy_cloud_run.sh",
@@ -73,7 +73,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/public_reads.dart",
-      "sha256": "533acbef4da26f8eecf5109858ea04b7417939986793f1cdc57cf444a6430659"
+      "sha256": "faa2d23d0b839a685881f0ba8f0b8c6d6a8c5f59fb4e6dd492b7f09055cf195c"
     },
     {
       "path": "scripts/generate_public_image_thumbnails.dart",
@@ -89,11 +89,11 @@
     },
     {
       "path": "services/storefront_html/lib/src/site_layout.dart",
-      "sha256": "a83705055233418b6fc8c524c53ad3fca0eb3937ffd204fc629d3d092db9ea07"
+      "sha256": "632c152301c2774cb2255e39d01346c7cb81d85b706558095293515c687f26c5"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_css.dart",
-      "sha256": "c65955957e1accbc2b00a0a7131ed7dd0ef72d04ff2fdadab98b5378ebd8b6a8"
+      "sha256": "e9d93f73ff1af3824340b11a80f6f36d586c25eef0b1beb26520403e887da1ba"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_script.dart",
@@ -101,7 +101,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/material_icons.dart",
-      "sha256": "c6088281f90f26ad1b14059906febdd3e882b2522e0601c7507ae5fc711c28b2"
+      "sha256": "df0533aaf537eaf4ef74f196a7dec07ba3605304c13f5a90544d3ccd83d5a2a0"
     }
   ]
 }
