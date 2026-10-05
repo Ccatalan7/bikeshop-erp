@@ -225,16 +225,17 @@ Hecho y verificado:
   la prueba. Armar la página compilada (AOT) tarda 5–7 ms. En la base:
   `get_public_product_page_v1` 281 ms, `get_public_storefront_shell_v1` 5 ms.
 
-Falta para cerrar la fase 0:
+Cloud Run (2026-10-04): el dueño instaló `gcloud`, inició sesión y dio a la
+cuenta de compilación el rol `roles/run.builder`; el proyecto ya tenía
+facturación. Se habilitaron Cloud Run, Cloud Build y Artifact Registry y el
+servicio `storefront-html` corre en `southamerica-east1` (`min-instances 1`,
+512 MiB). Medido directo contra Cloud Run desde Chile: primer byte ~0,7 s, de
+eso 310–460 ms de lectura en São Paulo (la ficha técnica) y 6–16 ms de armado.
+La reescritura `/_html/**` → `storefront-html` del target `store` va en el
+mismo commit que este texto.
 
-1. Iniciar sesión en Google Cloud en el Mac (`gcloud auth login`, el dueño) y
-   confirmar que el proyecto tiene facturación, que Cloud Run exige.
-2. `services/storefront_html/deploy_cloud_run.sh` (Cloud Build compila la
-   imagen; `min-instances 1` para no pagar arranques en frío en el primer byte).
-3. Recién entonces, la reescritura `/_html/**` → `storefront-html` en el
-   target `store` de `firebase.json`: si el servicio no existe, falla el
-   despliegue de Hosting.
-4. Medir desde `vinabike.cl/_html/...` y anotar el costo mensual real.
+Falta: medir desde `vinabike.cl/_html/...` cuando publique el build de la
+tienda, y anotar el costo mensual real después de unos días.
 
 Lo que encontró la fase 0, y la fase 1 resuelve antes de abrir rutas:
 

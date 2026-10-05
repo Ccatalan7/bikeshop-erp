@@ -4,6 +4,12 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-04 — corrección — el servidor HTML corre en Cloud Run y
+  `vinabike.cl/_html/**` lo alcanza. Dos trampas del primer despliegue en
+  `services/storefront_html/README.md`: la cuenta de compilación necesita
+  `roles/run.builder` aunque tenga Editor, y `dart compile exe` no crea su
+  carpeta de salida.
+
 - 2026-10-04 — corrección — el dueño aprobó la migración y empezó la fase 0:
   núcleo Dart compartido en un paquete (los archivos se movieron y las rutas
   viejas los reexportan), dos lecturas públicas `SECURITY INVOKER` en

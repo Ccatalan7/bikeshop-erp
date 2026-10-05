@@ -46,8 +46,9 @@ visita desde `get_public_storefront_shell_v1` y `get_public_product_page_v1`,
 con el mismo código Dart que la tienda Flutter: el paquete
 `packages/vinabike_public_core` (proyección comercial, ficha técnica, texto SEO,
 datos estructurados, rutas de categoría y menú, tema, horario). En la fase 0 no
-reemplaza ninguna ruta pública: va a vivir en Cloud Run (`southamerica-east1`)
-detrás de `/_html/**` en el target `store`, con `noindex`. Plan y fases en
+reemplaza ninguna ruta pública: vive en Cloud Run (`storefront-html`,
+`southamerica-east1`, desde el 2026-10-04) detrás de `/_html/**` en el target
+`store`, con `noindex`. Plan y fases en
 `docs/architecture/storefront-html-migration-plan.md` `[Repo]`.
 
 ## Dueños de datos (Supabase, `public`)

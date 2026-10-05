@@ -13,7 +13,8 @@ COPY services/storefront_html services/storefront_html
 
 WORKDIR /src/services/storefront_html
 RUN dart pub get --enforce-lockfile
-RUN dart compile exe bin/server.dart -o /out/server
+# `dart compile exe` does not create the output folder.
+RUN mkdir -p /out && dart compile exe bin/server.dart -o /out/server
 
 FROM scratch
 COPY --from=build /runtime/ /

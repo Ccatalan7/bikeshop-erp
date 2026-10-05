@@ -50,7 +50,23 @@ bash services/storefront_html/deploy_cloud_run.sh
 ```
 
 Cloud Run en `southamerica-east1`, junto a Supabase. Necesita `gcloud` con la
-sesión de un dueño del proyecto y facturación activa. Cloud Build compila la
+sesión de un dueño del proyecto y facturación activa. Desplegado por primera vez
+el 2026-10-04 (`storefront-html-00001`).
+
+Dos trampas que costaron un intento cada una (2026-10-04):
+
+- La compilación corre con la cuenta de servicio por defecto
+  (`452996097799-compute@developer.gserviceaccount.com`), y aunque tiene
+  Editor, Cloud Build la rechaza («the default service account is missing
+  required IAM permissions») hasta que tiene `roles/run.builder`. Ese permiso
+  lo dio el dueño; un agente no cambia permisos del proyecto.
+- `dart compile exe` no crea la carpeta de salida: el `Dockerfile` hace
+  `mkdir -p /out` antes.
+
+Cloud Run reserva las rutas que terminan en `z` (`/healthz` responde 404 desde
+el borde de Google, sin llegar al servidor).
+
+Cloud Build compila la
 imagen (`Dockerfile`, Dart 3.10.4 → binario nativo sobre una imagen vacía)
 desde un contexto con sólo este servicio y el núcleo. Después del primer
 despliegue, y nunca antes, se agrega en `firebase.json` (target `store`) la

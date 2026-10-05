@@ -200,11 +200,11 @@
     },
     {
       "path": "services/storefront_html/Dockerfile",
-      "sha256": "0ff94faed278e75659ff173ec2ee4e2a31343a2650bf7f8add7a68b4c2f340c6"
+      "sha256": "9c583124347b84e38394137aea1bb87f05f2acda4bd1460f356d44cf0ecb6478"
     },
     {
       "path": "services/storefront_html/README.md",
-      "sha256": "8242982000f14dcc551c0e0f9d02e56c325a88addb7673d0f96a48edce33aa74"
+      "sha256": "a2bdc20676b8b0c967767d6d9e9a22b834a76e95b5712bbf1fcca67cc9adfe13"
     },
     {
       "path": "services/storefront_html/analysis_options.yaml",

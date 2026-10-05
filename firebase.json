@@ -692,6 +692,13 @@
           "destination": "/app-open.html"
         },
         {
+          "source": "/_html/**",
+          "run": {
+            "serviceId": "storefront-html",
+            "region": "southamerica-east1"
+          }
+        },
+        {
           "source": "**",
           "destination": "/index.html"
         }

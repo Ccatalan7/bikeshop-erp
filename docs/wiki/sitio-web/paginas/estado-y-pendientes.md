@@ -31,7 +31,6 @@ Se actualiza cada vez que algo cambia de estado; cada línea con su fecha.
 | 2026-09-24 | Crear la GitHub App (APP_ID, INSTALLATION_ID, llave privada) | sin ella «Publicar» del editor no puede disparar el build ([publicacion](publicacion-y-despliegue.md)) |
 | 2026-09-24 | Marcar `contact` como evento clave en GA4 | es una configuración de la cuenta |
 | 2026-09-23 | Reconectar la cuenta Google del ERP con el permiso de Search Console | el centro SEO no ve Google hasta entonces |
-| 2026-10-04 | **Iniciar sesión en Google Cloud** en el Mac (`gcloud auth login`) y confirmar que `project-vinabike` tiene facturación | sin eso no se despliega el servidor HTML en Cloud Run: la fase 0 está hecha en local y en la base, falta su ruta oculta `/_html/**` ([estado de la fase 0](../../../architecture/storefront-html-migration-plan.md)) |
 
 ## Lo puede hacer un agente
 
@@ -57,7 +56,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 | 2026-09-26 | Login `/cuenta/login` sin la dirección «Sendero» | [portal](portal-de-clientes.md) |
 | 2026-10-03 | Código muerto: `banners_management_page.dart`, `content_management_page.dart`, `customer_account_page.dart`, `premium_dashboard_widgets.dart`, ruta `/cuenta/mensajes`; clave `header_nav_links` | [editor](editor-del-sitio.md) |
 | 2026-10-08 | Leer el resultado de la tarea `vinabike-store-ready-review` | [rendimiento](rendimiento.md) |
-| 2026-10-04 | **Fase 0 de la migración a HTML:** desplegar `services/storefront_html` en Cloud Run (`deploy_cloud_run.sh`), recién entonces agregar la reescritura `/_html/**` del target `store` en `firebase.json` (si el servicio no existe, el despliegue de Hosting falla), medir desde vinabike.cl y el costo mensual | `docs/architecture/storefront-html-migration-plan.md` |
+| 2026-10-04 | **Fase 0 de la migración a HTML:** medir desde `vinabike.cl/_html/productos/…` (celular lento y primer byte) y anotar el costo mensual real de Cloud Run después de unos días | `docs/architecture/storefront-html-migration-plan.md` |
 | 2026-10-04 | Requisitos de la fase 1 que encontró la fase 0: ficha técnica precalculada (hoy ~275 ms por lectura); la ficha Flutter y el generador usan `PublicProductSeoCopyInput.fromSettings`; menús de categoría con la misma normalización que `normalizePublicCatalogRouteForRuntime`; disponibilidad de los productos-set (`preview_product_stock_impact`) en la lectura de la página; nodo `BikeStore`; submenús plegados en el teléfono | `docs/architecture/storefront-html-migration-plan.md` |
 | 2026-10-04 | Paridad latente de la ficha técnica: el generador de snapshots arma la identidad con `color`, `size`, `material` y `weight` leídos de `products`, y la página pública no los recibe; un producto que los tenga mostraría en el snapshot filas que la página no. 0 productos afectados hoy | [datos-estructurados](datos-estructurados.md) |
 
@@ -65,6 +64,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 
 | Fecha | Qué | Página |
 |---|---|---|
+| 2026-10-04 | Servidor HTML en Cloud Run (`storefront-html`, `southamerica-east1`) detrás de la reescritura `/_html/**` del target `store`. El dueño instaló `gcloud`, inició sesión y dio `roles/run.builder` a la cuenta de compilación | [mapa](mapa-del-sistema.md) |
 | 2026-10-04 | El dueño aprobó la migración del sitio y su editor a HTML. Fase 0 en local y en la base: núcleo Dart en `packages/vinabike_public_core` (18 archivos movidos, sin copiar), `get_public_storefront_shell_v1` + `get_public_product_page_v1` desplegadas y verificadas (`20261004180000`, `20261004190000` tras la revisión de Codex), servidor Jaspr con pruebas | [mapa](mapa-del-sistema.md) |
 | 2026-10-04 | Ficha técnica (`additionalProperty`), `model` y migas completas en el JSON-LD de cada producto, con un solo armado para el snapshot y la página | [datos-estructurados](datos-estructurados.md) |
 | 2026-10-04 | `BikeStore` con logo, imagen, mapa, horario y link a la política de devoluciones. El envío se dejó fuera: Google no puede acotar «Chile continental» | [datos-estructurados](datos-estructurados.md) |
