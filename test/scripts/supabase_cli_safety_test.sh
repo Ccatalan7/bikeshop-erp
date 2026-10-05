@@ -96,15 +96,20 @@ assert_file_not_contains \
   "$ROOT_DIR/scripts/generate_product_seo_snapshots.dart" \
   "environment or .env"
 assert_file_not_contains "$ROOT_DIR/scripts/deploy.ps1" ".env"
+assert_file_not_contains \
+  "$ROOT_DIR/scripts/generate_public_image_thumbnails.dart" \
+  "_readDotEnv"
 # The GitHub expression must remain literal while this shell test counts it.
+# The eighth (2026-10-05) is the card_thumbnails job: it writes the copies to
+# Storage and their record (scripts/generate_public_image_thumbnails.dart).
 # shellcheck disable=SC2016
 secret_workflow_bindings="$(
   grep -Fc -- \
     'SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}' \
     "$ROOT_DIR/.github/workflows/firebase-hosting-store.yml"
 )"
-[[ "$secret_workflow_bindings" == 7 ]] ||
-  fail "Expected exactly seven reviewed workflow bindings for SUPABASE_SECRET_KEY."
+[[ "$secret_workflow_bindings" == 8 ]] ||
+  fail "Expected exactly eight reviewed workflow bindings for SUPABASE_SECRET_KEY."
 
 grep -F -- "projects api-keys" "$ROOT_DIR/scripts/db/status.sh" >/dev/null ||
   fail "Status lost its metadata-only API-key type check."
