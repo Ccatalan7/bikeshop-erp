@@ -6,7 +6,9 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:vinabike_public_core/modules/website/models/website_catalog_price_list.dart';
 import 'package:vinabike_public_core/public_store/models/public_category_route.dart';
+import 'package:vinabike_public_core/public_store/models/public_commerce_product_projection.dart';
 // import '../theme/public_store_theme.dart'; // Unused
 import '../models/catalog_filter_rail_policy.dart';
 import '../providers/public_store_tenant_provider.dart';
@@ -21,6 +23,7 @@ import '../../shared/utils/seo_helper.dart';
 // import '../providers/cart_provider.dart'; // Unused
 import '../widgets/full_page_loading.dart';
 import '../widgets/catalog_collection_presentation.dart';
+import '../widgets/catalog_price_list_view.dart';
 import '../utils/product_url.dart';
 import '../utils/public_spec_display.dart';
 import '../utils/public_store_tenant_resolver.dart';
@@ -143,6 +146,19 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   bool _inventoryRevalidationPending = false;
   WebsiteCatalogPresentationRegistry _presentationRegistry =
       const WebsiteCatalogPresentationRegistry({});
+
+  /// Every published service, for `/servicios` laid out as a price list,
+  /// and the store it was read for (the one the page's categories are, so
+  /// the groups are named from the same store). An inventory change marks
+  /// it stale and drops any read in flight (the list stays on screen until
+  /// the new read lands); a failure falls back to the grid until the next
+  /// change or another store.
+  List<Product>? _priceListProducts;
+  String? _priceListTenantId;
+  int _priceListToken = 0;
+  bool _priceListLoading = false;
+  bool _priceListStale = false;
+  bool _priceListFailed = false;
   // Shared across routed catalog instances so catalog -> detail -> back keeps
   // the already-painted pages. Soft expiry starts a silent origin refresh;
   // retained values are visual continuity, never purchase authority.
@@ -258,6 +274,9 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   void _handlePublicInventoryInvalidated() {
     _loadToken++;
     _activeCatalogPageSignature = null;
+    _priceListToken++;
+    _priceListStale = true;
+    _priceListFailed = false;
     // Invalidation means "refresh now", not "erase what the customer sees".
     // Mark retained values stale so the next load reaches the origin while the
     // current grid, facets and geometry remain stable.
@@ -806,6 +825,10 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     if (_loadedCategoriesTenantId != null &&
         _loadedCategoriesTenantId != tenantId) {
       setState(() {
+        _priceListToken++;
+        _priceListProducts = null;
+        _priceListTenantId = null;
+        _priceListFailed = false;
         _loadedCategoriesTenantId = null;
         _categoryTree = const [];
         _allCategoriesById = const {};
@@ -2171,8 +2194,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     }
   }
 
-  String _normalizeForSearch(String input) =>
-      normalizePublicCatalogText(input);
+  String _normalizeForSearch(String input) => normalizePublicCatalogText(input);
 
   List<String> _tokenizeSearchQuery(String query) {
     final normalized = _normalizeForSearch(query);
@@ -2612,6 +2634,150 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     );
   }
 
+  /// `/servicios` when the editor laid it out as a price list.
+  WebsiteCatalogPresentation? get _servicesPriceList {
+    if (_selectedCategoryId != null ||
+        _selectedProductType != ProductType.service) {
+      return null;
+    }
+    final presentation = _presentationRegistry.forCatalogRoot(
+      WebsiteCatalogRoot.services,
+    );
+    return presentation?.isPriceList == true ? presentation : null;
+  }
+
+  /// Every published service, a page of 100 (the read's ceiling) at a time,
+  /// as the HTML storefront reads them; a reply for another store or an
+  /// older request is dropped.
+  Future<void> _loadPriceListProducts() async {
+    if (_priceListLoading) return;
+    _priceListLoading = true;
+    final token = ++_priceListToken;
+    _priceListStale = false;
+    try {
+      final tenantId = await resolvePublicStoreTenantId(context);
+      if (!mounted || token != _priceListToken) return;
+      // Read for the store whose categories name the groups; another one
+      // (a switch on its way) waits for the page's own reload.
+      if (tenantId == null || tenantId != _loadedCategoriesTenantId) {
+        throw StateError('La tienda no es la de las categorías');
+      }
+      final service = context.read<PublicInventoryService>();
+      final policy = _readVisibilityPolicy();
+      final products = <Product>[];
+      // Up to the listing's own total; fifty pages only guard against a
+      // total that never ends.
+      for (var offset = 0; offset < 5000; offset += 100) {
+        final page = await service.getProductPageForTenant(
+          tenantId: tenantId,
+          productType: ProductType.service,
+          policy: policy,
+          sortBy: 'name',
+          limit: 100,
+          offset: offset,
+        );
+        if (!mounted || token != _priceListToken) return;
+        products.addAll(page.products);
+        if (page.products.length < 100 || products.length >= page.totalCount) {
+          break;
+        }
+      }
+      setState(() {
+        _priceListProducts = products;
+        _priceListTenantId = tenantId;
+      });
+    } catch (error) {
+      debugPrint('[ProductCatalogPage] Price list failed: $error');
+      // The paged grid still answers.
+      if (mounted && token == _priceListToken) {
+        setState(() => _priceListFailed = true);
+      }
+    } finally {
+      _priceListLoading = false;
+      // An invalidation that arrived during this read reloads now.
+      if (mounted && _priceListStale) setState(() {});
+    }
+  }
+
+  /// The price list, a loading page while its services arrive, or null for
+  /// the grid when they could not be read.
+  Widget? _buildServicesPriceList(WebsiteCatalogPresentation presentation) {
+    final storeId = _loadedCategoriesTenantId;
+    if (_priceListFailed || storeId == null) return null;
+    final current = _priceListTenantId == storeId;
+    if (_priceListProducts == null || _priceListStale || !current) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _loadPriceListProducts();
+      });
+    }
+    // Another store's services are never shown while this one's load.
+    final products = current ? _priceListProducts : null;
+    if (products == null) return const FullPageLoading();
+    final categories = <String, Category>{
+      for (final category in _loadedCategories ?? const <Category>[])
+        if (category.id != null) category.id!: category,
+    };
+    int compareCategories(String a, String b) {
+      final byOrder = (categories[a]?.sortOrder ?? 0).compareTo(
+        categories[b]?.sortOrder ?? 0,
+      );
+      return byOrder != 0
+          ? byOrder
+          : (categories[a]?.name ?? '').compareTo(categories[b]?.name ?? '');
+    }
+
+    final pathById = {
+      for (final product in products) product.id: publicProductPath(product),
+    };
+    final plans = categories[presentation.plansCategoryId];
+    final websiteService = context.read<WebsiteService>();
+    return CatalogPriceListView(
+      presentation: presentation,
+      list: CatalogPriceList.build(
+        items: [
+          for (final product in products)
+            if (PublicCommerceProductProjection.fromProduct(product)
+                case final commerce)
+              CatalogPriceItem(
+                id: product.id,
+                name: commerce.title,
+                price: commerce.price,
+                categoryId: product.categoryId?.trim() ?? '',
+                description: CatalogPriceItem.descriptionOf(
+                  websiteDescription: product.websiteDescription,
+                  description: product.description,
+                ),
+              ),
+        ],
+        compareCategories: compareCategories,
+        categoryLabel: (id) => categories[id]?.name ?? '',
+        plansCategoryId: presentation.plansCategoryId,
+      ),
+      title: presentation.heroTitle.trim().isNotEmpty
+          ? presentation.heroTitle.trim()
+          : 'Servicios',
+      intro: presentation.heroDescription.trim(),
+      heroImageUrl: presentation.heroImageUrl.trim(),
+      rootLabel: 'Servicios',
+      plansTitle: plans?.name ?? '',
+      plansIntro: plans?.description?.trim() ?? '',
+      rating: presentation.heroShowRating
+          ? CatalogPriceListRating.read(websiteService.getSetting)
+          : null,
+      initialQuery: _searchQuery,
+      itemHref: (id) => pathById[id],
+      onOpenItem: (id) {
+        final path = pathById[id];
+        if (path != null) PublicStoreLayout.navigateToHref(context, path);
+      },
+      isActionShown: (href) =>
+          PublicStoreLayout.isHrefPubliclyEligible(context, href),
+      onAction: (action) =>
+          PublicStoreLayout.navigateToHref(context, action.href),
+      onHome: () => PublicStoreLayout.navigateToHref(context, '/'),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context); // Required for AutomaticKeepAliveClientMixin
@@ -2654,6 +2820,10 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     }
     if (_catalogLoadError != null) {
       return _buildCatalogLoadErrorState();
+    }
+    if (_servicesPriceList case final presentation?) {
+      final priceList = _buildServicesPriceList(presentation);
+      if (priceList != null) return priceList;
     }
 
     return Container(

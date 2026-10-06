@@ -33,7 +33,7 @@ con `WebsiteLinkValueEditor` y se audita en `Estructura > Destinos y enlaces`
 
 | Espacio | Dueño de |
 |---|---|
-| `Catálogo web` (Productos, Categorías, Portada) | qué productos y categorías salen en la web; la colección destacada; la presentación de cada categoría (slug, portada, migas, facetas) |
+| `Catálogo web` (Productos, Categorías, Portada) | qué productos y categorías salen en la web; la colección destacada; la presentación de cada categoría (slug, portada, migas, facetas) y el diseño de `/servicios`: grilla o lista de precios con portada, botón, calificación, planes y cierre (2026-10-06, [catálogo](catalogo-y-fichas.md)) |
 | `Estructura > Páginas` | registros de `website_pages` |
 | `Estructura > Navegación y menús` | `website_navigation` (encabezado y pie) |
 | `Estructura > Destinos y enlaces` | auditoría de a dónde lleva cada botón y menú |

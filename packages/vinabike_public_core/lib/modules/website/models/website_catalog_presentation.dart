@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'website_action.dart';
+
 /// Canonical storage key for catalog and category collection presentation.
 ///
 /// The complete registry lives in `website_settings`, so it participates in
@@ -22,19 +24,19 @@ enum WebsiteCatalogRoot { products, services }
 
 extension WebsiteCatalogRootX on WebsiteCatalogRoot {
   String get presentationId => switch (this) {
-        WebsiteCatalogRoot.products => websiteProductsCatalogPresentationId,
-        WebsiteCatalogRoot.services => websiteServicesCatalogPresentationId,
-      };
+    WebsiteCatalogRoot.products => websiteProductsCatalogPresentationId,
+    WebsiteCatalogRoot.services => websiteServicesCatalogPresentationId,
+  };
 
   String get routeSegment => switch (this) {
-        WebsiteCatalogRoot.products => 'productos',
-        WebsiteCatalogRoot.services => 'servicios',
-      };
+    WebsiteCatalogRoot.products => 'productos',
+    WebsiteCatalogRoot.services => 'servicios',
+  };
 
   String get label => switch (this) {
-        WebsiteCatalogRoot.products => 'Todos los productos',
-        WebsiteCatalogRoot.services => 'Todos los servicios',
-      };
+    WebsiteCatalogRoot.products => 'Todos los productos',
+    WebsiteCatalogRoot.services => 'Todos los servicios',
+  };
 
   static WebsiteCatalogRoot? fromPresentationId(String raw) {
     return WebsiteCatalogRoot.values
@@ -49,16 +51,16 @@ extension WebsiteCatalogHeroSizeX on WebsiteCatalogHeroSize {
   String get storageValue => name;
 
   String get label => switch (this) {
-        WebsiteCatalogHeroSize.compact => 'Compacto',
-        WebsiteCatalogHeroSize.standard => 'Estándar',
-        WebsiteCatalogHeroSize.immersive => 'Inmersivo',
-      };
+    WebsiteCatalogHeroSize.compact => 'Compacto',
+    WebsiteCatalogHeroSize.standard => 'Estándar',
+    WebsiteCatalogHeroSize.immersive => 'Inmersivo',
+  };
 
   double get desktopHeight => switch (this) {
-        WebsiteCatalogHeroSize.compact => 250,
-        WebsiteCatalogHeroSize.standard => 360,
-        WebsiteCatalogHeroSize.immersive => 500,
-      };
+    WebsiteCatalogHeroSize.compact => 250,
+    WebsiteCatalogHeroSize.standard => 360,
+    WebsiteCatalogHeroSize.immersive => 500,
+  };
 
   static WebsiteCatalogHeroSize fromStorage(Object? raw) =>
       WebsiteCatalogHeroSize.values.firstWhere(
@@ -73,9 +75,9 @@ extension WebsiteCatalogHeroAlignmentX on WebsiteCatalogHeroAlignment {
   String get storageValue => name;
 
   String get label => switch (this) {
-        WebsiteCatalogHeroAlignment.left => 'Izquierda',
-        WebsiteCatalogHeroAlignment.center => 'Centro',
-      };
+    WebsiteCatalogHeroAlignment.left => 'Izquierda',
+    WebsiteCatalogHeroAlignment.center => 'Centro',
+  };
 
   static WebsiteCatalogHeroAlignment fromStorage(Object? raw) =>
       WebsiteCatalogHeroAlignment.values.firstWhere(
@@ -90,10 +92,10 @@ extension WebsiteMegaMenuContentAlignmentX on WebsiteMegaMenuContentAlignment {
   String get storageValue => name;
 
   String get label => switch (this) {
-        WebsiteMegaMenuContentAlignment.top => 'Arriba',
-        WebsiteMegaMenuContentAlignment.center => 'Centro',
-        WebsiteMegaMenuContentAlignment.bottom => 'Abajo',
-      };
+    WebsiteMegaMenuContentAlignment.top => 'Arriba',
+    WebsiteMegaMenuContentAlignment.center => 'Centro',
+    WebsiteMegaMenuContentAlignment.bottom => 'Abajo',
+  };
 
   static WebsiteMegaMenuContentAlignment fromStorage(Object? raw) =>
       WebsiteMegaMenuContentAlignment.values.firstWhere(
@@ -108,24 +110,68 @@ extension WebsiteCatalogGridDensityX on WebsiteCatalogGridDensity {
   String get storageValue => name;
 
   String get label => switch (this) {
-        WebsiteCatalogGridDensity.editorial => 'Editorial',
-        WebsiteCatalogGridDensity.balanced => 'Equilibrada',
-        WebsiteCatalogGridDensity.compact => 'Compacta',
-      };
+    WebsiteCatalogGridDensity.editorial => 'Editorial',
+    WebsiteCatalogGridDensity.balanced => 'Equilibrada',
+    WebsiteCatalogGridDensity.compact => 'Compacta',
+  };
 
   String get description => switch (this) {
-        WebsiteCatalogGridDensity.editorial =>
-          'Imágenes grandes y hasta 4 columnas.',
-        WebsiteCatalogGridDensity.balanced =>
-          'Buen equilibrio entre imagen y cantidad.',
-        WebsiteCatalogGridDensity.compact => 'Más productos visibles por fila.',
-      };
+    WebsiteCatalogGridDensity.editorial =>
+      'Imágenes grandes y hasta 4 columnas.',
+    WebsiteCatalogGridDensity.balanced =>
+      'Buen equilibrio entre imagen y cantidad.',
+    WebsiteCatalogGridDensity.compact => 'Más productos visibles por fila.',
+  };
 
   static WebsiteCatalogGridDensity fromStorage(Object? raw) =>
       WebsiteCatalogGridDensity.values.firstWhere(
         (value) => value.storageValue == raw?.toString(),
         orElse: () => WebsiteCatalogGridDensity.balanced,
       );
+}
+
+/// How a collection lays out its items: the product grid, or a price list
+/// grouped by each item's own category (the services carta: name and price,
+/// one line each), with an optional row of plan cards above it.
+enum WebsiteCatalogLayout { grid, priceList }
+
+extension WebsiteCatalogLayoutX on WebsiteCatalogLayout {
+  String get storageValue => switch (this) {
+    WebsiteCatalogLayout.grid => 'grid',
+    WebsiteCatalogLayout.priceList => 'price_list',
+  };
+
+  String get label => switch (this) {
+    WebsiteCatalogLayout.grid => 'Cuadrícula',
+    WebsiteCatalogLayout.priceList => 'Lista de precios',
+  };
+
+  String get description => switch (this) {
+    WebsiteCatalogLayout.grid => 'Tarjetas con foto, filtros y páginas.',
+    WebsiteCatalogLayout.priceList =>
+      'Todos en una página, agrupados por categoría, con su precio.',
+  };
+
+  static WebsiteCatalogLayout fromStorage(Object? raw) =>
+      WebsiteCatalogLayout.values.firstWhere(
+        (value) => value.storageValue == raw?.toString(),
+        orElse: () => WebsiteCatalogLayout.grid,
+      );
+}
+
+/// An action stored inside a presentation (`{label, to, variant}`, the
+/// shape `WebsiteActionValue.toJson` writes), or `null` without a label or a
+/// destination.
+WebsiteActionValue? _actionFromJson(Object? raw) {
+  if (raw is! Map) return null;
+  final label = (raw['label'] ?? '').toString().trim();
+  final href = (raw['to'] ?? raw['href'] ?? '').toString().trim();
+  if (label.isEmpty || href.isEmpty) return null;
+  return WebsiteActionValue(
+    label: label,
+    href: href,
+    variant: WebsiteActionVariant.fromStorage(raw['variant']?.toString()),
+  );
 }
 
 /// Facets currently backed by the public catalog query contract.
@@ -139,11 +185,11 @@ extension WebsiteCatalogFacetX on WebsiteCatalogFacet {
   String get storageValue => name;
 
   String get label => switch (this) {
-        WebsiteCatalogFacet.categories => 'Categorías',
-        WebsiteCatalogFacet.availability => 'Disponibilidad',
-        WebsiteCatalogFacet.brand => 'Marca',
-        WebsiteCatalogFacet.price => 'Precio',
-      };
+    WebsiteCatalogFacet.categories => 'Categorías',
+    WebsiteCatalogFacet.availability => 'Disponibilidad',
+    WebsiteCatalogFacet.brand => 'Marca',
+    WebsiteCatalogFacet.price => 'Precio',
+  };
 
   static WebsiteCatalogFacet? tryFromStorage(Object? raw) {
     final value = raw?.toString();
@@ -185,21 +231,29 @@ class WebsiteCatalogPresentation {
     this.showBreadcrumbs = true,
     this.showSubcategories = true,
     List<WebsiteCatalogFacet> facets = defaultFacets,
-  })  : megaMenuOverlay = megaMenuOverlay.clamp(0.0, 0.85),
-        megaMenuCardOverlay = megaMenuCardOverlay.clamp(0.0, 0.65),
-        megaMenuOverviewWidth = megaMenuOverviewWidth
-            .clamp(minMegaMenuOverviewWidth, maxMegaMenuOverviewWidth)
-            .toDouble(),
-        slug = websiteCategorySlug(slug),
-        slugAliases = List<String>.unmodifiable(
-          _normalizeCategorySlugAliases(
-            slugAliases,
-            currentSlug: websiteCategorySlug(slug),
-          ),
-        ),
-        facets = List<WebsiteCatalogFacet>.unmodifiable(
-          _dedupeFacets(facets),
-        );
+    this.layout = WebsiteCatalogLayout.grid,
+    this.heroAction,
+    this.heroShowRating = false,
+    String plansCategoryId = '',
+    String closingTitle = '',
+    String closingText = '',
+    this.closingAction,
+  }) : plansCategoryId = plansCategoryId.trim(),
+       closingTitle = closingTitle.trim(),
+       closingText = closingText.trim(),
+       megaMenuOverlay = megaMenuOverlay.clamp(0.0, 0.85),
+       megaMenuCardOverlay = megaMenuCardOverlay.clamp(0.0, 0.65),
+       megaMenuOverviewWidth = megaMenuOverviewWidth
+           .clamp(minMegaMenuOverviewWidth, maxMegaMenuOverviewWidth)
+           .toDouble(),
+       slug = websiteCategorySlug(slug),
+       slugAliases = List<String>.unmodifiable(
+         _normalizeCategorySlugAliases(
+           slugAliases,
+           currentSlug: websiteCategorySlug(slug),
+         ),
+       ),
+       facets = List<WebsiteCatalogFacet>.unmodifiable(_dedupeFacets(facets));
 
   static const List<WebsiteCatalogFacet> defaultFacets = [
     WebsiteCatalogFacet.categories,
@@ -233,6 +287,31 @@ class WebsiteCatalogPresentation {
   final bool showSubcategories;
   final List<WebsiteCatalogFacet> facets;
 
+  /// Grid or price list ([WebsiteCatalogLayout]).
+  final WebsiteCatalogLayout layout;
+
+  /// The hero's button (the shared action: label, destination, look).
+  final WebsiteActionValue? heroAction;
+
+  /// Whether the hero shows the store's Google rating (synced reviews).
+  final bool heroShowRating;
+
+  /// A category of this collection shown as plan cards above the price list
+  /// (its items' price and «qué incluye»), and left out of the list.
+  final String plansCategoryId;
+
+  /// The closing band after the list: a title, a line and a button.
+  final String closingTitle;
+  final String closingText;
+  final WebsiteActionValue? closingAction;
+
+  bool get isPriceList => layout == WebsiteCatalogLayout.priceList;
+
+  bool get hasClosing =>
+      closingTitle.isNotEmpty ||
+      closingText.isNotEmpty ||
+      closingAction != null;
+
   /// Canonical registry identity. For legacy category records this is the real
   /// category UUID; root records use one of the reserved catalog owner IDs.
   String get ownerId => categoryId;
@@ -244,9 +323,7 @@ class WebsiteCatalogPresentation {
 
   bool get isCategoryPresentation => !isCatalogRoot;
 
-  factory WebsiteCatalogPresentation.catalogRoot(
-    WebsiteCatalogRoot root,
-  ) {
+  factory WebsiteCatalogPresentation.catalogRoot(WebsiteCatalogRoot root) {
     return WebsiteCatalogPresentation(
       categoryId: root.presentationId,
       slug: root.routeSegment,
@@ -279,13 +356,15 @@ class WebsiteCatalogPresentation {
     return WebsiteCatalogPresentation(
       categoryId: json['category_id']?.toString() ?? '',
       slug: websiteCategorySlug(json['slug']?.toString() ?? ''),
-      slugAliases: (json['slug_aliases'] as List?)
+      slugAliases:
+          (json['slug_aliases'] as List?)
               ?.map((value) => value.toString())
               .toList(growable: false) ??
           const <String>[],
       heroSize: WebsiteCatalogHeroSizeX.fromStorage(json['hero_size']),
-      heroAlignment:
-          WebsiteCatalogHeroAlignmentX.fromStorage(json['hero_alignment']),
+      heroAlignment: WebsiteCatalogHeroAlignmentX.fromStorage(
+        json['hero_alignment'],
+      ),
       gridDensity: WebsiteCatalogGridDensityX.fromStorage(json['grid_density']),
       heroImageUrl: json['hero_image_url']?.toString().trim() ?? '',
       heroEyebrow: json['hero_eyebrow']?.toString().trim() ?? '',
@@ -302,7 +381,7 @@ class WebsiteCatalogPresentation {
           (json['mega_menu_card_overlay'] as num?)?.toDouble() ?? 0,
       megaMenuOverviewWidth:
           (json['mega_menu_overview_width'] as num?)?.toDouble() ??
-              defaultMegaMenuOverviewWidth,
+          defaultMegaMenuOverviewWidth,
       megaMenuContentAlignment: WebsiteMegaMenuContentAlignmentX.fromStorage(
         json['mega_menu_content_alignment'],
       ),
@@ -311,34 +390,48 @@ class WebsiteCatalogPresentation {
       // Missing means “inherit the polished defaults”. An explicit empty list
       // means that the administrator deliberately hid every optional facet.
       facets: hasFacets ? facets : defaultFacets,
+      layout: WebsiteCatalogLayoutX.fromStorage(json['layout']),
+      heroAction: _actionFromJson(json['hero_action']),
+      heroShowRating: json['hero_show_rating'] == true,
+      plansCategoryId: json['plans_category_id']?.toString() ?? '',
+      closingTitle: json['closing_title']?.toString() ?? '',
+      closingText: json['closing_text']?.toString() ?? '',
+      closingAction: _actionFromJson(json['closing_action']),
     ).normalizedForOwner();
   }
 
   Map<String, dynamic> toJson() => {
-        'category_id': categoryId,
-        'slug': slug,
-        'slug_aliases': slugAliases,
-        'hero_size': heroSize.storageValue,
-        'hero_alignment': heroAlignment.storageValue,
-        'grid_density': gridDensity.storageValue,
-        'hero_image_url': heroImageUrl,
-        'hero_eyebrow': heroEyebrow,
-        'hero_title': heroTitle,
-        'hero_description': heroDescription,
-        'mega_menu_image_url': megaMenuImageUrl,
-        'seo_title': seoTitle,
-        'seo_description': seoDescription,
-        'social_image_url': socialImageUrl,
-        'allow_indexing': allowIndexing,
-        'hero_overlay': heroOverlay,
-        'mega_menu_overlay': megaMenuOverlay,
-        'mega_menu_card_overlay': megaMenuCardOverlay,
-        'mega_menu_overview_width': megaMenuOverviewWidth,
-        'mega_menu_content_alignment': megaMenuContentAlignment.storageValue,
-        'show_breadcrumbs': showBreadcrumbs,
-        'show_subcategories': showSubcategories,
-        'facets': facets.map((facet) => facet.storageValue).toList(),
-      };
+    'category_id': categoryId,
+    'slug': slug,
+    'slug_aliases': slugAliases,
+    'hero_size': heroSize.storageValue,
+    'hero_alignment': heroAlignment.storageValue,
+    'grid_density': gridDensity.storageValue,
+    'hero_image_url': heroImageUrl,
+    'hero_eyebrow': heroEyebrow,
+    'hero_title': heroTitle,
+    'hero_description': heroDescription,
+    'mega_menu_image_url': megaMenuImageUrl,
+    'seo_title': seoTitle,
+    'seo_description': seoDescription,
+    'social_image_url': socialImageUrl,
+    'allow_indexing': allowIndexing,
+    'hero_overlay': heroOverlay,
+    'mega_menu_overlay': megaMenuOverlay,
+    'mega_menu_card_overlay': megaMenuCardOverlay,
+    'mega_menu_overview_width': megaMenuOverviewWidth,
+    'mega_menu_content_alignment': megaMenuContentAlignment.storageValue,
+    'show_breadcrumbs': showBreadcrumbs,
+    'show_subcategories': showSubcategories,
+    'facets': facets.map((facet) => facet.storageValue).toList(),
+    'layout': layout.storageValue,
+    'hero_action': heroAction?.toJson(),
+    'hero_show_rating': heroShowRating,
+    'plans_category_id': plansCategoryId,
+    'closing_title': closingTitle,
+    'closing_text': closingText,
+    'closing_action': closingAction?.toJson(),
+  };
 
   WebsiteCatalogPresentation copyWith({
     String? slug,
@@ -363,6 +456,15 @@ class WebsiteCatalogPresentation {
     bool? showBreadcrumbs,
     bool? showSubcategories,
     List<WebsiteCatalogFacet>? facets,
+    WebsiteCatalogLayout? layout,
+    WebsiteActionValue? heroAction,
+    bool clearHeroAction = false,
+    bool? heroShowRating,
+    String? plansCategoryId,
+    String? closingTitle,
+    String? closingText,
+    WebsiteActionValue? closingAction,
+    bool clearClosingAction = false,
   }) {
     return WebsiteCatalogPresentation(
       categoryId: categoryId,
@@ -390,6 +492,15 @@ class WebsiteCatalogPresentation {
       showBreadcrumbs: showBreadcrumbs ?? this.showBreadcrumbs,
       showSubcategories: showSubcategories ?? this.showSubcategories,
       facets: facets ?? this.facets,
+      layout: layout ?? this.layout,
+      heroAction: clearHeroAction ? null : heroAction ?? this.heroAction,
+      heroShowRating: heroShowRating ?? this.heroShowRating,
+      plansCategoryId: plansCategoryId ?? this.plansCategoryId,
+      closingTitle: closingTitle ?? this.closingTitle,
+      closingText: closingText ?? this.closingText,
+      closingAction: clearClosingAction
+          ? null
+          : closingAction ?? this.closingAction,
     );
   }
 
@@ -402,26 +513,79 @@ class WebsiteCatalogPresentation {
 
   /// Removes values that the selected owner cannot expose or consume.
   ///
-  /// Catalog roots currently own grid density, ordered facets and explicit SEO
-  /// values. This prevents imports/automation from creating hidden root hero
-  /// values that no administrator could inspect in the workspace.
+  /// Catalog roots own grid density, ordered facets, explicit SEO values and
+  /// the layout. A root laid out as a price list also owns its hero (text,
+  /// image, button, rating), its plans and its closing band, which the
+  /// workspace shows only then; a grid root has no hero, so none of those
+  /// survive there. This prevents imports/automation from creating hidden
+  /// root values that no administrator could inspect in the workspace.
   WebsiteCatalogPresentation normalizedForOwner() {
     final root = catalogRoot;
-    if (root == null) return this;
-    return WebsiteCatalogPresentation.catalogRoot(root).copyWith(
+    // A category keeps its own hero and the grid: the price list, its
+    // button, rating, plans and closing band are a catalog root's.
+    if (root == null) {
+      return isPriceList ||
+              heroAction != null ||
+              heroShowRating ||
+              plansCategoryId.isNotEmpty ||
+              hasClosing
+          ? copyWith(
+              layout: WebsiteCatalogLayout.grid,
+              clearHeroAction: true,
+              heroShowRating: false,
+              plansCategoryId: '',
+              closingTitle: '',
+              closingText: '',
+              clearClosingAction: true,
+            )
+          : this;
+    }
+    // Only the services are a price list: a product catalog of thousands of
+    // items stays a grid, and the workspace offers it nothing else.
+    final rootLayout = root == WebsiteCatalogRoot.services
+        ? layout
+        : WebsiteCatalogLayout.grid;
+    final base = WebsiteCatalogPresentation.catalogRoot(root).copyWith(
       gridDensity: gridDensity,
       facets: facets,
       seoTitle: seoTitle,
       seoDescription: seoDescription,
       socialImageUrl: socialImageUrl,
       allowIndexing: allowIndexing,
+      layout: rootLayout,
+    );
+    if (rootLayout != WebsiteCatalogLayout.priceList) return base;
+    // A button half written (a label without a destination) is no button,
+    // as it reads back.
+    return base.copyWith(
+      heroAlignment: heroAlignment,
+      heroImageUrl: heroImageUrl.trim(),
+      heroEyebrow: heroEyebrow.trim(),
+      heroTitle: heroTitle.trim(),
+      heroDescription: heroDescription.trim(),
+      heroOverlay: heroOverlay,
+      heroAction: _completeAction(heroAction),
+      heroShowRating: heroShowRating,
+      plansCategoryId: plansCategoryId.trim(),
+      closingTitle: closingTitle.trim(),
+      closingText: closingText.trim(),
+      closingAction: _completeAction(closingAction),
     );
   }
+
+  static WebsiteActionValue? _completeAction(WebsiteActionValue? action) =>
+      action == null ||
+          action.label.trim().isEmpty ||
+          action.href.trim().isEmpty
+      ? null
+      : WebsiteActionValue(
+          label: action.label.trim(),
+          href: action.href.trim(),
+          variant: action.variant,
+        );
 }
 
-List<WebsiteCatalogFacet> _dedupeFacets(
-  Iterable<WebsiteCatalogFacet> facets,
-) {
+List<WebsiteCatalogFacet> _dedupeFacets(Iterable<WebsiteCatalogFacet> facets) {
   final seen = <WebsiteCatalogFacet>{};
   return facets.where(seen.add).toList(growable: false);
 }
@@ -700,16 +864,18 @@ WebsiteCatalogGridMetrics websiteCatalogGridMetrics({
   if (width < 1320) {
     return WebsiteCatalogGridMetrics(
       crossAxisCount: density == WebsiteCatalogGridDensity.editorial ? 3 : 4,
-      childAspectRatio:
-          density == WebsiteCatalogGridDensity.editorial ? 0.76 : 0.72,
+      childAspectRatio: density == WebsiteCatalogGridDensity.editorial
+          ? 0.76
+          : 0.72,
       crossAxisSpacing: 28,
       mainAxisSpacing: 36,
     );
   }
   return WebsiteCatalogGridMetrics(
     crossAxisCount: density == WebsiteCatalogGridDensity.compact ? 5 : 4,
-    childAspectRatio:
-        density == WebsiteCatalogGridDensity.editorial ? 0.82 : 0.75,
+    childAspectRatio: density == WebsiteCatalogGridDensity.editorial
+        ? 0.82
+        : 0.75,
     crossAxisSpacing: density == WebsiteCatalogGridDensity.compact ? 26 : 34,
     mainAxisSpacing: 40,
   );

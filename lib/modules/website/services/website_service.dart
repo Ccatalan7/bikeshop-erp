@@ -1950,7 +1950,9 @@ class WebsiteService extends ChangeNotifier {
     if (root != null) {
       if (!presentation.hasSamePersistedValue(normalized)) {
         throw Exception(
-          'El catálogo raíz sólo admite densidad, filtros y SEO configurables.',
+          'El catálogo raíz sólo guarda lo que su editor muestra: diseño, '
+          'densidad, filtros, SEO y, en lista de precios, su portada, planes '
+          'y cierre.',
         );
       }
     }

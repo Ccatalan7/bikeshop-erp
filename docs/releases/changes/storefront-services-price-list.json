@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "storefront-services-price-list",
+  "scope": "release",
+  "platforms": [
+    "web"
+  ],
+  "title": "Los servicios del taller, con su precio en una página",
+  "summary": "En vinabike.cl, /servicios muestra todos los servicios con su precio en una sola página: las mantenciones como planes con lo que incluye cada una y el resto agrupado por tipo, con un buscador y el botón para agendar por WhatsApp.",
+  "items": [
+    "Lo eliges y lo editas en Catálogo web, Categorías, Presentación, Todos los servicios: diseño, portada, botón, calificación de Google, planes y cierre."
+  ],
+  "evidence": [
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_catalog_price_list.dart",
+      "sha256": "e1bf3301324b40735613359bfbc08b93d6677c98c5b6d1c25c5ae1f6d90a834f"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_catalog_presentation.dart",
+      "sha256": "a9673d6dfa4fdcdfa40eb53a6c1fd33d0b16bad2e147ef11dbeeb58b3e4d66c8"
+    },
+    {
+      "path": "services/storefront_html/lib/src/catalog_price_list_view.dart",
+      "sha256": "a5f7fb4204d73e7fe178f36d8d7c958470de5499ea21c55e09e39a9be8d60f3f"
+    },
+    {
+      "path": "services/storefront_html/lib/src/catalog_page_model.dart",
+      "sha256": "7f51665545384f037cd2428ae6877f770540f2fffa63329a40a31e38642af780"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_handler.dart",
+      "sha256": "8856449da0dd94447541e636709353525062f0502624d11f298a560aac67c957"
+    },
+    {
+      "path": "services/storefront_html/lib/storefront_html.dart",
+      "sha256": "7b279b4d3ad4cf44133e885c9dc9e51230f6279d963f5d114005f6aa19811590"
+    },
+    {
+      "path": "lib/public_store/widgets/catalog_price_list_view.dart",
+      "sha256": "689cf699aa6049d4e6b3af62fb1b0534f9900151c80698488386068596c452ff"
+    },
+    {
+      "path": "lib/public_store/pages/product_catalog_page.dart",
+      "sha256": "7474aefd99b6bb618b38a659469898614708cc1d36ffe0426fee83edc5b82f34"
+    },
+    {
+      "path": "lib/modules/website/pages/product_website_visibility_page.dart",
+      "sha256": "0292a294cebde2f9dec00d97dfce4fd382ff094d26d13a2ecf4ac699d819d453"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_action_editor.dart",
+      "sha256": "8755e9df72c5e9826ef1683cc33f4194883d100a84ae504b8d531eb8698eacd6"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_link_value_editor.dart",
+      "sha256": "df1ad44c306901efd5e4ad1c5571d8366999267125afd4ba97b24697765f6861"
+    },
+    {
+      "path": "lib/modules/website/services/website_service.dart",
+      "sha256": "0ad024da586ce948c8c7d34f038f3d29fdc868885d3477ce2a43819d265936d0"
+    },
+    {
+      "path": "services/storefront_html/lib/src/public_reads.dart",
+      "sha256": "05f62f2372baeecbc1b4c50c66b0620f41f55864ab760d9043d5dcdaeb6b320d"
+    }
+  ]
+}

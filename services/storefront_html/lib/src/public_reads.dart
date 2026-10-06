@@ -35,6 +35,7 @@ class CatalogRequest {
     required this.limit,
     required this.offset,
     this.services = false,
+    this.facets = true,
   });
 
   final List<String>? categoryIds;
@@ -53,6 +54,10 @@ class CatalogRequest {
 
   /// `/servicios`: the workshop's services instead of the products.
   final bool services;
+
+  /// Whether to read the filters too (facets and option names); a price
+  /// list reads only its rows.
+  final bool facets;
 }
 
 /// The listing (`get_public_products_faceted_v2`), its rows completed like
@@ -495,10 +500,12 @@ class SupabasePublicReads implements PublicReads {
         'p_limit': request.limit,
         'p_offset': request.offset,
       }).then((rows) => _completeRows(list(rows))),
-      _rpc('get_public_product_facets_v2', filters),
-      _rpc('get_public_spec_option_labels_v1', {
-        'p_tenant_id': config.tenantId,
-      }),
+      if (request.facets) ...[
+        _rpc('get_public_product_facets_v2', filters),
+        _rpc('get_public_spec_option_labels_v1', {
+          'p_tenant_id': config.tenantId,
+        }),
+      ],
     ]);
     final listing =
         results[0]!
@@ -511,8 +518,8 @@ class SupabasePublicReads implements PublicReads {
       products: listing.rows,
       brandRows: listing.brands,
       thumbnails: listing.thumbnails,
-      facets: list(results[1]),
-      optionLabels: list(results[2]),
+      facets: request.facets ? list(results[1]) : const <Object?>[],
+      optionLabels: request.facets ? list(results[2]) : const <Object?>[],
     );
   }
 

@@ -56,11 +56,11 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
-      "sha256": "bc9ca778259ccf91ad76fb3a55925de84abbd3539609fe779f260a5ecc0d4f9f"
+      "sha256": "8856449da0dd94447541e636709353525062f0502624d11f298a560aac67c957"
     },
     {
       "path": "services/storefront_html/lib/src/public_reads.dart",
-      "sha256": "f32f6dcc4c749946ef52fd57239a173e61ec2f37a350bd1ad42e5ce40a447204"
+      "sha256": "05f62f2372baeecbc1b4c50c66b0620f41f55864ab760d9043d5dcdaeb6b320d"
     },
     {
       "path": "services/storefront_html/lib/src/material_icons.dart",
@@ -68,7 +68,7 @@
     },
     {
       "path": "services/storefront_html/lib/storefront_html.dart",
-      "sha256": "190863fe59556bea4b3e7776440b59f3a505c18d2bc687e45f1a175d4f048574"
+      "sha256": "7b279b4d3ad4cf44133e885c9dc9e51230f6279d963f5d114005f6aa19811590"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_fonts.dart",

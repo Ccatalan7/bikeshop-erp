@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "storefront-services-price-list-app",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android"
+  ],
+  "title": "Diseña la página de servicios desde el ERP",
+  "summary": "En Catálogo web, Categorías, Presentación, «Todos los servicios» tiene el diseño «Lista de precios»: eliges la portada, el botón, la calificación de Google, la categoría de los planes y el cierre, y lo ves en la vista previa antes de guardar.",
+  "items": [
+    "La tienda que se abre dentro del ERP muestra /servicios igual que vinabike.cl."
+  ],
+  "evidence": [
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_catalog_price_list.dart",
+      "sha256": "e1bf3301324b40735613359bfbc08b93d6677c98c5b6d1c25c5ae1f6d90a834f"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_catalog_presentation.dart",
+      "sha256": "a9673d6dfa4fdcdfa40eb53a6c1fd33d0b16bad2e147ef11dbeeb58b3e4d66c8"
+    },
+    {
+      "path": "lib/public_store/widgets/catalog_price_list_view.dart",
+      "sha256": "689cf699aa6049d4e6b3af62fb1b0534f9900151c80698488386068596c452ff"
+    },
+    {
+      "path": "lib/public_store/pages/product_catalog_page.dart",
+      "sha256": "7474aefd99b6bb618b38a659469898614708cc1d36ffe0426fee83edc5b82f34"
+    },
+    {
+      "path": "lib/modules/website/pages/product_website_visibility_page.dart",
+      "sha256": "0292a294cebde2f9dec00d97dfce4fd382ff094d26d13a2ecf4ac699d819d453"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_action_editor.dart",
+      "sha256": "8755e9df72c5e9826ef1683cc33f4194883d100a84ae504b8d531eb8698eacd6"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_link_value_editor.dart",
+      "sha256": "df1ad44c306901efd5e4ad1c5571d8366999267125afd4ba97b24697765f6861"
+    },
+    {
+      "path": "lib/modules/website/services/website_service.dart",
+      "sha256": "0ad024da586ce948c8c7d34f038f3d29fdc868885d3477ce2a43819d265936d0"
+    }
+  ]
+}

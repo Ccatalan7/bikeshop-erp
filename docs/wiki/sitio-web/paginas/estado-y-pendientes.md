@@ -28,7 +28,8 @@ Se actualiza cada vez que algo cambia de estado; cada línea con su fecha.
   2026-10-06); hoy no hay ninguna publicada. Un bloque con fondo, borde o
   relleno propio todavía lo dibuja Flutter (página entera, también en la
   portada).
-- Sitemap: 1.315 URL. La tienda lista 539 productos con stock y 59 servicios.
+- Sitemap: 1.315 URL. La tienda lista 539 productos con stock y 62 servicios
+  (2026-10-06, con los 7 servicios que estaban guardados como producto).
 - Checkout con Mercado Pago y transferencia funcionando (desde el 2026-09-23).
 - Página instantánea en fichas, categorías y portada; semántica para rastreadores.
 - Merchant: suspendido («Información engañosa»), en período de bloqueo.
@@ -68,6 +69,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 | 2026-09-24 | Imágenes pesadas: campaña de cámaras en PNG de 2 MB, WebP de 312 KB en la grilla de categorías | [rendimiento](rendimiento.md) |
 | 2026-09-26 | Login `/cuenta/login` sin la dirección «Sendero» | [portal](portal-de-clientes.md) |
 | 2026-10-06 | **Rediseño de los bloques del editor:** propuesta en Claude Design con datos reales (cifras, carta del taller, mantenciones, reseñas, galería, equipo, preguntas, marcas, llamado); espera el visto bueno del dueño, y la tercera tanda de la fase 5a espera eso | `docs/architecture/storefront-html-migration-plan.md` |
+| 2026-10-06 | **Rediseñar las páginas de configuración del editor** (dueño: «they are a fucking mess… it's really difficult to use»): cómo se organizan, presentan y navegan; hoy `Catálogo web` son pestañas dentro de pestañas (`Categorías > Presentación > Todos los servicios`), una columna angosta y larga de controles y una lista que mezcla los dos catálogos con 140 categorías. Va junto con la **comparación contra Shopify y Wix** que pidió el mismo día: plantillas, controles, funciones y **controles sobre el bloque mismo**, no sólo en el panel. Primero la propuesta en Claude Design con datos reales; se construye con su visto bueno | [editor](editor-del-sitio.md) |
 | 2026-10-06 | **Lienzo del editor en HTML:** el sitio real en un visor web dentro del ERP (requisito 1 del dueño); los chats se quedan en Flutter (7 conversaciones del portal en total, 0 en 90 días) | `docs/architecture/storefront-html-migration-plan.md` |
 | 2026-10-06 | Pasar al HTML el canje de los enlaces de Auth (vuelta de Google en `/auth/callback`, confirmar con `code`), hoy en Flutter: el verificador PKCE ya está donde ambos lo leen | `docs/architecture/storefront-html-migration-plan.md` |
 | 2026-10-03 | Código muerto: `banners_management_page.dart`, `content_management_page.dart`, `customer_account_page.dart`, `premium_dashboard_widgets.dart`, ruta `/cuenta/mensajes`; clave `header_nav_links` | [editor](editor-del-sitio.md) |

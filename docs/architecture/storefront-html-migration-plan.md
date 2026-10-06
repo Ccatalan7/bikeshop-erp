@@ -793,6 +793,30 @@ A 800 px Flutter pone tres tarjetas de 141 px y el HTML dos: es la decisión
 de la fase 1 (Flutter mide la ventana, el HTML la columna de resultados), no
 un descuido; se mantiene.
 
+### `/servicios` como lista de precios (2026-10-06)
+
+El dueño aprobó la propuesta de `/servicios` del lienzo de Design («dale,
+arregla el catálogo y construye la página»). No es una página del editor ni un
+bloque: es un **diseño de la raíz de servicios** en «Catálogo web»
+(`layout: price_list` en `catalog_category_presentations_v1`), con portada,
+planes, la lista por grupo y cierre (detalle en
+`docs/wiki/sitio-web/paginas/catalogo-y-fichas.md` y en el registro de
+superficies). Las reglas son del núcleo (`website_catalog_price_list.dart`) y
+las dibujan el servidor y Flutter; no hay medición a píxel contra Flutter
+porque Flutter no tenía esta página: el HTML es el diseño aprobado y el
+widget Flutter lo sigue.
+
+Dos decisiones con costo:
+
+- **La lista lee todo, de a 100** (el techo de `get_public_products_faceted_v2`),
+  hasta 1.000. Para no sumar una espera, `/servicios` pide la primera página
+  de 100 **junto** con el shell, antes de saber si es lista de precios; si es
+  grilla esa lectura se descarta y pide la suya (una lectura de más sólo en
+  ese caso).
+- **El HTML se mide con un Supabase falso local** que lee producción y pone
+  la presentación en la respuesta del shell (`fake_page_sb.mjs` en el
+  scratchpad): así se ve el diseño antes de guardarlo en el editor.
+
 ## Fase 2e: `/contacto` (2026-10-05)
 
 Tampoco es una página de bloques: Flutter dibuja `ContactPage` con los datos

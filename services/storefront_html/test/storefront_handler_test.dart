@@ -391,6 +391,38 @@ class _FakeReads implements PublicReads {
   Future<String?> productIdForAlias(String path) async => aliases[path];
 }
 
+/// A catalog that answers each page of its rows, as the listing read does.
+class _PagedReads extends _FakeReads {
+  _PagedReads({super.shell, super.products});
+
+  @override
+  Future<CatalogReads> catalog(CatalogRequest request) async {
+    catalogRequests.add(request);
+    return (
+      products: products.skip(request.offset).take(request.limit).toList(),
+      brandRows: brandRows,
+      thumbnails: thumbnails,
+      facets: facets,
+      optionLabels: const <Object?>[],
+    );
+  }
+}
+
+/// A listing read that fails at once while the shell is still on its way.
+class _FailingListingReads extends _FakeReads {
+  _FailingListingReads({super.shell});
+
+  @override
+  Future<ShellReads> shell() async {
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    return super.shell();
+  }
+
+  @override
+  Future<CatalogReads> catalog(CatalogRequest request) =>
+      Future.error(PublicReadException('down'));
+}
+
 const _config = StorefrontConfig(
   supabaseUrl: 'https://example.invalid',
   publishableKey: 'test',
@@ -970,7 +1002,11 @@ void main() {
         final html = await response.readAsString();
         expect(response.statusCode, 200);
         // The services, not the products, under the snapshot's own title.
-        expect(fake.catalogRequests.single.services, isTrue);
+        // The first page a price list would need is read with the shell; a
+        // grid then reads its own.
+        expect(fake.catalogRequests, hasLength(2));
+        expect(fake.catalogRequests.last.services, isTrue);
+        expect(fake.catalogRequests.last.limit, 20);
         expect(
           html,
           contains(
@@ -1005,6 +1041,286 @@ void main() {
         expect(html, contains('href="/servicios"'));
       },
     );
+
+    group('services as a price list', () {
+      const plans = 'c0000000-0000-4000-8000-0000000000a1';
+      const brakes = 'c0000000-0000-4000-8000-0000000000a2';
+      Map<String, dynamic> shell({Map<String, Object?> look = const {}}) {
+        final shell = _shell();
+        shell['settings'] = {
+          ...shell['settings'] as Map,
+          'google_reviews_rating': '4.4',
+          'google_reviews_total': '36',
+          websiteCatalogPresentationsSettingKey: jsonEncode({
+            'items': [
+              {
+                'category_id': websiteServicesCatalogPresentationId,
+                'layout': 'price_list',
+                'hero_title': 'Servicios del taller',
+                'hero_description': 'Con su precio, IVA incluido.',
+                'hero_action': {
+                  'label': 'Agendar por WhatsApp',
+                  'href': 'https://wa.me/56998357797',
+                },
+                'hero_show_rating': true,
+                'plans_category_id': plans,
+                'closing_title': '¿No ves lo que necesitas?',
+                'closing_action': {
+                  'label': 'Escribir por WhatsApp',
+                  'href': 'https://wa.me/56998357797',
+                },
+                ...look,
+              },
+            ],
+          }),
+        };
+        shell['categories'] = [
+          ...shell['categories'] as List,
+          {
+            'id': plans,
+            'name': 'Mantenciones',
+            'parent_id': null,
+            'full_path': 'Servicio / Mantenciones',
+            'show_on_website': false,
+            'description': 'Para dejar la bici al día de una vez.',
+            'sort_order': 1,
+          },
+          {
+            'id': brakes,
+            'name': 'Frenos',
+            'parent_id': null,
+            'full_path': 'Servicio / Frenos',
+            'show_on_website': false,
+            'sort_order': 2,
+          },
+        ];
+        return shell;
+      }
+
+      Map<String, dynamic> service(
+        String name,
+        String sku,
+        num price,
+        String? category, {
+        String description = '',
+        int total = 4,
+      }) => {
+        ..._product(name: name, sku: sku),
+        'id': '6f1d2a3e-0000-4000-8000-${sku.padLeft(12, '0')}',
+        'product_type': 'service',
+        'price': price,
+        'category_id': category,
+        'description': description,
+        'total_count': total,
+      };
+
+      final services = [
+        service(
+          'Mantención Full',
+          '2',
+          70000,
+          plans,
+          description:
+              '1) Desarme completo\n2) Mantención de transmisión\n'
+              'Limpieza profunda de:\n- Cadena\n- Piñón\n3) Centrado',
+        ),
+        service(
+          'Mantención Básica',
+          '1',
+          24990,
+          plans,
+          description: '1) Cambio de piolas\n2) Regulación de frenos',
+        ),
+        service('Purgado de frenos', '3', 18000, brakes),
+        service('Regulación de frenos', '4', 4000, brakes),
+      ];
+
+      test('draws the hero, the plans, every service by its group and the '
+          'closing band, as the editor set them', () async {
+        final fake = _PagedReads(shell: shell(), products: services);
+        final response = await _get(fake, '/servicios');
+        final html = await response.readAsString();
+        expect(response.statusCode, 200);
+        // One read of a hundred, in name order, whatever page is asked.
+        expect(fake.catalogRequests, hasLength(1));
+        expect(fake.catalogRequests.single.limit, 100);
+        expect(fake.catalogRequests.single.offset, 0);
+        expect(fake.catalogRequests.single.sortBy, 'name');
+        expect(fake.catalogRequests.single.services, isTrue);
+        expect(html, contains('<h1>Servicios del taller</h1>'));
+        expect(html, contains('Con su precio, IVA incluido.'));
+        expect(html, contains('href="https://wa.me/56998357797"'));
+        expect(html, contains('4,4'));
+        expect(html, contains('36 reseñas en Google'));
+        // The plans category's own name and description, cheapest first;
+        // the plan that includes the most is the one marked.
+        expect(html, contains('<h2>Mantenciones</h2>'));
+        expect(html, contains('Para dejar la bici al día de una vez.'));
+        expect(
+          html.indexOf('Mantención Básica</a>'),
+          lessThan(html.indexOf('Mantención Full</a>')),
+        );
+        expect(RegExp('class="pl-plan hi"').allMatches(html), hasLength(1));
+        expect(
+          RegExp(
+            r'class="pl-plan hi">\s*<div class="pl-plan-top">\s*<h3>\s*'
+            r'<a href="([^"]+)">Mantención Full</a>\s*</h3>\s*'
+            r'<span class="pl-pill">La más completa</span>',
+          ).firstMatch(html)?.group(1),
+          publicProductPath(Product.fromJson(services[0])),
+        );
+        expect(
+          html,
+          contains(
+            'Mantención de transmisión<span class="pl-inc-d">Limpieza '
+            'profunda de: cadena, piñón</span>',
+          ),
+        );
+        // Every other service under its group, cheapest first, priced.
+        expect(html, contains('<h2>Todos los servicios</h2>'));
+        expect(html, contains('<h3>Frenos</h3>'));
+        expect(html, contains('2 servicios'));
+        expect(
+          html.indexOf('Regulación de frenos</span>'),
+          lessThan(html.indexOf('Purgado de frenos</span>')),
+        );
+        expect(html, contains(r'<span class="pl-price">$ 4.000</span>'));
+        expect(html, contains('<h2>¿No ves lo que necesitas?</h2>'));
+        expect(html, contains('Escribir por WhatsApp'));
+        // The page is still the services catalog Google reads.
+        expect(
+          html,
+          contains('href="https://vinabike.cl/servicios" rel="canonical"'),
+        );
+        expect(html, contains('"@type":"Service"'));
+        expect(html, isNot(contains('Mostrando')));
+      });
+
+      test('reads past the hundred the listing answers at a time', () async {
+        final many = [
+          for (var index = 0; index < 150; index++)
+            service(
+              'Servicio $index',
+              '${100 + index}',
+              1000 + index,
+              brakes,
+              total: 150,
+            ),
+        ];
+        final fake = _PagedReads(shell: shell(), products: many);
+        final html = await (await _get(fake, '/servicios')).readAsString();
+        expect(fake.catalogRequests.map((request) => request.offset), [0, 100]);
+        expect(html, contains('150 servicios'));
+        expect(html, contains('Servicio 149'));
+      });
+
+      test(
+        'a search only hides rows: every service stays in the page, the plans '
+        'included',
+        () async {
+          final fake = _PagedReads(shell: shell(), products: services);
+          final html = await (await _get(
+            fake,
+            '/servicios?q=regulacion',
+          )).readAsString();
+          // The read is the whole list, without the search or the facets.
+          final read = fake.catalogRequests.single;
+          expect(read.searchQuery, isEmpty);
+          expect(read.facets, isFalse);
+          expect(html, contains('value="regulacion"'));
+          expect(
+            RegExp(
+              r'<li data-pl-name="Purgado de frenos" hidden',
+            ).hasMatch(html),
+            isTrue,
+          );
+          expect(
+            RegExp(
+              r'<li data-pl-name="Regulación de frenos" hidden',
+            ).hasMatch(html),
+            isFalse,
+          );
+          expect(html, contains('1 servicio<'));
+          expect(html, contains('Mantención Full</a>'));
+          expect(RegExp(r'<p class="pl-empty" hidden').hasMatch(html), isTrue);
+
+          final none = await (await _get(
+            _PagedReads(shell: shell(), products: services),
+            '/servicios?q=cadena',
+          )).readAsString();
+          expect(
+            RegExp(r'<p class="pl-empty" data-pl-none').hasMatch(none),
+            isTrue,
+          );
+          expect(none, contains('No hay servicios con ese nombre.'));
+        },
+      );
+
+      test(
+        "the buttons follow the store's links, an anchor in the page",
+        () async {
+          final fake = _PagedReads(
+            shell: shell(
+              look: const {
+                'hero_action': {'label': 'Ver frenos', 'href': '#g-frenos'},
+                'closing_action': {
+                  'label': 'Ver tienda',
+                  'href': '/tienda/productos',
+                },
+              },
+            ),
+            products: services,
+          );
+          final html = await (await _get(fake, '/servicios')).readAsString();
+          expect(html, contains('href="#g-frenos"'));
+          expect(html, isNot(contains('href="/#g-frenos"')));
+          expect(html, contains('href="/productos"'));
+          expect(html, isNot(contains('/tienda/')));
+        },
+      );
+
+      test('a listing that fails while the shell is read is a 503, not an '
+          'unhandled error', () async {
+        final response = await _get(
+          _FailingListingReads(shell: shell()),
+          '/servicios',
+        );
+        expect(response.statusCode, 503);
+      });
+
+      test('Google gets every service of the list', () async {
+        final many = [
+          for (var index = 0; index < 40; index++)
+            service(
+              'Servicio $index',
+              '${300 + index}',
+              1000,
+              brakes,
+              total: 40,
+            ),
+        ];
+        final html = await (await _get(
+          _PagedReads(shell: shell(), products: many),
+          '/servicios',
+        )).readAsString();
+        expect(RegExp('"@type":"Service"').allMatches(html), hasLength(40));
+      });
+
+      test(
+        'a grid root is the paged catalog, without the price list',
+        () async {
+          final fake = _PagedReads(
+            shell: shell(look: const {'layout': 'grid'}),
+            products: services,
+          );
+          final html = await (await _get(fake, '/servicios')).readAsString();
+          expect(fake.catalogRequests.last.limit, 20);
+          expect(html, contains('<h1 class="trail">SERVICIOS</h1>'));
+          expect(html, isNot(contains('pl-plan')));
+          expect(html, isNot(contains('<h1>Servicios del taller</h1>')));
+        },
+      );
+    });
 
     test('cards use the commercial title and the canonical brand', () async {
       final fake = _FakeReads(
@@ -2187,6 +2503,10 @@ void main() {
       policyPageCss(WebsiteThemeRoles.resolve((_) => '')),
     );
     balanced('homePageCss', homePageCss(WebsiteThemeRoles.resolve((_) => '')));
+    balanced(
+      'catalogPriceListCss',
+      catalogPriceListCss(WebsiteThemeRoles.resolve((_) => '')),
+    );
     balanced(
       'editorPageEmptyCss',
       editorPageEmptyCss(WebsiteThemeRoles.resolve((_) => '')),

@@ -5,7 +5,11 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../public_store/services/public_inventory_service.dart';
+import 'package:vinabike_public_core/modules/website/models/website_action.dart';
+import 'package:vinabike_public_core/modules/website/models/website_catalog_price_list.dart';
+
 import '../../../public_store/widgets/catalog_collection_presentation.dart';
+import '../../../public_store/widgets/catalog_price_list_view.dart';
 import '../../inventory/models/inventory_models.dart';
 import '../../inventory/pages/product_form_page.dart';
 import '../../inventory/widgets/product_editor_dialog.dart';
@@ -19,6 +23,9 @@ import '../../../shared/widgets/operational_status_badge.dart';
 import '../models/website_catalog_presentation.dart';
 import '../services/website_service.dart';
 import '../services/website_catalog_availability_loader.dart';
+import '../theme/website_resolved_theme.dart';
+import '../theme/website_theme_builder.dart';
+import '../widgets/website_action_editor.dart';
 import '../widgets/website_admin_ui.dart';
 import '../widgets/website_media_picker.dart';
 
@@ -293,6 +300,8 @@ class _ProductWebsiteVisibilityPageState
   final _presentationDescriptionController = TextEditingController();
   final _presentationSeoTitleController = TextEditingController();
   final _presentationSeoDescriptionController = TextEditingController();
+  final _presentationClosingTitleController = TextEditingController();
+  final _presentationClosingTextController = TextEditingController();
   final _horizontalScrollController = ScrollController();
   final _verticalScrollController = ScrollController();
   final _supabase = Supabase.instance.client;
@@ -353,6 +362,10 @@ class _ProductWebsiteVisibilityPageState
     _presentationSeoTitleController.addListener(_handlePresentationTextChanged);
     _presentationSeoDescriptionController
         .addListener(_handlePresentationTextChanged);
+    _presentationClosingTitleController
+        .addListener(_handlePresentationTextChanged);
+    _presentationClosingTextController
+        .addListener(_handlePresentationTextChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadProducts());
   }
 
@@ -406,6 +419,12 @@ class _ProductWebsiteVisibilityPageState
     _presentationSeoDescriptionController
       ..removeListener(_handlePresentationTextChanged)
       ..dispose();
+    _presentationClosingTitleController
+      ..removeListener(_handlePresentationTextChanged)
+      ..dispose();
+    _presentationClosingTextController
+      ..removeListener(_handlePresentationTextChanged)
+      ..dispose();
     _horizontalScrollController.dispose();
     _verticalScrollController.dispose();
     super.dispose();
@@ -432,7 +451,7 @@ class _ProductWebsiteVisibilityPageState
           .from('product_categories')
           .select(
             'id,name,full_path,parent_id,level,description,image_url,'
-            'show_on_website,is_active',
+            'show_on_website,is_active,sort_order',
           )
           .eq('tenant_id', tenantId)
           .eq('is_active', true)
@@ -635,8 +654,12 @@ class _ProductWebsiteVisibilityPageState
     final baseline = _presentationBaseline;
     final draft = _presentationDraft;
     if (baseline == null || draft == null) return false;
+    // A catalog root saves only what it can show (`normalizedForOwner`):
+    // the hero of a grid, or a button half written, is no change.
     return _presentationRemovalPending ||
-        !draft.hasSamePersistedValue(baseline);
+        !draft
+            .normalizedForOwner()
+            .hasSamePersistedValue(baseline.normalizedForOwner());
   }
 
   void _handlePresentationTextChanged() {
@@ -654,6 +677,15 @@ class _ProductWebsiteVisibilityPageState
         heroEyebrow: _presentationEyebrowController.text.trim(),
         heroTitle: _presentationTitleController.text.trim(),
         heroDescription: _presentationDescriptionController.text.trim(),
+      );
+    } else {
+      // The price list's texts; a grid root drops them when it saves.
+      next = next.copyWith(
+        heroEyebrow: _presentationEyebrowController.text.trim(),
+        heroTitle: _presentationTitleController.text.trim(),
+        heroDescription: _presentationDescriptionController.text.trim(),
+        closingTitle: _presentationClosingTitleController.text.trim(),
+        closingText: _presentationClosingTextController.text.trim(),
       );
     }
     if (next.hasSamePersistedValue(current)) return;
@@ -697,6 +729,8 @@ class _ProductWebsiteVisibilityPageState
     _presentationDescriptionController.text = effective.heroDescription;
     _presentationSeoTitleController.text = effective.seoTitle;
     _presentationSeoDescriptionController.text = effective.seoDescription;
+    _presentationClosingTitleController.text = effective.closingTitle;
+    _presentationClosingTextController.text = effective.closingText;
     _syncingPresentationText = false;
     setState(() {
       _presentationOwnerId = target.id;
@@ -792,7 +826,7 @@ class _ProductWebsiteVisibilityPageState
       return;
     }
 
-    final next = current.copyWith(slug: slug);
+    final next = current.copyWith(slug: slug).normalizedForOwner();
     final wasRemoval = _presentationRemovalPending;
     setState(() => _isSavingPresentation = true);
     try {
@@ -861,6 +895,8 @@ class _ProductWebsiteVisibilityPageState
     _presentationDescriptionController.text = fallback.heroDescription;
     _presentationSeoTitleController.text = fallback.seoTitle;
     _presentationSeoDescriptionController.text = fallback.seoDescription;
+    _presentationClosingTitleController.text = fallback.closingTitle;
+    _presentationClosingTextController.text = fallback.closingText;
     _syncingPresentationText = false;
     setState(() {
       _presentationDraft = fallback;
@@ -1932,7 +1968,7 @@ class _ProductWebsiteVisibilityPageState
               ),
               Tooltip(
                 message: target.isRoot
-                    ? 'Esta configuración controla la grilla y los filtros de '
+                    ? 'Esta configuración controla el diseño y los filtros de '
                         '${target.publicPath}; no cambia qué artículos son públicos.'
                     : 'Estos ajustes no cambian el nombre, la jerarquía ni los '
                         'productos de la categoría.',
@@ -1974,8 +2010,9 @@ class _ProductWebsiteVisibilityPageState
                         ),
                         const SizedBox(height: 3),
                         Text(
-                          'La ruta es canónica. Aquí defines SEO, densidad y '
-                          'filtros para Editar, Preview y el sitio público.',
+                          'La ruta es canónica. Aquí defines su diseño, SEO y '
+                          'lo que muestra, para Editar, Preview y el sitio '
+                          'público.',
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
                           ),
@@ -1988,30 +2025,39 @@ class _ProductWebsiteVisibilityPageState
             )
           else
             _buildCategoryPresentationControls(theme, target, draft),
+          if (target.root == WebsiteCatalogRoot.services) ...[
+            const SizedBox(height: 16),
+            _buildRootLayoutControls(theme, draft),
+          ],
           const SizedBox(height: 16),
           _buildPresentationSeoEditor(theme, target, draft),
-          const SizedBox(height: 18),
-          Text('Catálogo', style: _presentationSectionStyle(theme)),
-          const SizedBox(height: 10),
-          _buildPresentationDropdown<WebsiteCatalogGridDensity>(
-            theme,
-            label: 'Densidad del grid',
-            value: draft.gridDensity,
-            values: WebsiteCatalogGridDensity.values,
-            labelFor: (value) => value.label,
-            onChanged: (value) => _updatePresentationDraft(
-              (current) => current.copyWith(gridDensity: value),
+          if (target.isRoot && draft.isPriceList) ...[
+            const SizedBox(height: 18),
+            ..._buildPriceListControls(theme, draft),
+          ] else ...[
+            const SizedBox(height: 18),
+            Text('Catálogo', style: _presentationSectionStyle(theme)),
+            const SizedBox(height: 10),
+            _buildPresentationDropdown<WebsiteCatalogGridDensity>(
+              theme,
+              label: 'Densidad del grid',
+              value: draft.gridDensity,
+              values: WebsiteCatalogGridDensity.values,
+              labelFor: (value) => value.label,
+              onChanged: (value) => _updatePresentationDraft(
+                (current) => current.copyWith(gridDensity: value),
+              ),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            draft.gridDensity.description,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+            const SizedBox(height: 4),
+            Text(
+              draft.gridDensity.description,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
             ),
-          ),
-          const SizedBox(height: 14),
-          _buildPresentationFacetEditor(theme, draft),
+            const SizedBox(height: 14),
+            _buildPresentationFacetEditor(theme, draft),
+          ],
           const SizedBox(height: 18),
           Divider(color: theme.colorScheme.outlineVariant),
           const SizedBox(height: 10),
@@ -2519,6 +2565,340 @@ class _ProductWebsiteVisibilityPageState
     );
   }
 
+  /// How a catalog root is laid out: the paged grid with its filters, or
+  /// the price list (only the services offer it).
+  Widget _buildRootLayoutControls(
+    ThemeData theme,
+    WebsiteCatalogPresentation draft,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('Diseño', style: _presentationSectionStyle(theme)),
+        const SizedBox(height: 10),
+        SegmentedButton<WebsiteCatalogLayout>(
+          segments: [
+            for (final layout in WebsiteCatalogLayout.values)
+              ButtonSegment(
+                value: layout,
+                label: Text(layout.label),
+                icon: Icon(
+                  layout == WebsiteCatalogLayout.grid
+                      ? Icons.grid_view_rounded
+                      : Icons.format_list_bulleted_rounded,
+                  size: 18,
+                ),
+              ),
+          ],
+          selected: {draft.layout},
+          showSelectedIcon: false,
+          onSelectionChanged: (selection) => _updatePresentationDraft(
+            (current) => current.copyWith(layout: selection.first),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          draft.layout.description,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// The categories that hold published-or-not services: where a price
+  /// list's plans can come from.
+  List<_WebsiteCategoryVisibilityOption> get _serviceCategories {
+    final counts = <String, int>{};
+    for (final product in _products) {
+      if (!product.isService) continue;
+      final id = product.categoryId?.trim() ?? '';
+      if (id.isNotEmpty) counts[id] = (counts[id] ?? 0) + 1;
+    }
+    return _websiteCategories
+        .where((category) => counts.containsKey(category.id))
+        .toList(growable: false);
+  }
+
+  int _serviceCount(String categoryId) => _products
+      .where(
+        (product) =>
+            product.isService && product.categoryId?.trim() == categoryId,
+      )
+      .length;
+
+  List<Widget> _buildPriceListControls(
+    ThemeData theme,
+    WebsiteCatalogPresentation draft,
+  ) {
+    final help = theme.textTheme.bodySmall?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    final rating =
+        CatalogPriceListRating.read(context.read<WebsiteService>().getSetting);
+    final planCategories = _serviceCategories;
+    // The saved choice is always the control's value: a category left
+    // without services (or deleted) stays visible with its warning instead
+    // of reading «Sin planes» while it is still saved.
+    final plansId = draft.plansCategoryId;
+    final savedWithoutServices = plansId.isNotEmpty &&
+        !planCategories.any((category) => category.id == plansId);
+    final savedCategory = _websiteCategories
+        .where((category) => category.id == plansId)
+        .firstOrNull;
+    Widget actionEditor({
+      required String title,
+      required WebsiteActionValue? value,
+      required ValueChanged<WebsiteActionValue> onChanged,
+      required VoidCallback onRemove,
+      required String keyPrefix,
+    }) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLowest,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: theme.colorScheme.outlineVariant),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            WebsiteActionEditor(
+              title: title,
+              value: value ?? const WebsiteActionValue(label: '', href: ''),
+              darkStyle: theme.brightness == Brightness.dark,
+              showVariant: true,
+              keyPrefix: keyPrefix,
+              onChanged: onChanged,
+            ),
+            if (value != null) ...[
+              const SizedBox(height: 4),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: onRemove,
+                  icon: const Icon(Icons.close_rounded, size: 17),
+                  label: const Text('Quitar botón'),
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
+    return [
+      Text('Portada', style: _presentationSectionStyle(theme)),
+      const SizedBox(height: 4),
+      Text(
+        'Sin imagen, la portada usa el color principal del sitio, '
+        'oscurecido.',
+        style: help,
+      ),
+      const SizedBox(height: 10),
+      WebsiteImagePickerField(
+        currentUrl: draft.heroImageUrl.isEmpty ? null : draft.heroImageUrl,
+        enableBackgroundRemoval: false,
+        onChanged: (url) => _updatePresentationDraft(
+          (current) => current.copyWith(heroImageUrl: url.trim()),
+        ),
+      ),
+      if (draft.heroImageUrl.isNotEmpty) ...[
+        const SizedBox(height: 4),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            onPressed: () => _updatePresentationDraft(
+              (current) => current.copyWith(heroImageUrl: ''),
+            ),
+            icon: const Icon(Icons.hide_image_outlined, size: 17),
+            label: const Text('Quitar imagen'),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Oscurecimiento · ${(draft.heroOverlay * 100).round()}%',
+          style: theme.textTheme.labelMedium,
+        ),
+        Slider(
+          value: draft.heroOverlay,
+          min: 0,
+          max: 0.78,
+          divisions: 13,
+          label: '${(draft.heroOverlay * 100).round()}%',
+          semanticFormatterCallback: (value) => '${(value * 100).round()}%',
+          onChanged: (value) => _updatePresentationDraft(
+            (current) => current.copyWith(heroOverlay: value),
+          ),
+        ),
+      ],
+      const SizedBox(height: 10),
+      TextField(
+        key: const ValueKey<String>('catalog-price-list-eyebrow'),
+        controller: _presentationEyebrowController,
+        decoration: const InputDecoration(
+          labelText: 'Antetítulo opcional',
+          hintText: 'Sin texto adicional',
+          border: OutlineInputBorder(),
+        ),
+      ),
+      const SizedBox(height: 10),
+      TextField(
+        key: const ValueKey<String>('catalog-price-list-title'),
+        controller: _presentationTitleController,
+        decoration: const InputDecoration(
+          labelText: 'Título',
+          hintText: 'Servicios',
+          helperText: 'Vacío dice «Servicios».',
+          border: OutlineInputBorder(),
+        ),
+      ),
+      const SizedBox(height: 10),
+      TextField(
+        key: const ValueKey<String>('catalog-price-list-description'),
+        controller: _presentationDescriptionController,
+        minLines: 2,
+        maxLines: 4,
+        decoration: const InputDecoration(
+          labelText: 'Texto bajo el título',
+          hintText: 'Con su precio, IVA incluido.',
+          border: OutlineInputBorder(),
+        ),
+      ),
+      const SizedBox(height: 10),
+      _buildPresentationDropdown<WebsiteCatalogHeroAlignment>(
+        theme,
+        label: 'Alineación',
+        value: draft.heroAlignment,
+        values: WebsiteCatalogHeroAlignment.values,
+        labelFor: (value) => value.label,
+        onChanged: (value) => _updatePresentationDraft(
+          (current) => current.copyWith(heroAlignment: value),
+        ),
+      ),
+      const SizedBox(height: 12),
+      actionEditor(
+        title: 'Botón de la portada',
+        keyPrefix: 'catalog-price-list-hero-action',
+        value: draft.heroAction,
+        onChanged: (value) => _updatePresentationDraft(
+          (current) => current.copyWith(heroAction: value),
+        ),
+        onRemove: () => _updatePresentationDraft(
+          (current) => current.copyWith(clearHeroAction: true),
+        ),
+      ),
+      const SizedBox(height: 4),
+      Text(
+        'El mismo botón va en cada tarjeta de plan.',
+        style: help,
+      ),
+      const SizedBox(height: 6),
+      SwitchListTile.adaptive(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('Calificación de Google'),
+        subtitle: Text(
+          rating == null
+              ? 'No hay calificación sincronizada: no se muestra.'
+              : '${rating.label} de 5'
+                  '${rating.totalLabel.isEmpty ? '' : ' · ${rating.totalLabel}'}',
+        ),
+        value: draft.heroShowRating,
+        onChanged: (value) => _updatePresentationDraft(
+          (current) => current.copyWith(heroShowRating: value),
+        ),
+      ),
+      const SizedBox(height: 14),
+      Text('Planes', style: _presentationSectionStyle(theme)),
+      const SizedBox(height: 4),
+      Text(
+        'Los servicios de esta categoría salen como tarjetas con su precio y '
+        'lo que incluyen, leído de su descripción («1) …», «2) …»). El '
+        'resto va en la lista, agrupado por su categoría.',
+        style: help,
+      ),
+      const SizedBox(height: 10),
+      DropdownButtonFormField<String>(
+        initialValue: plansId,
+        isExpanded: true,
+        decoration: const InputDecoration(
+          labelText: 'Categoría de los planes',
+          border: OutlineInputBorder(),
+        ),
+        items: [
+          const DropdownMenuItem(value: '', child: Text('Sin planes')),
+          for (final category in planCategories)
+            DropdownMenuItem(
+              value: category.id,
+              child: Text(
+                '${category.label} · ${_serviceCount(category.id)}',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          if (savedWithoutServices)
+            DropdownMenuItem(
+              value: plansId,
+              child: Text(
+                savedCategory == null
+                    ? 'Categoría que ya no existe'
+                    : '${savedCategory.label} · sin servicios',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+        ],
+        onChanged: (value) => _updatePresentationDraft(
+          (current) => current.copyWith(plansCategoryId: value ?? ''),
+        ),
+      ),
+      if (savedWithoutServices) ...[
+        const SizedBox(height: 6),
+        Text(
+          'Esta categoría no tiene servicios: la página no muestra planes. '
+          'Elige otra o «Sin planes».',
+          style: help?.copyWith(color: theme.colorScheme.error),
+        ),
+      ],
+      const SizedBox(height: 18),
+      Text('Cierre', style: _presentationSectionStyle(theme)),
+      const SizedBox(height: 4),
+      Text('La banda al final de la página. Sin texto, no sale.', style: help),
+      const SizedBox(height: 10),
+      TextField(
+        key: const ValueKey<String>('catalog-price-list-closing-title'),
+        controller: _presentationClosingTitleController,
+        decoration: const InputDecoration(
+          labelText: 'Título del cierre',
+          hintText: '¿No ves lo que necesitas?',
+          border: OutlineInputBorder(),
+        ),
+      ),
+      const SizedBox(height: 10),
+      TextField(
+        key: const ValueKey<String>('catalog-price-list-closing-text'),
+        controller: _presentationClosingTextController,
+        minLines: 2,
+        maxLines: 4,
+        decoration: const InputDecoration(
+          labelText: 'Texto del cierre',
+          border: OutlineInputBorder(),
+        ),
+      ),
+      const SizedBox(height: 12),
+      actionEditor(
+        title: 'Botón del cierre',
+        keyPrefix: 'catalog-price-list-closing-action',
+        value: draft.closingAction,
+        onChanged: (value) => _updatePresentationDraft(
+          (current) => current.copyWith(closingAction: value),
+        ),
+        onRemove: () => _updatePresentationDraft(
+          (current) => current.copyWith(clearClosingAction: true),
+        ),
+      ),
+    ];
+  }
+
   TextStyle? _presentationSectionStyle(ThemeData theme) =>
       theme.textTheme.labelLarge?.copyWith(
         fontWeight: FontWeight.w800,
@@ -2945,77 +3325,146 @@ class _ProductWebsiteVisibilityPageState
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  if (!target.isRoot)
-                    CatalogCollectionPresentationHeader(
-                      presentation: draft,
-                      title: title,
-                      description: description,
-                      imageUrl: imageUrl,
-                      compact: true,
-                      breadcrumbs: [
-                        CatalogCollectionNavigationItem(
-                          id: WebsiteCatalogRoot.products.presentationId,
-                          label: 'Productos',
-                        ),
-                        for (var index = 0;
-                            index < target.pathParts.length;
-                            index++)
+                  if (target.isRoot && draft.normalizedForOwner().isPriceList)
+                    _buildPriceListPreview(
+                      draft.normalizedForOwner(),
+                      eligibleProducts,
+                    )
+                  else ...[
+                    if (!target.isRoot)
+                      CatalogCollectionPresentationHeader(
+                        presentation: draft,
+                        title: title,
+                        description: description,
+                        imageUrl: imageUrl,
+                        compact: true,
+                        breadcrumbs: [
                           CatalogCollectionNavigationItem(
-                            id: 'preview-breadcrumb-$index',
-                            label: target.pathParts[index],
-                            selected: index == target.pathParts.length - 1,
+                            id: WebsiteCatalogRoot.products.presentationId,
+                            label: 'Productos',
                           ),
-                      ],
-                      subcategories: subcategories
-                          .map(
-                            (item) => CatalogCollectionNavigationItem(
-                              id: item.id,
-                              label: item.shortLabel,
+                          for (var index = 0;
+                              index < target.pathParts.length;
+                              index++)
+                            CatalogCollectionNavigationItem(
+                              id: 'preview-breadcrumb-$index',
+                              label: target.pathParts[index],
+                              selected: index == target.pathParts.length - 1,
                             ),
-                          )
-                          .toList(growable: false),
-                    ),
-                  Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        final showSidebar = constraints.maxWidth >= 660;
-                        final grid = _buildPresentationProductGridPreview(
-                          theme,
-                          draft: draft,
-                          products: products,
-                          totalCount: eligibleProducts.length,
-                        );
-                        if (!showSidebar) {
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                        ],
+                        subcategories: subcategories
+                            .map(
+                              (item) => CatalogCollectionNavigationItem(
+                                id: item.id,
+                                label: item.shortLabel,
+                              ),
+                            )
+                            .toList(growable: false),
+                      ),
+                    Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final showSidebar = constraints.maxWidth >= 660;
+                          final grid = _buildPresentationProductGridPreview(
+                            theme,
+                            draft: draft,
+                            products: products,
+                            totalCount: eligibleProducts.length,
+                          );
+                          if (!showSidebar) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _buildPresentationFacetPreview(theme, draft),
+                                const SizedBox(height: 22),
+                                grid,
+                              ],
+                            );
+                          }
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _buildPresentationFacetPreview(theme, draft),
-                              const SizedBox(height: 22),
-                              grid,
+                              SizedBox(
+                                width: 190,
+                                child: _buildPresentationFacetPreview(
+                                    theme, draft),
+                              ),
+                              const SizedBox(width: 30),
+                              Expanded(child: grid),
                             ],
                           );
-                        }
-                        return Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            SizedBox(
-                              width: 190,
-                              child:
-                                  _buildPresentationFacetPreview(theme, draft),
-                            ),
-                            const SizedBox(width: 30),
-                            Expanded(child: grid),
-                          ],
-                        );
-                      },
+                        },
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// `/servicios` as a price list, drawn by the store's own widget in the
+  /// site's theme, from the services the public rules let through.
+  Widget _buildPriceListPreview(
+    WebsiteCatalogPresentation presentation,
+    List<_WebsiteProductVisibilityRow> products,
+  ) {
+    final categories = {
+      for (final category in _websiteCategories) category.id: category,
+    };
+    int compareCategories(String a, String b) {
+      final byOrder = (categories[a]?.sortOrder ?? 0).compareTo(
+        categories[b]?.sortOrder ?? 0,
+      );
+      return byOrder != 0
+          ? byOrder
+          : (categories[a]?.shortLabel ?? '').compareTo(
+              categories[b]?.shortLabel ?? '',
+            );
+    }
+
+    final websiteService = context.read<WebsiteService>();
+    final plans = categories[presentation.plansCategoryId];
+    return Theme(
+      data: WebsiteThemeBuilder.build(
+        base: Theme.of(context),
+        resolved: WebsiteResolvedTheme.resolve(websiteService.getSetting),
+      ),
+      child: CatalogPriceListView(
+        presentation: presentation,
+        list: CatalogPriceList.build(
+          items: [
+            for (final product in products)
+              CatalogPriceItem(
+                id: product.id,
+                name: product.name,
+                price: product.price,
+                categoryId: product.categoryId?.trim() ?? '',
+                description: CatalogPriceItem.descriptionOf(
+                  websiteDescription: product.websiteDescription,
+                  description: product.description,
+                ),
+              ),
+          ],
+          compareCategories: compareCategories,
+          categoryLabel: (id) => categories[id]?.shortLabel ?? '',
+          plansCategoryId: presentation.plansCategoryId,
+        ),
+        title: presentation.heroTitle.isNotEmpty
+            ? presentation.heroTitle
+            : 'Servicios',
+        intro: presentation.heroDescription,
+        heroImageUrl: presentation.heroImageUrl,
+        rootLabel: 'Servicios',
+        plansTitle: plans?.shortLabel ?? '',
+        plansIntro: plans?.description ?? '',
+        rating: presentation.heroShowRating
+            ? CatalogPriceListRating.read(websiteService.getSetting)
+            : null,
       ),
     );
   }
@@ -6036,6 +6485,7 @@ class _WebsiteCategoryVisibilityOption {
     required this.level,
     required this.description,
     required this.imageUrl,
+    this.sortOrder = 0,
   });
 
   final String id;
@@ -6045,6 +6495,9 @@ class _WebsiteCategoryVisibilityOption {
   final int level;
   final String description;
   final String imageUrl;
+
+  /// The catalog's order (`sort_order`, then the name), as the store groups.
+  final int sortOrder;
 
   List<String> get pathParts => label
       .split('/')
@@ -6072,6 +6525,7 @@ class _WebsiteCategoryVisibilityOption {
       level: (json['level'] as num?)?.toInt() ?? 0,
       description: json['description']?.toString().trim() ?? '',
       imageUrl: json['image_url']?.toString().trim() ?? '',
+      sortOrder: (json['sort_order'] as num?)?.toInt() ?? 0,
     );
   }
 
@@ -6084,6 +6538,7 @@ class _WebsiteCategoryVisibilityOption {
       level: level,
       description: description,
       imageUrl: imageUrl,
+      sortOrder: sortOrder,
     );
   }
 }

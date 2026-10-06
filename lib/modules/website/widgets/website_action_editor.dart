@@ -20,6 +20,7 @@ class WebsiteActionEditor extends StatefulWidget {
     this.dense = true,
     this.showVariant = false,
     this.asyncBinding,
+    this.keyPrefix,
   });
 
   final WebsiteActionValue value;
@@ -31,6 +32,10 @@ class WebsiteActionEditor extends StatefulWidget {
 
   /// Exact authority shared by every asynchronous child of this action.
   final WebsiteAsyncFieldBinding? asyncBinding;
+
+  /// Names the label field (`<prefix>-label`) where one surface holds more
+  /// than one action, so a test or an agent finds each by identity.
+  final String? keyPrefix;
 
   @override
   State<WebsiteActionEditor> createState() => _WebsiteActionEditorState();
@@ -189,6 +194,9 @@ class _WebsiteActionEditorState extends State<WebsiteActionEditor> {
             return KeyEventResult.ignored;
           },
           child: TextField(
+            key: widget.keyPrefix == null
+                ? null
+                : ValueKey<String>('${widget.keyPrefix}-label'),
             controller: _labelController,
             focusNode: _labelFocusNode,
             style: TextStyle(

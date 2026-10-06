@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:jaspr/dom.dart';
 import 'package:jaspr/server.dart';
 import 'package:shelf/shelf.dart' show Middleware;
+import 'package:vinabike_public_core/modules/website/models/website_catalog_presentation.dart';
 import 'package:vinabike_public_core/modules/website/models/website_catalog_query.dart';
 import 'package:vinabike_public_core/public_store/models/public_policy_content.dart';
 import 'package:vinabike_public_core/public_store/utils/product_url.dart';
@@ -20,6 +21,7 @@ import 'portal_page_route.dart';
 import 'portal_page_view.dart';
 import 'catalog_page_model.dart';
 import 'catalog_page_view.dart';
+import 'catalog_price_list_view.dart';
 import 'flutter_shell.dart';
 import 'home_page_model.dart';
 import 'contact_page_model.dart';
@@ -227,6 +229,41 @@ class _Route {
     if (legacy != null) {
       return _legacyCategoryCatalog(legacy, parsed, services: services);
     }
+    if (slug == null && services) {
+      // `/servicios` may be a price list, which lists every service: its
+      // first hundred rows, without filters, are read with the shell, the
+      // rest once the shell says so. A grid reads its own page instead, and
+      // that first read (rows only) is the one wasted.
+      final firstPage = reads.catalog(_listingPage(0));
+      // Listened to at once: a failure while the shell is read would
+      // otherwise be an unhandled error; awaiting it below still throws.
+      firstPage.ignore();
+      final context = _context(await reads.shell());
+      final priceList =
+          context.shell.sitePublished &&
+          context.shell.presentations
+                  .forCatalogRoot(WebsiteCatalogRoot.services)
+                  ?.isPriceList ==
+              true;
+      if (!context.shell.sitePublished) return _unpublished(context);
+      return _catalogPage(
+        context,
+        null,
+        parsed,
+        priceList
+            ? await _wholeListing(await firstPage)
+            : await reads.catalog(
+                catalogRequestFor(
+                  shell: null,
+                  categoryId: null,
+                  query: parsed.query,
+                  services: true,
+                ),
+              ),
+        dataMs: _watch.elapsedMilliseconds,
+        services: true,
+      );
+    }
     if (slug == null) {
       // The listing does not depend on the shell: read both at once.
       final results = await Future.wait<Object>([
@@ -284,6 +321,50 @@ class _Route {
     );
   }
 
+  /// One page of 100 (the read's ceiling) of every published service, in
+  /// name order and without the URL's filters: a price list shows them all
+  /// and its search only hides rows (`?q=` included), so clearing it brings
+  /// them back.
+  CatalogRequest _listingPage(int offset) => CatalogRequest(
+    categoryIds: null,
+    searchQuery: '',
+    brandIds: const [],
+    specFilters: null,
+    minPrice: null,
+    maxPrice: null,
+    onlyInStock: false,
+    sortBy: 'name',
+    limit: 100,
+    offset: offset,
+    services: true,
+    facets: false,
+  );
+
+  /// Every row of the services listing, from its [first] page on.
+  Future<CatalogReads> _wholeListing(CatalogReads first) async {
+    final products = [...first.products];
+    final thumbnails = [...first.thumbnails];
+    int total(List<Object?> rows) => rows.isNotEmpty && rows.first is Map
+        ? ((rows.first as Map)['total_count'] as num?)?.toInt() ?? rows.length
+        : 0;
+    final all = total(first.products);
+    // Up to the listing's own total; fifty pages only guard against a
+    // total that never ends.
+    for (var offset = 100; offset < all && offset < 5000; offset += 100) {
+      final next = await reads.catalog(_listingPage(offset));
+      if (next.products.isEmpty) break;
+      products.addAll(next.products);
+      thumbnails.addAll(next.thumbnails);
+    }
+    return (
+      products: products,
+      brandRows: first.brandRows,
+      thumbnails: thumbnails,
+      facets: first.facets,
+      optionLabels: first.optionLabels,
+    );
+  }
+
   Future<Response> _catalogPage(
     PageContext context,
     String? categoryId,
@@ -302,7 +383,9 @@ class _Route {
       services: services,
     );
     return _render(
-      catalogPageDocument(model),
+      model.priceList != null
+          ? catalogPriceListDocument(model)
+          : catalogPageDocument(model),
       indexable: model.meta.indexable,
       dataMs: dataMs,
     );

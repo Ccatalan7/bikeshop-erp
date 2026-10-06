@@ -1671,6 +1671,7 @@ class _WebsiteLinkConfiguratorState extends State<_WebsiteLinkConfigurator> {
               const SizedBox(height: 16),
               if (_mode == WebsiteLinkEditMode.external)
                 TextFormField(
+                  key: const ValueKey<String>('website-link-external-url'),
                   controller: _externalController,
                   decoration: _decoration('URL externa')
                       .copyWith(prefixIcon: const Icon(Icons.open_in_new)),

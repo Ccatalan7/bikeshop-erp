@@ -4,6 +4,12 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-06 — corrección — [catálogo](paginas/catalogo-y-fichas.md):
+  `/servicios` como lista de precios (portada, planes, servicios por grupo,
+  cierre), decidido en `Catálogo web > Presentación`; las 10 categorías de
+  servicios; [editor](paginas/editor-del-sitio.md) y
+  [estado](paginas/estado-y-pendientes.md) con el pendiente de rediseñar las
+  páginas de configuración del editor.
 - 2026-10-06 — corrección — [estado](paginas/estado-y-pendientes.md): los
   bloques del editor que ninguna página usa no se copian con el aspecto viejo
   de Flutter; el dueño pidió verlos rediseñados antes (propuesta en Claude

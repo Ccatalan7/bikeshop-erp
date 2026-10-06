@@ -23,6 +23,8 @@ export 'src/contact_page_css.dart';
 export 'src/contact_page_model.dart';
 export 'src/contact_page_view.dart' show contactPageDocument;
 export 'src/catalog_page_view.dart';
+export 'src/catalog_price_list_view.dart'
+    show catalogPriceListCss, catalogPriceListDocument;
 export 'src/flutter_shell.dart';
 export 'src/home_page_model.dart';
 export 'src/home_page_view.dart' show homePageDocument;

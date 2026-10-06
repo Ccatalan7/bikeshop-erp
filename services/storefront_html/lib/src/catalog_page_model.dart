@@ -1,4 +1,5 @@
 import 'package:vinabike_public_core/modules/website/models/website_catalog_presentation.dart';
+import 'package:vinabike_public_core/modules/website/models/website_catalog_price_list.dart';
 import 'package:vinabike_public_core/modules/website/models/website_catalog_query.dart';
 import 'package:vinabike_public_core/public_store/models/catalog_filter_rail_policy.dart';
 import 'package:vinabike_public_core/public_store/models/public_catalog_facets.dart';
@@ -44,6 +45,7 @@ class CatalogPageModel {
     required this.facets,
     required this.directCounts,
     required this.queryError,
+    required this.priceList,
   });
 
   factory CatalogPageModel.build({
@@ -90,7 +92,33 @@ class CatalogPageModel {
             row['brand_id'].toString(),
       ],
     );
+    // A root laid out as a price list: every row, grouped by its own
+    // category in the catalog's order, the plan category apart.
+    final priceList = categoryId == null && presentation.isPriceList
+        ? CatalogPriceList.build(
+            items: [
+              for (final row in rows)
+                if (PublicCommerceProductProjection.fromJson(row)
+                    case final commerce)
+                  CatalogPriceItem(
+                    id: commerce.id,
+                    name: commerce.title,
+                    price: commerce.price,
+                    categoryId: (row['category_id'] ?? '').toString(),
+                    description: CatalogPriceItem.descriptionOf(
+                      websiteDescription: row['website_description']
+                          ?.toString(),
+                      description: row['description']?.toString(),
+                    ),
+                  ),
+            ],
+            compareCategories: shell.compareCategories,
+            categoryLabel: shell.categoryName,
+            plansCategoryId: presentation.plansCategoryId,
+          )
+        : null;
     return CatalogPageModel._(
+      priceList: priceList,
       services: services,
       page: page,
       uri: uri,
@@ -157,6 +185,15 @@ class CatalogPageModel {
   /// Why the URL's filters were not applied, as the Flutter catalog says it.
   final String? queryError;
 
+  /// The root's price list ([WebsiteCatalogLayout.priceList]), or `null`
+  /// for the grid.
+  final CatalogPriceList? priceList;
+
+  /// Each listed item's public page.
+  late final Map<String, String> pathById = {
+    for (final product in products) product.commerce.id: product.path,
+  };
+
   StorefrontShell get shell => page.shell;
 
   int get pageCount => total == 0 ? 1 : (total / query.pageSize).ceil();
@@ -173,6 +210,9 @@ class CatalogPageModel {
 
   /// What it lists, in plural («productos», «servicios»).
   String get noun => services ? 'servicios' : 'productos';
+
+  /// One of what it lists («servicio», «producto»).
+  String get singularNoun => services ? 'servicio' : 'producto';
 
   /// The root or the category's public path.
   String get basePath => categoryId == null
@@ -376,18 +416,27 @@ class CatalogPageModel {
     final image = presentation.socialImageUrl.trim().isNotEmpty
         ? presentation.socialImageUrl.trim()
         : heroImage;
-    final listed = products.take(categoryId == null ? 24 : 10).toList();
+    // A price list is one page with every service: Google gets them all.
+    final listed = priceList != null
+        ? products
+        : products.take(categoryId == null ? 24 : 10).toList();
     return PageMeta(
-      title: currentPage > 1 ? '$title · página $currentPage' : title,
+      title: currentPage > 1 && priceList == null
+          ? '$title · página $currentPage'
+          : title,
       description: description,
       canonicalUrl: canonicalUrl,
       indexable: route.isIndexable,
       imageUrl: image,
       // The largest paint: a category's hero photo, otherwise the first card,
       // with the same candidates the card offers so it is fetched once.
-      preloadImage: categoryId != null && heroImage.isNotEmpty
+      // A price list draws no card photo: only its hero's, if it has one.
+      preloadImage:
+          (categoryId != null || priceList != null) && heroImage.isNotEmpty
           ? (src: heroImage, srcset: null, sizes: null)
-          : products.isEmpty || products.first.commerce.imageUrls.isEmpty
+          : priceList != null ||
+                products.isEmpty ||
+                products.first.commerce.imageUrls.isEmpty
           ? null
           : switch (products.first.thumbnail) {
               final copies? when copies.variants.isNotEmpty => (

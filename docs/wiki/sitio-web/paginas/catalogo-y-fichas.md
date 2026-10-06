@@ -2,9 +2,9 @@
 titulo: Catálogo, categorías y fichas de producto
 resumen: qué producto sale en la tienda y por qué, cómo se arman categorías, facetas, búsqueda y la ficha pública, y qué pasa con los agotados
 fuentes: [repositorio, google-search-central]
-archivos: [packages/vinabike_public_core/lib/shared/models/public_product_visibility_policy.dart, packages/vinabike_public_core/lib/public_store/models/public_category_route.dart, packages/vinabike_public_core/lib/public_store/models/public_catalog_facets.dart, services/storefront_html/lib/src/catalog_page_model.dart, packages/vinabike_public_core/lib/public_store/models/public_commerce_product_projection.dart, packages/vinabike_public_core/lib/public_store/models/public_product_seo_copy.dart, lib/public_store/pages/product_catalog_page.dart, lib/public_store/pages/product_detail_page.dart, packages/vinabike_public_core/lib/public_store/utils/public_spec_display.dart]
+archivos: [packages/vinabike_public_core/lib/shared/models/public_product_visibility_policy.dart, packages/vinabike_public_core/lib/public_store/models/public_category_route.dart, packages/vinabike_public_core/lib/public_store/models/public_catalog_facets.dart, services/storefront_html/lib/src/catalog_page_model.dart, packages/vinabike_public_core/lib/public_store/models/public_commerce_product_projection.dart, packages/vinabike_public_core/lib/public_store/models/public_product_seo_copy.dart, lib/public_store/pages/product_catalog_page.dart, lib/public_store/pages/product_detail_page.dart, packages/vinabike_public_core/lib/public_store/utils/public_spec_display.dart, packages/vinabike_public_core/lib/modules/website/models/website_catalog_price_list.dart, services/storefront_html/lib/src/catalog_price_list_view.dart, lib/public_store/widgets/catalog_price_list_view.dart]
 tablas: [products, product_categories, product_url_aliases, website_settings, featured_products]
-revisado: 2026-10-05
+revisado: 2026-10-06
 ---
 
 # Catálogo, categorías y fichas de producto
@@ -79,6 +79,37 @@ la misma URL con la disponibilidad correcta `[GSC]`.
   2026-10-05 faltaba en la lista y una categoría filtrada así decía
   `index,follow` (`storefront_seo_route.dart`) `[Repo]`.
 
+## Servicios: la lista de precios
+
+Desde el 2026-10-06 `/servicios` es una **lista de precios**, no la grilla de
+tarjetas con el logo repetido `[Repo]` `[Prod 2026-10-06]`. Lo decide el editor:
+`Catálogo web > Categorías > Presentación > Todos los servicios > Diseño`
+(`layout: price_list` en `catalog_category_presentations_v1`; los productos
+siempre son grilla). Muestra todo en una página:
+
+- **Portada:** título, texto, imagen opcional (sin ella, el color principal
+  oscurecido), un botón del editor y la calificación de Google sincronizada.
+- **Planes:** los servicios de la categoría elegida (`plans_category_id`, hoy
+  «Servicio / Mantenciones») como tarjetas. Lo que incluye cada una sale de su
+  **descripción numerada** (`1) …`, `2) …`; las líneas debajo de un número son
+  su detalle). Se marca «La más completa» la que incluye más; no es un
+  reclamo, es un hecho del catálogo.
+- **La lista:** el resto, agrupado por **su propia categoría** en el orden del
+  catálogo y del más barato al más caro; sin precio dice «Consultar». Se
+  filtra al escribir (sin acentos) y, sin script, con `?q=`.
+- **Cierre:** título, texto y botón, opcional.
+
+Las categorías de servicios agrupan igual las líneas del taller (G1): las 10
+subcategorías de «Servicio» (Mantenciones, Frenos, Transmisión, Cables y fundas,
+Ruedas, Dirección, Suspensión, Limpieza, Revisión general, Armado y arriendo)
+se crearon el 2026-10-06 con 66 servicios; 62 públicos. Ninguna se publica en
+la navegación: la lista las usa como grupos, no como páginas `[Prod 2026-10-06]`.
+
+La lectura pública corta en 100 filas: el servidor lee de a 100 hasta tener
+todo (`_wholeListing`); la primera página va junto con la del menú para no
+sumar una espera. Un servicio público necesita foto como un producto: los
+servicios llevan el logo de Viñabike como imagen.
+
 ## La ficha pública
 
 - Una sola proyección (`PublicCommerceProductProjection`) alimenta la ficha
@@ -122,6 +153,11 @@ la misma URL con la disponibilidad correcta `[GSC]`.
   `search_public_products`, `get_public_featured_products`.
 - Páginas: `product_catalog_page.dart`, `product_detail_page.dart`; editor:
   `product_website_visibility_page.dart`, `featured_products_page.dart`.
+- Lista de precios: reglas en el núcleo (`website_catalog_price_list.dart`:
+  grupos, planes, «qué incluye», el plan marcado, la calificación); la dibujan
+  `catalog_price_list_view.dart` del servidor HTML y el widget Flutter
+  `CatalogPriceListView` (tienda del ERP, Editar/Vista previa y la vista previa
+  del espacio «Catálogo web»).
 - Tienda HTML (fase 1, ruta oculta): `services/storefront_html/lib/src/`
   `catalog_page_model.dart` y `catalog_page_view.dart` (catálogo, categoría,
   búsqueda), `product_page_model.dart` y `product_page_view.dart` (ficha). Los
