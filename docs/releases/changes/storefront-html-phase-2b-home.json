@@ -68,11 +68,11 @@
     },
     {
       "path": "services/storefront_html/lib/src/site_layout.dart",
-      "sha256": "f017b69dba5dcaea5bfb12c9e9673f75d26d3e9b5da553e6486a0f42befb86f4"
+      "sha256": "24838ff91198842b7efbe1afecc942e58a6e0ff4ef175a92c48e8391bf5e0a08"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_css.dart",
-      "sha256": "a00c9fe5b8701e259cc7240240448f4958bfdd0555bf32c78851ef11ac4c7105"
+      "sha256": "bc4730123ff5d6589d3d65dd9692e1d63728121a74fc0ea8c7d11e3ee40bc617"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
@@ -120,7 +120,7 @@
     },
     {
       "path": "services/storefront_html/test/storefront_handler_test.dart",
-      "sha256": "dfe5c512aca12f207ad98d2b586f4013a3977da4f072a8500fb380e4c8decb81"
+      "sha256": "b3b190cbe57dc9ed1c57ef892f520d772eaeaa3bfbdf3fced1910576c6b1463a"
     }
   ]
 }

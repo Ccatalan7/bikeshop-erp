@@ -41,7 +41,6 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 
 | Desde | Qué | Página |
 |---|---|---|
-| 2026-10-06 | **Menú ancho de escritorio en las páginas HTML:** «Componentes» abre en Flutter un panel a todo el ancho (pestañas por rama, foto de la sección, tarjetas con imagen, «VER TODO»); el HTML abre una lista simple | [rutas](rutas-y-navegacion.md) |
 | 2026-10-04 | **Contenido real y visible en el HTML** de fichas, categorías y portada (hoy en `<noscript>`, ~100–150 palabras contra 700–2.500 de los referentes). Si el dueño aprueba la migración a HTML, la fase 1 lo resuelve y no se completa la página instantánea | [seo-de-referentes](seo-de-referentes.md) |
 | 2026-10-04 | **Descripciones de producto**: 29 de 1.541 publicados tienen texto; el JSON-LD y la página no tienen qué mostrar en el resto (contenido, no marcado) | [datos-estructurados](datos-estructurados.md) |
 | 2026-10-04 | Términos de devolución (días, quién paga, reembolso) como campos del editor, para declararlos además del link (regla 1: primero el control) | [datos-estructurados](datos-estructurados.md) |
@@ -67,6 +66,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 
 | Fecha | Qué | Página |
 |---|---|---|
+| 2026-10-06 | **Menú ancho de escritorio como Flutter en las páginas HTML:** «Componentes» abría una lista simple; ahora el panel con pestañas por rama, foto de la sección, tarjetas, subniveles y «VER TODO», a ±0,1 px de Flutter a 1440 y 1100 px y con sus tiempos | [rutas](rutas-y-navegacion.md) |
 | 2026-10-06 | **Encabezado con sesión y menú del teléfono como Flutter:** con sesión, las páginas HTML seguían diciendo «Iniciar sesión»; y el menú del teléfono mostraba «Accesorios» como grupo vacío, con letra más chica que Flutter | [rutas](rutas-y-navegacion.md) |
 | 2026-10-06 | **La página del pedido en HTML** (fase 3c): al píxel de Flutter en los seis estados, el regreso de Mercado Pago (verificado antes de creerle a la dirección) y sin acceso, a 1440 y 412 px; el resumen en PDF lo arma el servidor con el mismo código que la app; de punta a punta en la base local desde el checkout HTML | [checkout-y-pedidos](checkout-y-pedidos.md) |
 | 2026-10-06 | **`/checkout` abierto al servidor HTML** (d487113c): `noindex`, líneas y paso desde Flutter verificados en vivo | [checkout-y-pedidos](checkout-y-pedidos.md) |

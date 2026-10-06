@@ -13,7 +13,7 @@
   "evidence": [
     {
       "path": "lib/public_store/widgets/public_store_layout.dart",
-      "sha256": "5c71241f0b31667858683e2b5be95f8085d2b289d4a04b0546f587e74b30b95e"
+      "sha256": "efe3d1e272af8ff13348c1a0e5947666cf26a4b85ce279e74259e2fce6ea0d08"
     },
     {
       "path": "packages/vinabike_public_core/lib/public_store/seo/storefront_html_routes.dart",

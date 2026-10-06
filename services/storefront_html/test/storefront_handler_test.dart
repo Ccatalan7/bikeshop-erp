@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:jaspr/server.dart';
 import 'package:test/test.dart';
+import 'package:vinabike_public_core/modules/website/models/website_catalog_presentation.dart';
 import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
 import 'package:vinabike_public_core/public_store/utils/product_url.dart';
 import 'package:vinabike_public_core/shared/models/product.dart';
@@ -530,18 +531,19 @@ void main() {
         ],
       },
     );
-    expect(
-      html,
-      contains(
-        '<li class="nav-no-mobile"><a href="/contacto">Sólo escritorio</a>',
-      ),
+    // The desktop menu and the phone's sheet are Flutter's two projections.
+    final desktop = html.substring(
+      html.indexOf('<nav class="menu"'),
+      html.indexOf('</nav>', html.indexOf('<nav class="menu"')),
     );
-    expect(
-      html,
-      contains(
-        '<li class="nav-no-desktop"><a href="/contacto">Sólo teléfono</a>',
-      ),
+    final sheet = html.substring(
+      html.indexOf('<div class="menu-sheet"'),
+      html.indexOf('</nav>', html.indexOf('<div class="menu-sheet"')),
     );
+    expect(desktop, contains('Sólo escritorio'));
+    expect(desktop, isNot(contains('Sólo teléfono')));
+    expect(sheet, contains('Sólo teléfono'));
+    expect(sheet, isNot(contains('Sólo escritorio')));
     expect(html, isNot(contains('En ninguno')));
   });
 
@@ -2138,6 +2140,142 @@ void main() {
       // Page links keep their page (Contacto), drafts stay out.
       expect(sheet, contains('>Contacto<'));
       expect(sheet, isNot(contains('Página borrador')));
+    });
+
+    Map<String, dynamic> wideMenu({String? css = 'megamenu'}) {
+      final shell = withMenu([
+        {
+          'id': 'n4',
+          'menu_location': 'header',
+          'label': 'Componentes',
+          'link_type': 'category',
+          'link_value': _parent,
+          'order_index': 4,
+          'css_class': ?css,
+        },
+        for (final (id, parent, label, order) in [
+          ('n5', 'n4', 'Suspensión', 1),
+          ('n6', 'n5', 'Horquillas', 1),
+          ('n8', 'n6', 'Horquillas rígidas', 1),
+          ('n7', 'n4', 'Frenos', 2),
+        ])
+          {
+            'id': id,
+            'menu_location': 'header',
+            'parent_id': parent,
+            'label': label,
+            'link_type': 'category',
+            'link_value': _child,
+            'order_index': order,
+          },
+      ]);
+      (shell['settings']
+          as Map)[websiteCatalogPresentationsSettingKey] = jsonEncode({
+        'items': [
+          {
+            'category_id': _child,
+            'slug': 'horquillas',
+            'mega_menu_image_url': 'https://img.example/suspension.webp',
+            'mega_menu_overlay': 0.5,
+            'mega_menu_card_overlay': 0.2,
+            'mega_menu_overview_width': 330,
+            'mega_menu_content_alignment': 'center',
+          },
+        ],
+      });
+      return shell;
+    }
+
+    Future<String> desktopMenu(Map<String, dynamic> shell) async {
+      final html = await (await _get(
+        _FakeReads(shell: shell),
+        '/productos',
+      )).readAsString();
+      final start = html.indexOf('<nav class="menu"');
+      return html.substring(start, html.indexOf('<div class="tools">', start));
+    }
+
+    test('an item marked «megamenu» opens Flutter\'s wide panel: a tab per '
+        'branch, the section\'s photo, its cards and a level per card with '
+        'subcategories', () async {
+      final menu = await desktopMenu(wideMenu());
+      // The trigger is a button, as Flutter's; the page is «VER TODO».
+      expect(
+        menu,
+        contains(
+          '<button class="mega-btn" type="button" aria-expanded="false" '
+          'aria-controls="mega-n4">Componentes</button>',
+        ),
+      );
+      expect(
+        menu,
+        matches(
+          RegExp(
+            r'class="mega-all mega-link" href="/productos/categoria/componentes"',
+          ),
+        ),
+      );
+      // The first branch with children is open; a leaf branch is a tab too.
+      expect(
+        menu,
+        matches(
+          RegExp(
+            r'<a class="mega-tab on" data-branch="n5" href="/productos/categoria/horquillas">\s*<span>SUSPENSIÓN</span>',
+          ),
+        ),
+      );
+      expect(menu, contains('<a class="mega-tab" data-branch="n7"'));
+      expect(menu, contains('<section class="mega-branch" data-branch="n5">'));
+      expect(
+        menu,
+        contains('<section class="mega-branch" data-branch="n7" hidden>'),
+      );
+      // «Catálogo web»: photo, veil, width and alignment of the section.
+      expect(menu, contains('class="mega-ov photo" style="width:330px"'));
+      expect(menu, contains('alt="Imagen de Suspensión"'));
+      expect(menu, contains('src="https://img.example/suspension.webp"'));
+      expect(
+        menu,
+        contains(
+          'linear-gradient(90deg,rgb(0 0 0 / 0.5) 0%,rgb(0 0 0 / 0.17) 48%,transparent 86%)',
+        ),
+      );
+      expect(menu, contains('justify-content:center'));
+      expect(menu, contains('Explorar Suspensión'));
+      // A card leads to its products; its caption opens its subcategories.
+      expect(menu, contains('aria-label="Ver productos de Horquillas"'));
+      expect(menu, contains('background:rgb(0 0 0 / 0.2)'));
+      expect(
+        menu,
+        matches(
+          RegExp(
+            r'<button class="mega-cap" type="button" data-open="n6" aria-label="Ver las 1 subcategorías de Horquillas">\s*<span>1 SUBCATEGORÍA</span>',
+          ),
+        ),
+      );
+      expect(menu, contains('<div class="mega-level" data-level="n6" hidden>'));
+      expect(menu, matches(RegExp(r'<span>Volver a Suspensión</span>')));
+      expect(menu, contains('VER TODO EN HORQUILLAS'));
+    });
+
+    test('an item with children but no «megamenu» opens the compact list, '
+        'and the panel\'s styles and script come only with a menu', () async {
+      final menu = await desktopMenu(wideMenu(css: null));
+      expect(menu, contains('<li class="has-drop" data-drop>'));
+      expect(menu, contains('VER TODO COMPONENTES'));
+      expect(menu, isNot(contains('mega-branch')));
+      final plain = await (await _get(
+        _FakeReads(),
+        '/productos',
+      )).readAsString();
+      expect(plain, isNot(contains('.mega{')));
+      expect(plain, isNot(contains('[data-mega]')));
+      final withMenu = await (await _get(
+        _FakeReads(shell: wideMenu()),
+        '/productos',
+      )).readAsString();
+      expect(withMenu, contains('.mega{'));
+      expect(withMenu, contains("querySelectorAll('[data-mega]')"));
     });
 
     test('a signed-in customer is drawn by the page script, from the '

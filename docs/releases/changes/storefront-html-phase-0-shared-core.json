@@ -236,7 +236,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_css.dart",
-      "sha256": "a00c9fe5b8701e259cc7240240448f4958bfdd0555bf32c78851ef11ac4c7105"
+      "sha256": "bc4730123ff5d6589d3d65dd9692e1d63728121a74fc0ea8c7d11e3ee40bc617"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",

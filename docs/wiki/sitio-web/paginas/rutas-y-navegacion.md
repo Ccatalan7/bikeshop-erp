@@ -142,9 +142,12 @@ Flutter sólo podía imitar en el navegador:
 - Con la sesión del cliente iniciada, el encabezado muestra su cuenta (la
   inicial, el nombre y el menú del portal) en Flutter y, desde el 2026-10-06,
   en las páginas HTML `[Repo]`.
-- **Diferencia abierta (2026-10-06):** en escritorio, «Componentes» abre en
-  Flutter un menú ancho con fotos y pestañas; en las páginas HTML, una lista
-  ([estado](estado-y-pendientes.md)).
+- En escritorio, un ítem con hijas y `megamenu` en su «Clase CSS» abre el
+  menú ancho (pestañas por rama, foto de la sección, tarjetas, subniveles y
+  «VER TODO»); sin esa clase, una lista compacta. Las páginas HTML lo dibujan
+  igual que Flutter desde el 2026-10-06, con la misma foto
+  (`megaMenuPresentationOf`) y el mismo contraste (`PublicHeaderContrastMode`)
+  `[Repo]`.
 - Pendiente del dueño: la tarjeta «MOUNTAIN BIKE» de la portada enlaza a Cadenas
   (2026-09-24).
 

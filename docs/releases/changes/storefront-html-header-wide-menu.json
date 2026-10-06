@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "storefront-html-header-wide-menu",
+  "scope": "internal",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "services/storefront_html/lib/src/mega_menu_view.dart",
+      "sha256": "e9200d5c85dfe94b496fd061ca7e517014bc37af0667c23b09b724a034967de2"
+    },
+    {
+      "path": "services/storefront_html/lib/src/site_layout.dart",
+      "sha256": "24838ff91198842b7efbe1afecc942e58a6e0ff4ef175a92c48e8391bf5e0a08"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_css.dart",
+      "sha256": "bc4730123ff5d6589d3d65dd9692e1d63728121a74fc0ea8c7d11e3ee40bc617"
+    },
+    {
+      "path": "services/storefront_html/lib/src/material_icons.dart",
+      "sha256": "0c7c084aeccf678a6049ed1f97431b1d42cf2a36eb9c4c1a0d20637f536dc093"
+    },
+    {
+      "path": "services/storefront_html/test/storefront_handler_test.dart",
+      "sha256": "b3b190cbe57dc9ed1c57ef892f520d772eaeaa3bfbdf3fced1910576c6b1463a"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/theme/public_header_contrast.dart",
+      "sha256": "2d39548573c425680c14bdb12f79ff1237f293ea929a33816671f68cc2306190"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/services/mega_menu_presentation.dart",
+      "sha256": "bbae68c4dee23257beb3c074d6540152294cea0e96d00a70e22e481fea6b4f67"
+    },
+    {
+      "path": "lib/public_store/theme/public_header_contrast.dart",
+      "sha256": "92e895bc5fba429d07b233af91fa3de95d9d2ca831e1aeeb4e05ec8cd8650530"
+    },
+    {
+      "path": "lib/public_store/widgets/public_store_layout.dart",
+      "sha256": "efe3d1e272af8ff13348c1a0e5947666cf26a4b85ce279e74259e2fce6ea0d08"
+    },
+    {
+      "path": "lib/public_store/widgets/store_layout/layout_helpers.dart",
+      "sha256": "c64a6c7458bc277bc23d57da764ee7bc27ea7e9d613bd04e21505080dd6f3baf"
+    },
+    {
+      "path": "test/unit/website_navigation_renderer_contract_test.dart",
+      "sha256": "3436c9a70da32029da637dc6dbdc9a06033b288aceb7c9f20071f79f44eea587"
+    },
+    {
+      "path": "supabase/migrations/20261006120000_public_storefront_shell_menu_class.sql",
+      "sha256": "4bf27c4f0b03610aa661ca7b8b1b8c4cf2ad84720196e4ef71697d9d3708ff9c"
+    },
+    {
+      "path": "supabase/manual_checks/verification/20261006120000_public_storefront_shell_menu_class.sql",
+      "sha256": "cb0bd74f3b82d5b5dae0422adb931ed6e0299df5e1ac1961c4e243057b0ff2c2"
+    },
+    {
+      "path": "supabase/tests/public_storefront_page_reads.sql",
+      "sha256": "7c86a6f17273d75916e04473d582f2b97b8312e90ef346229ffe61c1defb53bc"
+    }
+  ]
+}

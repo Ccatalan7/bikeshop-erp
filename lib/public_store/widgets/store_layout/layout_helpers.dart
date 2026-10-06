@@ -49,22 +49,16 @@ Map<String, MegaMenuBranchPresentation> _projectMegaMenuBranchPresentations({
 }) {
   final projections = <String, MegaMenuBranchPresentation>{};
   void visit(WebsiteNavigation branch) {
-    final destination = WebsiteDestination.parse(branch.href ?? '');
-    if (destination.kind == WebsiteDestinationKind.category) {
-      final reference = destination.reference?.trim() ?? '';
-      final presentation = reference.isEmpty
-          ? null
-          : registry.forCategory(reference) ??
-              registry.resolveSlug(reference)?.presentation;
-      if (presentation != null) {
-        projections[branch.id] = MegaMenuBranchPresentation(
-          imageUrl: presentation.megaMenuImageUrl,
-          overlay: presentation.megaMenuOverlay,
-          cardOverlay: presentation.megaMenuCardOverlay,
-          overviewWidth: presentation.megaMenuOverviewWidth,
-          contentAlignment: presentation.megaMenuContentAlignment,
-        );
-      }
+    // The HTML store's wide menu reads the same owner.
+    final presentation = megaMenuPresentationOf(branch, registry);
+    if (presentation != null) {
+      projections[branch.id] = MegaMenuBranchPresentation(
+        imageUrl: presentation.megaMenuImageUrl,
+        overlay: presentation.megaMenuOverlay,
+        cardOverlay: presentation.megaMenuCardOverlay,
+        overviewWidth: presentation.megaMenuOverviewWidth,
+        contentAlignment: presentation.megaMenuContentAlignment,
+      );
     }
 
     for (final child in branch.children) {

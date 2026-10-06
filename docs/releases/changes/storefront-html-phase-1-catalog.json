@@ -40,11 +40,11 @@
     },
     {
       "path": "lib/public_store/widgets/public_store_layout.dart",
-      "sha256": "5c71241f0b31667858683e2b5be95f8085d2b289d4a04b0546f587e74b30b95e"
+      "sha256": "efe3d1e272af8ff13348c1a0e5947666cf26a4b85ce279e74259e2fce6ea0d08"
     },
     {
       "path": "lib/public_store/widgets/store_layout/layout_helpers.dart",
-      "sha256": "f5c5991d17aa8fd36146980c3bd246eafa491195184cee7982bed8fc26718ec3"
+      "sha256": "c64a6c7458bc277bc23d57da764ee7bc27ea7e9d613bd04e21505080dd6f3baf"
     },
     {
       "path": "lib/public_store/widgets/store_layout/scroll_and_chrome.dart",
@@ -136,7 +136,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/site_layout.dart",
-      "sha256": "f017b69dba5dcaea5bfb12c9e9673f75d26d3e9b5da553e6486a0f42befb86f4"
+      "sha256": "24838ff91198842b7efbe1afecc942e58a6e0ff4ef175a92c48e8391bf5e0a08"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_script.dart",

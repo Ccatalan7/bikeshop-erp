@@ -20,11 +20,24 @@ String storefrontCss({
   String onSurface = 'rgb(0 0 0 / .867)',
   String onSurfaceVariant = 'rgb(61.2 61.2 61.2 / .899)',
   String outlineVariant = '#d7d7d7',
-}) =>
-    '''
+  // White words on an open wide menu's surface (`HeaderMenuColors`).
+  bool lightMenuSurface = true,
+}) {
+  // The header with white words: clear over the home's first block, or
+  // painted with a dark menu surface.
+  final light = lightMenuSurface
+      ? ':is(.top.over.clear:not(.mega-open),.top.mega-open)'
+      : '.top.over.clear:not(.mega-open)';
+  return '''
 ${storefrontFontFacesCss()}
 :root{--primary:$primary;--accent:$accent;--sheet-on:$onSurface;--sheet-onv:$onSurfaceVariant;--sheet-line:$outlineVariant;--ink:#1e293b;--on-variant:#475569;--outline-variant:#cbd5e1;--chevron:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z'/%3E%3C/svg%3E");--muted:#5b6b7f;--faint:#94a3b8;--line:#e2e8f0;--soft:#f4f6f9;--ok:#15803d;--bad:#b42318;--foot:#1e293b;--r:14px;--c-line:#e8e2d8;--c-2nd:#666d7a;--c-muted:#93989f;--c-soft:#f6f6f6;--c-ok:#10b981;
 --head:"$headingFont","Arial Narrow",Arial,sans-serif;--body:"$bodyFont","Segoe UI",Roboto,Arial,sans-serif}
+/* Flutter's own font, Roboto 400 as its engine loads it from Google, for
+   the texts Flutter draws without a family (a button's bare TextStyle);
+   Chrome does not embolden it, so its bold is a stroke of Skia's fake-bold
+   width (1/24 of the size at 9 px to 1/32 at 36 px). Fetched only where such
+   a text shows. */
+@font-face{font-family:"vb-roboto";src:url(https://fonts.gstatic.com/s/roboto/v32/KFOmCnqEu92Fr1Me4GZLCzYlKw.woff2) format("woff2");font-weight:400;font-display:swap}
 [hidden]{display:none!important}*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
 body{margin:0;background:#fff;color:var(--ink);font:400 17px/1.55 var(--body);display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}
 #contenido{flex:1 0 auto}
@@ -44,21 +57,14 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,su
 .menu{flex:1;display:flex;align-items:center;min-width:0}.menu-toggle{position:absolute;opacity:0;pointer-events:none}.menu-button,.menu-sheet,.sheet-scrim{display:none}
 .menu>ul{display:flex;gap:24px;list-style:none;margin:0;padding:0}
 .menu>ul>li{position:relative;display:flex;align-items:center;height:56px}
-.menu>ul>li>a{display:flex;align-items:center;padding:5px 0;font:400 14px/20px var(--body);letter-spacing:.1px;text-transform:uppercase;color:var(--ink);text-decoration:none;border-bottom:2px solid transparent;white-space:nowrap}
+.menu>ul>li>a{display:flex;align-items:center;padding:5.6px 0 4.4px;font:400 14px/21px var(--body);letter-spacing:.1px;text-transform:uppercase;color:var(--ink);text-decoration:none;border-bottom:2px solid transparent;white-space:nowrap}
 /* The current item takes the header's own text color (`_buildNavItemLink`
    gets `textColor`), not the brand's. */
 .menu>ul>li>a[aria-current]{color:rgb(0 0 0 / .87);font-weight:600;border-bottom-color:rgb(0 0 0 / .87)}
-.has-sub>a{font-weight:600!important;border-bottom-color:transparent!important;border-radius:4px;transition:background .25s}
-.has-sub:hover>a,.has-sub:focus-within>a{background:color-mix(in srgb,var(--primary) 8%,transparent)}
-.has-sub>a::after{content:"";width:18px;height:18px;margin-left:4px;background:currentColor;-webkit-mask:var(--chevron) center/18px no-repeat;mask:var(--chevron) center/18px no-repeat;transition:transform .25s}
-.has-sub:hover>a::after,.has-sub:focus-within>a::after{transform:rotate(-180deg)}
-.sub{display:none;position:absolute;top:100%;left:-18px;min-width:230px;list-style:none;margin:0;padding:10px;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 18px 40px rgba(15,23,42,.12)}
-.has-sub:hover .sub,.has-sub:focus-within .sub{display:block}
-.sub a{display:block;padding:9px 10px;border-radius:8px;color:var(--ink);text-decoration:none;font-size:15px}.sub a:hover,.sub a[aria-current]{background:var(--soft)}
 .tools{display:flex;align-items:center;gap:2px;margin-left:auto;color:var(--ink)}.tools>a{color:inherit;display:flex;align-items:center;justify-content:center;width:40px;height:40px}.tools>a svg{width:22px;height:22px}
 .cart-link{position:relative}
 .cart-count{position:absolute;top:-8px;right:-10px;min-width:19px;height:19px;padding:0 5px;border-radius:999px;background:var(--accent);color:#fff;font:700 11px/19px var(--body);text-align:center}
-.tools>a.login{width:auto;height:auto;min-height:40px;margin-left:10px;gap:8px;border:1.2px solid rgba(203,213,225,.9);border-radius:10px;padding:9px 14px;background:rgba(255,255,255,.92);font:600 13px/18px var(--body)!important;letter-spacing:.15px;text-transform:uppercase;text-decoration:none;white-space:nowrap}
+.tools>a.login{width:auto;height:auto;min-height:40px;margin-left:10px;gap:8px;border:1.2px solid rgba(203,213,225,.9);border-radius:10px;padding:9px 12.8px;background:rgba(255,255,255,.92);font:600 13px/18px "vb-roboto",var(--body)!important;-webkit-text-stroke:.04em currentColor;letter-spacing:.15px;text-transform:uppercase;text-decoration:none;white-space:nowrap}
 .tools>a.login svg{width:17px;height:17px}
 .login:hover{background:rgba(30,41,59,.05)}
 /* Signed in (`CustomerAccountMenu`): the initial in a 34 px circle, the first
@@ -80,18 +86,21 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,su
 .sheet-item.sheet-out{width:100%;border:0;background:none;color:#ef4444;text-align:left}
 /* The home's header over its first block (`_StickyHeaderScaffold` with
    `allowOverlayAtTop`): fixed, clear under a dark veil with a white logo and
-   white words while the page is at the top, solid after 50 px of scroll or
-   while a menu is open. The color fades in 300 ms (`AnimatedPhysicalModel`);
-   the veil and the words switch at once, as in Flutter. */
-.top.over{position:fixed;top:0;left:0;right:0;transition:background-color .3s ease-in-out}
+   white words while the page is at the top, solid after 50 px of scroll.
+   The color fades in 300 ms (`AnimatedPhysicalModel`); the veil and the
+   words switch at once, as in Flutter. An open wide menu paints the header
+   with the menu's surface (veil kept at the top) and its words by contrast
+   (`MegaMenuController.isAnyMenuOpen`). */
+.top.over{position:fixed;top:0;left:0;right:0}
 .top.over:not(.clear) .banner{display:none}
-.top.over.clear:not(:has(.has-sub:hover,.has-sub:focus-within)){background-color:transparent;background-image:linear-gradient(rgb(0 0 0 / .52),rgb(0 0 0 / .24))}
-.top.over.clear:not(:has(.has-sub:hover,.has-sub:focus-within)) .logo img{filter:brightness(0) invert(1)}
-.top.over.clear:not(:has(.has-sub:hover,.has-sub:focus-within)) .logo-name,.top.over.clear:not(:has(.has-sub:hover,.has-sub:focus-within)) .menu>ul>li>a,.top.over.clear:not(:has(.has-sub:hover,.has-sub:focus-within)) .tools,.top.over.clear:not(:has(.has-sub:hover,.has-sub:focus-within)) .menu-button{color:#fff}
-.top.over.clear:not(:has(.has-sub:hover,.has-sub:focus-within)) .menu>ul>li>a[aria-current]{color:#fff;border-bottom-color:#fff}
-.top.over.clear:not(:has(.has-sub:hover,.has-sub:focus-within)) .tools>a.login{background:rgb(0 0 0 / .18);border-color:rgb(255 255 255 / .36)}
-.top.over.clear:not(:has(.has-sub:hover,.has-sub:focus-within)) .acct{color:#fff}
-.top.over.clear:not(:has(.has-sub:hover,.has-sub:focus-within)) .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rgb(255 255 255 / .08)),rgb(0 0 0 / .18)}
+.top.over.clear:not(.mega-open){background-color:transparent}
+.top.over.clear{background-image:linear-gradient(rgb(0 0 0 / .52),rgb(0 0 0 / .24))}
+$light .logo img{filter:brightness(0) invert(1)}
+$light :is(.logo-name,.menu>ul>li>a,.menu>ul>li>button,.tools,.menu-button){color:#fff}
+$light .menu>ul>li>a[aria-current]{color:#fff;border-bottom-color:#fff}
+$light .tools>a.login{background:rgb(0 0 0 / .18);border-color:rgb(255 255 255 / .36)}
+$light .acct{color:#fff}
+$light .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rgb(255 255 255 / .08)),rgb(0 0 0 / .18)}
 
 /* Product page: product_detail_page.dart and product_spec_sheet_view.dart.
    Its colors are the store theme's commerce roles: text #1e293b, accent the
@@ -399,8 +408,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,su
 .notfound{padding-block:72px 96px;max-width:640px}.notfound h1{margin:0 0 12px;font:400 32px/1.15 var(--head);text-transform:uppercase;color:var(--ink)}.notfound p{color:var(--muted)}
 .notfound a.primary-link{display:inline-block;margin-top:18px;padding:14px 22px;border-radius:12px;background:var(--primary);color:#fff;font-weight:600;text-decoration:none}
 
-@media (min-width:1080px){.nav-no-desktop{display:none!important}}
-@media (max-width:1079px){.nav-no-mobile{display:none!important}
+@media (max-width:1079px){
 .top .wrap.bar{padding-inline:16px}
 .bar{height:68px}.logo{order:1;margin-right:auto}.logo img{height:40px;max-width:140px;object-fit:contain;object-position:left center}
 .tools{order:2;gap:4px;margin-left:16px}.tools>a{width:48px;height:48px}.tools>a svg{width:23px;height:23px}.tools .login,.tools .acct{display:none}
@@ -494,3 +502,4 @@ body:has(.sheet-check:checked){overflow:hidden}
 body{font-size:16px}.wrap{padding-inline:16px}
 }
 ''';
+}

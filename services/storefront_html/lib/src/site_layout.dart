@@ -15,6 +15,7 @@ import 'package:vinabike_public_core/public_store/seo/public_product_structured_
 import 'package:vinabike_public_core/public_store/utils/social_url.dart';
 
 import 'material_icons.dart';
+import 'mega_menu_view.dart';
 import 'storefront_css.dart';
 import 'storefront_fonts.dart';
 import 'storefront_script.dart';
@@ -112,6 +113,10 @@ Component sitePage({
   final s = context.shell;
   final roles = WebsiteThemeRoles.resolve(s.setting);
   final indexable = meta.indexable && !context.hidden;
+  final menuColors = HeaderMenuColors.of(s, roles);
+  final menus = s
+      .menuFor(MenuLocation.header, mobile: false, storeUrl: context.storeUrl)
+      .any((item) => item.children.any((c) => c.isVisible && c.showOnDesktop));
   final business = _businessNode(context);
   return Document(
     lang: 'es-CL',
@@ -162,8 +167,10 @@ Component sitePage({
               onSurface: roles.onSurface.css,
               onSurfaceVariant: roles.onSurfaceVariant.css,
               outlineVariant: roles.outlineVariant.css,
+              lightMenuSurface: menuColors.surfaceLight,
             ),
           ),
+          if (menus) RawText(headerMenuCss(menuColors)),
           RawText(SiteFooter.wrapCss(s)),
           if (meta.styles.isNotEmpty) RawText(meta.styles),
         ],
@@ -197,6 +204,7 @@ Component sitePage({
       ),
       script(content: _bodyData(context)),
       script(content: storefrontScript),
+      if (menus) script(content: headerMenuScript),
       ...pageScripts,
     ]),
   );
@@ -263,7 +271,13 @@ class SiteHeader extends StatelessComponent {
     final banner = s.setting('header_show_top_banner') == 'true'
         ? s.setting('top_banner_text')
         : '';
-    final items = s.topLevel(MenuLocation.header);
+    // The desktop menu as Flutter's header gets it (`forDesktop`); the
+    // phone's sheet reads its own projection below.
+    final items = s.menuFor(
+      MenuLocation.header,
+      mobile: false,
+      storeUrl: page.storeUrl,
+    );
     return header(classes: overlay ? 'top over' : 'top', [
       if (banner.isNotEmpty) p(classes: 'banner', [.text(banner)]),
       // Without JavaScript a checkbox opens the phone menu (a sheet from the
@@ -292,9 +306,7 @@ class SiteHeader extends StatelessComponent {
           classes: 'menu',
           attributes: {'aria-label': 'Principal'},
           [
-            ul([
-              for (final item in items) ?_menuItem(item, s.childrenOf(item)),
-            ]),
+            ul([for (final item in items) ?_menuItem(item)]),
           ],
         ),
         div(classes: 'tools', [
@@ -518,34 +530,20 @@ class SiteHeader extends StatelessComponent {
   /// never a parent of it: `/productos` is not current on a category.
   bool _current(String href) => Uri.parse(href).path == page.path;
 
-  Component? _menuItem(
-    WebsiteNavigation item,
-    List<WebsiteNavigation> children,
-  ) {
+  /// A desktop item: its link, or the wide panel or compact list of its
+  /// children (`headerMenuItem`).
+  Component? _menuItem(WebsiteNavigation item) {
+    if (item.children.any((c) => c.isVisible && c.showOnDesktop)) {
+      return headerMenuItem(page.shell, item);
+    }
     final href = page.shell.hrefFor(item);
     if (href == null) return null;
-    final links = [
-      for (final child in children)
-        if (page.shell.hrefFor(child) case final childHref?)
-          li(classes: _deviceClasses(child), [
-            a(
-              href: childHref,
-              attributes: {if (_current(childHref)) 'aria-current': 'page'},
-              [.text(child.label)],
-            ),
-          ]),
-    ];
-    final link = a(
-      href: href,
-      attributes: {if (_current(href)) 'aria-current': 'page'},
-      [.text(item.label)],
-    );
-    if (links.isEmpty) {
-      return li(classes: _deviceClasses(item), [link]);
-    }
-    return li(classes: _deviceClasses(item, 'has-sub'), [
-      link,
-      ul(classes: 'sub', links),
+    return li([
+      a(
+        href: href,
+        attributes: {if (_current(href)) 'aria-current': 'page'},
+        [.text(item.label)],
+      ),
     ]);
   }
 }
@@ -1012,17 +1010,6 @@ function gtag() { dataLayer.push(arguments); }
   else { window.addEventListener('load', schedule, { once: true }); }
 })();
 ''';
-}
-
-/// `show_on_desktop` / `show_on_mobile` as classes the stylesheet hides at
-/// the phone breakpoint, so one HTML serves both like Flutter's two menus.
-String? _deviceClasses(WebsiteNavigation item, [String? base]) {
-  final classes = [
-    ?base,
-    if (!item.showOnMobile) 'nav-no-mobile',
-    if (!item.showOnDesktop) 'nav-no-desktop',
-  ];
-  return classes.isEmpty ? null : classes.join(' ');
 }
 
 Component _property(String property, String content) => Component.element(

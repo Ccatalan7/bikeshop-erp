@@ -262,18 +262,22 @@ void main() {
       'lib/public_store/widgets/mega_menu.dart',
     ).readAsStringSync();
 
+    // The typed resolution has one owner the HTML store's wide menu shares
+    // (`megaMenuPresentationOf`, vinabike_public_core, 2026-10-06).
+    final owner = File(
+      'packages/vinabike_public_core/lib/public_store/services/'
+      'mega_menu_presentation.dart',
+    ).readAsStringSync();
     expect(layout, contains('_projectMegaMenuBranchPresentations('));
+    expect(layout, contains('megaMenuPresentationOf(branch, registry)'));
+    expect(owner, contains("WebsiteDestination.parse(item.href ?? '')"));
     expect(
-      layout,
-      contains("WebsiteDestination.parse(branch.href ?? '')"),
+      owner,
+      contains('destination.kind != WebsiteDestinationKind.category'),
     );
+    expect(owner, contains('registry.forCategory(reference)'));
     expect(
-      layout,
-      contains('destination.kind == WebsiteDestinationKind.category'),
-    );
-    expect(layout, contains('registry.forCategory(reference)'));
-    expect(
-      layout,
+      owner,
       contains('registry.resolveSlug(reference)?.presentation'),
     );
     expect(layout, contains('projections[branch.id] ='));

@@ -49,7 +49,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/material_icons.dart",
-      "sha256": "16d4bfaf7d27cd7645bbb9d4efba316da60a896b397358f637b2801e73cae185"
+      "sha256": "0c7c084aeccf678a6049ed1f97431b1d42cf2a36eb9c4c1a0d20637f536dc093"
     },
     {
       "path": "services/storefront_html/lib/storefront_html.dart",

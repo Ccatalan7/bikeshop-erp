@@ -1079,10 +1079,48 @@ Medido con una sesión inventada que la prueba responde (ninguna lectura llega
 a la base con ese token): encabezado y menú de cuenta a ±2 px a 1440, el menú
 del teléfono con sesión y sin ella al píxel en alto.
 
-Sigue: el menú ancho de escritorio. Flutter abre en «Componentes» un panel a
-todo el ancho (pestañas por rama, foto de la sección, tarjetas con imagen,
-«VER TODO»); el HTML abre una lista. Después, el portal y la cuenta
-(`/cuenta/**`), lo último que dibuja Flutter en la web.
+### El menú ancho de escritorio (2026-10-06)
+
+En escritorio «Componentes» abría en el HTML una lista simple; Flutter abre un
+panel a todo el ancho. Ahora el HTML dibuja ese panel
+(`services/storefront_html/lib/src/mega_menu_view.dart`), sobre la misma
+proyección de escritorio que Flutter (`menuFor(..., mobile: false)`):
+
+- **Cuál se abre:** un ítem con hijas y `megamenu` en su «Clase CSS» abre el
+  panel (`MegaMenuButton`); sin ella, la lista compacta
+  (`NavigationDropdownButton`). La función pública del menú no traía
+  `css_class`: la agrega `20261006120000` (aplicada y verificada). Los dos
+  disparadores son botones, como en Flutter; la página de la rama es «VER
+  TODO», dentro del panel, y todos sus enlaces vienen en el HTML.
+- **Un dueño:** la foto, los velos, el ancho y la alineación de cada sección
+  salen de `megaMenuPresentationOf` y el blanco o negro de las letras de
+  `PublicHeaderContrastMode`, los dos en el núcleo; Flutter los usa también.
+- **Medido contra Flutter a 1440 y 1100 px:** pestañas, foto de sección,
+  tarjetas, «Volver a…» y «VER TODO EN…» a ±0,1 px; la foto sin
+  desplazamiento (difiere sólo el suavizado). Tiempos de Flutter: abre 110 ms
+  después de posar el puntero, cierra 180 ms después de salir, aparece en
+  190 ms, cambia de sección en 150 ms y la revela en 1250 ms; a los 450 ms las
+  dos capturas coinciden.
+
+Tres reglas de Flutter que no se ven en el código del widget y que valen para
+cualquier página:
+
+- **El interlineado.** Flutter reparte el espacio extra de una línea en
+  proporción al ascenso y descenso de la fuente
+  (`TextLeadingDistribution.proportional`); CSS lo reparte a medias. Con
+  Barlow (1,0 y 0,2) el texto de Flutter cae `(alto − 1,2 × tamaño) / 3` px
+  más abajo: en el encabezado, 1 px. Se corrige moviendo el texto, no la caja.
+- **Un botón sin familia es Roboto.** Un `TextStyle` de botón sin
+  `fontFamily` («INICIAR SESIÓN», «Volver a…») no hereda Barlow: Flutter lo
+  dibuja en Roboto 400, que su motor baja de Google, con negrita fingida. El
+  HTML carga esa misma Roboto (`vb-roboto`) sólo donde se ve, y como Chrome no
+  la engruesa, la negrita es un trazo del ancho de Skia (1/24 del tamaño a
+  9 px, 1/32 a 36 px).
+- **El borde no suma.** El borde de un botón de Flutter (`side`) se dibuja
+  dentro del tamaño: en CSS se resta del relleno.
+
+Sigue: el portal y la cuenta (`/cuenta/**`), lo último que dibuja Flutter en
+la web.
 
 ### Pendiente
 

@@ -4,6 +4,9 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-06 — corrección — [rutas](paginas/rutas-y-navegacion.md): el menú
+  ancho de escritorio en las páginas HTML, como Flutter (la función del menú
+  trae `css_class` desde `20261006120000`); cerrada la diferencia abierta.
 - 2026-10-06 — corrección — [rutas](paginas/rutas-y-navegacion.md): el
   encabezado HTML muestra la cuenta con sesión y el menú del teléfono usa la
   regla de Flutter; el menú ancho de escritorio queda como diferencia abierta.
