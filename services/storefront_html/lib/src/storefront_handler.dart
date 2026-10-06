@@ -12,6 +12,7 @@ import 'package:vinabike_public_core/shared/models/product.dart';
 
 import 'cart_page_model.dart';
 import 'cart_page_view.dart';
+import 'checkout_page_view.dart';
 import 'catalog_page_model.dart';
 import 'catalog_page_view.dart';
 import 'flutter_shell.dart';
@@ -119,6 +120,8 @@ Handler storefrontHandler({
         ['contacto'] => await route.contact(),
         ['carrito'] => await route.cart(),
         ['carrito', 'lineas'] => await route.cartLines(),
+        ['checkout'] => await route.checkout(),
+        ['checkout', 'lineas'] => await route.checkoutLines(),
         _ => await route.notFound(),
       };
     } on PublicReadException catch (error) {
@@ -361,16 +364,47 @@ class _Route {
   /// `/carrito/lineas?l=<id>:<q>,…`: the visitor's saved lines, re-read
   /// and drawn, as JSON for the cart page. Never stored by a cache: it is
   /// this visitor's basket at this moment.
-  Future<Response> cartLines() async {
+  Future<Response> cartLines() async =>
+      _json(cartLinesJson(await _savedLines()));
+
+  /// `/checkout`: the form, the same for everyone, with the payment methods
+  /// the store accepts now; the lines come from [checkoutLines].
+  Future<Response> checkout() async {
+    final read = await reads.shell();
+    final context = _context(read);
+    if (!context.shell.sitePublished) return _unpublished(context);
+    final methods = CheckoutPageData.methodsOf(read.payments);
+    return _render(
+      checkoutPageDocument(
+        CheckoutPageData(
+          page: context,
+          methods: methods ?? const [],
+          methodsKnown: methods != null,
+          supabaseUrl: config.supabaseUrl,
+          publishableKey: config.publishableKey,
+        ),
+      ),
+    );
+  }
+
+  /// `/checkout/lineas?l=<id>:<q>,…`: the cart's lines with what the order
+  /// states of each one.
+  Future<Response> checkoutLines() async =>
+      _json(checkoutLinesJson(await _savedLines()));
+
+  Future<CartLinesModel> _savedLines() async {
     final saved = parseSavedCartLines(
       request.requestedUri.queryParameters['l'] ?? '',
     );
-    final model = CartLinesModel.build(
+    return CartLinesModel.build(
       saved: saved,
       reads: await reads.cartProducts([for (final line in saved) line.id]),
       tenantId: config.tenantId,
     );
-    final body = utf8.encode(jsonEncode(cartLinesJson(model)));
+  }
+
+  Response _json(Map<String, Object?> value) {
+    final body = utf8.encode(jsonEncode(value));
     final gzipped = _acceptsGzip(request) ? gzip.encode(body) : null;
     return Response.ok(
       gzipped ?? body,

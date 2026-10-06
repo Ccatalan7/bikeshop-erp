@@ -787,6 +787,38 @@ metadata. A production gate must additionally scan the complete JSON tree
 read-only, because checking only the canonical array can turn an unexpected
 legacy shape into a false zero.
 
+## La CLI sin sesión no deja registrar la versión: el registro va por el wrapper (2026-10-06)
+
+`deploy_migration.sh` aplicó y verificó `20261006090000` en producción y falló
+al registrar: `migration repair` respondió `FGA Authentication Error.
+Unauthorized`, y lo mismo `projects list` y el conector MCP de Supabase.
+La página de estado de Supabase estaba en verde: es la autorización de la
+cuenta (el token de la CLI y el del conector), no una caída. El
+`just db-preflight` lo dice antes: «CLI authentication missing or invalid».
+
+La migración ya estaba en producción y verificada. Registrar esa versión exacta
+es autónomo, y es una fila: `version`, `name` (el nombre del archivo sin la
+versión) y `statements`. La CLI guarda en `statements` cada sentencia
+separada por los `;` de nivel superior, con sus comentarios delante y sin el
+`;`. Se escribe esa misma fila con `query.sh production --write` (las
+sentencias entre comillas de dólar propias) y se confirma con
+`migration_status.sh` → `APPLIED`. Esto **no** sirve para registrar una versión
+que no se aplicó y verificó: eso sigue siendo una reparación que decide el
+dueño.
+
+Lo que la CLI sin sesión sí deja fuera es el plano de control (desplegar
+funciones Edge, secretos): eso necesita volver a iniciar sesión en la cuenta.
+
+## Insertar una tienda cambia el sujeto de la petición (2026-10-06)
+
+En un sembrado o un pgTAP, `insert into public.tenants` deja el id de la
+tienda en `request.jwt.claim.sub`. Si después se inserta un producto con
+`tax_rate`, el disparador de la clasificación de IVA registra a `auth.uid()`
+como autor y la llave a `auth.users` falla con el id de la tienda. Los
+`set_config` del autor van **después** de crear la tienda. Una tienda nueva
+nace además con ajustes por defecto (`site_title`…): los de la prueba van con
+`on conflict (tenant_id, key) do update`.
+
 ## Cloud sessions: the wrapper cannot reach production, the Supabase MCP can
 
 **2026-09-15, decisión del dueño.** A Claude Code session running in the

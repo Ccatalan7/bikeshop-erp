@@ -6,6 +6,14 @@ export 'src/cart_page_model.dart';
 export 'src/cart_page_view.dart'
     show cartPageDocument, cartLinesJson, cartLinesPath;
 export 'src/catalog_page_model.dart';
+export 'src/checkout_page_script.dart' show checkoutPageScript;
+export 'src/checkout_records_script.dart' show checkoutRecordsScript;
+export 'src/checkout_page_view.dart'
+    show
+        CheckoutPageData,
+        checkoutPageDocument,
+        checkoutLinesJson,
+        checkoutLinesPath;
 export 'src/contact_page_css.dart';
 export 'src/contact_page_model.dart';
 export 'src/contact_page_view.dart' show contactPageDocument;

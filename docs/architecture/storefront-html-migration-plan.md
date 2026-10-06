@@ -927,6 +927,82 @@ Lo que costó:
   sitemap; ahora exige que `/carrito` venga del servidor con `noindex`
   (`privateServerRoutes`).
 
+## Fase 3b: el checkout (2026-10-06)
+
+`/checkout` en el servidor (`checkout_page_view.dart`, `checkout_page_css.dart`,
+`checkout_page_script.dart`, `checkout_records_script.dart`), por ahora sólo en
+la copia oculta `/_html/checkout`. Como el carrito, el formulario es el mismo
+para todos (con los medios de pago que la tienda acepta en ese momento y el
+punto de retiro) y las líneas llegan de `/checkout/lineas`, con lo que el
+pedido dice de cada una (`orderItems` de Flutter) y el neto, IVA y bruto.
+
+El navegador llama a Supabase **directo**, con la clave publicable, igual que
+Flutter: capacidades, cotización, `google-places-proxy`,
+`create_public_online_order_with_access` y `mercadopago-create-preference`.
+No pasa por Cloud Run: no suma costo y la confianza es la misma de hoy.
+
+Lo que hace posible convivir con Flutter es escribir **los mismos registros**
+que `CheckoutSessionStore` (`checkout_records_script.dart`): el intento con su
+carga exacta antes de la primera llamada, el recibo, el acceso al pedido y el
+resultado del carrito. La página del pedido (`/pedido/<id>`) y el regreso de
+Mercado Pago siguen siendo Flutter y no cambian.
+`test/unit/storefront_html_checkout_contract_test.dart` corre ese script en
+Node y lee lo escrito con los lectores de Flutter, en ambos sentidos.
+
+- **Sesión del cliente:** la de Flutter (`sb-<ref>-auth-token` en
+  localStorage). Si venció, se renueva y se escribe de vuelta en el formato que
+  lee gotrue-dart. «Crear una cuenta» usa PKCE como `supabase_flutter`: deja el
+  verificador en `flutter.supabase.auth.token-code-verifier`, así el enlace del
+  correo inicia sesión.
+- **Transferencia:** antes de abrir la página del pedido, el carrito pierde una
+  sola vez lo pedido (`consumeCartOnce`, contra la revisión del carrito con
+  que se armó el pedido). A diferencia de Flutter, no vuelve a proyectar las
+  líneas que quedan contra el catálogo; las ajusta el carrito al abrirse.
+- **Medido contra Flutter** con su árbol de semántica: 43 cajas a 1440 px y
+  43 a 412 px a menos de 0,6 px. Lo no obvio:
+  - La densidad del tema (−1) quita 4 px a campos, radios y casillas. Un campo
+    mide 18 + 27 + 18 − 4 = 59 px, un radio 36.
+  - El texto del campo es el `bodyLarge` del tema (18 px) y la etiqueta su
+    `bodyMedium` (16 px).
+  - Flutter redondea **cada línea** de un párrafo (13 × 1,45 da líneas de
+    19 px). La altura de línea se escribe ya redondeada.
+  - Las columnas de la dirección siguen al `LayoutBuilder` de la sección (dos
+    columnas desde 640 px de contenido): en CSS es una consulta de contenedor,
+    no de la ventana. Con la ventana, entre 980 y 1157 px salía al revés.
+  - Un `span` con margen vertical no lo aplica: el subtítulo de cada opción
+    sumaba 4 px menos.
+- **Íconos:** salen de la misma fuente que dibuja Flutter
+  (`MaterialIcons-Regular.otf`) con `tool/material_icon_paths.py`, sin
+  descargar nada.
+- **Probar pedidos, siempre en local:** `tool/run_local_checkout.sh` siembra
+  una tienda de prueba (`tool/local_checkout_seed.sql`) y sirve el HTML contra
+  la base local. Las funciones Edge las responde la prueba del navegador.
+
+  Escenarios probados: transferencia, Mercado Pago (redirige a su
+  `init_point`), retiro, cliente con sesión vencida, respuesta perdida
+  (reintenta y recupera el **mismo** pedido) y página recargada a medio
+  intento.
+
+  Trampas del sembrado:
+  - Insertar una tienda deja su id como sujeto de la petición
+    (`request.jwt.claim.sub`), y la clasificación de IVA de un producto exige
+    un usuario real como autor: el sujeto se fija después de la tienda.
+  - Una tienda nueva nace con ajustes por defecto, así que se usa `on
+    conflict`.
+  - Un pedido deja reservas y eventos que no se dejan borrar; el reinicio
+    local apaga disparadores y llaves sólo para las filas de la tienda de
+    prueba.
+
+Lo que costó: probando con la sesión del cliente apareció un **error de
+producción** que no venía de la migración. Desde `20260711123000`, un cliente
+con sesión no podía pagar por transferencia ni en Flutter: la base deshacía el
+pedido al procesarlo. Se arregló en `20261006090000`
+([checkout](../wiki/sitio-web/paginas/checkout-y-pedidos.md)).
+
+Sigue: abrir `/checkout` al servidor (reescritura, que Flutter le deje la
+página, revisión de rutas privadas, que el carrito deje de precargar
+`main.dart.js`), y después la página del pedido y el portal.
+
 ### Pendiente
 
 - Las copias de una foto reemplazada quedan en Storage (pocos KB cada una);

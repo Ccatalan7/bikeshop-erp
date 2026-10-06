@@ -41,19 +41,19 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
-      "sha256": "d9b4309eb652f14024f0c09297dda7c90d70739c95b20d956cb6ce1358fe5a4f"
+      "sha256": "20e01e461e5c25f5b001b100207da2037ac596d2892606d1f4f3e003e03e3fda"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_script.dart",
-      "sha256": "2bb4034fd5db0f9fb7fd908df5cfde789c08f9f267e3f23d39e79b6a75ea44ff"
+      "sha256": "1c2e2078e4b66634536a0dbfc9d61f82d0959a505795293e28c2dae8acf3964f"
     },
     {
       "path": "services/storefront_html/lib/storefront_html.dart",
-      "sha256": "eb0dbbb0f741cad6b0735d84cece0250c60be4a923c48ec06a65e4a9f75a8a58"
+      "sha256": "c50f94d1f583e5f9239bda60ccb3bd963b38f0ae3d0601c4efca8c8444205a44"
     },
     {
       "path": "services/storefront_html/test/storefront_handler_test.dart",
-      "sha256": "57ae34a59e1d2b9bcb2df147f632f2e9342694e0e7429e9ba915f255dfe334ea"
+      "sha256": "38053dadda181a67d89f38df585e0ec58e94f41744f46be8683a12b78e6ddedb"
     },
     {
       "path": "test/unit/product_seo_snapshot_server_routes_test.dart",

@@ -4,6 +4,9 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-06 — corrección — [checkout](paginas/checkout-y-pedidos.md): checkout HTML
+  en `/_html/checkout` (fase 3b), tienda de prueba local, y el pedido por
+  transferencia de un cliente con sesión que la base deshacía desde el 11-jul.
 - 2026-10-06 — corrección — [checkout](paginas/checkout-y-pedidos.md) y
   [rutas](paginas/rutas-y-navegacion.md): `/carrito` pasa al servidor HTML (fase 3a).
 - 2026-10-06 — consulta archivada — [publicación](paginas/publicacion-y-despliegue.md):

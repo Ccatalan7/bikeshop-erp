@@ -150,6 +150,7 @@ class _FakeReads implements PublicReads {
     this.policyRows = const [],
     this.homeRow,
     this.contactRow,
+    this.payments,
   }) : shellJson = shell;
 
   final Map<String, dynamic>? page;
@@ -164,13 +165,16 @@ class _FakeReads implements PublicReads {
   final List<Object?> policyRows;
   final Map<String, dynamic>? homeRow;
   final Map<String, dynamic>? contactRow;
+
+  /// `get_public_checkout_capabilities`, as the shell read returns it.
+  final Object? payments;
   final requested = <String>[];
   final catalogRequests = <CatalogRequest>[];
 
   @override
   Future<ShellReads> shell() async {
     if (fail) throw PublicReadException('down');
-    return (shell: shellJson ?? _shell(), payments: null);
+    return (shell: shellJson ?? _shell(), payments: payments);
   }
 
   @override
@@ -1803,5 +1807,125 @@ void main() {
         (id: 'e', quantity: 3),
       ]);
     });
+  });
+
+  group('checkout', () {
+    final cassette = {
+      ..._product(name: 'Cassette Eclipse 8v', sku: 'C8'),
+      'id': '6f1d2a3e-0000-4000-8000-000000000008',
+      'price': 35000,
+      'tax_rate': 19,
+    };
+    const both = {
+      'schemaVersion': 1,
+      'methods': [
+        {'code': 'mercadopago', 'available': true, 'reasonCode': 'available'},
+        {'code': 'transfer', 'available': true, 'reasonCode': 'available'},
+      ],
+    };
+
+    test('the form is the same for everyone, never indexed, with the store\'s '
+        'payment methods and pickup point', () async {
+      final response = await _get(_FakeReads(payments: both), '/checkout');
+      final html = await response.readAsString();
+
+      expect(response.statusCode, 200);
+      expect(html, contains('<meta name="robots" content="noindex,follow"'));
+      expect(
+        html,
+        contains('href="https://vinabike.cl/checkout" rel="canonical"'),
+      );
+      expect(html, contains('data-lines-url="/checkout/lineas"'));
+      expect(html, contains('data-sb-url="https://example.invalid"'));
+      expect(html, contains('data-sb-key="test"'));
+      expect(
+        html,
+        contains(
+          'data-pickup-address="Retiro en tienda: Alvarez 32, Viña del Mar"',
+        ),
+      );
+      expect(html, contains('name="payment" value="mercadopago" checked'));
+      expect(html, contains('name="payment" value="transfer"'));
+      expect(html, contains('RECOMENDADO'));
+      expect(html, contains('Retiro en Viñabike'));
+      // Records, then the page, both after the script that owns the cart.
+      final owner = html.indexOf('window.vinabikeCart = {');
+      final records = html.indexOf('window.vinabikeCheckoutRecords = function');
+      final page = html.indexOf('var R = window.vinabikeCheckoutRecords(');
+      expect(owner, greaterThan(0));
+      expect(records, greaterThan(owner));
+      expect(page, greaterThan(records));
+    });
+
+    test('the hidden copy asks the hidden lines', () async {
+      final response = await _get(
+        _FakeReads(payments: both),
+        '/_html/checkout',
+      );
+      expect(
+        await response.readAsString(),
+        contains('data-lines-url="/_html/checkout/lineas"'),
+      );
+    });
+
+    test(
+      'without the payment methods the form says so instead of guessing',
+      () async {
+        final response = await _get(_FakeReads(), '/checkout');
+        final html = await response.readAsString();
+        expect(
+          html,
+          contains('No pudimos verificar los medios de pago disponibles.'),
+        );
+        expect(html, isNot(contains('name="payment"')));
+      },
+    );
+
+    test('the lines carry what the order states of each one', () async {
+      final response = await _get(
+        _FakeReads(products: [cassette]),
+        '/checkout/lineas?l=${cassette['id']}:2',
+      );
+      expect(response.headers['cache-control'], 'no-store');
+      final data =
+          jsonDecode(await response.readAsString()) as Map<String, dynamic>;
+
+      expect(data['valid'], isTrue);
+      expect(data['gross'], 70000);
+      expect(data['net'], 58824);
+      expect(data['tax'], 11176);
+      expect(data['items'], [
+        {
+          'product_id': cassette['id'],
+          'product_name': 'Cassette Eclipse 8v',
+          'product_sku': 'C8',
+          'quantity': 2,
+          'unit_price': 35000.0,
+          'subtotal': 70000.0,
+        },
+      ]);
+      expect(data['rows'], contains('Cantidad: 2'));
+      expect(data['rows'], contains('\$ 70.000'));
+    });
+
+    test(
+      'without a tax rate the order is blocked, the gross still known',
+      () async {
+        final response = await _get(
+          _FakeReads(
+            products: [
+              {...cassette}..remove('tax_rate'),
+            ],
+          ),
+          '/checkout/lineas?l=${cassette['id']}:1',
+        );
+        final data =
+            jsonDecode(await response.readAsString()) as Map<String, dynamic>;
+        expect(data['valid'], isFalse);
+        expect(data['gross'], isNull);
+        expect(data['knownGross'], 35000);
+        expect(data['block'], isNotEmpty);
+      },
+    );
   });
 }

@@ -42,7 +42,7 @@ prueba), salvo en el editor, su vista previa y `/tienda` `[Repo]`.
 | `/pagina/:slug` | página CMS dinámica | según su publicación |
 | `/contacto`, `/nosotros`, `/terminos`, `/privacidad`, `/devoluciones`, `/envios` | páginas fijas con su página CMS, todas dibujadas por el servidor HTML; las cinco de información sin nada que leer y `/contacto` sin publicar responden 404 con `noindex`. `/contacto` muestra los datos de Configuración (correo, teléfono, dirección, WhatsApp, redes, horario, Maps) y un formulario que abre un correo a la tienda | sí, si su página está publicada (y, las de información, tienen algo que leer); si no, `noindex,follow` |
 | `/carrito` | carrito; lo dibuja el servidor HTML y sus líneas llegan de `/carrito/lineas` (JSON, `no-store`) | no (`X-Robots-Tag` y meta) |
-| `/checkout` | compra (Flutter) | no (`X-Robots-Tag`) |
+| `/checkout` | compra (Flutter); la versión HTML está en `/_html/checkout` y sus líneas en `/checkout/lineas` (JSON, `no-store`) hasta abrirla | no (`X-Robots-Tag` y meta) |
 | `/pedido/:id` | confirmación de un pedido (con token de acceso) | no |
 | `/cuenta`, `/cuenta/login`, `/cuenta/perfil`, `/cuenta/direcciones`, `/cuenta/pedidos`, `/cuenta/bicicletas`, `/cuenta/servicios`, `/cuenta/chats`, `/cuenta/chats/:id`, `/cuenta/mensajes`, `/cuenta/mensajes/:id`, `/cuenta/descargas/android` | portal de clientes ([portal-de-clientes](portal-de-clientes.md)) | no |
 | `/auth/callback` | vuelta del inicio de sesión | no |

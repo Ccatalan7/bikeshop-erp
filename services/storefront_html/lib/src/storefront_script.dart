@@ -155,12 +155,60 @@ const storefrontScript = r'''
     });
   }
 
+  // The checkout needs the saved document's revision (Flutter's
+  // `captureDurableCheckoutRevision`): a document without one (written
+  // before revisions) is saved again first, with the same lines.
+  function ensureRevision() {
+    return locked(function () {
+      var now = Date.now();
+      var stored = readCart(now);
+      if (stored.doc && (!stored.doc.revision || stored.legacy)) {
+        commit(stored, copyLines(stored.doc), now);
+        stored = readCart(now);
+      }
+      var doc = stored.doc;
+      return { lines: copyLines(doc), revision: doc && doc.revision ? String(doc.revision) : null };
+    });
+  }
+
+  // `consumeOrderedLines`: after an order, the cart loses what was ordered,
+  // only if it is still the document the order was made from (its
+  // revision); otherwise it stays as it is and the order page says so.
+  function consumeLines(ordered, expectedRevision) {
+    return locked(function () {
+      var now = Date.now();
+      var stored = readCart(now);
+      var doc = stored.doc;
+      if (!doc || stored.legacy || !expectedRevision || String(doc.revision || '') !== String(expectedRevision)) return false;
+      var want = {};
+      for (var i = 0; i < ordered.length; i++) {
+        var id = String(ordered[i].id || '').trim(), q = ordered[i].q;
+        if (!id || !(q >= 1)) return false;
+        want[id] = (want[id] || 0) + q;
+      }
+      var lines = copyLines(doc).map(function (l) { return { id: l.id, q: l.q - (want[l.id] || 0) }; })
+        .filter(function (l) { return l.q > 0; });
+      var applied = ((doc.applied_mutations) || []).map(function (m) {
+        if (typeof m === 'string') return { id: m.trim(), at: doc.saved_at };
+        return m && typeof m === 'object' ? { id: String(m.id || '').trim(), at: m.at } : null;
+      }).filter(function (m) { return m && m.id && fresh(m.at, now); });
+      var next = { v: 1, tenant: tenant, saved_at: new Date(now).toISOString(), lines: lines, revision: uuid() };
+      if (applied.length) next.applied_mutations = applied;
+      var encoded = JSON.stringify(JSON.stringify(next));
+      localStorage.setItem(cartKey, encoded);
+      if (localStorage.getItem(cartKey) !== encoded) throw new Error('cart');
+      return true;
+    });
+  }
+
   window.vinabikeCart = {
     key: cartKey,
     // The saved lines, `[]` without a cart; throws on a document Flutter
     // could not read, which is never overwritten.
     lines: function () { return copyLines(readCart(Date.now()).doc); },
     update: updateCart,
+    ensureRevision: ensureRevision,
+    consume: consumeLines,
     badge: function () { paintBadge(); }
   };
 
@@ -173,6 +221,9 @@ const storefrontScript = r'''
     if (!window.vinabikeMeasurementAllowed || typeof window.fbq !== 'function') return;
     window.fbq('track', name, params);
   }
+
+  // For the checkout's `begin_checkout` and `InitiateCheckout`.
+  window.vinabikeMeasure = { track: track, pixel: pixel };
 
   var prefetched = false;
   function warmCart() {

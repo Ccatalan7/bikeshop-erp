@@ -2,9 +2,9 @@
 titulo: Carrito, checkout y pedidos online
 resumen: cómo compra un cliente en vinabike.cl, qué pagos acepta, qué pasa con el stock, la venta y los correos, y dónde opera el pedido el equipo
 fuentes: [repositorio]
-archivos: [docs/runbooks/ONLINE_ORDER_OPERATIONS.md, docs/user-guides/WEBSITE_ONLINE_SALES_USER_GUIDE.md, lib/public_store/pages/checkout_page.dart, lib/public_store/pages/order_confirmation_page.dart, lib/public_store/providers/cart_provider.dart, lib/public_store/services/public_checkout_capability_service.dart, lib/modules/website/pages/online_orders_page.dart, lib/modules/website/services/mercadopago_service.dart]
+archivos: [docs/runbooks/ONLINE_ORDER_OPERATIONS.md, services/storefront_html/lib/src/checkout_page_view.dart, services/storefront_html/lib/src/checkout_page_script.dart, services/storefront_html/lib/src/checkout_records_script.dart, services/storefront_html/tool/local_checkout_seed.sql, supabase/migrations/20261006090000_public_checkout_processes_signed_in_transfer.sql, docs/user-guides/WEBSITE_ONLINE_SALES_USER_GUIDE.md, lib/public_store/pages/checkout_page.dart, lib/public_store/pages/order_confirmation_page.dart, lib/public_store/providers/cart_provider.dart, lib/public_store/services/public_checkout_capability_service.dart, lib/modules/website/pages/online_orders_page.dart, lib/modules/website/services/mercadopago_service.dart]
 tablas: [online_orders, online_order_items, online_order_inventory_reservations, online_order_access_tokens, online_order_payment_preferences, online_order_events, online_order_official_documents, online_order_corrections, website_settings]
-revisado: 2026-10-04
+revisado: 2026-10-06
 ---
 
 # Carrito, checkout y pedidos online
@@ -36,7 +36,15 @@ tributario» `[Repo]`.
 2. **Checkout** (`/checkout`): `get_public_checkout_capabilities` dice qué
    métodos y entregas están activos; `quote_public_online_shipping` cotiza el
    envío; `google-places-proxy` autocompleta la dirección. Un producto sin tasa
-   de IVA explícita bloquea el checkout `[Repo]`.
+   de IVA explícita bloquea el checkout `[Repo]`. Desde el 2026-10-06 existe la
+   versión HTML (`/_html/checkout`, oculta hasta abrirla): el servidor manda el
+   formulario y los medios de pago; el navegador pide `/checkout/lineas`, cotiza
+   y crea el pedido con **las mismas llamadas** que Flutter, y guarda el mismo
+   registro de recuperación (`CheckoutSessionStore`: intento, recibo, acceso al
+   pedido, resultado del carrito), así que la página del pedido y el regreso de
+   Mercado Pago siguen siendo Flutter sin cambios. Con la sesión del cliente
+   (`sb-<ref>-auth-token` de Flutter, renovada si venció) liga el pedido a su
+   cuenta y guarda la dirección `[Repo]`.
 3. **Crear el pedido:** `create_public_online_order_with_access` congela precio,
    costo e IVA por línea, **reserva** las unidades (disponible = físico − reservas
    activas, para que dos clientes no compren la última) y devuelve un token de
@@ -109,6 +117,15 @@ se cancela: va por devolución, corrección o nota de crédito y reembolso
 - 72 pedidos y 75 líneas en total (aprox., 2026-10-03) `[Prod]`.
 - **Última venta web pagada: WEB-26-00015, el 2026-05-03.** Después sólo hay
   pedidos de prueba, todos anulados (2026-10-04) `[Prod]`.
+- **Un cliente con sesión no podía pagar por transferencia (11-jul → 6-oct).**
+  El checkout procesa al tiro cada pedido que no es de Mercado Pago con
+  `process_online_order`, y desde `20260711123000` esa función rechaza a todo
+  usuario autenticado que no sea personal de la tienda: el pedido se deshacía
+  entero y el cliente veía «No pudimos confirmar el resultado». Un invitado
+  pasaba. No hay ningún pedido así en esas fechas (sí de personal y de
+  invitados) `[Prod 2026-10-06]`. Arreglo `20261006090000`: el checkout procesa
+  su propio pedido con `process_public_checkout_order`, interna; se encontró
+  probando el checkout HTML con la tienda de prueba local `[Repo]`.
 
 ## Trampas
 
@@ -117,11 +134,24 @@ se cancela: va por devolución, corrección o nota de crédito y reembolso
 - Cambiar el costo actual de un producto no reescribe el costo del pedido.
 - Un pedido de prueba nace `confirmed` con su venta `sent` sin asientos ni stock;
   se anula con `transition_online_order_status`, no borrando filas.
+- **Probar pedidos nunca en producción:** `services/storefront_html/tool/run_local_checkout.sh`
+  siembra una tienda de prueba en la base local (`local_checkout_seed.sql`:
+  productos con stock e IVA, las cuatro tarifas, los dos medios de pago con
+  datos falsos y un cliente con contraseña de prueba) y sirve el HTML contra
+  ella. Las funciones Edge no corren en local: la prueba del navegador las
+  responde (Mercado Pago, Places).
+- Un pedido por transferencia nace `confirmed` y crea su venta en la misma
+  llamada; con sesión, esa llamada corre con el JWT del cliente, así que
+  cualquier guarda de «personal de la tienda» en ese camino tumba el pedido.
 
 ## En el código y la base
 
 - Tienda HTML: `services/storefront_html/lib/src/cart_page_model.dart`,
-  `cart_page_view.dart` (carrito y `/carrito/lineas`).
+  `cart_page_view.dart` (carrito y `/carrito/lineas`); `checkout_page_view.dart`,
+  `checkout_page_css.dart`, `checkout_page_script.dart` (formulario, cotización,
+  pedido, Mercado Pago) y `checkout_records_script.dart` (los registros de
+  `CheckoutSessionStore`, probados contra Flutter en
+  `test/unit/storefront_html_checkout_contract_test.dart`).
 - Tienda Flutter: `cart_page.dart` (en el editor y en `/tienda`), `checkout_page.dart`,
   `order_confirmation_page.dart`, `cart_provider.dart`,
   `public_checkout_capability_service.dart`, `checkout_session_store.dart`,
@@ -131,5 +161,7 @@ se cancela: va por devolución, corrección o nota de crédito y reembolso
   política en `online_order_workflow_policy.dart`.
 - Tablas: `online_orders`, `online_order_items` y las `online_order_*` de
   reservas, tokens, preferencias, eventos, documentos y correcciones.
+- Base: `create_public_online_order_with_access` → `create_public_online_order_unkeyed`
+  → `process_public_checkout_order` (transferencia) `[Repo]`.
 - Funciones: `mercadopago-*`, `send-transactional-order-email`,
   `resend-transactional-webhook`, `google-places-proxy`.
