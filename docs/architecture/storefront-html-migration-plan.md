@@ -1437,6 +1437,12 @@ pasos, con el lienzo Flutter como predeterminado hasta que el HTML lo iguale:
   responde Flutter entera (`_flutterFallback`), así que el sitio nunca pierde
   un bloque; cada tipo nuevo se mide contra Flutter con una página de prueba
   servida por un Supabase falso (nada se escribe en producción para medir).
+  **Corrección del dueño, 2026-10-06:** la paridad a píxel vale para lo que
+  ya se ve en línea; un tipo que ninguna página publicada usa no se copia
+  con el aspecto viejo de Flutter: se rediseña primero en un lienzo de Claude
+  Design con datos reales, se le presenta al dueño y, aprobado, se construye
+  en los dos dueños (widget de Flutter y HTML) para que el editor y el sitio
+  sigan iguales.
 - **5b, dibujar un borrador.** Una ruta del servidor sólo para el personal
   recibe el documento en edición (bloques y ajustes del tema, sin guardar) con
   la sesión del ERP, comprueba que es personal de la tienda leyendo como ella
@@ -1560,3 +1566,40 @@ texto, como `StaticPolicyPage`. Lo que costó:
   pregunta de varias líneas (medido: una de tres líneas mide 90). Abre con
   `<details>`: funciona sin script y con teclado, y anima su alto donde el
   navegador lo permite (`::details-content`).
+
+### 5a, tercera tanda: en pausa hasta aprobar el diseño (2026-10-06)
+
+Cifras, testimonios, equipo, planes, galería, servicios, banner de partners
+y el espacio del bloque de pie quedaron dibujados en HTML a píxel de Flutter
+(cajas idénticas a 1440, 800 y 412; diferencia media bajo 1/255) y **no se
+publicaron**: al ver las capturas el dueño rechazó el aspecto («HORRIBLE
+designs… why aren't you using design sync to create them and present that
+to me?»). Ninguna página publicada usa esos tipos (las cinco con bloques
+usan portada, «sobre nosotros», características, preguntas y contacto), así
+que no había nada en línea que conservar. Costó unas dos horas de medición
+que no se van a usar tal cual. La propuesta nueva, con los precios, reseñas
+y cifras reales, está en el lienzo «Bloques del sitio Viñabike»
+(https://claude.ai/artifact/Eg75Q9vj2oZYWKiyGFDCHU) y espera su visto bueno.
+
+Lo que la medición enseñó y sirve para cualquier paridad que quede:
+
+- **Chrome dibuja un borde de 1,5 px como 1 px** (redondea el ancho a
+  píxeles del dispositivo) y cada tarjeta perdía un píxel de alto; una sombra
+  interior `inset 0 0 0 1.5px` sí se dibuja fraccionaria y no ocupa espacio,
+  igual que el borde de Flutter dentro del relleno.
+- **`theme.dividerColor` es negro** en la tienda, venga lo que venga del
+  editor: sale del tema base de `PublicStoreTheme` (su `ColorScheme.light`
+  sin `outlineVariant`) y `WebsiteThemeBuilder` no lo cambia.
+- **Las `Card` sin margen propio llevan 8** (el tema base) dentro del ancho
+  que Flutter les da; la sombra al 14 % medida por elevación: 1 = `0 1px 2px
+  -1px` al 8 %, 2 = `0 2px 3.5px -1px` al 4,5 %, 4 = `0 4px 9px -3px` al
+  5,5 %, cada una con un halo de 1–2 px.
+- **Una tarjeta translúcida deja ver la sombra que Flutter pinta bajo ella**
+  (`drawShadow` con oclusor transparente): el plan destacado se ve 3,6 % más
+  oscuro adentro, menos junto al borde de arriba.
+- **El banner de partners sólo tiene altura mínima** (su perfil no es
+  `exact`): la rama de alto fijo de `_buildPartnersBanner` no se alcanza en
+  una página pública.
+- **Un plan sin botón muestra «Seleccionar» a `/productos`**: lo agrega la
+  normalización (`syncNestedActions`), no el widget.
+

@@ -4,6 +4,10 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-06 — corrección — [estado](paginas/estado-y-pendientes.md): los
+  bloques del editor que ninguna página usa no se copian con el aspecto viejo
+  de Flutter; el dueño pidió verlos rediseñados antes (propuesta en Claude
+  Design) y la tercera tanda de la fase 5a espera su visto bueno.
 - 2026-10-06 — corrección — [editor](paginas/editor-del-sitio.md): el HTML
   dibuja también preguntas, llamado a la acción, características y «sobre
   nosotros», y dice qué tipos faltan; [estado](paginas/estado-y-pendientes.md)

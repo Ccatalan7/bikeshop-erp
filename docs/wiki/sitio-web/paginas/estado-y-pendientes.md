@@ -67,6 +67,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 | 2026-09-24 | La tienda llama `get_public_store_data` directo además de usar la precarga (sin investigar) | [rendimiento](rendimiento.md) |
 | 2026-09-24 | Imágenes pesadas: campaña de cámaras en PNG de 2 MB, WebP de 312 KB en la grilla de categorías | [rendimiento](rendimiento.md) |
 | 2026-09-26 | Login `/cuenta/login` sin la dirección «Sendero» | [portal](portal-de-clientes.md) |
+| 2026-10-06 | **Rediseño de los bloques del editor:** propuesta en Claude Design con datos reales (cifras, carta del taller, mantenciones, reseñas, galería, equipo, preguntas, marcas, llamado); espera el visto bueno del dueño, y la tercera tanda de la fase 5a espera eso | `docs/architecture/storefront-html-migration-plan.md` |
 | 2026-10-06 | **Lienzo del editor en HTML:** el sitio real en un visor web dentro del ERP (requisito 1 del dueño); los chats se quedan en Flutter (7 conversaciones del portal en total, 0 en 90 días) | `docs/architecture/storefront-html-migration-plan.md` |
 | 2026-10-06 | Pasar al HTML el canje de los enlaces de Auth (vuelta de Google en `/auth/callback`, confirmar con `code`), hoy en Flutter: el verificador PKCE ya está donde ambos lo leen | `docs/architecture/storefront-html-migration-plan.md` |
 | 2026-10-03 | Código muerto: `banners_management_page.dart`, `content_management_page.dart`, `customer_account_page.dart`, `premium_dashboard_widgets.dart`, ruta `/cuenta/mensajes`; clave `header_nav_links` | [editor](editor-del-sitio.md) |
