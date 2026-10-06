@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "storefront-customer-login",
+  "scope": "release",
+  "platforms": [
+    "web"
+  ],
+  "title": "Entrar a tu cuenta carga al instante",
+  "summary": "En vinabike.cl, la página para entrar a tu cuenta llega armada desde el servidor: en un teléfono lento se usa en un par de segundos, no en 15 a 20.",
+  "items": [
+    "Entrar, crear tu cuenta o recuperar tu contraseña funciona como antes, y el teléfono que das al crear la cuenta ya no se pierde al confirmar el correo."
+  ],
+  "evidence": [
+    {
+      "path": "firebase.json",
+      "sha256": "0d300b6b32a054b58d90af6d37441b98c22ff15ae77d86262748015aa60b8590"
+    },
+    {
+      "path": "scripts/releases/check_storefront_html_routes.mjs",
+      "sha256": "f57d7255a4999f72e1983837c7dca339c1eb6a63c8381bff79413170f5c2c1da"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/seo/storefront_html_routes.dart",
+      "sha256": "a9d8ad7a8d09666cc72d48f3ba11081ccf668afdb5ce9640c37b03ecedf31539"
+    },
+    {
+      "path": "services/storefront_html/lib/src/login_page_view.dart",
+      "sha256": "ebfbd28435c938925e829232750c69c71f2f0b95d6c42853cc802479a5b2e506"
+    },
+    {
+      "path": "services/storefront_html/lib/src/login_page_css.dart",
+      "sha256": "d4ee99dcc2fc7b626d3b9328a287bb2a4fe3b967b1995b5aa4e0117a5ff26c30"
+    },
+    {
+      "path": "services/storefront_html/lib/src/login_page_script.dart",
+      "sha256": "23fddc62e67a687e4bf9cb8715b1e7e7a3cff0c0912dabfb9dd371ffb20a3990"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_page_route.dart",
+      "sha256": "1b7f37858ec744fe9577ef7390cdebd42af0947a21a6f40b2010785651ad9118"
+    },
+    {
+      "path": "services/storefront_html/lib/src/public_reads.dart",
+      "sha256": "05f55351537b3d4ec710e295d457767369e739aae7c9eb61deffdd76e6d48a84"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_handler.dart",
+      "sha256": "4a5d77c1b18c51e178ff3a691d9ffd94a207b96a8493832cb41067b3d9564aa7"
+    },
+    {
+      "path": "services/storefront_html/lib/src/css_values.dart",
+      "sha256": "837c094bec571f7bb457924d868afd54b5847ddeaa64c2137a676d82df0b3905"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_page_css.dart",
+      "sha256": "bb0f5a67e3d71a08b22c23a1b7ba3347ced50b70c223834b9844dd479e587712"
+    },
+    {
+      "path": "services/storefront_html/lib/src/material_icons.dart",
+      "sha256": "a39f0b9711f69c53f2e502255ee149e26061f2e17fe981254e28abf3d5a5fe68"
+    },
+    {
+      "path": "services/storefront_html/lib/storefront_html.dart",
+      "sha256": "70454e6f857a7f04a2621839e22a804b6b967f1f4720a1711e700bcb5ad98767"
+    }
+  ]
+}

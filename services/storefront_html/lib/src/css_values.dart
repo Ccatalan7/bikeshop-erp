@@ -36,3 +36,49 @@ WebsiteRgba hexColor(Object? raw, WebsiteRgba fallback) {
 /// (only the regular file ships): weight 400 and a stroke, from 600 up.
 String headingWeightCss(int weight) =>
     weight >= 600 ? '-webkit-text-stroke:.032em currentColor' : '';
+
+/// One Flutter text style, as CSS: its line is the size times the style's
+/// height, rounded (SkParagraph); a heading font that ships only its regular
+/// file draws 600 and up as that outline emboldened by Skia. SkParagraph puts
+/// half of the letter spacing before each glyph (shift a text right by half).
+class FlutterTextCss {
+  const FlutterTextCss(
+    this.family,
+    this.size,
+    this.height,
+    this.weight,
+    this.spacing, {
+    required this.heading,
+  });
+
+  final String family;
+  final double size;
+  final double height;
+  final int weight;
+  final double spacing;
+
+  /// The heading font ships only its regular file.
+  final bool heading;
+
+  int get line => (size * height).round();
+
+  /// Skia's fake-bold stroke width for [size].
+  double get _embolden {
+    final ratio = size <= 9
+        ? 1 / 24
+        : size >= 36
+        ? 1 / 32
+        : 1 / 24 + (size - 9) / 27 * (1 / 32 - 1 / 24);
+    return double.parse((size * ratio).toStringAsFixed(3));
+  }
+
+  String get font {
+    final drawnWeight = heading ? 400 : weight;
+    final stroke = heading && weight >= 600
+        ? ';-webkit-text-stroke:${cssPx(_embolden)} currentColor'
+        : ';-webkit-text-stroke:0';
+    return 'font:$drawnWeight ${cssPx(size)}/${line}px '
+        'var(--${heading ? 'head' : 'body'});'
+        'letter-spacing:${cssPx(spacing)}$stroke';
+  }
+}

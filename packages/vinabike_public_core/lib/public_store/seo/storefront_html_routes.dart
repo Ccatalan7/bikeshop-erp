@@ -1,8 +1,9 @@
 /// The public paths Firebase Hosting hands to the HTML storefront: the
 /// `run` rewrites of the store target in `firebase.json`, in the same
-/// spelling (a test keeps the two equal). Flutter still draws the way in
-/// and the chats; from them it leaves for these paths with a full page
-/// load, so every visitor reads the same pages.
+/// spelling (a test keeps the two equal). Flutter still draws the chats
+/// and redeems the links that come back from an e-mail or from Google; from
+/// them it leaves for these paths with a full page load, so every visitor
+/// reads the same pages.
 const storefrontHtmlRouteSources = <String>[
   '/',
   '/productos',
@@ -32,6 +33,8 @@ const storefrontHtmlRouteSources = <String>[
   '/cuenta/perfil',
   '/cuenta/direcciones',
   '/cuenta/accion',
+  // The way in (phase 4c); a link back from Auth gets Flutter from it.
+  '/cuenta/login',
 ];
 
 /// Whether the HTML storefront answers [path] (no query, no fragment), as

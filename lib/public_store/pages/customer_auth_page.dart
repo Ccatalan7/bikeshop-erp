@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show AuthException;
+import 'package:vinabike_public_core/public_store/models/customer_auth_forms.dart';
 import '../services/customer_account_service.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../theme/public_store_theme.dart';
@@ -190,7 +191,9 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                'Te enviamos un correo a ${_verificationEmail ?? _emailController.text.trim()} para confirmar tu cuenta.',
+                customerAuthVerificationSent(
+                  _verificationEmail ?? _emailController.text.trim(),
+                ),
               ),
             ),
           );
@@ -215,9 +218,9 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(_isLogin
-              ? 'No pudimos iniciar sesión. Revisa tus datos e inténtalo nuevamente.'
-              : 'No pudimos crear la cuenta con estos datos. Inténtalo nuevamente.'),
+          content: Text(
+            _isLogin ? customerAuthSignInFailed : customerAuthSignUpFailed,
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -249,12 +252,15 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Contraseña actualizada. Inicia sesión con tu nueva clave.',
-          ),
+          content: Text(customerAuthPasswordRecovered),
         ),
       );
-      await PublicStoreLayout.navigateToHref(context, '/cuenta/login');
+      // On the public store the login is the HTML store's page (a full load
+      // that drops this bar): `?clave=` makes it say the same.
+      await PublicStoreLayout.navigateToHref(
+        context,
+        '/cuenta/login?$customerAuthPasswordNoticeParameter=actualizada',
+      );
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -320,12 +326,13 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Contraseña creada. Inicia sesión para entrar a tu cuenta.',
-          ),
+          content: Text(customerAuthPasswordCreated),
         ),
       );
-      await PublicStoreLayout.navigateToHref(context, '/cuenta/login');
+      await PublicStoreLayout.navigateToHref(
+        context,
+        '/cuenta/login?$customerAuthPasswordNoticeParameter=creada',
+      );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -437,9 +444,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'No pudimos iniciar sesión con Google. Inténtalo nuevamente.',
-          ),
+          content: Text(customerAuthGoogleFailed),
           backgroundColor: Colors.red,
         ),
       );
@@ -486,19 +491,21 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
                     ],
                   ),
                   child: isWide
-                      ? Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                                child: _buildIntroPanel(context,
-                                    isRecoveryMode: isRecoveryMode,
-                                    isInvitationMode: isInvitationMode)),
-                            Expanded(
-                                child: _buildFormPanel(context,
-                                    isRecoveryMode: isRecoveryMode,
-                                    isInvitationMode: isInvitationMode,
-                                    isRecoveryPending: isRecoveryPending)),
-                          ],
+                      ? IntrinsicHeight(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Expanded(
+                                  child: _buildIntroPanel(context,
+                                      isRecoveryMode: isRecoveryMode,
+                                      isInvitationMode: isInvitationMode)),
+                              Expanded(
+                                  child: _buildFormPanel(context,
+                                      isRecoveryMode: isRecoveryMode,
+                                      isInvitationMode: isInvitationMode,
+                                      isRecoveryPending: isRecoveryPending)),
+                            ],
+                          ),
                         )
                       : Column(
                           mainAxisSize: MainAxisSize.min,
@@ -529,6 +536,10 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
     bool isInvitationMode = false,
   }) {
     final theme = Theme.of(context);
+    final mode = _mode(
+      isRecoveryMode: isRecoveryMode,
+      isInvitationMode: isInvitationMode,
+    );
 
     return Container(
       padding:
@@ -557,7 +568,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'CUENTA VINABIKE',
+            customerAuthEyebrow,
             style: theme.textTheme.labelMedium?.copyWith(
               color: PublicStoreTheme.textSecondary,
               fontWeight: FontWeight.w700,
@@ -566,13 +577,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
           ),
           const SizedBox(height: 14),
           Text(
-            isInvitationMode
-                ? 'Crea tu primera contraseña para activar el acceso.'
-                : isRecoveryMode
-                    ? 'Crea una nueva contraseña para recuperar tu acceso.'
-                    : _isLogin
-                        ? 'Ingresa para revisar pedidos, bicicletas y soporte desde un solo lugar.'
-                        : 'Crea tu cuenta para guardar tus datos, seguir tus pedidos y acceder a tu historial.',
+            customerAuthHeadline(mode),
             style: theme.textTheme.headlineMedium?.copyWith(
               fontSize: compact ? 28 : 32,
               height: 1.15,
@@ -581,38 +586,20 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
           ),
           const SizedBox(height: 14),
           Text(
-            isInvitationMode
-                ? 'Este enlace de invitación confirma tu correo. Define una clave fuerte y luego inicia sesión.'
-                : isRecoveryMode
-                    ? 'Este enlace seguro confirma tu identidad. Define una clave nueva y entrarás directo a tu cuenta.'
-                    : _isLogin
-                        ? 'Una experiencia más ordenada, rápida y clara que el checkout improvisado de invitado.'
-                        : 'Todo queda asociado a tu cuenta para futuras compras, seguimiento y atención postventa.',
+            customerAuthLead(mode),
             style: theme.textTheme.bodyLarge?.copyWith(
               color: PublicStoreTheme.textSecondary,
             ),
           ),
-          const SizedBox(height: 28),
-          _buildBenefitRow(
-            icon: Icons.shopping_bag_outlined,
-            title: 'Pedidos y seguimiento',
-            subtitle:
-                'Consulta compras, estados y confirmaciones en un solo panel.',
-          ),
-          const SizedBox(height: 16),
-          _buildBenefitRow(
-            icon: Icons.pedal_bike_outlined,
-            title: 'Historial de bicicletas',
-            subtitle:
-                'Accede a tus bicicletas registradas y próximos servicios.',
-          ),
-          const SizedBox(height: 16),
-          _buildBenefitRow(
-            icon: Icons.support_agent_outlined,
-            title: 'Atención más rápida',
-            subtitle:
-                'Mantén tus datos listos para soporte, mensajes y futuras compras.',
-          ),
+          for (final (index, (icon, title, subtitle))
+              in customerAuthBenefits.indexed) ...[
+            SizedBox(height: index == 0 ? 28 : 16),
+            _buildBenefitRow(
+              icon: _benefitIcons[icon] ?? Icons.check_circle_outline,
+              title: title,
+              subtitle: subtitle,
+            ),
+          ],
           if (!compact) ...[
             const SizedBox(height: 28),
             // return-contract: explicit-destination — this is a labelled link
@@ -620,7 +607,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
             TextButton.icon(
               onPressed: () => PublicStoreLayout.navigateToHref(context, '/'),
               icon: const Icon(Icons.arrow_back, size: 18),
-              label: const Text('Volver al inicio'),
+              label: const Text(customerAuthBackHome),
               style: TextButton.styleFrom(
                 foregroundColor: PublicStoreTheme.textPrimary,
                 padding: EdgeInsets.zero,
@@ -635,6 +622,24 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
       ),
     );
   }
+
+  CustomerAuthMode _mode({
+    required bool isRecoveryMode,
+    required bool isInvitationMode,
+  }) =>
+      isInvitationMode
+          ? CustomerAuthMode.invitation
+          : isRecoveryMode
+              ? CustomerAuthMode.recovery
+              : _isLogin
+                  ? CustomerAuthMode.login
+                  : CustomerAuthMode.register;
+
+  static const _benefitIcons = <String, IconData>{
+    'shopping_bag': Icons.shopping_bag_outlined,
+    'pedal_bike': Icons.pedal_bike_outlined,
+    'support_agent': Icons.support_agent_outlined,
+  };
 
   Widget _buildBenefitRow({
     required IconData icon,
@@ -697,6 +702,10 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
   }) {
     final theme = Theme.of(context);
     final isPasswordSetupMode = isRecoveryMode || isInvitationMode;
+    final mode = _mode(
+      isRecoveryMode: isRecoveryMode,
+      isInvitationMode: isInvitationMode,
+    );
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(28, 30, 28, 30),
@@ -713,26 +722,14 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           Text(
-                            isInvitationMode
-                                ? 'Crea tu contraseña'
-                                : isRecoveryMode
-                                    ? 'Nueva contraseña'
-                                    : _isLogin
-                                        ? 'Iniciar sesión'
-                                        : 'Crear cuenta',
+                            customerAuthFormTitle(mode),
                             style: theme.textTheme.headlineSmall?.copyWith(
                               color: PublicStoreTheme.textPrimary,
                             ),
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            isInvitationMode
-                                ? 'Define una contraseña segura para terminar de activar tu cuenta.'
-                                : isRecoveryMode
-                                    ? 'Ingresa una contraseña nueva para terminar la recuperación.'
-                                    : _isLogin
-                                        ? 'Usa tu correo y contraseña para continuar.'
-                                        : 'Completa tus datos para guardar tus compras e historial.',
+                            customerAuthFormLead(mode),
                             style: theme.textTheme.bodyMedium?.copyWith(
                               color: PublicStoreTheme.textSecondary,
                             ),
@@ -822,11 +819,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
                                         color: Colors.white,
                                       ),
                                     )
-                                  : Text(
-                                      isInvitationMode
-                                          ? 'CREAR CONTRASEÑA'
-                                          : 'ACTUALIZAR CONTRASEÑA',
-                                    ),
+                                  : Text(customerAuthSubmit(mode)),
                             ),
                             const SizedBox(height: 14),
                             TextButton(
@@ -860,7 +853,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
                                     SizedBox(width: 12),
                                     Expanded(
                                       child: Text(
-                                        'Tu cuenta ha sido confirmada. Ahora puedes iniciar sesión.',
+                                        customerAuthConfirmedNotice,
                                         style: TextStyle(
                                           color: Color(0xFF1F5D3B),
                                           fontWeight: FontWeight.w700,
@@ -888,7 +881,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     const Text(
-                                      'Confirma tu correo',
+                                      customerAuthVerifyTitle,
                                       style: TextStyle(
                                         fontSize: 15,
                                         fontWeight: FontWeight.w700,
@@ -897,7 +890,9 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
                                     ),
                                     const SizedBox(height: 8),
                                     Text(
-                                      'Enviamos un correo a $_verificationEmail. Revisa tu bandeja de entrada y activa tu cuenta desde el enlace recibido.',
+                                      customerAuthVerifyBody(
+                                        _verificationEmail!,
+                                      ),
                                       style: const TextStyle(
                                         fontSize: 13,
                                         height: 1.45,
@@ -923,7 +918,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
                                                   messenger.showSnackBar(
                                                     const SnackBar(
                                                       content: Text(
-                                                        'Hemos reenviado el correo de verificación.',
+                                                        customerAuthResent,
                                                       ),
                                                     ),
                                                   );
@@ -933,7 +928,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
                                                   messenger.showSnackBar(
                                                     const SnackBar(
                                                       content: Text(
-                                                        'No pudimos reenviar el correo. Inténtalo nuevamente.',
+                                                        customerAuthResendFailed,
                                                       ),
                                                       backgroundColor:
                                                           Colors.red,
@@ -949,7 +944,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
                                             },
                                       icon: const Icon(
                                           Icons.mark_email_unread_outlined),
-                                      label: const Text('Reenviar correo'),
+                                      label: const Text(customerAuthResend),
                                       style: OutlinedButton.styleFrom(
                                         foregroundColor:
                                             PublicStoreTheme.textPrimary,
@@ -972,60 +967,45 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
                               ),
                             ],
                             if (!_isLogin) ...[
-                              _buildFieldLabel('Nombre completo'),
+                              _buildFieldLabel(customerAuthNameLabel),
                               TextFormField(
                                 controller: _nameController,
                                 decoration: const InputDecoration(
-                                  hintText: 'Tu nombre y apellido',
+                                  hintText: customerAuthNameHint,
                                   prefixIcon: Icon(Icons.person_outline),
                                 ),
-                                validator: (value) {
-                                  if (value == null || value.trim().isEmpty) {
-                                    return 'El nombre es requerido';
-                                  }
-                                  return null;
-                                },
+                                validator: customerAuthNameError,
                               ),
                               const SizedBox(height: 16),
                             ],
-                            _buildFieldLabel('Correo electrónico'),
+                            _buildFieldLabel(customerAuthEmailLabel),
                             TextFormField(
                               controller: _emailController,
                               decoration: const InputDecoration(
-                                hintText: 'nombre@correo.com',
+                                hintText: customerAuthEmailHint,
                                 prefixIcon: Icon(Icons.email_outlined),
                               ),
                               keyboardType: TextInputType.emailAddress,
-                              validator: (value) {
-                                if (value == null || value.trim().isEmpty) {
-                                  return 'El correo es requerido';
-                                }
-                                if (!value.contains('@')) {
-                                  return 'Ingresa un correo válido';
-                                }
-                                return null;
-                              },
+                              validator: customerAuthEmailError,
                             ),
                             const SizedBox(height: 16),
                             if (!_isLogin) ...[
-                              _buildFieldLabel('Teléfono'),
+                              _buildFieldLabel(customerAuthPhoneLabel),
                               TextFormField(
                                 controller: _phoneController,
                                 decoration: const InputDecoration(
-                                  hintText: '+56 9 1234 5678',
+                                  hintText: customerAuthPhoneHint,
                                   prefixIcon: Icon(Icons.phone_outlined),
                                 ),
                                 keyboardType: TextInputType.phone,
                               ),
                               const SizedBox(height: 16),
                             ],
-                            _buildFieldLabel('Contraseña'),
+                            _buildFieldLabel(customerAuthPasswordLabel),
                             TextFormField(
                               controller: _passwordController,
                               decoration: InputDecoration(
-                                hintText: _isLogin
-                                    ? 'Tu contraseña'
-                                    : AuthInputValidation.strongPasswordHelper,
+                                hintText: customerAuthPasswordHint(mode),
                                 prefixIcon: const Icon(Icons.lock_outline),
                                 suffixIcon: IconButton(
                                   icon: Icon(
@@ -1041,10 +1021,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
                               ),
                               obscureText: _obscurePassword,
                               validator: (value) =>
-                                  AuthInputValidation.validatePassword(
-                                value,
-                                isNewPassword: !_isLogin,
-                              ),
+                                  customerAuthPasswordError(value, mode),
                             ),
                             const SizedBox(height: 22),
                             FilledButton(
@@ -1072,9 +1049,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
                                         color: Colors.white,
                                       ),
                                     )
-                                  : Text(_isLogin
-                                      ? 'INICIAR SESIÓN'
-                                      : 'CREAR CUENTA'),
+                                  : Text(customerAuthSubmit(mode)),
                             ),
                             const SizedBox(height: 18),
                             Row(
@@ -1090,7 +1065,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 14),
                                   child: Text(
-                                    'o continúa con',
+                                    customerAuthOr,
                                     style: theme.textTheme.bodySmall?.copyWith(
                                       color: PublicStoreTheme.textSecondary,
                                       fontWeight: FontWeight.w600,
@@ -1114,11 +1089,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
                                 size: 16,
                                 color: PublicStoreTheme.textPrimary,
                               ),
-                              label: Text(
-                                _isLogin
-                                    ? 'Continuar con Google'
-                                    : 'Registrarse con Google',
-                              ),
+                              label: Text(customerAuthGoogle(mode)),
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: PublicStoreTheme.textPrimary,
                                 backgroundColor: Colors.white,
@@ -1145,9 +1116,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
                               runSpacing: 4,
                               children: [
                                 Text(
-                                  _isLogin
-                                      ? '¿No tienes cuenta?'
-                                      : '¿Ya tienes cuenta?',
+                                  customerAuthSwitchQuestion(mode),
                                   style: const TextStyle(
                                     color: PublicStoreTheme.textSecondary,
                                     fontSize: 13,
@@ -1172,9 +1141,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
                                       fontWeight: FontWeight.w700,
                                     ),
                                   ),
-                                  child: Text(_isLogin
-                                      ? 'Regístrate'
-                                      : 'Inicia sesión'),
+                                  child: Text(customerAuthSwitchAction(mode)),
                                 ),
                               ],
                             ),
@@ -1191,8 +1158,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
-                                  child:
-                                      const Text('¿Olvidaste tu contraseña?'),
+                                  child: const Text(customerAuthForgot),
                                 ),
                               ),
                           ],
@@ -1314,33 +1280,23 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Recuperar contraseña'),
+        title: const Text(customerResetTitle),
         content: Form(
           key: formKey,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Ingresa tu correo y enviaremos un enlace seguro para restablecer el acceso.',
-              ),
+              const Text(customerResetBody),
               const SizedBox(height: 16),
               TextFormField(
                 controller: emailController,
                 keyboardType: TextInputType.emailAddress,
                 decoration: const InputDecoration(
-                  labelText: 'Correo electrónico',
+                  labelText: customerAuthEmailLabel,
                   prefixIcon: Icon(Icons.email_outlined),
                 ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'El correo es requerido';
-                  }
-                  if (!value.contains('@')) {
-                    return 'Ingresa un correo válido';
-                  }
-                  return null;
-                },
+                validator: customerAuthEmailError,
               ),
             ],
           ),
@@ -1348,7 +1304,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancelar'),
+            child: const Text(customerResetCancel),
           ),
           FilledButton(
             onPressed: () async {
@@ -1362,45 +1318,39 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
                 if (dialogContext.mounted) Navigator.pop(dialogContext);
                 messenger.showSnackBar(
                   const SnackBar(
-                    content: Text(
-                      'Si existe una cuenta asociada, recibirás un correo para continuar con la recuperación.',
-                    ),
+                    content: Text(customerResetSent),
                   ),
                 );
               } on AuthException catch (error) {
-                final isRateLimited =
-                    error.message.toLowerCase().contains('rate limit');
+                final isRateLimited = customerResetIsRateLimited(
+                  code: error.code,
+                  message: error.message,
+                );
                 if (!isRateLimited) {
                   if (dialogContext.mounted) Navigator.pop(dialogContext);
                   messenger.showSnackBar(
                     const SnackBar(
-                      content: Text(
-                        'Si existe una cuenta asociada, recibirás un correo para continuar con la recuperación.',
-                      ),
+                      content: Text(customerResetSent),
                     ),
                   );
                   return;
                 }
                 messenger.showSnackBar(
                   const SnackBar(
-                    content: Text(
-                      'Demasiados intentos. Espera unos minutos y reintenta.',
-                    ),
+                    content: Text(customerResetRateLimited),
                     backgroundColor: Colors.red,
                   ),
                 );
               } catch (_) {
                 messenger.showSnackBar(
                   const SnackBar(
-                    content: Text(
-                      'No pudimos conectarnos al servicio. Revisa tu conexión e inténtalo nuevamente.',
-                    ),
+                    content: Text(customerResetOffline),
                     backgroundColor: Colors.red,
                   ),
                 );
               }
             },
-            child: const Text('Enviar enlace'),
+            child: const Text(customerResetSend),
           ),
         ],
       ),

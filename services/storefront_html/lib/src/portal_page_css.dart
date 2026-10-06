@@ -34,14 +34,14 @@ String portalPageCss(WebsiteThemeRoles roles) {
   final head = _family(roles.headingFont);
   final body = _family(roles.bodyFont);
 
-  _TextStyle heading(
+  FlutterTextCss heading(
     double size, {
     int weight = 600,
     double spacing = 1,
     double height = 1.05,
-  }) => _TextStyle(head, size, height, weight, spacing, heading: true);
-  _TextStyle text(double size, {int weight = 400, double height = 1.45}) =>
-      _TextStyle(body, size, height, weight, 0.25, heading: false);
+  }) => FlutterTextCss(head, size, height, weight, spacing, heading: true);
+  FlutterTextCss text(double size, {int weight = 400, double height = 1.45}) =>
+      FlutterTextCss(body, size, height, weight, 0.25, heading: false);
 
   final eyebrow = heading(13, weight: 500, spacing: 2.6);
   final label = heading(14, weight: 500, spacing: 1.6, height: 1.2);
@@ -57,7 +57,7 @@ String portalPageCss(WebsiteThemeRoles roles) {
   final subtitle = text(16);
   final number = heading(14, weight: 500);
 
-  String rule(String selector, _TextStyle style, [String extra = '']) =>
+  String rule(String selector, FlutterTextCss style, [String extra = '']) =>
       '$selector{${style.font}$extra}'
       '$selector>.pt-x{left:${cssPx(style.spacing / 2)}}';
 
@@ -396,7 +396,7 @@ ${rule('.pt-panel-title', heading(28, spacing: 0.5), ';text-transform:uppercase'
 .pt-facts>div+div{margin-top:12px;padding-top:12px;border-top:1px solid var(--pt-line)}
 ${rule('.pt-fact', text(16, weight: 500, height: 1.4), ';margin-top:4px')}
 .pt-files{margin-top:24px}
-${rule('.pt-files-title', _TextStyle(head, 14, 1.43, 500, 0.1, heading: true))}
+${rule('.pt-files-title', FlutterTextCss(head, 14, 1.43, 500, 0.1, heading: true))}
 .pt-files-grid{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
 .pt-file{display:flex;align-items:center;justify-content:center;width:96px;height:96px;overflow:hidden;border-radius:8px;background:var(--pt-hi)}
 .pt-file img{width:100%;height:100%;object-fit:cover}
@@ -500,13 +500,13 @@ ${rule('.pt-tbtn', label, ';text-transform:uppercase;white-space:nowrap')}
 .pt-alert.scroll .pt-alert-main{overflow-y:auto}
 ${rule('.pt-alert-title', heading(24), ';flex:none;padding:24px 24px 0;text-transform:uppercase')}
 .pt-alert-body{flex:0 1 auto;min-height:0;padding:16px 24px 24px}
-${rule('.pt-alert-text', _TextStyle(body, 16, 1.5, 400, 0.25, heading: false), ';color:var(--pt-ink2)')}
+${rule('.pt-alert-text', FlutterTextCss(body, 16, 1.5, 400, 0.25, heading: false), ';color:var(--pt-ink2)')}
 ${rule('.pt-alert-sub', subtitle, ';color:var(--pt-ink2)')}
-${rule('.pt-alert-strong', _TextStyle(head, 14, 1.43, 700, 0.1, heading: true))}
+${rule('.pt-alert-strong', FlutterTextCss(head, 14, 1.43, 700, 0.1, heading: true))}
 .pt-alert-strong+.pt-alert-text{margin-top:8px}
-${rule('.pt-alert-error', _TextStyle(body, 16, 1.5, 400, 0.25, heading: false), ';margin-top:12px;color:var(--pt-bad)')}
+${rule('.pt-alert-error', FlutterTextCss(body, 16, 1.5, 400, 0.25, heading: false), ';margin-top:12px;color:var(--pt-bad)')}
 .pt-alert-error.near{margin-top:8px}
-${rule('.pt-alert-notice', _TextStyle(body, 16, 1.5, 400, 0.25, heading: false), ';margin-top:10px;color:var(--pt-ink)')}
+${rule('.pt-alert-notice', FlutterTextCss(body, 16, 1.5, 400, 0.25, heading: false), ';margin-top:10px;color:var(--pt-ink)')}
 .pt-alert-actions{flex:none;gap:8px;padding:8px 24px 20px}
 .pt-alert-act{display:contents}
 .pt-dlg [data-step-only]{display:none}
@@ -556,49 +556,6 @@ ${rule('.pt-alert-notice', _TextStyle(body, 16, 1.5, 400, 0.25, heading: false),
 
 /// The family a theme names, as `var(--head)`/`var(--body)` spell it.
 String _family(String font) => font.trim();
-
-/// One Flutter text style, as CSS.
-class _TextStyle {
-  const _TextStyle(
-    this.family,
-    this.size,
-    this.height,
-    this.weight,
-    this.spacing, {
-    required this.heading,
-  });
-
-  final String family;
-  final double size;
-  final double height;
-  final int weight;
-  final double spacing;
-
-  /// The heading font ships only its regular file.
-  final bool heading;
-
-  int get line => (size * height).round();
-
-  /// Skia's fake-bold stroke width for [size].
-  double get _embolden {
-    final ratio = size <= 9
-        ? 1 / 24
-        : size >= 36
-        ? 1 / 32
-        : 1 / 24 + (size - 9) / 27 * (1 / 32 - 1 / 24);
-    return double.parse((size * ratio).toStringAsFixed(3));
-  }
-
-  String get font {
-    final drawnWeight = heading ? 400 : weight;
-    final stroke = heading && weight >= 600
-        ? ';-webkit-text-stroke:${cssPx(_embolden)} currentColor'
-        : ';-webkit-text-stroke:0';
-    return 'font:$drawnWeight ${cssPx(size)}/${line}px '
-        'var(--${heading ? 'head' : 'body'});'
-        'letter-spacing:${cssPx(spacing)}$stroke';
-  }
-}
 
 /// `PortalStyle`'s colors from the editor theme's roles
 /// (`PublicStoreSurfaceTheme`).

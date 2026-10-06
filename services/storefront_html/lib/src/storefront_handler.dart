@@ -15,6 +15,7 @@ import 'cart_page_view.dart';
 import 'checkout_page_view.dart';
 import 'order_page_view.dart';
 import 'order_summary_pdf_route.dart';
+import 'login_page_view.dart';
 import 'portal_page_route.dart';
 import 'portal_page_view.dart';
 import 'catalog_page_model.dart';
@@ -155,6 +156,7 @@ Handler storefrontHandler({
         ['checkout', 'lineas'] => await route.checkoutLines(),
         ['pedido', final id] when _orderIdPattern.hasMatch(id) =>
           await route.order(id),
+        ['cuenta', 'login'] => await route.login(),
         ['cuenta'] ||
         [
           'cuenta',
@@ -450,6 +452,40 @@ class _Route {
     final context = _context(await reads.shell());
     if (!context.shell.sitePublished) return _unpublished(context);
     return _render(portalPageDocument(context, which));
+  }
+
+  /// `/cuenta/login` (4c): the way in. A link back from Supabase Auth
+  /// ([loginIsAuthReturn]) is answered with the Flutter store, which redeems
+  /// it, with the login's head; when that page cannot be read the visitor is
+  /// asked to try again rather than shown a page that would drop the link.
+  Future<Response> login() async {
+    final context = _context(await reads.shell());
+    if (!context.shell.sitePublished) return _unpublished(context);
+    final document = loginPageDocument(context);
+    if (hidden || !loginIsAuthReturn(_uri.queryParameters.keys)) {
+      return _render(document);
+    }
+    final shell = await flutterShell?.html(context.storeUrl);
+    if (shell == null) return _readFailed();
+    final rendered = await renderComponent(document, request: request);
+    final html = adaptFlutterShell(
+      shell,
+      loginPageMeta(context),
+      main: mainContentOf(utf8.decode(rendered.body)),
+    );
+    final gzipped = _acceptsGzip(request)
+        ? gzip.encode(utf8.encode(html))
+        : null;
+    return Response(
+      200,
+      body: gzipped ?? html,
+      headers: {
+        ..._pageHeaders(noindex: true),
+        'vary': 'accept-encoding',
+        'content-encoding': ?(gzipped == null ? null : 'gzip'),
+        'x-storefront-fallback': 'flutter',
+      },
+    );
   }
 
   /// `/checkout/lineas?l=<id>:<q>,…`: the cart's lines with what the order

@@ -4,6 +4,13 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-06 — corrección — [portal](paginas/portal-de-clientes.md): el
+  login en el servidor HTML (fase 4c), con Auth desde el navegador y los
+  enlaces del correo en Flutter; el teléfono de la cuenta nueva se guarda al
+  entrar; [seguridad](paginas/seguridad.md) (la contraseña no llega al
+  servidor; la regla de Hosting de `/cuenta/**` pisaba el `no-store`),
+  [rutas](paginas/rutas-y-navegacion.md) y [estado](paginas/estado-y-pendientes.md)
+  al día.
 - 2026-10-06 — corrección — [portal](paginas/portal-de-clientes.md): perfil y
   direcciones en el servidor HTML (fase 4b), guardados con `POST
   /cuenta/accion` como el cliente; tres arreglos de las dos tiendas al

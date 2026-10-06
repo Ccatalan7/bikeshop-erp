@@ -365,11 +365,38 @@
           "headers": [
             {
               "key": "Cache-Control",
-              "value": "public, max-age=0, must-revalidate"
+              "value": "private, no-cache"
             },
             {
               "key": "X-Robots-Tag",
               "value": "noindex, nofollow, noarchive"
+            }
+          ]
+        },
+        {
+          "source": "/cuenta/vista",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-store"
+            }
+          ]
+        },
+        {
+          "source": "/cuenta/accion",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-store"
+            }
+          ]
+        },
+        {
+          "source": "/cuenta/archivo",
+          "headers": [
+            {
+              "key": "Cache-Control",
+              "value": "no-store"
             }
           ]
         },
@@ -851,6 +878,13 @@
         },
         {
           "source": "/cuenta/accion",
+          "run": {
+            "serviceId": "storefront-html",
+            "region": "southamerica-east1"
+          }
+        },
+        {
+          "source": "/cuenta/login",
           "run": {
             "serviceId": "storefront-html",
             "region": "southamerica-east1"

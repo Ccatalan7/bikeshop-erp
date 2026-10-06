@@ -252,6 +252,15 @@ class _FakeReads implements PublicReads {
   }
 
   @override
+  Future<Map<String, dynamic>?> customerEnter(String accessToken) async {
+    requested.add('enter');
+    if (fail) throw PublicReadException('down');
+    final read = portal;
+    if (read == null) throw const CustomerSessionRefused();
+    return read.profile;
+  }
+
+  @override
   Future<bool> customerWrite(
     String accessToken, {
     required String method,
@@ -3097,6 +3106,224 @@ void main() {
       expect(get.statusCode, 405);
       expect(get.headers['cache-control'], 'no-store');
       expect(get.headers['x-robots-tag'], 'noindex');
+    });
+
+    // ------------------------------------------------------------ 4c
+
+    test('the login is the HTML page: noindex, its own head, the forms, and '
+        'the script that hands a fragment link back before painting', () async {
+      final response = await _get(_FakeReads(), '/cuenta/login');
+      expect(response.statusCode, 200);
+      expect(response.headers['x-robots-tag'], 'noindex');
+      final html = await response.readAsString();
+      expect(html, contains('<title>Iniciar sesión | '));
+      expect(
+        html,
+        contains('href="https://vinabike.cl/cuenta/login" rel="canonical"'),
+      );
+      expect(html, contains('data-login'));
+      expect(html, contains('data-action-url="/cuenta/accion"'));
+      expect(html, contains('method="post"'));
+      expect(html, contains('Ingresa para revisar pedidos, bicicletas'));
+      expect(html, contains('Crea tu cuenta para guardar tus datos'));
+      expect(html, contains('Recuperar contraseña'));
+      expect(html, contains('enlace'));
+      expect(html, contains('class="foot'));
+      final hidden = await (await _get(
+        _FakeReads(),
+        '/_html/cuenta/login',
+      )).readAsString();
+      expect(hidden, contains('data-action-url="/_html/cuenta/accion"'));
+      expect(hidden, isNot(contains('vinabikeAuthHandoff=true')));
+    });
+
+    test(
+      'a link back from Auth is answered with Flutter, with the login '
+      'head; the hidden copy stays HTML; no Flutter page, try again',
+      () async {
+        for (final query in [
+          'confirmed=true&code=abc',
+          'error=access_denied&error_code=otp_expired',
+          'enlace=1',
+          'token_hash=x&type=recovery',
+        ]) {
+          final flutter = _FakeFlutterShell();
+          final response = await _get(
+            _FakeReads(),
+            '/cuenta/login?$query',
+            flutterShell: flutter,
+          );
+          expect(response.statusCode, 200, reason: query);
+          expect(response.headers['x-storefront-fallback'], 'flutter');
+          expect(response.headers['x-robots-tag'], 'noindex');
+          final html = await response.readAsString();
+          expect(html, contains('flutter_bootstrap.js'));
+          expect(html, contains('<title>Iniciar sesión | '));
+          expect(html, contains('noindex'));
+        }
+        final plain = await _get(
+          _FakeReads(),
+          '/cuenta/login?confirmed=true',
+          flutterShell: _FakeFlutterShell(),
+        );
+        expect(plain.headers['x-storefront-fallback'], isNull);
+        final hidden = await _get(
+          _FakeReads(),
+          '/_html/cuenta/login?code=abc',
+          flutterShell: _FakeFlutterShell(),
+        );
+        expect(hidden.headers['x-storefront-fallback'], isNull);
+        expect(
+          (await _get(_FakeReads(), '/cuenta/login?code=abc')).statusCode,
+          503,
+        );
+        expect(loginIsAuthReturn(['confirmed']), isFalse);
+        expect(loginIsAuthReturn(['clave']), isFalse);
+        expect(loginIsAuthReturn(['code']), isTrue);
+      },
+    );
+
+    Future<(int, Map<String, Object?>)> login(
+      _FakeReads reads,
+      Map<String, Object?> body, {
+      String? auth,
+    }) async {
+      final response = await _get(
+        reads,
+        portalActionPath,
+        method: 'POST',
+        headers: {'authorization': ?auth, 'content-type': 'application/json'},
+        body: jsonEncode(body),
+      );
+      expect(response.headers['cache-control'], 'no-store');
+      return (
+        response.statusCode,
+        jsonDecode(await response.readAsString()) as Map<String, Object?>,
+      );
+    }
+
+    test('check: the core\'s messages for each form, with no session and '
+        'nothing read', () async {
+      final reads = _FakeReads();
+      expect(
+        (await login(reads, {
+          'action': 'check',
+          'form': 'login',
+          'values': {'email': '', 'password': ''},
+        })).$2,
+        {
+          'errors': {
+            'email': 'El correo es requerido',
+            'password': 'Por favor ingrese su contraseña',
+          },
+        },
+      );
+      expect(
+        (await login(reads, {
+          'action': 'check',
+          'form': 'register',
+          'values': {'name': ' ', 'email': 'a@b', 'password': 'aaaaaaa1'},
+        })).$2,
+        {
+          'errors': {'name': 'El nombre es requerido'},
+        },
+      );
+      expect(
+        (await login(reads, {
+          'action': 'check',
+          'form': 'reset',
+          'values': {'email': 'sin-arroba'},
+        })).$2,
+        {
+          'errors': {'email': 'Ingresa un correo válido'},
+        },
+      );
+      expect(
+        (await login(reads, {
+          'action': 'check',
+          'form': 'login',
+          'values': {'email': 'a@b', 'password': 'Aaa1..'},
+        })).$2,
+        {'errors': <String, Object?>{}},
+      );
+      final (status, answer) = await login(reads, {
+        'action': 'check',
+        'form': 'otro',
+      });
+      expect(status, 400);
+      expect(answer['state'], 'invalid');
+      expect(reads.requested, isEmpty);
+    });
+
+    test('enter: the store\'s customer behind the session, the signup phone '
+        'kept when the profile has none', () async {
+      final reads = _FakeReads(portal: portal());
+      expect(
+        (await login(reads, {'action': 'enter'}, auth: 'Bearer ${token()}')).$2,
+        {'state': 'entered'},
+      );
+      expect(reads.requested, ['enter']);
+      expect(reads.writes, isEmpty);
+      expect(
+        (await login(_FakeReads(portal: portal(profile: null)), {
+          'action': 'enter',
+        }, auth: 'Bearer ${token()}')).$2,
+        {'state': 'not-customer'},
+      );
+      expect(
+        (await login(_FakeReads(), {
+          'action': 'enter',
+        }, auth: 'Bearer ${token()}')).$2,
+        {'state': 'expired'},
+      );
+      expect(
+        (await login(_FakeReads(fail: true), {
+          'action': 'enter',
+        }, auth: 'Bearer ${token()}')).$2,
+        {'state': 'not-customer'},
+      );
+      // No session: not an action the login can send.
+      expect((await login(reads, {'action': 'enter'})).$1, 400);
+
+      String b64(Map<String, Object?> v) =>
+          base64Url.encode(utf8.encode(jsonEncode(v))).replaceAll('=', '');
+      final withPhone =
+          '${b64({'alg': 'HS256'})}.'
+          '${b64({
+            'sub': '7e570000-0000-4000-8000-0000000000aa',
+            'user_metadata': {'phone': ' +56 9 8765 4321 '},
+          })}.'
+          '${'x' * 43}';
+      final noPhone = _FakeReads(
+        portal: portal(
+          profile: const {
+            'id': customer,
+            'tenant_id': _tenant,
+            'auth_user_id': '7e570000-0000-4000-8000-0000000000aa',
+            'name': 'Ana Prueba',
+            'phone': null,
+          },
+        ),
+      );
+      expect(
+        (await login(noPhone, {
+          'action': 'enter',
+        }, auth: 'Bearer $withPhone')).$2,
+        {'state': 'entered'},
+      );
+      expect(noPhone.writes.single['table'], 'customers');
+      expect(noPhone.writes.single['filters'], {
+        'id': 'eq.$customer',
+        'tenant_id': 'eq.$_tenant',
+      });
+      expect(
+        (noPhone.writes.single['body'] as Map)['phone'],
+        '+56 9 8765 4321',
+      );
+      // A profile with a phone keeps it.
+      final kept = _FakeReads(portal: portal());
+      await login(kept, {'action': 'enter'}, auth: 'Bearer $withPhone');
+      expect(kept.writes, isEmpty);
     });
 
     test('a refused session is renewed before any write', () async {

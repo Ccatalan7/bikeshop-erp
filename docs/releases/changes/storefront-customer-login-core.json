@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "storefront-customer-login-core",
+  "scope": "internal",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/customer_auth_forms.dart",
+      "sha256": "b62ddf471c2058e7a4d36c534ddca39db18f39239ecd0bfecba55d773ad5cdf8"
+    },
+    {
+      "path": "lib/public_store/pages/customer_auth_page.dart",
+      "sha256": "68487a13f025c992b0ed5dbe21113562e4ec16c2bb1bb31e85b3b1afada3bf64"
+    },
+    {
+      "path": "lib/public_store/services/customer_account_service.dart",
+      "sha256": "a78fdeffd2e8cf4544e0c7720ab1140896735cfd85a1ea23beb34f40764bbc77"
+    }
+  ]
+}

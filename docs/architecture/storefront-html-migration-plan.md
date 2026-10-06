@@ -1232,7 +1232,7 @@ Lo que costó, y vale para las páginas que siguen:
 
 - Las copias de una foto reemplazada quedan en Storage (pocos KB cada una);
   una limpieza de las que ninguna fila nombra, si algún día pesan.
-- 4c (entrar) y 4d (chats) siguen en Flutter.
+- 4d (chats) sigue en Flutter; 4c (entrar) se hizo el mismo día (abajo).
 
 ## Fase 4b: el portal, escribir (2026-10-06)
 
@@ -1316,3 +1316,91 @@ Lo que costó, y vale para los formularios que siguen:
 - La búsqueda de Maps en el formulario de una dirección sólo se probó con
   respuestas falsas (para no gastar consultas); en vivo la usa el mismo proxy
   que el checkout.
+
+## Fase 4c: entrar (2026-10-06)
+
+`/cuenta/login` en el servidor (`login_page_view.dart`, `login_page_css.dart`,
+`login_page_script.dart`): entrar, crear la cuenta, el aviso «Confirma tu
+correo» con «Reenviar correo», Google y el diálogo «Recuperar contraseña»,
+con las barras de Flutter. Las palabras y las reglas de cada campo pasaron al
+núcleo (`customer_auth_forms.dart`); `CustomerAuthPage` usa las mismas.
+
+- **Supabase Auth se llama desde el navegador, no desde el servidor.** Auth
+  cuenta los intentos de entrar y de crear cuenta por dirección IP: pasando
+  por Cloud Run, todos los clientes compartirían una y el límite de uno
+  bloquearía a todos. Lo que el navegador manda a Auth es lo mismo que manda
+  gotrue-dart (mismo cuerpo, mismo `redirect_to`), y lo que recibe queda donde
+  lo deja `supabase_flutter`: la sesión en `sb-<ref>-auth-token` como
+  `Session.toJson`, y el verificador PKCE en
+  `flutter.supabase.auth.token-code-verifier` (JSON, con `/passwordRecovery`
+  para una recuperación). Así el enlace del correo y la vuelta de Google, que
+  canjea Flutter, lo encuentran.
+- **El servidor revisa los campos antes** (`POST /cuenta/accion`, `check`, sin
+  sesión) con las reglas del núcleo, y **la contraseña no le llega**: el
+  navegador manda su forma (cada mayúscula, minúscula, dígito, espacio o signo
+  cambiado por uno de su tipo), que es todo lo que leen las reglas. Con la
+  sesión de Auth, `enter` hace lo de `_loadCustomerData`: el alta idempotente
+  y el cliente de la tienda; si no puede serlo, la sesión se cierra en Auth
+  (`logout?scope=local`) y dice lo de Flutter.
+- **Los enlaces que vuelven de Auth son de Flutter.** `code`, `token_hash`,
+  `type`, `error`, `access_token` o `enlace` en la dirección: el servidor
+  responde la página de Flutter con la cabeza del login
+  (`loginIsAuthReturn`). Un enlace que trae el token en el fragmento (el
+  puente `auth-action.html` de recuperación e invitación) no llega al
+  servidor: un script al principio de la página lo devuelve con `?enlace=1`
+  antes de pintar. Al terminar, Flutter vuelve a `/cuenta/login?clave=…` y el
+  login HTML dice lo que Flutter decía.
+- **Arreglado en las dos tiendas:** el teléfono escrito al crear la cuenta se
+  perdía cuando había que confirmar el correo (Flutter sólo lo guardaba si
+  Auth daba sesión al registrarse, y en producción nunca la da): 1 de 7
+  cuentas. Ahora `enter` y `signIn` lo guardan del `user_metadata` si el
+  cliente no tiene teléfono (`customerSignupPhone`). El gris del panel de la
+  izquierda llega al fondo de la tarjeta (`IntrinsicHeight`); antes se cortaba
+  a la altura de su contenido. `updateProfile` filtra la tienda y escribe UTC.
+- **Hosting pisaba el `no-store`.** La regla de cabeceras de `/cuenta/**`
+  (`public, max-age=0, must-revalidate`, de cuando todo eso era Flutter)
+  reemplaza la del servidor en toda respuesta 200: las páginas del portal y
+  las respuestas de `/cuenta/vista` y `/cuenta/accion` salían con ella (un POST
+  no se guarda en caché, así que no hubo fuga). Ahora `/cuenta/**` es
+  `private, no-cache` y las tres rutas de datos `no-store`.
+- **Medido contra Flutter** a 1440, 900 y 412 px: entrar, crear cuenta,
+  errores, el aviso de confirmado, «Confirma tu correo» con su barra y el
+  diálogo, con los bordes en la misma fila y el texto a ±1 px. 60
+  comportamientos en los dos anchos contra un Supabase falso que nunca
+  reenvía nada de Auth a producción.
+- **Revisión de Codex** (sólo lectura, 4 hallazgos P2, ninguno de
+  credenciales, tienda ni redirección): cambiar de modo mientras el servidor
+  revisaba podía mandar a Auth un registro sin revisar (ahora se manda lo que
+  se revisó y el cambio de modo espera); dos clics en Google podían dejar un
+  verificador que no era el de su desafío (uno a la vez); una sesión que no
+  puede ser cliente quedaba guardada mientras Auth no contestaba el cierre
+  (se olvida al tiro y el cierre va después, con 5 s de tope). El cuarto
+  queda como límite conocido de las dos tiendas: gotrue-dart guarda **un**
+  verificador, así que empezar otro flujo (Google, recuperar) antes de abrir
+  el correo de confirmación hace que ese enlace no se pueda canjear con
+  `code`; la cuenta queda confirmada igual y basta entrar con la clave.
+
+Lo que costó, y vale para lo que sigue:
+
+- **El script de la tienda deja fuera los campos vacíos de todo formulario
+  GET al enviarse** (para que el catálogo no ponga `?min_price=` en la
+  dirección): un formulario del login sin `method` es GET y sus campos vacíos
+  quedaban deshabilitados. Un formulario que maneja un script lleva
+  `method="post"`. Los del portal no lo sufrían porque llegan después.
+- **Una consulta de contenedor no le da estilo al propio contenedor, y mide
+  su caja de contenido:** `@container lg (min-width:900px){.lg{…}}` nunca
+  aplica (se mueve a un hijo), y con 24 px de relleno a cada lado el ancho de
+  Flutter (`LayoutBuilder`, la página entera) es el de la consulta más 48:
+  900 de Flutter es `min-width: 852px`.
+- **Un ícono en un `flex` se encoge** cuando el texto de al lado es largo
+  (`flex-shrink: 1`): la caja de 40 px de los beneficios medía menos y el texto
+  partía distinto en el teléfono. `flex: none` en el ícono.
+- **Un `TextStyle` suelto en el login hereda `bodyMedium`** del tema de la
+  tienda: el cuerpo a 16, alto 1,5 y espaciado 0,25. El tema de la tienda pone
+  sus propios tamaños (`headlineSmall` 20 con el alto 1,333 de Material: 27).
+- **La barra de Flutter con el color de texto del editor** (negro al 87 %) se
+  ve más oscura que ese color sobre blanco (#191919, no #222): su sombra queda
+  debajo y se ve a través. En CSS, el color sobre una capa negra al 29 %.
+- **El campo del diálogo de Flutter casi no tiene borde** (dos niveles de gris
+  sobre el fondo del diálogo, sin explicación en el código del decorador): se
+  copia lo medido, el borde mezclado al 25 % con el fondo.

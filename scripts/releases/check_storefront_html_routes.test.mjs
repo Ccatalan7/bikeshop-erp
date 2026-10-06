@@ -202,6 +202,7 @@ test("an order page and the portal are checked as private server routes", () => 
     "/cuenta/bicicletas",
     "/cuenta/perfil",
     "/cuenta/direcciones",
+    "/cuenta/login",
     "/pedido/00000000-0000-4000-8000-000000000000",
   ]);
 });

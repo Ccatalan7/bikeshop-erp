@@ -74,6 +74,8 @@ void main() {
       '/cuenta/perfil',
       '/cuenta/direcciones',
       '/cuenta/accion',
+      // The way in (phase 4c).
+      '/cuenta/login',
     ]) {
       expect(routes.owns(path), isTrue, reason: path);
     }
@@ -82,7 +84,7 @@ void main() {
       '/checkoutx',
       '/pedido',
       '/carritox',
-      '/cuenta/login',
+      '/cuenta/loginx',
       '/cuenta/chats',
       '/cuenta/chats/46a51a87-aa3a-430c-a6e1-af48c8d74541',
       '/cuenta/perfilx',
@@ -128,12 +130,13 @@ void main() {
       '/cuenta/servicios',
       '/cuenta/perfil',
       '/cuenta/direcciones',
+      '/cuenta/login',
     ]) {
       expect(storefrontHtmlServes(path), isTrue, reason: path);
     }
     for (final path in [
       '/pedido',
-      '/cuenta/login',
+      '/auth/callback',
       '/cuenta/chats',
       '/carritox',
       '/checkoutx',

@@ -152,7 +152,8 @@ void main() {
     );
   });
 
-  test('employee access delegates identity creation to the canonical admin edge',
+  test(
+      'employee access delegates identity creation to the canonical admin edge',
       () {
     expect(
       userManagementServiceSource,
@@ -511,10 +512,20 @@ void main() {
         File('lib/public_store/pages/customer_profile_page.dart')
             .readAsStringSync();
 
+    // The login's rules live in the core, for Flutter and the HTML store
+    // (2026-10-06): a new account's password is held to the strong rule.
+    final customerAuthForms = File(
+      'packages/vinabike_public_core/lib/public_store/models/customer_auth_forms.dart',
+    ).readAsStringSync();
     expect(
-        customerAuthSource, contains('AuthInputValidation.validatePassword'));
-    expect(customerAuthSource, contains('isNewPassword: !_isLogin'));
+        customerAuthSource, contains('customerAuthPasswordError(value, mode)'));
+    expect(customerAuthForms, contains('AuthInputValidation.validatePassword'));
+    expect(
+      customerAuthForms,
+      contains('isNewPassword: mode != CustomerAuthMode.login'),
+    );
     expect(customerAuthSource, isNot(contains('Mínimo 6 caracteres')));
+    expect(customerAuthForms, isNot(contains('Mínimo 6 caracteres')));
     expect(checkoutSource, contains('isNewPassword: true'));
     expect(checkoutSource, isNot(contains('Usa al menos 6 caracteres')));
     expect(customerProfileSource, contains('isNewPassword: true'));
@@ -533,7 +544,11 @@ void main() {
     expect(forgotSource, isNot(contains('No existe una cuenta')));
     expect(forgotSource, isNot(contains('e.toString()')));
     expect(forgotSource, isNot(contains(r'${e.message}')));
-    expect(customerAuthSource, contains('Si existe una cuenta asociada'));
+    final customerAuthForms = File(
+      'packages/vinabike_public_core/lib/public_store/models/customer_auth_forms.dart',
+    ).readAsStringSync();
+    expect(customerAuthForms, contains('Si existe una cuenta asociada'));
+    expect(customerAuthSource, contains('content: Text(customerResetSent)'));
     expect(customerAuthSource, isNot(contains(r'$error')));
     expect(
       customerAuthSource,

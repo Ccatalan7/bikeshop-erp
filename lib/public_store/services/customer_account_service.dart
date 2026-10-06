@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:vinabike_public_core/public_store/models/customer_auth_forms.dart';
 import 'package:vinabike_public_core/public_store/models/customer_portal_forms.dart';
 import 'package:vinabike_public_core/public_store/models/customer_portal_snapshot.dart';
 import '../../shared/models/customer_address.dart';
@@ -532,6 +533,7 @@ class CustomerAccountService extends ChangeNotifier {
       _pendingVerificationEmail = null;
       _currentUser = response.user;
       await _loadCustomerData(rethrowOnFailure: true);
+      await _keepSignupPhone();
     } on AuthException catch (e) {
       if (_currentUser != null && _customerProfile == null) {
         await _supabase.auth.signOut(scope: SignOutScope.local);
@@ -558,6 +560,21 @@ class CustomerAccountService extends ChangeNotifier {
     } finally {
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  /// The phone typed when the account was created, kept once the customer
+  /// exists ([customerSignupPhone]). Entering never fails for it.
+  Future<void> _keepSignupPhone() async {
+    final phone = customerSignupPhone(
+      profilePhone: _customerProfile?['phone'],
+      userMetadata: _currentUser?.userMetadata,
+    );
+    if (phone == null) return;
+    try {
+      await updateProfile(phone: phone);
+    } catch (_) {
+      debugPrint('⚠️ [CustomerAuth] Signup phone not kept');
     }
   }
 
@@ -899,12 +916,13 @@ class CustomerAccountService extends ChangeNotifier {
 
       if (updates.isEmpty) return;
 
-      updates['updated_at'] = DateTime.now().toIso8601String();
+      updates['updated_at'] = DateTime.now().toUtc().toIso8601String();
 
       await _supabase
           .from('customers')
           .update(updates)
-          .eq('id', _customerProfile!['id']);
+          .eq('id', _customerProfile!['id'])
+          .eq('tenant_id', _customerProfile!['tenant_id']);
 
       await _loadCustomerData();
     } catch (e) {

@@ -202,6 +202,13 @@ abstract interface class PublicReads {
   /// the page that sends a write has read the account already).
   Future<Map<String, dynamic>?> customerProfile(String accessToken);
 
+  /// What entering does once Supabase Auth gave a session: the store's
+  /// customer behind it, created first when it is missing (the idempotent
+  /// `provision_current_public_store_customer`, as
+  /// `CustomerAccountService._loadCustomerData`), or null when the session
+  /// cannot be one (the function refuses it).
+  Future<Map<String, dynamic>?> customerEnter(String accessToken);
+
   /// A write of the customer's own [table] (`customers` or
   /// `customer_addresses`) with their session: row security decides, and
   /// [filters] must name the store (`tenant_id`). [method] is `PATCH`,
@@ -226,6 +233,22 @@ abstract interface class PublicReads {
   /// A link to open one of a job's files now
   /// (`WorkshopAssetService.resolve`), or null when the session may not.
   Future<String?> customerJobFile(String accessToken, String reference);
+}
+
+/// The claims of a customer's session token, read without checking its
+/// signature: only to name what Supabase will check when the same token is
+/// sent (`user_metadata` of the account), never to decide who it is.
+Map<String, Object?> customerSessionClaims(String token) {
+  final parts = token.split('.');
+  if (parts.length != 3) return const {};
+  try {
+    final payload = jsonDecode(
+      utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+    );
+    return payload is Map ? Map<String, Object?>.from(payload) : const {};
+  } on FormatException {
+    return const {};
+  }
 }
 
 class PublicReadException implements Exception {
@@ -779,6 +802,26 @@ class SupabasePublicReads implements PublicReads {
       stderr.writeln('portal job file unavailable: ${error.runtimeType}');
       return null;
     }
+  }
+
+  @override
+  Future<Map<String, dynamic>?> customerEnter(String accessToken) async {
+    if (_sessionUser(accessToken) == null) {
+      throw const CustomerSessionRefused();
+    }
+    try {
+      await _customerRpc(
+        accessToken,
+        'provision_current_public_store_customer',
+        {'p_tenant_id': config.tenantId},
+      );
+    } on PublicReadException catch (error) {
+      // Refused (an unconfirmed e-mail, an inactive or taken customer): not
+      // a customer of this store. Only the kind is logged.
+      stderr.writeln('customer enter refused: ${error.message}');
+      return null;
+    }
+    return customerProfile(accessToken);
   }
 
   @override

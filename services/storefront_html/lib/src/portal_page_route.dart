@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:jaspr/server.dart';
+import 'package:vinabike_public_core/public_store/models/customer_auth_forms.dart';
 import 'package:vinabike_public_core/public_store/models/customer_portal_forms.dart';
 import 'package:vinabike_public_core/shared/utils/auth_input_validation.dart';
 import 'package:vinabike_public_core/shared/utils/self_password_rules.dart';
@@ -108,6 +109,14 @@ Future<({Map<String, Object?> answer, int dataMs})> _drawn(
 /// after a save, with a `toast` when Flutter shows one), `{toast}` (a save
 /// that failed), the password steps (`{step, notice, error, done}`) or
 /// `{state: expired}` when the session must be renewed first.
+///
+/// The login (4c) asks two things: `check` (`form`: `login`, `register` or
+/// `reset`; no session) answers `{errors}` with what each field lacks, by
+/// `customer_auth_forms.dart`, before the browser sends anything to Supabase
+/// Auth; `enter`, with the session Auth just gave, answers
+/// `{state: entered}` or `{state: not-customer}`. Auth itself is called from
+/// the browser: it counts attempts by address, and through this server every
+/// customer would share one.
 Future<Response> portalActionResponse(
   Request request, {
   required PublicReads reads,
@@ -124,10 +133,28 @@ Future<Response> portalActionResponse(
         if (entry.value is String || entry.value is bool)
           entry.key.toString(): entry.value.toString(),
   };
-  if (token == null ||
-      page == null ||
-      query.length > 512 ||
-      values.values.any((value) => value.length > 1024)) {
+  if (values.values.any((value) => value.length > 1024)) {
+    return _json(request, 400, {'state': 'invalid'});
+  }
+  if (action == 'check') {
+    final errors = _authCheck(body?['form']?.toString(), values);
+    if (errors == null) return _json(request, 400, {'state': 'invalid'});
+    return _json(request, 200, {'errors': errors});
+  }
+  if (action == 'enter' && token != null) {
+    try {
+      return _json(request, 200, await _enter(reads, token));
+    } on CustomerSessionRefused {
+      return _json(request, 200, {'state': 'expired'});
+    } on Object catch (error) {
+      stderr.writeln(
+        'portal enter failed: '
+        '${error is PublicReadException ? error.message : error.runtimeType}',
+      );
+      return _json(request, 200, {'state': 'not-customer'});
+    }
+  }
+  if (token == null || page == null || query.length > 512) {
     return _json(request, 400, {'state': 'invalid'});
   }
   // The redraw keeps this browser's «Quedó pendiente…» (`pending`).
@@ -193,6 +220,54 @@ Future<Response> portalActionResponse(
 }
 
 typedef _Drawn = Future<Map<String, Object?>> Function([String? toast]);
+
+/// The login's fields that do not pass, by name, or null for a form the
+/// login does not have.
+Map<String, String>? _authCheck(String? form, Map<String, String> values) =>
+    switch (form) {
+      'login' => customerAuthErrors(CustomerAuthMode.login, values),
+      'register' => customerAuthErrors(CustomerAuthMode.register, values),
+      'reset' => {'email': ?customerAuthEmailError(values['email'])},
+      _ => null,
+    };
+
+/// After Supabase Auth gave a session: the store's customer behind it
+/// (created when missing), and the phone typed when the account was opened
+/// kept in it when it has none ([customerSignupPhone]); entering never fails
+/// for the phone.
+Future<Map<String, Object?>> _enter(PublicReads reads, String token) async {
+  final profile = await reads.customerEnter(token);
+  if (profile == null) return const {'state': 'not-customer'};
+  final phone = customerSignupPhone(
+    profilePhone: profile['phone'],
+    userMetadata: customerSessionClaims(token)['user_metadata'],
+  );
+  if (phone != null) {
+    await _written(
+      () => reads
+          .customerWrite(
+            token,
+            method: 'PATCH',
+            table: 'customers',
+            filters: {
+              'id': 'eq.${profile['id']}',
+              'tenant_id': 'eq.${profile['tenant_id']}',
+            },
+            body: {
+              'phone': phone,
+              'updated_at': DateTime.now().toUtc().toIso8601String(),
+            },
+          )
+          // The customer entered: a refusal here only leaves the phone.
+          .catchError(
+            (Object _) => false,
+            test: (e) => e is CustomerSessionRefused,
+          ),
+      'signup phone',
+    );
+  }
+  return const {'state': 'entered'};
+}
 
 Future<Map<String, Object?>> _saveProfile(
   PublicReads reads,

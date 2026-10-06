@@ -13,12 +13,12 @@ Se actualiza cada vez que algo cambia de estado; cada línea con su fecha.
 
 ## En vivo (2026-10-06) `[Prod]`
 
-- Build de la tienda: commit `3e4ae449` (`release.json`); servidor HTML
-  `core-4e26693ee312.server-eaf96eda7daf`.
-  El carrito, el checkout, la página del pedido y las páginas de lectura del
-  portal (`/cuenta`, pedidos, taller, bicicletas) ya son del servidor
-  (2026-10-06, `3e4ae449`); Flutter sólo arranca en el login, el perfil, las
-  direcciones y los chats del portal.
+- Build de la tienda: commit `fbf034e7` (`release.json`); servidor HTML
+  `core-c94ee1ddcbcd.server-24ad2591b711`.
+  El carrito, el checkout, la página del pedido y el portal salvo el login y
+  los chats (`/cuenta`, pedidos, taller, bicicletas, perfil y direcciones) ya
+  son del servidor (2026-10-06, `fbf034e7`); Flutter sólo arranca en el login
+  y los chats del portal.
 - ERP 1.0.8 (macOS y Android) publicado desde `d042080b`, con el núcleo
   compartido del portal; el editor no cambia.
 - Sitemap: 1.315 URL. La tienda lista 539 productos con stock y 59 servicios.
@@ -60,7 +60,8 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 | 2026-09-24 | La tienda llama `get_public_store_data` directo además de usar la precarga (sin investigar) | [rendimiento](rendimiento.md) |
 | 2026-09-24 | Imágenes pesadas: campaña de cámaras en PNG de 2 MB, WebP de 312 KB en la grilla de categorías | [rendimiento](rendimiento.md) |
 | 2026-09-26 | Login `/cuenta/login` sin la dirección «Sendero» | [portal](portal-de-clientes.md) |
-| 2026-10-06 | **Fase 4c–4d de la migración a HTML:** login con PKCE compatible con Flutter (4c), chats (4d) | `docs/architecture/storefront-html-migration-plan.md` |
+| 2026-10-06 | **Fase 4d de la migración a HTML:** los chats del portal (tiempo real), o quedan en Flutter si no hay ganancia que medir | `docs/architecture/storefront-html-migration-plan.md` |
+| 2026-10-06 | Pasar al HTML el canje de los enlaces de Auth (vuelta de Google en `/auth/callback`, confirmar con `code`), hoy en Flutter: el verificador PKCE ya está donde ambos lo leen | `docs/architecture/storefront-html-migration-plan.md` |
 | 2026-10-03 | Código muerto: `banners_management_page.dart`, `content_management_page.dart`, `customer_account_page.dart`, `premium_dashboard_widgets.dart`, ruta `/cuenta/mensajes`; clave `header_nav_links` | [editor](editor-del-sitio.md) |
 | 2026-10-08 | Leer el resultado de la tarea `vinabike-store-ready-review` | [rendimiento](rendimiento.md) |
 | 2026-10-04 | **Fase 0 de la migración a HTML:** anotar el costo mensual real de Cloud Run (`storefront-html`) después de unos días; lo demás está hecho y medido ([rendimiento](rendimiento.md)) | `docs/architecture/storefront-html-migration-plan.md` |
@@ -71,6 +72,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 
 | Fecha | Qué | Página |
 |---|---|---|
+| 2026-10-06 | **El login en HTML** (fase 4c): entrar, crear la cuenta, Google y «¿Olvidaste tu contraseña?», con Supabase Auth desde el navegador y la sesión y el verificador donde los lee Flutter; los enlaces del correo siguen en Flutter; al píxel de Flutter a 1440, 900 y 412 px y 60 comportamientos en los dos anchos contra un Supabase falso; revisión de Codex con 3 arreglos; el teléfono de la cuenta nueva ya no se pierde | [portal](portal-de-clientes.md) |
 | 2026-10-06 | **Perfil y direcciones en HTML** (fase 4b): datos, contraseña (con código y cierre de las demás sesiones), agregar, editar, principal y borrar una dirección con la búsqueda de Maps; se guardan por `POST /cuenta/accion` como el cliente; al píxel de Flutter a 1440 y 412 px y 52 comportamientos verificados. En las dos tiendas: borrar el RUT o el teléfono ya los borra, un obligatorio con espacios no pasa y las fechas de una dirección van en UTC | [portal](portal-de-clientes.md) |
 | 2026-10-06 | **Las páginas de lectura del portal en HTML** (fase 4a): `/cuenta`, pedidos, taller (con `?bike_id=`) y bicicletas los dibuja el servidor leyendo Supabase como el cliente, sin guardar su sesión; fichas de trabajo y de bici, filtros y archivos del trabajo; al píxel de Flutter a 1440 y 412 px. El marco se lee a los 1,6 s en un teléfono lento contra 18,4 s de Flutter | [portal](portal-de-clientes.md) |
 | 2026-10-06 | **Menú ancho de escritorio como Flutter en las páginas HTML:** «Componentes» abría una lista simple; ahora el panel con pestañas por rama, foto de la sección, tarjetas, subniveles y «VER TODO», a ±0,1 px de Flutter a 1440 y 1100 px y con sus tiempos | [rutas](rutas-y-navegacion.md) |

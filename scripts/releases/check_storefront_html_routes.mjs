@@ -72,6 +72,7 @@ export const privateServerRoutes = [
   "/cuenta/bicicletas",
   "/cuenta/perfil",
   "/cuenta/direcciones",
+  "/cuenta/login",
 ];
 
 // A path under a private `/**` source, to ask for it: the order page answers

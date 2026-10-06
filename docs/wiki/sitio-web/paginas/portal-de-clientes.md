@@ -37,7 +37,8 @@ Todas llevan `noindex` por cabecera ([rutas](rutas-y-navegacion.md)).
 
 `/cuenta`, `/cuenta/pedidos`, `/cuenta/servicios` y `/cuenta/bicicletas` las
 responde el servidor HTML, y desde la fase 4b también `/cuenta/perfil` y
-`/cuenta/direcciones`; entrar y el soporte siguen en Flutter, y entre unas y
+`/cuenta/direcciones`, y desde la fase 4c `/cuenta/login`; el soporte y los
+enlaces que vuelven de un correo o de Google siguen en Flutter, y entre unas y
 otras se pasa con una carga completa. La
 página llega sin datos; el navegador pide `POST /cuenta/vista` con el token
 del cliente y el servidor lee Supabase como ese cliente: la base decide qué
@@ -56,6 +57,28 @@ guardarse. Arreglado en las dos tiendas al mudarlo (2026-10-06): borrar el
 RUT o el teléfono ahora los borra (volvían), un obligatorio con sólo espacios
 ya no pasa y las fechas de una dirección se escriben en UTC (iban 3 a 4 h
 corridas) `[Repo 2026-10-06]`.
+
+**Entrar (fase 4c).** El login HTML entra, crea la cuenta, abre Google y
+manda el enlace de «¿Olvidaste tu contraseña?», con las palabras y reglas de
+`customer_auth_forms.dart` (Flutter usa las mismas). El navegador llama a
+Supabase Auth directo, como Flutter: Auth cuenta los intentos por dirección y,
+pasando por el servidor, todos los clientes compartirían una. Lo que Auth da
+queda donde lo deja `supabase_flutter` (la sesión en `sb-<ref>-auth-token`, el
+verificador PKCE en `flutter.supabase.auth.token-code-verifier`), así que el
+enlace del correo y la vuelta de Google, que canjea Flutter, lo encuentran.
+Antes de llamar a Auth el servidor revisa los campos (`check`); la contraseña
+no le llega, sólo su forma (cada letra, número o signo cambiado por uno de su
+tipo), que es todo lo que miran las reglas. Con la sesión, `enter` crea o
+confirma el cliente de la tienda; si no puede serlo, la sesión se cierra y
+dice lo mismo que Flutter. Un enlace del correo (recuperar, invitación,
+confirmar con `code`, un error) lo responde Flutter: el servidor lo ve en la
+dirección, y si viene en el fragmento la página lo devuelve con `?enlace=1`
+antes de pintar. Al terminar una recuperación o una invitación Flutter vuelve
+a `/cuenta/login?clave=…`, y el login HTML dice lo que Flutter decía.
+Arreglado en las dos tiendas (2026-10-06): el teléfono escrito al crear la
+cuenta se perdía si había que confirmar el correo (1 de 7 cuentas); ahora se
+guarda al entrar si el cliente no tiene. El gris del panel de la izquierda
+llega al fondo de la tarjeta `[Repo 2026-10-06]`.
 
 ## Cómo se ve: dirección «Sendero» (2026-09-26)
 
@@ -81,7 +104,7 @@ Las fotos del portal salen del editor (`theme_customer_portal_image`,
 
 ## Pendiente
 
-- El login `/cuenta/login` (1.411 líneas) no pasó por «Sendero».
+- El login `/cuenta/login` no pasó por «Sendero» (en Flutter y en HTML se ve igual).
 - Código muerto: `customer_account_page.dart`, `premium_dashboard_widgets.dart` y
   la ruta legado `/cuenta/mensajes` (`customer_chat_list_page.dart`).
 - Para mirar el portal sin sesión (un agente no ingresa contraseñas):
@@ -103,8 +126,11 @@ Las fotos del portal salen del editor (`theme_customer_portal_image`,
   lecturas en `SupabasePublicReads.customerPortal`, escrituras en
   `customerWrite` y `customerAuth`; la búsqueda de Maps en `places_script.dart`
   (la misma del checkout).
+- El login en HTML: `login_page_view.dart`, `login_page_css.dart`,
+  `login_page_script.dart`; `check` y `enter` en `portal_page_route.dart`, el
+  alta en `SupabasePublicReads.customerEnter`.
 - Reglas de los formularios en el núcleo: `customer_portal_forms.dart`,
-  `self_password_rules.dart`, `customer_address.dart`,
-  `auth_input_validation.dart`.
+  `customer_auth_forms.dart`, `self_password_rules.dart`,
+  `customer_address.dart`, `auth_input_validation.dart`.
 - Tablas: `customers` (`auth_user_id`), `customer_addresses`, `online_orders`, `mechanic_jobs`, `bikes`.
 - Superficie registrada: fila «Customer portal» de `canonical-ui-surfaces.md`.
