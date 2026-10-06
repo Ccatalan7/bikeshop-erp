@@ -879,7 +879,5 @@ Dos trampas de la publicación, del mismo día:
 ### Pendiente
 
 - El costo real de Cloud Run en la facturación, después de unos días.
-- El PNG de 2,1 MB de la tercera diapositiva debería volver a subirse por el
-  editor (que lo optimiza a WebP): hoy sólo dejó de estorbar a la primera.
 - Las copias de una foto reemplazada quedan en Storage (pocos KB cada una);
   una limpieza de las que ninguna fila nombra, si algún día pesan.

@@ -4,6 +4,8 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-06 — corrección — [rendimiento](paginas/rendimiento.md): la foto de
+  cámaras del carrusel, 2,1 MB en PNG, pasa a WebP de 118 KB por el editor.
 - 2026-10-05 — consulta archivada — [rendimiento](paginas/rendimiento.md):
   portada en vivo, teléfono lento: foto principal 2,7 s, carga 2,8 s.
 - 2026-10-05 — corrección — [rendimiento](paginas/rendimiento.md): «Productos

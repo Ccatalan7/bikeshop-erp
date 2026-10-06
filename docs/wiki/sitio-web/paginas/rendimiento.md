@@ -146,8 +146,10 @@ tarjeta»).
   elegir una imagen vieja de la biblioteca, la optimiza (`<nombre>-src<hash>-<uuid>-web.webp`,
   reutilizada si ya existe; WebP > 300 KB también) `[Repo]`.
 - Carrusel: la diapositiva 1 pasó de PNG 1 MB a WebP 59 KB; la foto de la portada
-  de JPEG 168 KB a WebP 82 KB. Siguen pesados: la campaña de cámaras en PNG
-  (2.085 KB) y una WebP de 312 KB en la grilla de categorías (2026-09-24).
+  de JPEG 168 KB a WebP 82 KB. La campaña de cámaras (diapositiva 3) pasó de
+  PNG 2.085 KB a WebP 118 KB, elegida otra vez en la biblioteca del editor,
+  que la optimiza al usarla (2026-10-06). Ninguna imagen que baja la portada
+  pasa de ~120 KB `[Prod 2026-10-06]`.
 - La biblioteca no lista `.avif` (`listAssets`).
 
 ## Presupuesto del bundle

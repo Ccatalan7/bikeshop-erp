@@ -5,6 +5,7 @@
 #   app_control.sh window [out.png]      # OS screenshot of the app window
 #   app_control.sh click X Y [wait]      # tap in FRAME coordinates
 #   app_control.sh scroll X Y [lines]    # scroll wheel at that point
+#   app_control.sh hscroll X Y [px]      # horizontal scroll (+ reveals what is right)
 #   app_control.sh drag X Y X2 Y2        # press, move, release
 #   app_control.sh hover X Y [X2 Y2]     # synthetic mouse passes over, no press
 #                                        # (APP_CONTROL_HOVER_LEAVE=1 removes it after)
@@ -122,6 +123,12 @@ try:
         call('ext.vinabike.input.scroll', isolateId=isolate,
              x=logical_x, y=logical_y,
              dy=-float(a if a is not None else -5) * 40)
+    elif verb == 'hscroll':
+        # A horizontal list (slide chips, tabs) ignores the vertical wheel and
+        # only builds the items it shows: positive pixels reveal the right.
+        call('ext.vinabike.input.scroll', isolateId=isolate,
+             x=logical_x, y=logical_y,
+             dx=float(a if a is not None else 200), dy=0)
     elif verb == 'hover':
         # Synthetic mouse that never presses: from (x, y) to (a, b) if given.
         params = dict(isolateId=isolate, x=logical_x, y=logical_y,
@@ -584,6 +591,12 @@ EOF
       exit 1
     fi
     echo "archivo elegido en la app debug: $file_path"
+    ;;
+
+  hscroll)
+    [ $# -ge 3 ] || { echo "uso: app_control.sh hscroll X Y [px]" >&2; exit 2; }
+    vm_input "$@" || { echo "hscroll necesita la app debug con ext.vinabike.input.scroll" >&2; exit 1; }
+    sleep "${APP_CONTROL_SETTLE:-0.6}"
     ;;
 
   hover)

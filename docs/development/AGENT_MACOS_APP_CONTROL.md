@@ -323,12 +323,29 @@ scripts/dev/app_control.sh shot out.png      # the app's own rendered frame
 scripts/dev/app_control.sh geometry          # pid · window · frame size
 scripts/dev/app_control.sh click X Y         # current `shot` only; never reuse
 scripts/dev/app_control.sh scroll X Y -5
+scripts/dev/app_control.sh hscroll X Y 300   # lista horizontal: + muestra lo de la derecha
 scripts/dev/app_control.sh drag X Y X2 Y2
 scripts/dev/app_control.sh hover X Y [X2 Y2] # pasa un mouse sin apretar
 scripts/dev/app_control.sh type "texto"
 scripts/dev/app_control.sh key 36            # 36 return · 53 esc · 48 tab
 scripts/dev/app_control.sh choose-file /ruta/absoluta/cartola.png
 ```
+
+### Una lista horizontal no construye lo que no se ve (2026-10-06)
+
+Los chips de diapositivas del carrusel (y cualquier fila horizontal con scroll)
+sólo construyen los que caben: `find --label` del tercero respondía «sin
+coincidencias» aunque `read` lo listara. La rueda vertical (`scroll`) no la
+mueve. `hscroll X Y 300` manda el desplazamiento horizontal por el mismo canal
+(`ext.vinabike.input.scroll` con `dx`) y después `tap --label` lo encuentra.
+No se arrastra la fila para moverla: los chips llevan asa de «Reordenar» y un
+arrastre puede cambiar el orden de las diapositivas en producción.
+
+Un campo sin `ValueKey` cuyo texto es sólo el `labelText` de su decoración
+(el buscador de la biblioteca de imágenes) no lo encuentra `enter-text
+--label`. Con la app al frente, `click` sobre el campo en el frame actual y
+luego `type "texto"` sí escriben; `read` lo confirma (`= texto · [campo con
+foco]`).
 
 ### `hover`: un mouse sintético dentro de la app (2026-10-01)
 
