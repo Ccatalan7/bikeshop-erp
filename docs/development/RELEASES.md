@@ -278,6 +278,18 @@ configuración: si toca un archivo que un registro abierto cita como evidencia
 hash nuevo. El 2026-10-05 un cambio al filtro del flujo de la tienda salió sin
 validar y con la huella vieja; lo atrapó la validación del commit siguiente.
 
+La base publicada exacta es la que imprime la preparación («Notes base»):
+`resolve_previous_release_commit.sh` da la última versión de escritorio y
+`resolve_paired_release_notes_base.mjs` la cruza con la última de Android.
+`node scripts/releases/release_version.mjs --prepare --macos` imprime su
+`notes_base` por otro camino; **si las dos no coinciden, se para antes de
+publicar**. El 2026-10-06 el resolvedor tomaba la primera versión que listaba
+la API de GitHub, y la API puso 1.0.9 y 1.0.8 antes de 1.0.10 (no ordena por
+fecha). La preparación de 1.0.11 eligió la base de 1.0.9, validó un rango con
+registros ya publicados en 1.0.10 y huellas viejas, y los dos publicadores
+fallaron sin publicar nada: una ronda entera perdida. Desde ese día ordena por
+`published_at`.
+
 ```bash
 node scripts/releases/generate_release_notes.mjs \
   --check-index --from-commit <base-publicada-exacta>

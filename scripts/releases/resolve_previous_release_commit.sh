@@ -73,9 +73,14 @@ while IFS=$'\t' read -r release_tag release_target; do
   printf '%s\n' "$candidate_commit"
   exit 0
 done < <(
+  # The releases API does not list newest first: with two-digit patch
+  # versions it returned 1.0.9 and 1.0.8 before 1.0.10 (2026-10-06), so the
+  # first match was an older release. Order every page by publication time.
   gh api --paginate "repos/${REPOSITORY}/releases?per_page=100" \
     --jq \
-    '.[] | select(.draft == false) | [.tag_name, .target_commitish] | @tsv'
+    '.[] | select(.draft == false and .published_at != null) | [.published_at, .tag_name, .target_commitish] | @tsv' |
+    LC_ALL=C sort -r |
+    cut -f2-
 )
 
 fallback_commit="$(git rev-parse "${HEAD_COMMIT}^" 2>/dev/null || true)"

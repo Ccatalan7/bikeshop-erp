@@ -252,6 +252,16 @@ void main() {
     );
   });
 
+  test('release-note baseline is the newest published release', () {
+    // GitHub lists 1.0.9 before 1.0.10; the first match must be the newest.
+    final listing = releaseBaseResolver.indexOf('releases?per_page=100');
+    expect(listing, greaterThanOrEqualTo(0));
+    final tail = releaseBaseResolver.substring(listing);
+    expect(tail, contains('[.published_at, .tag_name, .target_commitish]'));
+    expect(tail, contains('LC_ALL=C sort -r'));
+    expect(tail, contains('cut -f2-'));
+  });
+
   test('CI owns the complete release integrity gate', () {
     final npmBuild = integrityWorkflow.indexOf(
       'npm run build:spreadsheet-engine',
