@@ -9,12 +9,12 @@
     "windows",
     "android"
   ],
-  "title": "Edita la página de servicios sobre ella misma",
-  "summary": "En el editor del sitio, al abrir Servicios tocas una sección o un texto y lo escribes ahí; el panel muestra sólo esa sección y lo que viene del catálogo, y se guarda con el mismo Guardar de todo el sitio.",
+  "title": "Edita Servicios sobre la página, con Guardar siempre arriba",
+  "summary": "En el editor del sitio tocas una sección o un texto de Servicios y lo escribes ahí; el panel muestra sólo esa sección. La barra deja a la vista la página que editas, Deshacer, Rehacer, Ver como cliente y Guardar, también en Catálogo y Ajustes.",
   "items": [
-    "Portada, planes, todos los servicios y cierre se eligen en la página o en la lista de secciones del panel, que lleva a Inventario para precios y nombres.",
-    "Pasar de lista de precios a cuadrícula avisa que la portada, los planes y el cierre se borran al guardar.",
-    "Dos personas que guardan presentaciones del catálogo al mismo tiempo ya no se pisan: cada una conserva lo suyo."
+    "Portada, planes, servicios y cierre se eligen en la página o en la lista de secciones del panel, que lleva a Inventario para precios y nombres.",
+    "Desde la barra se cambia de página, y el menú Sitio web lleva a Páginas, Catálogo y los ajustes del sitio; el panel deja de tener su propio Guardar.",
+    "Dos personas que guardan presentaciones del catálogo a la vez ya no se pisan, y pasar a cuadrícula avisa qué se borra al guardar."
   ],
   "evidence": [
     {
@@ -55,7 +55,7 @@
     },
     {
       "path": "lib/modules/website/widgets/website_editor_panel.dart",
-      "sha256": "2bce3dd4a7b369114933ad3bb7944c74acca92b63030720d69ae99bba32bcaff"
+      "sha256": "9b6ed5684a2d26b6c34f452da941134b32f67bd90536631e287689e3e4679747"
     },
     {
       "path": "lib/modules/website/widgets/website_editor_contextual_dock.dart",
@@ -71,11 +71,23 @@
     },
     {
       "path": "lib/public_store/widgets/public_store_layout.dart",
-      "sha256": "a3a7c4fafb8eb7810e69e13d0c2b7844675b5b82cb857ae7618100e0216442a3"
+      "sha256": "e76cfbd3780f2db754fabda18119f2eec80ff2c8ec85b3c20d1ccbf58ac53d7f"
     },
     {
       "path": "lib/public_store/widgets/store_layout/scroll_and_chrome.dart",
-      "sha256": "fbe97aace0bf29dc6319b090f980fd43f8b41e98e6a09e02211f83c7e31731e0"
+      "sha256": "3f7a8efcb98ee3744ac27d6769b2cc2f27ec3063879d94e193df7048fd8afc65"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_editor_chrome_geometry.dart",
+      "sha256": "c404b941cdb63318e4f2b606e28e2649ab56afc591d157c98833abaf90897068"
+    },
+    {
+      "path": "lib/modules/website/widgets/deferred_website_editor_panel.dart",
+      "sha256": "f14b97733020b1ab39df0f21b81d5f443cfaccf57cc1b9c25528181a7a1294ef"
+    },
+    {
+      "path": "lib/public_store/widgets/persistent_editor_shell.dart",
+      "sha256": "3fa6360008dfc36d3c6c0bd2da6a49e21d3dd4a67429ec8b0d9f28a1bdf78317"
     }
   ]
 }
