@@ -23,8 +23,8 @@ Firebase la reescribe a `app.html` (la página de Flutter; no se llama
 `index.html` para que `/` sea del servidor) y Flutter la resuelve en
 `public_store_router.dart`; ahí el 404 lo decide la app, y una ruta inexistente
 responde «Página no encontrada» con `noindex` para no ser un soft 404 `[Repo]`
-`[GSC]`. Flutter sólo arranca en el carrito, el checkout, la cuenta y el
-portal; un clic suyo hacia una ruta del servidor hace una carga completa
+`[GSC]`. Flutter sólo arranca en el checkout, la cuenta y el portal (el
+carrito es del servidor desde el 2026-10-06); un clic suyo hacia una ruta del servidor hace una carga completa
 (`storefrontHtmlServes` en el núcleo, comparada con `firebase.json` por una
 prueba), salvo en el editor, su vista previa y `/tienda` `[Repo]`.
 
@@ -41,7 +41,8 @@ prueba), salvo en el editor, su vista previa y `/tienda` `[Repo]`.
 | `/servicios/categoria/:category` | categoría de servicios (servidor HTML) | sí, con las mismas reglas |
 | `/pagina/:slug` | página CMS dinámica | según su publicación |
 | `/contacto`, `/nosotros`, `/terminos`, `/privacidad`, `/devoluciones`, `/envios` | páginas fijas con su página CMS, todas dibujadas por el servidor HTML; las cinco de información sin nada que leer y `/contacto` sin publicar responden 404 con `noindex`. `/contacto` muestra los datos de Configuración (correo, teléfono, dirección, WhatsApp, redes, horario, Maps) y un formulario que abre un correo a la tienda | sí, si su página está publicada (y, las de información, tienen algo que leer); si no, `noindex,follow` |
-| `/carrito`, `/checkout` | compra | no (`X-Robots-Tag`) |
+| `/carrito` | carrito; lo dibuja el servidor HTML y sus líneas llegan de `/carrito/lineas` (JSON, `no-store`) | no (`X-Robots-Tag` y meta) |
+| `/checkout` | compra (Flutter) | no (`X-Robots-Tag`) |
 | `/pedido/:id` | confirmación de un pedido (con token de acceso) | no |
 | `/cuenta`, `/cuenta/login`, `/cuenta/perfil`, `/cuenta/direcciones`, `/cuenta/pedidos`, `/cuenta/bicicletas`, `/cuenta/servicios`, `/cuenta/chats`, `/cuenta/chats/:id`, `/cuenta/mensajes`, `/cuenta/mensajes/:id`, `/cuenta/descargas/android` | portal de clientes ([portal-de-clientes](portal-de-clientes.md)) | no |
 | `/auth/callback` | vuelta del inicio de sesión | no |

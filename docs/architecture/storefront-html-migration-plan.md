@@ -886,6 +886,47 @@ bajando la tienda Flutter (~7 GB/día) y versiones viejas guardadas sin
 límite. El HTML terminó con lo primero y las versiones quedaron en 50 por
 sitio; el detalle está en el wiki, `publicacion-y-despliegue.md`.
 
+## Fase 3a: el carrito (2026-10-06)
+
+`/carrito` lo responde el servidor (`cart_page_model.dart`,
+`cart_page_view.dart`, `cart_page_css.dart`). El carrito vive en el
+navegador, y Hosting borra las cookies, así que la primera respuesta no puede
+saber qué tiene: el servidor manda el marco, igual para todos, y el script de
+la página pide `/carrito/lineas?l=<id>:<q>,…`. Esa respuesta vuelve a leer
+los productos como Flutter al restaurar (`get_public_products` sin filtro de
+stock y `get_public_product_tax_classifications`; sin tasa no se paga),
+ajusta las cantidades al stock, cuenta las líneas ajustadas y dibuja líneas y
+resumen. El navegador guarda lo ajustado, como hace Flutter. La regla de IVA
+por línea (`StorefrontTaxSummary`) pasó al núcleo: carrito HTML, checkout y
+confirmación calculan igual.
+
++, − y eliminar escriben el mismo documento que «Agregar», bajo el mismo
+candado (`window.vinabikeCart` del script global; el del carrito corre
+después, por `pageScripts` de `sitePage`). Otra pestaña abierta se actualiza
+sola con el evento `storage`. Antes del primer pintado un script en línea
+decide entre «vacío» y «cargando», para que un carrito vacío no parpadee.
+
+Medido contra Flutter a 1440 y 412 px, vacío y con líneas: todo texto y
+botón en el mismo píxel, los mismos totales (neto, IVA, total) y el mismo
+documento guardado. En un teléfono lento las líneas están en pantalla a los
+**1,2–1,5 s** con 203 KB, contra **18,4 s** y 3.640 KB de Flutter
+`[Prod 2026-10-06]`. El checkout sigue en Flutter: «Proceder al pago» empieza
+a bajar `main.dart.js` cuando el visitante apunta al botón.
+
+Lo que costó:
+
+- **Una clase genérica chocó otra vez** (como `.sheet` en la fase 1): `.cart`
+  ya era el formulario de «Agregar» de la ficha, un `grid`, y dejó el carrito
+  de 104 px de ancho. La raíz se llama `cart-page`.
+- **`flex: 7` / `flex: 4` no es el `Expanded` de Flutter**: CSS descuenta el
+  relleno del resumen antes de repartir y lo corrió 30 px; una grilla
+  `7fr 4fr` reparte como Flutter.
+- **Un botón con el relleno por defecto de Material** pierde 4 px por lado con
+  la densidad compacta (24 → 20) y su etiqueta cae en otra letra: se mide.
+- La revisión de rutas de la publicación sólo miraba lo que está en el
+  sitemap; ahora exige que `/carrito` venga del servidor con `noindex`
+  (`privateServerRoutes`).
+
 ### Pendiente
 
 - Las copias de una foto reemplazada quedan en Storage (pocos KB cada una);

@@ -10,7 +10,7 @@
   "title": "Productos y catálogo cargan mucho más rápido",
   "summary": "La portada, productos, categorías y búsqueda de vinabike.cl llegan armados desde el servidor, con el precio y el stock del momento y las fotos de cada lista en el tamaño de su tarjeta: quien entra desde Google ve la ficha en un segundo en un teléfono lento.",
   "items": [
-    "La portada, productos, servicios y páginas como Envíos llegan armadas: en un teléfono lento se leen en 1 segundo, cuando la tienda tardaba de 15 a 20.",
+    "La portada, productos, servicios, el carrito y páginas como Envíos llegan armadas: en un teléfono lento se leen en 1 a 1,5 segundos, no en 15 a 20.",
     "Categorías y filtros funcionan sin JavaScript, se comparten como enlace y cada foto de las listas pesa unos 20 KB en vez de 120.",
     "En Nosotros, Términos y Privacidad el contacto muestra el teléfono, el correo y la dirección de la tienda, no un aviso para el editor."
   ],

@@ -26,8 +26,13 @@ tributario» `[Repo]`.
 
 ## El recorrido del cliente
 
-1. **Carrito** (`/carrito`): `CartProvider` con almacenamiento local y candado
-   entre pestañas (`cart_lock`).
+1. **Carrito** (`/carrito`): desde el 2026-10-06 lo dibuja el servidor HTML.
+   Lo que el visitante eligió vive en su navegador (el mismo documento que
+   lee `CartProvider`, con su candado entre pestañas); la página pide
+   `/carrito/lineas` y el servidor vuelve a leer precio, stock y tasa de IVA
+   de cada producto, ajusta al stock y dibuja líneas y resumen con la misma
+   regla de IVA que el checkout (`StorefrontTaxSummary`, en el núcleo). Un
+   producto sin tasa bloquea «Proceder al pago» `[Repo]`.
 2. **Checkout** (`/checkout`): `get_public_checkout_capabilities` dice qué
    métodos y entregas están activos; `quote_public_online_shipping` cotiza el
    envío; `google-places-proxy` autocompleta la dirección. Un producto sin tasa
@@ -115,7 +120,9 @@ se cancela: va por devolución, corrección o nota de crédito y reembolso
 
 ## En el código y la base
 
-- Tienda: `cart_page.dart`, `checkout_page.dart`,
+- Tienda HTML: `services/storefront_html/lib/src/cart_page_model.dart`,
+  `cart_page_view.dart` (carrito y `/carrito/lineas`).
+- Tienda Flutter: `cart_page.dart` (en el editor y en `/tienda`), `checkout_page.dart`,
   `order_confirmation_page.dart`, `cart_provider.dart`,
   `public_checkout_capability_service.dart`, `checkout_session_store.dart`,
   `checkout_exit_guard.dart`.

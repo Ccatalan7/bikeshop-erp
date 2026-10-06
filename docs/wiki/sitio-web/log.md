@@ -4,6 +4,8 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-06 — corrección — [checkout](paginas/checkout-y-pedidos.md) y
+  [rutas](paginas/rutas-y-navegacion.md): `/carrito` pasa al servidor HTML (fase 3a).
 - 2026-10-06 — consulta archivada — [publicación](paginas/publicacion-y-despliegue.md):
   costo de Hosting (rastreadores de IA y versiones sin límite) y cómo medirlo.
 - 2026-10-06 — corrección — [rendimiento](paginas/rendimiento.md): la foto de
