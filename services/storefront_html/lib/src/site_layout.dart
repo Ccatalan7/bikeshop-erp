@@ -2,7 +2,9 @@ import 'dart:convert';
 
 import 'package:jaspr/dom.dart';
 import 'package:jaspr/server.dart';
+import 'package:vinabike_public_core/modules/website/models/website_catalog_query.dart';
 import 'package:vinabike_public_core/modules/website/models/website_page_models.dart';
+import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
 import 'package:vinabike_public_core/public_store/models/public_business_hours.dart';
 import 'package:vinabike_public_core/public_store/models/public_checkout_capabilities.dart';
 import 'package:vinabike_public_core/public_store/models/public_payment_claims.dart';
@@ -67,6 +69,8 @@ class PageContext {
     required this.path,
     required this.hidden,
     this.query = '',
+    this.supabaseUrl = '',
+    this.publishableKey = '',
   });
 
   final StorefrontShell shell;
@@ -87,6 +91,11 @@ class PageContext {
   final bool hidden;
 
   String get storeUrl => shell.storeOrigin(fallbackOrigin);
+
+  /// Where the browser reaches Supabase with the publishable key, as the
+  /// Flutter store does: the customer's session (header, checkout, order).
+  final String supabaseUrl;
+  final String publishableKey;
 }
 
 /// The whole document around a page's content.
@@ -101,6 +110,7 @@ Component sitePage({
   List<Component> pageScripts = const [],
 }) {
   final s = context.shell;
+  final roles = WebsiteThemeRoles.resolve(s.setting);
   final indexable = meta.indexable && !context.hidden;
   final business = _businessNode(context);
   return Document(
@@ -149,6 +159,9 @@ Component sitePage({
               accent: s.accentColor,
               headingFont: s.headingFont,
               bodyFont: s.bodyFont,
+              onSurface: roles.onSurface.css,
+              onSurfaceVariant: roles.onSurfaceVariant.css,
+              outlineVariant: roles.outlineVariant.css,
             ),
           ),
           RawText(SiteFooter.wrapCss(s)),
@@ -196,7 +209,9 @@ String _bodyData(PageContext context) {
   final key =
       'flutter.public_store_cart_v2.${base64Url.encode(utf8.encode(context.tenantId))}';
   return 'document.body.dataset.tenant=${jsonEncode(context.tenantId)};'
-      'document.body.dataset.cartKey=${jsonEncode(key)};';
+      'document.body.dataset.cartKey=${jsonEncode(key)};'
+      'document.body.dataset.sbUrl=${jsonEncode(context.supabaseUrl)};'
+      'document.body.dataset.sbKey=${jsonEncode(context.publishableKey)};';
 }
 
 /// The `BikeStore` node every public page carries, as the Flutter store's
@@ -305,6 +320,7 @@ class SiteHeader extends StatelessComponent {
             RawText(materialIcon(mdPersonOutline)),
             .text('Iniciar sesión'),
           ]),
+          _accountMenu(),
           Component.element(
             tag: 'label',
             classes: 'menu-button',
@@ -323,14 +339,38 @@ class SiteHeader extends StatelessComponent {
         a(classes: 'sheet-item sheet-login', href: '/cuenta/login', [
           RawText(materialIcon(mdLoginRounded)),
           span([.text('Iniciar Sesión')]),
+          RawText(materialIcon(mdChevronRight, size: 20, classes: 'go')),
         ]),
+        a(
+          classes: 'sheet-item sheet-account',
+          href: '/cuenta',
+          attributes: {'hidden': ''},
+          [
+            RawText(materialIcon(mdPersonRounded)),
+            span([.text('Mi Cuenta')]),
+            RawText(materialIcon(mdChevronRight, size: 20, classes: 'go')),
+          ],
+        ),
         hr(),
         nav(
           attributes: {'aria-label': 'Menú del teléfono'},
           [
-            for (final item in items)
-              if (item.showOnMobile)
-                ?_sheetItem(item, s.childrenOf(item), depth: 0),
+            for (final item in s.menuFor(
+              MenuLocation.header,
+              mobile: true,
+              storeUrl: page.storeUrl,
+            ))
+              ?_sheetItem(item, depth: 0),
+          ],
+        ),
+        hr(classes: 'sheet-account', attributes: {'hidden': ''}),
+        button(
+          classes: 'sheet-item sheet-out sheet-account',
+          attributes: {'type': 'button', 'data-act': 'sign-out', 'hidden': ''},
+          [
+            RawText(materialIcon(mdLogoutRounded)),
+            span([.text('Cerrar Sesión')]),
+            RawText(materialIcon(mdChevronRight, size: 20, classes: 'go')),
           ],
         ),
       ]),
@@ -338,24 +378,98 @@ class SiteHeader extends StatelessComponent {
       // painted: clear at the top, solid after 50 px of scroll. Without
       // scripts the header stays solid, which is always readable.
       if (overlay) script(content: _overlayHeaderScript),
+      // A customer seen on an earlier page shows as signed in from the first
+      // paint; the page script confirms it (or reverts) with the base.
+      script(content: _accountFirstPaintScript(page)),
     ]);
   }
 
-  /// One row of the phone sheet, as `_buildMobileNavigationNode` draws it:
-  /// an item with children opens in place with «Ver todo …» first.
-  Component? _sheetItem(
-    WebsiteNavigation item,
-    List<WebsiteNavigation> children, {
-    required int depth,
-  }) {
+  /// `CustomerAccountMenu` signed in: the initial, the first name over «Mi
+  /// cuenta» and the portal's sections; the page script fills and opens it.
+  Component _accountMenu() => div(
+    classes: 'acct',
+    attributes: {'data-acct': '', 'hidden': ''},
+    [
+      button(
+        classes: 'acct-btn',
+        attributes: {
+          'type': 'button',
+          'title': 'Mi cuenta',
+          'aria-haspopup': 'menu',
+          'aria-expanded': 'false',
+        },
+        [
+          span(classes: 'acct-av', attributes: {'data-acct-initial': ''}, []),
+          span(classes: 'acct-text', [
+            b(attributes: {'data-acct-name': ''}, [.text('Mi cuenta')]),
+            Component.element(
+              tag: 'small',
+              attributes: {'data-acct-sub': '', 'hidden': ''},
+              children: [.text('Mi cuenta')],
+            ),
+          ]),
+          RawText(materialIcon(mdArrowDropDown)),
+        ],
+      ),
+      div(
+        classes: 'acct-menu',
+        attributes: {'role': 'menu', 'hidden': ''},
+        [
+          for (final (icon, label, href) in _accountItems) ...[
+            a(
+              classes: 'acct-item',
+              href: href,
+              attributes: {'role': 'menuitem'},
+              [
+                RawText(materialIcon(icon, size: 18)),
+                span([.text(label)]),
+              ],
+            ),
+            if (href == '/cuenta') hr(),
+          ],
+          hr(),
+          button(
+            classes: 'acct-item',
+            attributes: {
+              'type': 'button',
+              'role': 'menuitem',
+              'data-act': 'sign-out',
+            },
+            [
+              RawText(materialIcon(mdLogout, size: 18)),
+              span([.text('Cerrar sesión')]),
+            ],
+          ),
+        ],
+      ),
+    ],
+  );
+
+  /// `CustomerAccountMenu._items`: the portal's sections, same words.
+  static const _accountItems = [
+    (mdHomeOutlined, 'Resumen', '/cuenta'),
+    (mdReceiptLongOutlined, 'Pedidos', '/cuenta/pedidos'),
+    (mdBuildOutlined, 'Taller', '/cuenta/servicios'),
+    (mdPedalBikeOutlined, 'Bicicletas', '/cuenta/bicicletas'),
+    (mdChatBubbleOutline, 'Soporte', '/cuenta/chats'),
+    (mdPersonOutline, 'Perfil y seguridad', '/cuenta/perfil'),
+    (mdLocationOnOutlined, 'Direcciones', '/cuenta/direcciones'),
+  ];
+
+  /// One row of the phone sheet, as `_buildMobileNavigationNode` draws it
+  /// over the projected menu (`StorefrontShell.menuFor`): a leaf links, with
+  /// «Solo esta categoría» under a category's own products; an item with
+  /// children opens in place with «Ver todo …» first when it leads somewhere.
+  Component? _sheetItem(WebsiteNavigation item, {required int depth}) {
     final href = page.shell.hrefFor(item);
-    final visible = [
-      for (final child in children)
-        if (child.showOnMobile) child,
-    ];
     final indent = 'padding-left:${24 + depth * 14}px';
-    if (visible.isEmpty) {
+    if (item.children.isEmpty) {
       if (href == null) return null;
+      final raw = Uri.tryParse(item.href?.trim() ?? '');
+      final direct =
+          raw != null &&
+          WebsiteCatalogQuery.tryParse(raw)?.categoryScope ==
+              WebsiteCatalogCategoryScope.direct;
       return a(
         classes: 'sheet-item',
         href: href,
@@ -367,7 +481,10 @@ class SiteHeader extends StatelessComponent {
           RawText(
             materialIcon(depth == 0 ? mdArrowForward : mdSubdirectoryRight),
           ),
-          span([.text(item.label)]),
+          span([
+            .text(item.label),
+            if (direct) small([.text('Solo esta categoría')]),
+          ]),
           RawText(materialIcon(mdChevronRight, size: 20, classes: 'go')),
         ],
       );
@@ -393,8 +510,7 @@ class SiteHeader extends StatelessComponent {
             RawText(materialIcon(mdChevronRight, size: 20, classes: 'go')),
           ],
         ),
-      for (final child in visible)
-        ?_sheetItem(child, page.shell.childrenOf(child), depth: depth + 1),
+      for (final child in item.children) ?_sheetItem(child, depth: depth + 1),
     ]);
   }
 
@@ -933,3 +1049,30 @@ Component _preload(String href, String as) => Component.element(
 /// The face of a heading family the page preloads (its Latin subset).
 String _fontFile(String family) =>
     family == 'Oswald' ? 'Oswald-wght' : 'Barlow-SemiBold';
+
+/// Where the store keeps a customer's session (`sb-<ref>-auth-token`, the
+/// key `supabase_flutter` uses) and, per tab, the profile the header last
+/// showed for it.
+String accountSessionKey(String supabaseUrl) {
+  final host = Uri.tryParse(supabaseUrl)?.host ?? '';
+  return 'sb-${host.split('.').first}-auth-token';
+}
+
+String accountProfileKey(String tenantId) =>
+    'vinabike.account-profile.v1.$tenantId';
+
+/// Before the first paint: a session in this browser whose customer this tab
+/// already read shows as signed in; the page script (`paintAccount`) draws
+/// the same thing and confirms it with the base, or reverts it.
+String _accountFirstPaintScript(PageContext page) =>
+    '(function(h){try{'
+    'var s=JSON.parse(localStorage.getItem(${jsonEncode(accountSessionKey(page.supabaseUrl))})||"null");'
+    'var p=JSON.parse(sessionStorage.getItem(${jsonEncode(accountProfileKey(page.tenantId))})||"null");'
+    'if(!(s&&s.user&&p&&p.uid===s.user.id))return;'
+    'h.querySelector("[data-acct-initial]").textContent=p.initial;'
+    'h.querySelector("[data-acct-name]").textContent=p.first||"Mi cuenta";'
+    'h.querySelector("[data-acct-sub]").hidden=!p.first;'
+    'h.querySelector("[data-acct]").hidden=false;'
+    'h.querySelectorAll(".login,.sheet-login").forEach(function(e){e.hidden=true});'
+    'h.querySelectorAll(".sheet-account").forEach(function(e){e.hidden=false})'
+    '}catch(e){}})(document.currentScript.parentNode);';

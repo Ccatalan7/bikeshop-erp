@@ -183,6 +183,8 @@ class _Route {
     path: path,
     query: _uri.query,
     hidden: hidden,
+    supabaseUrl: config.supabaseUrl,
+    publishableKey: config.publishableKey,
   );
 
   /// `/productos` or a category, with the visitor's search and filters.

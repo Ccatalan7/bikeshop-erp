@@ -236,15 +236,15 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_css.dart",
-      "sha256": "2c901c4f78314441f46e29f781d2be8fdec4c916865eb8929b9d7d07e8e99d65"
+      "sha256": "a00c9fe5b8701e259cc7240240448f4958bfdd0555bf32c78851ef11ac4c7105"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
-      "sha256": "a41dbbbc68e1086bb1db3ae3b1e9904af70b7781114c6a52c1dfcba159595844"
+      "sha256": "feb430579f1e40564f1130ced3b3114520627e9205adb8da71aacc194dc7d584"
     },
     {
       "path": "services/storefront_html/lib/storefront_html.dart",
-      "sha256": "f9523c70c12f22a7377e762093af10d7001f538cb733121d2fdb04e9939793f0"
+      "sha256": "2d43d15d3526765e2d87fc338f1942e5815221473e8cc32976d27ddee6438c30"
     },
     {
       "path": "services/storefront_html/pubspec.yaml",

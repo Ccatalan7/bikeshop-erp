@@ -244,6 +244,44 @@ class StorefrontShell {
         item,
   ];
 
+  /// The menu as Flutter's header gets it for phones or desktops: the
+  /// authored rows nested by parent in their order, unpublished editor pages
+  /// dropped (`PublicPagePublication.forAllAudiences`), then the shared
+  /// category projection (`PublicCategoryNavigationProjection`), which keeps
+  /// a published category, strips an unpublished one to a group of the first
+  /// two levels and promotes the public children of a deeper one.
+  List<WebsiteNavigation> menuFor(
+    MenuLocation location, {
+    required bool mobile,
+    required String storeUrl,
+  }) {
+    List<WebsiteNavigation> level(String? parent) {
+      final rows = [
+        for (final item in navigation)
+          if (item.menuLocation == location && item.parentId == parent) item,
+      ]..sort((a, b) => a.orderIndex.compareTo(b.orderIndex));
+      return [
+        for (final item in rows)
+          item.copyWith(
+            children: level(item.id),
+            // A page link carries its page, as Flutter's tree does; without
+            // it the page projection takes it for an unresolved link.
+            linkedPage: item.linkType == NavLinkType.page
+                ? pagesById[item.linkValue?.trim() ?? '']
+                : null,
+          ),
+      ];
+    }
+
+    final origin = Uri.tryParse(storeUrl);
+    final projection = PublicCategoryNavigationProjection(
+      publication,
+      internalOrigins: [if (origin != null && origin.hasScheme) origin],
+    );
+    final tree = pagePublication.forAllAudiences(level(null));
+    return mobile ? projection.forMobile(tree) : projection.forDesktop(tree);
+  }
+
   List<WebsiteNavigation> childrenOf(WebsiteNavigation parent) => [
     for (final item in navigation)
       if (item.parentId == parent.id && _shownSomewhere(item)) item,

@@ -4,6 +4,9 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-06 — corrección — [rutas](paginas/rutas-y-navegacion.md): el
+  encabezado HTML muestra la cuenta con sesión y el menú del teléfono usa la
+  regla de Flutter; el menú ancho de escritorio queda como diferencia abierta.
 - 2026-10-06 — corrección — [checkout](paginas/checkout-y-pedidos.md) y
   [rutas](paginas/rutas-y-navegacion.md): `/checkout` abierto al servidor; la
   página del pedido en HTML (fase 3c) con su PDF en el servidor; la clave

@@ -133,7 +133,18 @@ Flutter sólo podía imitar en el navegador:
   menús`); un botón de campaña no es un ítem de menú.
 - `Estructura > Destinos y enlaces` audita a dónde lleva cada botón y menú.
 - Las categorías del menú se muestran según la publicación real de la
-  categoría (`Catálogo web > Categorías`).
+  categoría (`Catálogo web > Categorías`). En las dos tiendas manda la misma
+  regla del núcleo, `PublicCategoryNavigationProjection` (desde el
+  2026-10-06 también en el menú del teléfono HTML): una categoría publicada
+  queda; una sin publicar de los dos primeros niveles queda como grupo sin
+  enlace si tiene hijas públicas; una más profunda cede su lugar a sus hijas
+  públicas `[Repo]`.
+- Con la sesión del cliente iniciada, el encabezado muestra su cuenta (la
+  inicial, el nombre y el menú del portal) en Flutter y, desde el 2026-10-06,
+  en las páginas HTML `[Repo]`.
+- **Diferencia abierta (2026-10-06):** en escritorio, «Componentes» abre en
+  Flutter un menú ancho con fotos y pestañas; en las páginas HTML, una lista
+  ([estado](estado-y-pendientes.md)).
 - Pendiente del dueño: la tarjeta «MOUNTAIN BIKE» de la portada enlaza a Cadenas
   (2026-09-24).
 

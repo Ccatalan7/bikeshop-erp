@@ -20,17 +20,14 @@
 ///   (`consumeCartOnce`, its outcome under
 ///   `vinabike.public-cart-preserved.v1.…`) before the order page opens.
 /// - **Session.** The Flutter store's own (`sb-<ref>-auth-token` in
-///   localStorage); an expired one is renewed and written back in the
-///   format gotrue-dart reads.
+///   localStorage), through the page script's `window.vinabikeSession`,
+///   which renews an expired one and writes it back as gotrue-dart reads it.
 const checkoutPageScript = r'''
 (function (root) {
   var cart = window.vinabikeCart;
   if (!root || !cart || !window.vinabikeCheckoutRecords) return;
   var D = root.dataset;
   var tenant = D.tenant, sbUrl = D.sbUrl.replace(/\/+$/, ''), sbKey = D.sbKey;
-  var ref = '';
-  try { ref = new URL(sbUrl).host.split('.')[0]; } catch (e) { /* no session */ }
-  var authKey = 'sb-' + ref + '-auth-token';
   var checkoutKey = 'vinabike.public-checkout.v1.' + tenant;
   var EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
   function $(s) { return root.querySelector(s); }
@@ -81,45 +78,10 @@ const checkoutPageScript = r'''
     }).then(function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.json(); });
   }
 
-  // The Flutter store's session, renewed when it is about to expire.
-  function readSession() {
-    try {
-      var s = JSON.parse(localStorage.getItem(authKey) || 'null');
-      return s && s.access_token && s.user && s.user.id ? s : null;
-    } catch (e) { return null; }
-  }
-  function jwtExp(token) {
-    try { return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).exp || 0; } catch (e) { return 0; }
-  }
-  var sessionPromise = null;
+  // The customer's session: the page script owns it (`vinabikeSession`,
+  // renewed under supabase_flutter's lock and written back as it reads it).
   function session() {
-    if (sessionPromise) return sessionPromise;
-    sessionPromise = new Promise(function (resolve) {
-      var s = readSession();
-      if (!s) { resolve(null); return; }
-      if (jwtExp(s.access_token) * 1000 - Date.now() > 60e3) { resolve(s); return; }
-      if (!s.refresh_token) { resolve(null); return; }
-      var renew = function () {
-        // Another tab may have renewed it already.
-        var latest = readSession();
-        if (latest && jwtExp(latest.access_token) * 1000 - Date.now() > 60e3) return Promise.resolve(latest);
-        return call('/auth/v1/token?grant_type=refresh_token', { refresh_token: (latest || s).refresh_token }).then(function (r) {
-          if (!r || !r.access_token || !r.user) return null;
-          var next = {
-            access_token: r.access_token, expires_in: r.expires_in, expires_at: r.expires_at || jwtExp(r.access_token),
-            refresh_token: r.refresh_token, token_type: r.token_type || 'bearer',
-            provider_token: s.provider_token || null, provider_refresh_token: s.provider_refresh_token || null, user: r.user
-          };
-          try { localStorage.setItem(authKey, JSON.stringify(next)); } catch (e) { /* this page still uses it */ }
-          return next;
-        });
-      };
-      var run = navigator.locks && navigator.locks.request
-        ? navigator.locks.request('lock:' + authKey, renew)
-        : renew();
-      run.then(resolve, function () { resolve(null); });
-    });
-    return sessionPromise;
+    return window.vinabikeSession ? window.vinabikeSession.current() : Promise.resolve(null);
   }
 
   // ---- state ---------------------------------------------------------------

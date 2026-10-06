@@ -2089,4 +2089,80 @@ void main() {
       expect((await _get(reads, '/pedido/resumen.pdf')).statusCode, 405);
     });
   });
+
+  group('header', () {
+    Map<String, dynamic> withMenu(List<Map<String, Object>> rows) {
+      final shell = _shell();
+      shell['navigation'] = [...(shell['navigation'] as List), ...rows];
+      return shell;
+    }
+
+    test('the phone sheet follows Flutter\'s projection: a published '
+        'category whose children are all hidden is a plain link', () async {
+      final shell = withMenu([
+        {
+          'id': 'n4',
+          'menu_location': 'header',
+          'label': 'Accesorios',
+          'link_type': 'category',
+          'link_value': _parent,
+          'order_index': 4,
+        },
+        {
+          'id': 'n5',
+          'menu_location': 'header',
+          'parent_id': 'n4',
+          'label': 'Interna',
+          'link_type': 'category',
+          'link_value': _hidden,
+          'order_index': 1,
+        },
+      ]);
+      final html = await (await _get(
+        _FakeReads(shell: shell),
+        '/productos',
+      )).readAsString();
+      final start = html.indexOf('class="menu-sheet"');
+      final sheet = html.substring(start, html.indexOf('</nav>', start));
+      expect(sheet, isNot(contains('Ver todo Accesorios')));
+      expect(sheet, isNot(contains('>Interna<')));
+      // A link row, not a group (`<summary>`) with «Ver todo».
+      expect(
+        RegExp(
+          r'<a class="sheet-item"[^>]*href="/productos/categoria/[^"]+"[^>]*>'
+          r'\s*<svg[\s\S]*?</svg>\s*<span>Accesorios</span>',
+        ).hasMatch(sheet),
+        isTrue,
+      );
+      expect(sheet, isNot(contains('<summary')));
+      // Page links keep their page (Contacto), drafts stay out.
+      expect(sheet, contains('>Contacto<'));
+      expect(sheet, isNot(contains('Página borrador')));
+    });
+
+    test('a signed-in customer is drawn by the page script, from the '
+        'session Flutter keeps', () async {
+      final html = await (await _get(
+        _FakeReads(),
+        '/productos',
+      )).readAsString();
+      expect(html, contains('class="acct" data-acct hidden'));
+      expect(html, contains('role="menuitem" href="/cuenta/pedidos"'));
+      expect(html, contains('data-act="sign-out"'));
+      expect(
+        html,
+        contains('class="sheet-item sheet-account" hidden href="/cuenta"'),
+      );
+      // The body tells the page script where the session lives.
+      expect(
+        html,
+        contains('document.body.dataset.sbUrl="https://example.invalid"'),
+      );
+      expect(
+        accountSessionKey('https://abcd1234.supabase.co'),
+        'sb-abcd1234-auth-token',
+      );
+      expect(html, contains('"sb-example-auth-token"'));
+    });
+  });
 }

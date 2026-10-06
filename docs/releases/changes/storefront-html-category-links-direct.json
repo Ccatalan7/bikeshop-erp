@@ -13,7 +13,7 @@
   "evidence": [
     {
       "path": "services/storefront_html/lib/src/storefront_shell.dart",
-      "sha256": "cb34bf766a1a7b93fe7a594919eaa5401547671539658635b8a009efb8cbf91c"
+      "sha256": "8068228b37cb10cbe07c94adc615168b9d0bf0328b962408bf9154a63900e9f3"
     },
     {
       "path": "services/storefront_html/lib/src/website_blocks_view.dart",
@@ -21,7 +21,7 @@
     },
     {
       "path": "services/storefront_html/test/storefront_handler_test.dart",
-      "sha256": "54a76cc6be26a5f8d380d94f8a962f0159ec2e068c6ad8efb05f311cd8aa6537"
+      "sha256": "dfe5c512aca12f207ad98d2b586f4013a3977da4f072a8500fb380e4c8decb81"
     }
   ]
 }

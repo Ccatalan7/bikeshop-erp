@@ -37,15 +37,15 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_css.dart",
-      "sha256": "2c901c4f78314441f46e29f781d2be8fdec4c916865eb8929b9d7d07e8e99d65"
+      "sha256": "a00c9fe5b8701e259cc7240240448f4958bfdd0555bf32c78851ef11ac4c7105"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
-      "sha256": "a41dbbbc68e1086bb1db3ae3b1e9904af70b7781114c6a52c1dfcba159595844"
+      "sha256": "feb430579f1e40564f1130ced3b3114520627e9205adb8da71aacc194dc7d584"
     },
     {
       "path": "services/storefront_html/test/storefront_handler_test.dart",
-      "sha256": "54a76cc6be26a5f8d380d94f8a962f0159ec2e068c6ad8efb05f311cd8aa6537"
+      "sha256": "dfe5c512aca12f207ad98d2b586f4013a3977da4f072a8500fb380e4c8decb81"
     }
   ]
 }

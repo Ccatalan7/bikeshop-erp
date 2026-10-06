@@ -2,7 +2,7 @@
   "schema_version": 1,
   "source": "ai",
   "module": "website",
-  "id": "storefront-html-fonts-latin-woff2",
+  "id": "storefront-html-header-account",
   "scope": "internal",
   "platforms": [
     "web"
@@ -12,28 +12,36 @@
   "items": [],
   "evidence": [
     {
-      "path": "scripts/fonts/subset_storefront_fonts.sh",
-      "sha256": "a098727347c2e28e4f653d867058d55715006c15173e4cc3723614da09d73859"
-    },
-    {
       "path": "services/storefront_html/lib/src/site_layout.dart",
       "sha256": "f017b69dba5dcaea5bfb12c9e9673f75d26d3e9b5da553e6486a0f42befb86f4"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_shell.dart",
+      "sha256": "8068228b37cb10cbe07c94adc615168b9d0bf0328b962408bf9154a63900e9f3"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_css.dart",
       "sha256": "a00c9fe5b8701e259cc7240240448f4958bfdd0555bf32c78851ef11ac4c7105"
     },
     {
-      "path": "services/storefront_html/lib/src/storefront_fonts.dart",
-      "sha256": "a1c489c78b8128778b5bcd0d80a8502f6d8b9eedcbb508543fd8e28b84e29282"
+      "path": "services/storefront_html/lib/src/storefront_script.dart",
+      "sha256": "65b94268d4868adcc5b54a75f792bab377fcec8f41b3f23041a0beea1eb0602d"
+    },
+    {
+      "path": "services/storefront_html/lib/src/checkout_page_script.dart",
+      "sha256": "e97ab087c35b6d4512539c9a0de66887a446661228af80276d4dad0607da1f54"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
       "sha256": "feb430579f1e40564f1130ced3b3114520627e9205adb8da71aacc194dc7d584"
     },
     {
-      "path": "services/storefront_html/test/storefront_fonts_test.dart",
-      "sha256": "d820b318981cd5d663859172fe83e49f5ddb291ae8f85f71361f6c8bc5ef37ff"
+      "path": "services/storefront_html/lib/src/material_icons.dart",
+      "sha256": "16d4bfaf7d27cd7645bbb9d4efba316da60a896b397358f637b2801e73cae185"
+    },
+    {
+      "path": "services/storefront_html/lib/storefront_html.dart",
+      "sha256": "2d43d15d3526765e2d87fc338f1942e5815221473e8cc32976d27ddee6438c30"
     },
     {
       "path": "services/storefront_html/test/storefront_handler_test.dart",

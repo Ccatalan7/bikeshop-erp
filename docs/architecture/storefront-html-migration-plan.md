@@ -1051,8 +1051,38 @@ núcleo (`online_order_labels.dart`) y los getters de `OnlineOrder` las llaman.
 - Con la página del pedido en HTML, el checkout ya no precarga `main.dart.js`
   al apuntar a «Realizar pedido» (eran 3,6 MB para nada).
 
-Sigue: el portal y las páginas de la cuenta (`/cuenta/**`), lo último que
-dibuja Flutter en la web.
+`/pedido/**` quedó abierto el 2026-10-06 (ea3e52a3, publicación
+37437697313). En un teléfono lento el pedido aparece en 0,9–1,0 s con 168 KB;
+Flutter lo dibujaba a los 22 s con 3,85 MB.
+
+### El encabezado con sesión y el menú del teléfono (2026-10-06)
+
+Dos diferencias con Flutter que estaban en vivo desde las primeras fases:
+
+- **Con sesión**, Flutter muestra la cuenta (inicial, nombre, «Mi cuenta» y el
+  menú del portal) y el HTML seguía diciendo «Iniciar sesión». Ahora la sesión
+  del cliente vive en el script común (`window.vinabikeSession`: lee
+  `sb-<ref>-auth-token`, la renueva bajo el candado de `supabase_flutter`, la
+  cierra con `logout?scope=local`) y el checkout la usa en vez de la suya. El
+  encabezado lee la fila de `customers` de la tienda, como
+  `CustomerAccountService.isAuthenticated`; la pestaña recuerda lo último que
+  mostró para que la página siguiente ya salga con la cuenta, sin parpadeo.
+- **El menú del teléfono** no usaba la regla de Flutter
+  (`PublicCategoryNavigationProjection.forMobile` sobre el árbol con
+  `PublicPagePublication.forAllAudiences`): «Accesorios», con sus hijas sin
+  publicar, salía como grupo vacío. Ahora la usa (`StorefrontShell.menuFor`), y
+  cada fila tiene la letra (18 px), los colores del tema y el subtítulo «Solo
+  esta categoría» de Flutter. Un enlace a una página necesita su página
+  adjunta antes de la regla: sin ella la toma por un enlace sin resolver.
+
+Medido con una sesión inventada que la prueba responde (ninguna lectura llega
+a la base con ese token): encabezado y menú de cuenta a ±2 px a 1440, el menú
+del teléfono con sesión y sin ella al píxel en alto.
+
+Sigue: el menú ancho de escritorio. Flutter abre en «Componentes» un panel a
+todo el ancho (pestañas por rama, foto de la sección, tarjetas con imagen,
+«VER TODO»); el HTML abre una lista. Después, el portal y la cuenta
+(`/cuenta/**`), lo último que dibuja Flutter en la web.
 
 ### Pendiente
 

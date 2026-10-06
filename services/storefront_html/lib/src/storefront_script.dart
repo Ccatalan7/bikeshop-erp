@@ -426,6 +426,155 @@ const storefrontScript = r'''
     track('store_ready', { value: Math.round(ms / 100) / 10, load_ms: ms, load_bucket: bucket });
   });
 
+  // ---- the customer's session (Flutter's, `sb-<ref>-auth-token`) --------
+  // Read as gotrue-dart writes it; an expired one is renewed under the lock
+  // supabase_flutter takes and written back in the same format.
+  var sbUrl = (body.dataset.sbUrl || '').replace(/\/+$/, ''), sbKey = body.dataset.sbKey || '';
+  var sbRef = '';
+  try { sbRef = new URL(sbUrl).host.split('.')[0]; } catch (e) { /* no session */ }
+  var authKey = 'sb-' + sbRef + '-auth-token';
+  var profileKey = 'vinabike.account-profile.v1.' + tenant;
+  function readSession() {
+    try {
+      var s = JSON.parse(localStorage.getItem(authKey) || 'null');
+      return s && s.access_token && s.user && s.user.id ? s : null;
+    } catch (e) { return null; }
+  }
+  function jwtExp(token) {
+    try { return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).exp || 0; } catch (e) { return 0; }
+  }
+  function authCall(path, payload, token) {
+    return fetch(sbUrl + path, {
+      method: 'POST',
+      headers: { apikey: sbKey, authorization: 'Bearer ' + (token || sbKey), 'content-type': 'application/json' },
+      body: JSON.stringify(payload || {})
+    }).then(function (r) { return r.ok ? r.text().then(function (t) { return t ? JSON.parse(t) : null; }) : null; });
+  }
+  var sessionPromise = null;
+  function currentSession() {
+    if (sessionPromise) return sessionPromise;
+    sessionPromise = new Promise(function (resolve) {
+      var s = readSession();
+      if (!s || !sbUrl) { resolve(null); return; }
+      if (jwtExp(s.access_token) * 1000 - Date.now() > 60e3) { resolve(s); return; }
+      if (!s.refresh_token) { resolve(null); return; }
+      var renew = function () {
+        // Another tab may have renewed it already.
+        var latest = readSession();
+        if (latest && jwtExp(latest.access_token) * 1000 - Date.now() > 60e3) return Promise.resolve(latest);
+        return authCall('/auth/v1/token?grant_type=refresh_token', { refresh_token: (latest || s).refresh_token }).then(function (r) {
+          if (!r || !r.access_token || !r.user) return null;
+          var next = {
+            access_token: r.access_token, expires_in: r.expires_in, expires_at: r.expires_at || jwtExp(r.access_token),
+            refresh_token: r.refresh_token, token_type: r.token_type || 'bearer',
+            provider_token: s.provider_token || null, provider_refresh_token: s.provider_refresh_token || null, user: r.user
+          };
+          try { localStorage.setItem(authKey, JSON.stringify(next)); } catch (e) { /* this page still uses it */ }
+          return next;
+        });
+      };
+      var run = navigator.locks && navigator.locks.request ? navigator.locks.request('lock:' + authKey, renew) : renew();
+      run.then(resolve, function () { resolve(null); });
+    });
+    return sessionPromise;
+  }
+  // The store's customer behind the session (`customers`, by tenant), as
+  // `CustomerAccountService.isAuthenticated` requires it.
+  function customerProfile() {
+    return currentSession().then(function (s) {
+      if (!s) return null;
+      return fetch(sbUrl + '/rest/v1/customers?select=id,name,email,auth_user_id,tenant_id&auth_user_id=eq.' +
+        encodeURIComponent(s.user.id) + '&tenant_id=eq.' + encodeURIComponent(tenant) + '&limit=1', {
+        headers: { apikey: sbKey, authorization: 'Bearer ' + s.access_token, accept: 'application/json' }
+      }).then(function (r) { return r.ok ? r.json() : null; }).then(function (rows) {
+        var row = rows && rows[0];
+        return row && row.auth_user_id === s.user.id && row.tenant_id === tenant ? { session: s, row: row } : null;
+      });
+    });
+  }
+  // supabase_flutter's signOut (scope local): end this session, forget it.
+  function signOut() {
+    return currentSession().then(function (s) {
+      if (!s) return null;
+      return fetch(sbUrl + '/auth/v1/logout?scope=local', {
+        method: 'POST', headers: { apikey: sbKey, authorization: 'Bearer ' + s.access_token }
+      }).catch(function () { return null; });
+    }).then(function () {
+      try { localStorage.removeItem(authKey); } catch (e) { /* nothing kept */ }
+      try { sessionStorage.removeItem(profileKey); } catch (e) { /* nothing kept */ }
+      sessionPromise = null;
+    });
+  }
+  window.vinabikeSession = { key: authKey, read: readSession, current: currentSession, profile: customerProfile, signOut: signOut };
+
+  // ---- the header's account (CustomerAccountMenu) -------------------------
+  // customerFirstName: «Usuario», «Cliente» or the email's name are filler.
+  function firstName(row) {
+    var name = String(row.name || '').trim();
+    if (!name) return null;
+    var lower = name.toLowerCase();
+    if (lower === 'usuario' || lower === 'cliente') return null;
+    var email = String(row.email || '').trim().toLowerCase(), at = email.indexOf('@');
+    if (at > 0 && lower === email.slice(0, at)) return null;
+    return name.split(/\s+/)[0];
+  }
+  var header = document.querySelector('header.top');
+  function paintAccount(seen) {
+    if (!header) return;
+    var box = header.querySelector('[data-acct]');
+    if (!box) return;
+    header.querySelector('[data-acct-initial]').textContent = seen ? seen.initial : '';
+    header.querySelector('[data-acct-name]').textContent = (seen && seen.first) || 'Mi cuenta';
+    header.querySelector('[data-acct-sub]').hidden = !(seen && seen.first);
+    box.hidden = !seen;
+    header.querySelectorAll('.login,.sheet-login').forEach(function (e) { e.hidden = !!seen; });
+    header.querySelectorAll('.sheet-account').forEach(function (e) { e.hidden = !seen; });
+  }
+  if (readSession()) {
+    customerProfile().then(function (found) {
+      if (!found) {
+        try { sessionStorage.removeItem(profileKey); } catch (e) { /* nothing kept */ }
+        paintAccount(null);
+        return;
+      }
+      var first = firstName(found.row), email = String(found.row.email || '').trim();
+      var source = first || email;
+      var seen = { uid: found.session.user.id, first: first, initial: source ? Array.from(source)[0].toUpperCase() : '·' };
+      try { sessionStorage.setItem(profileKey, JSON.stringify(seen)); } catch (e) { /* drawn anyway */ }
+      paintAccount(seen);
+    }, function () { /* keep what the first paint showed */ });
+  } else if (window.vinabikeAccountSeen) {
+    paintAccount(null);
+  }
+  var accountMenu = header && header.querySelector('.acct-menu');
+  var accountButton = header && header.querySelector('.acct-btn');
+  function openMenu(open) {
+    if (!accountMenu) return;
+    accountMenu.hidden = !open;
+    accountButton.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) { var first = accountMenu.querySelector('.acct-item'); if (first) first.focus(); }
+  }
+  if (accountButton) {
+    accountButton.addEventListener('click', function () { openMenu(accountMenu.hidden); });
+    document.addEventListener('click', function (event) {
+      if (!accountMenu.hidden && !event.target.closest('[data-acct]')) openMenu(false);
+    });
+    accountMenu.addEventListener('keydown', function (event) {
+      var items = Array.prototype.slice.call(accountMenu.querySelectorAll('.acct-item'));
+      var at = items.indexOf(document.activeElement);
+      if (event.key === 'Escape') { openMenu(false); accountButton.focus(); }
+      else if (event.key === 'ArrowDown') { event.preventDefault(); items[(at + 1) % items.length].focus(); }
+      else if (event.key === 'ArrowUp') { event.preventDefault(); items[(at - 1 + items.length) % items.length].focus(); }
+    });
+  }
+  document.addEventListener('click', function (event) {
+    var out = event.target.closest && event.target.closest('[data-act=sign-out]');
+    if (!out || !header || !header.contains(out)) return;
+    out.disabled = true;
+    // PublicStoreLayout.signOutCustomer: then to the home.
+    signOut().then(function () { location.assign('/'); });
+  });
+
   paintBadge();
   window.addEventListener('storage', function (event) { if (event.key === cartKey) paintBadge(); });
   window.addEventListener('pageshow', paintBadge);

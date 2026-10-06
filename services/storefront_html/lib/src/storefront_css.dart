@@ -15,10 +15,15 @@ String storefrontCss({
   required String accent,
   required String headingFont,
   required String bodyFont,
+  // The theme's roles the phone sheet paints with (`colorScheme.onSurface`,
+  // `onSurfaceVariant`, `outlineVariant` in Flutter's sheet).
+  String onSurface = 'rgb(0 0 0 / .867)',
+  String onSurfaceVariant = 'rgb(61.2 61.2 61.2 / .899)',
+  String outlineVariant = '#d7d7d7',
 }) =>
     '''
 ${storefrontFontFacesCss()}
-:root{--primary:$primary;--accent:$accent;--ink:#1e293b;--on-variant:#475569;--outline-variant:#cbd5e1;--chevron:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z'/%3E%3C/svg%3E");--muted:#5b6b7f;--faint:#94a3b8;--line:#e2e8f0;--soft:#f4f6f9;--ok:#15803d;--bad:#b42318;--foot:#1e293b;--r:14px;--c-line:#e8e2d8;--c-2nd:#666d7a;--c-muted:#93989f;--c-soft:#f6f6f6;--c-ok:#10b981;
+:root{--primary:$primary;--accent:$accent;--sheet-on:$onSurface;--sheet-onv:$onSurfaceVariant;--sheet-line:$outlineVariant;--ink:#1e293b;--on-variant:#475569;--outline-variant:#cbd5e1;--chevron:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z'/%3E%3C/svg%3E");--muted:#5b6b7f;--faint:#94a3b8;--line:#e2e8f0;--soft:#f4f6f9;--ok:#15803d;--bad:#b42318;--foot:#1e293b;--r:14px;--c-line:#e8e2d8;--c-2nd:#666d7a;--c-muted:#93989f;--c-soft:#f6f6f6;--c-ok:#10b981;
 --head:"$headingFont","Arial Narrow",Arial,sans-serif;--body:"$bodyFont","Segoe UI",Roboto,Arial,sans-serif}
 [hidden]{display:none!important}*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
 body{margin:0;background:#fff;color:var(--ink);font:400 17px/1.55 var(--body);display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}
@@ -56,6 +61,23 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,su
 .tools>a.login{width:auto;height:auto;min-height:40px;margin-left:10px;gap:8px;border:1.2px solid rgba(203,213,225,.9);border-radius:10px;padding:9px 14px;background:rgba(255,255,255,.92);font:600 13px/18px var(--body)!important;letter-spacing:.15px;text-transform:uppercase;text-decoration:none;white-space:nowrap}
 .tools>a.login svg{width:17px;height:17px}
 .login:hover{background:rgba(30,41,59,.05)}
+/* Signed in (`CustomerAccountMenu`): the initial in a 34 px circle, the first
+   name over «Mi cuenta», a drop-down; the menu opens 50 px below the
+   button's top, right-aligned, as Material's PopupMenuButton places it. */
+.acct{position:relative;margin-left:10px;color:rgb(0 0 0 / .87)}
+.acct-btn{display:flex;align-items:center;height:37px;padding:0;border:0;border-radius:4px;background:none;color:inherit;cursor:pointer}
+.acct-btn:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.acct-av{display:grid;place-items:center;width:34px;height:34px;margin-right:8px;border-radius:50%;background:color-mix(in srgb,currentColor 10%,transparent);font:400 16px/1 var(--head);-webkit-text-stroke:.032em currentColor}
+.acct-text{display:flex;flex-direction:column;align-items:flex-start;text-align:left}
+.acct-text b{font:700 14px/20px var(--body);letter-spacing:.25px;white-space:nowrap}
+.acct-text small{font:400 11px/16px var(--body);letter-spacing:.25px;opacity:.6;white-space:nowrap}
+.acct-btn>svg{width:24px;height:24px}
+.acct-menu{position:absolute;top:50px;right:0;z-index:40;min-width:168px;padding:8px 0;border-radius:4px;background:#ededed;box-shadow:0 1px 3px rgb(0 0 0 / .3),0 4px 8px 3px rgb(0 0 0 / .15)}
+.acct-menu hr{margin:7.5px 0;border:0;border-top:1px solid #d7d7d7}
+.acct-item{display:flex;align-items:center;gap:12px;box-sizing:border-box;width:100%;height:48px;padding:0 12px;border:0;background:none;color:#202020;font:500 14px/20px var(--body);letter-spacing:.1px;text-align:left;text-decoration:none;white-space:nowrap;cursor:pointer}
+.acct-item svg{flex:none;color:#4f4f4f}
+.acct-item:hover,.acct-item:focus-visible{background:rgb(32 32 32 / .08);outline:0}
+.sheet-item.sheet-out{width:100%;border:0;background:none;color:#ef4444;text-align:left}
 /* The home's header over its first block (`_StickyHeaderScaffold` with
    `allowOverlayAtTop`): fixed, clear under a dark veil with a white logo and
    white words while the page is at the top, solid after 50 px of scroll or
@@ -68,6 +90,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,su
 .top.over.clear:not(:has(.has-sub:hover,.has-sub:focus-within)) .logo-name,.top.over.clear:not(:has(.has-sub:hover,.has-sub:focus-within)) .menu>ul>li>a,.top.over.clear:not(:has(.has-sub:hover,.has-sub:focus-within)) .tools,.top.over.clear:not(:has(.has-sub:hover,.has-sub:focus-within)) .menu-button{color:#fff}
 .top.over.clear:not(:has(.has-sub:hover,.has-sub:focus-within)) .menu>ul>li>a[aria-current]{color:#fff;border-bottom-color:#fff}
 .top.over.clear:not(:has(.has-sub:hover,.has-sub:focus-within)) .tools>a.login{background:rgb(0 0 0 / .18);border-color:rgb(255 255 255 / .36)}
+.top.over.clear:not(:has(.has-sub:hover,.has-sub:focus-within)) .acct{color:#fff}
 .top.over.clear:not(:has(.has-sub:hover,.has-sub:focus-within)) .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rgb(255 255 255 / .08)),rgb(0 0 0 / .18)}
 
 /* Product page: product_detail_page.dart and product_spec_sheet_view.dart.
@@ -380,7 +403,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,su
 @media (max-width:1079px){.nav-no-mobile{display:none!important}
 .top .wrap.bar{padding-inline:16px}
 .bar{height:68px}.logo{order:1;margin-right:auto}.logo img{height:40px;max-width:140px;object-fit:contain;object-position:left center}
-.tools{order:2;gap:4px;margin-left:16px}.tools>a{width:48px;height:48px}.tools>a svg{width:23px;height:23px}.tools .login{display:none}
+.tools{order:2;gap:4px;margin-left:16px}.tools>a{width:48px;height:48px}.tools>a svg{width:23px;height:23px}.tools .login,.tools .acct{display:none}
 .menu{display:none}
 .menu-button{display:flex;align-items:center;justify-content:center;width:48px;height:48px;cursor:pointer;color:var(--ink);border-radius:50%}.menu-button svg{width:23px;height:23px}
 .menu-toggle:focus-visible~.bar .menu-button{outline:3px solid var(--accent);outline-offset:-4px}
@@ -389,15 +412,23 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,su
 .menu-toggle:checked~.sheet-scrim{display:block;animation:vb-fade .25s ease-out}
 .menu-toggle:checked~.menu-sheet{display:block;animation:vb-sheet .25s cubic-bezier(.2,0,0,1)}
 body:has(.menu-toggle:checked){overflow:hidden}
-.sheet-handle{display:block;width:40px;height:4px;margin:0 auto 24px;border-radius:2px;background:var(--outline-variant)}
-.menu-sheet hr{margin:8px 24px;border:0;border-top:1px solid var(--outline-variant)}
-.sheet-item{display:flex;align-items:center;gap:16px;padding:14px 20px 14px 24px;color:var(--ink);text-decoration:none;font:500 16px/24px var(--body);letter-spacing:.1px;cursor:pointer;list-style:none}
-.sheet-item>svg{flex:none;width:21px;height:21px}.sheet-item>svg.go{width:20px;height:20px;color:var(--on-variant)}
-.sheet-item>span{flex:1;min-width:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.sheet-handle{display:block;width:40px;height:4px;margin:0 auto 24px;border-radius:2px;background:var(--sheet-line)}
+.menu-sheet hr{margin:8px 24px;border:0;border-top:1px solid var(--sheet-line)}
+/* `_buildMobileMenuItem`: the theme's bodyLarge (18 px, 27 px line) at 500. */
+.sheet-item{display:flex;align-items:center;gap:16px;padding:14px 20px 14px 24px;color:var(--sheet-on);text-decoration:none;font:500 18px/27px var(--body);letter-spacing:.1px;cursor:pointer;list-style:none}
+.sheet-item>svg{flex:none;width:21px;height:21px}.sheet-item>svg.go{width:20px;height:20px;color:var(--sheet-onv)}
+.sheet-item>span{flex:1;min-width:0}
+.sheet-item>span{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.sheet-item>span:has(small){display:flex;flex-direction:column}
+.sheet-item small{font:500 14px/21px var(--body);letter-spacing:.25px;opacity:.62}
 .sheet-item:hover{background:color-mix(in srgb,var(--primary) 4.5%,transparent)}
 .sheet-login,.sheet-all{color:var(--primary)}
 summary.sheet-item::-webkit-details-marker{display:none}
-.sheet-group>summary>svg:first-child{color:var(--on-variant)}.sheet-group>summary>span{font:600 14px/20px var(--body)}
+/* ExpansionTile keeps a 1 px border above and below, transparent here. */
+.sheet-group{border-block:1px solid transparent}
+/* An item with children (`ExpansionTile`): the theme's titleSmall, the
+   heading font at 14 px, Flutter's synthetic bold. */
+.sheet-group>summary>svg:first-child{color:var(--sheet-onv)}.sheet-group>summary>span{font:400 14px/20px var(--head);-webkit-text-stroke:.032em currentColor}
 .sheet-group>summary>svg.go{width:24px;height:24px;transition:transform .2s}
 .sheet-group[open]{background:color-mix(in srgb,var(--primary) 3.5%,transparent)}
 .sheet-group[open]>summary>svg.go{transform:rotate(180deg);color:var(--primary)}

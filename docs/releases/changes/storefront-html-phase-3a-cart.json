@@ -37,23 +37,23 @@
     },
     {
       "path": "services/storefront_html/lib/src/site_layout.dart",
-      "sha256": "a45518571a037a168eaf94ccb279b7e67fd5159354dc6ac0dc67e82ae142bb53"
+      "sha256": "f017b69dba5dcaea5bfb12c9e9673f75d26d3e9b5da553e6486a0f42befb86f4"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
-      "sha256": "a41dbbbc68e1086bb1db3ae3b1e9904af70b7781114c6a52c1dfcba159595844"
+      "sha256": "feb430579f1e40564f1130ced3b3114520627e9205adb8da71aacc194dc7d584"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_script.dart",
-      "sha256": "33acb9a688e43af78a98c44c5a2420f38446eb67598ecee59a29300851419227"
+      "sha256": "65b94268d4868adcc5b54a75f792bab377fcec8f41b3f23041a0beea1eb0602d"
     },
     {
       "path": "services/storefront_html/lib/storefront_html.dart",
-      "sha256": "f9523c70c12f22a7377e762093af10d7001f538cb733121d2fdb04e9939793f0"
+      "sha256": "2d43d15d3526765e2d87fc338f1942e5815221473e8cc32976d27ddee6438c30"
     },
     {
       "path": "services/storefront_html/test/storefront_handler_test.dart",
-      "sha256": "54a76cc6be26a5f8d380d94f8a962f0159ec2e068c6ad8efb05f311cd8aa6537"
+      "sha256": "dfe5c512aca12f207ad98d2b586f4013a3977da4f072a8500fb380e4c8decb81"
     },
     {
       "path": "test/unit/product_seo_snapshot_server_routes_test.dart",
