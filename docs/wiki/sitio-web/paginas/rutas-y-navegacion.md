@@ -42,8 +42,8 @@ prueba), salvo en el editor, su vista previa y `/tienda` `[Repo]`.
 | `/pagina/:slug` | página CMS dinámica | según su publicación |
 | `/contacto`, `/nosotros`, `/terminos`, `/privacidad`, `/devoluciones`, `/envios` | páginas fijas con su página CMS, todas dibujadas por el servidor HTML; las cinco de información sin nada que leer y `/contacto` sin publicar responden 404 con `noindex`. `/contacto` muestra los datos de Configuración (correo, teléfono, dirección, WhatsApp, redes, horario, Maps) y un formulario que abre un correo a la tienda | sí, si su página está publicada (y, las de información, tienen algo que leer); si no, `noindex,follow` |
 | `/carrito` | carrito; lo dibuja el servidor HTML y sus líneas llegan de `/carrito/lineas` (JSON, `no-store`) | no (`X-Robots-Tag` y meta) |
-| `/checkout` | compra (Flutter); la versión HTML está en `/_html/checkout` y sus líneas en `/checkout/lineas` (JSON, `no-store`) hasta abrirla | no (`X-Robots-Tag` y meta) |
-| `/pedido/:id` | confirmación de un pedido (con token de acceso) | no |
+| `/checkout` | compra, servidor HTML desde el 2026-10-06; sus líneas en `/checkout/lineas` (JSON, `no-store`) | no (`X-Robots-Tag` y meta) |
+| `/pedido/:id` | confirmación de un pedido (con token de acceso), servidor HTML desde el 2026-10-06; su resumen en PDF es `POST /pedido/resumen.pdf` (token en el cuerpo) | no |
 | `/cuenta`, `/cuenta/login`, `/cuenta/perfil`, `/cuenta/direcciones`, `/cuenta/pedidos`, `/cuenta/bicicletas`, `/cuenta/servicios`, `/cuenta/chats`, `/cuenta/chats/:id`, `/cuenta/mensajes`, `/cuenta/mensajes/:id`, `/cuenta/descargas/android` | portal de clientes ([portal-de-clientes](portal-de-clientes.md)) | no |
 | `/auth/callback` | vuelta del inicio de sesión | no |
 | `/shop/:slug` | URL de la tienda vieja | redirige 301 |
@@ -83,9 +83,11 @@ dice otra cosa `[GSC]`.
 (decidido 2026-10-04, corrige la propuesta del 2026-10-03 de quitarlo). Es cierto
 que Google no lee el `noindex` de una URL bloqueada y que una URL bloqueada y
 enlazada puede salir como resultado sin contenido `[GSC]`. Pero `/pedido/<id>`
-lleva el token de acceso al pedido: con el bloqueo, el rastreador nunca abre ni
-renderiza el detalle de un pedido aunque alguien filtre el enlace, y la cabecera
-sigue cubriendo a quien llegue sin pasar por robots.txt. Ninguna de esas URL
+nombra un pedido: con el bloqueo, el rastreador nunca abre ni renderiza esa
+página aunque alguien filtre el enlace, y la cabecera sigue cubriendo a quien
+llegue sin pasar por robots.txt. El token de acceso nunca va en la dirección:
+vive en la pestaña que hizo el pedido, y desde el 2026-10-06 el servidor sólo
+manda el marco de la página, sin datos del pedido (corrige «lleva el token»). Ninguna de esas URL
 está enlazada desde páginas públicas. El test
 `google_merchant_identity_contract_test.dart` exige las dos líneas.
 

@@ -29,7 +29,7 @@
     },
     {
       "path": "scripts/releases/check_storefront_html_routes.test.mjs",
-      "sha256": "d248be649724246c0fe90d67a70fbea90867771efc8bb243033d5135993f7d27"
+      "sha256": "cd1fff6fd77d4303b72ddfce3d1d29d7815763edadb55d9e765a5518ea11e1ae"
     },
     {
       "path": "services/storefront_html/lib/src/contact_page_css.dart",
@@ -45,23 +45,23 @@
     },
     {
       "path": "services/storefront_html/lib/src/material_icons.dart",
-      "sha256": "c5e9c21855f3c0379e9734e26aefc846ab5760006583ed4b958d6afb45072c0a"
+      "sha256": "a5e19d3575b369ade49346f5c9cd817c5d7e170ffcf906e99e5fa313e02216de"
     },
     {
       "path": "services/storefront_html/lib/src/public_reads.dart",
-      "sha256": "1ae2e1f7dd0842bb68012d63a98b68318be3b660035e13ae70662cc39a085817"
+      "sha256": "b63e127c9eaffe06d49b4fb943ce9a92a3fa3bf7fb12fdc6bc3c163adf6102c4"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
-      "sha256": "20e01e461e5c25f5b001b100207da2037ac596d2892606d1f4f3e003e03e3fda"
+      "sha256": "a41dbbbc68e1086bb1db3ae3b1e9904af70b7781114c6a52c1dfcba159595844"
     },
     {
       "path": "services/storefront_html/lib/storefront_html.dart",
-      "sha256": "c50f94d1f583e5f9239bda60ccb3bd963b38f0ae3d0601c4efca8c8444205a44"
+      "sha256": "f9523c70c12f22a7377e762093af10d7001f538cb733121d2fdb04e9939793f0"
     },
     {
       "path": "services/storefront_html/test/storefront_handler_test.dart",
-      "sha256": "38053dadda181a67d89f38df585e0ec58e94f41744f46be8683a12b78e6ddedb"
+      "sha256": "54a76cc6be26a5f8d380d94f8a962f0159ec2e068c6ad8efb05f311cd8aa6537"
     }
   ]
 }

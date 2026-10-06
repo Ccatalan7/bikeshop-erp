@@ -2,7 +2,7 @@ name: vinabike_public_core
 description: >-
   What a Viñabike product looks like to the public, in pure Dart: the commerce
   projection, the technical sheet, SEO copy, structured data, category paths,
-  theme colors and business hours. The ERP (Flutter) and the HTML storefront
+  theme colors, business hours and the order summary PDF. The ERP (Flutter) and the HTML storefront
   import it, so the rules have one owner.
 version: 0.1.0
 publish_to: none
@@ -12,6 +12,8 @@ environment:
 
 dependencies:
   intl: ^0.20.2
+  pdf: ^3.11.1
+  timezone: ^0.10.0
 
 dev_dependencies:
   lints: ^6.0.0

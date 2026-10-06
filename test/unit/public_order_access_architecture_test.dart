@@ -196,8 +196,9 @@ void main() {
     final policy = source(
       'lib/public_store/models/order_confirmation_policy.dart',
     );
+    // The summary's document is drawn by the shared core for both stores.
     final pdf = source(
-      'lib/public_store/pages/order_confirmation_pdf.dart',
+      'packages/vinabike_public_core/lib/public_store/documents/order_summary_pdf.dart',
     );
 
     expect(policy, contains('if (order.isCancelled)'));

@@ -217,12 +217,15 @@ const storefrontScript = r'''
     if (typeof window.gtag === 'function') window.gtag('event', name, params);
   }
 
-  function pixel(name, params) {
+  // `eventId` lets Meta discard a repeat (`purchase_<order>`).
+  function pixel(name, params, eventId) {
     if (!window.vinabikeMeasurementAllowed || typeof window.fbq !== 'function') return;
-    window.fbq('track', name, params);
+    if (eventId) window.fbq('track', name, params, { eventID: eventId });
+    else window.fbq('track', name, params);
   }
 
-  // For the checkout's `begin_checkout` and `InitiateCheckout`.
+  // For the checkout's `begin_checkout` and `InitiateCheckout` and the
+  // order page's `purchase`.
   window.vinabikeMeasure = { track: track, pixel: pixel };
 
   function itemOf(el) {

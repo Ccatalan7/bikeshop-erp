@@ -1,8 +1,9 @@
-// The HTML checkout (phase 3b of docs/architecture/storefront-html-migration-plan.md)
-// keeps the same records as Flutter's `CheckoutSessionStore`, so Flutter's
-// order page and Mercado Pago's return work after an HTML order. This runs
-// the page's own records script in Node (with the page script that owns the
-// cart) and reads what it wrote with Flutter's readers, both ways.
+// The HTML checkout and order page (phases 3b and 3c of
+// docs/architecture/storefront-html-migration-plan.md) keep the same records
+// as Flutter's `CheckoutSessionStore`, so an order started in one store is
+// shown and closed by the other (the app still runs Flutter's pages). This
+// runs the pages' own records script in Node (with the page script that owns
+// the cart) and reads what it wrote with Flutter's readers, both ways.
 import 'dart:convert';
 import 'dart:io';
 
@@ -31,7 +32,7 @@ String _cartKey() =>
 /// page script and the records script over the given storage, and returns
 /// both storages as they end.
 Future<({Map<String, String> session, Map<String, String> local, Object? out})>
-_run({
+    _run({
   Map<String, String> session = const {},
   Map<String, String> local = const {},
   required String steps,
@@ -46,8 +47,7 @@ _run({
     ..writeAsStringSync(
       _script('services/storefront_html/lib/src/checkout_records_script.dart'),
     );
-  final harness = File('${dir.path}/harness.js')
-    ..writeAsStringSync('''
+  final harness = File('${dir.path}/harness.js')..writeAsStringSync('''
 function storage(initial) {
   const values = Object.assign({}, initial);
   return {
@@ -100,23 +100,22 @@ const R = window.vinabikeCheckoutRecords('$_tenant', cart);
 
 /// The Flutter cart the visitor arrives with.
 String _savedCart({String revision = 'flutter-revision'}) => jsonEncode(
-  jsonEncode(
-    PersistedCart(
-      tenantId: _tenant,
-      savedAt: DateTime.now().toUtc().subtract(const Duration(minutes: 5)),
-      lines: const [
-        PersistedCartLine(productId: _a, quantity: 2),
-        PersistedCartLine(productId: _b, quantity: 1),
-      ],
-      revision: revision,
-    ).toJson(),
-  ),
-);
+      jsonEncode(
+        PersistedCart(
+          tenantId: _tenant,
+          savedAt: DateTime.now().toUtc().subtract(const Duration(minutes: 5)),
+          lines: const [
+            PersistedCartLine(productId: _a, quantity: 2),
+            PersistedCartLine(productId: _b, quantity: 1),
+          ],
+          revision: revision,
+        ).toJson(),
+      ),
+    );
 
 /// The order the page builds (`buildOrder`) for those two lines, by
 /// transfer, with home delivery.
-String _orderSteps({required String expiresAt}) =>
-    '''
+String _orderSteps({required String expiresAt}) => '''
   const snap = await cart.ensureRevision();
   R.saveSnapshot({
     v: 1, tenant_id: '$_tenant', saved_at: new Date().toISOString(),
@@ -147,6 +146,72 @@ String _orderSteps({required String expiresAt}) =>
   R.saveSnapshot(current);
   R.saveOrderAccess(receipt);
 ''';
+
+/// A transfer attempt Flutter's checkout saved with its order's receipt.
+CheckoutSessionSnapshot _flutterTransferAttempt() =>
+    CheckoutSessionSnapshot.create(
+      tenantId: _tenant,
+      savedAt: DateTime.now().toUtc(),
+      idempotencyKey: _attempt,
+      orderData: {
+        'tenant_id': _tenant,
+        'checkout_idempotency_key': _attempt,
+        'customer_email': 'ana@example.invalid',
+        'customer_name': 'Ana Prueba',
+        'customer_address': 'Retiro en tienda: Alvarez 32',
+        'delivery_type': 'pickup',
+        'subtotal': 74790.0,
+        'tax_amount': 14210.0,
+        'shipping_quote_cost': 0,
+        'shipping_cost': 0,
+        'discount_amount': 0,
+        'total': 89000.0,
+        'status': 'pending',
+        'payment_status': 'pending',
+        'payment_method': 'transfer',
+      },
+      orderItems: [
+        {
+          'tenant_id': _tenant,
+          'product_id': _a,
+          'product_name': 'Cassette',
+          'quantity': 2,
+          'unit_price': 35000.0,
+          'subtotal': 70000.0,
+        },
+        {
+          'tenant_id': _tenant,
+          'product_id': _b,
+          'product_name': 'Maza',
+          'quantity': 1,
+          'unit_price': 19000.0,
+          'subtotal': 19000.0,
+        },
+      ],
+      handoff: const CheckoutHandoffSnapshot(
+        paymentMethod: 'transfer',
+        deliveryType: 'pickup',
+      ),
+      cartRevision: 'flutter-revision',
+    ).withReceipt(
+      PublicOrderCheckoutAccess(
+        orderId: _order,
+        accessToken: _token,
+        expiresAt: DateTime.now().toUtc().add(const Duration(days: 30)),
+        isReplay: false,
+      ),
+    );
+
+/// The keys Flutter wrote: [MemoryCheckoutSessionStorage] has no listing,
+/// so the outcome key is rebuilt the way the store names it.
+Future<List<String>> _keysOf(MemoryCheckoutSessionStorage storage) async {
+  String b64(String value) => base64Url.encode(utf8.encode(value));
+  final key =
+      'vinabike.public-cart-preserved.v1.${b64(_tenant)}.${b64(_order)}';
+  return [if (await storage.read(key) != null) key];
+}
+
+String _checkoutKey() => 'vinabike.public-checkout.v1.$_tenant';
 
 Future<CheckoutSessionStore> _flutterStoreOver(
   Map<String, String> session,
@@ -184,8 +249,7 @@ void main() {
       );
       final run = await _run(
         local: {_cartKey(): _savedCart()},
-        steps:
-            '${_orderSteps(expiresAt: _postgresTimestamp(exact))}\n'
+        steps: '${_orderSteps(expiresAt: _postgresTimestamp(exact))}\n'
             "  out = await R.consumeCartOnce('$_order');",
       );
       final store = await _flutterStoreOver(run.session);
@@ -239,8 +303,7 @@ void main() {
       final expires = DateTime.now().toUtc().add(const Duration(days: 30));
       final run = await _run(
         local: {_cartKey(): _savedCart()},
-        steps:
-            '${_orderSteps(expiresAt: expires.toIso8601String())}\n'
+        steps: '${_orderSteps(expiresAt: expires.toIso8601String())}\n'
             // Another tab adds a line before the subtraction.
             "  await cart.update((lines) => lines.concat([{ id: 'x-other', q: 1 }]));\n"
             "  out = await R.consumeCartOnce('$_order');",
@@ -312,8 +375,7 @@ void main() {
         session: {
           'vinabike.public-checkout.v1.$_tenant': jsonEncode(saved.toJson()),
         },
-        steps:
-            '  const s = R.readSnapshot();\n'
+        steps: '  const s = R.readSnapshot();\n'
             '  out = s && { attempt: s.idempotency_key, order: s.receipt.order_id, method: s.handoff.payment_method };',
       );
       expect(run.out, {
@@ -343,6 +405,157 @@ void main() {
       );
       expect(run.out, isNull);
       expect(run.session['vinabike.public-checkout.v1.$_tenant'], '');
+    },
+    skip: skip,
+  );
+
+  test(
+    'a transfer Flutter\'s checkout placed is closed by the HTML order page '
+    'as Flutter closes it',
+    () async {
+      final attempt = _flutterTransferAttempt();
+      final run = await _run(
+        session: {_checkoutKey(): jsonEncode(attempt.toJson())},
+        local: {_cartKey(): _savedCart()},
+        steps:
+            // What the order page does on entry (`start`).
+            "  const access = R.readOrderAccess('$_order');\n"
+            '  const snap = R.readSnapshot();\n'
+            '  R.saveOrderAccess(snap.receipt);\n'
+            "  const settled = await R.settleOutcome('$_order');\n"
+            "  const outcome = await R.consumeCartOnce('$_order');\n"
+            "  const taken = R.takeTransferReceipt('$_order');\n"
+            '  out = { before: access, settled, state: outcome.state, '
+            'warning: R.showsWarning(outcome), taken: !!taken };',
+      );
+      final out = run.out as Map<String, dynamic>;
+      expect(out['before'], isNull);
+      expect(out['settled'], isNull);
+      expect(out['state'], 'applied');
+      expect(out['warning'], isFalse);
+      expect(out['taken'], isTrue);
+
+      final store = await _flutterStoreOver(run.session);
+      expect(await store.read(_tenant), isNull);
+      final access = await store.readOrderAccess(
+        tenantId: _tenant,
+        orderId: _order,
+      );
+      expect(access?.accessToken, _token);
+      final outcome = await store.readCartOutcome(
+        tenantId: _tenant,
+        orderId: _order,
+      );
+      expect(outcome?.state, CheckoutCartOutcomeState.applied);
+      final cart = PersistedCart.fromJson(
+        jsonDecode(jsonDecode(run.local[_cartKey()]!) as String),
+      );
+      expect(cart!.lines, isEmpty);
+    },
+    skip: skip,
+  );
+
+  test(
+    'a warning Flutter left is acknowledged by the HTML page for both',
+    () async {
+      final flutter = MemoryCheckoutSessionStorage();
+      final store = CheckoutSessionStore(storage: flutter);
+      await store.markCartPreservationWarning(
+        tenantId: _tenant,
+        orderId: _order,
+      );
+      final key = (await _keysOf(flutter)).single;
+      final run = await _run(
+        session: {key: (await flutter.read(key))!},
+        steps: "  const before = R.showsWarning(R.readOutcome('$_order'));\n"
+            "  const done = R.acknowledge('$_order');\n"
+            "  const again = R.acknowledge('$_order');\n"
+            "  out = { before, done, again, after: R.showsWarning(R.readOutcome('$_order')) };",
+      );
+      expect(run.out, {
+        'before': true,
+        'done': true,
+        'again': false,
+        'after': false,
+      });
+      final read = await _flutterStoreOver(run.session);
+      final outcome = await read.readCartOutcome(
+        tenantId: _tenant,
+        orderId: _order,
+      );
+      expect(outcome?.state, CheckoutCartOutcomeState.preserved);
+      expect(outcome?.acknowledgedAt, isNotNull);
+      expect(outcome?.reason, 'explicit_warning');
+      expect(
+        await read.hasCartPreservationWarning(
+          tenantId: _tenant,
+          orderId: _order,
+        ),
+        isFalse,
+      );
+    },
+    skip: skip,
+  );
+
+  test(
+    'a claim nobody finished is settled as preserved, as Flutter settles it',
+    () async {
+      final claimed = _flutterTransferAttempt().claimCartConsumption(
+        claimId: 'claim-of-a-closed-tab',
+        startedAt: DateTime.now().toUtc(),
+      );
+      final run = await _run(
+        session: {_checkoutKey(): jsonEncode(claimed.toJson())},
+        local: {_cartKey(): _savedCart()},
+        steps: "  const o = await R.settleOutcome('$_order');\n"
+            '  out = { state: o.state, reason: o.reason, warning: R.showsWarning(o) };',
+      );
+      expect(run.out, {
+        'state': 'preserved',
+        'reason': 'interrupted',
+        'warning': true,
+      });
+      final store = await _flutterStoreOver(run.session);
+      final snapshot = await store.read(_tenant);
+      expect(
+        snapshot?.cartConsumptionStatus,
+        CheckoutCartConsumptionStatus.preserved,
+      );
+      final outcome = await store.readCartOutcome(
+        tenantId: _tenant,
+        orderId: _order,
+      );
+      expect(outcome?.reason, 'interrupted');
+      // Nothing was subtracted.
+      final cart = PersistedCart.fromJson(
+        jsonDecode(jsonDecode(run.local[_cartKey()]!) as String),
+      );
+      expect(cart!.lines, hasLength(2));
+    },
+    skip: skip,
+  );
+
+  test(
+    'an order token saved the old way is migrated as Flutter migrates it',
+    () async {
+      final run = await _run(
+        session: {'vinabike.public-order-access.v1.$_order': _token},
+        steps: "  out = R.readOrderAccess('$_order');",
+      );
+      expect((run.out as Map)['access_token'], _token);
+      expect(run.session['vinabike.public-order-access.v1.$_order'], '');
+      final store = await _flutterStoreOver(run.session);
+      final access = await store.readOrderAccess(
+        tenantId: _tenant,
+        orderId: _order,
+      );
+      expect(access?.accessToken, _token);
+      expect(
+        access!.expiresAt.isAfter(
+          DateTime.now().toUtc().add(const Duration(days: 29)),
+        ),
+        isTrue,
+      );
     },
     skip: skip,
   );

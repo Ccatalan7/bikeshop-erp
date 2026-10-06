@@ -4,6 +4,11 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-06 — corrección — [checkout](paginas/checkout-y-pedidos.md) y
+  [rutas](paginas/rutas-y-navegacion.md): `/checkout` abierto al servidor; la
+  página del pedido en HTML (fase 3c) con su PDF en el servidor; la clave
+  publicable pasa la puerta de las funciones; el token del pedido nunca va en
+  la dirección.
 - 2026-10-06 — corrección — [checkout](paginas/checkout-y-pedidos.md): checkout HTML
   en `/_html/checkout` (fase 3b), tienda de prueba local, y el pedido por
   transferencia de un cliente con sesión que la base deshacía desde el 11-jul.

@@ -1,6 +1,8 @@
 /// Website and e-commerce data models
 library;
 
+import 'package:vinabike_public_core/public_store/models/online_order_labels.dart';
+
 import '../theme/website_resolved_theme.dart';
 import 'website_font_registry.dart';
 
@@ -448,16 +450,8 @@ class StorefrontIdentitySnapshot {
 /// [OnlineOrder.deliveryDisplayName] delegates here so surfaces that only hold
 /// the raw `delivery_type` string — for example an `erp_notifications` payload
 /// snapshot — reuse this owner instead of maintaining a second map.
-String onlineOrderDeliveryDisplayName(String deliveryType) {
-  switch (deliveryType) {
-    case 'pickup':
-      return 'Retiro en tienda';
-    case 'shipping':
-      return 'Despacho';
-    default:
-      return deliveryType;
-  }
-}
+String onlineOrderDeliveryDisplayName(String deliveryType) =>
+    onlineOrderDeliveryLabel(deliveryType);
 
 class OnlineOrder {
   final String id;
@@ -863,41 +857,10 @@ class OnlineOrder {
     );
   }
 
-  String get statusDisplayName {
-    switch (status) {
-      case 'pending':
-        return 'Pendiente';
-      case 'confirmed':
-        return 'Confirmado';
-      case 'processing':
-        return 'En Proceso';
-      case 'ready_for_pickup':
-        return 'Listo para retiro';
-      case 'shipped':
-        return 'Enviado';
-      case 'delivered':
-        return 'Entregado';
-      case 'cancelled':
-        return 'Cancelado';
-      default:
-        return status;
-    }
-  }
+  String get statusDisplayName => onlineOrderStatusLabel(status);
 
-  String get paymentStatusDisplayName {
-    switch (paymentStatus) {
-      case 'pending':
-        return 'Pendiente';
-      case 'paid':
-        return 'Pagado';
-      case 'failed':
-        return 'Fallido';
-      case 'refunded':
-        return 'Reembolsado';
-      default:
-        return paymentStatus;
-    }
-  }
+  String get paymentStatusDisplayName =>
+      onlineOrderPaymentStatusLabel(paymentStatus);
 
   /// Operational cancellation is terminal and always takes precedence over a
   /// stale or still-pending payment projection in customer-facing surfaces.

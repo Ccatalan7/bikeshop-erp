@@ -135,6 +135,11 @@ abstract interface class PublicReads {
   Future<HomePageReads> homePage(
     List<String> Function(Map<String, dynamic> page) productIds,
   );
+
+  /// An order through its access token
+  /// (`get_public_online_order_by_access_token`, the read Flutter's order
+  /// page makes), for its summary PDF; null when the token opens nothing.
+  Future<Object?> publicOrder(String accessToken);
 }
 
 class PublicReadException implements Exception {
@@ -282,6 +287,13 @@ class SupabasePublicReads implements PublicReads {
       thumbnails: listing.thumbnails,
     );
   }
+
+  @override
+  Future<Object?> publicOrder(String accessToken) =>
+      // Not retried: each read counts a use of the token.
+      _rpcOnce('get_public_online_order_by_access_token', {
+        'p_token': accessToken,
+      });
 
   @override
   Future<HomePageReads> homePage(

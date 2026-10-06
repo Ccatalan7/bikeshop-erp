@@ -108,7 +108,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/material_icons.dart",
-      "sha256": "c5e9c21855f3c0379e9734e26aefc846ab5760006583ed4b958d6afb45072c0a"
+      "sha256": "a5e19d3575b369ade49346f5c9cd817c5d7e170ffcf906e99e5fa313e02216de"
     },
     {
       "path": "services/storefront_html/lib/src/policy_page_model.dart",
@@ -120,7 +120,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/public_reads.dart",
-      "sha256": "1ae2e1f7dd0842bb68012d63a98b68318be3b660035e13ae70662cc39a085817"
+      "sha256": "b63e127c9eaffe06d49b4fb943ce9a92a3fa3bf7fb12fdc6bc3c163adf6102c4"
     },
     {
       "path": "services/storefront_html/lib/src/site_layout.dart",
@@ -132,7 +132,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
-      "sha256": "20e01e461e5c25f5b001b100207da2037ac596d2892606d1f4f3e003e03e3fda"
+      "sha256": "a41dbbbc68e1086bb1db3ae3b1e9904af70b7781114c6a52c1dfcba159595844"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_shell.dart",
@@ -148,7 +148,7 @@
     },
     {
       "path": "services/storefront_html/lib/storefront_html.dart",
-      "sha256": "c50f94d1f583e5f9239bda60ccb3bd963b38f0ae3d0601c4efca8c8444205a44"
+      "sha256": "f9523c70c12f22a7377e762093af10d7001f538cb733121d2fdb04e9939793f0"
     }
   ]
 }

@@ -12,8 +12,8 @@
 //   - a page is not a 200 with its sitemap URL as canonical and indexable;
 //   - an old link does not 301 to the product's canonical path;
 //   - an unknown category is not a real 404 from the server;
-//   - a private route (`/carrito`, `/checkout`) is not a 200 from the server
-//     with noindex;
+//   - a private route (`/carrito`, `/checkout`, an order page) is not a 200
+//     from the server with noindex;
 //   - Cloud Run answers with another source than this commit's
 //     (`x-storefront-source`, services/storefront_html/tool/source_id.sh): the
 //     shared core changed and the server was not published with it.
@@ -49,15 +49,31 @@ export function exactServerRoutes(firebaseConfig) {
     .map((rewrite) => rewrite.source);
 }
 
+// Every source, exact or `/**`, the store target rewrites to the HTML server.
+export function serverRouteSources(firebaseConfig) {
+  const store = (firebaseConfig?.hosting ?? []).find((entry) => entry.target === "store");
+  return (store?.rewrites ?? [])
+    .filter((rewrite) => rewrite.run?.serviceId === "storefront-html" &&
+      typeof rewrite.source === "string")
+    .map((rewrite) => rewrite.source);
+}
+
 // Server routes that are never indexed, so the sitemap does not list them:
 // they must still be a 200 from the server, with `noindex`.
 export const privateServerRoutes = ["/carrito", "/checkout"];
+
+// A path under a private `/**` source, to ask for it: the order page answers
+// its frame for any order id (the order itself is read in the browser).
+export const privateServerSamples = {
+  "/pedido/**": "/pedido/00000000-0000-4000-8000-000000000000",
+};
 
 export function selectStorefrontHtmlChecks({
   sitemapXml,
   redirectManifest,
   storeOrigin,
   exactRoutes = ["/productos"],
+  serverSources = exactRoutes,
   productSample = 6,
   legacySample = 2,
 }) {
@@ -111,7 +127,12 @@ export function selectStorefrontHtmlChecks({
       },
     ]),
     missing: "/productos/categoria/no-existe-revision-de-publicacion",
-    private: exactRoutes.filter((path) => privateServerRoutes.includes(path)),
+    private: [
+      ...exactRoutes.filter((path) => privateServerRoutes.includes(path)),
+      ...serverSources
+        .filter((source) => source in privateServerSamples)
+        .map((source) => privateServerSamples[source]),
+    ],
   };
 }
 
@@ -252,6 +273,9 @@ async function main() {
   if (origins.length === 0) {
     throw new Error("Faltan EXPECTED_STORE_ORIGIN y EXPECTED_FIREBASE_ORIGIN.");
   }
+  const firebaseConfig = JSON.parse(
+    readFileSync(process.env.FIREBASE_CONFIG ?? "firebase.json", "utf8"),
+  );
   const checks = selectStorefrontHtmlChecks({
     sitemapXml: readFileSync(
       process.env.SITEMAP_FILE ?? "build/web_store/sitemap.xml",
@@ -264,9 +288,8 @@ async function main() {
       ),
     ),
     storeOrigin: process.env.CANONICAL_STORE_ORIGIN ?? "https://vinabike.cl",
-    exactRoutes: exactServerRoutes(
-      JSON.parse(readFileSync(process.env.FIREBASE_CONFIG ?? "firebase.json", "utf8")),
-    ),
+    exactRoutes: exactServerRoutes(firebaseConfig),
+    serverSources: serverRouteSources(firebaseConfig),
   });
   const expectedSource = execFileSync(
     "bash",

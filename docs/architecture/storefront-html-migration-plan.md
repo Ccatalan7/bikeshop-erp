@@ -999,9 +999,60 @@ con sesión no podía pagar por transferencia ni en Flutter: la base deshacía e
 pedido al procesarlo. Se arregló en `20261006090000`
 ([checkout](../wiki/sitio-web/paginas/checkout-y-pedidos.md)).
 
-Sigue: abrir `/checkout` al servidor (reescritura, que Flutter le deje la
-página, revisión de rutas privadas, que el carrito deje de precargar
-`main.dart.js`), y después la página del pedido y el portal.
+`/checkout` quedó abierto al servidor el 2026-10-06 (d487113c, publicación
+37433245945): lo responde Cloud Run con `noindex` y Flutter le deja la página.
+
+## Fase 3c: la página del pedido (2026-10-06)
+
+`/pedido/<id>` en el servidor (`order_page_view.dart`, `order_page_css.dart`,
+`order_page_script.dart`). El acceso al pedido vive en la pestaña
+(`CheckoutSessionStore`), así que el servidor manda el marco —el mismo para
+todos, con los datos de transferencia de los ajustes del editor— y el script
+hace lo que hace `OrderConfirmationPage`:
+
+- toma el acceso de la pestaña (el recibo del intento manda sobre uno
+  guardado), cierra el carrito una sola vez y, en una transferencia, retira el
+  intento;
+- con un regreso de Mercado Pago (`?status=…&payment_id=…`) **verifica** el
+  pago con `mercadopago-get-payment` antes de creerle a la dirección, y sólo
+  entonces cierra el carrito y el recibo;
+- lee el pedido con `get_public_online_order_by_access_token` y lo dibuja con
+  las mismas palabras de `OrderConfirmationPolicy` para cada estado (pagado,
+  en revisión, fallido, por transferencia, cancelado, recibido);
+- mide `purchase` (GA4) y `Purchase` (Meta, `eventID` `purchase_<id>`) igual
+  que Flutter: cada carga, salvo un pedido cancelado o un pago fallido; los dos
+  descartan un id repetido.
+
+Los registros nuevos (acceso con migración de la llave antigua, resultado del
+carrito al presentarlo, aviso confirmado, retiro del recibo) están en
+`checkout_records_script.dart`, que ahora comparten el checkout y el pedido;
+`test/unit/storefront_html_checkout_contract_test.dart` los cruza con Flutter
+en ambos sentidos (8 casos).
+
+**El resumen en PDF** («DESCARGAR RESUMEN DEL PEDIDO») tiene un solo dueño:
+`buildOrderSummaryPdf` en el núcleo compartido
+(`packages/vinabike_public_core/lib/public_store/documents/`). La app lo llama
+con su `OnlineOrder`; el servidor lo arma en `POST /pedido/resumen.pdf`, con el
+acceso en el cuerpo (nunca en la dirección), y las fuentes Barlow las lee una
+vez de Hosting, que sirve los mismos archivos que empaqueta Flutter.
+`test/unit/order_summary_pdf_contract_test.dart` exige que las dos lecturas
+del pedido digan lo mismo. Las palabras de los estados del pedido pasaron al
+núcleo (`online_order_labels.dart`) y los getters de `OnlineOrder` las llaman.
+
+- **Medido contra Flutter** con el pedido de prueba respondido por el
+  navegador (nada llega a la base): los seis estados, el regreso aprobado con
+  aviso del carrito y la página sin acceso, a 1440 y 412 px. Todas las
+  posiciones coinciden al píxel. Esa página **no usa los roles del tema**:
+  pinta con sus propios literales (azul del logo, líneas y superficies
+  cálidas, un acento por estado), así que el CSS usa los mismos.
+- **De punta a punta en local:** transferencia desde el checkout HTML hasta el
+  pedido, carrito vaciado, PDF descargado y la página que sigue abriendo al
+  recargar.
+- Con la página del pedido en HTML, el checkout ya no precarga `main.dart.js`
+  al apuntar a «Realizar pedido» (eran 3,6 MB para nada).
+
+Sigue: el portal y las páginas de la cuenta (`/cuenta/**`), lo último que
+dibuja Flutter en la web.
 
 ### Pendiente
 

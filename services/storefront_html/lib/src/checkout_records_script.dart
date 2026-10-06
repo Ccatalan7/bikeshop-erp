@@ -1,6 +1,7 @@
 /// The checkout's records, as `CheckoutSessionStore` writes them (Flutter):
 /// the recovery snapshot of an attempt, the order's access, and the cart's
-/// one-time subtraction. Kept apart from the page so
+/// one-time subtraction with its outcome. The checkout and the order page
+/// both run it. Kept apart from the pages so
 /// `test/unit/storefront_html_checkout_contract_test.dart` can run it in
 /// Node and read what it wrote with Flutter's own readers, both ways.
 ///
@@ -148,25 +149,118 @@ const checkoutRecordsScript = r'''
     }));
   }
 
+  // _readOrderAccessUnlocked: the order's own key, or the token alone under
+  // the key Flutter used before (migrated with 30 days); a stale or
+  // unreadable one is retired.
+  function readOrderAccess(order) {
+    var key = accessKey(order), raw = ssRead(key);
+    if (!raw) {
+      var legacyKey = 'vinabike.public-order-access.v1.' + order, legacyRaw = ssRead(legacyKey);
+      var legacy = text(legacyRaw);
+      if (!legacy) return null;
+      if (legacy.length < 40 || legacy.length > 128) {
+        if (ssRead(legacyKey) === legacyRaw) ssClear(legacyKey);
+        return null;
+      }
+      saveOrderAccess({ order_id: order, access_token: legacy, expires_at: new Date(Date.now() + 30 * 864e5).toISOString(), replay: false });
+      raw = ssRead(key);
+      if (!raw) throw new Error('access');
+      if (ssRead(legacyKey) === legacyRaw) ssClear(legacyKey);
+    }
+    try {
+      var d = JSON.parse(raw);
+      if (!d || d.v !== 1 || String(d.tenant_id) !== tenant || String(d.order_id) !== order) throw new Error('access');
+      var access = parseReceipt(d);
+      if (!access || !(Date.parse(access.expires_at) > Date.now())) throw new Error('access');
+      return access;
+    } catch (e) {
+      if (ssRead(key) === raw) ssClear(key);
+      return null;
+    }
+  }
+
   // ---- the cart's one-time subtraction (consumeCartOnce) -----------------
+  // CheckoutCartOutcome.toJson
+  function writeOutcome(o) {
+    var out = { v: 2, tenant_id: tenant, order_id: o.order_id, state: o.state, finalized_at: dartIso(o.finalized_at) };
+    if (o.reason != null) out.reason = String(o.reason);
+    if (o.acknowledged_at != null) out.acknowledged_at = dartIso(o.acknowledged_at);
+    ssWrite(outcomeKey(o.order_id), JSON.stringify(out));
+    return out;
+  }
+  // _readCartOutcomeUnlocked: v1 was the first, unacknowledged warning; an
+  // unreadable outcome is retired.
   function readOutcome(order) {
-    var raw = ssRead(outcomeKey(order));
+    var key = outcomeKey(order), raw = ssRead(key);
     if (!raw) return null;
     try {
       var o = JSON.parse(raw);
-      if (o && o.tenant_id === tenant && o.order_id === order && (o.v === 1 || o.v === 2)) return o;
-    } catch (e) { /* unreadable: Flutter retires it */ }
-    return null;
+      if (!o || String(o.tenant_id) !== tenant || String(o.order_id) !== order) throw new Error('outcome');
+      if (o.v === 1) return writeOutcome({ order_id: order, state: 'preserved', finalized_at: nowIso(), reason: 'legacy_marker' });
+      if (o.v !== 2 || ['preserved', 'applied'].indexOf(o.state) < 0 || !dartIso(o.finalized_at) ||
+          (o.acknowledged_at != null && !dartIso(o.acknowledged_at))) throw new Error('outcome');
+      return o;
+    } catch (e) {
+      if (ssRead(key) === raw) ssClear(key);
+      return null;
+    }
   }
   function recordOutcome(order, state, reason) {
     var existing = readOutcome(order);
     if (existing) return existing;
-    var o = { v: 2, tenant_id: tenant, order_id: order, state: state, finalized_at: nowIso() };
-    if (reason) o.reason = reason;
-    ssWrite(outcomeKey(order), JSON.stringify(o));
-    return o;
+    return writeOutcome({ order_id: order, state: state, finalized_at: nowIso(), reason: reason || null });
   }
+  function showsWarning(o) { return !!o && o.state === 'preserved' && o.acknowledged_at == null; }
+  // acknowledgeCartPreservationWarning: hides the banner, keeps the tombstone.
+  function acknowledge(order) {
+    var o = readOutcome(order);
+    if (!o || o.state !== 'preserved' || o.acknowledged_at != null) return false;
+    o.acknowledged_at = nowIso();
+    writeOutcome(o);
+    return true;
+  }
+  // settleCartOutcomeForPresentation: what the order page shows, without
+  // starting a subtraction; a claim nobody finished closes as preserved.
+  function settleOutcome(order) {
+    if (flights[order]) return flights[order];
+    var existing = readOutcome(order);
+    if (existing) return Promise.resolve(existing);
+    var snap = readSnapshot();
+    if (!snap || !snap.receipt || snap.receipt.order_id !== order) return Promise.resolve(null);
+    var status = snap.cart_consumption_status;
+    if (status === 'applied') return Promise.resolve(recordOutcome(order, 'applied'));
+    if (status === 'preserved') return Promise.resolve(recordOutcome(order, 'preserved', 'legacy_preserved'));
+    if (status === 'consuming') {
+      var interrupted = recordOutcome(order, 'preserved', 'interrupted');
+      try { snap.cart_consumption_status = 'preserved'; saveSnapshot(snap); } catch (e) { /* the outcome already decides */ }
+      return Promise.resolve(interrupted);
+    }
+    return Promise.resolve(null);
+  }
+  // clearReceiptIfMatches / takeTransferReceiptIfMatches: the attempt is
+  // retired only once the order's access is saved on its own and the cart
+  // has its outcome.
+  function retireReceipt(order, transferOnly) {
+    var snap = readSnapshot();
+    if (!snap || !snap.receipt || snap.receipt.order_id !== order) return null;
+    if (transferOnly && snap.handoff.payment_method !== 'transfer') return null;
+    if (!readOutcome(order)) return null;
+    saveOrderAccess(snap.receipt);
+    var latest = readSnapshot();
+    if (!latest || latest.idempotency_key !== snap.idempotency_key || !latest.receipt ||
+        latest.receipt.order_id !== order || latest.receipt.access_token !== snap.receipt.access_token) return null;
+    ssClear(checkoutKey);
+    return snap;
+  }
+  var flights = {};
   function consumeCartOnce(order) {
+    if (flights[order]) return flights[order];
+    var flight = runConsumption(order);
+    flights[order] = flight;
+    flight.then(function () { delete flights[order]; }, function () { delete flights[order]; });
+    return flight;
+  }
+  function runConsumption(order) {
     var existing = readOutcome(order);
     if (existing) return Promise.resolve(existing);
     var snap = readSnapshot();
@@ -209,7 +303,11 @@ const checkoutRecordsScript = r'''
   return {
     key: checkoutKey, uuid: uuid, ssRead: ssRead, ssClear: ssClear,
     parseReceipt: parseReceipt, parseSnapshot: parseSnapshot, readSnapshot: readSnapshot,
-    saveSnapshot: saveSnapshot, saveOrderAccess: saveOrderAccess, consumeCartOnce: consumeCartOnce
+    saveSnapshot: saveSnapshot, saveOrderAccess: saveOrderAccess, readOrderAccess: readOrderAccess,
+    consumeCartOnce: consumeCartOnce, settleOutcome: settleOutcome, readOutcome: readOutcome,
+    showsWarning: showsWarning, acknowledge: acknowledge,
+    takeTransferReceipt: function (order) { return retireReceipt(order, true); },
+    clearReceipt: function (order) { return retireReceipt(order, false); }
   };
   };
 })();

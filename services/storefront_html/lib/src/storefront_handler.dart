@@ -13,6 +13,8 @@ import 'package:vinabike_public_core/shared/models/product.dart';
 import 'cart_page_model.dart';
 import 'cart_page_view.dart';
 import 'checkout_page_view.dart';
+import 'order_page_view.dart';
+import 'order_summary_pdf_route.dart';
 import 'catalog_page_model.dart';
 import 'catalog_page_view.dart';
 import 'flutter_shell.dart';
@@ -62,7 +64,9 @@ Handler storefrontHandler({
   required StorefrontConfig config,
   required PublicReads reads,
   FlutterShell? flutterShell,
+  OrderSummaryFonts? orderSummaryFonts,
 }) {
+  final fonts = orderSummaryFonts ?? OrderSummaryFonts.forConfig(config);
   return (Request request) async {
     final requested = request.requestedUri;
     var path = requested.path;
@@ -71,6 +75,12 @@ Handler storefrontHandler({
     if (hidden) {
       path = path.substring(hiddenRoutePrefix.length);
       if (path.isEmpty) path = '/';
+    }
+    if (path == orderSummaryPdfPath) {
+      if (request.method != 'POST') {
+        return Response(405, headers: {'allow': 'POST'});
+      }
+      return orderSummaryPdf(request, reads: reads, fonts: fonts);
     }
     if (request.method != 'GET' && request.method != 'HEAD') {
       return Response(405, headers: {'allow': 'GET, HEAD'});
@@ -122,6 +132,8 @@ Handler storefrontHandler({
         ['carrito', 'lineas'] => await route.cartLines(),
         ['checkout'] => await route.checkout(),
         ['checkout', 'lineas'] => await route.checkoutLines(),
+        ['pedido', final id] when _orderIdPattern.hasMatch(id) =>
+          await route.order(id),
         _ => await route.notFound(),
       };
     } on PublicReadException catch (error) {
@@ -380,6 +392,23 @@ class _Route {
           page: context,
           methods: methods ?? const [],
           methodsKnown: methods != null,
+          supabaseUrl: config.supabaseUrl,
+          publishableKey: config.publishableKey,
+        ),
+      ),
+    );
+  }
+
+  /// `/pedido/<id>`: the frame of the order page; the order comes from the
+  /// access this tab keeps, so the script reads it.
+  Future<Response> order(String id) async {
+    final context = _context(await reads.shell());
+    if (!context.shell.sitePublished) return _unpublished(context);
+    return _render(
+      orderPageDocument(
+        OrderPageData(
+          page: context,
+          orderId: id,
           supabaseUrl: config.supabaseUrl,
           publishableKey: config.publishableKey,
         ),
@@ -831,3 +860,7 @@ Future<String?> _packageRoot(String repository, String name) async {
   }
   return null;
 }
+
+/// An order id as the store issues them (a UUID); anything else is a page
+/// that is not there.
+final _orderIdPattern = RegExp(r'^[0-9A-Za-z-]{1,64}$');

@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 
 import {
   exactServerRoutes,
+  serverRouteSources,
   checkStorefrontHtmlRoutes,
   selectStorefrontHtmlChecks,
   tagAttributes,
@@ -180,4 +181,20 @@ test("a private route must be the server's, never indexed", async () => {
   });
   assert.equal(fromFlutter.length, 1);
   assert.match(fromFlutter[0], /sin x-storefront-source/);
+});
+
+test("an order page is checked as a private server route", () => {
+  const firebaseConfig = JSON.parse(readFileSync("firebase.json", "utf8"));
+  const checks = selectStorefrontHtmlChecks({
+    sitemapXml,
+    redirectManifest,
+    storeOrigin: store,
+    exactRoutes: exactServerRoutes(firebaseConfig),
+    serverSources: serverRouteSources(firebaseConfig),
+  });
+  assert.deepEqual(checks.private, [
+    "/carrito",
+    "/checkout",
+    "/pedido/00000000-0000-4000-8000-000000000000",
+  ]);
 });

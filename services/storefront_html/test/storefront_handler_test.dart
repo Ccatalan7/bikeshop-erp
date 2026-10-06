@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:jaspr/server.dart';
 import 'package:test/test.dart';
@@ -151,6 +152,7 @@ class _FakeReads implements PublicReads {
     this.homeRow,
     this.contactRow,
     this.payments,
+    this.orders = const {},
   }) : shellJson = shell;
 
   final Map<String, dynamic>? page;
@@ -168,6 +170,9 @@ class _FakeReads implements PublicReads {
 
   /// `get_public_checkout_capabilities`, as the shell read returns it.
   final Object? payments;
+
+  /// `get_public_online_order_by_access_token` by token.
+  final Map<String, Object?> orders;
   final requested = <String>[];
   final catalogRequests = <CatalogRequest>[];
 
@@ -182,6 +187,13 @@ class _FakeReads implements PublicReads {
     requested.add(sku ?? 'id:$productId');
     if (fail) throw PublicReadException('down');
     return (shell: shellJson ?? _shell(), payments: null, page: page);
+  }
+
+  @override
+  Future<Object?> publicOrder(String accessToken) async {
+    requested.add('order');
+    if (fail) throw PublicReadException('down');
+    return orders[accessToken];
   }
 
   @override
@@ -260,9 +272,27 @@ Future<Response> _get(
   StorefrontConfig config = _config,
   Map<String, String> headers = const {},
   FlutterShell? flutterShell,
+  Object? body,
 }) => Future.value(
-  storefrontHandler(config: config, reads: reads, flutterShell: flutterShell)(
-    Request(method, Uri.parse('http://localhost$path'), headers: headers),
+  storefrontHandler(
+    config: config,
+    reads: reads,
+    flutterShell: flutterShell,
+    orderSummaryFonts: _repositoryFonts,
+  )(
+    Request(
+      method,
+      Uri.parse('http://localhost$path'),
+      headers: headers,
+      body: body,
+    ),
+  ),
+);
+
+/// The faces Flutter bundles, from the repository.
+final _repositoryFonts = OrderSummaryFonts(
+  (face) async => ByteData.sublistView(
+    await File('../../assets/fonts/$face.ttf').readAsBytes(),
   ),
 );
 
@@ -1927,5 +1957,136 @@ void main() {
         expect(data['block'], isNotEmpty);
       },
     );
+  });
+
+  group('order page', () {
+    const order = '0d000000-0000-4000-8000-000000000021';
+    final token = 'od-test-token-${'x' * 40}';
+    Map<String, Object?> envelope({String id = order}) => {
+      'order': {
+        'id': id,
+        'number': 'WEB-26-00021',
+        'status': 'confirmed',
+        'paymentStatus': 'pending',
+        'paymentMethod': 'transfer',
+        'deliveryType': 'pickup',
+        'createdAt': '2026-10-06T08:30:00.123456+00:00',
+        'updatedAt': '2026-10-06T08:31:00+00:00',
+        'subtotal': 74790,
+        'taxAmount': 14210,
+        'shippingCost': 0,
+        'discountAmount': 0,
+        'total': 89000,
+      },
+      'items': [
+        {
+          'name': 'Cassette Eclipse 8v',
+          'sku': 'C8',
+          'quantity': 1,
+          'unitPrice': 89000,
+          'subtotal': 89000,
+          'taxRate': 19,
+        },
+      ],
+      'storefront': {'schemaVersion': 1, 'displayName': 'Viñabike'},
+    };
+    Map<String, dynamic> transferShell() {
+      final shell = _shell();
+      (shell['settings'] as Map<String, String>).addAll(<String, String>{
+        'payment_transfer_bank_name': 'Banco de Chile',
+        'payment_transfer_account_type': 'Cuenta corriente',
+        'payment_transfer_account_number': '81522258',
+        'payment_transfer_account_holder': 'NEWEN SpA',
+        'payment_transfer_rut': '77.541.999-7',
+        'payment_transfer_contact_email': 'contacto@vinabike.cl',
+      });
+      return shell;
+    }
+
+    test('the frame is the same for everyone, never indexed, with the '
+        'store\'s transfer details', () async {
+      final response = await _get(
+        _FakeReads(shell: transferShell()),
+        '/pedido/$order',
+      );
+      final html = await response.readAsString();
+
+      expect(response.statusCode, 200);
+      expect(html, contains('<meta name="robots" content="noindex,follow"'));
+      expect(html, contains('data-order="$order"'));
+      expect(html, contains('data-pdf-url="/pedido/resumen.pdf"'));
+      expect(html, contains('<dt>BANCO</dt><dd>Banco de Chile</dd>'));
+      expect(html, contains('<dt>CUENTA CORRIENTE</dt><dd>81522258</dd>'));
+      expect(
+        html,
+        contains(
+          'envía el comprobante a contacto@vinabike.cl con tu número de '
+          'pedido.',
+        ),
+      );
+      expect(html, isNot(contains('Nuestro equipo te compartirá')));
+      // No order, customer or token in the page the server sends.
+      expect(html, isNot(contains('WEB-26-00021')));
+      final owner = html.indexOf('window.vinabikeCart = {');
+      final records = html.indexOf('window.vinabikeCheckoutRecords = function');
+      final page = html.indexOf("root.dataset.order");
+      expect(owner, greaterThan(0));
+      expect(records, greaterThan(owner));
+      expect(page, greaterThan(records));
+    });
+
+    test('without transfer details it says the team will send them', () async {
+      final html = await (await _get(
+        _FakeReads(),
+        '/_html/pedido/$order',
+      )).readAsString();
+      expect(html, contains('Nuestro equipo te compartirá'));
+      expect(html, contains('data-pdf-url="/_html/pedido/resumen.pdf"'));
+    });
+
+    test('an id that is not an order id is a page that is not there', () async {
+      final response = await _get(_FakeReads(), '/pedido/a.b');
+      expect(response.statusCode, 404);
+    });
+
+    test(
+      'the summary PDF is drawn from the access, sent in the body',
+      () async {
+        final reads = _FakeReads(orders: {token: envelope()});
+        final response = await _get(
+          reads,
+          '/pedido/resumen.pdf',
+          method: 'POST',
+          headers: {'content-type': 'application/json'},
+          body: jsonEncode({'order_id': order, 'access_token': token}),
+        );
+        final bytes = await response.read().expand((chunk) => chunk).toList();
+
+        expect(response.statusCode, 200);
+        expect(response.headers['content-type'], 'application/pdf');
+        expect(
+          response.headers['content-disposition'],
+          'attachment; filename="pedido_WEB-26-00021.pdf"',
+        );
+        expect(response.headers['cache-control'], 'no-store');
+        expect(String.fromCharCodes(bytes.take(5)), '%PDF-');
+        expect(bytes.length, greaterThan(5000));
+      },
+    );
+
+    test('the PDF needs that order\'s access and a POST', () async {
+      final reads = _FakeReads(orders: {token: envelope(id: 'other')});
+      Future<int> post(Object body) async => (await _get(
+        reads,
+        '/pedido/resumen.pdf',
+        method: 'POST',
+        body: jsonEncode(body),
+      )).statusCode;
+
+      expect(await post({'order_id': order, 'access_token': token}), 404);
+      expect(await post({'order_id': order, 'access_token': 'short'}), 400);
+      expect(await post({'order_id': 'a/b', 'access_token': token}), 400);
+      expect((await _get(reads, '/pedido/resumen.pdf')).statusCode, 405);
+    });
   });
 }

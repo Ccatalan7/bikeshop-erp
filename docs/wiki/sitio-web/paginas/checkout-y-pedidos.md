@@ -36,13 +36,12 @@ tributario» `[Repo]`.
 2. **Checkout** (`/checkout`): `get_public_checkout_capabilities` dice qué
    métodos y entregas están activos; `quote_public_online_shipping` cotiza el
    envío; `google-places-proxy` autocompleta la dirección. Un producto sin tasa
-   de IVA explícita bloquea el checkout `[Repo]`. Desde el 2026-10-06 existe la
-   versión HTML (`/_html/checkout`, oculta hasta abrirla): el servidor manda el
-   formulario y los medios de pago; el navegador pide `/checkout/lineas`, cotiza
-   y crea el pedido con **las mismas llamadas** que Flutter, y guarda el mismo
-   registro de recuperación (`CheckoutSessionStore`: intento, recibo, acceso al
-   pedido, resultado del carrito), así que la página del pedido y el regreso de
-   Mercado Pago siguen siendo Flutter sin cambios. Con la sesión del cliente
+   de IVA explícita bloquea el checkout `[Repo]`. Desde el 2026-10-06 lo
+   dibuja el servidor HTML (d487113c): manda el formulario y los medios de
+   pago; el navegador pide `/checkout/lineas`, cotiza y crea el pedido con
+   **las mismas llamadas** que Flutter, y guarda el mismo registro de
+   recuperación (`CheckoutSessionStore`: intento, recibo, acceso al pedido,
+   resultado del carrito), que también lee la app. Con la sesión del cliente
    (`sb-<ref>-auth-token` de Flutter, renovada si venció) liga el pedido a su
    cuenta y guarda la dirección `[Repo]`.
 3. **Crear el pedido:** `create_public_online_order_with_access` congela precio,
@@ -60,7 +59,14 @@ tributario» `[Repo]`.
      referencia), nunca editando el estado a mano.
 5. **Confirmación** (`/pedido/:id`): se abre con el token
    (`get_public_online_order_by_access_token`); `noindex`. Correo transaccional
-   por `send-transactional-order-email` (Resend).
+   por `send-transactional-order-email` (Resend). Desde el 2026-10-06 (fase 3c)
+   la dibuja el servidor HTML: el marco es el mismo para todos (con los datos
+   de transferencia del editor) y el navegador toma el token de la pestaña,
+   cierra el carrito una vez, **verifica** el regreso de Mercado Pago con
+   `mercadopago-get-payment` antes de creerle a `?status=` y lee el pedido. El
+   PDF del resumen lo arma el servidor (`POST /pedido/resumen.pdf`, token en el
+   cuerpo) con el mismo código que la app (`buildOrderSummaryPdf`, núcleo)
+   `[Repo]`.
 
 ## Correos al cliente
 
@@ -143,6 +149,17 @@ se cancela: va por devolución, corrección o nota de crédito y reembolso
 - Un pedido por transferencia nace `confirmed` y crea su venta en la misma
   llamada; con sesión, esa llamada corre con el JWT del cliente, así que
   cualquier guarda de «personal de la tienda» en ese camino tumba el pedido.
+- Para mirar la página del pedido sin crear uno: la prueba del navegador deja
+  el acceso en `sessionStorage` y responde ella misma
+  `get_public_online_order_by_access_token` (y `mercadopago-get-payment`); así
+  se comparan Flutter en producción y el HTML con el mismo pedido inventado,
+  sin que nada llegue a la base. Hay que cortar GA4 y Meta: la página mide
+  `purchase` en cada carga.
+- La puerta de Supabase acepta la clave publicable nueva (`sb_publishable_…`)
+  como `Authorization` en las funciones con `verify_jwt` (la app usa la clave
+  `anon` antigua): una llamada vacía a `mercadopago-get-payment` y
+  `mercadopago-create-preference` llega a la función (400/403 de su código, no
+  «Invalid JWT») `[Prod 2026-10-06]`.
 
 ## En el código y la base
 
@@ -151,7 +168,12 @@ se cancela: va por devolución, corrección o nota de crédito y reembolso
   `checkout_page_css.dart`, `checkout_page_script.dart` (formulario, cotización,
   pedido, Mercado Pago) y `checkout_records_script.dart` (los registros de
   `CheckoutSessionStore`, probados contra Flutter en
-  `test/unit/storefront_html_checkout_contract_test.dart`).
+  `test/unit/storefront_html_checkout_contract_test.dart`); `order_page_view.dart`,
+  `order_page_css.dart`, `order_page_script.dart` (página del pedido) y
+  `order_summary_pdf_route.dart` (`POST /pedido/resumen.pdf`).
+- Núcleo: `public_store/documents/order_summary_pdf.dart` (el resumen en PDF de
+  las dos tiendas) y `public_store/models/online_order_labels.dart` (palabras de
+  los estados), con `test/unit/order_summary_pdf_contract_test.dart`.
 - Tienda Flutter: `cart_page.dart` (en el editor y en `/tienda`), `checkout_page.dart`,
   `order_confirmation_page.dart`, `cart_provider.dart`,
   `public_checkout_capability_service.dart`, `checkout_session_store.dart`,

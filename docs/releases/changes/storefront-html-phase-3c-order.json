@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "storefront-html-phase-3c-order",
+  "scope": "internal",
+  "platforms": [
+    "web"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "services/storefront_html/lib/src/order_page_view.dart",
+      "sha256": "db65fba445d2a412747910f772cf8e141da9584892d5a70a2e965a3b6eac53a2"
+    },
+    {
+      "path": "services/storefront_html/lib/src/order_page_css.dart",
+      "sha256": "dde5659aab542969f94d6861262bbfc6a57dadfc940227b02107310e15fe3c83"
+    },
+    {
+      "path": "services/storefront_html/lib/src/order_page_script.dart",
+      "sha256": "4d086f8aaa76e6f266ca20a168c4260500887aeaaf4341118ca965e9d39aafcc"
+    },
+    {
+      "path": "services/storefront_html/lib/src/order_summary_pdf_route.dart",
+      "sha256": "934e00c37c2dcc56dd7df103a9300c22b0890bc3307fbd8f2fee9fecab92ea0a"
+    },
+    {
+      "path": "services/storefront_html/lib/src/checkout_records_script.dart",
+      "sha256": "6a97e3731729cb18d66bff6ea795a42e11e9950eb4f591d06d8e6b94990abd0c"
+    },
+    {
+      "path": "services/storefront_html/lib/src/checkout_page_script.dart",
+      "sha256": "ca9a79367f297539d62b65003cad3b642b4de0b5cf3d865b9372f3abe67df1da"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_handler.dart",
+      "sha256": "a41dbbbc68e1086bb1db3ae3b1e9904af70b7781114c6a52c1dfcba159595844"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_script.dart",
+      "sha256": "33acb9a688e43af78a98c44c5a2420f38446eb67598ecee59a29300851419227"
+    },
+    {
+      "path": "services/storefront_html/lib/src/public_reads.dart",
+      "sha256": "b63e127c9eaffe06d49b4fb943ce9a92a3fa3bf7fb12fdc6bc3c163adf6102c4"
+    },
+    {
+      "path": "services/storefront_html/lib/src/material_icons.dart",
+      "sha256": "a5e19d3575b369ade49346f5c9cd817c5d7e170ffcf906e99e5fa313e02216de"
+    },
+    {
+      "path": "services/storefront_html/lib/storefront_html.dart",
+      "sha256": "f9523c70c12f22a7377e762093af10d7001f538cb733121d2fdb04e9939793f0"
+    },
+    {
+      "path": "packages/vinabike_public_core/pubspec.yaml",
+      "sha256": "3d5605bb12fda9ca36048dddc5900575eed127982b9c287fab3bf80b3ae42b12"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/documents/order_summary_pdf.dart",
+      "sha256": "1c33f05395e252598cdb5a2c07ebf24fdba6f46a2cebd99b06333a2f94add4ce"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/online_order_labels.dart",
+      "sha256": "f6a5ad28bca31c19f63ed9e73917d429fc1b738d6b970d1eb314bef6cad31b15"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/seo/storefront_html_routes.dart",
+      "sha256": "f7ddf1db8e9c2b6d9aab55c38bdc8f474034beeded54ae1048319100e2227f12"
+    },
+    {
+      "path": "lib/public_store/pages/order_confirmation_pdf.dart",
+      "sha256": "3a36ca6621805b590ef78c05271ef48d814311c0e153d133c2563a300695ade6"
+    },
+    {
+      "path": "lib/modules/website/models/website_models.dart",
+      "sha256": "fc62c40642a2566eaf54d615ec76157f7c364b03672b2a2353e87a1ba03ee887"
+    },
+    {
+      "path": "scripts/releases/check_storefront_html_routes.mjs",
+      "sha256": "4a3722e2baa5edaf6de01a7c95eeca12772404e38d57f70767c28ee428be9b9b"
+    },
+    {
+      "path": "firebase.json",
+      "sha256": "87103296b0e6be2eeec11223ade4c918cc6c4b39e1012af67e873289d11f5c36"
+    }
+  ]
+}

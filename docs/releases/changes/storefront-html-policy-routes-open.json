@@ -17,7 +17,7 @@
     },
     {
       "path": "scripts/releases/check_storefront_html_routes.mjs",
-      "sha256": "918d62cc3afc95331a900a155b743596933e9e70260585ce2d1a94ee00b5768b"
+      "sha256": "4a3722e2baa5edaf6de01a7c95eeca12772404e38d57f70767c28ee428be9b9b"
     }
   ]
 }
