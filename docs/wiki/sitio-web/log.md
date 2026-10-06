@@ -4,6 +4,9 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-06 — consulta archivada — [rendimiento](paginas/rendimiento.md):
+  celular lento con todo lo público en HTML: 0,8–2,8 s por página contra
+  20,5 s de la cuenta, que sigue en Flutter.
 - 2026-10-06 — corrección — [rutas](paginas/rutas-y-navegacion.md): el menú
   ancho de escritorio en las páginas HTML, como Flutter (la función del menú
   trae `css_class` desde `20261006120000`); cerrada la diferencia abierta.

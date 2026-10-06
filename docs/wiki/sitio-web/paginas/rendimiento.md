@@ -99,6 +99,13 @@ LCP **2,0 s** (409 KB), `componentes` **2,1 s**, `camaras` **1,6 s**, `frenos`
 `docs/architecture/storefront-html-migration-plan.md` («Miniaturas de
 tarjeta»).
 
+**Todo lo público en HTML, en vivo** (2026-10-06, `66865dc3`, celular lento:
+CPU ×4, 1,6 Mbps, 150 ms, sin caché; «se lee» = el mayor pintado): portada
+**2,8 s** (474 KB), `/productos` **2,1 s** (366 KB), una ficha **2,4 s**
+(395 KB), `componentes` **2,0 s**, `/carrito` **0,8 s** (125 KB), `/contacto`
+**1,0 s**. Lo único que sigue en Flutter, `/cuenta/login`, queda usable a los
+**20,5 s** con 3.649 KB `[Prod 2026-10-06]`.
+
 - La página HTML viajaba sin comprimir (64 KB): ni Cloud Run ni Firebase
   Hosting comprimen una respuesta reenviada. El servidor la manda en gzip
   (15 KB) `[Prod 2026-10-05]`.
