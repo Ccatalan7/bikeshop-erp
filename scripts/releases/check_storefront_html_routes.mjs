@@ -12,6 +12,7 @@
 //   - a page is not a 200 with its sitemap URL as canonical and indexable;
 //   - an old link does not 301 to the product's canonical path;
 //   - an unknown category is not a real 404 from the server;
+//   - a private route (`/carrito`) is not a 200 from the server with noindex;
 //   - Cloud Run answers with another source than this commit's
 //     (`x-storefront-source`, services/storefront_html/tool/source_id.sh): the
 //     shared core changed and the server was not published with it.
@@ -46,6 +47,10 @@ export function exactServerRoutes(firebaseConfig) {
       typeof rewrite.source === "string" && !rewrite.source.includes("*"))
     .map((rewrite) => rewrite.source);
 }
+
+// Server routes that are never indexed, so the sitemap does not list them:
+// they must still be a 200 from the server, with `noindex`.
+export const privateServerRoutes = ["/carrito"];
 
 export function selectStorefrontHtmlChecks({
   sitemapXml,
@@ -105,6 +110,7 @@ export function selectStorefrontHtmlChecks({
       },
     ]),
     missing: "/productos/categoria/no-existe-revision-de-publicacion",
+    private: exactRoutes.filter((path) => privateServerRoutes.includes(path)),
   };
 }
 
@@ -205,6 +211,22 @@ export async function checkStorefrontHtmlRoutes({
         );
       } else {
         log(`ok ${origin}${redirect.path} → ${target}`);
+      }
+    }
+    for (const path of checks.private ?? []) {
+      const response = await request(origin, path, requestOptions);
+      const problems = [];
+      if (response.status !== 200) problems.push(`HTTP ${response.status}`);
+      const robots = tagAttributes(response.body, "meta").find(
+        (meta) => meta.name?.toLowerCase() === "robots",
+      )?.content ?? "";
+      if (!/noindex/i.test(robots)) problems.push(`robots «${robots}», esperaba noindex`);
+      const source = sourceProblem(origin, path, response.headers, expectedSource);
+      if (source) problems.push(source);
+      if (problems.length > 0) {
+        failures.push(`${origin}${path}: ${problems.join("; ")}`);
+      } else {
+        log(`ok ${origin}${path} (noindex)`);
       }
     }
     const missing = await request(origin, checks.missing, requestOptions);

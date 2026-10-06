@@ -98,8 +98,22 @@ typedef HomePageReads = ({
   List<Object?> thumbnails,
 });
 
+/// The saved cart's products by id, in stock or not (Flutter's
+/// `restorePublicStoreCartForTenant` asks `get_public_products` with
+/// `p_only_in_stock: false`), completed like a listing and with the tax rate
+/// checkout needs (`get_public_product_tax_classifications`): without it the
+/// cart blocks payment instead of inventing IVA, as Flutter does.
+typedef CartReads = ({
+  List<Object?> products,
+  List<Object?> brandRows,
+  List<Object?> thumbnails,
+});
+
 abstract interface class PublicReads {
   Future<ShellReads> shell();
+
+  /// The products of the visitor's saved cart, by id.
+  Future<CartReads> cartProducts(List<String> productIds);
 
   /// By [sku], or by [productId] for a product without one (its canonical
   /// route is `/productos/<uuid>`).
@@ -215,6 +229,57 @@ class SupabasePublicReads implements PublicReads {
       shell: results[0] as Map<String, dynamic>,
       payments: results[1],
       page: page is Map ? Map<String, dynamic>.from(page) : null,
+    );
+  }
+
+  @override
+  Future<CartReads> cartProducts(List<String> productIds) async {
+    final ids = productIds.where(_uuid.hasMatch).toSet().toList();
+    if (ids.isEmpty) {
+      return (
+        products: const <Object?>[],
+        brandRows: const <Object?>[],
+        thumbnails: const <Object?>[],
+      );
+    }
+    final results = await Future.wait([
+      _rpc('get_public_products', {
+        'p_tenant_id': config.tenantId,
+        'p_product_ids': ids,
+        'p_only_in_stock': false,
+        'p_sort_by': 'name',
+        'p_limit': ids.length,
+        'p_offset': 0,
+      }),
+      // A failed classification keeps the rows: the cart then blocks
+      // payment, as Flutter's `_attachCheckoutTaxRates` does.
+      _rpc('get_public_product_tax_classifications', {
+        'p_tenant_id': config.tenantId,
+        'p_product_ids': ids,
+      }).catchError((Object error) {
+        stderr.writeln('cart tax classification unavailable: $error');
+        return const <Object?>[];
+      }),
+    ]);
+    final rows = results[0] is List ? results[0] as List : const <Object?>[];
+    final listing = await _completeRows(rows.cast<Object?>());
+    final taxRates = <String, Object?>{
+      for (final row in results[1] is List ? results[1] as List : const [])
+        if (row is Map && row['id'] != null)
+          row['id'].toString(): row['tax_rate'],
+    };
+    return (
+      products: [
+        for (final row in listing.rows)
+          if (row is Map)
+            {
+              ...row,
+              if (taxRates.containsKey(row['id']?.toString()))
+                'tax_rate': taxRates[row['id'].toString()],
+            },
+      ],
+      brandRows: listing.brands,
+      thumbnails: listing.thumbnails,
     );
   }
 

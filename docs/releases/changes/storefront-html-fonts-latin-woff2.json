@@ -17,7 +17,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/site_layout.dart",
-      "sha256": "63ba5bae496591372a4b27c967ab44b01285b16929ccc4799cd8f7b3037e4828"
+      "sha256": "a45518571a037a168eaf94ccb279b7e67fd5159354dc6ac0dc67e82ae142bb53"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_css.dart",
@@ -29,7 +29,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
-      "sha256": "499b3c5ff9a9bf3ac02656bc4e775450ece369ba65df455ca5d158464378b4f9"
+      "sha256": "d9b4309eb652f14024f0c09297dda7c90d70739c95b20d956cb6ce1358fe5a4f"
     },
     {
       "path": "services/storefront_html/test/storefront_fonts_test.dart",
@@ -37,7 +37,7 @@
     },
     {
       "path": "services/storefront_html/test/storefront_handler_test.dart",
-      "sha256": "475c7dac188d764f4aba26d581157d3ae05a0250fdf704f9000f3338f8f6c891"
+      "sha256": "57ae34a59e1d2b9bcb2df147f632f2e9342694e0e7429e9ba915f255dfe334ea"
     }
   ]
 }

@@ -181,6 +181,19 @@ class _FakeReads implements PublicReads {
   }
 
   @override
+  Future<CartReads> cartProducts(List<String> productIds) async {
+    if (fail) throw PublicReadException('down');
+    return (
+      products: [
+        for (final row in products)
+          if (row is Map && productIds.contains(row['id'])) row,
+      ],
+      brandRows: brandRows,
+      thumbnails: thumbnails,
+    );
+  }
+
+  @override
   Future<HomePageReads> homePage(
     List<String> Function(Map<String, dynamic> page) productIds,
   ) async {
@@ -1681,5 +1694,114 @@ void main() {
       policyPageCss(WebsiteThemeRoles.resolve((_) => '')),
     );
     balanced('homePageCss', homePageCss(WebsiteThemeRoles.resolve((_) => '')));
+  });
+
+  group('cart', () {
+    const gone = '6f1d2a3e-0000-4000-8000-00000000dead';
+    final fork = {
+      ..._product(),
+      'tax_rate': 19,
+      'stock_quantity': 2,
+      'inventory_qty': 2,
+    };
+    final cassette = {
+      ..._product(name: 'Cassette Eclipse 8v', sku: 'C8'),
+      'id': '6f1d2a3e-0000-4000-8000-000000000008',
+      'price': 35000,
+      'tax_rate': 19,
+    };
+
+    Future<Map<String, dynamic>> lines(
+      String l, {
+      List<Object?>? products,
+    }) async {
+      final response = await _get(
+        _FakeReads(products: products ?? [fork, cassette]),
+        '/carrito/lineas?l=${Uri.encodeQueryComponent(l)}',
+      );
+      expect(response.statusCode, 200);
+      expect(response.headers['content-type'], startsWith('application/json'));
+      expect(response.headers['cache-control'], 'no-store');
+      return jsonDecode(await response.readAsString()) as Map<String, dynamic>;
+    }
+
+    test(
+      'the page is the frame, never indexed; its script asks for the lines',
+      () async {
+        final response = await _get(_FakeReads(), '/carrito');
+        final html = await response.readAsString();
+
+        expect(response.statusCode, 200);
+        expect(html, contains('<meta name="robots" content="noindex,follow"'));
+        expect(
+          html,
+          contains('href="https://vinabike.cl/carrito" rel="canonical"'),
+        );
+        expect(html, contains('data-lines-url="/carrito/lineas"'));
+        expect(html, contains('Tu carrito está vacío'));
+        // The cart's script runs after the page script that owns the document.
+        expect(
+          html.indexOf('window.vinabikeCart = {'),
+          lessThan(html.indexOf('var cart = window.vinabikeCart;')),
+        );
+      },
+    );
+
+    test(
+      'a saved line is kept to the stock, a missing product leaves',
+      () async {
+        final data = await lines('${fork['id']}:5,$gone:1,${cassette['id']}:1');
+
+        expect(data['lines'], [
+          {'id': fork['id'], 'q': 2, 'limit': 2},
+          {'id': cassette['id'], 'q': 1, 'limit': 2},
+        ]);
+        expect(data['gone'], [gone]);
+        expect(data['adjusted'], 2);
+        expect(data['units'], 3);
+        expect(data['unitsText'], '3 unidades en revisión');
+        expect(data['payable'], isTrue);
+        final items = data['items'] as String;
+        expect(items, contains('HORQUILLA SUNTOUR 29 AURON 35'));
+        expect(
+          items,
+          contains('data-act="inc" aria-label="Agregar una unidad" disabled'),
+        );
+        expect(items, isNot(contains('Stock insuficiente')));
+        final summary = data['summary'] as String;
+        // 2 × 550.000 + 35.000, IVA included, by line.
+        expect(summary, contains('<b>\$ 1.135.000</b>'));
+        expect(summary, contains('IVA incluido (19%)'));
+        expect(summary, contains('href="/checkout"'));
+      },
+    );
+
+    test(
+      'without a tax rate the cart shows the gross and blocks payment',
+      () async {
+        final data = await lines(
+          '${cassette['id']}:1',
+          products: [
+            {...cassette}..remove('tax_rate'),
+          ],
+        );
+        final summary = data['summary'] as String;
+
+        expect(data['payable'], isFalse);
+        expect(summary, contains('TOTAL PRODUCTOS'));
+        expect(
+          summary,
+          contains('<button class="cs-pay" type="button" disabled>'),
+        );
+        expect(summary, isNot(contains('href="/checkout"')));
+      },
+    );
+
+    test('saved lines are read as Flutter reads them', () {
+      expect(parseSavedCartLines('a:2,b:x,a:5,c:0,,d:1:2,e:3'), [
+        (id: 'a', quantity: 5),
+        (id: 'e', quantity: 3),
+      ]);
+    });
   });
 }

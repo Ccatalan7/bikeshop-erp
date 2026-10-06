@@ -86,45 +86,83 @@ const storefrontScript = r'''
     });
   }
 
-  function addToCart(id, quantity, max) {
-    var run = function () {
-      var now = Date.now();
-      var stored = readCart(now);
-      var doc = stored.doc;
-      var lines = doc ? doc.lines.map(function (l) { return { id: l.id, q: l.q }; }) : [];
-      var line = lines.filter(function (l) { return l.id === id; })[0];
-      var wanted = (line ? line.q : 0) + quantity;
-      var bounded = max > 0 ? Math.min(wanted, max) : wanted;
-      if (bounded < 1) return 0;
-      if (line) line.q = bounded; else lines.push({ id: id, q: bounded });
-      var at = new Date(now).toISOString();
-      // The ids of writes already applied keep a retried write from applying
-      // twice. Flutter still reads the first encoding, a bare id dated by the
-      // document; it is kept, as `{id, at}`.
-      var applied = ((doc && doc.applied_mutations) || []).map(function (m) {
-        if (typeof m === 'string') return { id: m.trim(), at: doc.saved_at };
-        return m && typeof m === 'object' ? { id: String(m.id || '').trim(), at: m.at } : null;
-      }).filter(function (m) {
-        return m && m.id && fresh(m.at, now);
-      });
-      applied.push({ id: uuid(), at: at });
-      var next = { v: 1, tenant: tenant, saved_at: at, lines: lines, revision: uuid(), applied_mutations: applied };
-      var encoded = JSON.stringify(JSON.stringify(next));
-      localStorage.setItem(cartKey, encoded);
-      if (localStorage.getItem(cartKey) !== encoded) throw new Error('cart');
-      // The add is done: the store's own key is the one Flutter reads first,
-      // so a failure to clear the old shared key must not report it as lost
-      // (a retry would add the units twice).
-      if (stored.legacy) {
-        try { localStorage.removeItem(legacyKey); } catch (e) { /* read first anyway */ }
-      }
-      return bounded - (line ? wanted - quantity : 0);
-    };
+  // Saves [lines] as the next document, under the lock the caller holds.
+  // The ids of writes already applied keep a retried write from applying
+  // twice. Flutter still reads the first encoding, a bare id dated by the
+  // document; it is kept, as `{id, at}`.
+  function commit(stored, lines, now) {
+    var doc = stored.doc;
+    var at = new Date(now).toISOString();
+    var applied = ((doc && doc.applied_mutations) || []).map(function (m) {
+      if (typeof m === 'string') return { id: m.trim(), at: doc.saved_at };
+      return m && typeof m === 'object' ? { id: String(m.id || '').trim(), at: m.at } : null;
+    }).filter(function (m) {
+      return m && m.id && fresh(m.at, now);
+    });
+    applied.push({ id: uuid(), at: at });
+    var next = { v: 1, tenant: tenant, saved_at: at, lines: lines, revision: uuid(), applied_mutations: applied };
+    var encoded = JSON.stringify(JSON.stringify(next));
+    localStorage.setItem(cartKey, encoded);
+    if (localStorage.getItem(cartKey) !== encoded) throw new Error('cart');
+    // The write is done: the store's own key is the one Flutter reads first,
+    // so a failure to clear the old shared key must not report it as lost
+    // (a retry would add the units twice).
+    if (stored.legacy) {
+      try { localStorage.removeItem(legacyKey); } catch (e) { /* read first anyway */ }
+    }
+  }
+
+  function locked(run) {
     if (navigator.locks && navigator.locks.request) {
       return navigator.locks.request(lockName, function () { return run(); });
     }
     return Promise.resolve().then(run);
   }
+
+  function copyLines(doc) {
+    return doc ? doc.lines.map(function (l) { return { id: l.id, q: l.q }; }) : [];
+  }
+
+  function addToCart(id, quantity, max) {
+    return locked(function () {
+      var now = Date.now();
+      var stored = readCart(now);
+      var lines = copyLines(stored.doc);
+      var line = lines.filter(function (l) { return l.id === id; })[0];
+      var wanted = (line ? line.q : 0) + quantity;
+      var bounded = max > 0 ? Math.min(wanted, max) : wanted;
+      if (bounded < 1) return 0;
+      if (line) line.q = bounded; else lines.push({ id: id, q: bounded });
+      commit(stored, lines, now);
+      return bounded - (line ? wanted - quantity : 0);
+    });
+  }
+
+  // The cart page changes the same document: [change] gets the saved lines
+  // and returns the ones to keep (a line under one unit leaves). Nothing is
+  // written when they are the same.
+  function updateCart(change) {
+    return locked(function () {
+      var now = Date.now();
+      var stored = readCart(now);
+      var before = copyLines(stored.doc);
+      var lines = change(copyLines(stored.doc)).filter(function (l) {
+        return l && l.id && l.q >= 1 && l.q === Math.floor(l.q);
+      });
+      if (JSON.stringify(lines) === JSON.stringify(before)) return lines;
+      commit(stored, lines, now);
+      return lines;
+    });
+  }
+
+  window.vinabikeCart = {
+    key: cartKey,
+    // The saved lines, `[]` without a cart; throws on a document Flutter
+    // could not read, which is never overwritten.
+    lines: function () { return copyLines(readCart(Date.now()).doc); },
+    update: updateCart,
+    badge: function () { paintBadge(); }
+  };
 
   function track(name, params) {
     if (!window.vinabikeMeasurementAllowed) return;

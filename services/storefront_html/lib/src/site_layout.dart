@@ -95,6 +95,10 @@ Component sitePage({
   required PageMeta meta,
   required List<Component> content,
   List<Component> afterFooter = const [],
+
+  /// Scripts that use what the page script sets up (`window.vinabikeCart`),
+  /// so they run after it.
+  List<Component> pageScripts = const [],
 }) {
   final s = context.shell;
   final indexable = meta.indexable && !context.hidden;
@@ -180,6 +184,7 @@ Component sitePage({
       ),
       script(content: _bodyData(context)),
       script(content: storefrontScript),
+      ...pageScripts,
     ]),
   );
 }

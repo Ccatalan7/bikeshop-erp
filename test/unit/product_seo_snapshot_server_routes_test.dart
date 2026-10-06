@@ -54,12 +54,16 @@ void main() {
       '/servicios/categoria/mantencion',
       // The contact page (phase 2e).
       '/contacto',
+      // The cart and its lines (phase 3a).
+      '/carrito',
+      '/carrito/lineas',
     ]) {
       expect(routes.owns(path), isTrue, reason: path);
     }
     for (final path in [
       '/app.html',
-      '/carrito',
+      '/checkout',
+      '/carritox',
       '/cuenta/servicios',
       '/serviciosx',
       '/productosx',
@@ -94,10 +98,12 @@ void main() {
       '/producto/46a51a87-aa3a-430c-a6e1-af48c8d74541',
       '/servicios',
       '/contacto',
+      '/carrito',
+      '/carrito/lineas',
     ]) {
       expect(storefrontHtmlServes(path), isTrue, reason: path);
     }
-    for (final path in ['/carrito', '/checkout', '/cuenta', '/productosx']) {
+    for (final path in ['/checkout', '/cuenta', '/carritox', '/productosx']) {
       expect(storefrontHtmlServes(path), isFalse, reason: path);
     }
   });

@@ -17,7 +17,7 @@
   "evidence": [
     {
       "path": "firebase.json",
-      "sha256": "f412e9f0fdc156ad2a5f75953bff5334be33f7183a690f32252052954984af53"
+      "sha256": "c6037981788b888f5080ea3f43caca82d1a8299c5b6c61e32bf221ae3857969b"
     },
     {
       "path": "scripts/generate_product_seo_snapshots.dart",
@@ -29,7 +29,7 @@
     },
     {
       "path": "scripts/releases/check_storefront_html_routes.mjs",
-      "sha256": "7e219a29ffd1111c8450a3437c8322897a6ff4f6b0e606f9e6d4a5446b7d5818"
+      "sha256": "e1f4ec578e4ee0778322388c2ffa1581d2883224b5a6d7d35ee3374818c371ae"
     },
     {
       "path": "services/storefront_html/bin/server.dart",
@@ -41,7 +41,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
-      "sha256": "499b3c5ff9a9bf3ac02656bc4e775450ece369ba65df455ca5d158464378b4f9"
+      "sha256": "d9b4309eb652f14024f0c09297dda7c90d70739c95b20d956cb6ce1358fe5a4f"
     },
     {
       "path": "services/storefront_html/deploy_cloud_run.sh",
@@ -73,7 +73,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/public_reads.dart",
-      "sha256": "c89486550979f644367237f2df51c9adf8a5b65f2a240916fd2ff51dbf2376a8"
+      "sha256": "1ae2e1f7dd0842bb68012d63a98b68318be3b660035e13ae70662cc39a085817"
     },
     {
       "path": "scripts/generate_public_image_thumbnails.dart",
@@ -89,7 +89,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/site_layout.dart",
-      "sha256": "63ba5bae496591372a4b27c967ab44b01285b16929ccc4799cd8f7b3037e4828"
+      "sha256": "a45518571a037a168eaf94ccb279b7e67fd5159354dc6ac0dc67e82ae142bb53"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_css.dart",
@@ -97,7 +97,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_script.dart",
-      "sha256": "1a3ae6bb943da25cf38c6719134c50040447c7e8c109df0370c9a6ddf76dfda5"
+      "sha256": "2bb4034fd5db0f9fb7fd908df5cfde789c08f9f267e3f23d39e79b6a75ea44ff"
     },
     {
       "path": "services/storefront_html/lib/src/material_icons.dart",

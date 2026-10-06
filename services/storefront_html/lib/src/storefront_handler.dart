@@ -10,6 +10,8 @@ import 'package:vinabike_public_core/public_store/models/public_policy_content.d
 import 'package:vinabike_public_core/public_store/utils/product_url.dart';
 import 'package:vinabike_public_core/shared/models/product.dart';
 
+import 'cart_page_model.dart';
+import 'cart_page_view.dart';
 import 'catalog_page_model.dart';
 import 'catalog_page_view.dart';
 import 'flutter_shell.dart';
@@ -115,6 +117,8 @@ Handler storefrontHandler({
         [final slug] when publicPolicySlugs.contains(slug) =>
           await route.policy(slug),
         ['contacto'] => await route.contact(),
+        ['carrito'] => await route.cart(),
+        ['carrito', 'lineas'] => await route.cartLines(),
         _ => await route.notFound(),
       };
     } on PublicReadException catch (error) {
@@ -344,6 +348,39 @@ class _Route {
       status: model.available ? 200 : 404,
       indexable: model.meta.indexable,
       dataMs: _watch.elapsedMilliseconds,
+    );
+  }
+
+  /// `/carrito`: the frame of the cart; its lines come from [cartLines].
+  Future<Response> cart() async {
+    final context = _context(await reads.shell());
+    if (!context.shell.sitePublished) return _unpublished(context);
+    return _render(cartPageDocument(context));
+  }
+
+  /// `/carrito/lineas?l=<id>:<q>,…`: the visitor's saved lines, re-read
+  /// and drawn, as JSON for the cart page. Never stored by a cache: it is
+  /// this visitor's basket at this moment.
+  Future<Response> cartLines() async {
+    final saved = parseSavedCartLines(
+      request.requestedUri.queryParameters['l'] ?? '',
+    );
+    final model = CartLinesModel.build(
+      saved: saved,
+      reads: await reads.cartProducts([for (final line in saved) line.id]),
+      tenantId: config.tenantId,
+    );
+    final body = utf8.encode(jsonEncode(cartLinesJson(model)));
+    final gzipped = _acceptsGzip(request) ? gzip.encode(body) : null;
+    return Response.ok(
+      gzipped ?? body,
+      headers: {
+        'content-type': 'application/json; charset=utf-8',
+        'cache-control': 'no-store',
+        'x-robots-tag': 'noindex',
+        'vary': 'accept-encoding',
+        'content-encoding': ?(gzipped == null ? null : 'gzip'),
+      },
     );
   }
 

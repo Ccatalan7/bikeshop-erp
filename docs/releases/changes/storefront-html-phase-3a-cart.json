@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "storefront-html-phase-3a-cart",
+  "scope": "internal",
+  "platforms": [
+    "web"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "firebase.json",
+      "sha256": "c6037981788b888f5080ea3f43caca82d1a8299c5b6c61e32bf221ae3857969b"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/storefront_tax_summary.dart",
+      "sha256": "a9e29949de90a7b98fc003d1eacf7b3b45429a3ed215cfe836219056a92be788"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/seo/storefront_html_routes.dart",
+      "sha256": "9ca0d021738f74c075efd916212859a7f1d4e67e924b5508e6ad2ca216e36f57"
+    },
+    {
+      "path": "scripts/releases/check_storefront_html_routes.mjs",
+      "sha256": "e1f4ec578e4ee0778322388c2ffa1581d2883224b5a6d7d35ee3374818c371ae"
+    },
+    {
+      "path": "scripts/releases/check_storefront_html_routes.test.mjs",
+      "sha256": "d248be649724246c0fe90d67a70fbea90867771efc8bb243033d5135993f7d27"
+    },
+    {
+      "path": "services/storefront_html/lib/src/public_reads.dart",
+      "sha256": "1ae2e1f7dd0842bb68012d63a98b68318be3b660035e13ae70662cc39a085817"
+    },
+    {
+      "path": "services/storefront_html/lib/src/site_layout.dart",
+      "sha256": "a45518571a037a168eaf94ccb279b7e67fd5159354dc6ac0dc67e82ae142bb53"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_handler.dart",
+      "sha256": "d9b4309eb652f14024f0c09297dda7c90d70739c95b20d956cb6ce1358fe5a4f"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_script.dart",
+      "sha256": "2bb4034fd5db0f9fb7fd908df5cfde789c08f9f267e3f23d39e79b6a75ea44ff"
+    },
+    {
+      "path": "services/storefront_html/lib/storefront_html.dart",
+      "sha256": "eb0dbbb0f741cad6b0735d84cece0250c60be4a923c48ec06a65e4a9f75a8a58"
+    },
+    {
+      "path": "services/storefront_html/test/storefront_handler_test.dart",
+      "sha256": "57ae34a59e1d2b9bcb2df147f632f2e9342694e0e7429e9ba915f255dfe334ea"
+    },
+    {
+      "path": "test/unit/product_seo_snapshot_server_routes_test.dart",
+      "sha256": "e97604200acfb1515730aa2fb8342d89cc3ed7b0f8694b7a180130f0a788a11d"
+    },
+    {
+      "path": "lib/public_store/models/storefront_tax_summary.dart",
+      "sha256": "9c099845dd5c865cef01ffce13c2572a23a1272b604a4286b456e741441e3cbd"
+    },
+    {
+      "path": "services/storefront_html/lib/src/cart_page_css.dart",
+      "sha256": "c15ff8013503262fabec29ea4ecae2f73bad6f02b756dc51c7b3ffd7e4bd5f6d"
+    },
+    {
+      "path": "services/storefront_html/lib/src/cart_page_model.dart",
+      "sha256": "c29e709ac72009f29516a50aa85714fa22c99098cecc1124bb03edd0ee5b96cd"
+    },
+    {
+      "path": "services/storefront_html/lib/src/cart_page_view.dart",
+      "sha256": "f028a39fdf842eb06b260875df22aae71681280084e12d16184122f9445c9d5e"
+    }
+  ]
+}

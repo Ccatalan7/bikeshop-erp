@@ -132,7 +132,7 @@ test("fails on a noindex page and on a route Hosting answers itself", async () =
 
 test("checks every exact server route the sitemap publishes, from firebase.json", () => {
   const routes = exactServerRoutes(JSON.parse(readFileSync("firebase.json", "utf8")));
-  for (const path of ["/", "/productos", "/servicios", "/nosotros", "/envios", "/devoluciones", "/terminos", "/privacidad", "/contacto"]) {
+  for (const path of ["/", "/productos", "/servicios", "/nosotros", "/envios", "/devoluciones", "/terminos", "/privacidad", "/contacto", "/carrito"]) {
     assert.ok(routes.includes(path), path);
   }
   const withPolicies = sitemapXml.replace(
@@ -153,4 +153,31 @@ test("checks every exact server route the sitemap publishes, from firebase.json"
   assert.deepEqual(selected.slice(0, 5), ["/productos", "/servicios", "/nosotros", "/envios", "/"]);
   assert.equal(pages[4].canonical, store);
   assert.ok(!selected.includes("/terminos"));
+});
+
+test("a private route must be the server's, never indexed", async () => {
+  const withCart = { ...checks, private: ["/carrito"] };
+  const answer = (robots, servedSource = source) => (request, response) => {
+    if (new URL(request.url, "http://x").pathname === "/carrito") {
+      response.writeHead(200, { "content-type": "text/html", "x-storefront-source": servedSource });
+      return response.end(page("/carrito", { robots }));
+    }
+    return liveServer()(request, response);
+  };
+  const run = (handler) => withServer(handler, (origin) =>
+    checkStorefrontHtmlRoutes({ origins: [origin], checks: withCart, expectedSource: source, log: () => {}, requestOptions: fast }),
+  );
+  assert.deepEqual(await run(answer("noindex,follow")), []);
+  const indexed = await run(answer("index,follow"));
+  assert.equal(indexed.length, 1);
+  assert.match(indexed[0], /carrito: robots «index,follow», esperaba noindex/);
+  const fromFlutter = await run((request, response) => {
+    if (new URL(request.url, "http://x").pathname === "/carrito") {
+      response.writeHead(200, { "content-type": "text/html" });
+      return response.end(page("/carrito", { robots: "noindex" }));
+    }
+    return liveServer()(request, response);
+  });
+  assert.equal(fromFlutter.length, 1);
+  assert.match(fromFlutter[0], /sin x-storefront-source/);
 });

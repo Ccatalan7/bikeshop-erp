@@ -2,6 +2,9 @@
 /// request handler.
 library;
 
+export 'src/cart_page_model.dart';
+export 'src/cart_page_view.dart'
+    show cartPageDocument, cartLinesJson, cartLinesPath;
 export 'src/catalog_page_model.dart';
 export 'src/contact_page_css.dart';
 export 'src/contact_page_model.dart';
