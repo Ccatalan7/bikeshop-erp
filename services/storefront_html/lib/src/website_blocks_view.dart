@@ -1,5 +1,9 @@
+import 'dart:convert';
+
 import 'package:jaspr/dom.dart';
 import 'package:jaspr/server.dart';
+import 'package:vinabike_public_core/modules/website/models/website_action.dart';
+import 'package:vinabike_public_core/modules/website/models/website_block_surface_presence.dart';
 import 'package:vinabike_public_core/modules/website/models/website_block_type.dart';
 import 'package:vinabike_public_core/modules/website/models/website_hero_content.dart';
 import 'package:vinabike_public_core/modules/website/models/website_destination.dart';
@@ -11,6 +15,7 @@ import 'package:vinabike_public_core/shared/models/product.dart';
 
 import 'block_composition.dart';
 import 'material_icons.dart';
+import 'storefront_fonts.dart';
 import 'storefront_shell.dart';
 import 'website_brand_logos_view.dart';
 import 'website_carousel_view.dart';
@@ -53,8 +58,16 @@ class BlockRenderContext {
       trimmed,
       internalOrigins: [if (origin != null && origin.hasScheme) origin],
     );
+    // An e-mail or phone link opens the visitor's own app; otherwise the
+    // destination as Flutter navigates to it (`navigateToHref`): only an
+    // absolute http(s) URL leaves the store, and anything else, any other
+    // scheme included, is a path inside it.
+    if (Uri.tryParse(trimmed) case final uri?
+        when uri.isScheme('mailto') || uri.isScheme('tel')) {
+      return trimmed;
+    }
     return shell.categoryHref(destination) ??
-        StorefrontShell.publicPath(trimmed);
+        StorefrontShell.publicPath(destination.href);
   }
 
   PublicWebsiteContactFacts get siteContact => PublicWebsiteContactFacts(
@@ -105,11 +118,30 @@ const coveredSharedBlockTypes = {
   WebsiteBlockType.contact,
 };
 
+/// The block types a page drawn at the window's width (the home and the
+/// editor's own pages) draws with [sharedBlock].
+const pageCoveredBlockTypes = {
+  WebsiteBlockType.hero,
+  WebsiteBlockType.contact,
+  WebsiteBlockType.carousel,
+  WebsiteBlockType.products,
+  WebsiteBlockType.categoryGrid,
+  WebsiteBlockType.brandLogos,
+  WebsiteBlockType.videoBanner,
+  WebsiteBlockType.googleReviews,
+  WebsiteBlockType.text,
+  WebsiteBlockType.button,
+  WebsiteBlockType.divider,
+};
+
 /// Whether a page that draws [types] draws this block: its type, and what
-/// the block holds (a carousel with a video slide is not drawn yet).
+/// the block holds (a carousel with a video slide is not drawn yet). A block
+/// with a surface of its own (background, frame, padding) is not drawn yet:
+/// the HTML would show it without what the editor saved.
 bool sharedBlockCovers(ComposedBlock composed, Set<WebsiteBlockType> types) {
   final type = composed.block.type;
   if (type == null || !types.contains(type)) return false;
+  if (websiteBlockHasAuthoredSurface(composed.block.blockData)) return false;
   return switch (type) {
     WebsiteBlockType.carousel => carouselIsCovered(composed.data),
     WebsiteBlockType.products => productsBlockIsCovered(composed.data),
@@ -134,8 +166,209 @@ Component? sharedBlock(ComposedBlock composed, BlockRenderContext context) {
     WebsiteBlockType.brandLogos => BrandLogosView(composed, context),
     WebsiteBlockType.videoBanner => VideoBannerView(composed, context),
     WebsiteBlockType.googleReviews => GoogleReviewsView(composed, context),
+    WebsiteBlockType.text => _TextBlock(composed, context),
+    WebsiteBlockType.button => _ButtonBlock(composed, context),
+    WebsiteBlockType.divider => _DividerBlock(composed),
     _ => null,
   };
+}
+
+/// `WebsiteTextBlockContent`: the text in the theme's style for its preset
+/// (heading, subheading, caption or paragraph) with the editor's
+/// formatting, in a column at most `maxWidth` wide and centered.
+class _TextBlock extends StatelessComponent {
+  const _TextBlock(this.composed, this.context);
+
+  final ComposedBlock composed;
+  final BlockRenderContext context;
+
+  @override
+  Component build(BuildContext _) {
+    final data = composed.data;
+    final text = (data['text'] ?? '').toString();
+    final preset = switch ((data['preset'] ?? 'paragraph').toString()) {
+      'heading' => 'heading',
+      'subheading' => 'subheading',
+      'caption' => 'caption',
+      _ => 'paragraph',
+    };
+    final rawFormatting = data['formatting'];
+    final formatting = rawFormatting is Map
+        ? Map<String, dynamic>.from(rawFormatting)
+        : const <String, dynamic>{};
+    final maxWidth = switch (data['maxWidth']) {
+      final num value => value.toDouble(),
+      final String value => double.tryParse(value.trim()),
+      _ => null,
+    };
+    final width = maxWidth == null || !maxWidth.isFinite
+        ? null
+        : maxWidth.clamp(200.0, 1200.0);
+    final heading = preset == 'heading' || preset == 'subheading';
+    final style = <String>[
+      if (width != null) 'width:min(${_px(width)},100%)',
+      ...textFormattingCss(
+        formatting,
+        family: heading ? context.theme.headingFont : context.theme.bodyFont,
+        weight: switch (preset) {
+          'heading' => 700,
+          'subheading' => 600,
+          _ => 400,
+        },
+        fallback: heading ? 'var(--head)' : 'var(--body)',
+        fontSize: switch (preset) {
+          'heading' => context.theme.headingSize,
+          'subheading' => 18,
+          'caption' => context.theme.bodySize * 0.9,
+          _ => context.theme.bodySize,
+        },
+        lineHeight: switch (preset) {
+          'heading' => 36 / 28,
+          'subheading' => 28 / 22,
+          _ => 1.5,
+        },
+      ),
+    ];
+    // Written whole, its line breaks as references: the text's own spaces
+    // and breaks are drawn (`pre-wrap`, as Flutter's Text), and the
+    // renderer indents every line of a raw string it prints.
+    final tag = preset == 'heading' ? 'h2' : 'p';
+    final css = style.isEmpty
+        ? ''
+        : ' style="${_attribute.convert(style.join(';'))}"';
+    final lines = text.replaceAll('\r\n', '\n');
+    final content = _content.convert(lines).replaceAll('\n', '&#10;');
+    // A last line break is one more (empty) line in Flutter.
+    final last = lines.endsWith('\n') ? ' data-break' : '';
+    return RawText('<$tag class="txt $preset"$css$last>$content</$tag>');
+  }
+}
+
+/// [TextFormatting.applyTo] as declarations over a preset's own style
+/// ([family] at [weight]): bold, the weight, italic, underline, the size and
+/// line height (the preset's height multiplier unless the editor set one),
+/// color, letter spacing and family. A family Flutter can only draw at its
+/// regular instance (Oswald's variable file) is emboldened from 600 up
+/// (`-webkit-text-stroke`, as the hero); any other draws its own weight.
+List<String> textFormattingCss(
+  Map<String, dynamic> formatting, {
+  required String family,
+  required int weight,
+  required String fallback,
+  required double fontSize,
+  required double lineHeight,
+}) {
+  double? number(Object? raw) =>
+      raw is num && raw.toDouble().isFinite ? raw.toDouble() : null;
+  final weightIndex = formatting['fontWeight'];
+  final authoredWeight = formatting['bold'] == true
+      ? 700
+      : weightIndex is int && weightIndex >= 0 && weightIndex < 9
+      ? (weightIndex + 1) * 100
+      : null;
+  final effectiveWeight = authoredWeight ?? weight;
+  final size = number(formatting['fontSize']);
+  final height = number(formatting['lineHeight']);
+  final color = formatting['textColor'];
+  final spacing = number(formatting['letterSpacing']);
+  final authoredFamily = (formatting['fontFamily'] ?? '').toString().trim();
+  final safeFamily =
+      authoredFamily.isNotEmpty &&
+      !authoredFamily.contains(RegExp(r'[";{}<>\\]'));
+  final drawnFamily = safeFamily ? authoredFamily : family;
+  final align = switch (formatting['textAlign']) {
+    'center' => 'center',
+    'end' || 'right' => 'right',
+    'justify' => 'justify',
+    _ => null,
+  };
+  return [
+    if (align != null) 'text-align:$align',
+    if (authoredWeight != null || weight != 400 || safeFamily)
+      ...storefrontFontDrawsRegularOnly(drawnFamily)
+          ? [
+              'font-weight:400',
+              if (effectiveWeight >= 600)
+                '-webkit-text-stroke:.032em currentColor',
+            ]
+          : ['font-weight:$effectiveWeight'],
+    if (formatting['italic'] == true) 'font-style:italic',
+    if (formatting['underline'] == true) 'text-decoration:underline',
+    if (size != null && size > 0) 'font-size:${_px(size)}',
+    if (size != null && size > 0 || height != null)
+      'line-height:'
+          '${((size != null && size > 0 ? size : fontSize) * (height ?? lineHeight)).round()}px',
+    if (color is int) 'color:${WebsiteRgba.fromArgb(color).css}',
+    if (spacing != null) 'letter-spacing:${_px(spacing)}',
+    if (safeFamily) 'font-family:"$authoredFamily",$fallback',
+  ];
+}
+
+/// The standalone button (`_buildButton`): the theme's button across the
+/// block's width, filled with the accent or drawn in it, and absent when it
+/// has no destination a visitor may follow. It grows a little under the
+/// pointer (`HoverScale`).
+class _ButtonBlock extends StatelessComponent {
+  const _ButtonBlock(this.composed, this.context);
+
+  final ComposedBlock composed;
+  final BlockRenderContext context;
+
+  @override
+  Component build(BuildContext _) {
+    final action = WebsiteActionValue.resolvePrimary(
+      composed.data,
+      labelKeys: const ['label', 'text'],
+      hrefKeys: const ['link'],
+      variantKeys: const ['style'],
+      defaultLabel: 'Botón',
+      defaultVariant: WebsiteActionVariant.fromStorage(
+        composed.data['style']?.toString(),
+      ),
+    );
+    final href = action == null ? null : context.publicHref(action.href);
+    if (action == null || href == null) return Component.fragment(const []);
+    return a(classes: 'w-btn b-blk ${action.variant.name}', href: href, [
+      .text(action.label),
+    ]);
+  }
+}
+
+/// `_buildDivider`: a line as thick as the block says (1 to 12), a share of
+/// the width (10 % to all of it) and centered, in its color.
+class _DividerBlock extends StatelessComponent {
+  const _DividerBlock(this.composed);
+
+  final ComposedBlock composed;
+
+  @override
+  Component build(BuildContext _) {
+    final data = composed.data;
+    final thickness = (_number(data['thickness']) ?? 1).clamp(1.0, 12.0);
+    final share = (_number(data['widthPct']) ?? 1).clamp(0.1, 1.0);
+    final color =
+        _hexColor((data['color'] ?? '#E0E0E0').toString()) ??
+        WebsiteRgba.fromArgb(0xFFE0E0E0);
+    return div(
+      classes: 'dv',
+      attributes: {
+        'role': 'separator',
+        'style':
+            'width:${_num(share * 100)}%;height:${_px(thickness)};'
+            'background:${color.css}',
+      },
+      const [],
+    );
+  }
+
+  /// `#RRGGBB` or `#AARRGGBB` (alpha first, as Flutter reads it).
+  static WebsiteRgba? _hexColor(String raw) {
+    var hex = raw.trim().replaceAll('#', '');
+    if (hex.length == 6) hex = 'FF$hex';
+    if (hex.length != 8) return null;
+    final value = int.tryParse(hex, radix: 16);
+    return value == null ? null : WebsiteRgba.fromArgb(value);
+  }
 }
 
 /// `website_hero_block_content.dart`: the photo or the dark fallback, the
@@ -340,6 +573,9 @@ class _ContactBlock extends StatelessComponent {
   static String _digits(String phone) =>
       phone.replaceAll(RegExp(r'[^\d+]'), '');
 }
+
+const _content = HtmlEscape(HtmlEscapeMode.element);
+const _attribute = HtmlEscape(HtmlEscapeMode.attribute);
 
 String? _firstString(Map<String, dynamic> data, List<String> keys) {
   for (final key in keys) {

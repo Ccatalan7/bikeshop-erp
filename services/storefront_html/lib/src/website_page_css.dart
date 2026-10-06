@@ -24,6 +24,8 @@ String websiteBlocksCss(WebsiteThemeRoles theme) {
   final heroSize = theme.headingSize;
   final heroPhone = heroSize * 0.8;
   final body = theme.bodySize;
+  final heading = theme.headingSize;
+  final caption = body * 0.9;
   final (buttonHeight, buttonPadding) = switch (theme.buttonSize) {
     // The theme's minimum and padding less 4 (`VisualDensity(-1, -1)`).
     'small' => (32, 14),
@@ -72,6 +74,36 @@ String websiteBlocksCss(WebsiteThemeRoles theme) {
 .w-btn.on-dark.outline:hover,.w-btn.on-dark.text:hover{background:rgb(255 255 255 / .08)}
 .w-btn.on-dark.filled{background:var(--w-accent);border-color:var(--w-accent)}
 .w-btn.plain{border-color:var(--w-ovar);color:var(--w-prim);letter-spacing:0}
+
+/* Text (WebsiteTextBlockContent): the theme's styles for each preset, with
+   Material 3's letter spacing, in a column at most maxWidth wide. Its line
+   breaks and spaces are kept, as Flutter's Text keeps them; an empty text
+   is still a line, as in Flutter, and so is a last line break. The weight
+   of the heading and subheading is written on each, by its font. */
+.txt{margin:0 auto;white-space:pre-wrap;overflow-wrap:break-word;color:var(--w-on)}
+.txt:empty::before,.txt[data-break]::after{content:"\\200b"}
+.txt.heading{font:400 ${_n(heading)}px/${_lh(heading, 36 / 28)} var(--head)}
+.txt.subheading{font:400 18px/${_lh(18, 28 / 22)} var(--head)}
+.txt.paragraph{font:400 ${_n(body)}px/${_lh(body, 1.5)} var(--body);letter-spacing:.5px}
+.txt.caption{font:400 ${_n(caption)}px/${_lh(caption, 1.5)} var(--body);letter-spacing:.4px}
+
+/* Button block: the theme's button across the block, its label in the body
+   font at the body size (labelLarge's height and spacing); HoverScale
+   grows it 3 % under the pointer and presses it to 98 %. */
+.w-btn.b-blk{display:flex;width:100%;font-size:${_n(body)}px;line-height:${_lh(body, 20 / 14)};letter-spacing:.1px;white-space:normal;text-align:center;transition:background-color .2s,box-shadow .2s,transform .14s cubic-bezier(.215,.61,.355,1)}
+/* ElevatedButton: elevation 1 at rest and 3 under the pointer, measured
+   against Flutter's shadow. */
+.w-btn.b-blk.filled{background:var(--w-accent);border-color:var(--w-accent);color:#fff;box-shadow:0 .7px 1px rgb(0 0 0 / .18),0 0 1px rgb(0 0 0 / .04)}
+.w-btn.b-blk.filled:hover{box-shadow:0 2px 3px rgb(0 0 0 / .18),0 1px 5px rgb(0 0 0 / .08)}
+.w-btn.b-blk.outline{border-color:var(--w-accent);color:var(--w-accent)}
+.w-btn.b-blk.text{color:var(--w-accent)}
+.w-btn.b-blk.filled:hover{background:color-mix(in srgb,#fff 8%,var(--w-accent))}
+.w-btn.b-blk.outline:hover,.w-btn.b-blk.text:hover{background:color-mix(in srgb,var(--w-accent) 8%,transparent)}
+.w-btn.b-blk:hover{transform:scale(1.03)}
+.w-btn.b-blk:active{transform:scale(.98)}
+
+/* Divider: a centered line. */
+.dv{margin:0 auto}
 
 /* Contact (website_contact_block_content.dart): laid out by the width the
    block has, as its LayoutBuilder (1088 and 552). */
@@ -169,6 +201,18 @@ $videoBannerCss
 $googleReviewsCss
 ${bandVisibilityCss(homeBands)}
 ''';
+
+/// An editor page without blocks (`DynamicWebsitePage._buildEmptyState`).
+String editorPageEmptyCss(WebsiteThemeRoles theme) {
+  final heading = theme.headingSize * 0.5;
+  final body = theme.bodySize;
+  return '''
+.pg-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:${_n(theme.containerPadding)}px;text-align:center}
+.pg-empty svg{color:${theme.onSurface.withAlpha(theme.onSurface.a * .3).css}}
+.pg-empty-t{margin:16px 0 0;font:400 ${_n(heading)}px/${_lh(heading, 1.5)} var(--head);letter-spacing:.25px;color:${theme.onSurface.withAlpha(theme.onSurface.a * .6).css}}
+.pg-empty-s{margin:8px 0 0;font:400 ${_n(body)}px/${_lh(body, 1.5)} var(--body);letter-spacing:.25px;color:${theme.onSurface.withAlpha(theme.onSurface.a * .4).css}}
+''';
+}
 
 /// Carousel (`WebsiteCarouselBlockContent`) and the layers of a composed
 /// slide (`CanvasBlock`).

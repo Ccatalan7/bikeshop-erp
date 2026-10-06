@@ -26,6 +26,18 @@ const storefrontFontFaces = <StorefrontFontFace>[
   (family: 'Barlow', file: 'Barlow-ExtraBold', weight: '800 900'),
 ];
 
+/// Whether Flutter draws [family] only at its regular instance: a family
+/// whose one face is a variable file (Oswald) is drawn at 400 and, from 600
+/// up, emboldened by the engine, which the HTML imitates with a stroke. A
+/// family with a file per weight (Barlow) draws the weight asked.
+bool storefrontFontDrawsRegularOnly(String family) {
+  final faces = [
+    for (final face in storefrontFontFaces)
+      if (face.family.toLowerCase() == family.trim().toLowerCase()) face,
+  ];
+  return faces.length == 1 && faces.single.weight.contains(' ');
+}
+
 /// Where Firebase Hosting serves a face's Latin subset.
 String storefrontLatinFontUrl(String file) => '/fonts/$file.latin.woff2';
 

@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "storefront-editor-pages",
+  "scope": "release",
+  "platforms": [
+    "web"
+  ],
+  "title": "Tus páginas del editor cargan al instante",
+  "summary": "En vinabike.cl, una página que crees en el editor con textos, botones y separadores llega armada desde el servidor, como la portada, sin esperar a que cargue la tienda completa.",
+  "items": [
+    "Si le das fondo, borde o relleno a un bloque, la página lo muestra completo; antes la versión rápida de la portada lo omitía.",
+    "Un botón con un enlace de correo o de teléfono abre tu correo o tu teléfono en todas las páginas del sitio."
+  ],
+  "evidence": [
+    {
+      "path": "firebase.json",
+      "sha256": "fa14bc3e6528219b025312d55abb555fa44a1be4107a7f797bd0597aa9a5a3a9"
+    },
+    {
+      "path": "scripts/releases/check_storefront_html_routes.mjs",
+      "sha256": "eee8b72dcb800e71446b02af9decf7b7aa6de2058b871a4e0379a54a69de9504"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/seo/storefront_html_routes.dart",
+      "sha256": "babd68784816bc578c71204574d8fac6ee9949beb527528fc480eeda711892a8"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_surface_presence.dart",
+      "sha256": "80ed944e20723db4faa8672dad651d3d036c2832b5a81ef2b7cff463b5fe75cf"
+    },
+    {
+      "path": "services/storefront_html/lib/src/editor_page_model.dart",
+      "sha256": "b2b96abedaa6b89deaa5d3f3588ac868363319cf58763c706256b141a20a7f71"
+    },
+    {
+      "path": "services/storefront_html/lib/src/editor_page_view.dart",
+      "sha256": "d4c352d2b56e45eba737eaad69bd5068693b04f3e78cbb1741b8a763507f69b2"
+    },
+    {
+      "path": "services/storefront_html/lib/src/home_page_model.dart",
+      "sha256": "c429898e90ed568a57817c2feb30791b6e70d9c8e4f7171b7bea0fc5e31c3df6"
+    },
+    {
+      "path": "services/storefront_html/lib/src/home_page_view.dart",
+      "sha256": "bd439672ade7d123ca29d401a290103d550c3eb28305715444218b8ec45eb60b"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_blocks_view.dart",
+      "sha256": "06fd1c956b7b60acbf0c224b42a66bc1825794ec8ba42a470898518812ce3bea"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_page_css.dart",
+      "sha256": "cf51c84023bf49cadfae8c5c710f6056d4324c37407f5085daf24d899c2b94d5"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_handler.dart",
+      "sha256": "bc9ca778259ccf91ad76fb3a55925de84abbd3539609fe779f260a5ecc0d4f9f"
+    },
+    {
+      "path": "services/storefront_html/lib/src/public_reads.dart",
+      "sha256": "f32f6dcc4c749946ef52fd57239a173e61ec2f37a350bd1ad42e5ce40a447204"
+    },
+    {
+      "path": "services/storefront_html/lib/src/material_icons.dart",
+      "sha256": "ba89b3f94910af688533cbe3e2c8ebe00b44a188370de29fa6be143c108e36e5"
+    },
+    {
+      "path": "services/storefront_html/lib/storefront_html.dart",
+      "sha256": "190863fe59556bea4b3e7776440b59f3a505c18d2bc687e45f1a175d4f048574"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_fonts.dart",
+      "sha256": "38f1f3a6641cff5a16f60c3a4eaa3d915e0e7acc12c3a3317f4567f67db4974f"
+    },
+    {
+      "path": "lib/public_store/widgets/public_store_layout.dart",
+      "sha256": "1f4116781dd54b8214e5921c2b0c264034e87d44509ca8840a541b243ddd5341"
+    }
+  ]
+}

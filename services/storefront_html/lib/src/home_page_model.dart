@@ -1,6 +1,5 @@
 import 'package:vinabike_public_core/modules/website/models/website_block_base_definitions.dart';
 import 'package:vinabike_public_core/modules/website/models/website_block_normalization.dart';
-import 'package:vinabike_public_core/modules/website/models/website_block_type.dart';
 import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
 import 'package:vinabike_public_core/shared/models/product.dart';
 import 'package:vinabike_public_core/shared/models/public_product_visibility_policy.dart';
@@ -166,19 +165,7 @@ class HomePageModel {
   /// (`x-storefront-uncovered`): `/` opens only when there is none.
   late final Set<String> uncoveredTypes = {
     for (final composed in blocks)
-      if (!sharedBlockCovers(composed, homeCoveredBlockTypes))
+      if (!sharedBlockCovers(composed, pageCoveredBlockTypes))
         composed.block.blockType,
   };
 }
-
-/// The home's block types the HTML storefront draws.
-const homeCoveredBlockTypes = {
-  WebsiteBlockType.hero,
-  WebsiteBlockType.contact,
-  WebsiteBlockType.carousel,
-  WebsiteBlockType.products,
-  WebsiteBlockType.categoryGrid,
-  WebsiteBlockType.brandLogos,
-  WebsiteBlockType.videoBanner,
-  WebsiteBlockType.googleReviews,
-};

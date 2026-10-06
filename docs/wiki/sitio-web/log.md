@@ -4,6 +4,11 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-06 — corrección — [rutas](paginas/rutas-y-navegacion.md): las
+  páginas del editor (`/pagina/<slug>`) en el servidor HTML con texto, botón
+  y separador (fase 5a); [editor](paginas/editor-del-sitio.md) dice qué
+  bloques dibuja el HTML y que uno con superficie propia queda en Flutter;
+  [estado](paginas/estado-y-pendientes.md) con el ERP 1.0.9.
 - 2026-10-06 — corrección — [portal](paginas/portal-de-clientes.md): el
   login en el servidor HTML (fase 4c), con Auth desde el navegador y los
   enlaces del correo en Flutter; el teléfono de la cuenta nueva se guarda al

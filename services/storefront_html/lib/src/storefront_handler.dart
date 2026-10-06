@@ -24,6 +24,8 @@ import 'flutter_shell.dart';
 import 'home_page_model.dart';
 import 'contact_page_model.dart';
 import 'contact_page_view.dart';
+import 'editor_page_model.dart';
+import 'editor_page_view.dart';
 import 'home_page_view.dart';
 import 'policy_page_model.dart';
 import 'policy_page_view.dart';
@@ -150,6 +152,7 @@ Handler storefrontHandler({
         [final slug] when publicPolicySlugs.contains(slug) =>
           await route.policy(slug),
         ['contacto'] => await route.contact(),
+        ['pagina', final slug] => await route.editorPage(slug),
         ['carrito'] => await route.cart(),
         ['carrito', 'lineas'] => await route.cartLines(),
         ['checkout'] => await route.checkout(),
@@ -537,6 +540,42 @@ class _Route {
     }
     final response = await _render(
       homePageDocument(model),
+      indexable: model.meta.indexable,
+      dataMs: _watch.elapsedMilliseconds,
+    );
+    if (model.uncoveredTypes.isEmpty) return response;
+    return response.change(
+      headers: {'x-storefront-uncovered': model.uncoveredTypes.join(',')},
+    );
+  }
+
+  /// `/pagina/<slug>`: a page the editor creates and its blocks
+  /// (`DynamicWebsitePage`, which reads the slug in lower case).
+  Future<Response> editorPage(String requested) async {
+    final slug = requested.trim().toLowerCase();
+    if (slug.isEmpty || slug.length > 200) return notFound();
+    if (slug != requested) {
+      return _redirect(
+        '/${Uri(pathSegments: ['pagina', slug])}',
+        query: _uri.query,
+      );
+    }
+    final data = await reads.websitePage(slug, homeProductIds);
+    final context = _context((shell: data.shell, payments: data.payments));
+    if (!context.shell.sitePublished) return _unpublished(context);
+    if (data.page == null) return notFound();
+    final model = EditorPageModel.build(page: context, slug: slug, reads: data);
+    if (await _flutterFallback(
+          context,
+          model.uncoveredTypes,
+          meta: model.meta,
+          document: editorPageDocument(model),
+        )
+        case final fallback?) {
+      return fallback;
+    }
+    final response = await _render(
+      editorPageDocument(model),
       indexable: model.meta.indexable,
       dataMs: _watch.elapsedMilliseconds,
     );

@@ -76,6 +76,8 @@ void main() {
       '/cuenta/accion',
       // The way in (phase 4c).
       '/cuenta/login',
+      // The editor's own pages (phase 5a).
+      '/pagina/arriendo',
     ]) {
       expect(routes.owns(path), isTrue, reason: path);
     }
@@ -94,6 +96,8 @@ void main() {
       '/tienda/producto/46a51a87-aa3a-430c-a6e1-af48c8d74541',
       '/nosotros/equipo',
       '/contacto/x',
+      '/pagina',
+      '/paginax',
     ]) {
       expect(routes.owns(path), isFalse, reason: path);
     }
@@ -131,6 +135,7 @@ void main() {
       '/cuenta/perfil',
       '/cuenta/direcciones',
       '/cuenta/login',
+      '/pagina/arriendo',
     ]) {
       expect(storefrontHtmlServes(path), isTrue, reason: path);
     }

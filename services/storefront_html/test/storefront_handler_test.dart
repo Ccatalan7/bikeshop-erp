@@ -175,6 +175,7 @@ class _FakeReads implements PublicReads {
     this.byId = const {},
     this.policyRows = const [],
     this.homeRow,
+    this.editorPages = const {},
     this.contactRow,
     this.payments,
     this.orders = const {},
@@ -208,6 +209,9 @@ class _FakeReads implements PublicReads {
   final Map<String, Map<String, dynamic>> byId;
   final List<Object?> policyRows;
   final Map<String, dynamic>? homeRow;
+
+  /// The editor's published pages by slug.
+  final Map<String, Map<String, dynamic>> editorPages;
   final Map<String, dynamic>? contactRow;
 
   /// `get_public_checkout_capabilities`, as the shell read returns it.
@@ -327,6 +331,28 @@ class _FakeReads implements PublicReads {
       products: [
         for (final row in products)
           if (row is Map && ids.contains(row['id'])) row,
+      ],
+      brandRows: brandRows,
+      thumbnails: thumbnails,
+    );
+  }
+
+  @override
+  Future<HomePageReads> websitePage(
+    String slug,
+    List<String> Function(Map<String, dynamic> page) productIds,
+  ) async {
+    requested.add('pagina:$slug');
+    if (fail) throw PublicReadException('down');
+    final row = editorPages[slug];
+    final ids = row == null ? const <String>[] : productIds(row);
+    return (
+      shell: shellJson ?? _shell(),
+      payments: null,
+      page: row,
+      products: [
+        for (final product in products)
+          if (product is Map && ids.contains(product['id'])) product,
       ],
       brandRows: brandRows,
       thumbnails: thumbnails,
@@ -1806,6 +1832,220 @@ void main() {
     });
   });
 
+  group('editor pages', () {
+    Map<String, dynamic> block(
+      String id,
+      String type,
+      int order,
+      Map<String, dynamic> data,
+    ) => {
+      'id': id,
+      'block_type': type,
+      'order_index': order,
+      'is_visible': true,
+      'block_data': data,
+    };
+    Map<String, dynamic> page(
+      List<Map<String, dynamic>> blocks, {
+      String title = 'Arriendo de bicicletas',
+      String? metaDescription,
+    }) => {
+      'id': 'p1',
+      'slug': 'arriendo',
+      'title': title,
+      'meta_description': metaDescription,
+      'is_published': true,
+      'website_blocks': blocks,
+    };
+    final blocks = [
+      block('h', 'text', 0, {'text': 'Arriendo por día', 'preset': 'heading'}),
+      block('t', 'text', 1, {
+        'text': 'Casco incluido.\nDevuelve antes de las <19:00> & listo.',
+        'maxWidth': 600,
+        'formatting': {
+          'textAlign': 'center',
+          'bold': true,
+          'textColor': 0xFF1565C0,
+        },
+      }),
+      block('b', 'button', 2, {
+        'label': 'Reservar',
+        'link': '/contacto',
+        'style': 'outline',
+      }),
+      block('none', 'button', 3, {'label': 'Sin destino', 'link': ''}),
+      block('d', 'divider', 4, {
+        'thickness': 4,
+        'widthPct': 0.5,
+        'color': '#80FF0000',
+      }),
+      block('js', 'button', 5, {
+        'label': 'Truco',
+        'link': 'javascript:alert(1)',
+      }),
+      block('barlow', 'text', 6, {
+        'text': 'Barlow',
+        'preset': 'heading',
+        'formatting': {'fontFamily': 'Barlow', 'fontWeight': 7},
+      }),
+      block('last', 'text', 7, {'text': 'Uno\n'}),
+      block('mail', 'button', 8, {
+        'label': 'Escríbenos',
+        'link': 'mailto:taller@example.com',
+      }),
+    ];
+
+    test('draws text, buttons and dividers under the fixed header, with '
+        "the page's own title and description", () async {
+      final reads = _FakeReads(
+        editorPages: {
+          'arriendo': page(blocks, metaDescription: 'Bicicletas por día.'),
+        },
+      );
+      final response = await _get(reads, '/pagina/arriendo');
+      final html = await response.readAsString();
+
+      expect(response.statusCode, 200);
+      expect(response.headers['x-storefront-uncovered'], isNull);
+      expect(reads.requested, ['pagina:arriendo']);
+      expect(
+        html,
+        contains('<title>Arriendo de bicicletas | Viñabike</title>'),
+      );
+      expect(html, contains('content="Bicicletas por día."'));
+      expect(html, contains('href="https://vinabike.cl/pagina/arriendo"'));
+      expect(html, contains('content="index,follow"'));
+      // Only the home's header floats over its first block.
+      expect(html, isNot(contains('<header class="top over">')));
+      // The editor's default column: 800 wide; Oswald drawn at its regular
+      // instance and emboldened, as Flutter draws its variable file.
+      expect(
+        html,
+        contains(
+          '<h2 class="txt heading" style="width:min(800px,100%);'
+          'font-weight:400;-webkit-text-stroke:.032em currentColor">'
+          'Arriendo por día</h2>',
+        ),
+      );
+      // Another family draws the weight asked (Barlow has a file for it).
+      expect(
+        html,
+        contains(
+          'font-weight:800;font-family:&quot;Barlow&quot;,var(--head)">'
+          'Barlow</h2>',
+        ),
+      );
+      // A last line break is one more line in Flutter.
+      expect(html, contains('data-break>Uno&#10;</p>'));
+      // Only an absolute http(s) link leaves the store, as in Flutter: any
+      // other scheme is a path inside it.
+      expect(html, isNot(contains('href="javascript:')));
+      expect(html, contains('href="/javascript:alert(1)">Truco</a>'));
+      // An e-mail or phone link opens the visitor's app.
+      expect(html, contains('href="mailto:taller@example.com">Escríbenos</a>'));
+      // The text is written whole: its line break is a reference (the
+      // renderer indents every line it prints), its markup escaped.
+      expect(
+        html,
+        contains(
+          '<p class="txt paragraph" style="width:min(600px,100%);'
+          'text-align:center;font-weight:700;color:rgb(21 101 192)">'
+          'Casco incluido.&#10;Devuelve antes de las &lt;19:00&gt; &amp; '
+          'listo.</p>',
+        ),
+      );
+      expect(
+        html,
+        contains(
+          '<a class="w-btn b-blk outline" href="/contacto">Reservar</a>',
+        ),
+      );
+      // A button with nowhere to go is not drawn; its place keeps the space
+      // after it, as Flutter's empty block.
+      expect(html, isNot(contains('Sin destino')));
+      expect(RegExp(r'data-block="button"').allMatches(html), hasLength(4));
+      // Flutter reads the color alpha first.
+      expect(
+        html,
+        contains('width:50%;height:4px;background:rgb(255 0 0 / 0.502)'),
+      );
+    });
+
+    test('a block the HTML does not draw yet, or one with a surface of its '
+        'own, leaves the page to Flutter', () async {
+      final flutter = _FakeFlutterShell();
+      for (final extra in [
+        block('faq', 'faq', 9, {'title': 'Preguntas'}),
+        block('framed', 'text', 9, {
+          'text': 'Con fondo',
+          'style': {'backgroundColor': '#FFEEDD'},
+        }),
+        block('phone', 'divider', 9, {
+          'responsive': {
+            'mobile': {'surfacePaddingTop': 16},
+          },
+        }),
+      ]) {
+        final reads = _FakeReads(
+          editorPages: {
+            'arriendo': page([...blocks, extra]),
+          },
+        );
+        final public = await _get(
+          reads,
+          '/pagina/arriendo',
+          flutterShell: flutter,
+        );
+        expect(public.headers['x-storefront-fallback'], 'flutter');
+        expect(public.headers['x-storefront-uncovered'], extra['block_type']);
+        final hidden = await _get(
+          reads,
+          '/_html/pagina/arriendo',
+          flutterShell: flutter,
+        );
+        expect(hidden.statusCode, 200);
+        expect(await hidden.readAsString(), contains('Arriendo por día'));
+      }
+      // A button's scalar `style` is its variant, never a surface.
+      final button = await _get(
+        _FakeReads(
+          editorPages: {
+            'arriendo': page([blocks[2]]),
+          },
+        ),
+        '/pagina/arriendo',
+        flutterShell: flutter,
+      );
+      expect(button.headers['x-storefront-fallback'], isNull);
+    });
+
+    test('a page that does not exist answers 404, an upper-case slug the '
+        'lower-case page Flutter reads', () async {
+      final reads = _FakeReads(editorPages: {'arriendo': page(blocks)});
+      final missing = await _get(reads, '/pagina/otra');
+      expect(missing.statusCode, 404);
+
+      final upper = await _get(reads, '/pagina/Arriendo?x=1');
+      expect(upper.statusCode, 301);
+      expect(upper.headers['location'], '/pagina/arriendo?x=1');
+    });
+
+    test(
+      'a page without blocks is under construction and not indexed',
+      () async {
+        final response = await _get(
+          _FakeReads(editorPages: {'arriendo': page(const [])}),
+          '/pagina/arriendo',
+        );
+        final html = await response.readAsString();
+
+        expect(response.statusCode, 200);
+        expect(html, contains('Esta página está en construcción'));
+        expect(html, contains('content="noindex,follow"'));
+      },
+    );
+  });
+
   test('every stylesheet closes what it opens', () {
     // A stray «}» at the end of the shared stylesheet swallowed the first
     // rule of the next one (2026-10-05): the page theme never applied.
@@ -1834,6 +2074,10 @@ void main() {
       policyPageCss(WebsiteThemeRoles.resolve((_) => '')),
     );
     balanced('homePageCss', homePageCss(WebsiteThemeRoles.resolve((_) => '')));
+    balanced(
+      'editorPageEmptyCss',
+      editorPageEmptyCss(WebsiteThemeRoles.resolve((_) => '')),
+    );
   });
 
   group('cart', () {

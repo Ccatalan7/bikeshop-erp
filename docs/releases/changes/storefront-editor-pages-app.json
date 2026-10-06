@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "storefront-editor-pages-app",
+  "scope": "internal",
+  "platforms": [
+    "macos",
+    "windows",
+    "android"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "lib/public_store/widgets/public_store_layout.dart",
+      "sha256": "1f4116781dd54b8214e5921c2b0c264034e87d44509ca8840a541b243ddd5341"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/seo/storefront_html_routes.dart",
+      "sha256": "babd68784816bc578c71204574d8fac6ee9949beb527528fc480eeda711892a8"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_surface_presence.dart",
+      "sha256": "80ed944e20723db4faa8672dad651d3d036c2832b5a81ef2b7cff463b5fe75cf"
+    }
+  ]
+}

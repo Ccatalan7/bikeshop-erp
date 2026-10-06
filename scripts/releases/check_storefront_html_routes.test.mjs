@@ -206,3 +206,18 @@ test("an order page and the portal are checked as private server routes", () => 
     "/pedido/00000000-0000-4000-8000-000000000000",
   ]);
 });
+
+test("an editor page that does not exist must be the server's 404", () => {
+  const firebaseConfig = JSON.parse(readFileSync("firebase.json", "utf8"));
+  const checks = selectStorefrontHtmlChecks({
+    sitemapXml,
+    redirectManifest,
+    storeOrigin: store,
+    exactRoutes: exactServerRoutes(firebaseConfig),
+    serverSources: serverRouteSources(firebaseConfig),
+  });
+  assert.deepEqual(checks.missing, [
+    "/productos/categoria/no-existe-revision-de-publicacion",
+    "/pagina/no-existe-revision-de-publicacion",
+  ]);
+});

@@ -786,6 +786,13 @@
           }
         },
         {
+          "source": "/pagina/**",
+          "run": {
+            "serviceId": "storefront-html",
+            "region": "southamerica-east1"
+          }
+        },
+        {
           "source": "/carrito",
           "run": {
             "serviceId": "storefront-html",

@@ -4,7 +4,7 @@ resumen: cada URL pública de vinabike.cl, cuáles indexa Google, las redireccio
 fuentes: [repositorio, google-search-central]
 archivos: [lib/public_store/routes/public_store_router.dart, firebase.json, web/robots.txt, packages/vinabike_public_core/lib/public_store/utils/product_url.dart, services/storefront_html/lib/src/storefront_handler.dart]
 tablas: [website_navigation, website_pages, product_categories, product_url_aliases]
-revisado: 2026-10-05
+revisado: 2026-10-06
 ---
 
 # Rutas, redirecciones y navegación
@@ -14,8 +14,9 @@ revisado: 2026-10-05
 La tienda usa rutas limpias con la History API (sin `#`), que es lo que Google
 sabe seguir `[GSC]`. Desde el 2026-10-05, la portada `/`, `/productos`, sus
 categorías, las fichas, `/producto/<uuid>`, `/servicios` (y sus categorías),
-`/contacto` y las páginas de información
-(`/nosotros`, `/envios`, `/devoluciones`, `/terminos`, `/privacidad`) las
+`/contacto`, las páginas de información
+(`/nosotros`, `/envios`, `/devoluciones`, `/terminos`, `/privacidad`) y las
+que crea el editor (`/pagina/<slug>`, 2026-10-06) las
 responde el **servidor HTML** (Cloud Run
 `storefront-html`, reescrituras del target `store` en `firebase.json`): su 404 y
 sus 301 son respuestas reales del servidor `[Repo]`. Toda otra ruta desconocida
@@ -40,7 +41,7 @@ prueba), salvo en el editor, su vista previa y `/tienda` `[Repo]`.
 | `/productos/:id`, `/producto/:id` | ficha por UUID (histórica): 301 a la ficha canónica (Hosting o el servidor HTML) | no |
 | `/servicios` | servicios del taller (59 publicados, 2026-10-05): el mismo catálogo que `/productos` con `p_product_type = service`, dibujado por el servidor HTML; cada servicio en el JSON-LD con su precio | sí |
 | `/servicios/categoria/:category` | categoría de servicios (servidor HTML) | sí, con las mismas reglas |
-| `/pagina/:slug` | página CMS dinámica | según su publicación |
+| `/pagina/:slug` | página que crea el editor (`DynamicWebsitePage`); la dibuja el servidor HTML desde el 2026-10-06 (texto, botón, separador y los bloques de la portada) y, si tiene un bloque que el HTML aún no dibuja o uno con fondo, borde o relleno propio, responde la página de Flutter con su cabeza; una que no existe es un 404 del servidor y una dirección con mayúsculas va por 301 a la de minúsculas (Flutter lee el slug en minúsculas). Hoy no hay ninguna publicada | sí, con algo que leer; si no, `noindex,follow` |
 | `/contacto`, `/nosotros`, `/terminos`, `/privacidad`, `/devoluciones`, `/envios` | páginas fijas con su página CMS, todas dibujadas por el servidor HTML; las cinco de información sin nada que leer y `/contacto` sin publicar responden 404 con `noindex`. `/contacto` muestra los datos de Configuración (correo, teléfono, dirección, WhatsApp, redes, horario, Maps) y un formulario que abre un correo a la tienda | sí, si su página está publicada (y, las de información, tienen algo que leer); si no, `noindex,follow` |
 | `/carrito` | carrito; lo dibuja el servidor HTML y sus líneas llegan de `/carrito/lineas` (JSON, `no-store`) | no (`X-Robots-Tag` y meta) |
 | `/checkout` | compra, servidor HTML desde el 2026-10-06; sus líneas en `/checkout/lineas` (JSON, `no-store`) | no (`X-Robots-Tag` y meta) |

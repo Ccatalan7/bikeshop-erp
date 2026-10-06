@@ -2,9 +2,9 @@
 titulo: El editor del sitio
 resumen: cómo funciona el editor de vinabike.cl dentro del ERP — sus dos planos de control, los espacios de administración, los bloques, el guardado y el teléfono
 fuentes: [repositorio]
-archivos: [docs/architecture/website-editor-contract.md, lib/modules/website/providers/website_edit_mode_provider.dart, lib/modules/website/services/website_save_coordinator.dart, lib/modules/website/models/website_block_type.dart, lib/modules/website/services/website_editor_draft_controller.dart]
+archivos: [docs/architecture/website-editor-contract.md, services/storefront_html/lib/src/website_blocks_view.dart, packages/vinabike_public_core/lib/modules/website/models/website_block_surface_presence.dart, lib/modules/website/providers/website_edit_mode_provider.dart, lib/modules/website/services/website_save_coordinator.dart, lib/modules/website/models/website_block_type.dart, lib/modules/website/services/website_editor_draft_controller.dart]
 tablas: [website_pages, website_blocks, website_navigation, website_settings, featured_products]
-revisado: 2026-10-03
+revisado: 2026-10-06
 ---
 
 # El editor del sitio
@@ -72,6 +72,17 @@ producción se usan 11 tipos en 25 bloques: `hero` 5, `faq` 4, `about` 4,
 `categoryGrid`, `brandLogos` y `carousel` `[Prod 2026-10-03]`. La altura de cada
 tipo (exacta, mínima o intrínseca) la decide `WebsiteBlockCapabilityRegistry`, la
 misma regla para el inspector, Edit y público `[Repo]`.
+
+El sitio público lo dibuja el **servidor HTML**, que hoy cubre `hero`,
+`contact`, `carousel`, `products`, `categoryGrid`, `brandLogos`,
+`videoBanner`, `googleReviews`, `text`, `button` y `divider`
+(`pageCoveredBlockTypes`, 2026-10-06); las páginas de información leen
+además `about`, `faq` y `features` como secciones de texto. Una página con
+otro tipo, o con un bloque que tiene fondo, borde, sombra o relleno propio
+(`websiteBlockHasAuthoredSurface`: el HTML todavía no pinta superficies), la
+responde Flutter entera: el visitante nunca pierde lo que el editor guardó.
+El lienzo del editor sigue siendo Flutter; el plan para que sea el HTML real
+está en la fase 5 de `storefront-html-migration-plan.md` `[Repo]`.
 
 Lo que arma un agente (campañas, banners, diapositivas, secciones) son
 operaciones reales del editor: mismos valores por defecto, validaciones, esquema

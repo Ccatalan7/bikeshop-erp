@@ -11,7 +11,8 @@
 // UUID links and an unknown category, and fails when:
 //   - a page is not a 200 with its sitemap URL as canonical and indexable;
 //   - an old link does not 301 to the product's canonical path;
-//   - an unknown category is not a real 404 from the server;
+//   - an unknown category, or an editor page that does not exist, is not a
+//     real 404 from the server;
 //   - a private route (`/carrito`, `/checkout`, an order page, the portal's
 //     reading pages) is not a 200
 //     from the server with noindex;
@@ -81,6 +82,12 @@ export const privateServerSamples = {
   "/pedido/**": "/pedido/00000000-0000-4000-8000-000000000000",
 };
 
+// A path under a `/**` source with no page behind it: the server's own 404
+// (an editor page that does not exist).
+export const missingServerSamples = {
+  "/pagina/**": "/pagina/no-existe-revision-de-publicacion",
+};
+
 export function selectStorefrontHtmlChecks({
   sitemapXml,
   redirectManifest,
@@ -139,7 +146,12 @@ export function selectStorefrontHtmlChecks({
         location: redirect.destination,
       },
     ]),
-    missing: "/productos/categoria/no-existe-revision-de-publicacion",
+    missing: [
+      "/productos/categoria/no-existe-revision-de-publicacion",
+      ...serverSources
+        .filter((source) => source in missingServerSamples)
+        .map((source) => missingServerSamples[source]),
+    ],
     private: [
       ...exactRoutes.filter((path) => privateServerRoutes.includes(path)),
       ...serverSources
@@ -264,15 +276,17 @@ export async function checkStorefrontHtmlRoutes({
         log(`ok ${origin}${path} (noindex)`);
       }
     }
-    const missing = await request(origin, checks.missing, requestOptions);
-    const source = sourceProblem(origin, checks.missing, missing.headers, expectedSource);
-    if (missing.status !== 404 || source) {
-      failures.push(
-        `${origin}${checks.missing}: esperaba el 404 del servidor HTML, ` +
-          `llegó ${missing.status}${source ? `; ${source}` : ""}`,
-      );
-    } else {
-      log(`ok ${origin}${checks.missing} → 404`);
+    for (const path of checks.missing) {
+      const missing = await request(origin, path, requestOptions);
+      const source = sourceProblem(origin, path, missing.headers, expectedSource);
+      if (missing.status !== 404 || source) {
+        failures.push(
+          `${origin}${path}: esperaba el 404 del servidor HTML, ` +
+            `llegó ${missing.status}${source ? `; ${source}` : ""}`,
+        );
+      } else {
+        log(`ok ${origin}${path} → 404`);
+      }
     }
   }
   return failures;

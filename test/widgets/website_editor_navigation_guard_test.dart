@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -1105,6 +1106,70 @@ void main() {
         {'title': 'Draft'},
       );
       expect(checkoutGuard.hasNavigationPermit, isFalse);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'an e-mail or phone link opens the visitor app and stays on the page',
+    (tester) async {
+      // The HTML storefront writes `mailto:`/`tel:` as they are; Flutter
+      // made them a path inside the store (2026-10-06).
+      const channel = MethodChannel('plugins.flutter.io/url_launcher');
+      final launched = <String>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(channel, (
+        call,
+      ) async {
+        if (call.method == 'launch') {
+          launched.add((call.arguments as Map)['url'] as String);
+        }
+        return true;
+      });
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          channel,
+          null,
+        ),
+      );
+      final router = GoRouter(
+        initialLocation: '/',
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (context, state) => Scaffold(
+              body: Column(
+                children: [
+                  for (final link in const [
+                    'mailto:taller@example.com',
+                    'tel:+56912345678',
+                  ])
+                    TextButton(
+                      key: ValueKey(link),
+                      onPressed: () =>
+                          PublicStoreLayout.navigateToHref(context, link),
+                      child: Text(link),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+      await tester.pumpWidget(
+        ChangeNotifierProvider.value(
+          value: WebsiteEditModeProvider(),
+          child: MaterialApp.router(routerConfig: router),
+        ),
+      );
+
+      await tester.tap(find.byKey(const ValueKey('mailto:taller@example.com')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('tel:+56912345678')));
+      await tester.pumpAndSettle();
+
+      expect(launched, ['mailto:taller@example.com', 'tel:+56912345678']);
+      expect(router.routeInformationProvider.value.uri.path, '/');
       expect(tester.takeException(), isNull);
     },
   );

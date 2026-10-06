@@ -19,8 +19,14 @@ Se actualiza cada vez que algo cambia de estado; cada línea con su fecha.
   página del pedido, el portal y el login (2026-10-06, `32336525`); Flutter
   sólo arranca en los chats del portal, la descarga de la app del personal,
   `/auth/callback` y al canjear un enlace del correo.
-- ERP 1.0.8 (macOS y Android) publicado desde `d042080b`, con el núcleo
-  compartido del portal; el editor no cambia.
+- ERP 1.0.9 (macOS `macos-v1.0.9-309` y Android, APK 2084) publicado desde
+  `d0984f61` (2026-10-06), con el núcleo compartido del login (fase 4c); el
+  editor no cambia.
+- Las páginas que crea el editor (`/pagina/<slug>`) las dibuja el servidor
+  HTML con texto, botón, separador y los bloques de la portada (fase 5a,
+  2026-10-06); hoy no hay ninguna publicada. Un bloque con fondo, borde o
+  relleno propio todavía lo dibuja Flutter (página entera, también en la
+  portada).
 - Sitemap: 1.315 URL. La tienda lista 539 productos con stock y 59 servicios.
 - Checkout con Mercado Pago y transferencia funcionando (desde el 2026-09-23).
 - Página instantánea en fichas, categorías y portada; semántica para rastreadores.

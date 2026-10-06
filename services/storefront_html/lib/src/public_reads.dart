@@ -184,6 +184,13 @@ abstract interface class PublicReads {
     List<String> Function(Map<String, dynamic> page) productIds,
   );
 
+  /// A published editor page by its slug (`/pagina/<slug>`, Flutter's
+  /// `DynamicWebsitePage`), read as [homePage] reads the home.
+  Future<HomePageReads> websitePage(
+    String slug,
+    List<String> Function(Map<String, dynamic> page) productIds,
+  );
+
   /// An order through its access token
   /// (`get_public_online_order_by_access_token`, the read Flutter's order
   /// page makes), for its summary PDF; null when the token opens nothing.
@@ -407,6 +414,19 @@ class SupabasePublicReads implements PublicReads {
   @override
   Future<HomePageReads> homePage(
     List<String> Function(Map<String, dynamic> page) productIds,
+  ) => _editorPage({'is_home': 'eq.true'}, productIds);
+
+  @override
+  Future<HomePageReads> websitePage(
+    String slug,
+    List<String> Function(Map<String, dynamic> page) productIds,
+  ) => _editorPage({'slug': 'eq.$slug'}, productIds);
+
+  /// One published editor page ([which] picks it) with its blocks, and the
+  /// products its blocks pick by hand.
+  Future<HomePageReads> _editorPage(
+    Map<String, String> which,
+    List<String> Function(Map<String, dynamic> page) productIds,
   ) async {
     final results = await Future.wait([
       _shell(),
@@ -417,7 +437,7 @@ class SupabasePublicReads implements PublicReads {
             'og_image_url,is_published,'
             'website_blocks(id,block_type,block_data,is_visible,order_index)',
         'tenant_id': 'eq.${config.tenantId}',
-        'is_home': 'eq.true',
+        ...which,
         'is_published': 'eq.true',
         'website_blocks.tenant_id': 'eq.${config.tenantId}',
         'limit': '1',

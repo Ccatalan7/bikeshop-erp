@@ -362,11 +362,17 @@ class PublicStoreLayout extends StatefulWidget {
     final authoredUri = Uri.tryParse(authored);
     final authoredIsAbsoluteHttp = authoredUri != null &&
         (authoredUri.scheme == 'http' || authoredUri.scheme == 'https');
+    // An e-mail or phone link opens the visitor's own app, as the HTML
+    // storefront writes it; any other scheme stays a path inside the store.
+    final authoredIsContact = authoredUri != null &&
+        (authoredUri.isScheme('mailto') || authoredUri.isScheme('tel'));
     final normalizedUri = Uri.tryParse(normalized);
-    final launchesExternalWindow = authoredIsAbsoluteHttp &&
-        normalizedUri != null &&
-        (normalizedUri.scheme == 'http' || normalizedUri.scheme == 'https');
+    final launchesExternalWindow = authoredIsContact ||
+        authoredIsAbsoluteHttp &&
+            normalizedUri != null &&
+            (normalizedUri.scheme == 'http' || normalizedUri.scheme == 'https');
     final keepsCurrentPage = openInNewTab ||
+        authoredIsContact ||
         normalized.startsWith('#') ||
         _isCurrentLocation(context, normalized);
     final editorDecision = await WebsiteEditorNavigationGuard.authorize(
@@ -383,6 +389,11 @@ class PublicStoreLayout extends StatefulWidget {
       return;
     }
     if (!context.mounted) return;
+
+    if (authoredIsContact) {
+      if (await launchUrl(authoredUri)) editorDecision.commit();
+      return;
+    }
 
     if (authoredIsAbsoluteHttp && (normalized == authored || openInNewTab)) {
       if (authoredUri.host.isNotEmpty) {
@@ -7299,10 +7310,15 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     final authoredUri = Uri.tryParse(authored);
     final authoredIsAbsoluteHttp = authoredUri != null &&
         (authoredUri.scheme == 'http' || authoredUri.scheme == 'https');
+    // An e-mail or phone link opens the visitor's own app, as the HTML
+    // storefront writes it; any other scheme stays a path inside the store.
+    final authoredIsContact = authoredUri != null &&
+        (authoredUri.isScheme('mailto') || authoredUri.isScheme('tel'));
     final normalizedUri = Uri.tryParse(normalized);
-    final launchesExternalWindow = authoredIsAbsoluteHttp &&
-        normalizedUri != null &&
-        (normalizedUri.scheme == 'http' || normalizedUri.scheme == 'https');
+    final launchesExternalWindow = authoredIsContact ||
+        authoredIsAbsoluteHttp &&
+            normalizedUri != null &&
+            (normalizedUri.scheme == 'http' || normalizedUri.scheme == 'https');
     final editProvider = context.read<WebsiteEditModeProvider>();
     final editorMode = editProvider.mode;
     final isEditMode = editorMode == WebsiteEditorMode.edit;
@@ -7319,6 +7335,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     final replacesBrowserDocument =
         kIsWeb && forceHomeRefresh && isRequestedHomeTarget && !isEditMode;
     final keepsCurrentPage = openInNewTab ||
+        authoredIsContact ||
         normalized.startsWith('#') ||
         PublicStoreLayout._isCurrentLocation(context, normalized);
     final editorDecision = await WebsiteEditorNavigationGuard.authorize(
@@ -7341,6 +7358,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // Ensure any open mega menu closes before navigation so the configured
     // header surface returns to its normal overlay/solid state.
     MegaMenuController.instance.closeMenu();
+
+    if (authoredIsContact) {
+      if (await launchUrl(authoredUri)) editorDecision.commit();
+      return;
+    }
 
     // Sometimes website blocks/navigation store a bare UUID as a link target.
     // This can be either a product id OR a website_pages.id. Normalize to a

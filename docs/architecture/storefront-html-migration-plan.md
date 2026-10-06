@@ -1451,3 +1451,80 @@ pasos, con el lienzo Flutter como predeterminado hasta que el HTML lo iguale:
   avisa al panel, que lo selecciona; después las manillas y lo demás. Cuando
   el HTML iguala al lienzo Flutter en todos los bloques, pasa a ser el
   predeterminado y se retiran los renderizadores Flutter que nadie usa.
+
+### 5a, primera tanda: `/pagina/<slug>`, texto, botón y separador (2026-10-06)
+
+- **La ruta.** `/pagina/<slug>` (`DynamicWebsitePage`) la responde el
+  servidor: la misma lectura que la portada con `slug=eq.<slug>`, sus bloques
+  compuestos al ancho de la ventana (las bandas de la portada) y bajo el
+  encabezado fijo (sólo el de la portada flota). Título, descripción, imagen,
+  canónica y `robots` como `_scheduleSeoUpdate` (indexable sólo con algo que
+  leer). Una que no existe es el 404 del servidor; con mayúsculas, 301 a la
+  de minúsculas (Flutter lee el slug en minúsculas); sin bloques, «Esta
+  página está en construcción» con `noindex`. Hoy no hay ninguna publicada:
+  la ruta es también el banco de medición de los bloques.
+- **Cómo se mide sin escribir en producción.** Flutter: `vinabike.cl/pagina/
+  prueba-bloques` (Hosting sirve Flutter en `/pagina/**` hasta este cambio)
+  con Playwright respondiendo `website_pages?…slug=eq.prueba-bloques` desde un
+  archivo (objeto si el `Accept` pide `vnd.pgrst.object`, lista si no). HTML:
+  el servidor local contra un Supabase falso que responde lo mismo y pasa lo
+  demás a producción como visitante. Las mismas cajas de texto y botón a 1440,
+  800 y 412 (todas exactas), las capturas lado a lado y el color bajo el
+  puntero.
+- **Texto, botón y separador.** Los tres miden igual que Flutter en los tres
+  anchos. El botón con borde bajo el puntero, igual en color y escala.
+- **Un bloque con superficie propia queda en Flutter.** El HTML no pinta
+  todavía fondo, borde, sombra ni relleno de bloque
+  (`WebsiteBlockSurface`); antes de esta tanda los ignoraba en silencio en
+  cualquier bloque de la portada. Ahora `websiteBlockHasAuthoredSurface`
+  (núcleo, con prueba de que sus claves son las de
+  `WebsiteBlockSurfaceFields`) hace que esa página la responda Flutter
+  entera. En producción ningún bloque tiene superficie (2026-10-06).
+
+Lo que costó, y vale para lo que sigue:
+
+- **`WebsiteBlockSurface` envuelve cada bloque en un `Container` de ancho
+  infinito:** el hijo recibe el ancho entero como restricción fija. Por eso
+  el botón suelto ocupa todo el ancho del bloque (no se centra a su medida) y
+  un texto sin `maxWidth` es una caja de todo el ancho alineada a la
+  izquierda; con `maxWidth` es una columna centrada de ese ancho. Todo bloque
+  del renderizador se dibuja `fill`.
+- **El texto del editor lleva `maxWidth: 800` por defecto** (la
+  normalización pone los valores del tipo debajo de lo guardado); sólo un
+  `null` guardado lo quita.
+- **Jaspr sangra cada línea de un `RawText`:** un texto con saltos dentro de
+  `white-space: pre-wrap` mostraba la sangría del HTML. El texto se escribe
+  entero con sus saltos como `&#10;`.
+- **Los estilos de Flutter heredan lo que el tema no dice:** el párrafo es
+  `bodyLarge` con el tamaño del tema, alto 1,5 y espaciado 0,5 de Material 3;
+  el subtítulo `titleLarge` a 18 con el alto 28/22; el título
+  `headlineMedium` con el tamaño de títulos del tema y el alto 36/28; la
+  etiqueta del botón, el cuerpo a su tamaño con el alto 20/14 y el espaciado
+  0,1 de `labelLarge`.
+- **Un color de separador `#AARRGGBB` lleva el alfa primero** (como lo lee
+  Flutter), al revés que el `#RRGGBBAA` de CSS.
+- **La sombra de `ElevatedButton`** (elevación 1, y 3 bajo el puntero) se
+  ajustó midiendo filas de píxeles: `0 .7px 1px` al 18 % más un halo de 1 px,
+  y `0 2px 3px` al 18 % con `0 1px 5px` al 8 %.
+- **La tinta del texto es más oscura en Chrome que en CanvasKit** (≈1,5×,
+  mismo tamaño y posición): es el rasterizador, igual en todas las páginas ya
+  migradas; no se compensa con CSS.
+- **Un texto vacío y un salto final son líneas en Flutter** (24 px cada una
+  en el párrafo); en CSS un `<p>` vacío mide 0 y un salto final no agrega
+  línea. Un espacio de ancho cero (`:empty::before`, `[data-break]::after`)
+  los iguala; medido con una segunda página de prueba.
+- **El trazo que imita la negrita es de Oswald, no de «los títulos»:**
+  Flutter dibuja Oswald (un archivo variable) en su instancia regular y lo
+  engrosa desde 600; Barlow tiene un archivo por peso y dibuja el pedido.
+  El peso se decide por la familia que se dibuja
+  (`storefrontFontDrawsRegularOnly`), también cuando el editor cambia la
+  fuente de un texto (revisión de Codex).
+- **Un enlace del editor se escribe como lo navega Flutter**
+  (`navigateToHref`): una URL `http(s)` absoluta sale de la tienda, un
+  `mailto:` o `tel:` abre la app del visitante, y cualquier otro valor, con
+  o sin esquema, es una ruta dentro de ella (`WebsiteDestination.parse`). El
+  HTML escribía el valor guardado tal cual; desde la revisión de Codex
+  escribe el destino normalizado en todos los bloques. Flutter convertía
+  también `mailto:` y `tel:` en una ruta; ahora los abre, en las dos copias
+  de `navigateToHref`. Los enlaces de la portada y las páginas en vivo
+  quedaron iguales (comparados uno a uno).

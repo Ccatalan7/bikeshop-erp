@@ -17,6 +17,9 @@ const storefrontHtmlRouteSources = <String>[
   '/terminos',
   '/privacidad',
   '/contacto',
+  // The editor's own pages (phase 5a); one with a block the HTML does not
+  // draw yet is answered with Flutter.
+  '/pagina/**',
   '/carrito',
   '/carrito/**',
   '/checkout',
