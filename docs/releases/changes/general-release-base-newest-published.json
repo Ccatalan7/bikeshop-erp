@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "id": "general-release-base-newest-published",
+  "source": "ai",
+  "scope": "internal",
+  "platforms": [
+    "macos",
+    "windows",
+    "android"
+  ],
+  "module": "general",
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "scripts/releases/resolve_previous_release_commit.sh",
+      "sha256": "ecfce1c6f501dbd9808a722bc6873748b38fe34577a8ae9ec1b1d74452cfa945"
+    }
+  ]
+}
