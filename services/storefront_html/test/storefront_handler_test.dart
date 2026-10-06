@@ -1807,21 +1807,21 @@ void main() {
       final reads = _FakeReads(
         homeRow: home([
           ...blocks,
-          block('faq', 'faq', 6, {'title': 'Preguntas'}),
+          block('pricing', 'pricing', 6, {'title': 'Precios'}),
         ]),
         shell: shell,
       );
       final flutter = _FakeFlutterShell();
       final hidden = await _get(reads, '/_html/', flutterShell: flutter);
       expect(hidden.statusCode, 200);
-      expect(hidden.headers['x-storefront-uncovered'], 'faq');
+      expect(hidden.headers['x-storefront-uncovered'], 'pricing');
       expect(await hidden.readAsString(), contains('TALLER DE BICICLETAS'));
       expect(flutter.requested, isEmpty);
 
       final public = await _get(reads, '/', flutterShell: flutter);
       expect(public.statusCode, 200);
       expect(public.headers['x-storefront-fallback'], 'flutter');
-      expect(public.headers['x-storefront-uncovered'], 'faq');
+      expect(public.headers['x-storefront-uncovered'], 'pricing');
       expect(await public.readAsString(), contains('flutter_bootstrap.js'));
       expect(flutter.requested, ['https://vinabike.cl']);
     });
@@ -1922,7 +1922,7 @@ void main() {
       expect(
         html,
         contains(
-          '<h2 class="txt heading" style="width:min(800px,100%);'
+          '<h2 class="ft txt heading" style="width:min(800px,100%);'
           'font-weight:400;-webkit-text-stroke:.032em currentColor">'
           'Arriendo por día</h2>',
         ),
@@ -1948,7 +1948,7 @@ void main() {
       expect(
         html,
         contains(
-          '<p class="txt paragraph" style="width:min(600px,100%);'
+          '<p class="ft txt paragraph" style="width:min(600px,100%);'
           'text-align:center;font-weight:700;color:rgb(21 101 192)">'
           'Casco incluido.&#10;Devuelve antes de las &lt;19:00&gt; &amp; '
           'listo.</p>',
@@ -1975,7 +1975,7 @@ void main() {
         'own, leaves the page to Flutter', () async {
       final flutter = _FakeFlutterShell();
       for (final extra in [
-        block('faq', 'faq', 9, {'title': 'Preguntas'}),
+        block('pricing', 'pricing', 9, {'title': 'Precios'}),
         block('framed', 'text', 9, {
           'text': 'Con fondo',
           'style': {'backgroundColor': '#FFEEDD'},
@@ -2017,6 +2017,119 @@ void main() {
         flutterShell: flutter,
       );
       expect(button.headers['x-storefront-fallback'], isNull);
+    });
+
+    test('draws the FAQ, call to action, features and about blocks as '
+        'Flutter composes them', () async {
+      final response = await _get(
+        _FakeReads(
+          editorPages: {
+            'arriendo': page([
+              block('faq', 'faq', 0, {
+                'title': 'Preguntas',
+                'items': [
+                  {'question': '¿Hay casco?', 'answer': 'Sí, <incluido>.'},
+                ],
+              }),
+              block('cta1', 'cta', 1, {
+                'title': 'Reserva',
+                'subtitle': 'Hoy mismo',
+                'buttonText': 'Reservar',
+                'buttonLink': '/contacto',
+              }),
+              block('cta2', 'cta', 2, {
+                'title': 'Sin destino',
+                'buttonText': 'Pronto',
+                'buttonLink': '',
+                'backgroundImage': 'https://example.invalid/bg.webp',
+                'overlayOpacity': 0.4,
+                // Not a color the CTA reads (six or eight digits): black.
+                'overlayColor': '#f00',
+                'blockHeight': 360,
+              }),
+              block('ft', 'features', 3, {
+                'title': 'Por qué',
+                'features': [
+                  {'icon': 'build', 'title': 'Taller', 'description': ''},
+                  {'icon': 'inventada', 'title': 'Otra', 'description': 'X'},
+                ],
+              }),
+              block('ftl', 'features', 4, {
+                'title': 'Lista',
+                'layout': 'list',
+                'features': [
+                  {'icon': 'star', 'title': 'Uno', 'description': 'Dos'},
+                ],
+              }),
+              block('ab1', 'about', 5, {
+                'title': 'Nosotros',
+                'content': 'Taller desde 2015.',
+                'titleFormatting': {'lineHeight': 2},
+              }),
+              block('ab2', 'about', 6, {
+                'title': 'Con foto',
+                'content': 'Texto',
+                'imageUrl': 'https://example.invalid/a.webp',
+                'imagePosition': 'left',
+              }),
+            ]),
+          },
+        ),
+        '/pagina/arriendo',
+      );
+      final html = await response.readAsString();
+
+      expect(response.statusCode, 200);
+      expect(response.headers['x-storefront-uncovered'], isNull);
+      // FAQ: each question opens to its answer, escaped.
+      expect(html, contains('<details class="faq-it">'));
+      expect(html, contains('¿Hay casco?</span>'));
+      expect(html, contains('Sí, &lt;incluido&gt;.</p>'));
+      // CTA: the title in capitals over the primary's diagonal gradient,
+      // whose angle the page script sets; the button outlined by default.
+      expect(html, contains('<section class="cta-blk" data-diag'));
+      expect(html, contains('>RESERVA</h2>'));
+      expect(
+        html,
+        contains(
+          '<a class="w-btn cta-btn outline" href="/contacto">RESERVAR</a>',
+        ),
+      );
+      expect(html, contains('document.querySelectorAll("[data-diag]")'));
+      // An empty destination is Flutter's disabled button; a photo has its
+      // veil and no gradient.
+      expect(
+        html,
+        contains(
+          '<button class="w-btn cta-btn outline off" type="button" '
+          'disabled>PRONTO</button>',
+        ),
+      );
+      expect(html, contains('class="cta-blk fixed" style="height:360px"'));
+      expect(html, contains('background:rgb(0 0 0 / 0.4)'));
+      // Features: a card per item with its glyph; an unknown name is the
+      // star, as in Flutter; a list with the icon in a circle.
+      expect(html, contains('class="ft-card"'));
+      expect(
+        RegExp(r'<path d="M12 17\.25L18\.188 21').allMatches(html),
+        hasLength(2),
+      );
+      expect(html, contains('class="ft-list"'));
+      expect(html, contains('class="ft-dot"'));
+      // About: a centered column without a photo; the photo first with
+      // `data-media` naming its side.
+      expect(html, contains('<section class="ab-blk">'));
+      // A title whose size follows the width keeps an authored height as a
+      // multiplier of the size drawn.
+      expect(
+        html,
+        contains(
+          'style="font-weight:400;-webkit-text-stroke:'
+          '.032em currentColor;line-height:2">Nosotros</h2>',
+        ),
+      );
+      expect(html, contains('<section class="ab-blk" data-media="left">'));
+      expect(html, contains('src="https://example.invalid/a.webp"'));
     });
 
     test('a page that does not exist answers 404, an upper-case slug the '

@@ -1528,3 +1528,35 @@ Lo que costó, y vale para lo que sigue:
   también `mailto:` y `tel:` en una ruta; ahora los abre, en las dos copias
   de `navigateToHref`. Los enlaces de la portada y las páginas en vivo
   quedaron iguales (comparados uno a uno).
+
+### 5a, segunda tanda: preguntas, llamado a la acción, características y «sobre nosotros» (2026-10-06)
+
+Los cuatro bloques de contenido más usados (`faq`, `cta`, `features`,
+`about`) los dibuja el servidor en la portada y en `/pagina/<slug>`, medidos
+con una tercera página de prueba (dos de cada uno, con y sin foto, rejilla y
+lista, pregunta larga): las mismas cajas que Flutter a 1440, 800 y 412, la
+pregunta abierta con su respuesta en la misma fila y el tono bajo el
+puntero. Las páginas de información siguen leyéndolos como secciones de
+texto, como `StaticPolicyPage`. Lo que costó:
+
+- **Cada bloque decide sus tamaños por un ancho distinto:** las preguntas y
+  las características por su columna útil (el bloque menos su relleno, hasta
+  900 y 1100), «sobre nosotros» por el ancho del bloque entero (900 y 600).
+  Con `container-type` en la columna correspondiente las consultas leen lo
+  mismo que cada `LayoutBuilder`.
+- **Un `TextStyle` suelto hereda el espaciado 0,25 de `bodyMedium`** también
+  en los títulos de Oswald de estos bloques: sin él los anchos no calzan.
+- **El degradado del llamado a la acción va de esquina a esquina en
+  Flutter** (`Alignment.topLeft` a `bottomRight`, líneas de igual color
+  perpendiculares a la diagonal); el `to bottom right` de CSS sólo coincide
+  en un cuadrado y en una franja ancha se ve casi vertical. Un script de la
+  página da a cada bloque el ángulo de su diagonal (`180° − atan2(ancho,
+  alto)`), y lo actualiza al cambiar de tamaño; sin script queda el de CSS.
+- **El tono de una fila bajo el puntero es el `hoverColor` del tema** (negro
+  al 4 %), no el 8 % de `onSurface` de Material 3: medido sobre la tarjeta.
+- **La tarjeta de Material 3 (elevación 1, sombra del tema al 14 %)** se
+  ajustó por filas de píxeles: `0 2px 3.5px -1px` al 5 % más un halo de 1 px.
+- **La fila de una pregunta mide al menos 54** y deja 9 arriba y abajo de una
+  pregunta de varias líneas (medido: una de tres líneas mide 90). Abre con
+  `<details>`: funciona sin script y con teclado, y anima su alto donde el
+  navegador lo permite (`::details-content`).

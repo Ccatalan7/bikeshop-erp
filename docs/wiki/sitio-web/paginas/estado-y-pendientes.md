@@ -23,7 +23,8 @@ Se actualiza cada vez que algo cambia de estado; cada línea con su fecha.
   `d0984f61` (2026-10-06), con el núcleo compartido del login (fase 4c); el
   editor no cambia.
 - Las páginas que crea el editor (`/pagina/<slug>`) las dibuja el servidor
-  HTML con texto, botón, separador y los bloques de la portada (fase 5a,
+  HTML con texto, botón, separador, preguntas, llamado a la acción,
+  características, «sobre nosotros» y los bloques de la portada (fase 5a,
   2026-10-06); hoy no hay ninguna publicada. Un bloque con fondo, borde o
   relleno propio todavía lo dibuja Flutter (página entera, también en la
   portada).

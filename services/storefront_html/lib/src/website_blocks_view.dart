@@ -20,6 +20,7 @@ import 'storefront_shell.dart';
 import 'website_brand_logos_view.dart';
 import 'website_carousel_view.dart';
 import 'website_category_grid_view.dart';
+import 'website_content_blocks_view.dart';
 import 'website_products_view.dart';
 import 'website_reviews_view.dart';
 import 'website_video_banner_view.dart';
@@ -132,6 +133,10 @@ const pageCoveredBlockTypes = {
   WebsiteBlockType.text,
   WebsiteBlockType.button,
   WebsiteBlockType.divider,
+  WebsiteBlockType.faq,
+  WebsiteBlockType.cta,
+  WebsiteBlockType.features,
+  WebsiteBlockType.about,
 };
 
 /// Whether a page that draws [types] draws this block: its type, and what
@@ -169,6 +174,10 @@ Component? sharedBlock(ComposedBlock composed, BlockRenderContext context) {
     WebsiteBlockType.text => _TextBlock(composed, context),
     WebsiteBlockType.button => _ButtonBlock(composed, context),
     WebsiteBlockType.divider => _DividerBlock(composed),
+    WebsiteBlockType.faq => FaqBlockView(composed, context),
+    WebsiteBlockType.cta => CtaBlockView(composed, context),
+    WebsiteBlockType.features => FeaturesBlockView(composed, context),
+    WebsiteBlockType.about => AboutBlockView(composed, context),
     _ => null,
   };
 }
@@ -229,19 +238,32 @@ class _TextBlock extends StatelessComponent {
         },
       ),
     ];
-    // Written whole, its line breaks as references: the text's own spaces
-    // and breaks are drawn (`pre-wrap`, as Flutter's Text), and the
-    // renderer indents every line of a raw string it prints.
-    final tag = preset == 'heading' ? 'h2' : 'p';
-    final css = style.isEmpty
-        ? ''
-        : ' style="${_attribute.convert(style.join(';'))}"';
-    final lines = text.replaceAll('\r\n', '\n');
-    final content = _content.convert(lines).replaceAll('\n', '&#10;');
-    // A last line break is one more (empty) line in Flutter.
-    final last = lines.endsWith('\n') ? ' data-break' : '';
-    return RawText('<$tag class="txt $preset"$css$last>$content</$tag>');
+    return flutterText(
+      preset == 'heading' ? 'h2' : 'p',
+      classes: 'txt $preset',
+      text: text,
+      style: style,
+    );
   }
+}
+
+/// A Flutter `Text` as an element: written whole, its line breaks as
+/// references, so its own spaces and breaks are drawn (`pre-wrap`, class
+/// `ft`) and the renderer, which indents every line of a raw string it
+/// prints, cannot add any; a last break is one more line, as in Flutter.
+Component flutterText(
+  String tag, {
+  required String classes,
+  required String text,
+  List<String> style = const [],
+}) {
+  final css = style.isEmpty
+      ? ''
+      : ' style="${_attribute.convert(style.join(';'))}"';
+  final lines = text.replaceAll('\r\n', '\n');
+  final content = _content.convert(lines).replaceAll('\n', '&#10;');
+  final last = lines.endsWith('\n') ? ' data-break' : '';
+  return RawText('<$tag class="ft $classes"$css$last>$content</$tag>');
 }
 
 /// [TextFormatting.applyTo] as declarations over a preset's own style
@@ -257,6 +279,10 @@ List<String> textFormattingCss(
   required String fallback,
   required double fontSize,
   required double lineHeight,
+
+  /// The preset's size changes with the width (a block title): an authored
+  /// height alone is then a multiplier of whichever size is drawn.
+  bool responsiveSize = false,
 }) {
   double? number(Object? raw) =>
       raw is num && raw.toDouble().isFinite ? raw.toDouble() : null;
@@ -296,8 +322,10 @@ List<String> textFormattingCss(
     if (formatting['underline'] == true) 'text-decoration:underline',
     if (size != null && size > 0) 'font-size:${_px(size)}',
     if (size != null && size > 0 || height != null)
-      'line-height:'
-          '${((size != null && size > 0 ? size : fontSize) * (height ?? lineHeight)).round()}px',
+      responsiveSize && (size == null || size <= 0)
+          ? 'line-height:${_num(height!)}'
+          : 'line-height:'
+                '${((size != null && size > 0 ? size : fontSize) * (height ?? lineHeight)).round()}px',
     if (color is int) 'color:${WebsiteRgba.fromArgb(color).css}',
     if (spacing != null) 'letter-spacing:${_px(spacing)}',
     if (safeFamily) 'font-family:"$authoredFamily",$fallback',
@@ -347,7 +375,7 @@ class _DividerBlock extends StatelessComponent {
     final thickness = (_number(data['thickness']) ?? 1).clamp(1.0, 12.0);
     final share = (_number(data['widthPct']) ?? 1).clamp(0.1, 1.0);
     final color =
-        _hexColor((data['color'] ?? '#E0E0E0').toString()) ??
+        flutterHexColor((data['color'] ?? '#E0E0E0').toString()) ??
         WebsiteRgba.fromArgb(0xFFE0E0E0);
     return div(
       classes: 'dv',
@@ -360,15 +388,16 @@ class _DividerBlock extends StatelessComponent {
       const [],
     );
   }
+}
 
-  /// `#RRGGBB` or `#AARRGGBB` (alpha first, as Flutter reads it).
-  static WebsiteRgba? _hexColor(String raw) {
-    var hex = raw.trim().replaceAll('#', '');
-    if (hex.length == 6) hex = 'FF$hex';
-    if (hex.length != 8) return null;
-    final value = int.tryParse(hex, radix: 16);
-    return value == null ? null : WebsiteRgba.fromArgb(value);
-  }
+/// `#RRGGBB` or `#AARRGGBB` (alpha first), the only colors the blocks' own
+/// parsers in Flutter read (`_parseHexColor`, the CTA's `_parseColor`).
+WebsiteRgba? flutterHexColor(String raw) {
+  var hex = raw.trim().replaceAll('#', '');
+  if (hex.length == 6) hex = 'FF$hex';
+  if (hex.length != 8) return null;
+  final value = int.tryParse(hex, radix: 16);
+  return value == null ? null : WebsiteRgba.fromArgb(value);
 }
 
 /// `website_hero_block_content.dart`: the photo or the dark fallback, the

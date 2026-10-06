@@ -75,9 +75,11 @@ misma regla para el inspector, Edit y público `[Repo]`.
 
 El sitio público lo dibuja el **servidor HTML**, que hoy cubre `hero`,
 `contact`, `carousel`, `products`, `categoryGrid`, `brandLogos`,
-`videoBanner`, `googleReviews`, `text`, `button` y `divider`
-(`pageCoveredBlockTypes`, 2026-10-06); las páginas de información leen
-además `about`, `faq` y `features` como secciones de texto. Una página con
+`videoBanner`, `googleReviews`, `text`, `button`, `divider`, `faq`, `cta`,
+`features` y `about` (`pageCoveredBlockTypes`, 2026-10-06); las páginas de
+información leen `about`, `faq` y `features` como secciones de texto, como
+Flutter. Faltan `canvas`, `services`, `testimonials`, `gallery`, `pricing`,
+`team`, `stats`, `footer` y `partnersBanner`. Una página con
 otro tipo, o con un bloque que tiene fondo, borde, sombra o relleno propio
 (`websiteBlockHasAuthoredSurface`: el HTML todavía no pinta superficies), la
 responde Flutter entera: el visitante nunca pierde lo que el editor guardó.

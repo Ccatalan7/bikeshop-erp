@@ -80,8 +80,11 @@ String websiteBlocksCss(WebsiteThemeRoles theme) {
    breaks and spaces are kept, as Flutter's Text keeps them; an empty text
    is still a line, as in Flutter, and so is a last line break. The weight
    of the heading and subheading is written on each, by its font. */
-.txt{margin:0 auto;white-space:pre-wrap;overflow-wrap:break-word;color:var(--w-on)}
-.txt:empty::before,.txt[data-break]::after{content:"\\200b"}
+/* A Flutter Text (flutterText): its own spaces and breaks; an empty one is
+   a line, and so is a last break. */
+.ft{white-space:pre-wrap;overflow-wrap:break-word}
+.ft:empty::before,.ft[data-break]::after{content:"\\200b"}
+.txt{margin:0 auto;color:var(--w-on)}
 .txt.heading{font:400 ${_n(heading)}px/${_lh(heading, 36 / 28)} var(--head)}
 .txt.subheading{font:400 18px/${_lh(18, 28 / 22)} var(--head)}
 .txt.paragraph{font:400 ${_n(body)}px/${_lh(body, 1.5)} var(--body);letter-spacing:.5px}
@@ -199,8 +202,119 @@ ${categoryGridCss(theme)}
 $brandLogosCss
 $videoBannerCss
 $googleReviewsCss
+${contentBlocksCss(theme)}
 ${bandVisibilityCss(homeBands)}
 ''';
+
+/// The content blocks (website_content_blocks_view.dart): FAQ, call to
+/// action, features and «about us». Their titles change size by the width
+/// of their column, as their LayoutBuilders read it.
+String contentBlocksCss(WebsiteThemeRoles theme) {
+  final body = theme.bodySize;
+  final cta = body + 2;
+  // A phone is a canvas under 640 (the block less the theme's side
+  // padding): the side padding of these blocks is 16 there, 24 otherwise.
+  final phone = _n(640 - 2 * theme.containerPadding - 0.02);
+  final dark = WebsiteRgba.lerp(
+    theme.primary,
+    const WebsiteRgba(1, 0, 0, 0),
+    0.2,
+  );
+  final highest = WebsiteRgba.lerp(theme.background, theme.onSurface, 0.13);
+  return '''
+/* FAQ: ExpansionTile cards (Card radius 16, the theme's low container).
+   A Material 3 card at elevation 1 with the theme's 14 % shadow, as
+   measured against Flutter's. */
+:root{--card-shadow:0 2px 3.5px -1px rgb(0 0 0 / .05),0 0 1px rgb(0 0 0 / .01)}
+.faq-blk,.ft-blk,.ab-blk{padding:64px 24px}
+@container (max-width:${phone}px){.faq-blk,.ft-blk,.ab-blk{padding-inline:16px}}
+.faq-in{max-width:900px;margin:0 auto;container-type:inline-size}
+.faq-t,.ft-t{margin:0;text-align:center;font:400 26px/${_lh(26, 1.15)} var(--head);letter-spacing:.25px;color:var(--w-on)}
+@container (min-width:600px){.faq-t{font-size:34px;line-height:${_lh(34, 1.15)}}}
+@container (min-width:900px){.faq-t{font-size:40px;line-height:${_lh(40, 1.15)}}}
+.faq-s{margin:12px 0 0;text-align:center;font:400 17px/${_lh(17, 1.45)} var(--body);letter-spacing:.25px;color:var(--w-onv)}
+.faq-list{margin-top:32px}
+.faq-it{margin-bottom:16px;border-radius:16px;background:var(--w-low);box-shadow:var(--card-shadow);overflow:hidden}
+.faq-q{display:flex;align-items:center;gap:16px;min-height:54px;padding:0 24px 0 16px;list-style:none;cursor:pointer;transition:background-color .15s}
+.faq-q::-webkit-details-marker{display:none}
+/* ListTile's hover is the theme's hoverColor: black at 4 %. */
+.faq-q:hover{background:rgb(0 0 0 / .04)}
+.faq-q:focus-visible{outline:2px solid var(--w-prim);outline-offset:-2px}
+/* The question row as measured: at least 54 tall, 9 above and below a
+   question of several lines. */
+.faq-qt{flex:1;min-width:0;font:400 16px/24px var(--head);letter-spacing:.15px;color:var(--w-on);padding-block:9px}
+.faq-chev{flex:none;color:var(--w-prim);transition:transform .2s}
+.faq-it[open] .faq-chev{transform:rotate(180deg)}
+.faq-a{padding:12px 16px}
+.faq-at{margin:0;font:400 ${_n(body)}px/${_lh(body, 1.5)} var(--body);letter-spacing:.25px;color:var(--w-onv)}
+.faq-it::details-content{block-size:0;overflow:hidden;transition:block-size .2s,content-visibility .2s allow-discrete}
+.faq-it[open]::details-content{block-size:auto}
+@supports (interpolate-size:allow-keywords){:root{interpolate-size:allow-keywords}}
+
+/* Call to action: the photo with its veil, or the primary color running to
+   20 % black along the diagonal (Flutter's top-left to bottom-right; the
+   page script sets the angle by the block's shape). Its content is never
+   clipped: a height smaller than it runs past the bottom, as Flutter's
+   Stack. */
+.cta-blk{position:relative;display:flex;flex-direction:column;justify-content:safe center;padding:56px 24px;background:linear-gradient(var(--diag,to bottom right),${theme.primary.css},${dark.css})}
+.cta-blk.fixed{padding-block:0}
+@container (max-width:${phone}px){.cta-blk{padding-inline:16px}}
+.cta-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.cta-ov{position:absolute;inset:0;pointer-events:none}
+.cta-in{position:relative;display:flex;flex-direction:column;align-items:center;max-width:800px;width:100%;margin:0 auto}
+.cta-t{margin:0;max-width:100%;text-align:center;font:400 24px/36px var(--head);letter-spacing:1px;color:#fff}
+.cta-s{margin:12px 0 0;max-width:100%;text-align:center;font:400 ${_n(cta)}px/${_lh(cta, 1.5)} var(--body);letter-spacing:.5px;color:rgb(255 255 255 / .702)}
+.cta-btn{margin-top:24px;min-height:44px;max-width:100%;letter-spacing:1px;white-space:normal;overflow-wrap:anywhere;text-align:center;font-family:var(--body)}
+.cta-btn.outline{border-color:#fff;color:#fff}
+.cta-btn.text{color:#fff}
+.cta-btn.filled{background:var(--w-accent);border-color:var(--w-accent);color:#fff;box-shadow:0 .7px 1px rgb(0 0 0 / .18),0 0 1px rgb(0 0 0 / .04);transition:background-color .2s,box-shadow .2s}
+.cta-btn.filled:hover{background:color-mix(in srgb,#fff 8%,var(--w-accent));box-shadow:0 2px 3px rgb(0 0 0 / .18),0 1px 5px rgb(0 0 0 / .08)}
+.cta-btn.outline:hover,.cta-btn.text:hover{background:rgb(255 255 255 / .08)}
+.cta-btn.off{border-color:rgb(255 255 255 / .12);background:transparent;color:rgb(255 255 255 / .38);cursor:default}
+
+/* Features: cards of 320 in a centered wrap (the whole column on a phone),
+   or a list with the icon in a circle of the primary at 10 %. */
+.ft-in{max-width:1100px;margin:0 auto;container-type:inline-size}
+@container (min-width:600px){.ft-t{font-size:34px;line-height:${_lh(34, 1.15)}}}
+@container (min-width:1100px){.ft-t{font-size:40px;line-height:${_lh(40, 1.15)}}}
+.ft-grid{display:flex;flex-wrap:wrap;justify-content:center;align-items:flex-start;gap:24px;margin-top:48px}
+.ft-card{box-sizing:border-box;width:100%;display:flex;flex-direction:column;align-items:center;padding:24px;border-radius:12px;background:var(--w-low);box-shadow:var(--card-shadow);text-align:center}
+@container (min-width:600px){.ft-card{width:320px}}
+.ft-ic{color:var(--w-prim)}
+.ft-ct{margin:16px 0 0;font:400 18px/${_lh(18, 28 / 22)} var(--head);color:var(--w-on)}
+.ft-cd{margin:8px 0 0;font:400 ${_n(body)}px/${_lh(body, 1.5)} var(--body);letter-spacing:.25px;color:var(--w-onv)}
+.ft-list{display:flex;flex-direction:column;gap:32px;margin-top:48px}
+.ft-row{display:flex;align-items:flex-start;gap:20px}
+.ft-dot{flex:none;display:grid;place-items:center;width:52px;height:52px;border-radius:50%;background:var(--w-prim10);color:var(--w-prim)}
+.ft-rtx{flex:1;min-width:0}
+.ft-rt{margin:0;font:400 18px/27px var(--head);letter-spacing:.25px;color:var(--w-on)}
+.ft-rd{margin:8px 0 0;font:400 15px/${_lh(15, 1.5)} var(--body);letter-spacing:.25px;color:var(--w-onv)}
+
+/* About: the text beside the photo (4:3) from a block of 900, the photo
+   above it (16:9, 3:2 on a phone) below that, a column of 700 without one. */
+.ab-in{max-width:1200px;margin:0 auto}
+.ab-blk:not([data-media]) .ab-tx{width:fit-content;max-width:700px;margin:0 auto}
+.ab-tx{display:flex;flex-direction:column;align-items:flex-start}
+.ab-t{margin:0;font:400 26px/${_lh(26, 1.15)} var(--head);letter-spacing:.25px;color:var(--w-on)}
+.ab-c{margin:24px 0 0;font:400 16px/${_lh(16, 1.6)} var(--body);letter-spacing:.25px;color:var(--w-onv)}
+.ab-media{aspect-ratio:3/2;border-radius:16px;overflow:hidden;background:${highest.css}}
+.ab-media img{display:block;width:100%;height:100%;object-fit:cover}
+.ab-blk[data-media] .ab-in{display:flex;flex-direction:column;gap:24px}
+@container (min-width:600px){
+.ab-t{font-size:34px;line-height:${_lh(34, 1.15)}}
+.ab-c{font-size:16.5px;line-height:${_lh(16.5, 1.6)}}
+.ab-media{aspect-ratio:16/9}
+.ab-blk[data-media] .ab-in{gap:32px}
+}
+@container (min-width:900px){
+.ab-t{font-size:40px;line-height:${_lh(40, 1.15)}}
+.ab-c{font-size:17px;line-height:${_lh(17, 1.6)}}
+.ab-media{aspect-ratio:4/3}
+.ab-blk[data-media] .ab-in{display:grid;grid-template-columns:1fr 1fr;align-items:center;gap:48px}
+.ab-blk[data-media=right] .ab-media{order:2}
+}
+''';
+}
 
 /// An editor page without blocks (`DynamicWebsitePage._buildEmptyState`).
 String editorPageEmptyCss(WebsiteThemeRoles theme) {

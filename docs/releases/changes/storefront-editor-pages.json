@@ -8,7 +8,7 @@
     "web"
   ],
   "title": "Tus páginas del editor cargan al instante",
-  "summary": "En vinabike.cl, una página que crees en el editor con textos, botones y separadores llega armada desde el servidor, como la portada, sin esperar a que cargue la tienda completa.",
+  "summary": "En vinabike.cl, una página que crees en el editor con textos, botones, separadores, preguntas frecuentes, llamados a la acción, características o «sobre nosotros» llega armada desde el servidor, como la portada, sin esperar a que cargue la tienda completa.",
   "items": [
     "Si le das fondo, borde o relleno a un bloque, la página lo muestra completo; antes la versión rápida de la portada lo omitía.",
     "Un botón con un enlace de correo o de teléfono abre tu correo o tu teléfono en todas las páginas del sitio."
@@ -36,7 +36,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/editor_page_view.dart",
-      "sha256": "d4c352d2b56e45eba737eaad69bd5068693b04f3e78cbb1741b8a763507f69b2"
+      "sha256": "1dbe4ec6f7a4d6ecb860fb3d215f2b75da82d8a06f87fb17a457bdae8a389fbf"
     },
     {
       "path": "services/storefront_html/lib/src/home_page_model.dart",
@@ -48,11 +48,11 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_blocks_view.dart",
-      "sha256": "06fd1c956b7b60acbf0c224b42a66bc1825794ec8ba42a470898518812ce3bea"
+      "sha256": "419eeadb3d06a4a32cab8088621f52697021a7e3affce945efa9a3f41b33f8e9"
     },
     {
       "path": "services/storefront_html/lib/src/website_page_css.dart",
-      "sha256": "cf51c84023bf49cadfae8c5c710f6056d4324c37407f5085daf24d899c2b94d5"
+      "sha256": "ca9e3f75cbc68b2f5ae8c9f6c52b2ae9dd254161c1695eab8737fb756ef171b8"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
@@ -77,6 +77,14 @@
     {
       "path": "lib/public_store/widgets/public_store_layout.dart",
       "sha256": "1f4116781dd54b8214e5921c2b0c264034e87d44509ca8840a541b243ddd5341"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_content_blocks_view.dart",
+      "sha256": "af7956d7c65ba453cb043f99b61cb4e5e19be867bbfd3836c4cf98bf28637662"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_block_icons.dart",
+      "sha256": "e9761c8856c59e49fa895e4a685989d783011ddb62d2f6a88045e11e12ae2728"
     }
   ]
 }

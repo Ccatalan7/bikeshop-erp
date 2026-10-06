@@ -4,6 +4,10 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-06 — corrección — [editor](paginas/editor-del-sitio.md): el HTML
+  dibuja también preguntas, llamado a la acción, características y «sobre
+  nosotros», y dice qué tipos faltan; [estado](paginas/estado-y-pendientes.md)
+  al día.
 - 2026-10-06 — corrección — [rutas](paginas/rutas-y-navegacion.md): las
   páginas del editor (`/pagina/<slug>`) en el servidor HTML con texto, botón
   y separador (fase 5a); [editor](paginas/editor-del-sitio.md) dice qué

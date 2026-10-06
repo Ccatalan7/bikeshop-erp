@@ -10,6 +10,7 @@ import 'site_layout.dart';
 import 'website_blocks_view.dart';
 import 'website_brand_logos_view.dart';
 import 'website_carousel_view.dart';
+import 'website_content_blocks_view.dart';
 
 /// A page the editor creates, as `DynamicWebsitePage` composes it; a page
 /// without blocks says it is under construction (`_buildEmptyState`).
@@ -62,6 +63,7 @@ Component editorPageDocument(EditorPageModel model) {
     scripts: [
       if (draws(WebsiteBlockType.carousel)) script(content: carouselScript),
       if (draws(WebsiteBlockType.brandLogos)) script(content: brandLogosScript),
+      if (draws(WebsiteBlockType.cta)) script(content: ctaDiagonalScript),
     ],
   );
 }
