@@ -79,6 +79,32 @@ la misma URL con la disponibilidad correcta `[GSC]`.
   2026-10-05 faltaba en la lista y una categoría filtrada así decía
   `index,follow` (`storefront_seo_route.dart`) `[Repo]`.
 
+## Las categorías y `/productos` en el editor
+
+Desde el 2026-10-06 (etapa 3a del rediseño) `/productos` y cada categoría
+publicada (hoy 11: Accesorios y Componentes en la raíz, 9 subcategorías) se
+editan **sobre su página**, como Servicios `[Repo]` `[Prod 2026-10-06]`:
+
+- La lista «Secciones» muestra la **Portada** (sólo en una categoría), **Todos
+  los productos** («del catálogo · N») y **En Google**.
+- En la portada se escribe sobre la página. Sin título propio, la página
+  muestra el **nombre de la categoría** tal como lo ve el cliente; escribir
+  encima le da uno propio y vaciarlo vuelve al nombre. El panel cambia la
+  etiqueta, el texto, la foto y su oscurecimiento, el alto, la alineación y si
+  se ven las subcategorías.
+- En los productos se eligen las tarjetas (editorial, equilibrada, compacta),
+  los filtros y la ruta de categorías.
+- El nombre, la descripción, la foto de la categoría y sus productos se
+  cambian en Inventario («Abrir categorías en Inventario»). La dirección
+  (slug) y la foto del menú siguen en `Catálogo web > Categorías >
+  Presentación`.
+- Lo que no se guardó se ve en la página, pero los enlaces y la dirección
+  leen lo guardado.
+
+Las 11 presentaciones de categoría seguían en los valores por defecto el
+2026-10-06 (sin título propio ni foto, cuadrícula equilibrada)
+`[Prod 2026-10-06]`.
+
 ## Servicios: la lista de precios
 
 Desde el 2026-10-06 `/servicios` es una **lista de precios**, no la grilla de

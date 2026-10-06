@@ -265,7 +265,9 @@ void main() {
       expect(provider.hasBlockCanvas, isTrue);
 
       // The page itself going offstage (a cart, a product page in front)
-      // leaves no block page on the canvas.
+      // leaves no block page on the canvas, and takes its selection along;
+      // the header, on every page, stays chosen.
+      provider.selectBlock('page-1');
       await tester.pumpWidget(
         host(
           provider: provider,
@@ -279,6 +281,7 @@ void main() {
       );
       await tester.pump();
       expect(provider.hasBlockCanvas, isFalse);
+      expect(provider.selectedBlockId, isNull);
 
       WebsiteEditorDocumentBinding.bind(
         tester.element(find.byType(SizedBox)),

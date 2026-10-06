@@ -24,6 +24,44 @@ class CatalogCollectionNavigationItem {
   final String? href;
 }
 
+/// The portada's own texts, each written on the page in the editor.
+enum CatalogCollectionField { eyebrow, title, description }
+
+/// Builds one portada text where the page shows it, in the page's style and
+/// within the page's own line limit ([maxLines]), so the portada keeps the
+/// same height in Edit as on the site.
+typedef CatalogCollectionTextBuilder = Widget Function(
+  CatalogCollectionField field, {
+  required String text,
+  required TextStyle style,
+  required TextAlign textAlign,
+  required String placeholder,
+  required bool uppercase,
+  int? maxLines,
+});
+
+/// What the editor adds to the portada: texts written in place. Null on the
+/// public site and in Preview, where the portada is drawn as is.
+class CatalogCollectionEditing {
+  const CatalogCollectionEditing({
+    required this.text,
+    required this.showsEmpty,
+    required this.fallbackTitle,
+    required this.fallbackDescription,
+  });
+
+  final CatalogCollectionTextBuilder text;
+
+  /// An optional text that is empty is offered only while its section is
+  /// selected, so the page is not drawn with holes.
+  final bool Function(CatalogCollectionField field) showsEmpty;
+
+  /// The category's own name and description, shown while the portada's
+  /// texts are empty.
+  final String fallbackTitle;
+  final String fallbackDescription;
+}
+
 /// Shared category/collection presentation used by public, Edit and Preview.
 ///
 /// This widget owns only presentation. Category hierarchy, labels, visibility
@@ -38,6 +76,7 @@ class CatalogCollectionPresentationHeader extends StatelessWidget {
     required this.breadcrumbs,
     required this.subcategories,
     required this.compact,
+    this.editing,
   });
 
   final WebsiteCatalogPresentation presentation;
@@ -47,6 +86,7 @@ class CatalogCollectionPresentationHeader extends StatelessWidget {
   final List<CatalogCollectionNavigationItem> breadcrumbs;
   final List<CatalogCollectionNavigationItem> subcategories;
   final bool compact;
+  final CatalogCollectionEditing? editing;
 
   @override
   Widget build(BuildContext context) {
@@ -107,22 +147,29 @@ class CatalogCollectionPresentationHeader extends StatelessWidget {
                                 ? CrossAxisAlignment.center
                                 : CrossAxisAlignment.start,
                             children: [
-                              if (presentation.heroEyebrow.isNotEmpty) ...[
-                                Text(
-                                  presentation.heroEyebrow.toUpperCase(),
+                              if (presentation.heroEyebrow.isNotEmpty ||
+                                  (editing?.showsEmpty(
+                                        CatalogCollectionField.eyebrow,
+                                      ) ??
+                                      false)) ...[
+                                _text(
+                                  CatalogCollectionField.eyebrow,
+                                  shown: presentation.heroEyebrow,
+                                  own: presentation.heroEyebrow,
+                                  placeholder: 'Etiqueta sobre el título',
                                   textAlign: textAlign,
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w800,
-                                    letterSpacing: 1.8,
-                                  ),
+                                  uppercase: true,
+                                  style: _eyebrowStyle,
                                 ),
                                 const SizedBox(height: 12),
                               ],
-                              Text(
-                                title.toUpperCase(),
+                              _text(
+                                CatalogCollectionField.title,
+                                shown: title,
+                                own: presentation.heroTitle,
+                                placeholder: editing?.fallbackTitle ?? title,
                                 textAlign: textAlign,
+                                uppercase: true,
                                 style: TextStyle(
                                   color: Colors.white,
                                   fontSize: compact ? 32 : 48,
@@ -131,13 +178,25 @@ class CatalogCollectionPresentationHeader extends StatelessWidget {
                                   letterSpacing: 0.8,
                                 ),
                               ),
-                              if (description.isNotEmpty) ...[
+                              if (description.isNotEmpty ||
+                                  (editing?.showsEmpty(
+                                        CatalogCollectionField.description,
+                                      ) ??
+                                      false)) ...[
                                 const SizedBox(height: 16),
-                                Text(
-                                  description,
+                                _text(
+                                  CatalogCollectionField.description,
+                                  shown: description,
+                                  own: presentation.heroDescription,
+                                  placeholder: editing?.fallbackDescription
+                                              .trim()
+                                              .isNotEmpty ==
+                                          true
+                                      ? editing!.fallbackDescription
+                                      : 'Texto bajo el título',
                                   textAlign: textAlign,
+                                  uppercase: false,
                                   maxLines: compact ? 3 : 4,
-                                  overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     color: Colors.white.withValues(alpha: 0.92),
                                     fontSize: compact ? 14 : 16,
@@ -167,6 +226,50 @@ class CatalogCollectionPresentationHeader extends StatelessWidget {
             items: subcategories,
           ),
       ],
+    );
+  }
+
+  static const TextStyle _eyebrowStyle = TextStyle(
+    color: Colors.white,
+    fontSize: 11,
+    fontWeight: FontWeight.w800,
+    letterSpacing: 1.8,
+  );
+
+  /// A portada text: as the page shows it, or — in the editor — written in
+  /// place. The editor is handed what the customer sees ([shown]: the
+  /// category's name while the portada has no title of its own), so the
+  /// canvas never draws a placeholder where the site draws a title; writing
+  /// over it gives the portada its own, and emptying it goes back to the
+  /// category's. [own] is the presentation's value, for the optional label.
+  Widget _text(
+    CatalogCollectionField field, {
+    required String shown,
+    required String own,
+    required String placeholder,
+    required TextAlign textAlign,
+    required bool uppercase,
+    required TextStyle style,
+    int? maxLines,
+  }) {
+    final editing = this.editing;
+    if (editing == null) {
+      return Text(
+        uppercase ? shown.toUpperCase() : shown,
+        textAlign: textAlign,
+        maxLines: maxLines,
+        overflow: maxLines == null ? null : TextOverflow.ellipsis,
+        style: style,
+      );
+    }
+    return editing.text(
+      field,
+      text: field == CatalogCollectionField.eyebrow ? own : shown,
+      style: style,
+      textAlign: textAlign,
+      placeholder: placeholder,
+      uppercase: uppercase,
+      maxLines: maxLines,
     );
   }
 }

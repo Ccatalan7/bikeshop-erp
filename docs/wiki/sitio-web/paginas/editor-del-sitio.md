@@ -106,8 +106,14 @@ catálogo de bloques que el «+» de la página. En una página de catálogo lis
 propias secciones; en el carrito o una ficha de producto dice que la página no
 tiene secciones propias. «Capas» ya no está en «Agregar» `[Repo]`.
 
-Pendiente ([estado-y-pendientes](estado-y-pendientes.md)): las plantillas de
-categoría y de ficha de producto en el lienzo (etapa 3).
+**Las categorías en el lienzo (etapa 3a, 2026-10-06):** `/productos` y cada
+categoría se editan sobre su página igual que Servicios — portada escrita en la
+página, tarjetas, filtros y Google al costado; detalle en
+[catálogo y fichas](catalogo-y-fichas.md) `[Repo]`.
+
+Pendiente ([estado-y-pendientes](estado-y-pendientes.md)): una plantilla que
+cambie las 11 categorías a la vez, la ficha de producto en el lienzo, copiar
+secciones entre páginas y el historial de versiones (etapa 3b).
 
 ## Bloques
 
@@ -178,6 +184,12 @@ geometría pasa la prueba real de iOS
   La página que está en pantalla y es dueña del documento se publica a sí misma
   (`publishBlockCanvas`, desde `WebsiteEditorDocumentBinding.bind`) y se retira
   fuera de pantalla y al desecharse; la lista lee eso `[Repo 2026-10-06]`.
+- Recargar en caliente (`r`) no inicializa un campo nuevo en un objeto que ya
+  existía: el contexto que la página de catálogo había publicado antes de la
+  recarga traía `collection` en nulo y el panel mostró «type 'Null' is not a
+  subtype of type 'bool'». No es un defecto: después de agregar un campo a un
+  modelo vivo se reinicia (`R`) antes de juzgar la pantalla
+  `[Repo 2026-10-06]`.
 - El registro de presentaciones del catálogo es **una fila** con todas las
   categorías: leerlo y escribirlo entero deja que dos sesiones se pisen. Se
   escribe como «comparar y reemplazar» sobre su `updated_at`, releyendo ante un

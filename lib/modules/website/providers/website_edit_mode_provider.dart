@@ -3155,10 +3155,21 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _notifyAfterFrame();
   }
 
-  /// The composition that drew the block page left the canvas.
+  /// The composition that drew the block page left the canvas. A block of
+  /// its document that was selected goes with it: the inspector must not keep
+  /// editing a page that is no longer in view (the header and the footer stay,
+  /// they are on every page).
   void releaseBlockCanvas(Object publisher) {
     if (!identical(_blockCanvasPublisher, publisher)) return;
     _blockCanvasPublisher = null;
+    final selected = _selectedBlockId;
+    if (selected != null &&
+        WebsiteEditorChromeTarget.forSelection(selected) == null &&
+        WebsiteCatalogSectionTarget.parse(selected) == null) {
+      _selectedBlockId = null;
+      _resetCanvasTouchMode();
+      _selectionVersion++;
+    }
     _notifyAfterFrame();
   }
 
@@ -3167,8 +3178,15 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   bool isCatalogSectionAvailable(WebsiteCatalogSectionTarget target) {
     final canvas = _catalogCanvas;
     if (canvas == null || canvas.ownerId != target.ownerId) return false;
-    if (target.section == WebsiteCatalogSection.page) return true;
-    return effectiveCatalogPresentation(canvas.saved).isPriceList;
+    final priceList = canvas.offersPriceList &&
+        effectiveCatalogPresentation(canvas.saved).isPriceList;
+    return switch (target.section) {
+      // The page itself, and its items: the price list's or the grid's.
+      WebsiteCatalogSection.page || WebsiteCatalogSection.list => true,
+      // A portada: the price list's, or a category's own over its grid.
+      WebsiteCatalogSection.hero => priceList || canvas.collection,
+      WebsiteCatalogSection.plans || WebsiteCatalogSection.closing => priceList,
+    };
   }
 
   void _dropUnavailableCatalogSelection() {

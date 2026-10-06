@@ -44,6 +44,7 @@ WebsiteCatalogCanvasContext _canvas() => WebsiteCatalogCanvasContext(
             id: 'frenos', name: 'Frenos', itemCount: 8),
       ],
       ratingSummary: '4,4 de 5 · 36 reseñas',
+      offersPriceList: true,
     );
 
 final _publisher = Object();

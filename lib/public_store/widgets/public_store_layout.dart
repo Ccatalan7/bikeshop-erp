@@ -4048,6 +4048,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     WebsiteEditModeProvider editProvider,
   ) {
     final slug = _getCurrentSlugFromRoute(context, editProvider);
+    // A category on the canvas names itself (its route is only its address).
+    final canvas = editProvider.catalogCanvas;
+    if (slug.startsWith('!path:') && canvas != null && canvas.collection) {
+      return 'Página: ${canvas.rootLabel}';
+    }
     // The page by its name, as the page picker lists it; a CMS page by its
     // title; a route without one by its path.
     const names = <String, String>{

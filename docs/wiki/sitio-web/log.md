@@ -4,6 +4,11 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-06 — corrección — [catálogo](paginas/catalogo-y-fichas.md) y
+  [editor](paginas/editor-del-sitio.md): etapa 3a, `/productos` y las 11
+  categorías se editan sobre su página; la trampa de la recarga en caliente
+  con un campo nuevo; [estado](paginas/estado-y-pendientes.md) con el ERP
+  1.0.12 publicado y la etapa 3b pendiente.
 - 2026-10-06 — corrección — [editor](paginas/editor-del-sitio.md): etapa 2b,
   la lista «Secciones» (columna a la izquierda desde 1584 px o el panel sin
   selección) y la trampa del documento que sobrevive a su página;

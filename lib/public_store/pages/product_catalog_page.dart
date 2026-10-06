@@ -1627,7 +1627,29 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     return node.getAllDescendantIds();
   }
 
-  WebsiteCatalogPresentation? _presentationForCategory(String? categoryId) {
+  /// The editor this page draws for, while it is in Edit or Preview: the
+  /// presentation drawn is its draft. Routes and the address never read it.
+  WebsiteEditModeProvider? _drawingEditor;
+
+  /// What the page draws for [categoryId]: the editor's draft while one is
+  /// open, else as saved. Only for what is drawn — the portada, the trail,
+  /// the filters and the grid; the category's route always reads the saved
+  /// value, so an unsaved draft never moves a link.
+  WebsiteCatalogPresentation? _shownPresentationForCategory(
+    String? categoryId,
+  ) {
+    final saved = _savedPresentationForCategory(categoryId);
+    final editor = _drawingEditor;
+    if (saved == null || editor == null) return saved;
+    return editor.effectiveCatalogPresentation(saved);
+  }
+
+  WebsiteCatalogPresentation? _presentationForCategory(String? categoryId) =>
+      _savedPresentationForCategory(categoryId);
+
+  WebsiteCatalogPresentation? _savedPresentationForCategory(
+    String? categoryId,
+  ) {
     if (categoryId == null) {
       final root = _selectedProductType == ProductType.service
           ? WebsiteCatalogRoot.services
@@ -2606,7 +2628,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   Widget _buildCollectionIntroduction({required bool compact}) {
     final selectedId = _selectedCategoryId;
     final category = selectedId == null ? null : _allCategoriesById[selectedId];
-    final presentation = _presentationForCategory(selectedId);
+    final presentation = _shownPresentationForCategory(selectedId);
     if (category == null || presentation == null) {
       return const SizedBox.shrink();
     }
@@ -2627,25 +2649,181 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
               _countProductsInCategoryTree(child, null) > 0,
         )
         .toList(growable: false);
-    return CatalogCollectionPresentationHeader(
-      presentation: presentation,
-      title: title,
-      description: description,
-      imageUrl: imageUrl,
-      compact: compact,
-      // The hierarchy is rendered in the catalog heading below the hero so it
-      // replaces the generic title instead of creating a separate white row.
-      breadcrumbs: const [],
-      subcategories: visibleChildren
-          .map(
-            (child) => CatalogCollectionNavigationItem(
-              id: child.id,
-              label: child.name,
-              onTap: () => _selectCategory(child.id),
-              href: _publicCategoryHref(child.id),
-            ),
-          )
-          .toList(growable: false),
+    final editing = _canvasEditing;
+    return _canvasSection(
+      WebsiteCatalogSection.hero,
+      CatalogCollectionPresentationHeader(
+        presentation: presentation,
+        title: title,
+        description: description,
+        imageUrl: imageUrl,
+        compact: compact,
+        editing: editing == null
+            ? null
+            : _collectionEditing(editing.editor, editing.ownerId, category),
+        // The hierarchy is rendered in the catalog heading below the hero so
+        // it replaces the generic title instead of creating a separate white
+        // row.
+        breadcrumbs: const [],
+        subcategories: visibleChildren
+            .map(
+              (child) => CatalogCollectionNavigationItem(
+                id: child.id,
+                label: child.name,
+                // On the canvas a tap chooses the portada, as on any
+                // section; the subcategories open in Ver como cliente.
+                onTap: editing == null ? () => _selectCategory(child.id) : null,
+                href: _publicCategoryHref(child.id),
+              ),
+            )
+            .toList(growable: false),
+      ),
+    );
+  }
+
+  /// While Edit draws this page on the canvas: the editor, and the owner of
+  /// the presentation its sections edit. Null on the public site, in Preview
+  /// and while another page is in front.
+  ({WebsiteEditModeProvider editor, String ownerId})? get _canvasEditing {
+    final editor = _drawingEditor;
+    if (editor == null || !editor.isEditMode || !TickerMode.of(context)) {
+      return null;
+    }
+    final saved = _savedPresentationForCategory(_selectedCategoryId);
+    if (saved == null) return null;
+    return (editor: editor, ownerId: saved.ownerId);
+  }
+
+  /// [child] as a section of the page on the canvas: selected on a tap, with
+  /// its name, like a block. As is anywhere else.
+  Widget _canvasSection(WebsiteCatalogSection section, Widget child) {
+    final editing = _canvasEditing;
+    if (editing == null) return child;
+    final target = WebsiteCatalogSectionTarget(editing.ownerId, section);
+    final label = target.labelFor(noun: _catalogNounPlural());
+    return WebsiteEditorSelectableSurface(
+      key: ValueKey('catalog-section-${target.selectionId}'),
+      selectionId: target.selectionId,
+      label: label,
+      semanticsLabel: '$label de la página',
+      child: child,
+    );
+  }
+
+  /// The category portada's texts, written on the page and staged into the
+  /// editor's draft, saved by its «Guardar».
+  CatalogCollectionEditing _collectionEditing(
+    WebsiteEditModeProvider editor,
+    String ownerId,
+    _CategoryNode category,
+  ) {
+    final target = WebsiteCatalogSectionTarget(
+      ownerId,
+      WebsiteCatalogSection.hero,
+    );
+    void stage(CatalogCollectionField field, String raw) {
+      final saved = _savedPresentationForCategory(_selectedCategoryId);
+      if (saved == null || saved.ownerId != ownerId) return;
+      final current = editor.effectiveCatalogPresentation(saved);
+      final value = field == CatalogCollectionField.description
+          ? raw
+          : raw.replaceAll(RegExp(r'\s*\n\s*'), ' ');
+      editor.stageCatalogPresentation(
+        switch (field) {
+          CatalogCollectionField.eyebrow =>
+            current.copyWith(heroEyebrow: value),
+          CatalogCollectionField.title => current.copyWith(heroTitle: value),
+          CatalogCollectionField.description =>
+            current.copyWith(heroDescription: value),
+        },
+        saved: saved,
+      );
+    }
+
+    return CatalogCollectionEditing(
+      showsEmpty: (_) => editor.selectedBlockId == target.selectionId,
+      fallbackTitle: category.name,
+      fallbackDescription: category.description,
+      text: (
+        field, {
+        required text,
+        required style,
+        required textAlign,
+        required placeholder,
+        required uppercase,
+        maxLines,
+      }) =>
+          InlineEditableTextV2(
+        key: ValueKey('catalog-inline-$ownerId-${field.name}'),
+        text: text,
+        baseStyle: style,
+        textAlign: textAlign,
+        isEditMode: true,
+        placeholder: placeholder,
+        fieldKey: 'catalog-$ownerId-${field.name}',
+        toolbarPreset: TextToolbarPreset.textOnly,
+        allowWidthResize: false,
+        editorPadding: EdgeInsets.zero,
+        displayTransform: uppercase ? (value) => value.toUpperCase() : null,
+        maxLines: maxLines,
+        onSessionStart: () {
+          if (editor.selectedBlockId != target.selectionId) {
+            editor.selectBlock(target.selectionId);
+          }
+          return target;
+        },
+        onSessionCommit: (session, commit) {
+          if (commit.text != text) stage(field, commit.text);
+          return true;
+        },
+        onSessionCancel: (_) {},
+      ),
+    );
+  }
+
+  /// The grid page on the canvas as the editor reads it: `/servicios` laid
+  /// out as a grid, `/productos`, or a published category under either.
+  WebsiteCatalogCanvasContext? _gridCanvas(
+    WebsiteCatalogPresentation? servicesSaved,
+  ) {
+    final categoryId = _selectedCategoryId;
+    final services = _selectedProductType == ProductType.service;
+    if (categoryId == null) {
+      final saved = servicesSaved ??
+          (services ? null : _savedPresentationForCategory(null));
+      if (saved == null) return null;
+      return WebsiteCatalogCanvasContext(
+        saved: saved,
+        rootLabel: services ? 'Servicios' : 'Productos',
+        noun: services ? 'servicios' : 'productos',
+        itemCount: _totalProductCount,
+        groupCount: 0,
+        planCount: 0,
+        categories: const [],
+        offersPriceList: services,
+      );
+    }
+    final category = _allCategoriesById[categoryId];
+    final saved = _savedPresentationForCategory(categoryId);
+    if (category == null || saved == null) return null;
+    final children = [
+      for (final child in category.children)
+        if (child.isPublished && _countProductsInCategoryTree(child, null) > 0)
+          WebsiteCatalogCanvasCategory(
+            id: child.id,
+            name: child.name,
+            itemCount: _countProductsInCategoryTree(child, null),
+          ),
+    ];
+    return WebsiteCatalogCanvasContext(
+      saved: saved,
+      rootLabel: category.name,
+      noun: services ? 'servicios' : 'productos',
+      itemCount: _totalProductCount,
+      groupCount: children.length,
+      planCount: 0,
+      categories: children,
+      collection: true,
     );
   }
 
@@ -2938,6 +3116,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                   '${rating.label} de 5',
                   if (rating.totalLabel.isNotEmpty) rating.totalLabel,
                 ].join(' · '),
+          offersPriceList: true,
         );
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) _describeCanvas(editProvider, canvas);
@@ -3014,17 +3193,26 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     }
 
     // Debug: build
-    if (_isLoading) {
-      return const FullPageLoading();
-    }
-    if (_categoryRouteError != null) {
-      return _buildUnavailableCategoryState();
-    }
-    if (_catalogLoadError != null) {
+    if (_isLoading ||
+        _categoryRouteError != null ||
+        _catalogLoadError != null) {
+      // No catalog page is on the canvas while it loads or cannot be shown:
+      // the one this State described before (another category, say) must
+      // not stay selectable and editable under an error.
+      if (_publishedCanvasEditor != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _describeCanvas(editProvider, null);
+        });
+      }
+      if (_isLoading) return const FullPageLoading();
+      if (_categoryRouteError != null) {
+        return _buildUnavailableCategoryState();
+      }
       return _buildCatalogLoadErrorState();
     }
     final authoring = editProvider.isEditMode || editProvider.isPreviewMode;
     if (authoring) _followSavedPresentations();
+    _drawingEditor = authoring ? editProvider : null;
     // The page describes itself to the editor only while it is the one on
     // the canvas: a route pushed over it keeps it mounted underneath with its
     // tickers off, and TickerMode rebuilds it when that changes. Preview
@@ -3051,19 +3239,12 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         return priceList;
       }
     }
-    if (onCanvas && servicesSaved != null) {
-      // Laid out as a grid, the page still has its own settings.
-      final canvas = WebsiteCatalogCanvasContext(
-        saved: servicesSaved,
-        rootLabel: 'Servicios',
-        noun: 'servicios',
-        itemCount: _totalProductCount,
-        groupCount: 0,
-        planCount: 0,
-        categories: const [],
-      );
+    final gridCanvas = onCanvas ? _gridCanvas(servicesSaved) : null;
+    if (gridCanvas != null) {
+      // A grid page — /servicios laid out as one, /productos or a category —
+      // still has its own sections and settings.
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _describeCanvas(editProvider, canvas);
+        if (mounted) _describeCanvas(editProvider, gridCanvas);
       });
     } else if (_publishedCanvasEditor != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -3355,7 +3536,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   /// renders its own titled header with a close button. Emitting the rail's
   /// title there stacked two "Filtros" headings on top of each other.
   Widget _buildFilters({VoidCallback? refreshPanel, bool showTitle = true}) {
-    final presentation = _presentationForCategory(_selectedCategoryId);
+    final presentation = _shownPresentationForCategory(_selectedCategoryId);
     final facets =
         presentation?.facets ?? WebsiteCatalogPresentation.defaultFacets;
     final sections = <Widget>[];
@@ -4386,7 +4567,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
 
   Widget _buildCatalogHeading({required bool compact}) {
     final selectedId = _selectedCategoryId;
-    final presentation = _presentationForCategory(selectedId);
+    final presentation = _shownPresentationForCategory(selectedId);
     final showHierarchy =
         selectedId != null && presentation?.showBreadcrumbs == true;
     final path =
@@ -4526,9 +4707,29 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
         ? _filteredProducts
         : _filteredProducts.sublist(startIndex, endIndex);
     final gridDensity =
-        _presentationForCategory(_selectedCategoryId)?.gridDensity ??
+        _shownPresentationForCategory(_selectedCategoryId)?.gridDensity ??
             WebsiteCatalogGridDensity.balanced;
 
+    // On the canvas the grid is a section: a tap chooses it, and a card does
+    // not open its product (that is Ver como cliente's).
+    final onCanvas = _canvasEditing != null;
+    return _canvasSection(
+      WebsiteCatalogSection.list,
+      _buildProductGridBody(
+        paginatedProducts: paginatedProducts,
+        gridDensity: gridDensity,
+        totalPages: totalPages,
+        inert: onCanvas,
+      ),
+    );
+  }
+
+  Widget _buildProductGridBody({
+    required List<Product> paginatedProducts,
+    required WebsiteCatalogGridDensity gridDensity,
+    required int totalPages,
+    required bool inert,
+  }) {
     return MediaQueryLayoutBuilder(
       key: const ValueKey('product_grid_layout'),
       builder: (context, constraints) {
@@ -4567,6 +4768,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
                       return _CatalogProductCard(
                         key: ValueKey<String>('catalog-product-${product.id}'),
                         product: product,
+                        inert: inert,
                       );
                     },
                   ),
@@ -4774,9 +4976,13 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
 class _CatalogProductCard extends StatefulWidget {
   final Product product;
 
+  /// On the editor's canvas a card is part of its section and opens nothing.
+  final bool inert;
+
   const _CatalogProductCard({
     super.key,
     required this.product,
+    this.inert = false,
   });
 
   @override
@@ -4814,8 +5020,12 @@ class _CatalogProductCardState extends State<_CatalogProductCard> {
         cursor: SystemMouseCursors.click,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
-          onTap: () => PublicStoreLayout.navigateToHref(
-              context, publicProductPath(product)),
+          onTap: widget.inert
+              ? null
+              : () => PublicStoreLayout.navigateToHref(
+                    context,
+                    publicProductPath(product),
+                  ),
           child: AnimatedContainer(
             duration: hoverDuration,
             curve: Curves.easeOutCubic,

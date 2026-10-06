@@ -20,10 +20,10 @@ Se actualiza cada vez que algo cambia de estado; cada línea con su fecha.
   página del pedido, el portal y el login (2026-10-06, `32336525`); Flutter
   sólo arranca en los chats del portal, la descarga de la app del personal,
   `/auth/callback` y al canjear un enlace del correo.
-- ERP 1.0.11 (macOS `macos-v1.0.11-322` y Android, APK 2086) publicado desde
-  `fea927df` (2026-10-06): `/servicios` se edita sobre la página (etapa 1 del
-  rediseño) y la barra de arriba con los tres lugares y «Guardar» siempre
-  arriba (etapa 2a). La lista «Secciones» (etapa 2b) va en la siguiente.
+- ERP 1.0.12 (macOS `macos-v1.0.12-325` y Android, APK 2087) publicado desde
+  `b4b4d810` (2026-10-06): la lista «Secciones» (etapa 2b), sobre la 1.0.11
+  (`fea927df`: `/servicios` sobre la página y la barra con «Guardar» siempre
+  arriba). Las categorías sobre su página (etapa 3a) van en la siguiente.
 - Las páginas que crea el editor (`/pagina/<slug>`) las dibuja el servidor
   HTML con texto, botón, separador, preguntas, llamado a la acción,
   características, «sobre nosotros» y los bloques de la portada (fase 5a,
@@ -71,7 +71,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 | 2026-09-24 | Imágenes pesadas: campaña de cámaras en PNG de 2 MB, WebP de 312 KB en la grilla de categorías | [rendimiento](rendimiento.md) |
 | 2026-09-26 | Login `/cuenta/login` sin la dirección «Sendero» | [portal](portal-de-clientes.md) |
 | 2026-10-06 | **Rediseño de los bloques del editor:** propuesta en Claude Design con datos reales (cifras, carta del taller, mantenciones, reseñas, galería, equipo, preguntas, marcas, llamado); espera el visto bueno del dueño, y la tercera tanda de la fase 5a espera eso | `docs/architecture/storefront-html-migration-plan.md` |
-| 2026-10-06 | **Rediseño del editor (propuesta aprobada, «dale, construye la propuesta del editor»):** hechas la etapa 1 (`/servicios` se edita sobre la página), la 2a (la barra de arriba con los tres lugares y «Guardar» siempre visible) y la 2b (la lista «Secciones» a la izquierda, para todas las páginas), ver [editor](editor-del-sitio.md). Falta la **etapa 3**: las plantillas de categoría y de ficha de producto en el lienzo, copiar secciones entre páginas y el historial de versiones. Propuesta: página «El editor: hoy, Shopify, Wix y propuesta» de https://claude.ai/artifact/Eg75Q9vj2oZYWKiyGFDCHU | [editor](editor-del-sitio.md) |
+| 2026-10-06 | **Rediseño del editor (propuesta aprobada, «dale, construye la propuesta del editor»):** hechas la etapa 1 (`/servicios` se edita sobre la página), la 2a (la barra de arriba con los tres lugares y «Guardar» siempre visible) la 2b (la lista «Secciones» a la izquierda, para todas las páginas) y la 3a (`/productos` y las categorías sobre su página), ver [editor](editor-del-sitio.md). Falta la **etapa 3b**: una plantilla para las 11 categorías a la vez, las plantillas de categoría y de ficha de producto en el lienzo, copiar secciones entre páginas y el historial de versiones. Propuesta: página «El editor: hoy, Shopify, Wix y propuesta» de https://claude.ai/artifact/Eg75Q9vj2oZYWKiyGFDCHU | [editor](editor-del-sitio.md) |
 | 2026-10-06 | **Lienzo del editor en HTML:** el sitio real en un visor web dentro del ERP (requisito 1 del dueño); los chats se quedan en Flutter (7 conversaciones del portal en total, 0 en 90 días) | `docs/architecture/storefront-html-migration-plan.md` |
 | 2026-10-06 | Pasar al HTML el canje de los enlaces de Auth (vuelta de Google en `/auth/callback`, confirmar con `code`), hoy en Flutter: el verificador PKCE ya está donde ambos lo leen | `docs/architecture/storefront-html-migration-plan.md` |
 | 2026-10-03 | Código muerto: `banners_management_page.dart`, `content_management_page.dart`, `customer_account_page.dart`, `premium_dashboard_widgets.dart`, ruta `/cuenta/mensajes`; clave `header_nav_links` | [editor](editor-del-sitio.md) |

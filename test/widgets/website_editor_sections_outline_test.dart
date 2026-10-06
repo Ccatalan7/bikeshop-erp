@@ -167,7 +167,7 @@ void main() {
       expect(_row('footer'), findsOneWidget);
       expect(find.text('Sobre Viñabike'), findsOneWidget);
       expect(find.text('Productos Destacados'), findsOneWidget);
-      expect(find.text('oculta'), findsOneWidget);
+      expect(find.textContaining('oculta · MARCAS'), findsOneWidget);
       expect(find.text('Agregar sección'), findsOneWidget);
 
       final top = tester.getTopLeft(_row('header')).dy;
@@ -203,7 +203,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(provider.getBlock('brands-1')!['is_visible'], isTrue);
       expect(provider.hasUnsavedChanges, isTrue);
-      expect(find.text('oculta'), findsNothing);
+      expect(find.textContaining('oculta'), findsNothing);
     });
 
     testWidgets('the menu moves, duplicates and — confirmed — deletes',

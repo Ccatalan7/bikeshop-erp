@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-editor-categories-on-canvas",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android"
+  ],
+  "title": "Las categorías se editan sobre su página",
+  "summary": "En el editor del sitio, cada categoría y la página de productos se editan como Servicios: la lista muestra su portada y sus productos, y el panel, sólo lo de la sección elegida: textos, foto, alto, tarjetas, filtros y Google.",
+  "items": [
+    "La portada de una categoría muestra su nombre como lo ve el cliente; escribir encima le da un título propio y vaciarlo vuelve al de la categoría.",
+    "El tamaño de las tarjetas y los filtros se ven cambiar en la página antes de guardar; los enlaces y la dirección siguen usando lo guardado.",
+    "Al dejar una página, el panel ya no sigue mostrando un bloque de la página anterior."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/website/models/website_catalog_canvas.dart",
+      "sha256": "a305a09dacbb1822b2522ad0f80855265e830c248ce922d5b626fcccde0e66f3"
+    },
+    {
+      "path": "lib/modules/website/providers/website_edit_mode_provider.dart",
+      "sha256": "2c2fe9f957776bdb7be6b2ed046951922efa1aef49c550cc0c307be24802558d"
+    },
+    {
+      "path": "lib/modules/website/widgets/editor_panel/catalog_section_controls.dart",
+      "sha256": "7abaf7b0ee0798dda3c71750827ee585ac39146c77ccf8f13c6a83abb8febf96"
+    },
+    {
+      "path": "lib/modules/website/widgets/editor_panel/sections_outline.dart",
+      "sha256": "12e36d29d42c681dd8013af460e4861c09d4945a67687877a1f0581f4d3e8e4f"
+    },
+    {
+      "path": "lib/modules/website/widgets/editor_panel/shared_field_widgets.dart",
+      "sha256": "b735ed0a42f36ca0e4f4e41a0e62007b6c258858c92dd5e175e4f13b09e97b9b"
+    },
+    {
+      "path": "lib/public_store/pages/product_catalog_page.dart",
+      "sha256": "af760ed453682da5438d6897ce4c7f824ce7cdbcc80f4d706c796a5920fbe4fe"
+    },
+    {
+      "path": "lib/public_store/widgets/catalog_collection_presentation.dart",
+      "sha256": "a09f5301bc0d828f2592ce171d34e299137b0267f12c6a65cec92f6e5be280f0"
+    },
+    {
+      "path": "lib/public_store/widgets/public_store_layout.dart",
+      "sha256": "30bce3f940f496fc62258234b0aa54f223c7673ee8df668abf9ef86801dc6619"
+    }
+  ]
+}

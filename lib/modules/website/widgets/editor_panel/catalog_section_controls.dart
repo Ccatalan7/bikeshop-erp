@@ -18,12 +18,33 @@ WebsiteCatalogPresentation _savedCatalogPresentation(
           : WebsiteCatalogPresentation.catalogRoot(root));
 }
 
-/// Leaves the editor for Inventario's services, through the same guard as
-/// any other exit (save or discard first).
+/// Where the catalog page's content is changed: a category's, in its
+/// categories; a catalog's items, in its own list.
+({String route, String label}) _catalogSourceFor(
+  WebsiteCatalogCanvasContext? canvas,
+) {
+  if (canvas != null && canvas.collection) {
+    return (
+      route: '/inventory/categories',
+      label: 'Abrir categorías en Inventario'
+    );
+  }
+  if (canvas != null && canvas.noun == 'productos') {
+    return (
+      route: '/inventory/products',
+      label: 'Abrir productos en Inventario'
+    );
+  }
+  return (route: '/inventory/services', label: 'Abrir servicios en Inventario');
+}
+
+/// Leaves the editor for Inventario, through the same guard as any other
+/// exit (save or discard first).
 Future<void> _openCatalogSource(
   BuildContext context,
   WebsiteEditModeProvider provider,
 ) async {
+  final route = _catalogSourceFor(provider.catalogCanvas).route;
   final decision = await WebsiteEditorNavigationGuard.authorize(
     context,
     intent: WebsiteEditorNavigationIntent.leaveEditor,
@@ -31,7 +52,7 @@ Future<void> _openCatalogSource(
   if (!decision.isAllowed || !context.mounted) return;
   if (!decision.commit()) return;
   provider.closeEditor();
-  context.go('/inventory/services');
+  context.go(route);
 }
 
 /// «Lo que viene del catálogo»: what a section reads and where it changes.
@@ -86,9 +107,12 @@ class _CatalogSourceNote extends StatelessWidget {
               minimumSize: const Size(0, 40),
             ),
             icon: const Icon(Icons.open_in_new_rounded, size: 16),
-            label: const Text(
-              'Abrir servicios en Inventario',
-              style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+            label: Text(
+              _catalogSourceFor(provider.catalogCanvas).label,
+              style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
@@ -123,12 +147,19 @@ class _CatalogSectionControls extends StatelessWidget {
     void stage(WebsiteCatalogPresentation next) =>
         provider.stageCatalogPresentation(next, saved: saved);
 
+    final offersPriceList = canvas?.offersPriceList ?? true;
+    final priceList = offersPriceList && value.isPriceList;
     final children = switch (target.section) {
-      WebsiteCatalogSection.hero => _hero(context, value, canvas, stage),
+      WebsiteCatalogSection.hero => canvas?.collection == true
+          ? _collectionHero(context, value, canvas!, stage)
+          : _hero(context, value, canvas, stage),
       WebsiteCatalogSection.plans => _plans(context, value, canvas, stage),
-      WebsiteCatalogSection.list => _list(context, canvas),
+      WebsiteCatalogSection.list => priceList
+          ? _list(context, canvas)
+          : _gridList(context, value, canvas, stage),
       WebsiteCatalogSection.closing => _closing(context, value, stage),
-      WebsiteCatalogSection.page => _page(context, value, stage),
+      WebsiteCatalogSection.page =>
+        _page(context, value, stage, offersPriceList: offersPriceList),
     };
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -337,6 +368,204 @@ class _CatalogSectionControls extends StatelessWidget {
     ];
   }
 
+  /// A category's portada: its own texts and look over the category's name,
+  /// description and photo, which stay the category's.
+  List<Widget> _collectionHero(
+    BuildContext context,
+    WebsiteCatalogPresentation value,
+    WebsiteCatalogCanvasContext canvas,
+    ValueChanged<WebsiteCatalogPresentation> stage,
+  ) {
+    return [
+      _CollapsibleSection(
+        title: 'Textos',
+        icon: Icons.short_text_rounded,
+        children: [
+          const _CatalogHelp(
+            'También se escriben directo en la página: toca el texto. Vacíos, '
+            'la portada muestra el nombre y la descripción de la categoría.',
+          ),
+          _EditorTextField(
+            key: const ValueKey('catalog-hero-eyebrow'),
+            label: 'Etiqueta sobre el título',
+            value: value.heroEyebrow,
+            hint: 'Opcional, en mayúsculas',
+            onChanged: (text) => stage(value.copyWith(heroEyebrow: text)),
+          ),
+          const SizedBox(height: 12),
+          _EditorTextField(
+            key: const ValueKey('catalog-hero-title'),
+            label: 'Título',
+            value: value.heroTitle,
+            hint: canvas.rootLabel,
+            onChanged: (text) => stage(value.copyWith(heroTitle: text)),
+          ),
+          const SizedBox(height: 12),
+          _EditorTextField(
+            key: const ValueKey('catalog-hero-intro'),
+            label: 'Texto bajo el título',
+            value: value.heroDescription,
+            hint: 'Vacío usa la descripción de la categoría',
+            maxLines: 4,
+            onChanged: (text) => stage(value.copyWith(heroDescription: text)),
+          ),
+        ],
+      ),
+      _CollapsibleSection(
+        title: 'Foto y color',
+        icon: Icons.image_outlined,
+        children: [
+          _ImagePicker(
+            currentUrl: value.heroImageUrl.isEmpty ? null : value.heroImageUrl,
+            onChanged: (url) => stage(value.copyWith(heroImageUrl: url.trim())),
+          ),
+          if (value.heroImageUrl.isNotEmpty)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => stage(value.copyWith(heroImageUrl: '')),
+                icon: const Icon(Icons.close_rounded, size: 16),
+                label: const Text('Quitar la foto'),
+              ),
+            )
+          else
+            const _CatalogHelp(
+              'Sin foto propia, usa la de la categoría; sin ninguna, el color '
+              'de la marca.',
+            ),
+          const SizedBox(height: 6),
+          _CatalogOverlaySlider(
+            value: value.heroOverlay,
+            onChanged: (overlay) => stage(value.copyWith(heroOverlay: overlay)),
+          ),
+        ],
+      ),
+      _CollapsibleSection(
+        title: 'Alto y alineación',
+        icon: Icons.height_rounded,
+        initiallyExpanded: false,
+        children: [
+          VbSegmented<WebsiteCatalogHeroSize>(
+            groupLabel: 'Alto de la portada',
+            value: value.heroSize,
+            options: [
+              for (final size in WebsiteCatalogHeroSize.values)
+                VbSegmentedOption(value: size, label: size.label),
+            ],
+            onChanged: (size) => stage(value.copyWith(heroSize: size)),
+          ),
+          const SizedBox(height: 12),
+          VbSegmented<WebsiteCatalogHeroAlignment>(
+            groupLabel: 'Alineación de la portada',
+            value: value.heroAlignment,
+            options: [
+              for (final alignment in WebsiteCatalogHeroAlignment.values)
+                VbSegmentedOption(value: alignment, label: alignment.label),
+            ],
+            onChanged: (alignment) =>
+                stage(value.copyWith(heroAlignment: alignment)),
+          ),
+        ],
+      ),
+      _CollapsibleSection(
+        title: 'Subcategorías',
+        icon: Icons.account_tree_outlined,
+        initiallyExpanded: false,
+        children: [
+          _EditorToggle(
+            label: 'Mostrarlas bajo la portada',
+            value: value.showSubcategories,
+            onChanged: (show) => stage(value.copyWith(showSubcategories: show)),
+          ),
+          _CatalogHelp(
+            canvas.groupCount == 0
+                ? '${canvas.rootLabel} no tiene subcategorías con productos '
+                    'publicados: no se muestra ninguna.'
+                : '${canvas.groupCount} con productos publicados. Su nombre y '
+                    'su orden son los de sus categorías.',
+          ),
+        ],
+      ),
+    ];
+  }
+
+  /// The product grid of a catalog page: how dense its cards are, which
+  /// filters it offers, and (for a category) the trail above it.
+  List<Widget> _gridList(
+    BuildContext context,
+    WebsiteCatalogPresentation value,
+    WebsiteCatalogCanvasContext? canvas,
+    ValueChanged<WebsiteCatalogPresentation> stage,
+  ) {
+    final noun = canvas?.noun ?? 'productos';
+    void toggleFacet(WebsiteCatalogFacet facet, bool on) {
+      final next = [
+        for (final current in value.facets)
+          if (current != facet) current,
+        if (on) facet,
+      ];
+      stage(value.copyWith(facets: next));
+    }
+
+    return [
+      _CollapsibleSection(
+        title: 'Tarjetas',
+        icon: Icons.grid_view_rounded,
+        children: [
+          VbSegmented<WebsiteCatalogGridDensity>(
+            groupLabel: 'Tamaño de las tarjetas',
+            value: value.gridDensity,
+            options: [
+              for (final density in WebsiteCatalogGridDensity.values)
+                VbSegmentedOption(value: density, label: density.label),
+            ],
+            onChanged: (density) => stage(value.copyWith(gridDensity: density)),
+          ),
+          const SizedBox(height: 8),
+          _CatalogHelp(value.gridDensity.description),
+        ],
+      ),
+      _CollapsibleSection(
+        title: 'Filtros',
+        icon: Icons.filter_list_rounded,
+        children: [
+          for (final facet in WebsiteCatalogFacet.values)
+            _EditorToggle(
+              key: ValueKey('catalog-facet-${facet.name}'),
+              label: facet.label,
+              value: value.facets.contains(facet),
+              onChanged: (on) => toggleFacet(facet, on),
+            ),
+          const _CatalogHelp(
+            'Salen en la columna de la izquierda, en el orden en que se '
+            'encienden. El buscador y los filtros de la ficha técnica salen '
+            'siempre.',
+          ),
+        ],
+      ),
+      if (canvas?.collection == true)
+        _CollapsibleSection(
+          title: 'Ruta',
+          icon: Icons.linear_scale_rounded,
+          initiallyExpanded: false,
+          children: [
+            _EditorToggle(
+              label: 'Mostrar la ruta de categorías sobre los $noun',
+              value: value.showBreadcrumbs,
+              onChanged: (show) => stage(value.copyWith(showBreadcrumbs: show)),
+            ),
+          ],
+        ),
+      _CatalogSourceNote(
+        provider: provider,
+        text: canvas == null
+            ? 'Los $noun y sus fotos se cambian en Inventario.'
+            : '${canvas.itemCount} $noun publicados. Sus nombres, precios y '
+                'fotos se cambian en Inventario, no aquí.',
+      ),
+    ];
+  }
+
   List<Widget> _plans(
     BuildContext context,
     WebsiteCatalogPresentation value,
@@ -462,45 +691,47 @@ class _CatalogSectionControls extends StatelessWidget {
   List<Widget> _page(
     BuildContext context,
     WebsiteCatalogPresentation value,
-    ValueChanged<WebsiteCatalogPresentation> stage,
-  ) {
+    ValueChanged<WebsiteCatalogPresentation> stage, {
+    required bool offersPriceList,
+  }) {
     final saved = _savedCatalogPresentation(context, provider, target.ownerId);
     final losesSections = saved.isPriceList && !value.isPriceList;
     return [
-      _CollapsibleSection(
-        title: 'Diseño',
-        icon: Icons.dashboard_customize_outlined,
-        children: [
-          VbSegmented<WebsiteCatalogLayout>(
-            groupLabel: 'Diseño de la página',
-            value: value.layout,
-            options: const [
-              VbSegmentedOption(
-                value: WebsiteCatalogLayout.priceList,
-                label: 'Lista de precios',
-              ),
-              VbSegmentedOption(
-                value: WebsiteCatalogLayout.grid,
-                label: 'Cuadrícula',
-              ),
-            ],
-            onChanged: (layout) => stage(value.copyWith(layout: layout)),
-          ),
-          const SizedBox(height: 8),
-          _CatalogHelp(
-            value.isPriceList
-                ? 'Portada, planes, todos los servicios con su precio y un '
-                    'cierre. Para un taller con precios fijos.'
-                : 'Tarjetas con foto y filtros, como la tienda.',
-          ),
-          if (losesSections)
-            const _CatalogHelp(
-              'Como cuadrícula no hay portada, planes ni cierre: sus textos se '
-              'borran al guardar.',
-              warning: true,
+      if (offersPriceList)
+        _CollapsibleSection(
+          title: 'Diseño',
+          icon: Icons.dashboard_customize_outlined,
+          children: [
+            VbSegmented<WebsiteCatalogLayout>(
+              groupLabel: 'Diseño de la página',
+              value: value.layout,
+              options: const [
+                VbSegmentedOption(
+                  value: WebsiteCatalogLayout.priceList,
+                  label: 'Lista de precios',
+                ),
+                VbSegmentedOption(
+                  value: WebsiteCatalogLayout.grid,
+                  label: 'Cuadrícula',
+                ),
+              ],
+              onChanged: (layout) => stage(value.copyWith(layout: layout)),
             ),
-        ],
-      ),
+            const SizedBox(height: 8),
+            _CatalogHelp(
+              value.isPriceList
+                  ? 'Portada, planes, todos los servicios con su precio y un '
+                      'cierre. Para un taller con precios fijos.'
+                  : 'Tarjetas con foto y filtros, como la tienda.',
+            ),
+            if (losesSections)
+              const _CatalogHelp(
+                'Como cuadrícula no hay portada, planes ni cierre: sus textos se '
+                'borran al guardar.',
+                warning: true,
+              ),
+          ],
+        ),
       _CollapsibleSection(
         title: 'En Google',
         icon: Icons.travel_explore_rounded,

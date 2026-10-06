@@ -94,6 +94,8 @@ class WebsiteCatalogCanvasContext {
     required this.planCount,
     required this.categories,
     this.ratingSummary,
+    this.collection = false,
+    this.offersPriceList = false,
   });
 
   final WebsiteCatalogPresentation saved;
@@ -115,6 +117,15 @@ class WebsiteCatalogCanvasContext {
   /// «4,4 de 5 · 36 reseñas», or null when the store has no rating.
   final String? ratingSummary;
 
+  /// A category's page: its own portada over the product grid. Its texts,
+  /// photo and look are this presentation's; its name, description and
+  /// products are the category's, edited in Inventario.
+  final bool collection;
+
+  /// The page can be laid out as a price list (`/servicios`); every other
+  /// catalog page is a grid.
+  final bool offersPriceList;
+
   String get ownerId => saved.ownerId;
 
   @override
@@ -127,7 +138,9 @@ class WebsiteCatalogCanvasContext {
       other.groupCount == groupCount &&
       other.planCount == planCount &&
       listEquals(other.categories, categories) &&
-      other.ratingSummary == ratingSummary;
+      other.ratingSummary == ratingSummary &&
+      other.collection == collection &&
+      other.offersPriceList == offersPriceList;
 
   @override
   int get hashCode => Object.hash(
@@ -138,5 +151,7 @@ class WebsiteCatalogCanvasContext {
         planCount,
         Object.hashAll(categories),
         ratingSummary,
+        collection,
+        offersPriceList,
       );
 }

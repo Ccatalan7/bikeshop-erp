@@ -268,7 +268,7 @@ class _BlockSectionsList extends StatelessWidget {
                 cursor: SystemMouseCursors.grab,
                 child: SizedBox(
                   key: ValueKey('website-sections-drag-$id'),
-                  width: _sectionTarget(context, 24),
+                  width: _sectionTarget(context, 20),
                   height: _sectionTarget(context, 36),
                   child: const Icon(Icons.drag_indicator_rounded, size: 18),
                 ),
@@ -322,10 +322,17 @@ List<Widget> _catalogOutlineRows(
     );
   }
 
-  if (!shown.isPriceList) {
+  if (!(canvas.offersPriceList && shown.isPriceList)) {
     return [
+      if (canvas.collection)
+        row(
+          WebsiteCatalogSection.hero,
+          icon: Icons.title_rounded,
+          label: 'Portada',
+          note: shown.heroTitle.trim().isEmpty ? 'con su nombre' : null,
+        ),
       row(
-        WebsiteCatalogSection.page,
+        WebsiteCatalogSection.list,
         icon: Icons.grid_view_rounded,
         label: 'Todos los ${canvas.noun}',
         note: 'del catálogo · ${canvas.itemCount}',
@@ -371,29 +378,37 @@ List<Widget> _catalogOutlineTail(
   String? selected,
 ) {
   final shown = provider.effectiveCatalogPresentation(canvas.saved);
-  final priceList = shown.isPriceList;
+  final priceList = canvas.offersPriceList && shown.isPriceList;
   final pageId =
       WebsiteCatalogSectionTarget(canvas.ownerId, WebsiteCatalogSection.page)
           .selectionId;
+  final singular = canvas.noun == 'servicios' ? 'servicio' : 'producto';
+  final source = priceList
+      ? '${canvas.itemCount} ${canvas.noun} en ${canvas.groupCount} grupos. '
+          'Precios, nombres y lo que incluye cada plan se cambian en el '
+          'servicio, no aquí.'
+      : canvas.collection
+          ? '${canvas.itemCount} ${canvas.noun} en ${canvas.rootLabel}'
+              '${canvas.groupCount > 0 ? ' y sus ${canvas.groupCount} subcategorías' : ''}. '
+              'El nombre, la descripción y la foto de la categoría, y sus '
+              '${canvas.noun}, se cambian en Inventario; aquí, cómo se ven.'
+          : '${canvas.itemCount} ${canvas.noun}. Precios, nombres y fotos se '
+              'cambian en el $singular, no aquí.';
   return [
     _SectionRow(
       key: const ValueKey('website-sections-row-catalog-design'),
-      icon: Icons.tune_rounded,
-      label: 'Diseño y Google',
-      note: priceList ? 'lista de precios' : 'cuadrícula',
+      icon: canvas.offersPriceList
+          ? Icons.tune_rounded
+          : Icons.travel_explore_rounded,
+      label: canvas.offersPriceList ? 'Diseño y Google' : 'En Google',
+      note: canvas.offersPriceList
+          ? (priceList ? 'lista de precios' : 'cuadrícula')
+          : (shown.allowIndexing ? 'se muestra' : 'oculta'),
       selected: selected == pageId,
       onTap: () => provider.selectBlock(pageId),
     ),
     const SizedBox(height: 12),
-    _CatalogSourceNote(
-      provider: provider,
-      text: priceList
-          ? '${canvas.itemCount} ${canvas.noun} en ${canvas.groupCount} '
-              'grupos. Precios, nombres y lo que incluye cada plan se '
-              'cambian en el servicio, no aquí.'
-          : '${canvas.itemCount} ${canvas.noun}. Precios, nombres y '
-              'fotos se cambian en el servicio, no aquí.',
-    ),
+    _CatalogSourceNote(provider: provider, text: source),
   ];
 }
 
@@ -506,7 +521,7 @@ class _SectionRowState extends State<_SectionRow> {
                           ),
                           child: ExcludeSemantics(child: leading),
                         ),
-                      if (widget.leading != null) const SizedBox(width: 4),
+                      if (widget.leading != null) const SizedBox(width: 2),
                       Icon(
                         widget.icon,
                         size: 18,
@@ -529,9 +544,33 @@ class _SectionRowState extends State<_SectionRow> {
                                   fontSize: 13,
                                 ),
                               ),
-                              if (widget.subtitle case final subtitle?)
-                                Text(
-                                  subtitle,
+                              // The second line: what the row is about
+                              // («todo el sitio», «del catálogo · 59», «oculta»)
+                              // and the block's own words. Under the name, so
+                              // the name keeps the whole width at 264 px.
+                              if (widget.note != null ||
+                                  widget.subtitle != null)
+                                Text.rich(
+                                  TextSpan(
+                                    children: [
+                                      if (widget.note case final note?)
+                                        TextSpan(
+                                          text: note,
+                                          style: TextStyle(
+                                            color: noteColor,
+                                            fontWeight: widget.noteTone ==
+                                                    _SectionNoteTone.plain
+                                                ? FontWeight.w400
+                                                : FontWeight.w600,
+                                          ),
+                                        ),
+                                      if (widget.note != null &&
+                                          widget.subtitle != null)
+                                        const TextSpan(text: ' · '),
+                                      if (widget.subtitle case final subtitle?)
+                                        TextSpan(text: subtitle),
+                                    ],
+                                  ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: theme.textTheme.bodySmall?.copyWith(
@@ -543,27 +582,6 @@ class _SectionRowState extends State<_SectionRow> {
                           ),
                         ),
                       ),
-                      if (widget.note case final note?) ...[
-                        const SizedBox(width: 6),
-                        Flexible(
-                          child: ExcludeSemantics(
-                            child: Text(
-                              note,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.end,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: noteColor,
-                                fontSize: 11.5,
-                                fontWeight:
-                                    widget.noteTone == _SectionNoteTone.plain
-                                        ? FontWeight.w400
-                                        : FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
                       if (showsVisibility) widget.visibilityAction!,
                       if (widget.menu case final menu?) menu,
                       if (widget.menu == null && widget.leading == null)
@@ -672,7 +690,7 @@ class _SectionBlockMenu extends StatelessWidget {
             ],
           ),
         );
-    final extent = _sectionTarget(context, 36);
+    final extent = _sectionTarget(context, 32);
     return PopupMenuButton<String>(
       key: ValueKey('website-sections-more-$blockId'),
       tooltip: 'Más acciones de $label',

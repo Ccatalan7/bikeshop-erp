@@ -674,8 +674,38 @@ every page, sections on the page, the inspector showing only the selection).
 - **Narrow editor.** The contextual dock and sheet name the section, write in
   `común` and keep move/hide/duplicate inert with their reason.
 
-`Catálogo web > Categorías > Presentación` keeps editing the same registry
-for categories and the products root until those pages move to the canvas.
+**Categories and `/productos` on the canvas (stage 3a, 2026-10-06).** Every
+catalog page is edited this way now: `/servicios` (price list or grid),
+`/productos`, and each published category under either root.
+
+- **Which sections exist is what the page draws.** The page publishes
+  `collection` (a category: its own portada over the grid) and
+  `offersPriceList` (only `/servicios`). `isCatalogSectionAvailable`: `page`
+  and `list` always; `hero` on a price list or a category; `plans` and
+  `closing` only on a price list. A category saved as `price_list` is still
+  drawn as a grid, so it never offers plans.
+- **The draft is drawn, never routed.** `_shownPresentationForCategory`
+  applies the editor's draft to what is drawn — the portada, the trail above
+  the grid, the filters and the card density. The category's route, slug,
+  aliases and SEO keep reading the saved presentation, so an unsaved draft
+  never moves a link.
+- **The portada draws what the customer sees.** With no title or
+  description of its own, the inline field holds the category's name or
+  description in the page's style (never a placeholder where the site draws a
+  title); writing over it gives the portada its own, emptying it goes back to
+  the category's. The name, description, photo and products stay the
+  category's, edited in Inventario (`Abrir categorías en Inventario`).
+- **On the canvas** the portada and the grid are selectable sections; product
+  cards and subcategory chips are inert in Edit (they open in `Ver como
+  cliente`). The inspector offers, for a category portada, texts, photo and
+  darkening, height and alignment, and subcategories; for the grid, card
+  density, the filters (on/off, in the order they are turned on) and, on a
+  category, the trail; for the page, Google (and the price-list choice only on
+  `/servicios`).
+
+`Catálogo web > Categorías > Presentación` still edits the same registry, as
+a second place for what the canvas now does; the mega-menu photo and the
+slug/aliases are only there.
 
 ## Management workspaces and canonical ownership
 
