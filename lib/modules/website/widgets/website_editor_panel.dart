@@ -56,8 +56,10 @@ import 'website_link_value_editor.dart';
 import 'website_action_editor.dart';
 import 'website_background_removal_dialog.dart';
 import 'website_color_picker.dart';
+import 'website_block_delete_confirmation.dart';
 import 'website_block_edit_section.dart';
 import 'website_editor_chrome_geometry.dart';
+import 'website_editor_command_scope.dart';
 import 'website_editor_control_density.dart';
 import 'website_editor_host_theme.dart';
 import 'website_editor_navigation_guard.dart';
@@ -78,6 +80,7 @@ part 'editor_panel/header_footer_controls.dart';
 part 'editor_panel/backups_dialog.dart';
 part 'editor_panel/style_controls.dart';
 part 'editor_panel/catalog_section_controls.dart';
+part 'editor_panel/sections_outline.dart';
 
 /// Professional side panel editor for website blocks
 /// Clean, functional, and elegant interface

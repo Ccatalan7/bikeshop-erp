@@ -1684,7 +1684,14 @@ owner, `WebsiteEditorCommandScope`), and the inspector pane keeps only
 `Versiones guardadas` and `Descartar` (`website-editor-contract.md`, «The top
 bar»). Page composition and catalog pages on the canvas show the persistent
 inspector; catalog, structure, settings, and operations use the full
-workspace while preserving the active page draft.
+workspace while preserving the active page draft. The page's sections have one
+list, `Secciones` (`_SectionsOutline`): a rail at the left of the canvas from
+1584 logical px of editor (pane + rail + a desktop canvas), else the
+inspector's state with nothing selected. It lists only the page in view (a
+block page while it owns the open document, a catalog page by its own
+sections) and reorders, hides, duplicates, deletes (one `O-03` confirmation
+shared with the dock) and adds a section through the same insertion operation
+as the canvas (`website-editor-contract.md`, «The «Secciones» list»).
 Category catalog visibility and navigation placement are distinct workflows
 with asymmetric ownership: `product_categories.show_on_website` is the single
 owner of whether a category is a public destination; `website_navigation`

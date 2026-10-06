@@ -31,6 +31,9 @@ class PublicHomePage extends StatefulWidget {
 
 class _PublicHomePageState extends State<PublicHomePage>
     with AutomaticKeepAliveClientMixin {
+  /// The editor this page published its block canvas to, released on
+  /// dispose (a disposed State cannot read its context).
+  WebsiteEditModeProvider? _boundEditProvider;
   List<Product> _featuredProducts = [];
   bool _featuredProductsLoaded = false; // Load featured products once
   String? _resolvedTenantId;
@@ -408,9 +411,11 @@ class _PublicHomePageState extends State<PublicHomePage>
         heldLease != null &&
         heldLease.fingerprint == lease.fingerprint &&
         heldLease.authorityEpoch == lease.authorityEpoch;
+    _boundEditProvider = editProvider;
     WebsiteEditorDocumentBinding.bind(
       context,
       editProvider: editProvider,
+      publisher: this,
       ready: snapshotIsCurrent,
       blocks: () => List<Map<String, dynamic>>.from(
         snapshotIsCurrent ? snapshot.blocks : const <Map<String, dynamic>>[],
@@ -534,6 +539,7 @@ class _PublicHomePageState extends State<PublicHomePage>
 
   @override
   void dispose() {
+    WebsiteEditorDocumentBinding.release(_boundEditProvider, this);
     _observedFreshnessService?.cmsPageFreshnessSignal
         .removeListener(_handleCmsFreshnessSignal);
     // Debug: dispose

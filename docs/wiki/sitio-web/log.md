@@ -4,6 +4,10 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-06 — corrección — [editor](paginas/editor-del-sitio.md): etapa 2b,
+  la lista «Secciones» (columna a la izquierda desde 1584 px o el panel sin
+  selección) y la trampa del documento que sobrevive a su página;
+  [estado](paginas/estado-y-pendientes.md) con el ERP 1.0.11 publicado.
 - 2026-10-06 — corrección — [editor](paginas/editor-del-sitio.md): etapa 2a,
   la barra de arriba con los tres lugares, la página a la vista y «Guardar»
   siempre arriba; [estado](paginas/estado-y-pendientes.md) al día.

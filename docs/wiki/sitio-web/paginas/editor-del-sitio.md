@@ -94,9 +94,20 @@ guardar», «Ver como cliente» y **«Guardar», siempre arriba**. El panel dere
 ya no tiene su propio Guardar: guarda «Versiones guardadas» y «Descartar». Lo
 que no cabe a un ancho queda en «…» `[Repo]`.
 
-Pendiente ([estado-y-pendientes](estado-y-pendientes.md)): las secciones a la
-izquierda para todas las páginas (etapa 2b) y las plantillas de categoría y de
-ficha de producto (etapa 3).
+**Las secciones a la izquierda (etapa 2b, 2026-10-06):** «Secciones» es una
+sola lista de lo que tiene la página que está en pantalla, de arriba abajo,
+entre el encabezado y el pie. Con el editor de 1584 px o más es una columna a
+la izquierda del lienzo (264 px); más angosto, es lo que muestra el panel
+derecho cuando no hay nada seleccionado. Cada fila dice el tipo y el título
+propio del bloque («Banner · Sobre Viñabike»); se elige tocándola (y la página
+baja hasta ella), se arrastra por su manija, se oculta con el ojo, y en «…» se
+sube, baja, duplica o elimina (pregunta antes). «Agregar sección» abre el mismo
+catálogo de bloques que el «+» de la página. En una página de catálogo lista sus
+propias secciones; en el carrito o una ficha de producto dice que la página no
+tiene secciones propias. «Capas» ya no está en «Agregar» `[Repo]`.
+
+Pendiente ([estado-y-pendientes](estado-y-pendientes.md)): las plantillas de
+categoría y de ficha de producto en el lienzo (etapa 3).
 
 ## Bloques
 
@@ -160,6 +171,13 @@ geometría pasa la prueba real de iOS
   le cuenta al editor (la de servicios publica sus secciones) se publica sólo
   con `TickerMode.of(context)` encendido y se retira cuando se apaga; si no,
   Inicio mostraba el panel de «Servicios › Portada» `[Repo 2026-10-06]`.
+- El documento abierto del editor **sobrevive a su página**: el carrito, una
+  ficha de producto o el catálogo no abren documento, así que al ir de Inicio
+  al carrito el editor sigue teniendo los bloques de Inicio. Una lista de «lo
+  que tiene esta página» que lea sólo el documento muestra la página anterior.
+  La página que está en pantalla y es dueña del documento se publica a sí misma
+  (`publishBlockCanvas`, desde `WebsiteEditorDocumentBinding.bind`) y se retira
+  fuera de pantalla y al desecharse; la lista lee eso `[Repo 2026-10-06]`.
 - El registro de presentaciones del catálogo es **una fila** con todas las
   categorías: leerlo y escribirlo entero deja que dos sesiones se pisen. Se
   escribe como «comparar y reemplazar» sobre su `updated_at`, releyendo ante un

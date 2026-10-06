@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-editor-sections-list",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android"
+  ],
+  "title": "Las secciones de cada página, en una lista a la izquierda",
+  "summary": "En el editor del sitio, «Secciones» muestra lo que tiene la página en pantalla, entre el encabezado y el pie: desde la lista se elige, se arrastra, se oculta, se duplica o se elimina, y «Agregar sección» abre el catálogo de bloques.",
+  "items": [
+    "Con la ventana ancha la lista va a la izquierda de la página; más angosta, aparece en el panel derecho cuando no hay nada seleccionado.",
+    "Elegir una sección en la lista lleva la página hasta ella, y cada fila dice el tipo y el título propio del bloque.",
+    "En el carrito o una ficha de producto la lista ya no ofrece los bloques de la página anterior; «Capas» deja la pestaña Agregar."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/website/widgets/editor_panel/sections_outline.dart",
+      "sha256": "c402b07f70857221cfc742355fbd6ead5b1b1e48a5ce9ba817381fbf679fc664"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_editor_panel.dart",
+      "sha256": "aea0964a731c580bc392898bab03de8e1633bd36d4beba0376a60c853b44de1a"
+    },
+    {
+      "path": "lib/modules/website/widgets/editor_panel/add_blocks_tab.dart",
+      "sha256": "6affd62191ad0e5e77a41251d04513e132b30acc486f9f7974b6250e01daf161"
+    },
+    {
+      "path": "lib/modules/website/widgets/editor_panel/edit_block_tab.dart",
+      "sha256": "de04e87afa2dd0842ed0aab13e03ed126e19819cea9f19549363bbc6970f3105"
+    },
+    {
+      "path": "lib/modules/website/widgets/editor_panel/catalog_section_controls.dart",
+      "sha256": "16def7c61893f1d2b13359a45ecdad72ea067e6691dc3e61372cb3d82ec1f972"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_block_delete_confirmation.dart",
+      "sha256": "8384405bcf7dbc33d8a2ff138979b81e616b1533cdcfa491d4f4f37975b30972"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_editor_contextual_dock.dart",
+      "sha256": "e0326023f4f873e69488ef9196e060c76528511a8040a630374df78ae57c93c8"
+    },
+    {
+      "path": "lib/modules/website/widgets/deferred_website_editor_panel.dart",
+      "sha256": "e5af9d1f1be1dc7ac68214a56d427ff95dcf9944a37539a17d6d2916952d9b69"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_editor_command_scope.dart",
+      "sha256": "dff15a049d9a8fc2bc86eba58fbb9a30a78a8f281fe799e9f1f55ddbbc400d22"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_editor_chrome_geometry.dart",
+      "sha256": "b3b6e542cf652231f0bceed614fdf7076b32e9661f1dc868acc5e2275abca0db"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_editor_document_binding.dart",
+      "sha256": "a27ed5f61380bb55d372a2df2f9bbcb52cb19f380637eba4e8b131a0685ab253"
+    },
+    {
+      "path": "lib/modules/website/providers/website_edit_mode_provider.dart",
+      "sha256": "629cb44ad6d38c50440c50a390f654c42659ccaa714f2f81933065ccdaeab697"
+    },
+    {
+      "path": "lib/public_store/widgets/persistent_editor_shell.dart",
+      "sha256": "a81cafbd02bb8ff48a62fadaba6acb87da45266aba6b6ada0b81e2391fdccba6"
+    },
+    {
+      "path": "lib/public_store/widgets/public_store_layout.dart",
+      "sha256": "88f530aefb6373cfa75346e24ab79074f4c91208e2d1261510d2d47104750e11"
+    },
+    {
+      "path": "lib/public_store/pages/public_home_page.dart",
+      "sha256": "06ee37de2ffc87c6a74e0d5ff5536a680b498660d904b8012c22db008cf47814"
+    },
+    {
+      "path": "lib/public_store/pages/dynamic_website_page.dart",
+      "sha256": "b2d1067b5435b9c30cbcd5a7d16ffd64082ff46def3aeb5e2dad4bf7aa8000bf"
+    },
+    {
+      "path": "lib/public_store/pages/static_policy_page.dart",
+      "sha256": "5e261dca484204022e1f104c09587425184da0643b09c7078b5e8ff0adf31e13"
+    }
+  ]
+}

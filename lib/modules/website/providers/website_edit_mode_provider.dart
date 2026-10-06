@@ -626,6 +626,12 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   /// and the page instance that described it (only it may take it back).
   WebsiteCatalogCanvasContext? _catalogCanvas;
   Object? _catalogCanvasPublisher;
+
+  /// The block page drawn on the canvas right now (Inicio, a CMS page, a
+  /// policy page), by the composition that draws it. The open document can
+  /// outlive its page — a cart or a product page binds none — so a list of
+  /// the page's sections reads this, never the document alone.
+  Object? _blockCanvasPublisher;
   Map<String, dynamic> _settings = {};
 
   // Screenshot capability
@@ -2184,9 +2190,10 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   /// The block the canvas still owes the operator a look at, or null.
   ///
   /// Only an *operation* that displaced a block publishes one — the three
-  /// reorder commands plus undo/redo. Selection never does: revealing on every
-  /// tap would scroll the page out from under the finger that just chose a
-  /// block it could already see.
+  /// reorder commands plus undo/redo — and a choice from the «Secciones» list
+  /// ([selectBlockFromOutline]). A tap on the canvas never does: revealing on
+  /// every tap would scroll the page out from under the finger that just
+  /// chose a block it could already see.
   WebsiteEditorBlockRevealRequest? get blockRevealRequest =>
       _blockRevealRequest;
 
@@ -3137,6 +3144,24 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _notifyAfterFrame();
   }
 
+  /// Whether the page on the canvas is the open block document.
+  bool get hasBlockCanvas => _blockCanvasPublisher != null;
+
+  /// Called by the block composition while it is on the canvas; like the
+  /// catalog description, it never counts as a change.
+  void publishBlockCanvas({required Object publisher}) {
+    if (identical(_blockCanvasPublisher, publisher)) return;
+    _blockCanvasPublisher = publisher;
+    _notifyAfterFrame();
+  }
+
+  /// The composition that drew the block page left the canvas.
+  void releaseBlockCanvas(Object publisher) {
+    if (!identical(_blockCanvasPublisher, publisher)) return;
+    _blockCanvasPublisher = null;
+    _notifyAfterFrame();
+  }
+
   /// Whether [target] is on the canvas now: its page is the one drawn, and a
   /// price-list section exists only while the page is laid out as one.
   bool isCatalogSectionAvailable(WebsiteCatalogSectionTarget target) {
@@ -3993,6 +4018,18 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _selectionVersion++;
     debugPrint(
         '👉 [EditProvider] Block Selected: $blockId (v$_selectionVersion)');
+    notifyListeners();
+  }
+
+  /// A block chosen from the «Secciones» list, away from the canvas: unlike a
+  /// tap on the page, the operator may not be looking at it, so the canvas is
+  /// asked to bring it into view.
+  void selectBlockFromOutline(String blockId) {
+    if (getBlock(blockId) == null) return;
+    _selectedBlockId = blockId;
+    _resetCanvasTouchMode();
+    _selectionVersion++;
+    _requestBlockReveal(blockId);
     notifyListeners();
   }
 

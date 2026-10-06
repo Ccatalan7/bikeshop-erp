@@ -22,6 +22,11 @@ enum WebsitePageContentAudience { public, editor }
 class WebsiteEditorDocumentBinding {
   const WebsiteEditorDocumentBinding._();
 
+  ///
+  /// [publisher] is the page State. While its page is the one on the canvas
+  /// and owns the open document, it is published as the block canvas — what
+  /// the «Secciones» list reads to know the open document is the page in
+  /// view. Anything else takes it back; [release] does so on dispose.
   static void bind(
     BuildContext context, {
     required WebsiteEditModeProvider editProvider,
@@ -30,20 +35,31 @@ class WebsiteEditorDocumentBinding {
     required Map<String, dynamic> Function() settings,
     String? pageId,
     String? pageSlug,
+    required Object publisher,
   }) {
     // A kept-alive offstage page (persistent shell) must never rebind the
     // active document while the user is viewing another page.
-    if (!TickerMode.of(context)) return;
-    if (!editProvider.isInEditorContext) return;
-    if (!ready) return;
-    if (editProvider.ownsPageDocument(pageId: pageId, pageSlug: pageSlug)) {
+    if (!TickerMode.of(context) || !editProvider.isInEditorContext || !ready) {
+      editProvider.releaseBlockCanvas(publisher);
       return;
     }
-    editProvider.activatePageDocument(
-      blocks(),
-      settings(),
-      pageId: pageId,
-      pageSlug: pageSlug,
-    );
+    if (!editProvider.ownsPageDocument(pageId: pageId, pageSlug: pageSlug)) {
+      editProvider.activatePageDocument(
+        blocks(),
+        settings(),
+        pageId: pageId,
+        pageSlug: pageSlug,
+      );
+    }
+    if (editProvider.ownsPageDocument(pageId: pageId, pageSlug: pageSlug)) {
+      editProvider.publishBlockCanvas(publisher: publisher);
+    } else {
+      editProvider.releaseBlockCanvas(publisher);
+    }
+  }
+
+  /// The page State left the tree: whatever it published goes with it.
+  static void release(WebsiteEditModeProvider? editProvider, Object publisher) {
+    editProvider?.releaseBlockCanvas(publisher);
   }
 }

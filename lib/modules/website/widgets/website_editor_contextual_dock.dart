@@ -9,6 +9,7 @@ import '../models/website_responsive_authoring.dart';
 import '../models/website_catalog_canvas.dart';
 import '../providers/website_edit_mode_provider.dart';
 import '../models/website_canvas_manipulation.dart';
+import 'website_block_delete_confirmation.dart';
 import 'website_editor_block_sheet.dart';
 
 /// The contextual dock — the compact host's answer to the desktop pane.
@@ -684,41 +685,12 @@ class _DockOverflowMenu extends StatelessWidget {
     );
   }
 
-  /// `O-03 VbConfirmDialog` · the safe exit holds the initial focus and the
-  /// buttons name the act. Never Sí/No.
-  Future<void> _confirmDelete(BuildContext context) async {
-    final intent = provider.captureAsyncIntent(blockId: blockId);
-    if (intent == null) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('¿Eliminar este bloque?'),
-        content: const Text(
-          'Se quita de la página. Puedes deshacerlo mientras no guardes.',
-        ),
-        actions: [
-          TextButton(
-            autofocus: true,
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Conservar bloque'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Eliminar bloque'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !context.mounted) return;
-    final live = context.read<WebsiteEditModeProvider>();
-    live.commitAsyncIntent(intent, () {
-      final before = live.blocks.length;
-      live.deleteBlock(blockId);
-      return live.blocks.length < before
-          ? WebsiteInlineMutationResult.committed
-          : WebsiteInlineMutationResult.unchanged;
-    });
-  }
+  Future<void> _confirmDelete(BuildContext context) =>
+      confirmWebsiteBlockDeletion(
+        context,
+        provider: provider,
+        blockId: blockId,
+      );
 }
 
 class _MenuRow extends StatelessWidget {

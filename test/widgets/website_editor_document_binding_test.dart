@@ -24,6 +24,8 @@ WebsiteEditModeProvider providerWithGrantedLease() {
 
 /// The shared Home/Dynamic/Policy document binding: idempotent, provider-mode
 /// driven, and inert for offstage kept-alive pages.
+final Object _defaultPublisher = Object();
+
 void main() {
   const homeBlocks = <Map<String, dynamic>>[
     {
@@ -58,6 +60,7 @@ void main() {
     String? pageSlug,
     bool offstage = false,
     int? bindCalls,
+    Object? publisher,
   }) {
     return MaterialApp(
       home: TickerMode(
@@ -72,6 +75,7 @@ void main() {
               settings: () => const <String, dynamic>{},
               pageId: pageId,
               pageSlug: pageSlug,
+              publisher: publisher ?? _defaultPublisher,
             );
             return const SizedBox.shrink();
           },
@@ -208,6 +212,86 @@ void main() {
         isTrue,
       );
       expect(provider.blocks.single['id'], 'page-1');
+    },
+  );
+
+  testWidgets(
+    'only the page in view that owns the document is the block canvas',
+    (tester) async {
+      final provider = providerWithGrantedLease();
+      addTearDown(provider.dispose);
+      provider.applyRouteModeCommand(WebsiteEditorMode.edit);
+      final page = Object();
+      final home = Object();
+
+      // Loading: the open document is not this page yet.
+      await tester.pumpWidget(
+        host(
+          provider: provider,
+          ready: false,
+          blocks: pageBlocks,
+          pageId: 'page-a',
+          pageSlug: 'oferta',
+          publisher: page,
+        ),
+      );
+      await tester.pump();
+      expect(provider.hasBlockCanvas, isFalse);
+
+      await tester.pumpWidget(
+        host(
+          provider: provider,
+          ready: true,
+          blocks: pageBlocks,
+          pageId: 'page-a',
+          pageSlug: 'oferta',
+          publisher: page,
+        ),
+      );
+      await tester.pump();
+      expect(provider.hasBlockCanvas, isTrue);
+
+      // An offstage Home neither steals the document nor takes it back.
+      await tester.pumpWidget(
+        host(
+          provider: provider,
+          ready: true,
+          blocks: homeBlocks,
+          offstage: true,
+          publisher: home,
+        ),
+      );
+      await tester.pump();
+      expect(provider.hasBlockCanvas, isTrue);
+
+      // The page itself going offstage (a cart, a product page in front)
+      // leaves no block page on the canvas.
+      await tester.pumpWidget(
+        host(
+          provider: provider,
+          ready: true,
+          blocks: pageBlocks,
+          pageId: 'page-a',
+          pageSlug: 'oferta',
+          offstage: true,
+          publisher: page,
+        ),
+      );
+      await tester.pump();
+      expect(provider.hasBlockCanvas, isFalse);
+
+      WebsiteEditorDocumentBinding.bind(
+        tester.element(find.byType(SizedBox)),
+        editProvider: provider,
+        ready: true,
+        blocks: () => List<Map<String, dynamic>>.from(pageBlocks),
+        settings: () => const <String, dynamic>{},
+        pageId: 'page-a',
+        pageSlug: 'oferta',
+        publisher: page,
+      );
+      WebsiteEditorDocumentBinding.release(provider, home);
+      expect(provider.hasBlockCanvas, isFalse, reason: 'offstage context');
     },
   );
 }

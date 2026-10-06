@@ -16,6 +16,7 @@ import '../../modules/website/widgets/website_editor_contextual_dock.dart';
 import '../../modules/website/widgets/website_editor_contextual_operation_scope.dart';
 import '../../modules/website/widgets/website_editor_draft_recovery_host.dart';
 import '../../modules/website/widgets/website_editor_command_scope.dart';
+import 'website_insertion_host.dart';
 
 /// A persistent shell that keeps the editor panel mounted across route changes.
 ///
@@ -226,6 +227,7 @@ class _PersistentEditorShellState extends State<PersistentEditorShell> {
         onSave: _handleSave,
         onDiscard: _handleDiscard,
         onRestoreComplete: _handleRestoreComplete,
+        onAddSection: _handleAddSection,
         // The ERP appearance is captured HERE, above the storefront's own theme,
         // and restored by every operator surface that renders underneath it.
         child: WebsiteEditorHostTheme.capture(
@@ -269,6 +271,14 @@ class _PersistentEditorShellState extends State<PersistentEditorShell> {
                     // keeps the whole width: never a compressed side panel.
                     final mountsPane = showEditorPanel && paneWidth != null;
                     final mountsDock = showEditorPanel && paneWidth == null;
+                    // The «Secciones» rail comes with the pane, and only where
+                    // the canvas still renders the page as desktop beside both.
+                    final railWidth = mountsPane
+                        ? WebsiteEditorChromeGeometry.sectionsRailWidthFor(
+                            editorWidth,
+                          )
+                        : null;
+                    final mountsRail = railWidth != null;
                     _scheduleContextualDockMeasurement(isMounted: mountsDock);
                     // Read once, here, AFTER the removal above. Every sibling in the
                     // Stack below and the storefront's own bar slot position against
@@ -280,11 +290,13 @@ class _PersistentEditorShellState extends State<PersistentEditorShell> {
 
                     return WebsiteEditorChromeScope(
                       editorWidth: editorWidth,
-                      canvasWidth:
-                          mountsPane ? editorWidth - paneWidth : editorWidth,
+                      canvasWidth: mountsPane
+                          ? editorWidth - paneWidth - (railWidth ?? 0)
+                          : editorWidth,
                       contextualDockHeight:
                           mountsDock ? _contextualDockHeight : 0,
                       topBandHeight: editorTopBand,
+                      sectionsRailWidth: railWidth ?? 0,
                       child: Stack(
                         children: [
                           // Keep router child full-width so the top command bar uses
@@ -310,6 +322,14 @@ class _PersistentEditorShellState extends State<PersistentEditorShell> {
                                 onRestoreComplete: _handleRestoreComplete,
                                 onDiscard: _handleDiscard,
                               ),
+                            ),
+                          if (mountsRail)
+                            Positioned(
+                              top: editorTopBand,
+                              left: 0,
+                              bottom: 0,
+                              width: railWidth,
+                              child: const DeferredWebsiteEditorSectionsRail(),
                             ),
                           // Contextual host. Below the derived pane threshold the
                           // editor has no inspector column, so editing starts at the
@@ -338,7 +358,7 @@ class _PersistentEditorShellState extends State<PersistentEditorShell> {
                           if (editProvider.isInEditorContext)
                             Positioned(
                               top: editorTopBand + 8,
-                              left: 12,
+                              left: mountsRail ? railWidth + 12 : 12,
                               right: mountsPane ? paneWidth + 12 : 12,
                               child: WebsiteEditorDraftRecoveryHost(
                                 provider: editProvider,
@@ -413,6 +433,19 @@ class _PersistentEditorShellState extends State<PersistentEditorShell> {
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
+  }
+
+  /// «Agregar sección» from the list: the same insertion operation as the
+  /// canvas markers, at the end of the page, re-checked against the page when
+  /// the catalog closes.
+  Future<void> _handleAddSection(BuildContext context) async {
+    final provider = context.read<WebsiteEditModeProvider>();
+    if (!provider.hasBlockCanvas) return;
+    await commitWebsiteInsertion(
+      context: context,
+      intent: websitePageEndInsertionIntent(provider),
+      onAddBlock: provider.addBlock,
+    );
   }
 
   void _handleDiscard() {

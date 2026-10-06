@@ -689,6 +689,9 @@ class _PolicyMeta {
 
 class _StaticPolicyPageState extends State<StaticPolicyPage>
     with AutomaticKeepAliveClientMixin {
+  /// The editor this page published its block canvas to, released on
+  /// dispose (a disposed State cannot read its context).
+  WebsiteEditModeProvider? _boundEditProvider;
   static const List<String> _policySlugs = <String>[
     'nosotros',
     'terminos',
@@ -774,6 +777,7 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
 
   @override
   void dispose() {
+    WebsiteEditorDocumentBinding.release(_boundEditProvider, this);
     _observedWebsiteService?.cmsPageFreshnessSignal
         .removeListener(_handleCmsPageFreshnessSignal);
     super.dispose();
@@ -860,12 +864,16 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
   /// Attaches this policy page's document to the open editor session once its
   /// blocks are loaded. Mode entry/exit is owned by the FSM route binding in
   /// the storefront layout; this consumer only supplies its page document.
-  void _bindEditorDocument(WebsiteEditModeProvider editProvider) {
-    if (_loading || _pageId == null) return;
+  void _bindEditorDocument(
+    WebsiteEditModeProvider editProvider, {
+    required bool audienceSatisfied,
+  }) {
+    _boundEditProvider = editProvider;
     WebsiteEditorDocumentBinding.bind(
       context,
       editProvider: editProvider,
-      ready: true,
+      publisher: this,
+      ready: audienceSatisfied && !_loading && _pageId != null,
       blocks: () => List<Map<String, dynamic>>.from(_blocks),
       settings: () =>
           Map<String, dynamic>.from(context.read<WebsiteService>().settings),
@@ -1362,6 +1370,8 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
                 editProvider.editorEntryLease?.authorityEpoch ==
                     _editorLease?.authorityEpoch);
     if (!editorContentAuthorized) {
+      // Its content is gone, so it is no longer the page the list reads.
+      WebsiteEditorDocumentBinding.release(editProvider, this);
       _invalidateEditorContentAndReloadPublic();
       return const Center(child: CircularProgressIndicator());
     }
@@ -1384,9 +1394,7 @@ class _StaticPolicyPageState extends State<StaticPolicyPage>
     // The FSM route command in the storefront layout already owns the mode;
     // this consumer only binds its page document once blocks are loaded AND
     // the loaded audience matches the session's audience.
-    if (audienceSatisfied) {
-      _bindEditorDocument(editProvider);
-    }
+    _bindEditorDocument(editProvider, audienceSatisfied: audienceSatisfied);
 
     // Only use provider blocks if we are actually editing THIS page
     // This prevents showing homepage blocks when navigating to a policy page

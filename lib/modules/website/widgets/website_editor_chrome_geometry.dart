@@ -167,10 +167,30 @@ abstract final class WebsiteEditorChromeGeometry {
     return inspectorWidth;
   }
 
+  /// The «Secciones» rail at the left of the canvas (approved proposal,
+  /// 2026-10-06: sections on the left, the selection on the right).
+  static const double sectionsRailWidth = 264;
+
+  /// Derived, not chosen: the rail only comes when, beside the inspector, the
+  /// canvas still renders the page as desktop (`420 + 264 + 900`). Below it
+  /// the same list lives in the inspector while nothing is selected, so the
+  /// rail never turns a desktop page into its tablet layout.
+  static const double sectionsRailMinimumEditorWidth =
+      inspectorWidth + sectionsRailWidth + ResponsiveBreakpoints.desktopMin;
+
+  /// The rail width for [editorWidth], or null when it does not fit.
+  static double? sectionsRailWidthFor(double editorWidth) {
+    if (paneWidthFor(editorWidth) == null) return null;
+    return editorWidth >= sectionsRailMinimumEditorWidth
+        ? sectionsRailWidth
+        : null;
+  }
+
   /// Horizontal space the canvas keeps once the chrome took its share.
   static double canvasWidthFor(double editorWidth) {
     final pane = paneWidthFor(editorWidth);
-    return pane == null ? editorWidth : editorWidth - pane;
+    if (pane == null) return editorWidth;
+    return editorWidth - pane - (sectionsRailWidthFor(editorWidth) ?? 0);
   }
 
   /// The width a framed device preview paints at.
@@ -227,11 +247,19 @@ class WebsiteEditorChromeScope extends InheritedWidget {
     required this.canvasWidth,
     this.contextualDockHeight = 0,
     this.topBandHeight = WebsiteEditorChromeGeometry.topBarHeight,
+    this.sectionsRailWidth = 0,
     required super.child,
   });
 
   final double editorWidth;
   final double canvasWidth;
+
+  /// Width of the mounted «Secciones» rail at the left, or 0 when the shell
+  /// did not mount one. Published as mounted, not as possible: the canvas
+  /// insets by what is really there.
+  final double sectionsRailWidth;
+
+  bool get hasSectionsRail => sectionsRailWidth > 0;
 
   /// The whole band the editor bar occupies at the top, inset included.
   ///
@@ -290,7 +318,8 @@ class WebsiteEditorChromeScope extends InheritedWidget {
     return editorWidth != oldWidget.editorWidth ||
         canvasWidth != oldWidget.canvasWidth ||
         contextualDockHeight != oldWidget.contextualDockHeight ||
-        topBandHeight != oldWidget.topBandHeight;
+        topBandHeight != oldWidget.topBandHeight ||
+        sectionsRailWidth != oldWidget.sectionsRailWidth;
   }
 }
 

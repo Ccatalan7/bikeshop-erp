@@ -139,7 +139,8 @@ void main() {
       await pump(tester, provider);
 
       for (final label in [
-        'Secciones de Servicios',
+        'Secciones',
+        'Servicios',
         'Encabezado',
         'Portada',
         'Planes',

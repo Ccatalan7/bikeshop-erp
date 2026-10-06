@@ -52,6 +52,9 @@ class DynamicWebsitePage extends StatefulWidget {
 
 class _DynamicWebsitePageState extends State<DynamicWebsitePage>
     with AutomaticKeepAliveClientMixin {
+  /// The editor this page published its block canvas to, released on
+  /// dispose (a disposed State cannot read its context).
+  WebsiteEditModeProvider? _boundEditProvider;
   bool _isLoading = true;
   String? _error;
   List<Map<String, dynamic>> _blocks = [];
@@ -127,6 +130,7 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
 
   @override
   void dispose() {
+    WebsiteEditorDocumentBinding.release(_boundEditProvider, this);
     _observedWebsiteService?.cmsPageFreshnessSignal
         .removeListener(_handleCmsPageFreshnessSignal);
     super.dispose();
@@ -237,12 +241,16 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
   /// Attaches this CMS page's document to the open editor session once its
   /// blocks are loaded. Mode entry/exit is owned by the FSM route binding in
   /// the storefront layout; this consumer only supplies its page document.
-  void _bindEditorDocument(WebsiteEditModeProvider editProvider) {
-    if (_isLoading || _pageId == null) return;
+  void _bindEditorDocument(
+    WebsiteEditModeProvider editProvider, {
+    required bool audienceSatisfied,
+  }) {
+    _boundEditProvider = editProvider;
     WebsiteEditorDocumentBinding.bind(
       context,
       editProvider: editProvider,
-      ready: true,
+      publisher: this,
+      ready: audienceSatisfied && !_isLoading && _pageId != null,
       blocks: () => List<Map<String, dynamic>>.from(_blocks),
       settings: () =>
           Map<String, dynamic>.from(context.read<WebsiteService>().settings),
@@ -664,6 +672,8 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
                 editProvider.editorEntryLease?.authorityEpoch ==
                     _blocksLease?.authorityEpoch);
     if (!editorContentAuthorized) {
+      // Its content is gone, so it is no longer the page the list reads.
+      WebsiteEditorDocumentBinding.release(editProvider, this);
       _invalidateEditorContentAndReloadPublic();
       return const FullPageLoading();
     }
@@ -686,9 +696,7 @@ class _DynamicWebsitePageState extends State<DynamicWebsitePage>
     // The FSM route command in the storefront layout already owns the mode;
     // this consumer only binds its page document once blocks are loaded AND
     // the loaded audience matches the session's audience.
-    if (audienceSatisfied) {
-      _bindEditorDocument(editProvider);
-    }
+    _bindEditorDocument(editProvider, audienceSatisfied: audienceSatisfied);
 
     // Watch website service so page data changes can apply without full reload.
     // Theme values are resolved once by PublicStoreLayout and published via

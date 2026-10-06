@@ -232,6 +232,44 @@ proposal drew it, not as a row of entry points:
   `Deshacer`, `Rehacer` and `Descartar cambios`. Every width from 1050 to 1920
   is guarded against overflow in light and dark.
 
+### The «Secciones» list (2026-10-06)
+
+Third stage of the approved proposal: what the page in view is made of, top to
+bottom, in one list (`_SectionsOutline`, part
+`editor_panel/sections_outline.dart`), with the site's `Encabezado` and `Pie de
+página` around it.
+
+- **Where it lives.** A rail at the left of the canvas
+  (`WebsiteEditorSectionsRail`, deferred through
+  `DeferredWebsiteEditorSectionsRail`) mounted by `PersistentEditorShell` with
+  the pane, only from `sectionsRailMinimumEditorWidth` = pane 420 + rail 264 +
+  the 900 desktop canvas = 1584: the rail never turns a desktop page into its
+  tablet layout. The shell publishes the mounted width
+  (`WebsiteEditorChromeScope.sectionsRailWidth`, 0 when absent) and
+  `PublicStoreLayout` insets the canvas by it on the left; a framed device
+  preview centers between rail and pane. Below the threshold the same list is
+  the inspector's state with nothing selected; with the rail present that
+  state says where to choose instead of drawing the list twice. `Capas` is no
+  longer a mode of `Agregar`, which only inserts.
+- **Only the page in view.** A block page lists its blocks only while it owns
+  the open document *and* is on the canvas: `WebsiteEditorDocumentBinding.bind`
+  publishes the page State as `publishBlockCanvas` and takes it back offstage,
+  before its document is ready and on dispose. A cart or product page binds no
+  document, so the previous page's blocks are never offered there; the list
+  shows the header and footer and says the page has no sections of its own. A
+  catalog page lists its own sections (`catalogCanvas`), with what comes from
+  the catalog and the way to Inventario.
+- **What a row does.** Tap selects; from the list it also asks the canvas to
+  show the block (`selectBlockFromOutline` → `blockRevealRequest`), which a tap
+  on the canvas never does. The handle drags (`SliverReorderableList` →
+  `reorderBlocks`, applied only if the page still has the drawn order). The
+  eye hides or shows. The `…` menu moves up/down, duplicates, hides and deletes
+  — through `confirmWebsiteBlockDeletion`, the one `O-03` confirmation the dock
+  uses too. `Agregar sección` calls `WebsiteEditorCommandScope.onAddSection`:
+  the shell's `commitWebsiteInsertion` at the end of the page, the same
+  operation as the canvas markers. Each row says its kind and the block's own
+  title, unless the title only repeats the kind.
+
 For a category campaign, the complete workflow is:
 
 1. Find or configure the real category under `Catálogo web > Categorías`.

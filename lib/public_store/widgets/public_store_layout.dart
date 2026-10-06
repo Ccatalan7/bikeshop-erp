@@ -641,6 +641,10 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   /// contextual composition, so there is nothing to reserve.
   double _editorPaneInset(BuildContext context) =>
       WebsiteEditorChromeScope.maybeOf(context)?.paneWidth ?? 0.0;
+
+  /// The «Secciones» rail the shell actually mounted at the left, or 0.
+  double _editorRailInset(BuildContext context) =>
+      WebsiteEditorChromeScope.maybeOf(context)?.sectionsRailWidth ?? 0.0;
   static const String _actionPageEditorWorkspace = 'workspace_page_editor';
 
   /// The editor's three places (approved proposal, 2026-10-06): the pages,
@@ -2316,13 +2320,14 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     // hidden behind the panel. The Padding owner stays mounted in EVERY mode
     // and viewport; only its right inset changes. A conditional wrapper here
     // remounted standalone GoRoute content on Public/Preview/Edit changes.
-    final desktopEditorInset =
-        isEditMode && devicePreviewMode == DevicePreviewMode.desktop
-            ? _editorPaneInset(context)
-            : 0.0;
+    final insetsDesktopCanvas =
+        isEditMode && devicePreviewMode == DevicePreviewMode.desktop;
     pageContent = Padding(
       key: const ValueKey('storefront_desktop_editor_inset'),
-      padding: EdgeInsets.only(right: desktopEditorInset),
+      padding: EdgeInsets.only(
+        left: insetsDesktopCanvas ? _editorRailInset(context) : 0.0,
+        right: insetsDesktopCanvas ? _editorPaneInset(context) : 0.0,
+      ),
       child: pageContent,
     );
 
@@ -2361,7 +2366,10 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           devicePreviewMode == DevicePreviewMode.desktop &&
           !_isConfigHubOpen) {
         overlayLayer = Padding(
-          padding: EdgeInsets.only(right: _editorPaneInset(context)),
+          padding: EdgeInsets.only(
+            left: _editorRailInset(context),
+            right: _editorPaneInset(context),
+          ),
           child: overlayLayer,
         );
       }
@@ -5041,12 +5049,14 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                 availableWidth: availableWidth,
               )
             : availableWidth;
-        // Shift a framed preview left of the overlaid editor pane so it reads
-        // visually centered. With no pane there is nothing to compensate.
-        final panelOffset =
-            framed && isEditMode ? _editorPaneInset(context) / 2 : 0.0;
+        // Center a framed preview between the «Secciones» rail and the
+        // inspector pane. With neither there is nothing to compensate.
+        final framedEdit = framed && isEditMode;
         return Padding(
-          padding: EdgeInsets.only(right: panelOffset * 2),
+          padding: EdgeInsets.only(
+            left: framedEdit ? _editorRailInset(context) : 0.0,
+            right: framedEdit ? _editorPaneInset(context) : 0.0,
+          ),
           child: Center(
             child: SizedBox(
               width: frameWidth,

@@ -122,26 +122,61 @@ class _EditBlockTabState extends State<_EditBlockTab> {
 
   @override
   Widget build(BuildContext context) {
+    final content = _buildSelection(context);
+    final selectedId = editProvider.selectedBlockId;
+    // Without the rail, the «Secciones» list is what this tab shows with
+    // nothing selected; once a section is chosen this is the way back to it.
+    // A catalog section already has its own (its header names the page), and
+    // the contextual sheet has its own frame.
+    final returnsToSections = widget.showBlockHeader &&
+        selectedId != null &&
+        WebsiteCatalogSectionTarget.parse(selectedId) == null &&
+        !(WebsiteEditorChromeScope.maybeOf(context)?.hasSectionsRail ?? false);
+    if (!returnsToSections) return content;
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: const ValueKey('website-editor-back-to-sections'),
+              onPressed: () => editProvider.selectBlock(null),
+              style: TextButton.styleFrom(
+                foregroundColor: theme.colorScheme.onSurfaceVariant,
+                minimumSize: Size(
+                  0,
+                  WebsiteEditorControlDensityScope.maybeOf(context)
+                          ?.targetExtentFor(36) ??
+                      36,
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+              icon: const Icon(Icons.arrow_back_rounded, size: 16),
+              label: const Text('Secciones'),
+            ),
+          ),
+        ),
+        Expanded(child: content),
+      ],
+    );
+  }
+
+  Widget _buildSelection(BuildContext context) {
     final selectedId = editProvider.selectedBlockId;
 
     if (selectedId == null) {
       _syncSelection(null);
-      // A catalog page has sections drawn from its presentation, not blocks:
-      // its outline is what there is to select.
-      if (editProvider.catalogCanvas case final canvas?) {
-        return _CatalogSectionOutline(provider: editProvider, canvas: canvas);
-      }
       return _buildNoSelection();
     }
 
     if (WebsiteCatalogSectionTarget.parse(selectedId) case final target?) {
       _syncSelection(selectedId);
       // A section of a page no longer on the canvas (or of a layout no
-      // longer chosen) is not offered: its page's outline, or nothing.
+      // longer chosen) is not offered: the page's sections instead.
       if (!editProvider.isCatalogSectionAvailable(target)) {
-        if (editProvider.catalogCanvas case final canvas?) {
-          return _CatalogSectionOutline(provider: editProvider, canvas: canvas);
-        }
         return _buildNoSelection();
       }
       return _CatalogSectionControls(
@@ -430,7 +465,15 @@ class _EditBlockTabState extends State<_EditBlockTab> {
     return null;
   }
 
+  /// Nothing selected: the page's sections, so the next choice is a tap
+  /// away. Where the «Secciones» rail is already at the left of the canvas the
+  /// list is not drawn twice; this says where to choose.
   Widget _buildNoSelection() {
+    if (!(WebsiteEditorChromeScope.maybeOf(context)?.hasSectionsRail ??
+        false)) {
+      return _SectionsOutline(provider: editProvider);
+    }
+    final theme = Theme.of(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -438,24 +481,25 @@ class _EditBlockTabState extends State<_EditBlockTab> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              Icons.touch_app_outlined,
-              size: 48,
-              color: Colors.white.withValues(alpha: 0.3),
+              Icons.ads_click_rounded,
+              size: 40,
+              color: theme.colorScheme.onSurfaceVariant,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
             Text(
-              'Selecciona un bloque',
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.5),
-                fontSize: 14,
+              'Elige una sección',
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: theme.colorScheme.onSurface,
+                fontWeight: FontWeight.w700,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
-              'Haz clic en cualquier bloque de la página para editar sus propiedades',
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.3),
-                fontSize: 12,
+              'Tócala en la página o en la lista de la izquierda y aquí '
+              'aparece lo que se puede cambiar de ella.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                height: 1.4,
               ),
               textAlign: TextAlign.center,
             ),

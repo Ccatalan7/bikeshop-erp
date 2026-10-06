@@ -129,3 +129,41 @@ class _DeferredWebsiteBlockEditSurfaceState
           );
   }
 }
+
+/// Loads the SAME deferred editor library and mounts the «Secciones» rail at
+/// the left of the canvas, in the inspector's own theme so both sides of the
+/// canvas read as one tool.
+class DeferredWebsiteEditorSectionsRail extends StatefulWidget {
+  const DeferredWebsiteEditorSectionsRail({super.key});
+
+  @override
+  State<DeferredWebsiteEditorSectionsRail> createState() =>
+      _DeferredWebsiteEditorSectionsRailState();
+}
+
+class _DeferredWebsiteEditorSectionsRailState
+    extends State<DeferredWebsiteEditorSectionsRail> {
+  bool _libraryLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    editor.loadLibrary().then((_) {
+      if (mounted) setState(() => _libraryLoaded = true);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final inspectorTheme = WebsiteEditorInspectorTheme.resolveFrom(context);
+    return Theme(
+      data: inspectorTheme,
+      child: Material(
+        color: inspectorTheme.colorScheme.surface,
+        child: _libraryLoaded
+            ? editor.WebsiteEditorSectionsRail()
+            : const SizedBox.expand(),
+      ),
+    );
+  }
+}
