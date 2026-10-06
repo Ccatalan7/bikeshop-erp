@@ -95,8 +95,12 @@ void main() {
     expect(profileSource, contains('Reenviar código'));
     expect(profileSource, contains('AutofillHints.oneTimeCode'));
     expect(profileSource, contains('FilteringTextInputFormatter.digitsOnly'));
+    // The six-digit rule is the portal's, shared with the HTML store.
+    expect(profileSource, contains('validator: customerVerificationCodeError'));
     expect(
-      profileSource,
+      File(
+        'packages/vinabike_public_core/lib/public_store/models/customer_portal_forms.dart',
+      ).readAsStringSync(),
       contains("RegExp(r'^\\d{6}\$')"),
     );
     expect(profileSource, isNot(contains('error.message')));
@@ -142,8 +146,11 @@ void main() {
       profileSource,
       contains('Tu contraseña ya quedó actualizada.'),
     );
+    expect(profileSource, contains('Text(customerRevocationIntro)'));
     expect(
-      profileSource,
+      File(
+        'packages/vinabike_public_core/lib/public_store/models/customer_portal_forms.dart',
+      ).readAsStringSync(),
       contains('no necesitas volver a ingresar ni cambiar tu contraseña'),
     );
   });

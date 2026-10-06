@@ -9,10 +9,32 @@ import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.d
 import 'package:vinabike_public_core/public_store/models/customer_portal_presentation.dart';
 import 'package:vinabike_public_core/public_store/models/portal_time_zone.dart';
 import 'package:vinabike_public_core/public_store/utils/product_url.dart';
+import 'package:vinabike_public_core/shared/utils/auth_input_validation.dart';
 import 'package:vinabike_public_core/shared/models/product.dart';
 import 'package:vinabike_storefront_html/storefront_html.dart';
 
 const _tenant = '5443b130-cc28-45af-a420-cd500b288890';
+
+/// A customer's saved address, as `customer_addresses` returns it.
+const _addressRow = <String, Object?>{
+  'id': 'ad000000-0000-4000-8000-000000000001',
+  'customer_id': '7e570000-0000-4000-8000-0000000000ab',
+  'tenant_id': _tenant,
+  'label': 'Casa',
+  'recipient_name': 'Ana Prueba',
+  'phone': '+56 9 1234 5678',
+  'street_address': 'Avenida Libertad',
+  'street_number': '1234',
+  'apartment': null,
+  'comuna': 'Viña del Mar',
+  'city': 'Viña del Mar',
+  'region': 'Valparaíso',
+  'postal_code': null,
+  'additional_info': null,
+  'is_default': true,
+  'created_at': '2026-02-01T00:00:00Z',
+  'updated_at': '2026-02-01T00:00:00Z',
+};
 const _parent = 'c0000000-0000-4000-8000-000000000001';
 const _child = 'c0000000-0000-4000-8000-000000000002';
 const _hidden = 'c0000000-0000-4000-8000-000000000003';
@@ -157,10 +179,23 @@ class _FakeReads implements PublicReads {
     this.payments,
     this.orders = const {},
     this.portal,
+    this.writeOk = true,
+    this.auth = const {},
   }) : shellJson = shell;
 
   /// What `customerPortal` answers; null refuses the session.
   final CustomerPortalReads? portal;
+
+  /// Whether `customerWrite` writes a row.
+  final bool writeOk;
+
+  /// What Auth answers each call (200 when absent); null throws as a
+  /// connection that failed.
+  final Map<CustomerAuthCall, CustomerAuthAnswer?> auth;
+
+  /// Every write and Auth call, as sent.
+  final writes = <Map<String, Object?>>[];
+  final authCalls = <(CustomerAuthCall, Map<String, Object?>?)>[];
 
   final Map<String, dynamic>? page;
   final bool fail;
@@ -197,12 +232,53 @@ class _FakeReads implements PublicReads {
   }
 
   @override
-  Future<CustomerPortalReads> customerPortal(String accessToken) async {
-    requested.add('portal');
+  Future<CustomerPortalReads> customerPortal(
+    String accessToken, {
+    bool files = true,
+  }) async {
+    requested.add(files ? 'portal' : 'portal without files');
     if (fail) throw PublicReadException('down');
     final read = portal;
     if (read == null) throw const CustomerSessionRefused();
     return read;
+  }
+
+  @override
+  Future<Map<String, dynamic>?> customerProfile(String accessToken) async {
+    if (fail) throw PublicReadException('down');
+    final read = portal;
+    if (read == null) throw const CustomerSessionRefused();
+    return read.profile;
+  }
+
+  @override
+  Future<bool> customerWrite(
+    String accessToken, {
+    required String method,
+    required String table,
+    Map<String, String> filters = const {},
+    Map<String, Object?>? body,
+  }) async {
+    writes.add({
+      'method': method,
+      'table': table,
+      'filters': filters,
+      'body': body,
+    });
+    return writeOk;
+  }
+
+  @override
+  Future<CustomerAuthAnswer> customerAuth(
+    String accessToken,
+    CustomerAuthCall call, {
+    Map<String, Object?>? body,
+  }) async {
+    authCalls.add((call, body));
+    if (!auth.containsKey(call)) return (status: 200, code: null, message: '');
+    final answer = auth[call];
+    if (answer == null) throw const SocketException('down');
+    return answer;
   }
 
   @override
@@ -2349,10 +2425,11 @@ void main() {
       },
       List<Object?> jobs = const [],
       List<Object?> orders = const [],
+      List<Object?> addresses = const [_addressRow],
     }) => (
       shell: _shell(),
       profile: profile,
-      addresses: 1,
+      addresses: addresses,
       orders: orders,
       bikes: const [
         {
@@ -2438,7 +2515,7 @@ void main() {
     test('the view needs a session and a portal page', () async {
       final reads = _FakeReads(portal: portal());
       expect((await view(reads, '/cuenta', auth: ''))['state'], 'invalid');
-      expect((await view(reads, '/cuenta/perfil'))['state'], 'invalid');
+      expect((await view(reads, '/cuenta/chats'))['state'], 'invalid');
       expect(
         (await _get(reads, portalViewPath)).statusCode,
         405,
@@ -2554,6 +2631,491 @@ void main() {
       expect(svg, contains('stroke-linecap="round"'));
       expect(svg, contains('Q164 78 174 92'));
       expect(customerBikeSvg(CustomerBikeSilhouette.city), contains('A41 41'));
+    });
+
+    // ------------------------------------------------------------ 4b
+
+    Future<Map<String, Object?>> action(
+      _FakeReads reads,
+      String page,
+      String name, [
+      Map<String, Object?> values = const {},
+    ]) async {
+      final response = await _get(
+        reads,
+        portalActionPath,
+        method: 'POST',
+        headers: {
+          'authorization': 'Bearer ${token()}',
+          'content-type': 'application/json',
+        },
+        body: jsonEncode({'path': page, 'action': name, 'values': values}),
+      );
+      expect(response.headers['cache-control'], 'no-store');
+      return jsonDecode(await response.readAsString()) as Map<String, Object?>;
+    }
+
+    test('the profile and addresses frames send their forms to the server; '
+        'only the addresses page loads the Places client', () async {
+      for (final path in ['/cuenta/perfil', '/cuenta/direcciones']) {
+        final html = await (await _get(_FakeReads(), path)).readAsString();
+        expect(
+          html,
+          contains('data-action-url="/cuenta/accion"'),
+          reason: path,
+        );
+        expect(html, contains('data-portal="signedOut"'), reason: path);
+        expect(
+          html.contains('google-places-proxy'),
+          path == '/cuenta/direcciones',
+          reason: path,
+        );
+      }
+    });
+
+    test('the profile shows the facts, the form in place and the password '
+        'dialog with its three steps', () async {
+      final reads = _FakeReads(portal: portal());
+      final html = (await view(reads, '/cuenta/perfil'))['html'] as String;
+      expect(reads.requested, contains('portal without files'));
+      expect(html, contains('Perfil y seguridad'));
+      expect(html, contains('Para tus boletas'));
+      // RUT is empty: the row says «AGREGAR» and opens the form.
+      expect(html, contains('class="pt-prow-add" aria-label="Agregar"'));
+      expect(html, contains('data-form="profile"'));
+      expect(html, contains('data-required="Escribe tu nombre"'));
+      expect(html, contains('placeholder="12.345.678-9"'));
+      expect(html, contains('value="Ana Prueba"'));
+      expect(html, contains('Cambiar contraseña'));
+      expect(html, contains('Verifica que eres tú'));
+      expect(html, contains('Completar seguridad'));
+      expect(html, contains(AuthInputValidation.strongPasswordHelper));
+      expect(html, contains('Cambia la contraseña con que entras a la tienda'));
+      expect(html, isNot(contains('Quedó pendiente cerrar')));
+      final pendingResponse = await _get(
+        reads,
+        portalViewPath,
+        method: 'POST',
+        headers: {
+          'authorization': 'Bearer ${token()}',
+          'content-type': 'application/json',
+        },
+        body: jsonEncode({'path': '/cuenta/perfil', 'pending': true}),
+      );
+      final pending =
+          (jsonDecode(await pendingResponse.readAsString()) as Map)['html']
+              as String;
+      expect(pending, contains('Quedó pendiente cerrar las demás sesiones.'));
+      expect(pending, contains('Tu nueva contraseña ya está activa'));
+      expect(pending, contains('data-step-to="revocation"'));
+    });
+
+    test('the addresses show each row with what its form and menu need, or '
+        'the empty state', () async {
+      final html =
+          (await view(
+                _FakeReads(portal: portal()),
+                '/cuenta/direcciones',
+              ))['html']
+              as String;
+      expect(
+        html,
+        contains('La principal aparece primero al pagar un pedido.'),
+      );
+      expect(html, contains('Agregar dirección'));
+      expect(html, contains('Avenida Libertad 1234, Viña del Mar, Valparaíso'));
+      expect(html, contains('Ana Prueba · +56 9 1234 5678'));
+      expect(html, contains('data-delete-title="¿Eliminar «Casa»?"'));
+      expect(html, contains('&quot;profile_contact&quot;:true'));
+      expect(html, contains('aria-label="Opciones de Casa"'));
+      expect(html, contains('Usar como principal'));
+      expect(html, contains('Nueva dirección'));
+      expect(html, contains('Buscar dirección en Google Maps'));
+      expect(html, contains('data-required="Requerido"'));
+      final empty =
+          (await view(
+                _FakeReads(portal: portal(addresses: const [])),
+                '/cuenta/direcciones',
+              ))['html']
+              as String;
+      expect(empty, contains('No tienes direcciones guardadas.'));
+      expect(empty, contains('Agregar la primera dirección'));
+      expect(empty, contains('Dónde te enviamos tus pedidos.'));
+    });
+
+    test('saving the profile checks the name, writes only the profile '
+        'columns of this customer in this store and draws the page', () async {
+      final reads = _FakeReads(portal: portal());
+      expect(
+        (await action(reads, '/cuenta/perfil', 'profile', {
+          'name': '  ',
+        }))['errors'],
+        {'name': 'Escribe tu nombre'},
+      );
+      expect(reads.writes, isEmpty);
+      final saved = await action(reads, '/cuenta/perfil', 'profile', {
+        'name': ' Ana María ',
+        'rut': '',
+        'phone': '+56 9 8765 4321',
+        'email': 'otra@example.invalid',
+      });
+      expect(saved['toast'], 'Guardamos tus datos.');
+      expect(saved['html'], contains('data-portal="ready"'));
+      final write = reads.writes.single;
+      expect(write['method'], 'PATCH');
+      expect(write['table'], 'customers');
+      expect(write['filters'], {
+        'id': 'eq.$customer',
+        'tenant_id': 'eq.$_tenant',
+      });
+      final body = write['body'] as Map<String, Object?>;
+      expect(body['name'], 'Ana María');
+      expect(body['phone'], '+56 9 8765 4321');
+      // An emptied RUT is cleared, and the e-mail is never written.
+      expect(body.containsKey('rut'), isTrue);
+      expect(body['rut'], isNull);
+      expect(body.containsKey('email'), isFalse);
+      expect(
+        (await action(
+          _FakeReads(portal: portal(), writeOk: false),
+          '/cuenta/perfil',
+          'profile',
+          {'name': 'Ana'},
+        ))['toast'],
+        'No pudimos guardar tus datos. Inténtalo nuevamente.',
+      );
+    });
+
+    test(
+      'an address is checked, created for this customer and store, '
+      'changed, made principal or deleted only through its own row',
+      () async {
+        final reads = _FakeReads(portal: portal());
+        final errors =
+            (await action(reads, '/cuenta/direcciones', 'address-save', {
+                  'label': 'Casa',
+                }))['errors']
+                as Map;
+        expect(errors['recipient_name'], 'Requerido');
+        expect(errors['comuna'], 'Requerido');
+        expect(errors.containsKey('label'), isFalse);
+        final values = {
+          'id': '',
+          'label': 'Trabajo',
+          'recipient_name': 'Ana Prueba',
+          'phone': '+56 9 1234 5678',
+          'street_address': 'Álvarez',
+          'street_number': '32',
+          'apartment': '',
+          'comuna': 'Viña del Mar',
+          'city': 'Viña del Mar',
+          'region': 'Valparaíso',
+          'postal_code': '2520000',
+          'additional_info': '',
+          'is_default': false,
+          'profile_contact': true,
+        };
+        final created = await action(
+          reads,
+          '/cuenta/direcciones',
+          'address-save',
+          values,
+        );
+        expect(created['html'], contains('data-portal="ready"'));
+        final insert = reads.writes.last;
+        expect(insert['method'], 'POST');
+        expect(insert['table'], 'customer_addresses');
+        final row = insert['body'] as Map<String, Object?>;
+        expect(row['customer_id'], customer);
+        expect(row['tenant_id'], _tenant);
+        expect(row['apartment'], isNull);
+        expect(row['is_default'], isFalse);
+        expect(row['postal_code'], '2520000');
+        expect(row.containsKey('profile_contact'), isFalse);
+
+        const id = 'ad000000-0000-4000-8000-000000000001';
+        await action(reads, '/cuenta/direcciones', 'address-save', {
+          ...values,
+          'id': id,
+        });
+        expect(reads.writes.last['method'], 'PATCH');
+        expect(reads.writes.last['filters'], {
+          'id': 'eq.$id',
+          'customer_id': 'eq.$customer',
+          'tenant_id': 'eq.$_tenant',
+        });
+        await action(reads, '/cuenta/direcciones', 'address-default', {
+          'id': id,
+        });
+        expect(reads.writes.last['body'], {'is_default': true});
+        await action(reads, '/cuenta/direcciones', 'address-delete', {
+          'id': id,
+        });
+        expect(reads.writes.last['method'], 'DELETE');
+        expect(reads.writes.last['filters'], {
+          'id': 'eq.$id',
+          'customer_id': 'eq.$customer',
+          'tenant_id': 'eq.$_tenant',
+        });
+        final count = reads.writes.length;
+        expect(
+          (await action(reads, '/cuenta/direcciones', 'address-delete', {
+            'id': 'not-an-id',
+          }))['state'],
+          'invalid',
+        );
+        expect(reads.writes.length, count);
+        expect(
+          (await action(
+            _FakeReads(portal: portal(), writeOk: false),
+            '/cuenta/direcciones',
+            'address-delete',
+            {'id': id},
+          ))['toast'],
+          'No pudimos eliminar la dirección. Intenta de nuevo.',
+        );
+      },
+    );
+
+    test('the password: checked first, then Auth; a code when Auth asks for '
+        'one; only the sessions are retried once it changed', () async {
+      var reads = _FakeReads(portal: portal());
+      expect(
+        (await action(reads, '/cuenta/perfil', 'password', {
+          'password': 'corta1',
+          'confirm': 'corta1',
+        }))['errors'],
+        {'password': 'La contraseña debe tener al menos 8 caracteres'},
+      );
+      expect(
+        (await action(reads, '/cuenta/perfil', 'password', {
+          'password': 'pedal2026',
+          'confirm': 'pedal2025',
+        }))['errors'],
+        {'confirm': 'Las contraseñas no coinciden'},
+      );
+      expect(reads.authCalls, isEmpty);
+      expect(
+        await action(reads, '/cuenta/perfil', 'password', {
+          'password': 'pedal2026',
+          'confirm': 'pedal2026',
+        }),
+        {
+          'done': true,
+          'toast': 'Contraseña actualizada y demás sesiones cerradas.',
+        },
+      );
+      expect(reads.authCalls.map((c) => c.$1), [
+        CustomerAuthCall.updatePassword,
+        CustomerAuthCall.signOutOthers,
+      ]);
+      expect(reads.authCalls.first.$2, {'password': 'pedal2026'});
+
+      // The other sessions could not be closed: never the password again.
+      reads = _FakeReads(
+        portal: portal(),
+        auth: {CustomerAuthCall.signOutOthers: null},
+      );
+      expect(
+        await action(reads, '/cuenta/perfil', 'password', {
+          'password': 'pedal2026',
+          'confirm': 'pedal2026',
+        }),
+        {'step': 'revocation', 'pending': true},
+      );
+      expect(
+        (await action(reads, '/cuenta/perfil', 'revoke-others'))['error'],
+        contains('Reintenta desde Seguridad'),
+      );
+      expect(
+        reads.authCalls.where((c) => c.$1 == CustomerAuthCall.updatePassword),
+        hasLength(1),
+      );
+
+      // Auth asks for a code: it is mailed, then sent with the password.
+      reads = _FakeReads(
+        portal: portal(),
+        auth: {
+          CustomerAuthCall.updatePassword: (
+            status: 400,
+            code: 'reauthentication_needed',
+            message: 'Password update requires reauthentication',
+          ),
+        },
+      );
+      expect(
+        await action(reads, '/cuenta/perfil', 'password', {
+          'password': 'pedal2026',
+          'confirm': 'pedal2026',
+        }),
+        {
+          'step': 'verification',
+          'notice': 'Enviamos un código de verificación a tu correo asociado.',
+        },
+      );
+      expect(
+        (await action(reads, '/cuenta/perfil', 'password', {
+          'password': 'pedal2026',
+          'code': '12345',
+        }))['errors'],
+        {'code': 'Ingresa los 6 dígitos del código.'},
+      );
+      reads = _FakeReads(
+        portal: portal(),
+        auth: {
+          CustomerAuthCall.updatePassword: (
+            status: 400,
+            code: 'reauthentication_not_valid',
+            message: 'Verification code not valid',
+          ),
+          CustomerAuthCall.reauthenticate: (
+            status: 429,
+            code: 'over_email_send_rate_limit',
+            message: 'rate limit',
+          ),
+        },
+      );
+      expect(
+        (await action(reads, '/cuenta/perfil', 'password', {
+          'password': 'pedal2026',
+          'code': '123456',
+        }))['error'],
+        'El código no es válido. Revísalo e inténtalo nuevamente.',
+      );
+      expect(reads.authCalls.last.$2, {
+        'password': 'pedal2026',
+        'nonce': '123456',
+      });
+      expect(await action(reads, '/cuenta/perfil', 'password-resend'), {
+        'step': 'verification',
+        'error': 'Espera un momento antes de solicitar otro código.',
+      });
+      expect(
+        (await action(
+          _FakeReads(
+            portal: portal(),
+            auth: {
+              CustomerAuthCall.updatePassword: (
+                status: 422,
+                code: 'same_password',
+                message: 'New password should be different',
+              ),
+            },
+          ),
+          '/cuenta/perfil',
+          'password',
+          {'password': 'pedal2026', 'confirm': 'pedal2026'},
+        ))['error'],
+        'La nueva contraseña debe ser distinta a la contraseña actual.',
+      );
+    });
+
+    test('after a lost answer, Auth\'s «same password» means it changed: '
+        'only the other sessions are closed', () async {
+      final reads = _FakeReads(
+        portal: portal(),
+        auth: {
+          CustomerAuthCall.updatePassword: (
+            status: 422,
+            code: 'same_password',
+            message: 'New password should be different',
+          ),
+        },
+      );
+      expect(
+        await action(reads, '/cuenta/perfil', 'password', {
+          'password': 'pedal2026',
+          'confirm': 'pedal2026',
+          'uncertain': true,
+        }),
+        {
+          'done': true,
+          'toast': 'Contraseña actualizada y demás sesiones cerradas.',
+        },
+      );
+      expect(reads.authCalls.last.$1, CustomerAuthCall.signOutOthers);
+      // A failed call marks the outcome unknown for the next attempt.
+      expect(
+        await action(
+          _FakeReads(
+            portal: portal(),
+            auth: {CustomerAuthCall.updatePassword: null},
+          ),
+          '/cuenta/perfil',
+          'password',
+          {'password': 'pedal2026', 'confirm': 'pedal2026'},
+        ),
+        {
+          'error': 'No pudimos actualizar la contraseña. Inténtalo nuevamente.',
+          'uncertain': true,
+        },
+      );
+    });
+
+    test('a save keeps the pending notice, and a failed read before it '
+        'answers Flutter\'s words in the private envelope', () async {
+      final reads = _FakeReads(portal: portal());
+      final response = await _get(
+        reads,
+        portalActionPath,
+        method: 'POST',
+        headers: {
+          'authorization': 'Bearer ${token()}',
+          'content-type': 'application/json',
+        },
+        body: jsonEncode({
+          'path': '/cuenta/perfil',
+          'action': 'profile',
+          'values': {'name': 'Ana'},
+          'pending': true,
+        }),
+      );
+      final html =
+          (jsonDecode(await response.readAsString()) as Map)['html'] as String;
+      expect(html, contains('Quedó pendiente cerrar las demás sesiones.'));
+      final failed = await _get(
+        _FakeReads(fail: true),
+        portalActionPath,
+        method: 'POST',
+        headers: {
+          'authorization': 'Bearer ${token()}',
+          'content-type': 'application/json',
+        },
+        body: jsonEncode({
+          'path': '/cuenta/direcciones',
+          'action': 'address-delete',
+          'values': {'id': 'ad000000-0000-4000-8000-000000000001'},
+        }),
+      );
+      expect(failed.statusCode, 200);
+      expect(failed.headers['cache-control'], 'no-store');
+      expect(
+        (jsonDecode(await failed.readAsString()) as Map)['toast'],
+        'No pudimos eliminar la dirección. Intenta de nuevo.',
+      );
+      final get = await _get(reads, portalActionPath);
+      expect(get.statusCode, 405);
+      expect(get.headers['cache-control'], 'no-store');
+      expect(get.headers['x-robots-tag'], 'noindex');
+    });
+
+    test('a refused session is renewed before any write', () async {
+      final reads = _FakeReads();
+      expect(
+        (await action(reads, '/cuenta/perfil', 'profile', {
+          'name': 'Ana',
+        }))['state'],
+        'expired',
+      );
+      expect(reads.writes, isEmpty);
+      expect(
+        (await action(
+          _FakeReads(portal: portal()),
+          '/cuenta/perfil',
+          'borrar',
+        ))['state'],
+        'invalid',
+      );
     });
   });
 }

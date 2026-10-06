@@ -2,7 +2,7 @@
 titulo: Portal de clientes
 resumen: lo que ve un cliente con cuenta en /cuenta — pedidos, taller, bicis, soporte — cómo entra, cómo se ve y qué sigue pendiente
 fuentes: [repositorio]
-archivos: [services/storefront_html/lib/src/portal_page_view.dart, services/storefront_html/lib/src/portal_page_route.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_plans.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_snapshot.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_presentation.dart, lib/public_store/pages/customer_dashboard_page.dart, lib/public_store/pages/customer_orders_page.dart, lib/public_store/pages/customer_service_history_page.dart, lib/public_store/pages/customer_bikes_page.dart, lib/public_store/pages/customer_chat_hub_page.dart, lib/public_store/pages/customer_auth_page.dart, lib/public_store/widgets/customer_portal_style.dart, lib/public_store/widgets/customer_portal_layout.dart, lib/public_store/services/customer_account_service.dart]
+archivos: [services/storefront_html/lib/src/portal_page_view.dart, services/storefront_html/lib/src/portal_forms_view.dart, services/storefront_html/lib/src/portal_page_route.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_forms.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_plans.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_snapshot.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_presentation.dart, lib/public_store/pages/customer_dashboard_page.dart, lib/public_store/pages/customer_orders_page.dart, lib/public_store/pages/customer_service_history_page.dart, lib/public_store/pages/customer_bikes_page.dart, lib/public_store/pages/customer_chat_hub_page.dart, lib/public_store/pages/customer_auth_page.dart, lib/public_store/widgets/customer_portal_style.dart, lib/public_store/widgets/customer_portal_layout.dart, lib/public_store/services/customer_account_service.dart]
 tablas: [customers, bikes, mechanic_jobs, online_orders, website_settings]
 revisado: 2026-10-06
 ---
@@ -36,8 +36,9 @@ Todas llevan `noindex` por cabecera ([rutas](rutas-y-navegacion.md)).
 ## En HTML desde el 2026-10-06
 
 `/cuenta`, `/cuenta/pedidos`, `/cuenta/servicios` y `/cuenta/bicicletas` las
-responde el servidor HTML; el resto (entrar, perfil, direcciones, soporte)
-sigue en Flutter, y entre unas y otras se pasa con una carga completa. La
+responde el servidor HTML, y desde la fase 4b también `/cuenta/perfil` y
+`/cuenta/direcciones`; entrar y el soporte siguen en Flutter, y entre unas y
+otras se pasa con una carga completa. La
 página llega sin datos; el navegador pide `POST /cuenta/vista` con el token
 del cliente y el servidor lee Supabase como ese cliente: la base decide qué
 ve (RLS) y cada lectura filtra la tienda. El token no se guarda ni se anota.
@@ -45,6 +46,16 @@ Las reglas (qué va en «Para ti ahora», los estados, el dibujo de la bici, la
 garantía) están en el núcleo y Flutter usa las mismas `[Repo]`. Medido contra
 Flutter con datos reales anonimizados a 1440 y 412 px: mismos bordes y el
 texto a ±1 px `[Repo 2026-10-06]`.
+
+Lo que se guarda (el perfil, la contraseña, agregar, editar, hacer principal o
+borrar una dirección) va a `POST /cuenta/accion`: el servidor revisa con las
+reglas de `customer_portal_forms.dart`, escribe como el cliente con la tienda
+en cada filtro (el cliente y la tienda los pone el servidor) y responde la
+página de nuevo; la contraseña va a Supabase Auth con la misma sesión, sin
+guardarse. Arreglado en las dos tiendas al mudarlo (2026-10-06): borrar el
+RUT o el teléfono ahora los borra (volvían), un obligatorio con sólo espacios
+ya no pasa y las fechas de una dirección se escriben en UTC (iban 3 a 4 h
+corridas) `[Repo 2026-10-06]`.
 
 ## Cómo se ve: dirección «Sendero» (2026-09-26)
 
@@ -87,7 +98,13 @@ Las fotos del portal salen del editor (`theme_customer_portal_image`,
   `portal_time_zone.dart`.
 - HTML: `services/storefront_html/lib/src/portal_page_view.dart` (la vista),
   `portal_page_css.dart`, `portal_page_script.dart` y
-  `portal_page_route.dart` (`/cuenta/vista`, `/cuenta/archivo`); lecturas en
-  `SupabasePublicReads.customerPortal`.
-- Tablas: `customers` (`auth_user_id`), `online_orders`, `mechanic_jobs`, `bikes`.
+  `portal_page_route.dart` (`/cuenta/vista`, `/cuenta/archivo`,
+  `/cuenta/accion`); el perfil y las direcciones en `portal_forms_view.dart`;
+  lecturas en `SupabasePublicReads.customerPortal`, escrituras en
+  `customerWrite` y `customerAuth`; la búsqueda de Maps en `places_script.dart`
+  (la misma del checkout).
+- Reglas de los formularios en el núcleo: `customer_portal_forms.dart`,
+  `self_password_rules.dart`, `customer_address.dart`,
+  `auth_input_validation.dart`.
+- Tablas: `customers` (`auth_user_id`), `customer_addresses`, `online_orders`, `mechanic_jobs`, `bikes`.
 - Superficie registrada: fila «Customer portal» de `canonical-ui-surfaces.md`.

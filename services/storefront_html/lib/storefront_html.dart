@@ -28,7 +28,12 @@ export 'src/home_page_view.dart' show homePageDocument;
 export 'src/policy_page_model.dart';
 export 'src/policy_page_view.dart' show policyPageDocument;
 export 'src/portal_page_view.dart'
-    show PortalPage, customerBikeSvg, portalFilePath, portalViewPath;
+    show
+        PortalPage,
+        customerBikeSvg,
+        portalActionPath,
+        portalFilePath,
+        portalViewPath;
 export 'src/product_page_model.dart';
 export 'src/product_page_view.dart' show productPageDocument;
 export 'src/public_reads.dart';

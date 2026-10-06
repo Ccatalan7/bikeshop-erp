@@ -70,6 +70,10 @@ void main() {
       '/cuenta/bicicletas',
       '/cuenta/vista',
       '/cuenta/archivo',
+      // The profile, the addresses and where they save (phase 4b).
+      '/cuenta/perfil',
+      '/cuenta/direcciones',
+      '/cuenta/accion',
     ]) {
       expect(routes.owns(path), isTrue, reason: path);
     }
@@ -79,9 +83,9 @@ void main() {
       '/pedido',
       '/carritox',
       '/cuenta/login',
-      '/cuenta/perfil',
       '/cuenta/chats',
       '/cuenta/chats/46a51a87-aa3a-430c-a6e1-af48c8d74541',
+      '/cuenta/perfilx',
       '/serviciosx',
       '/productosx',
       '/producto',
@@ -122,13 +126,15 @@ void main() {
       '/pedido/46a51a87-aa3a-430c-a6e1-af48c8d74541',
       '/cuenta',
       '/cuenta/servicios',
+      '/cuenta/perfil',
+      '/cuenta/direcciones',
     ]) {
       expect(storefrontHtmlServes(path), isTrue, reason: path);
     }
     for (final path in [
       '/pedido',
       '/cuenta/login',
-      '/cuenta/perfil',
+      '/cuenta/chats',
       '/carritox',
       '/checkoutx',
     ]) {

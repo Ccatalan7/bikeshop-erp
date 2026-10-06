@@ -106,6 +106,12 @@ CPU ×4, 1,6 Mbps, 150 ms, sin caché; «se lee» = el mayor pintado): portada
 **1,0 s**. Lo único que sigue en Flutter, `/cuenta/login`, queda usable a los
 **20,5 s** con 3.649 KB `[Prod 2026-10-06]`.
 
+**El portal en HTML** (fase 4a, 2026-10-06, `3e4ae449`, el mismo celular lento):
+el marco de `/cuenta` con su puerta se lee a los **1,6 s** en vivo, contra
+**18,4 s** de Flutter; con sesión, la cuenta completa (resumen, pedidos, taller y
+bicis, leídos como el cliente por `POST /cuenta/vista`) a los **1,8 s** en local
+con datos reales anonimizados `[Prod 2026-10-06]` `[Repo 2026-10-06]`.
+
 - La página HTML viajaba sin comprimir (64 KB): ni Cloud Run ni Firebase
   Hosting comprimen una respuesta reenviada. El servidor la manda en gzip
   (15 KB) `[Prod 2026-10-05]`.

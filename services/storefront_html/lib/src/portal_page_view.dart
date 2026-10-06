@@ -5,18 +5,24 @@ import 'package:jaspr/dom.dart';
 import 'package:jaspr/server.dart';
 import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
 import 'package:vinabike_public_core/public_store/models/customer_bike_drawing_geometry.dart';
+import 'package:vinabike_public_core/public_store/models/customer_portal_forms.dart';
 import 'package:vinabike_public_core/public_store/models/customer_portal_plans.dart';
 import 'package:vinabike_public_core/public_store/models/customer_portal_presentation.dart';
 import 'package:vinabike_public_core/public_store/models/customer_portal_snapshot.dart';
 import 'package:vinabike_public_core/public_store/models/online_order.dart';
+import 'package:vinabike_public_core/shared/models/customer_address.dart';
+import 'package:vinabike_public_core/shared/utils/auth_input_validation.dart';
 import 'package:vinabike_public_core/shared/utils/chilean_utils.dart';
 
 import 'css_values.dart';
 import 'material_icons.dart';
+import 'places_script.dart';
 import 'portal_page_css.dart';
 import 'portal_page_script.dart';
 import 'public_reads.dart';
 import 'site_layout.dart';
+
+part 'portal_forms_view.dart';
 
 /// Where the portal page asks for its content, with the customer's session
 /// in the `authorization` header (never in the address).
@@ -25,13 +31,19 @@ const portalViewPath = '/cuenta/vista';
 /// Where the job sheet asks for a fresh link to one of the job's files.
 const portalFilePath = '/cuenta/archivo';
 
-/// The customer portal's pages the HTML store draws (4a, reading). Profile,
-/// addresses, the chats and the way in are still Flutter's.
+/// Where the profile and addresses pages send what the customer saves, with
+/// the session in the `authorization` header (`portal_action_route.dart`).
+const portalActionPath = '/cuenta/accion';
+
+/// The customer portal's pages the HTML store draws: reading (4a) and the
+/// profile and addresses (4b). The chats and the way in are still Flutter's.
 enum PortalPage {
   dashboard('/cuenta'),
   orders('/cuenta/pedidos'),
   workshop('/cuenta/servicios'),
-  bikes('/cuenta/bicicletas');
+  bikes('/cuenta/bicicletas'),
+  profile('/cuenta/perfil'),
+  addresses('/cuenta/direcciones');
 
   const PortalPage(this.path);
   final String path;
@@ -82,6 +94,12 @@ Component portalPageDocument(PageContext page, PortalPage which) {
           'data-portal-root': '',
           'data-view-url': '${page.hidden ? '/_html' : ''}$portalViewPath',
           'data-file-url': '${page.hidden ? '/_html' : ''}$portalFilePath',
+          'data-action-url': '${page.hidden ? '/_html' : ''}$portalActionPath',
+          if (which == PortalPage.addresses) ...{
+            // What the address search draws in its list.
+            'data-place-icon': materialIcon(mdPlaceOutlined),
+            'data-spinner': '<span class="pt-spin small">$_spinner</span>',
+          },
         },
         [
           _portalBoundary(images, _BoundaryState.signedOut),
@@ -112,7 +130,11 @@ Component portalPageDocument(PageContext page, PortalPage which) {
         ],
       ),
     ],
-    pageScripts: [script(content: portalPageScript)],
+    pageScripts: [
+      // The address form's search (4b) shares the checkout's Places client.
+      if (which == PortalPage.addresses) script(content: placesScript),
+      script(content: portalPageScript),
+    ],
     showFooter: false,
   );
 }
@@ -232,6 +254,7 @@ class PortalViewData {
     required this.jobs,
     required this.addresses,
     required this.jobFiles,
+    required this.pendingRevocation,
   });
 
   /// The rows as read, completed like `CustomerAccountService` completes
@@ -239,8 +262,9 @@ class PortalViewData {
   factory PortalViewData.fromReads(
     PortalPage page,
     String query,
-    CustomerPortalReads reads,
-  ) {
+    CustomerPortalReads reads, {
+    bool pendingRevocation = false,
+  }) {
     final settings = reads.shell['settings'];
     String setting(String key, [String fallback = '']) {
       final value = settings is Map ? settings[key] : null;
@@ -266,8 +290,9 @@ class PortalViewData {
       orderImages: customerOrderImages(reads.productImages),
       bikes: bikes,
       jobs: jobs,
-      addresses: reads.addresses,
+      addresses: [for (final row in reads.addresses) ?_address(row)],
       jobFiles: reads.jobFiles,
+      pendingRevocation: pendingRevocation,
     );
   }
 
@@ -279,8 +304,12 @@ class PortalViewData {
   final Map<String, String> orderImages;
   final List<Map<String, dynamic>> bikes;
   final List<Map<String, dynamic>> jobs;
-  final int addresses;
+  final List<CustomerAddress> addresses;
   final Map<String, String> jobFiles;
+
+  /// The password changed but closing the other sessions failed, in this
+  /// browser (`hasPendingOtherSessionsRevocation`, kept by the page).
+  final bool pendingRevocation;
 
   Map<String, String> get queryParameters =>
       query.isEmpty ? const {} : Uri.splitQueryString(query);
@@ -317,7 +346,7 @@ Component portalView(PortalViewData data) {
       footer = _serviceBand(
         customerServiceBandItems(
           profile: data.profile,
-          addressesCount: data.addresses,
+          addressesCount: data.addresses.length,
         ),
       );
     case PortalPage.orders:
@@ -344,6 +373,25 @@ Component portalView(PortalViewData data) {
       title = 'Bicicletas';
       meta = 'Las bicis que el taller registró a tu nombre.';
       body = _bikes(data, sheets);
+    case PortalPage.profile:
+      title = 'Perfil y seguridad';
+      meta = 'Los datos con que preparamos tus pedidos y boletas.';
+      body = _profile(data, sheets);
+    case PortalPage.addresses:
+      title = 'Direcciones';
+      final none = data.addresses.isEmpty;
+      meta = none
+          ? 'Dónde te enviamos tus pedidos.'
+          : 'La principal aparece primero al pagar un pedido.';
+      action = none
+          ? null
+          : _button(
+              'Agregar dirección',
+              kind: 'photo',
+              icon: mdAdd,
+              attributes: {'data-address': 'new'},
+            );
+      body = _addresses(data, sheets);
   }
 
   // A section of the tabs has no «Volver»; a filtered view does.
@@ -1490,6 +1538,7 @@ Component _t(String text) => span(classes: 'pt-x', [.text(text)]);
 Component _button(
   String label, {
   String kind = 'pri',
+  String? icon,
   bool arrow = false,
   bool expand = false,
   bool expandCompact = false,
@@ -1504,6 +1553,7 @@ Component _button(
     if (expandCompact) 'full-compact',
   ].join(' ');
   final children = <Component>[
+    if (icon != null) RawText(materialIcon(icon, size: 18)),
     span(classes: 'pt-btn-label', [_t(label)]),
     if (arrow) RawText(materialIcon(mdArrowForward, size: 18)),
   ];
@@ -1530,6 +1580,7 @@ Component _link(
   String label, {
   String? href,
   String? view,
+  String? act,
   bool wideOnly = false,
 }) {
   final children = [
@@ -1539,10 +1590,10 @@ Component _link(
     ]),
   ];
   final classes = wideOnly ? 'pt-link wide-only' : 'pt-link';
-  if (view != null) {
+  if (view != null || act != null) {
     return button(
       classes: classes,
-      attributes: {'type': 'button', 'data-view-to': view},
+      attributes: {'type': 'button', 'data-view-to': ?view, 'data-act': ?act},
       children,
     );
   }
@@ -1606,6 +1657,7 @@ Component _section(
   int? count,
   String? actionLabel,
   String? actionHref,
+  String? actionAct,
   required Component child,
 }) => section(classes: 'pt-section', [
   div(classes: 'pt-sh', [
@@ -1617,8 +1669,8 @@ Component _section(
           span(classes: 'pt-count', [_t('$count')]),
       ]),
     ]),
-    if (actionLabel != null && actionHref != null)
-      _link(actionLabel, href: actionHref),
+    if (actionLabel != null && (actionHref != null || actionAct != null))
+      _link(actionLabel, href: actionHref, act: actionAct),
   ]),
   child,
 ]);

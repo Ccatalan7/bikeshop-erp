@@ -113,16 +113,18 @@ typedef CartReads = ({
 /// The customer's account as the portal reads it, with the customer's own
 /// session (`CustomerAccountService`: the idempotent
 /// `provision_current_public_store_customer`, then `customers` by
-/// `auth_user_id` and tenant, their addresses, orders with their lines,
+/// `auth_user_id` and tenant, their addresses (the principal first, then the
+/// newest), orders with their lines,
 /// active bikes with their brand and model rows, and jobs). [profile] is null
 /// when the session is not a customer of this store. [jobBikes] are the
 /// bikes the jobs name, read apart as Flutter reads them; [productImages] the
 /// order lines' products (`customerOrderImageColumns`, public); [jobFiles]
-/// each job file's link to show it, resolved with the same session.
+/// each job file's link to show it, resolved with the same session (only
+/// when asked: the profile and addresses pages show none).
 typedef CustomerPortalReads = ({
   Map<String, dynamic> shell,
   Map<String, dynamic>? profile,
-  int addresses,
+  List<Object?> addresses,
   List<Object?> orders,
   List<Object?> bikes,
   List<Object?> jobs,
@@ -130,6 +132,22 @@ typedef CustomerPortalReads = ({
   List<Object?> productImages,
   Map<String, String> jobFiles,
 });
+
+/// What Supabase Auth answered a customer's request: its [status] and, when
+/// it refused, its error code and message (the request is never kept).
+typedef CustomerAuthAnswer = ({int status, String? code, String message});
+
+/// The Supabase Auth calls the portal makes with the customer's session.
+enum CustomerAuthCall {
+  /// `PUT /auth/v1/user` with `{password, nonce?}`.
+  updatePassword,
+
+  /// `GET /auth/v1/reauthenticate`: mails the customer a one-time code.
+  reauthenticate,
+
+  /// `POST /auth/v1/logout?scope=others`: closes every other session.
+  signOutOthers,
+}
 
 /// Supabase refused the customer's session (expired or not valid): the page
 /// renews it and asks again, or shows the way in.
@@ -173,8 +191,37 @@ abstract interface class PublicReads {
 
   /// The portal's reads with the customer's [accessToken]; throws
   /// [CustomerSessionRefused] when Supabase does not accept it. The token is
-  /// only sent to Supabase: never kept nor written to a log.
-  Future<CustomerPortalReads> customerPortal(String accessToken);
+  /// only sent to Supabase: never kept nor written to a log. [files] resolves
+  /// the jobs' files.
+  Future<CustomerPortalReads> customerPortal(
+    String accessToken, {
+    bool files = true,
+  });
+
+  /// The session's customer row in this store, or null (no provisioning:
+  /// the page that sends a write has read the account already).
+  Future<Map<String, dynamic>?> customerProfile(String accessToken);
+
+  /// A write of the customer's own [table] (`customers` or
+  /// `customer_addresses`) with their session: row security decides, and
+  /// [filters] must name the store (`tenant_id`). [method] is `PATCH`,
+  /// `POST` or `DELETE`; true when a row was written.
+  Future<bool> customerWrite(
+    String accessToken, {
+    required String method,
+    required String table,
+    Map<String, String> filters = const {},
+    Map<String, Object?>? body,
+  });
+
+  /// [call] to Supabase Auth with the customer's session; throws
+  /// [CustomerSessionRefused] when Auth does not accept it. Neither the
+  /// session nor [body] (a password) is kept or written to a log.
+  Future<CustomerAuthAnswer> customerAuth(
+    String accessToken,
+    CustomerAuthCall call, {
+    Map<String, Object?>? body,
+  });
 
   /// A link to open one of a job's files now
   /// (`WorkshopAssetService.resolve`), or null when the session may not.
@@ -536,7 +583,10 @@ class SupabasePublicReads implements PublicReads {
   }
 
   @override
-  Future<CustomerPortalReads> customerPortal(String accessToken) async {
+  Future<CustomerPortalReads> customerPortal(
+    String accessToken, {
+    bool files = true,
+  }) async {
     final userId = _sessionUser(accessToken);
     if (userId == null) throw const CustomerSessionRefused();
     final tenant = config.tenantId;
@@ -573,7 +623,7 @@ class SupabasePublicReads implements PublicReads {
       return (
         shell: shell,
         profile: null,
-        addresses: 0,
+        addresses: const <Object?>[],
         orders: const <Object?>[],
         bikes: const <Object?>[],
         jobs: const <Object?>[],
@@ -585,9 +635,10 @@ class SupabasePublicReads implements PublicReads {
     final customer = profile['id'].toString();
     final second = await Future.wait<List<Object?>>([
       _customerSelect(accessToken, 'customer_addresses', {
-        'select': 'id',
+        'select': '*',
         'customer_id': 'eq.$customer',
         'tenant_id': 'eq.$tenant',
+        'order': 'is_default.desc,created_at.desc',
       }),
       _customerSelect(accessToken, 'online_orders', {
         'select': '*,online_order_items(*)',
@@ -626,10 +677,11 @@ class SupabasePublicReads implements PublicReads {
           job['bike_id'].toString(),
     };
     final references = <String>{
-      for (final job in jobs)
-        if (job is Map)
-          for (final value in job['image_urls'] as List? ?? const [])
-            if (value is String && value.trim().isNotEmpty) value.trim(),
+      if (files)
+        for (final job in jobs)
+          if (job is Map)
+            for (final value in job['image_urls'] as List? ?? const [])
+              if (value is String && value.trim().isNotEmpty) value.trim(),
     };
     final third = await Future.wait<Object?>([
       productIds.isEmpty
@@ -669,7 +721,7 @@ class SupabasePublicReads implements PublicReads {
     return (
       shell: shell,
       profile: profile,
-      addresses: second[0].length,
+      addresses: second[0],
       orders: orders,
       bikes: second[2],
       jobs: jobs,
@@ -727,6 +779,115 @@ class SupabasePublicReads implements PublicReads {
       stderr.writeln('portal job file unavailable: ${error.runtimeType}');
       return null;
     }
+  }
+
+  @override
+  Future<Map<String, dynamic>?> customerProfile(String accessToken) async {
+    final userId = _sessionUser(accessToken);
+    if (userId == null) throw const CustomerSessionRefused();
+    final tenant = config.tenantId;
+    final rows = await _customerSelect(accessToken, 'customers', {
+      'select': '*',
+      'auth_user_id': 'eq.$userId',
+      'tenant_id': 'eq.$tenant',
+      'limit': '1',
+    });
+    final row = rows.isEmpty ? null : rows.first;
+    return row is Map &&
+            row['auth_user_id']?.toString() == userId &&
+            row['tenant_id']?.toString() == tenant
+        ? Map<String, dynamic>.from(row)
+        : null;
+  }
+
+  static const _customerTables = {'customers', 'customer_addresses'};
+
+  @override
+  Future<bool> customerWrite(
+    String accessToken, {
+    required String method,
+    required String table,
+    Map<String, String> filters = const {},
+    Map<String, Object?>? body,
+  }) async {
+    if (!_customerTables.contains(table) ||
+        !const {'PATCH', 'POST', 'DELETE'}.contains(method)) {
+      throw ArgumentError('not a portal write: $method $table');
+    }
+    final names = method == 'POST'
+        ? (body ?? const {})['tenant_id']?.toString() == config.tenantId
+        : filters['tenant_id'] == 'eq.${config.tenantId}';
+    if (!names) throw ArgumentError('a portal write names its store');
+    Future<Object?> send() => _customerSend(
+      accessToken,
+      method,
+      Uri.parse(
+        '${config.supabaseUrl}/rest/v1/$table',
+      ).replace(queryParameters: filters.isEmpty ? null : filters),
+      body,
+      '$table ${method.toLowerCase()}',
+      prefer: 'return=representation',
+    );
+    // A change or a removal can be sent twice; a new row cannot.
+    final written = method == 'POST' ? await send() : await _retrying(send);
+    return written is List && written.isNotEmpty;
+  }
+
+  @override
+  Future<CustomerAuthAnswer> customerAuth(
+    String accessToken,
+    CustomerAuthCall call, {
+    Map<String, Object?>? body,
+  }) async {
+    final (method, path) = switch (call) {
+      CustomerAuthCall.updatePassword => ('PUT', '/auth/v1/user'),
+      CustomerAuthCall.reauthenticate => ('GET', '/auth/v1/reauthenticate'),
+      CustomerAuthCall.signOutOthers => (
+        'POST',
+        '/auth/v1/logout?scope=others',
+      ),
+    };
+    final request = await _client
+        .openUrl(method, Uri.parse('${config.supabaseUrl}$path'))
+        .timeout(_timeout);
+    request.headers
+      ..set('apikey', config.publishableKey)
+      ..set('authorization', 'Bearer $accessToken');
+    if (body != null) {
+      request.headers.contentType = ContentType.json;
+      request.write(jsonEncode(body));
+    }
+    final response = await request.close().timeout(_timeout);
+    final text = await response
+        .transform(utf8.decoder)
+        .join()
+        .timeout(_timeout);
+    Object? decoded;
+    try {
+      decoded = text.isEmpty ? null : jsonDecode(text);
+    } on FormatException {
+      decoded = null;
+    }
+    final error = decoded is Map ? decoded : const {};
+    final rawCode = error['error_code'] ?? error['code'];
+    final code = rawCode is String ? rawCode : null;
+    final message =
+        (error['msg'] ?? error['message'] ?? error['error_description'] ?? '')
+            .toString();
+    if (response.statusCode == 401 ||
+        const {
+          'bad_jwt',
+          'no_authorization',
+          'session_not_found',
+          'session_expired',
+        }.contains(code)) {
+      throw const CustomerSessionRefused();
+    }
+    return (
+      status: response.statusCode,
+      code: response.statusCode < 300 ? null : code,
+      message: response.statusCode < 300 ? '' : message,
+    );
   }
 
   /// The user a session token names (`sub`). Not trusted for anything but
@@ -798,12 +959,14 @@ class SupabasePublicReads implements PublicReads {
     String method,
     Uri uri,
     Map<String, Object?>? body,
-    String name,
-  ) async {
+    String name, {
+    String? prefer,
+  }) async {
     final request = await _client.openUrl(method, uri).timeout(_timeout);
     request.headers
       ..set('apikey', config.publishableKey)
       ..set('authorization', 'Bearer $token');
+    if (prefer != null) request.headers.set('prefer', prefer);
     if (body != null) {
       request.headers.contentType = ContentType.json;
       request.write(jsonEncode(body));

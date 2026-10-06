@@ -1232,4 +1232,87 @@ Lo que costó, y vale para las páginas que siguen:
 
 - Las copias de una foto reemplazada quedan en Storage (pocos KB cada una);
   una limpieza de las que ninguna fila nombra, si algún día pesan.
-- 4b (perfil y direcciones), 4c (entrar) y 4d (chats) siguen en Flutter.
+- 4c (entrar) y 4d (chats) siguen en Flutter.
+
+## Fase 4b: el portal, escribir (2026-10-06)
+
+`/cuenta/perfil` y `/cuenta/direcciones` en el servidor
+(`portal_forms_view.dart`, parte de `portal_page_view.dart`), con el diálogo
+de la contraseña en sus tres pasos, el formulario de una dirección con la
+búsqueda de Google Maps, la confirmación de borrar y el menú de cada fila.
+
+- **Lo que se guarda va al servidor, no a Supabase desde el navegador.** El
+  formulario manda `POST /cuenta/accion` `{path, query, action, values}` con
+  la sesión en `authorization`; el servidor revisa con las reglas del núcleo,
+  escribe **como el cliente** (RLS) con la tienda en cada filtro
+  (`customerWrite` sólo acepta `customers` y `customer_addresses` y exige el
+  `tenant_id`) y responde la página dibujada de nuevo, el mensaje de un campo
+  o lo que hay que decir. Así una regla vive en un solo lugar y un teléfono
+  lento hace un viaje, no dos (escribir y volver a leer). El cliente y la
+  tienda los pone el servidor, nunca el navegador.
+- **La contraseña** también pasa por el servidor hacia Supabase Auth con la
+  misma sesión (`PUT /auth/v1/user`, `GET /auth/v1/reauthenticate`, `POST
+  /auth/v1/logout?scope=others`), sin guardarla ni anotarla. Una vez cambiada,
+  lo que falle después sólo pide cerrar las demás sesiones, nunca la
+  contraseña de nuevo; el aviso «Quedó pendiente…» queda en
+  `sessionStorage` por usuario (Flutter lo tenía en memoria).
+- **Un dueño:** `customer_portal_forms.dart` (qué pide cada campo, las
+  palabras, qué escribe un guardado), `self_password_rules.dart` (cómo se lee
+  un rechazo de Auth) y `customer_address.dart`, `auth_input_validation.dart`
+  movidos al núcleo; Flutter usa los mismos. La lectura de un lugar de Google
+  (`resolvePlace`) es una sola para el checkout y el portal
+  (`places_script.dart`).
+- **Arreglado en las dos tiendas:** borrar el RUT o el teléfono ahora los
+  borra (antes volvían, porque un campo vacío no se mandaba); un campo
+  obligatorio con sólo espacios ya no pasa; las fechas de una dirección se
+  escriben en UTC (Flutter las mandaba en hora local sin zona, 3 a 4 h
+  corridas); las escrituras de direcciones y del perfil filtran la tienda.
+- **Medido contra Flutter** a 1440 y 412 px: perfil, edición, errores, los
+  tres pasos de la contraseña, la fila, el menú, el formulario nuevo, editado
+  y con errores, borrar y el aviso de abajo, con los bordes en la misma fila
+  de píxeles y el texto a ±1 px. 52 comportamientos verificados en los dos
+  anchos contra un Supabase falso (guardar y cancelar, cada respuesta de Auth,
+  agregar, editar, principal, borrar, Esc, la búsqueda de Maps contestada en
+  la prueba, sin llamar a Google, y las carreras de la revisión).
+- **Revisión de Codex** (sólo lectura, 5 hallazgos, ninguno de tienda ni de
+  sesión, todos corregidos con prueba): una respuesta perdida después de que
+  Auth cambió la contraseña dejaba abiertas las demás sesiones (ahora el
+  intento siguiente avisa `uncertain` y un «misma contraseña» de Auth cuenta
+  como cambiada: sólo se cierran las sesiones); un resultado tardío de Maps
+  podía llenar otra dirección (se descarta por número de apertura); un Enter
+  durante el cierre del diálogo podía agregar la dirección dos veces (nada se
+  manda de un diálogo que se cierra); guardar el perfil borraba el aviso
+  pendiente (la acción manda `pending`); un 405 o una lectura fallida antes
+  de escribir salían sin `no-store` (ahora con las palabras de Flutter).
+
+Lo que costó, y vale para los formularios que siguen:
+
+- **Una escritura que cruza dos tramos (navegador → servidor → Auth) puede
+  haber ocurrido aunque la respuesta se pierda:** el navegador marca el
+  resultado como desconocido y el servidor lee el siguiente rechazo con eso
+  en mente; nunca se repite una mutación a ciegas.
+- **El texto de un campo es el `bodyLarge` del tema (18 px), no 16:** los
+  rótulos de la ficha y el texto escrito tienen tamaños distintos. Un campo de
+  una línea mide 48 (el mínimo), uno de dos 74, el código de 22 px 53; el
+  rótulo descansa a 18 px del borde, y al subir no se corre hacia el lado.
+- **El diálogo de Material se ensancha por sus botones** (`IntrinsicWidth`):
+  «Verifica que eres tú» mide 514, no 420 + 48, y el contenido se estira con
+  él. En CSS: `width: fit-content` con el texto en `contain: inline-size`.
+- **El tema del formulario reemplaza los botones de texto del sitio:** en un
+  diálogo un `TextButton` lleva el 12 de Material; en la página, el 20 del
+  sitio.
+- **El texto de ayuda y el de error van en una línea con «…»** (`maxLines`
+  nulo con `ellipsis` es una línea en Flutter).
+- **El contenido de un diálogo** es 16 px en líneas de 24 y espaciado 0,25;
+  el aviso de abajo (`SnackBar`), 16/24 con 24 a los lados y 52 de alto.
+- **Un `<dialog>` enfoca su primer campo al abrir** y el rótulo sube; el de
+  Flutter abre sin foco. `autofocus` en el `<dialog>` no le basta a Chrome:
+  se enfoca el diálogo después de `showModal()`.
+- **Skia pinta las letras más finas que Chrome** (la misma fuente y color,
+  ~30 % menos tinta): no es el peso; se compara la posición, no el grosor.
+
+### Pendiente
+
+- La búsqueda de Maps en el formulario de una dirección sólo se probó con
+  respuestas falsas (para no gastar consultas); en vivo la usa el mismo proxy
+  que el checkout.

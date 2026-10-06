@@ -389,27 +389,14 @@ const checkoutPageScript = r'''
         }, function () { if (mine === sugSeq) paintSugs([], 'No encontramos coincidencias'); });
     }, 300);
   }
-  function component(components, type) {
-    for (var i = 0; i < components.length; i++) if ((components[i].types || []).indexOf(type) >= 0) return components[i].long_name == null ? null : String(components[i].long_name);
-    return null;
-  }
   function pickSuggestion(s) {
     closeSugs();
     field('address').blur();
     call('/functions/v1/google-places-proxy', { action: 'details', placeId: s.placeId, sessionToken: state.placesToken, tenantId: tenant })
       .then(function (r) {
         if (!r || r.status !== 'OK' || !r.result) return;
-        var c = r.result.address_components || [];
-        var locality = component(c, 'locality'), province = component(c, 'administrative_area_level_2');
-        var region = component(c, 'administrative_area_level_1') || '';
-        var comuna = component(c, 'administrative_area_level_3') || locality || component(c, 'sublocality_level_1') || component(c, 'sublocality') || '';
-        var city = locality || (comuna ? comuna : null) || (province !== region ? province : null) || region;
-        var loc = r.result.geometry && r.result.geometry.location;
-        var resolved = {
-          street: component(c, 'route') || '', number: component(c, 'street_number'),
-          apartment: component(c, 'subpremise') || component(c, 'premise'), comuna: comuna, city: city, region: region,
-          postal: component(c, 'postal_code'), lat: loc && loc.lat, lng: loc && loc.lng
-        };
+        // One reading of a place for the checkout and the portal (places_script).
+        var resolved = window.vinabikePlaces.resolve(r.result);
         state.selected = null;
         state.resolved = resolved;
         setValue('address', s.description.trim() || addressDisplay(resolved));

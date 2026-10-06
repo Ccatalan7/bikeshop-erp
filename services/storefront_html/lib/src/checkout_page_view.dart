@@ -11,6 +11,7 @@ import 'checkout_page_css.dart';
 import 'checkout_page_script.dart';
 import 'checkout_records_script.dart';
 import 'material_icons.dart';
+import 'places_script.dart';
 import 'site_layout.dart';
 
 /// Where the checkout asks for the visitor's lines
@@ -185,6 +186,7 @@ Component checkoutPageDocument(CheckoutPageData data) {
     ],
     pageScripts: [
       script(content: checkoutRecordsScript),
+      script(content: placesScript),
       script(content: checkoutPageScript),
     ],
   );

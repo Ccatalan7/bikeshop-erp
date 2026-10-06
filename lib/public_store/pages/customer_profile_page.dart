@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show AuthException;
+import 'package:vinabike_public_core/public_store/models/customer_portal_forms.dart';
 import '../models/customer_portal_presentation.dart';
 import '../services/customer_account_service.dart';
 import '../widgets/customer_portal_layout.dart';
@@ -191,9 +192,7 @@ class _CustomerProfilePageState extends State<CustomerProfilePage>
                       ),
                       textCapitalization: TextCapitalization.words,
                       autofillHints: const [AutofillHints.name],
-                      validator: (v) => v == null || v.trim().isEmpty
-                          ? 'Escribe tu nombre'
-                          : null,
+                      validator: customerProfileNameError,
                     ),
                     TextFormField(
                       controller: _rutController,
@@ -311,7 +310,7 @@ class _CustomerProfilePageState extends State<CustomerProfilePage>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Quedó pendiente cerrar las demás sesiones.',
+                      customerRevocationPendingTitle,
                       style: style.rowTitle.copyWith(
                         color: warning.foreground,
                       ),
@@ -320,7 +319,7 @@ class _CustomerProfilePageState extends State<CustomerProfilePage>
                     Padding(
                       padding: const EdgeInsets.only(right: 8),
                       child: Text(
-                        'No vuelvas a cambiar la contraseña: puedes reintentar solamente el cierre de sesiones.',
+                        customerRevocationPendingMessage,
                         style: style.rowMeta.copyWith(
                           color: warning.foreground,
                         ),
@@ -361,14 +360,10 @@ class _CustomerProfilePageState extends State<CustomerProfilePage>
     final accountService = context.read<CustomerAccountService>();
 
     try {
-      await accountService.updateProfile(
-        name: _nameController.text.trim(),
-        phone: _phoneController.text.trim().isNotEmpty
-            ? _phoneController.text.trim()
-            : null,
-        rut: _rutController.text.trim().isNotEmpty
-            ? _rutController.text.trim()
-            : null,
+      await accountService.saveProfileForm(
+        name: _nameController.text,
+        phone: _phoneController.text,
+        rut: _rutController.text,
       );
 
       setState(() {
@@ -378,18 +373,14 @@ class _CustomerProfilePageState extends State<CustomerProfilePage>
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Guardamos tus datos.')),
+          const SnackBar(content: Text(customerProfileSaved)),
         );
       }
     } catch (_) {
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'No pudimos guardar tus datos. Inténtalo nuevamente.',
-            ),
-          ),
+          const SnackBar(content: Text(customerProfileSaveFailed)),
         );
       }
     }
@@ -480,14 +471,11 @@ class _CustomerPasswordChangeDialogState
       if (issue == CustomerPasswordUpdateIssue.reauthenticationRequired) {
         needsReauthentication = true;
       } else if (mounted) {
-        setState(() => _passwordError = _passwordIssueMessage(issue));
+        setState(() => _passwordError = customerPasswordIssueMessage(issue));
       }
     } catch (_) {
       if (mounted) {
-        setState(() {
-          _passwordError =
-              'No pudimos actualizar la contraseña. Inténtalo nuevamente.';
-        });
+        setState(() => _passwordError = customerPasswordUpdateFailed);
       }
     } finally {
       if (mounted) setState(() => _isBusy = false);
@@ -518,20 +506,18 @@ class _CustomerPasswordChangeDialogState
       if (!mounted) return;
       _verificationCodeController.clear();
       setState(() {
-        _verificationNotice = isResend
-            ? 'Enviamos un código nuevo. Usa solamente el último recibido.'
-            : 'Enviamos un código de verificación a tu correo asociado.';
+        _verificationNotice =
+            isResend ? customerVerificationResent : customerVerificationSent;
       });
     } on AuthException catch (error) {
       if (!mounted) return;
       setState(() {
-        _verificationError = _reauthenticationRequestMessage(error);
+        _verificationError = customerReauthenticationRequestMessage(error.code);
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _verificationError =
-            'No pudimos enviar el código. Revisa tu conexión e inténtalo nuevamente.';
+        _verificationError = customerVerificationSendFailedOffline;
       });
     } finally {
       if (mounted) setState(() => _isBusy = false);
@@ -557,13 +543,12 @@ class _CustomerPasswordChangeDialogState
       if (!mounted) return;
       final issue = CustomerAccountService.classifyPasswordUpdateError(error);
       setState(() {
-        _verificationError = _verificationIssueMessage(issue);
+        _verificationError = customerVerificationIssueMessage(issue);
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _verificationError =
-            'No pudimos verificar el código. Inténtalo nuevamente.';
+        _verificationError = customerVerificationCheckFailed;
       });
     } finally {
       if (mounted) setState(() => _isBusy = false);
@@ -607,15 +592,13 @@ class _CustomerPasswordChangeDialogState
         completed = true;
       } else {
         setState(() {
-          _revocationError =
-              'La contraseña sigue actualizada, pero no pudimos cerrar las demás sesiones. Revisa tu conexión y reintenta.';
+          _revocationError = customerRevocationRetryFailed;
         });
       }
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _revocationError =
-            'La contraseña sigue actualizada, pero no pudimos cerrar las demás sesiones. Reintenta desde Seguridad.';
+        _revocationError = customerRevocationRetryBroken;
       });
     } finally {
       if (mounted) setState(() => _isBusy = false);
@@ -630,43 +613,8 @@ class _CustomerPasswordChangeDialogState
     final messenger = ScaffoldMessenger.of(context);
     Navigator.of(context).pop();
     messenger.showSnackBar(
-      const SnackBar(
-        content: Text(
-          'Contraseña actualizada y demás sesiones cerradas.',
-        ),
-      ),
+      const SnackBar(content: Text(customerPasswordUpdated)),
     );
-  }
-
-  String _passwordIssueMessage(CustomerPasswordUpdateIssue issue) {
-    if (issue == CustomerPasswordUpdateIssue.samePassword) {
-      return 'La nueva contraseña debe ser distinta a la contraseña actual.';
-    }
-    return 'No pudimos actualizar la contraseña. Inténtalo nuevamente.';
-  }
-
-  String _verificationIssueMessage(CustomerPasswordUpdateIssue issue) {
-    switch (issue) {
-      case CustomerPasswordUpdateIssue.invalidVerificationCode:
-        return 'El código no es válido. Revísalo e inténtalo nuevamente.';
-      case CustomerPasswordUpdateIssue.expiredVerificationCode:
-        return 'El código venció. Solicita uno nuevo para continuar.';
-      case CustomerPasswordUpdateIssue.reauthenticationRequired:
-        return 'El código venció o ya no es válido. Solicita uno nuevo.';
-      case CustomerPasswordUpdateIssue.samePassword:
-        return 'La nueva contraseña debe ser distinta a la contraseña actual.';
-      case CustomerPasswordUpdateIssue.unknown:
-        return 'No pudimos verificar el código. Inténtalo nuevamente.';
-    }
-  }
-
-  String _reauthenticationRequestMessage(AuthException error) {
-    final code = error.code?.toLowerCase();
-    if (code == 'over_email_send_rate_limit' ||
-        code == 'over_request_rate_limit') {
-      return 'Espera un momento antes de solicitar otro código.';
-    }
-    return 'No pudimos enviar el código. Inténtalo nuevamente.';
   }
 
   @override
@@ -751,9 +699,7 @@ class _CustomerPasswordChangeDialogState
               ),
         ),
         const SizedBox(height: 8),
-        const Text(
-          'No pudimos cerrar las demás sesiones. Puedes reintentar solamente ese cierre; no necesitas volver a ingresar ni cambiar tu contraseña.',
-        ),
+        const Text(customerRevocationIntro),
         if (_revocationError != null) ...[
           const SizedBox(height: 12),
           Text(
@@ -777,9 +723,7 @@ class _CustomerPasswordChangeDialogState
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Elige una contraseña nueva. Si tu sesión requiere una verificación adicional, te enviaremos un código.',
-            ),
+            const Text(customerPasswordIntro),
             const SizedBox(height: 16),
             TextFormField(
               key: const ValueKey('customer-new-password'),
@@ -836,11 +780,7 @@ class _CustomerPasswordChangeDialogState
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            email?.isNotEmpty == true
-                ? 'Ingresa el código de 6 dígitos enviado a $email.'
-                : 'Ingresa el código de 6 dígitos enviado a tu correo asociado.',
-          ),
+          Text(customerVerificationPrompt(email)),
           const SizedBox(height: 16),
           TextFormField(
             key: const ValueKey('customer-password-verification-code'),
@@ -870,13 +810,7 @@ class _CustomerPasswordChangeDialogState
               }
             },
             onFieldSubmitted: (_) => _submitVerificationCode(),
-            validator: (value) {
-              final code = value?.trim() ?? '';
-              if (!RegExp(r'^\d{6}$').hasMatch(code)) {
-                return 'Ingresa los 6 dígitos del código.';
-              }
-              return null;
-            },
+            validator: customerVerificationCodeError,
           ),
           if (_verificationError != null) ...[
             const SizedBox(height: 8),

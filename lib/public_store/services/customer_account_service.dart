@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:vinabike_public_core/public_store/models/customer_portal_forms.dart';
 import 'package:vinabike_public_core/public_store/models/customer_portal_snapshot.dart';
 import '../../shared/models/customer_address.dart';
 import '../../shared/services/auth_redirect_urls.dart';
@@ -33,13 +34,9 @@ enum FirstPasswordInvitationTenantState {
   unavailable,
 }
 
-enum CustomerPasswordUpdateIssue {
-  reauthenticationRequired,
-  invalidVerificationCode,
-  expiredVerificationCode,
-  samePassword,
-  unknown,
-}
+/// The storefront's name for [SelfPasswordUpdateIssue] (one set of rules,
+/// `self_password_rules.dart`).
+typedef CustomerPasswordUpdateIssue = SelfPasswordUpdateIssue;
 
 class CustomerAccountService extends ChangeNotifier {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -731,19 +728,8 @@ class CustomerAccountService extends ChangeNotifier {
 
   static CustomerPasswordUpdateIssue classifyPasswordUpdateError(
     Object error,
-  ) {
-    return switch (SelfPasswordService.classifyUpdateError(error)) {
-      SelfPasswordUpdateIssue.reauthenticationRequired =>
-        CustomerPasswordUpdateIssue.reauthenticationRequired,
-      SelfPasswordUpdateIssue.invalidVerificationCode =>
-        CustomerPasswordUpdateIssue.invalidVerificationCode,
-      SelfPasswordUpdateIssue.expiredVerificationCode =>
-        CustomerPasswordUpdateIssue.expiredVerificationCode,
-      SelfPasswordUpdateIssue.samePassword =>
-        CustomerPasswordUpdateIssue.samePassword,
-      SelfPasswordUpdateIssue.unknown => CustomerPasswordUpdateIssue.unknown,
-    };
-  }
+  ) =>
+      SelfPasswordService.classifyUpdateError(error);
 
   /// Completes a password reset only for the user verified by the recovery
   /// credential captured from the current Auth link.
@@ -928,6 +914,37 @@ class CustomerAccountService extends ChangeNotifier {
     }
   }
 
+  /// «Guardar cambios» of «Perfil y seguridad»: the columns of
+  /// [customerProfileChanges] (an emptied RUT or phone is cleared), the same
+  /// the HTML portal writes.
+  Future<void> saveProfileForm({
+    required String name,
+    required String phone,
+    required String rut,
+  }) async {
+    final profile = _customerProfile;
+    if (profile == null) return;
+    try {
+      await _supabase
+          .from('customers')
+          .update(
+            customerProfileChanges(
+              name: name,
+              phone: phone,
+              rut: rut,
+              now: DateTime.now(),
+            ),
+          )
+          .eq('id', profile['id'])
+          .eq('tenant_id', profile['tenant_id']);
+      await _loadCustomerData();
+    } catch (_) {
+      _error = 'Error al actualizar perfil';
+      debugPrint('⚠️ [CustomerAccount] Profile update failed');
+      rethrow;
+    }
+  }
+
   // ============================================================================
   // ADDRESS MANAGEMENT
   // ============================================================================
@@ -940,6 +957,7 @@ class CustomerAccountService extends ChangeNotifier {
           .from('customer_addresses')
           .select()
           .eq('customer_id', _customerProfile!['id'])
+          .eq('tenant_id', _customerProfile!['tenant_id'])
           .order('is_default', ascending: false)
           .order('created_at', ascending: false);
 
@@ -973,11 +991,14 @@ class CustomerAccountService extends ChangeNotifier {
   }
 
   Future<void> updateAddress(CustomerAddress address) async {
+    if (_customerProfile == null) return;
+
     try {
       await _supabase
           .from('customer_addresses')
           .update(address.toJson())
-          .eq('id', address.id);
+          .eq('id', address.id)
+          .eq('tenant_id', _customerProfile!['tenant_id']);
 
       await loadAddresses();
     } catch (e) {
@@ -988,8 +1009,14 @@ class CustomerAccountService extends ChangeNotifier {
   }
 
   Future<void> deleteAddress(String addressId) async {
+    if (_customerProfile == null) return;
+
     try {
-      await _supabase.from('customer_addresses').delete().eq('id', addressId);
+      await _supabase
+          .from('customer_addresses')
+          .delete()
+          .eq('id', addressId)
+          .eq('tenant_id', _customerProfile!['tenant_id']);
 
       await loadAddresses();
     } catch (e) {
@@ -1000,10 +1027,14 @@ class CustomerAccountService extends ChangeNotifier {
   }
 
   Future<void> setDefaultAddress(String addressId) async {
+    if (_customerProfile == null) return;
+
     try {
       await _supabase
           .from('customer_addresses')
-          .update({'is_default': true}).eq('id', addressId);
+          .update({'is_default': true})
+          .eq('id', addressId)
+          .eq('tenant_id', _customerProfile!['tenant_id']);
 
       await loadAddresses();
     } catch (e) {

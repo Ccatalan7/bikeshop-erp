@@ -836,6 +836,27 @@
           }
         },
         {
+          "source": "/cuenta/perfil",
+          "run": {
+            "serviceId": "storefront-html",
+            "region": "southamerica-east1"
+          }
+        },
+        {
+          "source": "/cuenta/direcciones",
+          "run": {
+            "serviceId": "storefront-html",
+            "region": "southamerica-east1"
+          }
+        },
+        {
+          "source": "/cuenta/accion",
+          "run": {
+            "serviceId": "storefront-html",
+            "region": "southamerica-east1"
+          }
+        },
+        {
           "source": "/",
           "run": {
             "serviceId": "storefront-html",

@@ -84,13 +84,24 @@ Handler storefrontHandler({
       }
       return orderSummaryPdf(request, reads: reads, fonts: fonts);
     }
-    if (path == portalViewPath || path == portalFilePath) {
+    if (path == portalViewPath ||
+        path == portalFilePath ||
+        path == portalActionPath) {
       if (request.method != 'POST') {
-        return Response(405, headers: {'allow': 'POST'});
+        return Response(
+          405,
+          headers: {
+            'allow': 'POST',
+            'cache-control': 'no-store',
+            'x-robots-tag': 'noindex',
+          },
+        );
       }
-      return path == portalViewPath
-          ? portalViewResponse(request, reads: reads)
-          : portalFileResponse(request, reads: reads);
+      return switch (path) {
+        portalViewPath => portalViewResponse(request, reads: reads),
+        portalFilePath => portalFileResponse(request, reads: reads),
+        _ => portalActionResponse(request, reads: reads),
+      };
     }
     if (request.method != 'GET' && request.method != 'HEAD') {
       return Response(405, headers: {'allow': 'GET, HEAD'});
@@ -144,8 +155,11 @@ Handler storefrontHandler({
         ['checkout', 'lineas'] => await route.checkoutLines(),
         ['pedido', final id] when _orderIdPattern.hasMatch(id) =>
           await route.order(id),
-        ['cuenta'] || ['cuenta', 'pedidos' || 'servicios' || 'bicicletas'] =>
-          await route.portal(PortalPage.ofPath('/${segments.join('/')}')!),
+        ['cuenta'] ||
+        [
+          'cuenta',
+          'pedidos' || 'servicios' || 'bicicletas' || 'perfil' || 'direcciones',
+        ] => await route.portal(PortalPage.ofPath('/${segments.join('/')}')!),
         _ => await route.notFound(),
       };
     } on PublicReadException catch (error) {
@@ -430,7 +444,7 @@ class _Route {
     );
   }
 
-  /// `/cuenta/**` (4a): the frame; the customer's page comes from
+  /// `/cuenta/**` (4a, 4b): the frame; the customer's page comes from
   /// [portalViewResponse] with the session this browser keeps.
   Future<Response> portal(PortalPage which) async {
     final context = _context(await reads.shell());

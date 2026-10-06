@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_typeahead/flutter_typeahead.dart' as typeahead;
 import 'package:provider/provider.dart';
+import 'package:vinabike_public_core/public_store/models/customer_portal_forms.dart';
 import '../providers/public_store_tenant_provider.dart';
 import '../services/address_autocomplete_service.dart';
 import '../services/customer_account_service.dart';
@@ -14,8 +15,7 @@ class CustomerAddressesPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final accountService = context.watch<CustomerAccountService>();
-    final addresses = List<CustomerAddress>.from(accountService.addresses)
-      ..sort((a, b) => (b.isDefault ? 1 : 0) - (a.isDefault ? 1 : 0));
+    final addresses = customerAddressesInOrder(accountService.addresses);
 
     return CustomerPortalLayout(
       title: 'Direcciones',
@@ -87,7 +87,7 @@ class CustomerAddressesPage extends StatelessWidget {
     } catch (_) {
       messenger.showSnackBar(
         const SnackBar(
-          content: Text('No pudimos cambiar la principal. Intenta de nuevo.'),
+          content: Text(customerAddressDefaultFailed),
         ),
       );
     }
@@ -117,11 +117,7 @@ class CustomerAddressesPage extends StatelessWidget {
                     .deleteAddress(address.id);
               } catch (_) {
                 messenger.showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'No pudimos eliminar la dirección. Intenta de nuevo.',
-                    ),
-                  ),
+                  const SnackBar(content: Text(customerAddressDeleteFailed)),
                 );
               }
               if (dialogContext.mounted) Navigator.pop(dialogContext);
@@ -153,10 +149,7 @@ class _AddressRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final style = PortalStyle.of(context);
-    final contact = [
-      address.recipientName.trim(),
-      address.phone.trim(),
-    ].where((part) => part.isNotEmpty).join(' · ');
+    final contact = customerAddressContact(address);
     const principal = PortalTag(label: 'Principal');
     return PortalRow(
       leading: const PortalThumb(fallbackIcon: Icons.location_on_outlined),
@@ -253,12 +246,11 @@ class _AddressFormDialogState extends State<_AddressFormDialog> {
     _regionController = TextEditingController(text: addr?.region);
     _infoController = TextEditingController(text: addr?.additionalInfo);
     _postalCode = addr?.postalCode;
-    _useProfileContact = addr == null
-        ? false
-        : addr.recipientName.trim() == profileName &&
-            addr.phone.trim() == profilePhone &&
-            profileName.isNotEmpty &&
-            profilePhone.isNotEmpty;
+    _useProfileContact = customerAddressUsesProfileContact(
+      addr,
+      profileName: profileName,
+      profilePhone: profilePhone,
+    );
     _isDefault = addr?.isDefault ?? false;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -318,8 +310,7 @@ class _AddressFormDialogState extends State<_AddressFormDialog> {
                     controller: _labelController,
                     decoration: const InputDecoration(
                         labelText: 'Etiqueta (ej: Casa, Trabajo)'),
-                    validator: (v) =>
-                        v == null || v.isEmpty ? 'Requerido' : null,
+                    validator: customerAddressRequiredError,
                   ),
                   const SizedBox(height: 12),
                   _buildProfileContactOption(profileName, profilePhone),
@@ -329,16 +320,14 @@ class _AddressFormDialogState extends State<_AddressFormDialog> {
                     enabled: !_useProfileContact,
                     decoration: const InputDecoration(
                         labelText: 'Nombre del destinatario'),
-                    validator: (v) =>
-                        v == null || v.isEmpty ? 'Requerido' : null,
+                    validator: customerAddressRequiredError,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _phoneController,
                     enabled: !_useProfileContact,
                     decoration: const InputDecoration(labelText: 'Teléfono'),
-                    validator: (v) =>
-                        v == null || v.isEmpty ? 'Requerido' : null,
+                    validator: customerAddressRequiredError,
                   ),
                   if (_addressAutocompleteService?.isEnabled ?? false) ...[
                     const SizedBox(height: 12),
@@ -352,8 +341,7 @@ class _AddressFormDialogState extends State<_AddressFormDialog> {
                         child: TextFormField(
                           controller: _streetController,
                           decoration: const InputDecoration(labelText: 'Calle'),
-                          validator: (v) =>
-                              v == null || v.isEmpty ? 'Requerido' : null,
+                          validator: customerAddressRequiredError,
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -376,22 +364,19 @@ class _AddressFormDialogState extends State<_AddressFormDialog> {
                   TextFormField(
                     controller: _comunaController,
                     decoration: const InputDecoration(labelText: 'Comuna'),
-                    validator: (v) =>
-                        v == null || v.isEmpty ? 'Requerido' : null,
+                    validator: customerAddressRequiredError,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _cityController,
                     decoration: const InputDecoration(labelText: 'Ciudad'),
-                    validator: (v) =>
-                        v == null || v.isEmpty ? 'Requerido' : null,
+                    validator: customerAddressRequiredError,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _regionController,
                     decoration: const InputDecoration(labelText: 'Región'),
-                    validator: (v) =>
-                        v == null || v.isEmpty ? 'Requerido' : null,
+                    validator: customerAddressRequiredError,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
@@ -436,10 +421,6 @@ class _AddressFormDialogState extends State<_AddressFormDialog> {
   Widget _buildProfileContactOption(String profileName, String profilePhone) {
     final style = PortalStyle.of(context);
     final hasProfileContact = profileName.isNotEmpty && profilePhone.isNotEmpty;
-    final contactLabel = [
-      if (profileName.isNotEmpty) profileName,
-      if (profilePhone.isNotEmpty) profilePhone,
-    ].join(' · ');
 
     return InkWell(
       onTap: hasProfileContact
@@ -475,9 +456,10 @@ class _AddressFormDialogState extends State<_AddressFormDialog> {
                   Text('Usar mis datos de cuenta', style: style.rowTitle),
                   const SizedBox(height: 2),
                   Text(
-                    hasProfileContact
-                        ? contactLabel
-                        : 'Agrega nombre y teléfono en tu perfil para reutilizarlos.',
+                    customerProfileContactLabel(
+                      profileName: profileName,
+                      profilePhone: profilePhone,
+                    ),
                     style: style.rowMeta,
                   ),
                 ],
@@ -562,7 +544,7 @@ class _AddressFormDialogState extends State<_AddressFormDialog> {
 
       if (resolved == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No pudimos cargar esa dirección')),
+          const SnackBar(content: Text(customerAddressPlaceFailed)),
         );
         return;
       }
@@ -643,9 +625,7 @@ class _AddressFormDialogState extends State<_AddressFormDialog> {
       if (mounted) {
         setState(() => _isSaving = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No pudimos guardar la dirección. Intenta de nuevo.'),
-          ),
+          const SnackBar(content: Text(customerAddressSaveFailed)),
         );
       }
     }

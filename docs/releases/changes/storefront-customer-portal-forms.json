@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "storefront-customer-portal-forms",
+  "scope": "release",
+  "platforms": [
+    "web"
+  ],
+  "title": "Perfil y direcciones cargan al instante",
+  "summary": "En vinabike.cl, «Perfil y seguridad» y «Direcciones» de tu cuenta llegan armados desde el servidor: en un teléfono lento se usan en un par de segundos, no en 15 a 20.",
+  "items": [
+    "Cambiar tus datos, tu contraseña o tus direcciones funciona como antes, con la búsqueda en Google Maps, sin esperar a que cargue la tienda completa.",
+    "Si borras el RUT o el teléfono de tu perfil y guardas, ahora se borran; antes volvían a aparecer.",
+    "Un campo obligatorio de una dirección con sólo espacios ya no se guarda vacío."
+  ],
+  "evidence": [
+    {
+      "path": "firebase.json",
+      "sha256": "8bfe5fcecb72548b81c672558cf28c6665e9ffdca8b0dec943f24feb2bf2fdd3"
+    },
+    {
+      "path": "scripts/releases/check_storefront_html_routes.mjs",
+      "sha256": "848a9b78b643fe07c159724e58e005004a7139164c6ee3aeaf7a3b709fc8cb01"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/seo/storefront_html_routes.dart",
+      "sha256": "1296780fdf7e156b5c7ecb073887549fbde1116f60d23e9eb8bda04eac0d401c"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_forms_view.dart",
+      "sha256": "005b17ccc58e5e8d9fa993c5be1090067efff33759fe00490d419c0fa4c9f84c"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_page_view.dart",
+      "sha256": "8841c8c5c4ded26c9e1ade90e90bc755a485d39fdab7d4957d5d8ceef5a8d6fb"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_page_css.dart",
+      "sha256": "a2537ddbebb7091eb4a7695733ab57192c7f3dee104876d53ac53a4f9c3bcd36"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_page_script.dart",
+      "sha256": "e4e9d51eb9d5c95b263e65a306ff63dee1d8b09b84f3b73394e8f6e035ebfc83"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_page_route.dart",
+      "sha256": "a576affad2e34685e6d757f410310dbfce334508b0ca1773f9274badd138845a"
+    },
+    {
+      "path": "services/storefront_html/lib/src/public_reads.dart",
+      "sha256": "d0ea6479569cd1433d658f548728614bdaaa388279d364f391ff3c2862d9e733"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_handler.dart",
+      "sha256": "da6f5e337b982e98876b7a0a94aa76c959236ee236906c436a57926af216f8c6"
+    },
+    {
+      "path": "services/storefront_html/lib/src/places_script.dart",
+      "sha256": "a7d77d22a2e8d0e6940ed194da2b25e6a5460d9c3f55e1b572135bae41d2d1e9"
+    },
+    {
+      "path": "services/storefront_html/lib/src/checkout_page_script.dart",
+      "sha256": "db3351f0d9cee06ca5e13b88eef1c36be15cba2d00720874b84347e2fd36ac30"
+    },
+    {
+      "path": "services/storefront_html/lib/src/checkout_page_view.dart",
+      "sha256": "2897e2fb671243538414e5437f6bfe93e60cf106e29ab419e82583f493d5a84e"
+    },
+    {
+      "path": "services/storefront_html/lib/src/material_icons.dart",
+      "sha256": "435d9a6e6e4452887424103726a916018acdd94bf3b04ecb6b7565758a589cd2"
+    },
+    {
+      "path": "services/storefront_html/lib/storefront_html.dart",
+      "sha256": "d8b6aebf31b6277b94865b9638147b5e08835bff04f82599c364143d7dea0d32"
+    }
+  ]
+}

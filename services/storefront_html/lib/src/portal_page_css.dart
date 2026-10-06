@@ -62,7 +62,7 @@ String portalPageCss(WebsiteThemeRoles roles) {
       '$selector>.pt-x{left:${cssPx(style.spacing / 2)}}';
 
   return '''
-.pt{container:pt/inline-size;--pt-page:${c.page.css};--pt-well:${c.well.css};--pt-line:${c.line.css};--pt-ink:${c.ink.css};--pt-ink2:${c.ink2.css};--pt-act:${c.action.css};--pt-onact:${c.onAction.css};--pt-att:${c.attention.css};--pt-onatt:${c.onAttention.css};--pt-ok:${c.success.css};--pt-onok:${c.onSuccess.css};--pt-bad:${c.danger.css};--pt-onbad:${c.onDanger.css};--pt-hi:${c.highest.css};--pt-g:32px;background:var(--pt-page);color:var(--pt-ink)}
+.pt{container:pt/inline-size;--pt-muted:${c.muted.css};--pt-dis:${c.disabled.css};--pt-warnbg:${c.warningBackground.css};--pt-warnfg:${c.warningForeground.css};--pt-page:${c.page.css};--pt-well:${c.well.css};--pt-line:${c.line.css};--pt-ink:${c.ink.css};--pt-ink2:${c.ink2.css};--pt-act:${c.action.css};--pt-onact:${c.onAction.css};--pt-att:${c.attention.css};--pt-onatt:${c.onAttention.css};--pt-ok:${c.success.css};--pt-onok:${c.onSuccess.css};--pt-bad:${c.danger.css};--pt-onbad:${c.onDanger.css};--pt-hi:${c.highest.css};--pt-g:32px;background:var(--pt-page);color:var(--pt-ink)}
 @container pt (max-width:559.98px){.pt *{--pt-g:16px}}
 :where(.pt) *,:where(.pt) *::before,:where(.pt) *::after{box-sizing:border-box}
 :where(.pt) :where(p,h1,h2,h3,dl,dd){margin:0}
@@ -402,6 +402,155 @@ ${rule('.pt-files-title', _TextStyle(head, 14, 1.43, 500, 0.1, heading: true))}
 .pt-file img{width:100%;height:100%;object-fit:cover}
 .pt-files-error{margin-top:12px;color:var(--pt-bad)}
 .pt-dlg-lock{overflow:hidden}
+
+/* Perfil y direcciones (4b): filas de `PortalRow`, campos del tema del
+   formulario, el diálogo de Material y el menú de una fila. */
+.pt-prow{display:flex;align-items:center;width:100%;padding-block:14px;border-bottom:1px solid var(--pt-line);color:var(--pt-ink);text-align:left}
+.pt-prow.tap:hover{background:color-mix(in srgb,var(--pt-ink) 4%,transparent)}
+.pt-prow>.pt-thumb{margin-right:16px}
+.pt-prow>svg{flex:none;margin-left:12px}
+.pt-prow-main{flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start}
+.pt-prow-main>.pt-row-title{max-width:100%;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.pt-prow-main>.pt-row-meta{max-width:100%;margin-top:3px;overflow:hidden;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical}
+.pt-prow-trail{flex:none;display:flex;justify-content:flex-end;max-width:280px;margin-left:16px;overflow:hidden}
+${rule('.pt-prow-value', rowMeta, ';display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;text-align:right;color:var(--pt-ink)')}
+${rule('.pt-prow-add', label, ';text-transform:uppercase;white-space:nowrap;color:var(--pt-act)')}
+.pt-revoke{padding:14px 8px 10px 16px;border-bottom:1px solid var(--pt-line);background:var(--pt-warnbg);color:var(--pt-warnfg)}
+${rule('.pt-revoke-title', rowTitle)}
+${rule('.pt-revoke-msg', rowMeta, ';margin-top:4px;padding-right:8px')}
+.pt-revoke-go{display:flex;justify-content:flex-end}
+.pt-tbtn{display:inline-flex;align-items:center;justify-content:center;min-width:64px;min-height:44px;padding:0 20px;color:inherit}
+${rule('.pt-tbtn', label, ';text-transform:uppercase;white-space:nowrap')}
+/* The dialogs' form theme replaces the site's text buttons: Material's 12. */
+.pt-alert .pt-tbtn{min-width:44px;padding:0 12px}
+.pt-tbtn:hover,.pt-ibtn:hover,.pt-menu-item:hover{background:color-mix(in srgb,currentColor 8%,transparent)}
+.pt-tbtn:disabled{color:var(--pt-muted);background:none;cursor:default}
+.pt-ibtn{flex:none;display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;color:var(--pt-ink)}
+.pt-tbtn:focus-visible,.pt-ibtn:focus-visible,.pt-menu-item:focus-visible,.pt-prow:focus-visible{outline:2px solid var(--pt-act);outline-offset:2px}
+.pt-btn.danger{border-color:var(--pt-bad);background:var(--pt-bad);color:var(--pt-onbad)}
+.pt-btn:disabled{border-color:var(--pt-line);background:var(--pt-line);color:var(--pt-muted);cursor:default}
+.pt-btn.sec:disabled{background:transparent}
+.pt-btn:disabled:hover{background-image:none}
+.pt-btn-spin{display:flex;width:16px;height:16px;color:var(--pt-act)}
+.pt-btn-spin svg{width:16px;height:16px}
+.pt-btn-spin circle{stroke-width:2.5}
+.pt-pform-in{display:flex;flex-direction:column;gap:14px;padding-block:24px;border-bottom:1px solid var(--pt-line)}
+.pt-fgrid{display:grid;grid-template-columns:1fr 1fr;align-items:center;gap:14px}
+@container ptc (max-width:559.98px){.pt-fgrid{grid-template-columns:1fr}}
+.pt-factions,.pt-alert-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:12px}
+
+/* Campos: el `OutlineInputBorder` recto del portal; el rótulo descansa
+   dentro y sube a la línea al escribir. */
+.pt-f{position:relative;min-width:0}
+.pt-f input,.pt-f textarea{position:relative;z-index:1;display:block;box-sizing:border-box;width:100%;height:48px;margin:0;padding:11.5px 18px 9.5px;border:0;border-radius:0;background:transparent;font:400 18px/27px var(--body);letter-spacing:.5px;color:var(--pt-ink);outline:0;-webkit-appearance:none;appearance:none}
+.pt-f textarea{height:74px;padding-block:11.5px 9.5px;resize:none;overflow:auto}
+.pt-f.ic input{padding-left:48px;padding-right:44px}
+.pt-f.code input{height:53px;padding-block:11px 9px;text-align:center;font:700 22px/33px var(--body);letter-spacing:5px}
+.pt-f input::placeholder,.pt-f textarea::placeholder{color:var(--pt-muted);opacity:0;transition:opacity .15s}
+.pt-f input:focus::placeholder,.pt-f textarea:focus::placeholder{opacity:1}
+.pt-f input:-webkit-autofill{-webkit-box-shadow:0 0 0 40px var(--pt-page) inset;-webkit-text-fill-color:var(--pt-ink)}
+.pt-f.off input{color:var(--pt-dis);-webkit-text-fill-color:var(--pt-dis)}
+.pt-f.off.keep input{color:var(--pt-ink2);-webkit-text-fill-color:var(--pt-ink2)}
+.pt-f::before{content:'';position:absolute;inset:0 0 auto;height:var(--pt-fh,48px);background:var(--pt-page)}
+.pt-f.ta{--pt-fh:74px}
+.pt-f.code{--pt-fh:53px}
+.pt-f:not(.off):hover::before{background:color-mix(in srgb,var(--pt-ink) 4%,var(--pt-page))}
+.pt-f label{position:absolute;left:18px;top:15px;z-index:2;max-width:calc(100% - 36px);overflow:hidden;font:400 15px/20px var(--body);letter-spacing:.25px;white-space:nowrap;text-overflow:ellipsis;color:var(--pt-ink2);pointer-events:none;transform-origin:left top;transition:transform .2s cubic-bezier(.4,0,.2,1),color .2s,max-width .2s}
+.pt-f.ic label{left:48px;max-width:calc(100% - 92px)}
+.pt-f.code label{top:17.5px}
+.pt-f.ta label{top:28px}
+.pt-f fieldset{position:absolute;inset:-8px 0 auto;z-index:1;height:calc(var(--pt-fh,48px) + 8px);min-width:0;margin:0;padding:0 0 0 13px;border:1px solid var(--pt-line);border-radius:0;pointer-events:none}
+.pt-f legend{display:block;height:16px;max-width:0;padding:0;overflow:hidden;font:400 11.25px/16px var(--body);letter-spacing:.25px;white-space:nowrap;visibility:hidden;transition:max-width .05s .05s}
+.pt-f legend span{display:inline-block;padding:0 4px}
+.pt-f :is(input,textarea):focus~fieldset{border:2px solid var(--pt-act);padding-left:12px}
+.pt-f :is(input,textarea):is(:focus,:not(:placeholder-shown))~label,.pt-f.up label{max-width:calc(133% - 48px);color:var(--pt-ink);transform:translate(0,-22px) scale(.75)}
+.pt-f.ic :is(input,textarea):is(:focus,:not(:placeholder-shown))~label,.pt-f.ic.up label{transform:translate(-30px,-22px) scale(.75)}
+.pt-f.ta :is(input,textarea):is(:focus,:not(:placeholder-shown))~label,.pt-f.ta.up label{transform:translate(0,-35px) scale(.75)}
+.pt-f.code :is(input,textarea):is(:focus,:not(:placeholder-shown))~label,.pt-f.code.up label{transform:translate(0,-24.5px) scale(.75)}
+.pt-f :is(input,textarea):is(:focus,:not(:placeholder-shown))~fieldset legend,.pt-f.up legend{max-width:100%;transition:max-width .1s}
+.pt-f.bad fieldset{border-color:var(--pt-bad)}
+.pt-f.bad :is(input,textarea):focus~fieldset{border:2px solid var(--pt-bad);padding-left:12px}
+.pt-f-ic{position:absolute;left:12px;top:12px;z-index:2;display:flex;color:var(--pt-ink2);pointer-events:none}
+.pt-f-busy{position:absolute;right:15px;top:15px;z-index:2;display:flex;width:18px;height:18px;color:var(--pt-act)}
+.pt-f-busy svg{width:18px;height:18px}
+/* One line with an ellipsis, as Flutter's helper and error text. */
+.pt-f-msg{margin:0;padding:6px 18px 0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font:400 14px/19px var(--body);letter-spacing:.4px;color:var(--pt-ink2)}
+.pt-f-msg:empty{display:none}
+.pt-f.bad .pt-f-msg{color:var(--pt-bad)}
+.pt-fstack{display:flex;flex-direction:column;gap:12px;margin-top:16px}
+
+/* Casillas cuadradas en el color de acción. */
+.pt-cb{position:relative;flex:none;display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px}
+.pt-cb input{position:absolute;inset:0;z-index:1;width:100%;height:100%;margin:0;opacity:0;cursor:pointer}
+.pt-cb::before{content:'';display:block;width:18px;height:18px;box-sizing:border-box;border:2px solid var(--pt-ink2)}
+.pt-cb:has(input:checked)::before{border-color:var(--pt-act);background:var(--pt-act)}
+.pt-cb:has(input:disabled)::before{border-color:var(--pt-muted);opacity:.38}
+.pt-cb-mark{position:absolute;left:50%;top:50%;width:18px;height:18px;margin:-9px 0 0 -9px;color:var(--pt-onact);opacity:0}
+.pt-cb:has(input:checked) .pt-cb-mark{opacity:1}
+.pt-cb:has(input:focus-visible){outline:2px solid var(--pt-act);outline-offset:-2px}
+
+/* El diálogo de Material (`PortalDialog`), centrado en todo ancho. */
+.pt-dlg.alert[open]{align-items:center}
+.pt-dlg.alert:focus{outline:none}
+.pt-alert{position:relative;display:flex;flex-direction:column;width:fit-content;min-width:min(calc(var(--pt-aw) + 48px),calc(100% - 32px));max-width:calc(100% - 32px);max-height:calc(100% - 48px);margin:0;background:var(--pt-page);opacity:0;transition:opacity .15s cubic-bezier(0,0,.58,1)}
+.pt-dlg.in .pt-alert{opacity:1}
+/* As Flutter's `IntrinsicWidth`: the actions can widen the dialog, the
+   text never does. */
+.pt-alert-main{flex:0 1 auto;min-height:0;display:flex;flex-direction:column;contain:inline-size}
+.pt-alert.scroll .pt-alert-main{overflow-y:auto}
+${rule('.pt-alert-title', heading(24), ';flex:none;padding:24px 24px 0;text-transform:uppercase')}
+.pt-alert-body{flex:0 1 auto;min-height:0;padding:16px 24px 24px}
+${rule('.pt-alert-text', _TextStyle(body, 16, 1.5, 400, 0.25, heading: false), ';color:var(--pt-ink2)')}
+${rule('.pt-alert-sub', subtitle, ';color:var(--pt-ink2)')}
+${rule('.pt-alert-strong', _TextStyle(head, 14, 1.43, 700, 0.1, heading: true))}
+.pt-alert-strong+.pt-alert-text{margin-top:8px}
+${rule('.pt-alert-error', _TextStyle(body, 16, 1.5, 400, 0.25, heading: false), ';margin-top:12px;color:var(--pt-bad)')}
+.pt-alert-error.near{margin-top:8px}
+${rule('.pt-alert-notice', _TextStyle(body, 16, 1.5, 400, 0.25, heading: false), ';margin-top:10px;color:var(--pt-ink)')}
+.pt-alert-actions{flex:none;gap:8px;padding:8px 24px 20px}
+.pt-alert-act{display:contents}
+.pt-dlg [data-step-only]{display:none}
+.pt-dlg[data-step=password] [data-step-only~=password],.pt-dlg[data-step=verification] [data-step-only~=verification],.pt-dlg[data-step=revocation] [data-step-only~=revocation],.pt-dlg[data-step=new] [data-step-only~=new],.pt-dlg[data-step=edit] [data-step-only~=edit]{display:revert}
+.pt-dlg .pt-alert-act[data-step-only]{display:none}
+.pt-dlg[data-step=password] .pt-alert-act[data-step-only~=password],.pt-dlg[data-step=verification] .pt-alert-act[data-step-only~=verification],.pt-dlg[data-step=revocation] .pt-alert-act[data-step-only~=revocation]{display:contents}
+.pt-step-body{animation:pt-fade .18s ease}
+@keyframes pt-fade{from{opacity:0}to{opacity:1}}
+
+/* El formulario de una dirección. */
+.pt-addr{display:flex;flex-direction:column;gap:12px;max-height:72vh;margin-top:-8px;padding-top:8px;overflow-y:auto}
+.pt-addr-street{display:grid;grid-template-columns:3fr 1fr;align-items:center;gap:12px}
+.pt-addr-search{position:relative}
+.pt-mine{display:flex;align-items:flex-start;gap:6px;padding:10px 12px;background:var(--pt-well);cursor:pointer}
+.pt-mine.off{cursor:default}
+.pt-mine .pt-cb{width:32px;height:32px}
+.pt-mine-text{display:flex;flex-direction:column;min-width:0}
+.pt-mine-text .pt-row-meta{margin-top:2px}
+.pt-check-tile{display:flex;align-items:center;gap:16px;min-height:52px;cursor:pointer}
+.pt-check-tile .pt-cb{width:40px;height:40px}
+.pt-sugs{position:absolute;left:0;right:0;top:52px;z-index:5;margin:0;padding:8px 0;list-style:none;background:var(--pt-page);box-shadow:0 2px 4px -1px rgb(0 0 0 / .2),0 4px 5px rgb(0 0 0 / .14),0 1px 10px rgb(0 0 0 / .12);max-height:280px;overflow-y:auto}
+.pt-sugs li{display:flex;align-items:center;gap:16px;min-height:48px;padding:8px 16px;cursor:pointer;font:400 16px/24px var(--body);color:var(--pt-ink)}
+.pt-sugs li svg{flex:none;color:var(--pt-ink2)}
+.pt-sugs li[aria-selected=true],.pt-sugs li:hover{background:color-mix(in srgb,var(--pt-ink) 6%,transparent)}
+.pt-sugs .note{justify-content:center;cursor:default;color:var(--pt-ink2)}
+
+/* Las filas de dirección: la fila edita; el menú, a la derecha. */
+.pt-arow{position:relative;display:flex;align-items:center;border-bottom:1px solid var(--pt-line)}
+.pt-arow-main{border-bottom:0}
+.pt-arow-main .pt-row-meta.three{-webkit-line-clamp:3}
+.pt-arow-foot{display:none;margin-top:10px}
+.pt-arow-tag{flex:none;display:flex;margin-left:16px}
+.pt-arow-space{flex:none;width:56px}
+.pt-arow-more{position:absolute;right:0;top:50%;margin-top:-20px}
+.pt-arow-tag+.pt-arow-space{width:48px}
+@container ptc (max-width:559.98px){.pt-arow-foot{display:flex}.pt-arow-tag{display:none}}
+.pt-menu{position:fixed;z-index:20;min-width:112px;padding:7px 0;border:1px solid var(--pt-line);background:var(--pt-page);box-shadow:0 2px 4px -1px rgb(0 0 0 / .2),0 4px 5px rgb(0 0 0 / .14),0 1px 10px rgb(0 0 0 / .12);transform-origin:top right;animation:pt-menu .3s cubic-bezier(.2,0,0,1)}
+@keyframes pt-menu{from{opacity:0;clip-path:inset(0 0 100% 0)}33%{opacity:1}to{opacity:1;clip-path:inset(0 0 0 0)}}
+.pt-menu-item{display:flex;align-items:center;width:100%;min-height:48px;padding:0 12px;font:500 14px/20px var(--body);letter-spacing:.1px;white-space:nowrap;color:var(--pt-ink)}
+.pt-menu-item.danger{color:var(--pt-bad)}
+
+/* El aviso de abajo (`SnackBar`). */
+.pt-toast{position:fixed;left:0;right:0;bottom:0;z-index:60;margin:0;padding:14px 24px;background:var(--pt-ink);color:var(--pt-page);font:400 16px/24px var(--body);letter-spacing:.25px;animation:pt-toast .25s cubic-bezier(0,0,.2,1)}
+@keyframes pt-toast{from{transform:translateY(100%)}to{transform:none}}
 ''';
 }
 
@@ -465,6 +614,10 @@ class _PortalColors {
       attention = roles.accent,
       onAttention = roles.onAccent,
       highest = WebsiteRgba.lerp(roles.background, roles.onSurface, 0.13),
+      muted = WebsiteRgba.alphaBlend(
+        roles.onSurface.withAlpha(0.58),
+        roles.background,
+      ),
       success = _ensureContrast(_successGreen, roles.background),
       danger = _error,
       onDanger = WebsiteRgba.white;
@@ -479,11 +632,31 @@ class _PortalColors {
   final WebsiteRgba attention;
   final WebsiteRgba onAttention;
   final WebsiteRgba highest;
+
+  /// `PortalStyle.inkMuted`: a disabled control's text.
+  final WebsiteRgba muted;
+
+  /// Material's disabled field text: the text color at 38 %.
+  WebsiteRgba get disabled => WebsiteRgba.alphaBlend(ink.withAlpha(0.38), page);
   final WebsiteRgba success;
   final WebsiteRgba danger;
   final WebsiteRgba onDanger;
 
   WebsiteRgba get onSuccess => WebsiteRgba.readableOn(success);
+
+  /// `PortalStyle.tone(PortalTone.warning)`: the accent at 12 % on the page,
+  /// and the accent made readable on it.
+  WebsiteRgba get warningBackground =>
+      WebsiteRgba.alphaBlend(attention.withAlpha(0.12), page);
+  WebsiteRgba get warningForeground {
+    final ground = warningBackground;
+    if (WebsiteRgba.contrast(attention, ground) >= 4.5) return attention;
+    for (var step = 1; step <= 20; step++) {
+      final candidate = WebsiteRgba.lerp(attention, ink, step / 20);
+      if (WebsiteRgba.contrast(candidate, ground) >= 4.5) return candidate;
+    }
+    return ink;
+  }
 
   /// `PublicStoreTheme.successGreen` and `.error`.
   static final _successGreen = WebsiteRgba.fromArgb(0xFF10B981);

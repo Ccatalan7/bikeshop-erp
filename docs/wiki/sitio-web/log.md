@@ -4,6 +4,11 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-06 — corrección — [portal](paginas/portal-de-clientes.md): perfil y
+  direcciones en el servidor HTML (fase 4b), guardados con `POST
+  /cuenta/accion` como el cliente; tres arreglos de las dos tiendas al
+  mudarlo; [seguridad](paginas/seguridad.md), [rutas](paginas/rutas-y-navegacion.md)
+  y [estado](paginas/estado-y-pendientes.md) al día.
 - 2026-10-06 — corrección — [portal](paginas/portal-de-clientes.md): las
   páginas de lectura del portal en el servidor HTML (fase 4a), leídas con el
   token del cliente; reglas al núcleo; [rutas](paginas/rutas-y-navegacion.md)

@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "storefront-customer-portal-forms-core",
+  "scope": "internal",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/customer_portal_forms.dart",
+      "sha256": "ff09331fe95a300057e8e5eb0f62866b8ced19f9d086b13c8cdbf5504a30f08b"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/shared/utils/self_password_rules.dart",
+      "sha256": "d68661ceb53822027a21f1db3ad626fd190a6e2798039817c8382834f620ad7f"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/shared/models/customer_address.dart",
+      "sha256": "c2c504aa648ecbcee77f318bdd3fc88e9f15ba00588feda3427b3f3aa6bc492c"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/shared/utils/auth_input_validation.dart",
+      "sha256": "e70fda5beee00138df7d477de5c3801ad34499958b574ba6824347dd1ad7593a"
+    },
+    {
+      "path": "lib/shared/models/customer_address.dart",
+      "sha256": "1c2c70c7060f404b83eb53f20338f4662a1e005e20f07a1f04a3f2feb4e072e1"
+    },
+    {
+      "path": "lib/shared/utils/auth_input_validation.dart",
+      "sha256": "c8a2937757824ba54c811f3c8349601ece74c0189bc61a919dde36a877717908"
+    },
+    {
+      "path": "lib/shared/services/self_password_service.dart",
+      "sha256": "fcc7fbef84b29e2c085f17048fd3d2815a57989b8fa06a328f28e4d878bbefc5"
+    },
+    {
+      "path": "lib/public_store/pages/customer_profile_page.dart",
+      "sha256": "b8c369cec69265bcee9362c4e24a8e5852932df0a3e7b0c5fabbdcc23d6afa57"
+    },
+    {
+      "path": "lib/public_store/pages/customer_addresses_page.dart",
+      "sha256": "432cb9daaa80eaa91b5302e2e983d234623307ce78f5fe6602818314ab5b3454"
+    },
+    {
+      "path": "lib/public_store/services/customer_account_service.dart",
+      "sha256": "5c3a844fa0f13a7d5a8036cf92a3a74a9ecb0b9d6f3b060cfb1a4f642ec25738"
+    }
+  ]
+}

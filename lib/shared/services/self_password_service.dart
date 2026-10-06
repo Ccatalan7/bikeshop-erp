@@ -2,6 +2,10 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../utils/auth_input_validation.dart';
+import 'package:vinabike_public_core/shared/utils/self_password_rules.dart';
+
+export 'package:vinabike_public_core/shared/utils/self_password_rules.dart'
+    show SelfPasswordUpdateIssue;
 
 enum SelfPasswordOtherSessionsRevocationOutcome {
   revoked,
@@ -29,14 +33,6 @@ class SelfPasswordUpdateResult {
 
   bool get needsOtherSessionsRevocationRetry =>
       passwordUpdated && !otherSessionsRevoked;
-}
-
-enum SelfPasswordUpdateIssue {
-  reauthenticationRequired,
-  invalidVerificationCode,
-  expiredVerificationCode,
-  samePassword,
-  unknown,
 }
 
 typedef SelfPasswordIdentityUpdateCommand = Future<bool> Function(
@@ -138,25 +134,6 @@ class SelfPasswordService {
     if (error is! AuthException) {
       return SelfPasswordUpdateIssue.unknown;
     }
-
-    final code = error.code?.trim().toLowerCase();
-    final message = error.message.toLowerCase();
-
-    bool matches(String value) => code == value || message.contains(value);
-
-    if (matches('reauthentication_needed')) {
-      return SelfPasswordUpdateIssue.reauthenticationRequired;
-    }
-    if (matches('reauthentication_not_valid') ||
-        matches('reauth_nonce_missing')) {
-      return SelfPasswordUpdateIssue.invalidVerificationCode;
-    }
-    if (matches('otp_expired')) {
-      return SelfPasswordUpdateIssue.expiredVerificationCode;
-    }
-    if (matches('same_password')) {
-      return SelfPasswordUpdateIssue.samePassword;
-    }
-    return SelfPasswordUpdateIssue.unknown;
+    return selfPasswordIssueOf(code: error.code, message: error.message);
   }
 }
