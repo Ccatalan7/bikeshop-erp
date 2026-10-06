@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "general",
+  "id": "debug-horizontal-scroll",
+  "scope": "debug",
+  "platforms": [
+    "macos"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "scripts/dev/app_control.sh",
+      "sha256": "449dc4a71eeb1c4714a06adc3a6bcb9d2fb93f435cd94770b49367e931057e9b"
+    }
+  ]
+}
