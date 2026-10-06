@@ -729,7 +729,11 @@ void main() {
     expect(workspace, contains('socialImageUrl: url.trim()'));
     expect(service, contains('saveCatalogPresentation('));
     expect(service, contains('removeCatalogPresentation('));
-    expect(service, contains('await loadSettings();'));
+    // The registry is one row for every owner: each change is a
+    // compare-and-set on the row it read, re-read and re-applied on conflict
+    // (2026-10-06), never a refresh followed by a blind write.
+    expect(service, contains('_updateCatalogPresentationRegistry('));
+    expect(service, contains("update.eq('updated_at', readAt)"));
     expect(service, contains('prepareForSave(normalized)'));
     expect(
       service,

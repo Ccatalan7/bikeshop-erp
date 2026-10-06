@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:vinabike_erp/modules/website/models/website_action.dart';
+import 'package:vinabike_erp/modules/website/models/website_catalog_presentation.dart';
 import 'package:vinabike_erp/modules/website/models/website_page_models.dart';
 import 'package:vinabike_erp/modules/website/models/website_editor_capability.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
@@ -91,6 +93,96 @@ void main() {
       });
       expect(document.hasSiteSettingsChanges, isTrue);
       expect(document.hasUnsavedChanges, isTrue);
+    });
+
+    test(
+        'a catalog page edited on the canvas saves with Guardar, only what '
+        'its owner shows, and clears its draft', () async {
+      final document = _document([_block('Published headline')]);
+      addTearDown(document.dispose);
+      final saved =
+          WebsiteCatalogPresentation.catalogRoot(WebsiteCatalogRoot.services)
+              .copyWith(layout: WebsiteCatalogLayout.priceList);
+
+      // Back to the saved value by hand: nothing to save.
+      document.stageCatalogPresentation(
+        saved.copyWith(heroTitle: 'Servicios del taller'),
+        saved: saved,
+      );
+      document.stageCatalogPresentation(saved, saved: saved);
+      expect(document.hasUnsavedChanges, isFalse);
+
+      // A button still being written (no destination yet) stays in the
+      // draft; the registry gets only the finished parts.
+      final draft = saved.copyWith(
+        heroTitle: '  Servicios del taller ',
+        closingTitle: 'Agenda tu mantención',
+        closingAction: const WebsiteActionValue(label: 'Escríbenos', href: ''),
+      );
+      document.stageCatalogPresentation(draft, saved: saved);
+      expect(document.hasCatalogPresentationChanges, isTrue);
+      expect(document.effectiveCatalogPresentation(saved), same(draft));
+
+      final gateway = _FakeWebsiteSaveGateway(document.blocks);
+      final result = await WebsiteSaveCoordinator(gateway).save(
+        tenantId: _tenantId,
+        document: document,
+      );
+
+      expect(gateway.savedCatalogPresentations, hasLength(1));
+      final written = gateway.savedCatalogPresentations.single;
+      expect(written.heroTitle, 'Servicios del taller');
+      expect(written.closingTitle, 'Agenda tu mantención');
+      expect(written.closingAction, isNull);
+      expect(written.isPriceList, isTrue);
+      expect(
+        result.completedSections,
+        contains(WebsiteSaveSection.catalogPresentations),
+      );
+      expect(document.hasCatalogPresentationChanges, isFalse);
+      expect(document.hasUnsavedChanges, isFalse);
+    });
+
+    test(
+        'a catalog edit written back to the old value while its save is in '
+        'flight stays pending after the save lands', () async {
+      final document = _document([_block('Published headline')]);
+      addTearDown(document.dispose);
+      final saved =
+          WebsiteCatalogPresentation.catalogRoot(WebsiteCatalogRoot.services)
+              .copyWith(
+        layout: WebsiteCatalogLayout.priceList,
+        heroTitle: 'A',
+      );
+      document.stageCatalogPresentation(
+        saved.copyWith(heroTitle: 'B'),
+        saved: saved,
+      );
+
+      final gateway = _FakeWebsiteSaveGateway(document.blocks)
+        ..catalogGate = Completer<void>();
+      final save = WebsiteSaveCoordinator(gateway).save(
+        tenantId: _tenantId,
+        document: document,
+      );
+      await gateway.catalogStarted.future;
+
+      // Back to A while B is being written: the page still reads A as saved.
+      document.stageCatalogPresentation(
+        saved.copyWith(heroTitle: 'A'),
+        saved: saved,
+      );
+      expect(document.hasUnsavedChanges, isFalse);
+
+      gateway.catalogGate!.complete();
+      await save;
+
+      expect(gateway.savedCatalogPresentations.single.heroTitle, 'B');
+      // B is what the registry holds now; A is the operator's last word.
+      expect(document.hasCatalogPresentationChanges, isTrue);
+      expect(document.pendingCatalogPresentations.values.single.heroTitle, 'A');
+      final nowSaved = saved.copyWith(heroTitle: 'B');
+      expect(document.effectiveCatalogPresentation(nowSaved).heroTitle, 'A');
     });
 
     test('a stale page completion never replaces the new page document',
@@ -554,6 +646,9 @@ class _FakeWebsiteSaveGateway implements WebsiteSaveGateway {
   final List<String> navigationUpdateCalls = [];
   final List<String> navigationDeleteCalls = [];
   final List<List<String>> navigationReorderCalls = [];
+  final List<WebsiteCatalogPresentation> savedCatalogPresentations = [];
+  Completer<void>? catalogGate;
+  final Completer<void> catalogStarted = Completer<void>();
 
   final Completer<void> settingsStarted = Completer<void>();
   final Completer<void> replaceStarted = Completer<void>();
@@ -598,6 +693,19 @@ class _FakeWebsiteSaveGateway implements WebsiteSaveGateway {
     required String routeKey,
     required Map<String, String> values,
   }) async {}
+
+  @override
+  Future<void> saveCatalogPresentation({
+    required String tenantId,
+    required WebsiteCatalogPresentation presentation,
+  }) async {
+    final gate = catalogGate;
+    if (gate != null) {
+      if (!catalogStarted.isCompleted) catalogStarted.complete();
+      await gate.future;
+    }
+    savedCatalogPresentations.add(presentation);
+  }
 
   @override
   Future<WebsiteEditorPageTarget> resolvePage({

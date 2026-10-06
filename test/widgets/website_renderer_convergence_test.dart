@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:vinabike_erp/modules/website/models/website_catalog_presentation.dart';
 import 'package:vinabike_erp/modules/website/models/website_action.dart';
 import 'package:vinabike_erp/modules/website/models/website_editor_capability.dart';
 import 'package:vinabike_erp/modules/website/models/website_page_models.dart';
@@ -233,6 +234,12 @@ class _StatefulFakeSaveGateway implements WebsiteSaveGateway {
     final error = seoError;
     if (error != null) throw error;
   }
+
+  @override
+  Future<void> saveCatalogPresentation({
+    required String tenantId,
+    required WebsiteCatalogPresentation presentation,
+  }) async {}
 
   @override
   Future<WebsiteEditorPageTarget> resolvePage({

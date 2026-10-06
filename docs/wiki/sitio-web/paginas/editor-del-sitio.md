@@ -2,7 +2,7 @@
 titulo: El editor del sitio
 resumen: cómo funciona el editor de vinabike.cl dentro del ERP — sus dos planos de control, los espacios de administración, los bloques, el guardado y el teléfono
 fuentes: [repositorio]
-archivos: [docs/architecture/website-editor-contract.md, services/storefront_html/lib/src/website_blocks_view.dart, packages/vinabike_public_core/lib/modules/website/models/website_block_surface_presence.dart, lib/modules/website/providers/website_edit_mode_provider.dart, lib/modules/website/services/website_save_coordinator.dart, lib/modules/website/models/website_block_type.dart, lib/modules/website/services/website_editor_draft_controller.dart]
+archivos: [docs/architecture/website-editor-contract.md, lib/modules/website/models/website_catalog_canvas.dart, lib/modules/website/widgets/website_editor_selectable_surface.dart, lib/modules/website/widgets/editor_panel/catalog_section_controls.dart, services/storefront_html/lib/src/website_blocks_view.dart, packages/vinabike_public_core/lib/modules/website/models/website_block_surface_presence.dart, lib/modules/website/providers/website_edit_mode_provider.dart, lib/modules/website/services/website_save_coordinator.dart, lib/modules/website/models/website_block_type.dart, lib/modules/website/services/website_editor_draft_controller.dart]
 tablas: [website_pages, website_blocks, website_navigation, website_settings, featured_products]
 revisado: 2026-10-06
 ---
@@ -63,6 +63,34 @@ abre las mismas páginas de administración con rutas propias:
 
 `[Repo: app_router.dart, 2026-10-03]`
 
+## Páginas de catálogo en el lienzo (2026-10-06)
+
+Primera etapa de la propuesta que el dueño aprobó el 2026-10-06 («dale,
+construye la propuesta del editor»: un editor para todas las páginas, como
+Shopify o Wix). `/servicios` ya no se edita en un formulario aparte: se abre en
+el editor y **se edita encima** `[Repo]`.
+
+- Cada sección (Portada, Planes, Todos los servicios, Cierre) se selecciona en
+  la página o desde el panel. Los textos se escriben directo sobre la página;
+  una etiqueta vacía se ofrece sólo con su sección seleccionada.
+- Sin nada seleccionado, el panel muestra las secciones de la página y **lo que
+  viene del catálogo** («del catálogo · 59»): precios, nombres y lo que incluye
+  cada plan se cambian en el servicio, con un botón a Inventario.
+- Con una sección seleccionada, el panel muestra sólo lo suyo en grupos que se
+  abren: textos, botón, calificación de Google, foto, alineación; «Diseño y
+  Google» cambia lista ↔ cuadrícula (avisa que la cuadrícula borra portada,
+  planes y cierre al guardar) y lo que ve Google.
+- Se guarda con el mismo «Guardar»: un borrador por página de catálogo que
+  escribe sólo su entrada del registro, leído fresco. Probado en producción el
+  2026-10-06 con una ida y vuelta: cambió un solo campo y las otras 11
+  presentaciones quedaron iguales `[Prod 2026-10-06]`.
+- En una ventana angosta, el dock nombra la sección y «Editar» abre la hoja.
+
+Pendiente (etapas 2 y 3, [estado-y-pendientes](estado-y-pendientes.md)): las
+secciones a la izquierda para todas las páginas, la barra de arriba con
+«Guardar» siempre visible, los tres lugares (Páginas, Catálogo, Ajustes del
+sitio) y las plantillas de categoría y de ficha de producto.
+
 ## Bloques
 
 24 tipos en `WebsiteBlockType` (`hero`, `carousel`, `canvas`, `text`, `products`,
@@ -114,6 +142,12 @@ geometría pasa la prueba real de iOS
 `integration_test/website_phone_authoring_ios_smoke_test.dart` `[Repo]`.
 
 ## Trampas
+
+- Un atajo de teclado `Espacio`/`Enter` (`FocusableActionDetector`) en una
+  superficie que contiene un campo de texto **se come los espacios** que se
+  escriben en el campo: el evento sube por la cadena de foco y el atajo lo
+  consume antes que la entrada de texto. La superficie seleccionable sólo
+  reacciona cuando el foco es suyo (`node.hasPrimaryFocus`) `[Repo 2026-10-06]`.
 
 - Una página CMS duplicada para que un botón funcione (la categoría ya tiene su
   destino).

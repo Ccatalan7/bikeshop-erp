@@ -126,7 +126,31 @@ class _EditBlockTabState extends State<_EditBlockTab> {
 
     if (selectedId == null) {
       _syncSelection(null);
+      // A catalog page has sections drawn from its presentation, not blocks:
+      // its outline is what there is to select.
+      if (editProvider.catalogCanvas case final canvas?) {
+        return _CatalogSectionOutline(provider: editProvider, canvas: canvas);
+      }
       return _buildNoSelection();
+    }
+
+    if (WebsiteCatalogSectionTarget.parse(selectedId) case final target?) {
+      _syncSelection(selectedId);
+      // A section of a page no longer on the canvas (or of a layout no
+      // longer chosen) is not offered: its page's outline, or nothing.
+      if (!editProvider.isCatalogSectionAvailable(target)) {
+        if (editProvider.catalogCanvas case final canvas?) {
+          return _CatalogSectionOutline(provider: editProvider, canvas: canvas);
+        }
+        return _buildNoSelection();
+      }
+      return _CatalogSectionControls(
+        key: ValueKey('catalog_controls_${target.selectionId}'),
+        provider: editProvider,
+        target: target,
+        // The contextual sheet names the section in its own header.
+        showHeader: widget.showBlockHeader,
+      );
     }
 
     // Handle special elements (header/footer) - these are not blocks

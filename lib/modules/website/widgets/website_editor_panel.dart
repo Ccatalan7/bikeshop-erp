@@ -28,6 +28,8 @@ import '../models/website_block_registry.dart';
 import '../models/website_block_type.dart';
 import '../models/website_canvas_alignment.dart';
 import '../models/website_canvas_responsive_document.dart';
+import '../models/website_catalog_canvas.dart';
+import '../models/website_catalog_presentation.dart';
 import '../models/website_responsive_field_state.dart';
 import '../models/website_page_composition.dart';
 import '../models/website_editor_capability.dart';
@@ -58,6 +60,7 @@ import 'website_block_edit_section.dart';
 import 'website_editor_chrome_geometry.dart';
 import 'website_editor_control_density.dart';
 import 'website_editor_host_theme.dart';
+import 'website_editor_navigation_guard.dart';
 import 'website_media_picker.dart';
 import 'website_workspace_scope.dart';
 
@@ -74,6 +77,7 @@ part 'editor_panel/shared_field_widgets.dart';
 part 'editor_panel/header_footer_controls.dart';
 part 'editor_panel/backups_dialog.dart';
 part 'editor_panel/style_controls.dart';
+part 'editor_panel/catalog_section_controls.dart';
 
 /// Professional side panel editor for website blocks
 /// Clean, functional, and elegant interface

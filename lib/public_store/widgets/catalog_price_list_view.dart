@@ -6,6 +6,39 @@ import 'package:vinabike_public_core/modules/website/models/website_catalog_pric
 import '../theme/public_store_theme.dart';
 import 'public_link_semantics.dart';
 
+/// The sections the editor makes selectable on the canvas.
+enum CatalogPriceListSection { hero, plans, list, closing }
+
+/// The presentation's own texts, which the editor writes on the page.
+enum CatalogPriceListField { eyebrow, title, intro, closingTitle, closingText }
+
+/// What the editor adds to the price list on its canvas; the store and the
+/// preview draw it without one.
+class CatalogPriceListEditing {
+  const CatalogPriceListEditing({
+    required this.section,
+    required this.text,
+    required this.showsEmpty,
+  });
+
+  /// Wraps one section in its selectable chrome.
+  final Widget Function(CatalogPriceListSection section, Widget child) section;
+
+  /// One of the presentation's texts, written where it is read.
+  final Widget Function(
+    CatalogPriceListField field, {
+    required String text,
+    required TextStyle style,
+    required TextAlign textAlign,
+    required String placeholder,
+    required bool uppercase,
+  }) text;
+
+  /// Whether an empty optional text is offered to write (its section is
+  /// selected); otherwise it takes no room, as on the store.
+  final bool Function(CatalogPriceListField field) showsEmpty;
+}
+
 /// A catalog root laid out as a price list ([WebsiteCatalogLayout.priceList]),
 /// as the HTML storefront draws it (`catalog_price_list_view.dart`): the hero
 /// with its button and the Google rating, the plan category's items as cards,
@@ -35,6 +68,7 @@ class CatalogPriceListView extends StatefulWidget {
     this.onAction,
     this.isActionShown,
     this.onHome,
+    this.editing,
   });
 
   final WebsiteCatalogPresentation presentation;
@@ -74,6 +108,9 @@ class CatalogPriceListView extends StatefulWidget {
   /// follow is not drawn, as the HTML hides it (`publicHref`).
   final bool Function(String href)? isActionShown;
   final VoidCallback? onHome;
+
+  /// Present on the editor's canvas only.
+  final CatalogPriceListEditing? editing;
 
   @override
   State<CatalogPriceListView> createState() => _CatalogPriceListViewState();
@@ -130,14 +167,49 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _hero(look),
-              if (widget.list.plans.isNotEmpty) _plans(look),
-              _listSection(look),
-              if (widget.presentation.hasClosing) _closing(look),
+              _section(CatalogPriceListSection.hero, _hero(look)),
+              if (widget.list.plans.isNotEmpty)
+                _section(CatalogPriceListSection.plans, _plans(look)),
+              _section(CatalogPriceListSection.list, _listSection(look)),
+              if (widget.presentation.hasClosing)
+                _section(CatalogPriceListSection.closing, _closing(look)),
             ],
           ),
         );
       },
+    );
+  }
+
+  Widget _section(CatalogPriceListSection section, Widget child) =>
+      widget.editing?.section(section, child) ?? child;
+
+  /// One of the presentation's texts: written in place on the canvas, a plain
+  /// text elsewhere. Null when it is empty and not offered.
+  Widget? _text(
+    CatalogPriceListField field, {
+    required String text,
+    required TextStyle style,
+    TextAlign textAlign = TextAlign.start,
+    String placeholder = '',
+    bool uppercase = false,
+  }) {
+    final editing = widget.editing;
+    if (editing == null) {
+      if (text.isEmpty) return null;
+      return Text(
+        uppercase ? text.toUpperCase() : text,
+        textAlign: textAlign,
+        style: style,
+      );
+    }
+    if (text.isEmpty && !editing.showsEmpty(field)) return null;
+    return editing.text(
+      field,
+      text: text,
+      style: style,
+      textAlign: textAlign,
+      placeholder: placeholder,
+      uppercase: uppercase,
     );
   }
 
@@ -155,6 +227,7 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
     final presentation = widget.presentation;
     final centered =
         presentation.heroAlignment == WebsiteCatalogHeroAlignment.center;
+    final align = centered ? TextAlign.center : TextAlign.start;
     final rating = widget.rating;
     final text = ConstrainedBox(
       constraints: BoxConstraints(maxWidth: look.phone ? double.infinity : 720),
@@ -176,28 +249,43 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
             ],
           ),
           const SizedBox(height: 20),
-          if (presentation.heroEyebrow.isNotEmpty) ...[
-            Text(
-              presentation.heroEyebrow.toUpperCase(),
-              textAlign: centered ? TextAlign.center : TextAlign.start,
-              style: look.eyebrow,
-            ),
+          if (_text(
+            CatalogPriceListField.eyebrow,
+            text: presentation.heroEyebrow,
+            textAlign: align,
+            style: look.eyebrow,
+            placeholder: 'Etiqueta sobre el título',
+            uppercase: true,
+          )
+              case final eyebrow?) ...[
+            eyebrow,
             const SizedBox(height: 14),
           ],
-          Text(
-            widget.title.toUpperCase(),
-            textAlign: centered ? TextAlign.center : TextAlign.start,
-            style: look.heroTitle,
-          ),
-          if (widget.intro.isNotEmpty) ...[
+          _text(
+                CatalogPriceListField.title,
+                // The canvas writes the saved title; empty, the store shows
+                // the root's name, which the canvas shows as its placeholder.
+                text: widget.editing == null
+                    ? widget.title
+                    : presentation.heroTitle,
+                textAlign: align,
+                style: look.heroTitle,
+                placeholder: widget.title.toUpperCase(),
+                uppercase: true,
+              ) ??
+              const SizedBox.shrink(),
+          if (_text(
+            CatalogPriceListField.intro,
+            text: widget.intro,
+            textAlign: align,
+            style: look.heroIntro,
+            placeholder: 'Una o dos líneas bajo el título',
+          )
+              case final intro?) ...[
             const SizedBox(height: 22),
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 560),
-              child: Text(
-                widget.intro,
-                textAlign: centered ? TextAlign.center : TextAlign.start,
-                style: look.heroIntro,
-              ),
+              child: intro,
             ),
           ],
           if (_shown(presentation.heroAction) case final action?) ...[
@@ -882,20 +970,29 @@ class _CatalogPriceListViewState extends State<CatalogPriceListView> {
 
   Widget _closing(_PriceListLook look) {
     final presentation = widget.presentation;
+    final title = _text(
+      CatalogPriceListField.closingTitle,
+      text: presentation.closingTitle,
+      style: look.closingTitle,
+      placeholder: 'Título del cierre',
+      uppercase: true,
+    );
+    final line = _text(
+      CatalogPriceListField.closingText,
+      text: presentation.closingText,
+      style: look.closingText,
+      placeholder: 'Una línea que invite a escribir',
+    );
     final text = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (presentation.closingTitle.isNotEmpty)
-          Text(
-            presentation.closingTitle.toUpperCase(),
-            style: look.closingTitle,
-          ),
-        if (presentation.closingText.isNotEmpty) ...[
-          const SizedBox(height: 18),
+        if (title != null) title,
+        if (line != null) ...[
+          if (title != null) const SizedBox(height: 18),
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 540),
-            child: Text(presentation.closingText, style: look.closingText),
+            child: line,
           ),
         ],
       ],

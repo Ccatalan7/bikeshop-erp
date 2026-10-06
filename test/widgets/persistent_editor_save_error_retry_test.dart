@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
+import 'package:vinabike_erp/modules/website/models/website_catalog_presentation.dart';
 import 'package:vinabike_erp/modules/website/models/website_editor_capability.dart';
 import 'package:vinabike_erp/modules/website/models/website_page_models.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
@@ -187,6 +188,12 @@ class _RetryGateway implements WebsiteSaveGateway {
     required String tenantId,
     required String routeKey,
     required Map<String, String> values,
+  }) async {}
+
+  @override
+  Future<void> saveCatalogPresentation({
+    required String tenantId,
+    required WebsiteCatalogPresentation presentation,
   }) async {}
 
   @override

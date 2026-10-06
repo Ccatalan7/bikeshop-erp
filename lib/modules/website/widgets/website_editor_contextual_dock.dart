@@ -6,6 +6,7 @@ import '../../../shared/widgets/vb_status_badge.dart';
 import '../models/website_block_registry.dart';
 import '../models/website_block_type.dart';
 import '../models/website_responsive_authoring.dart';
+import '../models/website_catalog_canvas.dart';
 import '../providers/website_edit_mode_provider.dart';
 import '../models/website_canvas_manipulation.dart';
 import 'website_editor_block_sheet.dart';
@@ -142,9 +143,14 @@ class WebsiteEditorContextualDock extends StatelessWidget {
     // had no dock, and therefore no `Editar`, on the contextual host: its id
     // is reserved chrome, so the lookup was always -1 and the dock vanished.
     final chrome = provider.selectedChromeTarget;
+    // A catalog page's section is selected like the header: it names itself
+    // and has a fixed place in its page.
+    final catalogLabel = catalogSectionLabelFor(provider, selectedId);
     final blocks = provider.blocks;
     final index = blocks.indexWhere((block) => block['id'] == selectedId);
-    if (chrome == null && index == -1) return const SizedBox.shrink();
+    if (chrome == null && catalogLabel == null && index == -1) {
+      return const SizedBox.shrink();
+    }
 
     final block = index == -1 ? const <String, dynamic>{} : blocks[index];
     final isVisible = block['is_visible'] != false;
@@ -185,6 +191,7 @@ class WebsiteEditorContextualDock extends StatelessWidget {
                   blockId: selectedId,
                   block: block,
                   chrome: chrome,
+                  catalogLabel: catalogLabel,
                 ),
                 _ActionRow(
                   provider: provider,
@@ -193,6 +200,7 @@ class WebsiteEditorContextualDock extends StatelessWidget {
                   isLast: index == blocks.length - 1,
                   isVisible: isVisible,
                   chrome: chrome,
+                  catalogLabel: catalogLabel,
                 ),
               ],
             ),
@@ -243,6 +251,22 @@ class WebsiteEditorContextualDock extends StatelessWidget {
     };
   }
 
+  /// What a catalog page's selected section is called («Portada»), or null
+  /// when the selection is not one.
+  static String? catalogSectionLabelFor(
+    WebsiteEditModeProvider provider,
+    String? selectionId,
+  ) {
+    final target = WebsiteCatalogSectionTarget.parse(selectionId);
+    if (target == null || !provider.isCatalogSectionAvailable(target)) {
+      return null;
+    }
+    final canvas = provider.catalogCanvas;
+    return target.labelFor(
+      noun: canvas?.ownerId == target.ownerId ? canvas!.noun : 'servicios',
+    );
+  }
+
   /// What the dock and the sheet call the current selection.
   ///
   /// Chrome names itself; a block asks the registry. One function so the dock
@@ -274,19 +298,22 @@ class _IdentityRow extends StatelessWidget {
     required this.blockId,
     required this.block,
     required this.chrome,
+    required this.catalogLabel,
   });
 
   final WebsiteEditModeProvider provider;
   final String blockId;
   final Map<String, dynamic> block;
   final WebsiteEditorChromeTarget? chrome;
+  final String? catalogLabel;
 
   @override
   Widget build(BuildContext context) {
-    var identity = WebsiteEditorContextualDock.identityLabelForSelection(
-      chrome: chrome,
-      block: block,
-    );
+    var identity = catalogLabel ??
+        WebsiteEditorContextualDock.identityLabelForSelection(
+          chrome: chrome,
+          block: block,
+        );
     // The identity of the SELECTED LAYER reaches the dock, not just the block.
     // `Bloque · capa` named nothing: a canvas holds a headline, a button and
     // three shapes, and they are not interchangeable. t10 frame 10d shows what
@@ -312,11 +339,14 @@ class _IdentityRow extends StatelessWidget {
     }
     final scope = layerTarget != null && effectiveCanvasViewport == null
         ? 'Preparando el lienzo'
-        : WebsiteEditorContextualDock.scopeLabelForSelection(
-            chrome: chrome,
-            viewport: effectiveCanvasViewport ?? provider.previewViewport,
-            scope: provider.writeScope,
-          );
+        : catalogLabel != null
+            // A catalog page's presentation has no per-viewport value.
+            ? 'Escribe en: común'
+            : WebsiteEditorContextualDock.scopeLabelForSelection(
+                chrome: chrome,
+                viewport: effectiveCanvasViewport ?? provider.previewViewport,
+                scope: provider.writeScope,
+              );
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(10, 6, 10, 0),
@@ -352,6 +382,7 @@ class _ActionRow extends StatelessWidget {
     required this.isLast,
     required this.isVisible,
     required this.chrome,
+    required this.catalogLabel,
   });
 
   final WebsiteEditModeProvider provider;
@@ -360,6 +391,7 @@ class _ActionRow extends StatelessWidget {
   final bool isLast;
   final bool isVisible;
   final WebsiteEditorChromeTarget? chrome;
+  final String? catalogLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -370,10 +402,12 @@ class _ActionRow extends StatelessWidget {
     // say why. Removing them would make the dock reflow under the finger and
     // would teach the operator that the phone editor has fewer capabilities
     // than it does.
-    final chromeReason = chrome == null
-        ? null
-        : '${chrome!.label} es del sitio, no de esta página.';
-    final isChrome = chrome != null;
+    final chromeReason = chrome != null
+        ? '${chrome!.label} es del sitio, no de esta página.'
+        : catalogLabel != null
+            ? '$catalogLabel tiene un lugar fijo en esta página.'
+            : null;
+    final isChrome = chromeReason != null;
     // A Canvas layer is selected when the block owns one and the operator
     // picked it. The dock states that identity and offers its operations, so
     // the capability does not depend on hitting a small handle.

@@ -193,12 +193,17 @@ class _WebsiteBlockEditSheetState extends State<WebsiteBlockEditSheet> {
     // header — `_EditBlockTab` branches on the reserved id before it looks the
     // selection up — so the only thing wrong here was the title falling
     // through to the generic word for a surface that has a real name.
-    final title = chrome != null || block != null
-        ? WebsiteEditorContextualDock.identityLabelForSelection(
-            chrome: chrome,
-            block: block ?? const <String, dynamic>{},
-          )
-        : 'Bloque';
+    final catalogLabel = WebsiteEditorContextualDock.catalogSectionLabelFor(
+      provider,
+      selectedId,
+    );
+    final title = catalogLabel ??
+        (chrome != null || block != null
+            ? WebsiteEditorContextualDock.identityLabelForSelection(
+                chrome: chrome,
+                block: block ?? const <String, dynamic>{},
+              )
+            : 'Bloque');
     final isCanvasLayerTask =
         widget.task == WebsiteBlockEditSheetTask.canvasLayerActions;
     // A block inspector is mixed too: titles/actions can be common-only while
@@ -206,7 +211,9 @@ class _WebsiteBlockEditSheetState extends State<WebsiteBlockEditSheet> {
     // viewport. One sheet-level sentence would lie for at least one control.
     // Chrome is the exception because header/footer settings are site-wide by
     // contract and therefore always common.
-    final scope = chrome == null ? null : 'Escribe en: común';
+    // A catalog page's presentation has no per-viewport value either.
+    final scope =
+        chrome == null && catalogLabel == null ? null : 'Escribe en: común';
     final hasCanvasLayerTarget = provider.selectedCanvasLayerTarget != null;
 
     return WebsiteContextualSheetScaffold(
@@ -218,7 +225,7 @@ class _WebsiteBlockEditSheetState extends State<WebsiteBlockEditSheet> {
       // section, so mounting three tabs there would offer navigation that
       // changes nothing — a control that lies about being a control. A
       // surface with one group shows no tabs.
-      headerExtras: chrome != null || isCanvasLayerTask
+      headerExtras: chrome != null || catalogLabel != null || isCanvasLayerTask
           ? [Divider(height: 1, color: theme.dividerColor)]
           : [
               Divider(height: 1, color: theme.dividerColor),

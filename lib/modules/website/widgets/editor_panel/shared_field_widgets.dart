@@ -217,6 +217,7 @@ class _EditorTextField extends StatefulWidget {
   final WebsiteAsyncFieldBinding? asyncBinding;
 
   const _EditorTextField({
+    super.key,
     required this.label,
     required this.value,
     required this.onChanged,

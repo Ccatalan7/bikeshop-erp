@@ -1941,32 +1941,35 @@ class WebsiteService extends ChangeNotifier {
     if (tenantId == null || tenantId.isEmpty) {
       throw Exception('No se pudo determinar el tenant activo.');
     }
-    final normalized = presentation.normalizedForOwner();
-    if (normalized.ownerId.trim().isEmpty || normalized.slug.isEmpty) {
-      throw Exception('El propietario y su ruta pública son obligatorios.');
-    }
+    final normalized = _validatedCatalogPresentation(presentation);
+    await _updateCatalogPresentationRegistry(
+      tenantId,
+      (registry) => _registryWithPresentation(tenantId, registry, normalized),
+    );
+  }
 
-    final root = normalized.catalogRoot;
-    if (root != null) {
-      if (!presentation.hasSamePersistedValue(normalized)) {
-        throw Exception(
-          'El catálogo raíz sólo guarda lo que su editor muestra: diseño, '
-          'densidad, filtros, SEO y, en lista de precios, su portada, planes '
-          'y cierre.',
-        );
-      }
-    }
+  /// [saveCatalogPresentation] for the editor's save command: the tenant is
+  /// explicit and [writeGuard] re-checks the editor's authority before the
+  /// write and after it, like every other part of the same «Guardar».
+  Future<void> saveCatalogPresentationForTenant(
+    String tenantId,
+    WebsiteCatalogPresentation presentation, {
+    WebsiteEditorWriteGuard? writeGuard,
+  }) async {
+    final normalized = _validatedCatalogPresentation(presentation);
+    await _updateCatalogPresentationRegistry(
+      tenantId,
+      (registry) => _registryWithPresentation(tenantId, registry, normalized),
+      writeGuard: writeGuard,
+      explicitTenant: true,
+    );
+  }
 
-    // This setting is a registry. Refresh before the read-modify-write so a
-    // workspace opened from a direct route cannot overwrite entries that were
-    // not yet present in this service instance's cache.
-    await loadSettings();
-    if (_error != null) {
-      throw Exception(
-        'No se pudo recargar la configuración antes de guardar.',
-      );
-    }
-    final registry = catalogPresentationRegistry;
+  Future<WebsiteCatalogPresentationRegistry> _registryWithPresentation(
+    String tenantId,
+    WebsiteCatalogPresentationRegistry registry,
+    WebsiteCatalogPresentation normalized,
+  ) async {
     final validation = normalized.isCategoryPresentation
         ? await _catalogPresentationRegistryWithFallbacks(
             tenantId: tenantId,
@@ -1977,13 +1980,111 @@ class WebsiteService extends ChangeNotifier {
         !validation!.activeCategoryIds.contains(normalized.ownerId)) {
       throw Exception('La categoría ya no existe en el catálogo activo.');
     }
-    final prepared =
-        (validation?.registry ?? registry).prepareForSave(normalized);
-
-    await saveSetting(
-      websiteCatalogPresentationsSettingKey,
-      registry.put(prepared).encode(),
+    return registry.put(
+      (validation?.registry ?? registry).prepareForSave(normalized),
     );
+  }
+
+  /// The presentation registry is one row holding every owner's entry, so
+  /// each change is a compare-and-set: the row is replaced only while it is
+  /// still the one read (its `updated_at`, checked by the database in the same
+  /// statement); otherwise it is read again and [change] applied again. Two
+  /// sessions saving different owners at the same moment both land.
+  Future<void> _updateCatalogPresentationRegistry(
+    String tenantId,
+    Future<WebsiteCatalogPresentationRegistry> Function(
+      WebsiteCatalogPresentationRegistry current,
+    ) change, {
+    WebsiteEditorWriteGuard? writeGuard,
+    bool explicitTenant = false,
+  }) async {
+    const key = websiteCatalogPresentationsSettingKey;
+    final lease = explicitTenant
+        ? _leaseForBoundTenant(tenantId)
+        : _bindTenantScope(tenantId);
+    for (var attempt = 0; attempt < 4; attempt++) {
+      final row = await _supabase
+          .from('website_settings')
+          .select('value,updated_at')
+          .eq('tenant_id', tenantId)
+          .eq('key', key)
+          .maybeSingle();
+      final next = await change(
+        WebsiteCatalogPresentationRegistry.decode(row?['value']?.toString()),
+      );
+      final encoded = next.encode();
+      final now = DateTime.now().toUtc().toIso8601String();
+      // Re-validate the saving authority after the reads, immediately before
+      // the mutable statement.
+      writeGuard?.call();
+      final List<dynamic> written;
+      if (row == null) {
+        written = await _supabase.from('website_settings').upsert(
+          {
+            'tenant_id': tenantId,
+            'key': key,
+            'value': encoded,
+            'updated_at': now,
+          },
+          onConflict: 'tenant_id,key',
+          ignoreDuplicates: true,
+        ).select('key');
+      } else {
+        final readAt = row['updated_at']?.toString();
+        final update = _supabase
+            .from('website_settings')
+            .update({'value': encoded, 'updated_at': now})
+            .eq('tenant_id', tenantId)
+            .eq('key', key);
+        written = await (readAt == null
+                ? update.isFilter('updated_at', null)
+                : update.eq('updated_at', readAt))
+            .select('key');
+      }
+      // Re-validate after the response, before any local projection.
+      writeGuard?.call();
+      if (written.isEmpty) continue; // Changed since it was read: again.
+      if (lease == null || !_ownsTenantScope(lease)) return;
+      _settings[key] = encoded;
+      _settingsProjectionTenantId = tenantId;
+      // A settings read already on its way answers with the row before this
+      // write and would project it over this one: once it lands, this write
+      // is projected again, and a read-back starts after it.
+      final inFlight = _settingsLoad;
+      if (inFlight != null && _sameTenantScope(inFlight.lease, lease)) {
+        try {
+          await inFlight.future;
+        } catch (_) {}
+        writeGuard?.call();
+        if (!_ownsTenantScope(lease)) return;
+        _settings[key] = encoded;
+        _settingsProjectionTenantId = tenantId;
+      }
+      if (writeGuard == null) await _loadSettingsForTenantWithinScope(lease);
+      return;
+    }
+    throw Exception(
+      'Otra sesión cambió las presentaciones del catálogo al mismo tiempo. '
+      'Vuelve a guardar.',
+    );
+  }
+
+  WebsiteCatalogPresentation _validatedCatalogPresentation(
+    WebsiteCatalogPresentation presentation,
+  ) {
+    final normalized = presentation.normalizedForOwner();
+    if (normalized.ownerId.trim().isEmpty || normalized.slug.isEmpty) {
+      throw Exception('El propietario y su ruta pública son obligatorios.');
+    }
+    if (normalized.catalogRoot != null &&
+        !presentation.hasSamePersistedValue(normalized)) {
+      throw Exception(
+        'El catálogo raíz sólo guarda lo que su editor muestra: diseño, '
+        'densidad, filtros, SEO y, en lista de precios, su portada, planes '
+        'y cierre.',
+      );
+    }
+    return normalized;
   }
 
   Future<void> removeCatalogPresentation(String ownerId) async {
@@ -1993,29 +2094,21 @@ class WebsiteService extends ChangeNotifier {
     if (tenantId == null || tenantId.isEmpty) {
       throw Exception('No se pudo determinar el tenant activo.');
     }
-    await loadSettings();
-    if (_error != null) {
-      throw Exception(
-        'No se pudo recargar la configuración antes de restablecer.',
-      );
-    }
-    final registry = catalogPresentationRegistry;
-    final next = registry.remove(id);
     final isCategoryOwner = WebsiteCatalogRootX.fromPresentationId(id) == null;
-    if (isCategoryOwner) {
-      final validation = await _catalogPresentationRegistryWithFallbacks(
-        tenantId: tenantId,
-        registry: next,
-      );
-      final fallback = validation.registry.forCategory(id);
-      if (fallback != null) {
-        validation.registry.prepareForSave(fallback);
+    await _updateCatalogPresentationRegistry(tenantId, (registry) async {
+      final next = registry.remove(id);
+      if (isCategoryOwner) {
+        final validation = await _catalogPresentationRegistryWithFallbacks(
+          tenantId: tenantId,
+          registry: next,
+        );
+        final fallback = validation.registry.forCategory(id);
+        if (fallback != null) {
+          validation.registry.prepareForSave(fallback);
+        }
       }
-    }
-    await saveSetting(
-      websiteCatalogPresentationsSettingKey,
-      next.encode(),
-    );
+      return next;
+    });
   }
 
   Future<

@@ -13,15 +13,17 @@ Se actualiza cada vez que algo cambia de estado; cada línea con su fecha.
 
 ## En vivo (2026-10-06) `[Prod]`
 
-- Build de la tienda: commit `32336525` (`release.json`); servidor HTML
-  `core-a22aedf68b93.server-baea906264f3`.
+- Build de la tienda: commit `f2967a7b` (`release.json`, 2026-10-06 21:12
+  UTC); servidor HTML `core-bfcba35e141d.server-fc5aa6abc72c`
+  (`storefront-html-00032-fxr`, con `/servicios` como lista de precios).
   Todo lo que ve un cliente es del servidor: el carrito, el checkout, la
   página del pedido, el portal y el login (2026-10-06, `32336525`); Flutter
   sólo arranca en los chats del portal, la descarga de la app del personal,
   `/auth/callback` y al canjear un enlace del correo.
-- ERP 1.0.9 (macOS `macos-v1.0.9-309` y Android, APK 2084) publicado desde
-  `d0984f61` (2026-10-06), con el núcleo compartido del login (fase 4c); el
-  editor no cambia.
+- ERP 1.0.10 (macOS `macos-v1.0.10-315` y Android, APK 2085) publicado desde
+  `f2967a7b` (2026-10-06): la lista de precios de `/servicios` en la tienda de
+  la app y sus controles en `Catálogo web > Presentación`. La edición sobre el
+  lienzo (etapa 1 del rediseño) va en la versión siguiente.
 - Las páginas que crea el editor (`/pagina/<slug>`) las dibuja el servidor
   HTML con texto, botón, separador, preguntas, llamado a la acción,
   características, «sobre nosotros» y los bloques de la portada (fase 5a,
@@ -69,7 +71,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 | 2026-09-24 | Imágenes pesadas: campaña de cámaras en PNG de 2 MB, WebP de 312 KB en la grilla de categorías | [rendimiento](rendimiento.md) |
 | 2026-09-26 | Login `/cuenta/login` sin la dirección «Sendero» | [portal](portal-de-clientes.md) |
 | 2026-10-06 | **Rediseño de los bloques del editor:** propuesta en Claude Design con datos reales (cifras, carta del taller, mantenciones, reseñas, galería, equipo, preguntas, marcas, llamado); espera el visto bueno del dueño, y la tercera tanda de la fase 5a espera eso | `docs/architecture/storefront-html-migration-plan.md` |
-| 2026-10-06 | **Rediseñar las páginas de configuración del editor** (dueño: «they are a fucking mess… it's really difficult to use»): cómo se organizan, presentan y navegan; hoy `Catálogo web` son pestañas dentro de pestañas (`Categorías > Presentación > Todos los servicios`), una columna angosta y larga de controles y una lista que mezcla los dos catálogos con 140 categorías. Va junto con la **comparación contra Shopify y Wix** que pidió el mismo día: plantillas, controles, funciones y **controles sobre el bloque mismo**, no sólo en el panel. La comparación y la propuesta (un solo editor para todas las páginas, también catálogo, servicios, categoría y ficha; secciones a la izquierda, barra sobre lo seleccionado, ajustes a la derecha; tres lugares en vez de veinte entradas) están en la página «El editor: hoy, Shopify, Wix y propuesta» del lienzo https://claude.ai/artifact/Eg75Q9vj2oZYWKiyGFDCHU y esperan su visto bueno; se construye con su visto bueno | [editor](editor-del-sitio.md) |
+| 2026-10-06 | **Rediseño del editor (propuesta aprobada, «dale, construye la propuesta del editor»):** la etapa 1 está hecha (`/servicios` se edita sobre la página, ver [editor](editor-del-sitio.md)). Faltan: **etapa 2**, las secciones a la izquierda para todas las páginas (mover «Capas» y agregar/duplicar/ocultar secciones), la barra de arriba con «Guardar», «Deshacer», «Cambios sin guardar» y «Ver como cliente» siempre visibles, y tres lugares (Páginas, Catálogo, Ajustes del sitio) en vez de `Editar página / Catálogo web / Estructura ▾ / Ajustes ▾ / Más ▾`; **etapa 3**, las plantillas de categoría y de ficha de producto en el lienzo, copiar secciones entre páginas y el historial de versiones. Propuesta: página «El editor: hoy, Shopify, Wix y propuesta» de https://claude.ai/artifact/Eg75Q9vj2oZYWKiyGFDCHU | [editor](editor-del-sitio.md) |
 | 2026-10-06 | **Lienzo del editor en HTML:** el sitio real en un visor web dentro del ERP (requisito 1 del dueño); los chats se quedan en Flutter (7 conversaciones del portal en total, 0 en 90 días) | `docs/architecture/storefront-html-migration-plan.md` |
 | 2026-10-06 | Pasar al HTML el canje de los enlaces de Auth (vuelta de Google en `/auth/callback`, confirmar con `code`), hoy en Flutter: el verificador PKCE ya está donde ambos lo leen | `docs/architecture/storefront-html-migration-plan.md` |
 | 2026-10-03 | Código muerto: `banners_management_page.dart`, `content_management_page.dart`, `customer_account_page.dart`, `premium_dashboard_widgets.dart`, ruta `/cuenta/mensajes`; clave `header_nav_links` | [editor](editor-del-sitio.md) |

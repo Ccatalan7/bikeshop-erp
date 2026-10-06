@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:uuid/uuid.dart';
+import 'package:vinabike_public_core/modules/website/models/website_catalog_presentation.dart';
 
 import '../models/website_page_models.dart';
+import '../models/website_catalog_canvas.dart';
 import '../models/website_action.dart';
 import '../models/website_editor_capability.dart';
 import '../models/website_block_document_sanitizer.dart';
@@ -614,6 +616,16 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   final _WebsiteEditorSitewideDraftState _sitewideDraft =
       _WebsiteEditorSitewideDraftState();
   final _WebsiteEditorSeoDraftState _seoDraft = _WebsiteEditorSeoDraftState();
+
+  /// A catalog page's own presentation (its hero, plans, closing, layout and
+  /// Google texts) edited on the canvas, by owner (`@catalog/services`, a
+  /// category id). Saved by the same «Guardar» as the page blocks.
+  final Map<String, _CatalogPresentationDraft> _catalogDrafts = {};
+
+  /// The catalog page on the canvas, as it describes itself to the inspector,
+  /// and the page instance that described it (only it may take it back).
+  WebsiteCatalogCanvasContext? _catalogCanvas;
+  Object? _catalogCanvasPublisher;
   Map<String, dynamic> _settings = {};
 
   // Screenshot capability
@@ -2219,8 +2231,17 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   /// the header and then undoing, reordering or crossing Preview silently
   /// deselect it — on every host, not only on touch.
   bool _selectionStillExists(String selectionId) =>
-      WebsiteEditorChromeTarget.forSelection(selectionId) != null ||
-      _documentContainsBlock(selectionId);
+      _isReservedSelection(selectionId) || _documentContainsBlock(selectionId);
+
+  /// Editor chrome and a catalog page's sections: selected like blocks, never
+  /// in the page document, and never dangling while their page is drawn.
+  bool _isReservedSelection(String selectionId) {
+    if (WebsiteEditorChromeTarget.forSelection(selectionId) != null) {
+      return true;
+    }
+    final catalog = WebsiteCatalogSectionTarget.parse(selectionId);
+    return catalog != null && isCatalogSectionAvailable(catalog);
+  }
 
   /// Transient inspector/canvas selection. This is UI state and must never be
   /// persisted into block data or mark the page as changed.
@@ -2319,8 +2340,11 @@ class WebsiteEditModeProvider extends ChangeNotifier {
       _sitewideDraft.hasHeaderChanges ||
       _sitewideDraft.hasSiteSettingsChanges ||
       _seoDraft.hasChanges ||
+      hasCatalogPresentationChanges ||
       _sitewideDraft.hasThemeChanges ||
       _sitewideDraft.hasFooterChanges;
+  bool get hasCatalogPresentationChanges =>
+      _catalogDrafts.values.any((draft) => draft.changed);
   bool get hasPageDraftChanges => _pageDraft.hasUnsavedChanges;
   bool get hasSitewideDraftChanges =>
       _sitewideDraft.hasHeaderChanges ||
@@ -3076,6 +3100,115 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// The catalog presentations a «Guardar» has to write, by owner.
+  Map<String, WebsiteCatalogPresentation> get pendingCatalogPresentations =>
+      Map<String, WebsiteCatalogPresentation>.unmodifiable({
+        for (final entry in _catalogDrafts.entries)
+          if (entry.value.changed) entry.key: entry.value.value,
+      });
+
+  /// The catalog page drawn on the canvas, or null on any other page.
+  WebsiteCatalogCanvasContext? get catalogCanvas => _catalogCanvas;
+
+  /// Called by a catalog page on the canvas after it draws; renderer-owned,
+  /// like the canvas measurements, so it never counts as a change.
+  void publishCatalogCanvas(
+    WebsiteCatalogCanvasContext context, {
+    required Object publisher,
+  }) {
+    if (identical(_catalogCanvasPublisher, publisher) &&
+        _catalogCanvas == context) {
+      return;
+    }
+    _catalogCanvas = context;
+    _catalogCanvasPublisher = publisher;
+    _dropUnavailableCatalogSelection();
+    _notifyAfterFrame();
+  }
+
+  /// The page that described itself left the canvas. Another instance of the
+  /// same page never takes back what this one published; a section of the
+  /// page that left is no longer selected.
+  void releaseCatalogCanvas(Object publisher) {
+    if (!identical(_catalogCanvasPublisher, publisher)) return;
+    _catalogCanvas = null;
+    _catalogCanvasPublisher = null;
+    _dropUnavailableCatalogSelection();
+    _notifyAfterFrame();
+  }
+
+  /// Whether [target] is on the canvas now: its page is the one drawn, and a
+  /// price-list section exists only while the page is laid out as one.
+  bool isCatalogSectionAvailable(WebsiteCatalogSectionTarget target) {
+    final canvas = _catalogCanvas;
+    if (canvas == null || canvas.ownerId != target.ownerId) return false;
+    if (target.section == WebsiteCatalogSection.page) return true;
+    return effectiveCatalogPresentation(canvas.saved).isPriceList;
+  }
+
+  void _dropUnavailableCatalogSelection() {
+    final target = WebsiteCatalogSectionTarget.parse(_selectedBlockId);
+    if (target == null || isCatalogSectionAvailable(target)) return;
+    final page = WebsiteCatalogSectionTarget(
+      target.ownerId,
+      WebsiteCatalogSection.page,
+    );
+    // A price-list section gone with its layout leaves its page selected;
+    // a page that left the canvas leaves nothing selected.
+    _selectedBlockId =
+        isCatalogSectionAvailable(page) ? page.selectionId : null;
+    _selectionVersion++;
+  }
+
+  /// What a catalog page shows while it is edited: its draft, or [saved].
+  WebsiteCatalogPresentation effectiveCatalogPresentation(
+    WebsiteCatalogPresentation saved,
+  ) {
+    final draft = _catalogDrafts[saved.ownerId];
+    return draft != null && draft.changed ? draft.value : saved;
+  }
+
+  /// Stages one catalog page's presentation (saved on the global Guardar).
+  /// A value equal to what the registry holds is no change, so undoing an
+  /// edit by hand leaves nothing to save.
+  ///
+  /// The draft is kept even then, with what it was compared against: a value
+  /// written back while a save of the previous one is in flight must survive
+  /// that save's acknowledgement, which moves the comparison to what it wrote.
+  void stageCatalogPresentation(
+    WebsiteCatalogPresentation next, {
+    required WebsiteCatalogPresentation saved,
+  }) {
+    final ownerId = next.ownerId.trim();
+    if (ownerId.isEmpty || ownerId != saved.ownerId) return;
+    final draft = _catalogDrafts[ownerId];
+    if (draft == null) {
+      _catalogDrafts[ownerId] = _CatalogPresentationDraft(next, saved);
+    } else {
+      // An unchanged draft follows the registry the page now reads.
+      if (!draft.changed) draft.baseline = saved;
+      draft.value = next;
+    }
+    _dropUnavailableCatalogSelection();
+    notifyListeners();
+  }
+
+  /// Records what a save wrote for each owner: a draft equal to it is done; a
+  /// draft changed meanwhile, even back to the value before, stays pending.
+  void acknowledgeSavedCatalogPresentations(
+    Map<String, WebsiteCatalogPresentation> written,
+  ) {
+    var changed = false;
+    for (final entry in written.entries) {
+      final draft = _catalogDrafts[entry.key];
+      if (draft == null) continue;
+      draft.baseline = entry.value;
+      if (!draft.changed) _catalogDrafts.remove(entry.key);
+      changed = true;
+    }
+    if (changed) notifyListeners();
+  }
+
   Map<String, String>? getPendingPageSeo(String routeKey) {
     final values = _seoDraft.pendingByRoute[routeKey];
     return values == null ? null : Map<String, String>.unmodifiable(values);
@@ -3157,6 +3290,10 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _sitewideDraft.pendingFooterNavCreates.clear();
     _sitewideDraft.pendingFooterNavDeletes.clear();
     _seoDraft.pendingByRoute.clear();
+    _catalogDrafts.clear();
+    // The page on the canvas describes itself again on its next frame.
+    _catalogCanvas = null;
+    _catalogCanvasPublisher = null;
     _selectedFooterNavId = null;
   }
 
@@ -3255,7 +3392,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     final selected = _selectedBlockId;
     if (selected != null &&
         !blockIds.contains(selected) &&
-        WebsiteEditorChromeTarget.forSelection(selected) == null) {
+        !_isReservedSelection(selected)) {
       _selectedBlockId = null;
     }
 
@@ -6862,6 +6999,20 @@ class _WebsiteEditorSitewideDraftState {
   int themeEpoch = 0;
   bool hasThemeChanges = false;
   Map<String, String> pendingThemeSettings = {};
+}
+
+/// One catalog page's presentation being edited, and what the registry holds
+/// as far as this session knows (the value saved when it began, then what each
+/// save of it wrote).
+class _CatalogPresentationDraft {
+  _CatalogPresentationDraft(this.value, this.baseline);
+
+  WebsiteCatalogPresentation value;
+  WebsiteCatalogPresentation baseline;
+
+  bool get changed => !value
+      .normalizedForOwner()
+      .hasSamePersistedValue(baseline.normalizedForOwner());
 }
 
 class _WebsiteEditorSeoDraftState {

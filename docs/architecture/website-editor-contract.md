@@ -571,11 +571,51 @@ Required behavior:
 Do not create a duplicate `website_pages` row for a category or product merely
 to obtain a destination. Use its canonical catalog/product route.
 
+## Catalog pages on the canvas (2026-10-06)
+
+A catalog page whose content is its presentation — today `/servicios` laid
+out as a price list — is edited on the canvas like a block page, not in a
+separate form. This is the first stage of the owner's approved editor
+proposal («dale, construye la propuesta del editor», 2026-10-06: one editor for
+every page, sections on the page, the inspector showing only the selection).
+
+- **Selection.** Its sections are reserved selection ids carried by
+  `selectedBlockId`, as the header and the footer carry theirs:
+  `catalog:<owner>:<section>` (`WebsiteCatalogSectionTarget`, sections
+  `hero`, `plans`, `list`, `closing` and `page` for layout and Google). They
+  are never dangling and never cleared by block reconciliation. Each section
+  is wrapped in `WebsiteEditorSelectableSurface`, the one owner of that chrome
+  (the header and the footer use it too).
+- **Writing on the page.** The presentation's texts (eyebrow, title, intro,
+  closing title and line) are `InlineEditableTextV2` fields on the canvas; an
+  empty optional one is offered only while its section is selected. Actions
+  and item links are inert in Edit.
+- **Draft and save.** Every control stages into
+  `WebsiteEditModeProvider.stageCatalogPresentation` (by owner; a value equal
+  to the saved one drops the draft). It counts in `hasUnsavedChanges`, is
+  dropped by discard/leave, and is saved by the same global `Guardar` through
+  `WebsiteSaveSection.catalogPresentations` →
+  `WebsiteService.saveCatalogPresentationForTenant`, which reads the registry
+  fresh and writes only that owner's entry. The draft keeps a half-written
+  button; the registry receives `normalizedForOwner()`.
+- **What the page tells the inspector.** The page publishes a
+  `WebsiteCatalogCanvasContext` (saved value, counts, plan categories, rating)
+  after it draws and releases it when it leaves. With nothing selected the
+  inspector shows the page's sections and «Lo que viene del catálogo»; a data
+  section says `del catálogo · N` and sends the operator to Inventario, the
+  owner of names and prices.
+- **Narrow editor.** The contextual dock and sheet name the section, write in
+  `común` and keep move/hide/duplicate inert with their reason.
+
+`Catálogo web > Categorías > Presentación` keeps editing the same registry
+for categories and the products root until those pages move to the canvas.
+
 ## Management workspaces and canonical ownership
 
-Only page composition shows the persistent block inspector. Catalog,
-structure, settings, and operations use full-width management workspaces while
-preserving the current page draft and return context.
+Page composition and catalog pages on the canvas show the persistent
+inspector. Catalog publication, structure, settings, and operations use
+full-width management workspaces while preserving the current page draft and
+return context.
 
 - `Catálogo web` owns product/category publication and the featured collection.
 - `Catálogo web > Categorías > Presentación` owns the optional presentation

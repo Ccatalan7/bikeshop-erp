@@ -4,6 +4,13 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-06 — corrección — [editor](paginas/editor-del-sitio.md): etapa 1
+  del rediseño aprobado, `/servicios` se edita sobre la página (secciones,
+  textos en el lugar, panel de la selección, «Guardar» común) y la trampa del
+  atajo de `Espacio` que se come los espacios;
+  [catálogo](paginas/catalogo-y-fichas.md) dice dónde se edita;
+  [estado](paginas/estado-y-pendientes.md) con las etapas 2 y 3 y el ERP
+  1.0.10 publicado.
 - 2026-10-06 — corrección — [catálogo](paginas/catalogo-y-fichas.md):
   `/servicios` como lista de precios (portada, planes, servicios por grupo,
   cierre), decidido en `Catálogo web > Presentación`; las 10 categorías de

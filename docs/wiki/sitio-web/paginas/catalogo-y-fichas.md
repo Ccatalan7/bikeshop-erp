@@ -82,10 +82,15 @@ la misma URL con la disponibilidad correcta `[GSC]`.
 ## Servicios: la lista de precios
 
 Desde el 2026-10-06 `/servicios` es una **lista de precios**, no la grilla de
-tarjetas con el logo repetido `[Repo]` `[Prod 2026-10-06]`. Lo decide el editor:
-`Catálogo web > Categorías > Presentación > Todos los servicios > Diseño`
+tarjetas con el logo repetido `[Repo]` `[Prod 2026-10-06]`. Lo decide el editor
 (`layout: price_list` en `catalog_category_presentations_v1`; los productos
-siempre son grilla). Muestra todo en una página:
+siempre son grilla). **Se edita sobre la página**, como Inicio: en el editor se
+elige «Servicios», se toca una sección (Portada, Planes, Todos los servicios,
+Cierre) o un texto y se escribe ahí; el panel derecho muestra sólo esa
+sección, y «Diseño y Google» guarda la lista o la cuadrícula y lo que ve
+Google. Se guarda con el mismo «Guardar» de todo el sitio (ver
+`editor-del-sitio.md`) `[Repo]`. `Catálogo web > Categorías > Presentación`
+sigue editando el mismo registro. Muestra todo en una página:
 
 - **Portada:** título, texto, imagen opcional (sin ella, el color principal
   oscurecido), un botón del editor y la calificación de Google sincronizada.

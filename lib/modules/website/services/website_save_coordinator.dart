@@ -1,3 +1,4 @@
+import '../models/website_catalog_presentation.dart';
 import '../models/website_editor_capability.dart';
 import '../models/website_page_models.dart';
 import '../models/website_block_document_sanitizer.dart';
@@ -10,6 +11,7 @@ enum WebsiteSaveSection {
   footerSettings,
   themeSettings,
   pageSeo,
+  catalogPresentations,
   navigationUpdates,
   navigationOrder,
   pageBlocks,
@@ -57,6 +59,7 @@ class WebsiteEditorSaveCommand {
     required this.footerSettings,
     required this.themeSettings,
     required this.pageSeo,
+    required this.catalogPresentations,
     required this.navigationLabels,
     required this.navigationLinkTypes,
     required this.navigationLinkValues,
@@ -100,6 +103,9 @@ class WebsiteEditorSaveCommand {
         for (final entry in document.pendingPageSeo.entries)
           entry.key: Map<String, String>.from(entry.value),
       },
+      catalogPresentations: Map<String, WebsiteCatalogPresentation>.from(
+        document.pendingCatalogPresentations,
+      ),
       navigationLabels: Map<String, String>.from(
         document.pendingFooterNavLabels,
       ),
@@ -148,6 +154,9 @@ class WebsiteEditorSaveCommand {
   final Map<String, String> footerSettings;
   final Map<String, String> themeSettings;
   final Map<String, Map<String, String>> pageSeo;
+
+  /// Catalog pages' presentations edited on the canvas, by owner.
+  final Map<String, WebsiteCatalogPresentation> catalogPresentations;
   final Map<String, String> navigationLabels;
   final Map<String, NavLinkType> navigationLinkTypes;
   final Map<String, String?> navigationLinkValues;
@@ -207,6 +216,13 @@ abstract class WebsiteSaveGateway {
     required String tenantId,
     required String routeKey,
     required Map<String, String> values,
+  });
+
+  /// Writes one catalog page's presentation into the tenant's registry,
+  /// read fresh first so another owner's entry is never overwritten.
+  Future<void> saveCatalogPresentation({
+    required String tenantId,
+    required WebsiteCatalogPresentation presentation,
   });
 
   Future<WebsiteEditorPageTarget> resolvePage({
@@ -333,6 +349,18 @@ class WebsiteServiceSaveGateway implements WebsiteSaveGateway {
         'seo_${normalizedRoute}_title': metaTitle,
         'seo_${normalizedRoute}_description': metaDescription,
       },
+      writeGuard: writeGuard,
+    );
+  }
+
+  @override
+  Future<void> saveCatalogPresentation({
+    required String tenantId,
+    required WebsiteCatalogPresentation presentation,
+  }) {
+    return _service.saveCatalogPresentationForTenant(
+      tenantId,
+      presentation,
       writeGuard: writeGuard,
     );
   }
@@ -633,6 +661,22 @@ class WebsiteSaveCoordinator {
         document.acknowledgeSavedPageSeo({entry.key: entry.value});
       }
       completed.add(WebsiteSaveSection.pageSeo);
+    }
+
+    for (final entry in command.catalogPresentations.entries) {
+      _requireCurrentAuthority(command, document, commandEpoch);
+      // A draft keeps what is being typed (a button still without its
+      // destination); the registry stores only what its owner can show.
+      await _gateway.saveCatalogPresentation(
+        tenantId: command.tenantId,
+        presentation: entry.value.normalizedForOwner(),
+      );
+      if (_canAcknowledge(command, document, commandEpoch)) {
+        document.acknowledgeSavedCatalogPresentations({
+          entry.key: entry.value,
+        });
+      }
+      completed.add(WebsiteSaveSection.catalogPresentations);
     }
 
     for (final navigationId in command.navigationDeletes) {

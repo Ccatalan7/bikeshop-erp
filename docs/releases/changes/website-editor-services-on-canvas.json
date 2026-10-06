@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-editor-services-on-canvas",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android"
+  ],
+  "title": "Edita la página de servicios sobre ella misma",
+  "summary": "En el editor del sitio, al abrir Servicios tocas una sección o un texto y lo escribes ahí; el panel muestra sólo esa sección y lo que viene del catálogo, y se guarda con el mismo Guardar de todo el sitio.",
+  "items": [
+    "Portada, planes, todos los servicios y cierre se eligen en la página o en la lista de secciones del panel, que lleva a Inventario para precios y nombres.",
+    "Pasar de lista de precios a cuadrícula avisa que la portada, los planes y el cierre se borran al guardar.",
+    "Dos personas que guardan presentaciones del catálogo al mismo tiempo ya no se pisan: cada una conserva lo suyo."
+  ],
+  "evidence": [
+    {
+      "path": "lib/public_store/pages/product_catalog_page.dart",
+      "sha256": "5396e089c4914c6e8a34a972ae6dfc01d612fcb1f6b71b49d9deccf16726358d"
+    },
+    {
+      "path": "lib/modules/website/widgets/editor_panel/catalog_section_controls.dart",
+      "sha256": "c17a71f79d91b52464c6e50fd38545ba226b3b7b40a8e420166bd8796fae7f6d"
+    },
+    {
+      "path": "lib/modules/website/providers/website_edit_mode_provider.dart",
+      "sha256": "fe03a8ab4b9b118527b2db35341899d0774df75a47466f9c71dea82301750cbd"
+    },
+    {
+      "path": "lib/modules/website/services/website_save_coordinator.dart",
+      "sha256": "8cc0f12f689689f0e19e27535224b8c0f78584c4684bb4a58687661ae61cd273"
+    },
+    {
+      "path": "lib/modules/website/services/website_service.dart",
+      "sha256": "1a3a6af69bc8f8efc807823baf4d7b2ef0a000e69377b1f1ddac46077127e16b"
+    },
+    {
+      "path": "lib/modules/website/models/website_catalog_canvas.dart",
+      "sha256": "7d5dc797c8dd71bfc12d348b25a74d5f5c346ee603c393ada3085c05e9ede3e2"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_editor_selectable_surface.dart",
+      "sha256": "a0560b5ee1e65e53715d8197c306ab1744f66f570f4dbd9c55614f6e21f46816"
+    },
+    {
+      "path": "lib/modules/website/widgets/editor_panel/edit_block_tab.dart",
+      "sha256": "b669046893eebf37df6a0477ed798350cc118039cfc435004b4ab962d53a6d4c"
+    },
+    {
+      "path": "lib/modules/website/widgets/editor_panel/shared_field_widgets.dart",
+      "sha256": "04453c2723b36150dfe4007f166c2f6092c0aac8e031ebcb7f4885cdc569d6d9"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_editor_panel.dart",
+      "sha256": "2bce3dd4a7b369114933ad3bb7944c74acca92b63030720d69ae99bba32bcaff"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_editor_contextual_dock.dart",
+      "sha256": "74c6b2d6293d2ef1c6fb71e46ba7f24d45c5be40719199a0ac34df9b75226a0a"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_editor_block_sheet.dart",
+      "sha256": "464d475335e77d3b6b9dd00763c5deb95424f26def9e49191b7c0720bcd796f0"
+    },
+    {
+      "path": "lib/public_store/widgets/catalog_price_list_view.dart",
+      "sha256": "5efab3e7b20c9cf79ecc4017b9569b10ca618eb23197e3edfd9f46f494a9067b"
+    },
+    {
+      "path": "lib/public_store/widgets/public_store_layout.dart",
+      "sha256": "a3a7c4fafb8eb7810e69e13d0c2b7844675b5b82cb857ae7618100e0216442a3"
+    },
+    {
+      "path": "lib/public_store/widgets/store_layout/scroll_and_chrome.dart",
+      "sha256": "fbe97aace0bf29dc6319b090f980fd43f8b41e98e6a09e02211f83c7e31731e0"
+    }
+  ]
+}

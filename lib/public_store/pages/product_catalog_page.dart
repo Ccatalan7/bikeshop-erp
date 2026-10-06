@@ -29,10 +29,14 @@ import '../utils/public_spec_display.dart';
 import '../utils/public_store_tenant_resolver.dart';
 import '../../modules/website/providers/website_edit_mode_provider.dart';
 import '../../modules/inventory/models/category_models.dart';
+import '../../modules/website/models/website_catalog_canvas.dart';
 import '../../modules/website/models/website_catalog_presentation.dart';
 import '../../modules/website/models/website_catalog_query.dart';
 import '../../modules/website/models/website_page_models.dart';
 import '../../modules/website/services/website_service.dart';
+import '../../modules/website/widgets/inline_editable_text_v2.dart';
+import '../../modules/website/widgets/text_formatting_toolbar.dart';
+import '../../modules/website/widgets/website_editor_selectable_surface.dart';
 import '../../shared/widgets/safe_layout_builder.dart';
 import '../widgets/public_link_semantics.dart';
 import '../widgets/public_store_layout.dart';
@@ -159,6 +163,13 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   bool _priceListLoading = false;
   bool _priceListStale = false;
   bool _priceListFailed = false;
+
+  /// The raw registry [_presentationRegistry] was decoded from; in Edit and
+  /// Preview a save replaces it and the page follows.
+  String? _presentationRegistryRaw;
+
+  /// The editor this page described itself to, to take it back on dispose.
+  WebsiteEditModeProvider? _publishedCanvasEditor;
   // Shared across routed catalog instances so catalog -> detail -> back keeps
   // the already-painted pages. Soft expiry starts a silent origin refresh;
   // retained values are visual continuity, never purchase authority.
@@ -843,10 +854,13 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     final publicInventoryService = context.read<PublicInventoryService>();
     try {
       final websiteService = context.read<WebsiteService>();
+      _presentationRegistryRaw =
+          websiteService.getSetting(websiteCatalogPresentationsSettingKey);
       _presentationRegistry = WebsiteCatalogPresentationRegistry.decode(
-        websiteService.getSetting(websiteCatalogPresentationsSettingKey),
+        _presentationRegistryRaw,
       );
     } catch (_) {
+      _presentationRegistryRaw = null;
       _presentationRegistry = const WebsiteCatalogPresentationRegistry({});
     }
     final visibilityPolicy = _readVisibilityPolicy();
@@ -2370,6 +2384,7 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   @override
   void dispose() {
     // Debug: dispose
+    _publishedCanvasEditor?.releaseCatalogCanvas(this);
     _searchDebounce?.cancel();
     _observedInventoryService
         ?.removeListener(_handlePublicInventoryInvalidated);
@@ -2634,16 +2649,152 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     );
   }
 
-  /// `/servicios` when the editor laid it out as a price list.
-  WebsiteCatalogPresentation? get _servicesPriceList {
+  /// `/servicios`'s presentation as saved, while it is the page on screen.
+  WebsiteCatalogPresentation? get _servicesRootSaved {
     if (_selectedCategoryId != null ||
         _selectedProductType != ProductType.service) {
       return null;
     }
-    final presentation = _presentationRegistry.forCatalogRoot(
-      WebsiteCatalogRoot.services,
+    return _presentationRegistry.forCatalogRoot(WebsiteCatalogRoot.services) ??
+        WebsiteCatalogPresentation.catalogRoot(WebsiteCatalogRoot.services);
+  }
+
+  /// In Edit and Preview the page follows the registry the editor saves into
+  /// (the store keeps the one it loaded with its products).
+  void _followSavedPresentations() {
+    final String raw;
+    try {
+      raw = context
+          .read<WebsiteService>()
+          .getSetting(websiteCatalogPresentationsSettingKey);
+    } catch (_) {
+      return;
+    }
+    if (raw == _presentationRegistryRaw) return;
+    _presentationRegistryRaw = raw;
+    _presentationRegistry = WebsiteCatalogPresentationRegistry.decode(raw);
+  }
+
+  /// Tells the editor which catalog page is on the canvas (and what its
+  /// sections read), or that none is.
+  void _describeCanvas(
+    WebsiteEditModeProvider editProvider,
+    WebsiteCatalogCanvasContext? canvas,
+  ) {
+    final previous = _publishedCanvasEditor;
+    if (canvas == null) {
+      if (previous == null) return;
+      _publishedCanvasEditor = null;
+      previous.releaseCatalogCanvas(this);
+      return;
+    }
+    if (previous != null && !identical(previous, editProvider)) {
+      previous.releaseCatalogCanvas(this);
+    }
+    _publishedCanvasEditor = editProvider;
+    editProvider.publishCatalogCanvas(canvas, publisher: this);
+  }
+
+  /// What the editor adds on the canvas: each section selectable, and the
+  /// presentation's texts written where they are read. They stage into the
+  /// editor's draft, saved by its «Guardar».
+  CatalogPriceListEditing _priceListEditing(
+    WebsiteEditModeProvider editProvider,
+    String ownerId,
+  ) {
+    WebsiteCatalogSectionTarget targetOf(CatalogPriceListSection section) =>
+        WebsiteCatalogSectionTarget(
+          ownerId,
+          switch (section) {
+            CatalogPriceListSection.hero => WebsiteCatalogSection.hero,
+            CatalogPriceListSection.plans => WebsiteCatalogSection.plans,
+            CatalogPriceListSection.list => WebsiteCatalogSection.list,
+            CatalogPriceListSection.closing => WebsiteCatalogSection.closing,
+          },
+        );
+    WebsiteCatalogSectionTarget fieldTarget(CatalogPriceListField field) =>
+        targetOf(
+          switch (field) {
+            CatalogPriceListField.eyebrow ||
+            CatalogPriceListField.title ||
+            CatalogPriceListField.intro =>
+              CatalogPriceListSection.hero,
+            CatalogPriceListField.closingTitle ||
+            CatalogPriceListField.closingText =>
+              CatalogPriceListSection.closing,
+          },
+        );
+    void stage(CatalogPriceListField field, String raw) {
+      final saved = _servicesRootSaved;
+      if (saved == null || saved.ownerId != ownerId) return;
+      final current = editProvider.effectiveCatalogPresentation(saved);
+      final singleLine = field != CatalogPriceListField.intro &&
+          field != CatalogPriceListField.closingText;
+      final value = singleLine ? raw.replaceAll(RegExp(r'\s*\n\s*'), ' ') : raw;
+      editProvider.stageCatalogPresentation(
+        switch (field) {
+          CatalogPriceListField.eyebrow => current.copyWith(heroEyebrow: value),
+          CatalogPriceListField.title => current.copyWith(heroTitle: value),
+          CatalogPriceListField.intro =>
+            current.copyWith(heroDescription: value),
+          CatalogPriceListField.closingTitle =>
+            current.copyWith(closingTitle: value),
+          CatalogPriceListField.closingText =>
+            current.copyWith(closingText: value),
+        },
+        saved: saved,
+      );
+    }
+
+    return CatalogPriceListEditing(
+      section: (section, child) {
+        final target = targetOf(section);
+        final label = target.labelFor();
+        return WebsiteEditorSelectableSurface(
+          key: ValueKey('catalog-section-${target.selectionId}'),
+          selectionId: target.selectionId,
+          label: label,
+          semanticsLabel: '$label de la página',
+          child: child,
+        );
+      },
+      showsEmpty: (field) =>
+          editProvider.selectedBlockId == fieldTarget(field).selectionId,
+      text: (
+        field, {
+        required text,
+        required style,
+        required textAlign,
+        required placeholder,
+        required uppercase,
+      }) {
+        final target = fieldTarget(field);
+        return InlineEditableTextV2(
+          key: ValueKey('catalog-inline-$ownerId-${field.name}'),
+          text: text,
+          baseStyle: style,
+          textAlign: textAlign,
+          isEditMode: true,
+          placeholder: placeholder,
+          fieldKey: 'catalog-$ownerId-${field.name}',
+          toolbarPreset: TextToolbarPreset.textOnly,
+          allowWidthResize: false,
+          editorPadding: EdgeInsets.zero,
+          displayTransform: uppercase ? (value) => value.toUpperCase() : null,
+          onSessionStart: () {
+            if (editProvider.selectedBlockId != target.selectionId) {
+              editProvider.selectBlock(target.selectionId);
+            }
+            return target;
+          },
+          onSessionCommit: (session, commit) {
+            if (commit.text != text) stage(field, commit.text);
+            return true;
+          },
+          onSessionCancel: (_) {},
+        );
+      },
     );
-    return presentation?.isPriceList == true ? presentation : null;
   }
 
   /// Every published service, a page of 100 (the read's ceiling) at a time,
@@ -2701,7 +2852,11 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
 
   /// The price list, a loading page while its services arrive, or null for
   /// the grid when they could not be read.
-  Widget? _buildServicesPriceList(WebsiteCatalogPresentation presentation) {
+  Widget? _buildServicesPriceList(
+    WebsiteCatalogPresentation presentation,
+    WebsiteEditModeProvider editProvider, {
+    required bool onCanvas,
+  }) {
     final storeId = _loadedCategoriesTenantId;
     if (_priceListFailed || storeId == null) return null;
     final current = _priceListTenantId == storeId;
@@ -2731,28 +2886,67 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     };
     final plans = categories[presentation.plansCategoryId];
     final websiteService = context.read<WebsiteService>();
+    final rating = CatalogPriceListRating.read(websiteService.getSetting);
+    final editing = editProvider.isEditMode;
+    final list = CatalogPriceList.build(
+      items: [
+        for (final product in products)
+          if (PublicCommerceProductProjection.fromProduct(product)
+              case final commerce)
+            CatalogPriceItem(
+              id: product.id,
+              name: commerce.title,
+              price: commerce.price,
+              categoryId: product.categoryId?.trim() ?? '',
+              description: CatalogPriceItem.descriptionOf(
+                websiteDescription: product.websiteDescription,
+                description: product.description,
+              ),
+            ),
+      ],
+      compareCategories: compareCategories,
+      categoryLabel: (id) => categories[id]?.name ?? '',
+      plansCategoryId: presentation.plansCategoryId,
+    );
+    if (onCanvas) {
+      final counts = <String, int>{};
+      for (final product in products) {
+        final id = product.categoryId?.trim() ?? '';
+        if (id.isNotEmpty) counts[id] = (counts[id] ?? 0) + 1;
+      }
+      final ids = counts.keys.toList()..sort(compareCategories);
+      final saved = _servicesRootSaved;
+      if (saved != null) {
+        final canvas = WebsiteCatalogCanvasContext(
+          saved: saved,
+          rootLabel: 'Servicios',
+          noun: 'servicios',
+          itemCount: products.length,
+          groupCount: list.groups.length,
+          planCount: list.plans.length,
+          categories: [
+            for (final id in ids)
+              WebsiteCatalogCanvasCategory(
+                id: id,
+                name: categories[id]?.name ?? 'Sin nombre',
+                itemCount: counts[id]!,
+              ),
+          ],
+          ratingSummary: rating == null
+              ? null
+              : [
+                  '${rating.label} de 5',
+                  if (rating.totalLabel.isNotEmpty) rating.totalLabel,
+                ].join(' · '),
+        );
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _describeCanvas(editProvider, canvas);
+        });
+      }
+    }
     return CatalogPriceListView(
       presentation: presentation,
-      list: CatalogPriceList.build(
-        items: [
-          for (final product in products)
-            if (PublicCommerceProductProjection.fromProduct(product)
-                case final commerce)
-              CatalogPriceItem(
-                id: product.id,
-                name: commerce.title,
-                price: commerce.price,
-                categoryId: product.categoryId?.trim() ?? '',
-                description: CatalogPriceItem.descriptionOf(
-                  websiteDescription: product.websiteDescription,
-                  description: product.description,
-                ),
-              ),
-        ],
-        compareCategories: compareCategories,
-        categoryLabel: (id) => categories[id]?.name ?? '',
-        plansCategoryId: presentation.plansCategoryId,
-      ),
+      list: list,
       title: presentation.heroTitle.trim().isNotEmpty
           ? presentation.heroTitle.trim()
           : 'Servicios',
@@ -2761,20 +2955,28 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
       rootLabel: 'Servicios',
       plansTitle: plans?.name ?? '',
       plansIntro: plans?.description?.trim() ?? '',
-      rating: presentation.heroShowRating
-          ? CatalogPriceListRating.read(websiteService.getSetting)
-          : null,
+      rating: presentation.heroShowRating ? rating : null,
       initialQuery: _searchQuery,
       itemHref: (id) => pathById[id],
-      onOpenItem: (id) {
-        final path = pathById[id];
-        if (path != null) PublicStoreLayout.navigateToHref(context, path);
-      },
+      // On the canvas a tap selects and writes; nothing navigates away.
+      onOpenItem: editing
+          ? null
+          : (id) {
+              final path = pathById[id];
+              if (path != null) {
+                PublicStoreLayout.navigateToHref(context, path);
+              }
+            },
       isActionShown: (href) =>
           PublicStoreLayout.isHrefPubliclyEligible(context, href),
-      onAction: (action) =>
-          PublicStoreLayout.navigateToHref(context, action.href),
-      onHome: () => PublicStoreLayout.navigateToHref(context, '/'),
+      onAction: editing
+          ? null
+          : (action) => PublicStoreLayout.navigateToHref(context, action.href),
+      onHome:
+          editing ? null : () => PublicStoreLayout.navigateToHref(context, '/'),
+      editing: editing
+          ? _priceListEditing(editProvider, presentation.ownerId)
+          : null,
     );
   }
 
@@ -2821,9 +3023,52 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
     if (_catalogLoadError != null) {
       return _buildCatalogLoadErrorState();
     }
-    if (_servicesPriceList case final presentation?) {
-      final priceList = _buildServicesPriceList(presentation);
-      if (priceList != null) return priceList;
+    final authoring = editProvider.isEditMode || editProvider.isPreviewMode;
+    if (authoring) _followSavedPresentations();
+    // The page describes itself to the editor only while it is the one on
+    // the canvas: a route pushed over it keeps it mounted underneath with its
+    // tickers off, and TickerMode rebuilds it when that changes. Preview
+    // counts, so Edit → Vista previa → Edit keeps the selected section.
+    final onCanvas = authoring && TickerMode.of(context);
+    final servicesSaved = _servicesRootSaved;
+    final services = servicesSaved == null
+        ? null
+        : authoring
+            ? editProvider.effectiveCatalogPresentation(servicesSaved)
+            : servicesSaved;
+    if (services != null && services.isPriceList) {
+      final priceList = _buildServicesPriceList(
+        services,
+        editProvider,
+        onCanvas: onCanvas,
+      );
+      if (priceList != null) {
+        if (!onCanvas && _publishedCanvasEditor != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _describeCanvas(editProvider, null);
+          });
+        }
+        return priceList;
+      }
+    }
+    if (onCanvas && servicesSaved != null) {
+      // Laid out as a grid, the page still has its own settings.
+      final canvas = WebsiteCatalogCanvasContext(
+        saved: servicesSaved,
+        rootLabel: 'Servicios',
+        noun: 'servicios',
+        itemCount: _totalProductCount,
+        groupCount: 0,
+        planCount: 0,
+        categories: const [],
+      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _describeCanvas(editProvider, canvas);
+      });
+    } else if (_publishedCanvasEditor != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _describeCanvas(editProvider, null);
+      });
     }
 
     return Container(

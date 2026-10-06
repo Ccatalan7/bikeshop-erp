@@ -54,6 +54,7 @@ import '../../modules/website/widgets/website_link_value_editor.dart';
 import '../../modules/website/widgets/website_editor_block_sheet.dart';
 import '../../modules/website/widgets/website_editor_chrome_geometry.dart';
 import '../../modules/website/widgets/website_editor_host_theme.dart';
+import '../../modules/website/widgets/website_editor_selectable_surface.dart';
 import 'website_header_overlay_boundary.dart';
 import '../../modules/website/widgets/website_editor_command_scope.dart';
 import '../../modules/website/widgets/website_editor_navigation_guard.dart';
