@@ -876,8 +876,17 @@ Dos trampas de la publicación, del mismo día:
   las anotaciones del trabajo). Le pasó a dos corridas seguidas durante el
   incidente de Actions del 2026-10-05; se repite con `gh run rerun <id>`.
 
+### Costo medido (2026-10-06)
+
+Facturación del 1 al 5 de octubre: Cloud Run CLP 40, cubierto entero por la
+cuota gratis (CLP 0); Artifact Registry 72 MB (CLP 0), ahora con regla de
+limpieza (se quedan las 5 imágenes más nuevas y se borran las de más de 7
+días). Lo que sí cobró fue **Firebase Hosting, CLP 2.911**: rastreadores de IA
+bajando la tienda Flutter (~7 GB/día) y versiones viejas guardadas sin
+límite. El HTML terminó con lo primero y las versiones quedaron en 50 por
+sitio; el detalle está en el wiki, `publicacion-y-despliegue.md`.
+
 ### Pendiente
 
-- El costo real de Cloud Run en la facturación, después de unos días.
 - Las copias de una foto reemplazada quedan en Storage (pocos KB cada una);
   una limpieza de las que ninguna fila nombra, si algún día pesan.

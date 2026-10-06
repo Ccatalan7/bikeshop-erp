@@ -92,6 +92,29 @@ build diario cubre `[Prod]` `[Repo]`.
   propio se descartó (mismo peso y Firebase lo serviría sin caché) `[Repo]`.
 - Datos de portada: Worker de Cloudflare, 5 minutos.
 
+## Costo de Hosting (2026-10-06)
+
+El sitio tiene que ser gratis. Lo que cobra Firebase Hosting (cuenta de
+facturación en pesos, alerta en CLP 4.800):
+
+- **Descargas**: 360 MB/día gratis. Del 2 al 5 de octubre la tienda mandó
+  ~7 GB/día y costó **CLP 2.880** en cuatro días. No eran clientes: rastreadores
+  de IA (`meta-externalagent`, `PerplexityBot`, también `OAI-SearchBot` y
+  `facebookexternalhit`) recorrían todas las fichas cuando cada una era la
+  página Flutter (~4,4 MB). Desde que las fichas y el catálogo son HTML
+  (~15 KB, 2026-10-05 ~10:00 UTC) los mismos rastreadores bajan ~73 MB cada
+  12 horas y la tienda entera ~120 MB/día `[Prod 2026-10-06]`. No se los
+  bloquea: el costo desapareció con el HTML y pueden traer visitas.
+- **Almacenamiento**: 10 GB gratis. Cada publicación guardaba su versión para
+  siempre (`maxVersions: 999999` en la tienda): ~85 MB cada una de la tienda y
+  ~39 MB del ERP web, 21,8 GB en total. Desde el 2026-10-06 cada sitio guarda
+  las últimas **50** (`sites/{sitio}/config`, API de Hosting): ~6 GB, y el
+  rollback sigue teniendo días de margen.
+- Cómo mirarlo sin consola: la métrica
+  `firebasehosting.googleapis.com/network/sent_bytes_count` de Cloud Monitoring
+  por `site_name` y `domain_name`, por hora; Hosting no deja registro por
+  ruta, pero Cloud Run sí (`gcloud logging read`, agente por `userAgent`).
+
 ## Trampas
 
 - `web/index.html` copiado a `build/web_store` **no arranca Flutter**: el build

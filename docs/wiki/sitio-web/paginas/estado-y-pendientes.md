@@ -59,13 +59,13 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 | 2026-10-08 | Leer el resultado de la tarea `vinabike-store-ready-review` | [rendimiento](rendimiento.md) |
 | 2026-10-04 | **Fase 0 de la migración a HTML:** anotar el costo mensual real de Cloud Run (`storefront-html`) después de unos días; lo demás está hecho y medido ([rendimiento](rendimiento.md)) | `docs/architecture/storefront-html-migration-plan.md` |
 | 2026-10-05 | Precalcular los valores técnicos de las facetas (`spec_public_facet_values_internal_v1`, ~270 ms de los ~410 ms de `get_public_product_facets_v2` en cada visita al catálogo, Flutter y HTML) | [rendimiento](rendimiento.md) |
-| 2026-10-05 | Regla de limpieza de imágenes viejas en Artifact Registry (cada despliegue del servidor HTML guarda 5,5 MB; la cuota gratis es 0,5 GB) | `storefront-html-migration-plan.md` |
 | 2026-10-04 | Paridad latente de la ficha técnica: el generador de snapshots arma la identidad con `color`, `size`, `material` y `weight` leídos de `products`, y la página pública no los recibe; un producto que los tenga mostraría en el snapshot filas que la página no. 0 productos afectados hoy | [datos-estructurados](datos-estructurados.md) |
 
 ## Hecho
 
 | Fecha | Qué | Página |
 |---|---|---|
+| 2026-10-06 | **El sitio vuelve a costar CLP 0**: Hosting había cobrado CLP 2.911 (2–5 oct) por rastreadores de IA bajando la tienda Flutter y versiones guardadas sin límite; con el HTML los rastreadores bajan ~73 MB cada 12 h, cada sitio guarda 50 versiones y Artifact Registry borra imágenes viejas. La foto de cámaras del carrusel pasó de 2,1 MB a 118 KB por el editor | [publicacion-y-despliegue](publicacion-y-despliegue.md) |
 | 2026-10-05 | **Flutter deja la página a las rutas HTML** (fase 2f): desde el carrito o la cuenta, «Inicio», «Productos» o el pie cargan la página del servidor; los enlaces `?category=<id>` de los bloques salen con la ruta limpia (sin 301); «Productos destacados» baja la copia pequeña de la foto optimizada. Portada en un teléfono lento: foto principal 2,7 s, carga 2,8 s | [rendimiento](rendimiento.md) |
 | 2026-10-05 | **`/contacto` en el servidor HTML** (fase 2e): datos, horario, WhatsApp, redes y el formulario con los mensajes de Flutter, medidos al píxel a 1440 y 412 px. Arreglado en las dos tiendas: el botón de Instagram de Contacto llevaba a `instagram.com/https://…` porque el ajuste guarda la dirección completa | [rutas](rutas-y-navegacion.md) |
 | 2026-10-05 | **`/servicios` en el servidor HTML** (fase 2d): el catálogo de servicios del taller con el mismo título para Google que la instantánea y cada servicio con su precio en el JSON-LD; el generador deja de escribir su archivo. En todo el catálogo, la columna de resultados sube 2 px a la posición de Flutter | [rutas](rutas-y-navegacion.md) |
