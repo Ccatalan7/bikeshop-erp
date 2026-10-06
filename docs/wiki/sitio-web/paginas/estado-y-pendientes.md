@@ -20,10 +20,11 @@ Se actualiza cada vez que algo cambia de estado; cada línea con su fecha.
   página del pedido, el portal y el login (2026-10-06, `32336525`); Flutter
   sólo arranca en los chats del portal, la descarga de la app del personal,
   `/auth/callback` y al canjear un enlace del correo.
-- ERP 1.0.12 (macOS `macos-v1.0.12-325` y Android, APK 2087) publicado desde
-  `b4b4d810` (2026-10-06): la lista «Secciones» (etapa 2b), sobre la 1.0.11
-  (`fea927df`: `/servicios` sobre la página y la barra con «Guardar» siempre
-  arriba). Las categorías sobre su página (etapa 3a) van en la siguiente.
+- ERP 1.0.13 (macOS `macos-v1.0.13-328` y Android, APK 2088) publicado desde
+  `53b55fac` (2026-10-06): `/productos` y las categorías se editan sobre su
+  página (etapa 3a). Antes, el mismo día: 1.0.12 (`b4b4d810`, la lista
+  «Secciones») y 1.0.11 (`fea927df`, `/servicios` sobre la página y la barra
+  con «Guardar» siempre arriba).
 - Las páginas que crea el editor (`/pagina/<slug>`) las dibuja el servidor
   HTML con texto, botón, separador, preguntas, llamado a la acción,
   características, «sobre nosotros» y los bloques de la portada (fase 5a,
