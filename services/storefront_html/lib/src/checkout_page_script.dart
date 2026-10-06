@@ -900,6 +900,21 @@ const checkoutPageScript = r'''
     }
   });
 
+  // The order page is still the Flutter store: start fetching it once the
+  // visitor points at «Realizar pedido», never on a plain visit.
+  var warmed = false;
+  function warm(event) {
+    if (warmed || !(event.target.closest && event.target.closest('[data-act=place]'))) return;
+    warmed = true;
+    var link = document.createElement('link');
+    link.rel = 'prefetch';
+    link.href = '/main.dart.js';
+    document.head.appendChild(link);
+  }
+  root.addEventListener('pointerover', warm);
+  root.addEventListener('focusin', warm);
+  root.addEventListener('touchstart', warm, { passive: true });
+
   // An old Mercado Pago return to the checkout (`?status=failure&pedido=`).
   (function () {
     var params = new URLSearchParams(location.search), status = params.get('status');

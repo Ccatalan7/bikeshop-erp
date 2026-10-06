@@ -225,18 +225,6 @@ const storefrontScript = r'''
   // For the checkout's `begin_checkout` and `InitiateCheckout`.
   window.vinabikeMeasure = { track: track, pixel: pixel };
 
-  var prefetched = false;
-  function warmCart() {
-    // The cart is still the Flutter store: start fetching it once the visitor
-    // shows the intent, never on a plain visit.
-    if (prefetched) return;
-    prefetched = true;
-    var link = document.createElement('link');
-    link.rel = 'prefetch';
-    link.href = '/main.dart.js';
-    document.head.appendChild(link);
-  }
-
   function itemOf(el) {
     return {
       item_id: el.dataset.itemId,
@@ -290,7 +278,6 @@ const storefrontScript = r'''
         item.quantity = added;
         track('add_to_cart', { currency: 'CLP', value: item.price * added, items: [item] });
         pixel('AddToCart', { content_ids: [item.item_id], content_name: item.item_name, content_type: 'product', value: item.price * added, currency: 'CLP' });
-        warmCart();
         if (qtyInput) qtyInput.value = '1';
       }
       if (then === 'checkout' && (added > 0 || inCart())) {

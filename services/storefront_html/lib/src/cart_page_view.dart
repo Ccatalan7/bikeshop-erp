@@ -411,21 +411,6 @@ const cartPageScript = r'''
     else if (act === 'remove') askRemove(line);
   });
 
-  // The checkout is still the Flutter store: start fetching it once the
-  // visitor points at «Proceder al pago».
-  var warmed = false;
-  function warm(event) {
-    if (warmed || !(event.target.closest && event.target.closest('[data-checkout]'))) return;
-    warmed = true;
-    var link = document.createElement('link');
-    link.rel = 'prefetch';
-    link.href = '/main.dart.js';
-    document.head.appendChild(link);
-  }
-  root.addEventListener('pointerover', warm);
-  root.addEventListener('focusin', warm);
-  root.addEventListener('touchstart', warm, { passive: true });
-
   window.addEventListener('storage', function (event) { if (event.key === cart.key) refresh(); });
   window.addEventListener('pageshow', function (event) { if (event.persisted) refresh(); });
   refresh();

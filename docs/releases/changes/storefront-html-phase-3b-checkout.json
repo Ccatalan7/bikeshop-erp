@@ -17,7 +17,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/checkout_page_script.dart",
-      "sha256": "ca9a79367f297539d62b65003cad3b642b4de0b5cf3d865b9372f3abe67df1da"
+      "sha256": "9a54cd751f7a60423e268c2db787ac16756fc25bb6369c3d01dee330e3c68968"
     },
     {
       "path": "services/storefront_html/lib/src/checkout_page_view.dart",
@@ -49,7 +49,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_script.dart",
-      "sha256": "1c2e2078e4b66634536a0dbfc9d61f82d0959a505795293e28c2dae8acf3964f"
+      "sha256": "88da3c0a4d3927f21b30a413348a5d25022c9f09b138124903fc3eb4353bd4f5"
     },
     {
       "path": "services/storefront_html/lib/storefront_html.dart",

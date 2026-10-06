@@ -1,6 +1,6 @@
 /// The public paths Firebase Hosting hands to the HTML storefront: the
 /// `run` rewrites of the store target in `firebase.json`, in the same
-/// spelling (a test keeps the two equal). Flutter still draws the checkout
+/// spelling (a test keeps the two equal). Flutter still draws the order page
 /// and the customer portal; from them it leaves for these paths with a full
 /// page load, so every visitor reads the same pages.
 const storefrontHtmlRouteSources = <String>[
@@ -18,6 +18,8 @@ const storefrontHtmlRouteSources = <String>[
   '/contacto',
   '/carrito',
   '/carrito/**',
+  '/checkout',
+  '/checkout/**',
 ];
 
 /// Whether the HTML storefront answers [path] (no query, no fragment), as

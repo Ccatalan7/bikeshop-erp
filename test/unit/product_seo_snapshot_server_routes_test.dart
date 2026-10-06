@@ -57,12 +57,16 @@ void main() {
       // The cart and its lines (phase 3a).
       '/carrito',
       '/carrito/lineas',
+      // The checkout and its lines (phase 3b).
+      '/checkout',
+      '/checkout/lineas',
     ]) {
       expect(routes.owns(path), isTrue, reason: path);
     }
     for (final path in [
       '/app.html',
-      '/checkout',
+      '/checkoutx',
+      '/pedido/46a51a87-aa3a-430c-a6e1-af48c8d74541',
       '/carritox',
       '/cuenta/servicios',
       '/serviciosx',
@@ -100,10 +104,12 @@ void main() {
       '/contacto',
       '/carrito',
       '/carrito/lineas',
+      '/checkout',
+      '/checkout/lineas',
     ]) {
       expect(storefrontHtmlServes(path), isTrue, reason: path);
     }
-    for (final path in ['/checkout', '/cuenta', '/carritox', '/productosx']) {
+    for (final path in ['/pedido/x', '/cuenta', '/carritox', '/checkoutx']) {
       expect(storefrontHtmlServes(path), isFalse, reason: path);
     }
   });

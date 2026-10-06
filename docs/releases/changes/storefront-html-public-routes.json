@@ -10,14 +10,14 @@
   "title": "Productos y catálogo cargan mucho más rápido",
   "summary": "La portada, productos, categorías y búsqueda de vinabike.cl llegan armados desde el servidor, con el precio y el stock del momento y las fotos de cada lista en el tamaño de su tarjeta: quien entra desde Google ve la ficha en un segundo en un teléfono lento.",
   "items": [
-    "La portada, productos, servicios, el carrito y páginas como Envíos llegan armadas: en un teléfono lento se leen en 1 a 1,5 segundos, no en 15 a 20.",
+    "La portada, productos, el carrito, el checkout y páginas como Envíos llegan armadas: en un teléfono lento se leen en 1 a 2 segundos, no en 15 a 20.",
     "Categorías y filtros funcionan sin JavaScript, se comparten como enlace y cada foto de las listas pesa unos 20 KB en vez de 120.",
     "En Nosotros, Términos y Privacidad el contacto muestra el teléfono, el correo y la dirección de la tienda, no un aviso para el editor."
   ],
   "evidence": [
     {
       "path": "firebase.json",
-      "sha256": "c6037981788b888f5080ea3f43caca82d1a8299c5b6c61e32bf221ae3857969b"
+      "sha256": "9583760210feee298d60f361e3580c39aa7150b195f7088abe9a5de7bb95ebe3"
     },
     {
       "path": "scripts/generate_product_seo_snapshots.dart",
@@ -29,7 +29,7 @@
     },
     {
       "path": "scripts/releases/check_storefront_html_routes.mjs",
-      "sha256": "e1f4ec578e4ee0778322388c2ffa1581d2883224b5a6d7d35ee3374818c371ae"
+      "sha256": "918d62cc3afc95331a900a155b743596933e9e70260585ce2d1a94ee00b5768b"
     },
     {
       "path": "services/storefront_html/bin/server.dart",
@@ -97,11 +97,15 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_script.dart",
-      "sha256": "1c2e2078e4b66634536a0dbfc9d61f82d0959a505795293e28c2dae8acf3964f"
+      "sha256": "88da3c0a4d3927f21b30a413348a5d25022c9f09b138124903fc3eb4353bd4f5"
     },
     {
       "path": "services/storefront_html/lib/src/material_icons.dart",
       "sha256": "c5e9c21855f3c0379e9734e26aefc846ab5760006583ed4b958d6afb45072c0a"
+    },
+    {
+      "path": "services/storefront_html/lib/src/checkout_page_view.dart",
+      "sha256": "35c41c3478b67979647c82b4ea58270b1f57c58753697bfae557bc6d16a2f6f5"
     }
   ]
 }

@@ -12,7 +12,8 @@
 //   - a page is not a 200 with its sitemap URL as canonical and indexable;
 //   - an old link does not 301 to the product's canonical path;
 //   - an unknown category is not a real 404 from the server;
-//   - a private route (`/carrito`) is not a 200 from the server with noindex;
+//   - a private route (`/carrito`, `/checkout`) is not a 200 from the server
+//     with noindex;
 //   - Cloud Run answers with another source than this commit's
 //     (`x-storefront-source`, services/storefront_html/tool/source_id.sh): the
 //     shared core changed and the server was not published with it.
@@ -50,7 +51,7 @@ export function exactServerRoutes(firebaseConfig) {
 
 // Server routes that are never indexed, so the sitemap does not list them:
 // they must still be a 200 from the server, with `noindex`.
-export const privateServerRoutes = ["/carrito"];
+export const privateServerRoutes = ["/carrito", "/checkout"];
 
 export function selectStorefrontHtmlChecks({
   sitemapXml,
