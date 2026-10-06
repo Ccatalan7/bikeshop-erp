@@ -103,8 +103,9 @@ tarjeta»).
 CPU ×4, 1,6 Mbps, 150 ms, sin caché; «se lee» = el mayor pintado): portada
 **2,8 s** (474 KB), `/productos` **2,1 s** (366 KB), una ficha **2,4 s**
 (395 KB), `componentes` **2,0 s**, `/carrito` **0,8 s** (125 KB), `/contacto`
-**1,0 s**. Lo único que sigue en Flutter, `/cuenta/login`, queda usable a los
-**20,5 s** con 3.649 KB `[Prod 2026-10-06]`.
+**1,0 s**. `/cuenta/login`, que era lo último en Flutter, quedaba usable a los
+**20,5 s** con 3.649 KB `[Prod 2026-10-06]`; en HTML (fase 4c) se lee a los
+**0,8–0,9 s** con 215 KB `[Prod 2026-10-06, 32336525]`.
 
 **El portal en HTML** (fase 4a, 2026-10-06, `3e4ae449`, el mismo celular lento):
 el marco de `/cuenta` con su puerta se lee a los **1,6 s** en vivo, contra

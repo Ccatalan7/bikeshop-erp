@@ -1404,3 +1404,50 @@ Lo que costó, y vale para lo que sigue:
 - **El campo del diálogo de Flutter casi no tiene borde** (dos niveles de gris
   sobre el fondo del diálogo, sin explicación en el código del decorador): se
   copia lo medido, el borde mezclado al 25 % con el fondo.
+
+## Fase 4d: los chats se quedan en Flutter (2026-10-06)
+
+Medido en producción el 2026-10-06: el portal tiene 7 conversaciones en toda
+su vida y ninguna con mensajes en los últimos 90 días (la última, 22-abr); en
+el mismo período WhatsApp tuvo 14 activas de 22. Pasar los chats a HTML
+(tiempo real, adjuntos, leídos) no tiene ganancia que medir: quedan en
+Flutter, como decía el plan para ese caso. También se quedan
+`/cuenta/descargas/android` (la descarga de la app para el personal, con su
+propio ingreso) y `/auth/callback`, que además de canjear la vuelta de Google
+devuelve al editor su intento de OAuth (`WebsiteEditorOAuthIntentGate`).
+
+Con eso, lo que ve un cliente en vinabike.cl es HTML de punta a punta; Flutter
+arranca sólo en esas tres rutas y al canjear un enlace del correo. Lo que
+sigue del plan es el lienzo del editor (la sección «El editor» de arriba).
+
+## Fase 5: el lienzo del editor — plan (2026-10-06)
+
+El editor hoy es la tienda Flutter en modo edición (`PublicStoreLayout`,
+`WebsiteEditModeProvider`): borradores sin guardar, selección, manillas,
+vistas de teléfono y tableta, recuperación de borradores. El requisito 1 del
+dueño pide que el lienzo sea el sitio HTML real dentro del ERP. Se hace por
+pasos, con el lienzo Flutter como predeterminado hasta que el HTML lo iguale:
+
+- **5a, los bloques que faltan.** El servidor dibuja 8 de los 25 tipos de
+  bloque (`homeCoveredBlockTypes`: portada, contacto, carrusel, productos,
+  categorías, marcas, video, reseñas). Faltan `canvas` (las campañas con
+  capas, el más grande), `text`, `button`, `divider`, `services`, `about`,
+  `testimonials`, `features`, `cta`, `gallery`, `faq`, `pricing`, `team`,
+  `stats`, `footer` y `partnersBanner`. Hoy una página con uno de ellos la
+  responde Flutter entera (`_flutterFallback`), así que el sitio nunca pierde
+  un bloque; cada tipo nuevo se mide contra Flutter con una página de prueba
+  servida por un Supabase falso (nada se escribe en producción para medir).
+- **5b, dibujar un borrador.** Una ruta del servidor sólo para el personal
+  recibe el documento en edición (bloques y ajustes del tema, sin guardar) con
+  la sesión del ERP, comprueba que es personal de la tienda leyendo como ella
+  (RLS) y lo dibuja con los mismos componentes que la página pública;
+  `no-store`, `noindex` y sin dejarse enmarcar fuera del ERP.
+- **5c, «Vista HTML» en el editor.** Un visor web en la barra del editor
+  (WKWebView en macOS, WebView en Android, WebView2 en Windows, un iframe en
+  el ERP web; el ERP ya los usa en `webview_module_page.dart`) que muestra esa
+  página y se redibuja con cada cambio del panel. El lienzo Flutter sigue
+  siendo el de editar.
+- **5d, editar sobre el HTML.** Cada bloque lleva su id; un clic en el visor
+  avisa al panel, que lo selecciona; después las manillas y lo demás. Cuando
+  el HTML iguala al lienzo Flutter en todos los bloques, pasa a ser el
+  predeterminado y se retiran los renderizadores Flutter que nadie usa.

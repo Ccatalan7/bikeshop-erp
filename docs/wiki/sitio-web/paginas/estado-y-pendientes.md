@@ -13,12 +13,12 @@ Se actualiza cada vez que algo cambia de estado; cada línea con su fecha.
 
 ## En vivo (2026-10-06) `[Prod]`
 
-- Build de la tienda: commit `fbf034e7` (`release.json`); servidor HTML
-  `core-c94ee1ddcbcd.server-24ad2591b711`.
-  El carrito, el checkout, la página del pedido y el portal salvo el login y
-  los chats (`/cuenta`, pedidos, taller, bicicletas, perfil y direcciones) ya
-  son del servidor (2026-10-06, `fbf034e7`); Flutter sólo arranca en el login
-  y los chats del portal.
+- Build de la tienda: commit `32336525` (`release.json`); servidor HTML
+  `core-a22aedf68b93.server-baea906264f3`.
+  Todo lo que ve un cliente es del servidor: el carrito, el checkout, la
+  página del pedido, el portal y el login (2026-10-06, `32336525`); Flutter
+  sólo arranca en los chats del portal, la descarga de la app del personal,
+  `/auth/callback` y al canjear un enlace del correo.
 - ERP 1.0.8 (macOS y Android) publicado desde `d042080b`, con el núcleo
   compartido del portal; el editor no cambia.
 - Sitemap: 1.315 URL. La tienda lista 539 productos con stock y 59 servicios.
@@ -60,7 +60,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 | 2026-09-24 | La tienda llama `get_public_store_data` directo además de usar la precarga (sin investigar) | [rendimiento](rendimiento.md) |
 | 2026-09-24 | Imágenes pesadas: campaña de cámaras en PNG de 2 MB, WebP de 312 KB en la grilla de categorías | [rendimiento](rendimiento.md) |
 | 2026-09-26 | Login `/cuenta/login` sin la dirección «Sendero» | [portal](portal-de-clientes.md) |
-| 2026-10-06 | **Fase 4d de la migración a HTML:** los chats del portal (tiempo real), o quedan en Flutter si no hay ganancia que medir | `docs/architecture/storefront-html-migration-plan.md` |
+| 2026-10-06 | **Lienzo del editor en HTML:** el sitio real en un visor web dentro del ERP (requisito 1 del dueño); los chats se quedan en Flutter (7 conversaciones del portal en total, 0 en 90 días) | `docs/architecture/storefront-html-migration-plan.md` |
 | 2026-10-06 | Pasar al HTML el canje de los enlaces de Auth (vuelta de Google en `/auth/callback`, confirmar con `code`), hoy en Flutter: el verificador PKCE ya está donde ambos lo leen | `docs/architecture/storefront-html-migration-plan.md` |
 | 2026-10-03 | Código muerto: `banners_management_page.dart`, `content_management_page.dart`, `customer_account_page.dart`, `premium_dashboard_widgets.dart`, ruta `/cuenta/mensajes`; clave `header_nav_links` | [editor](editor-del-sitio.md) |
 | 2026-10-08 | Leer el resultado de la tarea `vinabike-store-ready-review` | [rendimiento](rendimiento.md) |
