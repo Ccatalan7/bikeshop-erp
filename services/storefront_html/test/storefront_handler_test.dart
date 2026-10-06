@@ -6,6 +6,8 @@ import 'package:jaspr/server.dart';
 import 'package:test/test.dart';
 import 'package:vinabike_public_core/modules/website/models/website_catalog_presentation.dart';
 import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
+import 'package:vinabike_public_core/public_store/models/customer_portal_presentation.dart';
+import 'package:vinabike_public_core/public_store/models/portal_time_zone.dart';
 import 'package:vinabike_public_core/public_store/utils/product_url.dart';
 import 'package:vinabike_public_core/shared/models/product.dart';
 import 'package:vinabike_storefront_html/storefront_html.dart';
@@ -154,7 +156,11 @@ class _FakeReads implements PublicReads {
     this.contactRow,
     this.payments,
     this.orders = const {},
+    this.portal,
   }) : shellJson = shell;
+
+  /// What `customerPortal` answers; null refuses the session.
+  final CustomerPortalReads? portal;
 
   final Map<String, dynamic>? page;
   final bool fail;
@@ -189,6 +195,19 @@ class _FakeReads implements PublicReads {
     if (fail) throw PublicReadException('down');
     return (shell: shellJson ?? _shell(), payments: null, page: page);
   }
+
+  @override
+  Future<CustomerPortalReads> customerPortal(String accessToken) async {
+    requested.add('portal');
+    if (fail) throw PublicReadException('down');
+    final read = portal;
+    if (read == null) throw const CustomerSessionRefused();
+    return read;
+  }
+
+  @override
+  Future<String?> customerJobFile(String accessToken, String reference) async =>
+      reference;
 
   @override
   Future<Object?> publicOrder(String accessToken) async {
@@ -2301,6 +2320,240 @@ void main() {
         'sb-abcd1234-auth-token',
       );
       expect(html, contains('"sb-example-auth-token"'));
+    });
+  });
+
+  group('portal', () {
+    setUpAll(usePortalTimeZone);
+    // An invented session: the server only reads its `sub` for the filter;
+    // the fake reads stand for Supabase, which checks the signature.
+    String token() {
+      String b64(Map<String, Object?> v) =>
+          base64Url.encode(utf8.encode(jsonEncode(v))).replaceAll('=', '');
+      return '${b64({'alg': 'HS256'})}.'
+          '${b64({'sub': '7e570000-0000-4000-8000-0000000000aa'})}.'
+          '${'x' * 43}';
+    }
+
+    const customer = '7e570000-0000-4000-8000-0000000000ab';
+    const bike = 'b1000000-0000-4000-8000-000000000001';
+    CustomerPortalReads portal({
+      Map<String, dynamic>? profile = const {
+        'id': customer,
+        'tenant_id': _tenant,
+        'auth_user_id': '7e570000-0000-4000-8000-0000000000aa',
+        'name': 'Ana Prueba',
+        'email': 'ana@example.invalid',
+        'phone': '+56 9 1234 5678',
+        'created_at': '2026-01-01T00:00:00Z',
+      },
+      List<Object?> jobs = const [],
+      List<Object?> orders = const [],
+    }) => (
+      shell: _shell(),
+      profile: profile,
+      addresses: 1,
+      orders: orders,
+      bikes: const [
+        {
+          'id': bike,
+          'brand': 'Besatti',
+          'model': 'Priore',
+          'bike_type': 'mountain_hardtail',
+          'color': 'negra',
+          'wheel_size': '27.5',
+          'warranty_until': '2027-03-01',
+          'bike_brands': {'name': 'Besatti'},
+          'bike_models': {'name': 'Priore'},
+        },
+      ],
+      jobs: jobs,
+      jobBikes: const [
+        {
+          'id': bike,
+          'brand': 'Besatti',
+          'model': 'Priore',
+          'color': 'negra',
+          'bike_type': 'mountain_hardtail',
+          'wheel_size': '27.5',
+        },
+      ],
+      productImages: const [],
+      jobFiles: const {},
+    );
+
+    Future<Map<String, Object?>> view(
+      _FakeReads reads,
+      String page, {
+      String query = '',
+      String? auth,
+    }) async {
+      final response = await _get(
+        reads,
+        portalViewPath,
+        method: 'POST',
+        headers: {
+          'authorization': auth ?? 'Bearer ${token()}',
+          'content-type': 'application/json',
+        },
+        body: jsonEncode({'path': page, 'query': query}),
+      );
+      expect(response.headers['cache-control'], 'no-store');
+      expect(response.headers['x-robots-tag'], 'noindex');
+      return jsonDecode(await response.readAsString()) as Map<String, Object?>;
+    }
+
+    test(
+      'the frame is the way in, with no data, no index and no store '
+      'footer; a session switches it to «Preparando» before painting',
+      () async {
+        for (final path in [
+          '/cuenta',
+          '/cuenta/pedidos',
+          '/cuenta/servicios',
+          '/cuenta/bicicletas',
+        ]) {
+          final response = await _get(_FakeReads(), path);
+          expect(response.statusCode, 200, reason: path);
+          final html = await response.readAsString();
+          expect(html, contains('data-portal-root'));
+          expect(html, contains('data-view-url="/cuenta/vista"'));
+          expect(html, contains('data-portal="signedOut"'));
+          expect(html, contains('data-portal="loading" hidden'));
+          expect(html, contains('data-portal="notCustomer" hidden'));
+          expect(html, contains('Entra a tu cuenta'));
+          expect(html, contains('href="/cuenta/login"'));
+          expect(html, contains('noindex'));
+          expect(html, isNot(contains('class="foot')));
+          expect(html, contains('"sb-example-auth-token"'));
+        }
+        final hidden = await (await _get(
+          _FakeReads(),
+          '/_html/cuenta',
+        )).readAsString();
+        expect(hidden, contains('data-view-url="/_html/cuenta/vista"'));
+      },
+    );
+
+    test('the view needs a session and a portal page', () async {
+      final reads = _FakeReads(portal: portal());
+      expect((await view(reads, '/cuenta', auth: ''))['state'], 'invalid');
+      expect((await view(reads, '/cuenta/perfil'))['state'], 'invalid');
+      expect(
+        (await _get(reads, portalViewPath)).statusCode,
+        405,
+        reason: 'a GET',
+      );
+    });
+
+    test('a refused session asks for a renewal; one that is not a customer '
+        'is told so', () async {
+      expect((await view(_FakeReads(), '/cuenta'))['state'], 'expired');
+      expect(
+        (await view(
+          _FakeReads(portal: portal(profile: null)),
+          '/cuenta',
+        ))['state'],
+        'not-customer',
+      );
+      expect(
+        (await view(_FakeReads(fail: true), '/cuenta'))['state'],
+        'not-customer',
+      );
+    });
+
+    test(
+      'the summary greets the customer and says what waits for them',
+      () async {
+        final html =
+            (await view(
+                  _FakeReads(
+                    portal: portal(
+                      jobs: const [
+                        {
+                          'id': 'j1000000-0000-4000-8000-000000000001',
+                          'bike_id': bike,
+                          'job_number': 'PG-00493',
+                          'status': 'ESPERANDO_APROBACION',
+                          'client_request': 'Frena poco atrás',
+                          'total_cost': 48500,
+                          'arrival_date': '2026-08-05',
+                          'created_at': '2026-08-05T15:00:00Z',
+                          'image_urls': [],
+                        },
+                      ],
+                    ),
+                  ),
+                  '/cuenta',
+                ))['html']
+                as String;
+        expect(html, contains('data-portal="ready"'));
+        expect(html, contains('Hola, Ana'));
+        expect(html, contains('Cliente desde diciembre de 2025'));
+        expect(html, contains('Para ti ahora'));
+        expect(
+          html,
+          contains('Presupuesto de \$ 48.500 por frena poco atrás.'),
+        );
+        expect(html, contains('Responder al taller'));
+        expect(html, contains('Tus bicicletas'));
+        expect(html, contains('<dialog id="pt-sheet-'));
+        expect(html, contains('Garantía hasta el 1 mar 2027'));
+        // The tabs, with Resumen open, and the service band.
+        expect(
+          html,
+          contains('class="pt-tab on" aria-current="page" href="/cuenta"'),
+        );
+        expect(html, contains('Habla con el taller'));
+      },
+    );
+
+    test(
+      'the workshop draws every bike view and opens the one asked for',
+      () async {
+        final html =
+            (await view(
+                  _FakeReads(
+                    portal: portal(
+                      jobs: const [
+                        {
+                          'id': 'j1000000-0000-4000-8000-000000000002',
+                          'bike_id': bike,
+                          'job_number': 'PG-00100',
+                          'status': 'ENTREGADO',
+                          'client_request': 'Cambio de cadena',
+                          'total_cost': 12000,
+                          'arrival_date': '2025-12-28',
+                          'created_at': '2025-12-28T15:00:00Z',
+                        },
+                      ],
+                    ),
+                  ),
+                  '/cuenta/servicios',
+                  query: 'bike_id=$bike',
+                ))['html']
+                as String;
+        expect(html, contains('class="pt-back"'));
+        expect(html, contains('data-view="all" hidden'));
+        expect(html, contains('data-view="$bike"'));
+        expect(html, isNot(contains('data-view="$bike" hidden')));
+        expect(html, contains('Historial'));
+        expect(html, contains('28 dic 2025'));
+      },
+    );
+
+    test('an instant becomes the store\'s date; a date stays as it is', () {
+      // 02:30 UTC on the 6th is still the 5th in Santiago (UTC−3/−4).
+      expect(portalDate(DateTime.parse('2026-10-06T02:30:00Z')), '5 oct 2026');
+      expect(portalDate(DateTime.parse('2026-10-06')), '6 oct 2026');
+    });
+
+    test('the bike drawing is the shared strokes as SVG', () {
+      final svg = customerBikeSvg(CustomerBikeSilhouette.road);
+      expect(svg, startsWith('<svg viewBox="0 0 220 132"'));
+      expect(svg, contains('stroke-linecap="round"'));
+      expect(svg, contains('Q164 78 174 92'));
+      expect(customerBikeSvg(CustomerBikeSilhouette.city), contains('A41 41'));
     });
   });
 }

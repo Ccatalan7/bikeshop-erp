@@ -4,6 +4,10 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-06 — corrección — [portal](paginas/portal-de-clientes.md): las
+  páginas de lectura del portal en el servidor HTML (fase 4a), leídas con el
+  token del cliente; reglas al núcleo; [rutas](paginas/rutas-y-navegacion.md)
+  y [seguridad](paginas/seguridad.md) al día.
 - 2026-10-06 — consulta archivada — [rendimiento](paginas/rendimiento.md):
   celular lento con todo lo público en HTML: 0,8–2,8 s por página contra
   20,5 s de la cuenta, que sigue en Flutter.

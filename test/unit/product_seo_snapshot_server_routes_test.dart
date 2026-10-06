@@ -63,6 +63,13 @@ void main() {
       // The order page and its summary (phase 3c).
       '/pedido/46a51a87-aa3a-430c-a6e1-af48c8d74541',
       '/pedido/resumen.pdf',
+      // The portal's reading pages and their content (phase 4a).
+      '/cuenta',
+      '/cuenta/pedidos',
+      '/cuenta/servicios',
+      '/cuenta/bicicletas',
+      '/cuenta/vista',
+      '/cuenta/archivo',
     ]) {
       expect(routes.owns(path), isTrue, reason: path);
     }
@@ -71,7 +78,10 @@ void main() {
       '/checkoutx',
       '/pedido',
       '/carritox',
-      '/cuenta/servicios',
+      '/cuenta/login',
+      '/cuenta/perfil',
+      '/cuenta/chats',
+      '/cuenta/chats/46a51a87-aa3a-430c-a6e1-af48c8d74541',
       '/serviciosx',
       '/productosx',
       '/producto',
@@ -110,10 +120,18 @@ void main() {
       '/checkout',
       '/checkout/lineas',
       '/pedido/46a51a87-aa3a-430c-a6e1-af48c8d74541',
+      '/cuenta',
+      '/cuenta/servicios',
     ]) {
       expect(storefrontHtmlServes(path), isTrue, reason: path);
     }
-    for (final path in ['/pedido', '/cuenta', '/carritox', '/checkoutx']) {
+    for (final path in [
+      '/pedido',
+      '/cuenta/login',
+      '/cuenta/perfil',
+      '/carritox',
+      '/checkoutx',
+    ]) {
       expect(storefrontHtmlServes(path), isFalse, reason: path);
     }
   });

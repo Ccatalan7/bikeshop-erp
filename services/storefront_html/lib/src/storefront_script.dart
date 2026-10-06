@@ -451,17 +451,20 @@ const storefrontScript = r'''
     }).then(function (r) { return r.ok ? r.text().then(function (t) { return t ? JSON.parse(t) : null; }) : null; });
   }
   var sessionPromise = null;
-  function currentSession() {
-    if (sessionPromise) return sessionPromise;
+  // [force]: Supabase refused the token before it expired (revoked, or the
+  // clock is off): renew it anyway.
+  function currentSession(force) {
+    if (sessionPromise && !force) return sessionPromise;
+    var stale = force ? (readSession() || {}).access_token : null;
     sessionPromise = new Promise(function (resolve) {
       var s = readSession();
       if (!s || !sbUrl) { resolve(null); return; }
-      if (jwtExp(s.access_token) * 1000 - Date.now() > 60e3) { resolve(s); return; }
+      if (!force && jwtExp(s.access_token) * 1000 - Date.now() > 60e3) { resolve(s); return; }
       if (!s.refresh_token) { resolve(null); return; }
       var renew = function () {
         // Another tab may have renewed it already.
         var latest = readSession();
-        if (latest && jwtExp(latest.access_token) * 1000 - Date.now() > 60e3) return Promise.resolve(latest);
+        if (latest && latest.access_token !== stale && jwtExp(latest.access_token) * 1000 - Date.now() > 60e3) return Promise.resolve(latest);
         return authCall('/auth/v1/token?grant_type=refresh_token', { refresh_token: (latest || s).refresh_token }).then(function (r) {
           if (!r || !r.access_token || !r.user) return null;
           var next = {
@@ -505,7 +508,10 @@ const storefrontScript = r'''
       sessionPromise = null;
     });
   }
-  window.vinabikeSession = { key: authKey, read: readSession, current: currentSession, profile: customerProfile, signOut: signOut };
+  window.vinabikeSession = {
+    key: authKey, read: readSession, current: function () { return currentSession(false); },
+    renew: function () { return currentSession(true); }, profile: customerProfile, signOut: signOut
+  };
 
   // ---- the header's account (CustomerAccountMenu) -------------------------
   // customerFirstName: «Usuario», «Cliente» or the email's name are filler.

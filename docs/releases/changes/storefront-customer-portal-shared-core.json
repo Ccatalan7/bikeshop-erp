@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "storefront-customer-portal-shared-core",
+  "scope": "internal",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/online_order.dart",
+      "sha256": "395876af97d016f78f6b48855a2dea19862b116770592ea92cfdc8a726581a70"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/bikeshop/models/bike_type.dart",
+      "sha256": "100a106370c1bf70128eb2f2767b0b4bd02ef0e170501a9211a9d7e5a3656ead"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/order_confirmation_policy.dart",
+      "sha256": "021ac739a66953174a7cee2352a423c83a8b594f0086e4e69faafe3df138d53b"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/customer_portal_presentation.dart",
+      "sha256": "ee429720b2e620f7d4b5372cd10df4d5dcec0d637c990897692ae17c3527cc5e"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/customer_portal_plans.dart",
+      "sha256": "08f04980fedf4fbfe8c5f48d8b39449753194d6b105b14e1fa56c9d080cbe423"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/customer_portal_snapshot.dart",
+      "sha256": "25080d62fdb55f348a7006e1e69ec5b6f60b3d38d96dac7f8060abc4a60e6cfb"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/customer_bike_drawing_geometry.dart",
+      "sha256": "35cf0b871b65343da9a49d79c9f0db6b054b8b62ba0b690fca14866632595c4f"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/portal_time_zone.dart",
+      "sha256": "c4b6c949217ba77406bffa61705c0215882bb11220c08dc559bcf35f9808722b"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/theme/website_theme_roles.dart",
+      "sha256": "a582530eb60d9a66b5393bc164460f7bfba999c096f1aea2e1c24199370e37cd"
+    },
+    {
+      "path": "lib/modules/website/models/website_models.dart",
+      "sha256": "c3392295f32f98b66b2036fac16de5d2d29d22ee7ad5d7898c9f92983b017053"
+    },
+    {
+      "path": "lib/modules/bikeshop/models/bikeshop_models.dart",
+      "sha256": "ff6e75d99e91a2d43b9ac2e0c0ebc3ba2771d1d75cbd595159f55a0c7e0e5f0e"
+    },
+    {
+      "path": "lib/public_store/models/customer_portal_presentation.dart",
+      "sha256": "caf672983b4a5016d9c5b771b3ce8cd383deb86fde8c52d29119fed0150093fd"
+    },
+    {
+      "path": "lib/public_store/models/order_confirmation_policy.dart",
+      "sha256": "33789692eada3394c1980eeca808610875cf86e703da8ca169b107de3fdab804"
+    },
+    {
+      "path": "lib/public_store/pages/customer_dashboard_page.dart",
+      "sha256": "8c0afa8e44f86e1d311ae0bd339fa3f46a2276cdec78ac42600f836f7bd6dccd"
+    },
+    {
+      "path": "lib/public_store/pages/customer_orders_page.dart",
+      "sha256": "5c58301ecfef55d9ae51557cdb58af3b6cdc14019f66ab8bd65ba17fc7ef2a02"
+    },
+    {
+      "path": "lib/public_store/pages/customer_service_history_page.dart",
+      "sha256": "7d7491468cb8bd1bb92e25ae42f4a007f66b7e5095e29f6d0e5dfd679020b584"
+    },
+    {
+      "path": "lib/public_store/widgets/customer_job_row.dart",
+      "sha256": "157a1d11e720be4ae0fbd949b959359cffeb4b6f7d05539c6f0600af542049a0"
+    },
+    {
+      "path": "lib/public_store/widgets/customer_bike_card.dart",
+      "sha256": "ea256f01c02afc302ae465c0bd3cb1b2275ef49da5031dc2a479438e0420d964"
+    },
+    {
+      "path": "lib/public_store/widgets/customer_bike_drawing.dart",
+      "sha256": "8cb8a021ce898b1ff621b91538f3fe0ea74c5164607de0ce10269a48ba9b93d7"
+    },
+    {
+      "path": "lib/public_store/services/customer_account_service.dart",
+      "sha256": "84a4380552bf4c7121f57d8da93b547fb8f616849feb7af1f1d492f4158bc2eb"
+    },
+    {
+      "path": "test/unit/website_admin_ui_architecture_test.dart",
+      "sha256": "ce00de69456cd6a4a7c27ac697d0316744f0eb3e28190653545e09786cf3ecd1"
+    },
+    {
+      "path": "test/unit/public_order_access_architecture_test.dart",
+      "sha256": "cd9df21d530436bc3b5c69308ef2d256bd3458c97696973f532ad9519274fc21"
+    }
+  ]
+}

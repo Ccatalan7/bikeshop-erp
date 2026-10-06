@@ -193,8 +193,9 @@ void main() {
     final confirmation = source(
       'lib/public_store/pages/order_confirmation_page.dart',
     );
+    // The rule lives in the shared core; the app re-exports it.
     final policy = source(
-      'lib/public_store/models/order_confirmation_policy.dart',
+      'packages/vinabike_public_core/lib/public_store/models/order_confirmation_policy.dart',
     );
     // The summary's document is drawn by the shared core for both stores.
     final pdf = source(

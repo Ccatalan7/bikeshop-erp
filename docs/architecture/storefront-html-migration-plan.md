@@ -923,6 +923,10 @@ Lo que costó:
   `7fr 4fr` reparte como Flutter.
 - **Un botón con el relleno por defecto de Material** pierde 4 px por lado con
   la densidad compacta (24 → 20) y su etiqueta cae en otra letra: se mide.
+  *Corregido el 2026-10-06:* la causa no es la densidad, que nunca quita
+  relleno horizontal (`ButtonStyleButton`: `dx = max(0, …)`); los 20 son el
+  relleno de botón del tema del sitio (`button_size: medium`). Un botón con
+  relleno propio de 24 conserva sus 24.
 - La revisión de rutas de la publicación sólo miraba lo que está en el
   sitemap; ahora exige que `/carrito` venga del servidor con `noindex`
   (`privateServerRoutes`).
@@ -1105,11 +1109,16 @@ proyección de escritorio que Flutter (`menuFor(..., mobile: false)`):
 Tres reglas de Flutter que no se ven en el código del widget y que valen para
 cualquier página:
 
-- **El interlineado.** Flutter reparte el espacio extra de una línea en
-  proporción al ascenso y descenso de la fuente
+- **El interlineado.** Un `TextStyle` suelto reparte el espacio extra de una
+  línea en proporción al ascenso y descenso de la fuente
   (`TextLeadingDistribution.proportional`); CSS lo reparte a medias. Con
   Barlow (1,0 y 0,2) el texto de Flutter cae `(alto − 1,2 × tamaño) / 3` px
   más abajo: en el encabezado, 1 px. Se corrige moviendo el texto, no la caja.
+  *Precisado el 2026-10-06:* un estilo que sale del tema (`titleLarge`,
+  `bodyMedium`… de `Typography.englishLike2021`) lleva
+  `TextLeadingDistribution.even`, igual que CSS: no se mueve. El portal,
+  todo derivado del tema, cuadró sin corrimiento; con él quedaba 13 px
+  arriba en el título de 72 px.
 - **Un botón sin familia es Roboto.** Un `TextStyle` de botón sin
   `fontFamily` («INICIAR SESIÓN», «Volver a…») no hereda Barlow: Flutter lo
   dibuja en Roboto 400, que su motor baja de Google, con negrita fingida. El
@@ -1138,8 +1147,8 @@ las reglas de `customer_portal_presentation.dart`. Se hace como el PDF del
 pedido: la página llega con su marco y el script pide al servidor las
 secciones con el token del cliente en la cabecera; el servidor lee Supabase
 **con ese token** (RLS, sin clave de servicio, sin guardarlo) y devuelve el
-HTML armado con las reglas movidas al núcleo. Sin sesión, la página manda a
-`/cuenta/login`.
+HTML armado con las reglas movidas al núcleo. Sin sesión, la página muestra
+la puerta de Flutter («Entra a tu cuenta» e «Iniciar sesión»), no redirige.
 
 Lecturas a portar, todas de `CustomerAccountService`: `customers` (por
 `auth_user_id` y `tenant_id`), `customer_addresses`, `online_orders` con sus
@@ -1164,7 +1173,63 @@ Orden:
 - **4d, chats:** tiempo real; al final, o se quedan en Flutter si no hay
   ganancia que medir.
 
+## Fase 4a: el portal, leer (2026-10-06)
+
+`/cuenta`, `/cuenta/pedidos`, `/cuenta/servicios` (con `?bike_id=`) y
+`/cuenta/bicicletas` en el servidor (`portal_page_view.dart`,
+`portal_page_css.dart`, `portal_page_script.dart`, `portal_page_route.dart`),
+con sus fichas de trabajo y de bici.
+
+- **El marco y el contenido.** La página llega con la puerta («Entra a tu
+  cuenta»); con una sesión en el navegador, un script antes de pintar la
+  cambia por «Preparando tu cuenta», como Flutter mientras lee al cliente. El
+  script pide `POST /cuenta/vista` con el token en `authorization`; el
+  servidor lee Supabase **como ese cliente** (RLS, más el filtro de tienda en
+  cada lectura, `SupabasePublicReads.customerPortal`) y responde la página
+  armada. Un token rechazado responde `expired` y el navegador lo renueva una
+  vez (`vinabikeSession.renew`); una sesión que no es cliente de la tienda,
+  «No pudimos abrir esta cuenta». El token no se guarda ni se escribe en un
+  registro; la respuesta es `no-store`.
+- **Un dueño.** Lo que cada página muestra y en qué orden salió de las
+  páginas de Flutter al núcleo (`customer_portal_plans.dart`: resumen,
+  pedidos, taller, franja de servicio, garantía), igual que el armado de las
+  filas (`customer_portal_snapshot.dart`), el dibujo de la bici
+  (`customer_bike_drawing_geometry.dart`, que Flutter pinta y el HTML escribe
+  en SVG) y las reglas de estado (`customer_portal_presentation.dart`,
+  `order_confirmation_policy.dart`, `online_order.dart`, `bike_type.dart`).
+  Flutter usa los mismos.
+- **Las fechas** en la hora de la tienda: el servidor corre en UTC, así que
+  `usePortalTimeZone()` hace que `portalLocalTime` lea un instante en
+  America/Santiago; una fecha sin zona (`2026-09-24`) queda como está.
+- **Filtros sin ida y vuelta.** «Pedidos» y «Taller» llegan con cada pestaña
+  o bici ya dibujada (`data-view`); un filtro muestra la suya al instante,
+  como el estado de la página en Flutter, y la grilla de fichas queda como la
+  arma Flutter para esa cantidad.
+- **Archivos del trabajo** (6 de 532 trabajos los tienen): la miniatura con un
+  enlace firmado por 5 minutos y, al tocarla, uno nuevo (`POST
+  /cuenta/archivo`) en otra pestaña, en vez del visor de Flutter.
+- **Sin pie de la tienda:** Flutter monta el portal con
+  `_buildPageNoScroll`, que no dibuja el pie; el HTML tampoco
+  (`sitePage(showFooter: false)`).
+- **Medido contra Flutter** con datos reales anonimizados, a 1440 y 412 px,
+  sin sesión, vacío y con fichas abiertas: los bordes de cada bloque en la
+  misma fila de píxeles y el texto a ±1 px.
+
+Lo que costó, y vale para las páginas que siguen:
+
+- **El borde de un `DecoratedBox` o de un `Material` va dentro de la caja**,
+  sobre el relleno; un `Container` lo suma. La franja de datos de las fichas
+  medía 2 px de más y corría todo lo de abajo.
+- **SkParagraph pone la mitad del espaciado entre letras antes de cada letra**
+  y la mitad después; CSS todo después. Un rótulo con 2,6 px de espaciado
+  empieza 1,3 px más a la derecha en Flutter.
+- **Una clase genérica chocó por tercera vez:** `.foot` (el pie de la tienda)
+  pintó de azul la columna del portal. Las clases del portal llevan `pt-`.
+- **Un reinicio `.pt button{…}` le gana a `.pt-chip{…}`** por especificidad:
+  los reinicios van en `:where(.pt)`.
+
 ### Pendiente
 
 - Las copias de una foto reemplazada quedan en Storage (pocos KB cada una);
   una limpieza de las que ninguna fila nombra, si algún día pesan.
+- 4b (perfil y direcciones), 4c (entrar) y 4d (chats) siguen en Flutter.

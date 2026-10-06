@@ -183,7 +183,7 @@ test("a private route must be the server's, never indexed", async () => {
   assert.match(fromFlutter[0], /sin x-storefront-source/);
 });
 
-test("an order page is checked as a private server route", () => {
+test("an order page and the portal are checked as private server routes", () => {
   const firebaseConfig = JSON.parse(readFileSync("firebase.json", "utf8"));
   const checks = selectStorefrontHtmlChecks({
     sitemapXml,
@@ -192,9 +192,14 @@ test("an order page is checked as a private server route", () => {
     exactRoutes: exactServerRoutes(firebaseConfig),
     serverSources: serverRouteSources(firebaseConfig),
   });
+  // The portal's content endpoints answer POST only: never asked for.
   assert.deepEqual(checks.private, [
     "/carrito",
     "/checkout",
+    "/cuenta",
+    "/cuenta/pedidos",
+    "/cuenta/servicios",
+    "/cuenta/bicicletas",
     "/pedido/00000000-0000-4000-8000-000000000000",
   ]);
 });

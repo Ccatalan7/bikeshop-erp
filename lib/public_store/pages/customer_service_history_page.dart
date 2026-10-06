@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:vinabike_public_core/public_store/models/customer_portal_plans.dart';
 
-import '../models/customer_portal_presentation.dart';
 import '../services/customer_account_service.dart';
 import '../widgets/customer_job_row.dart';
 import '../widgets/customer_portal_layout.dart';
@@ -126,37 +126,10 @@ class CustomerServiceHistoryBody extends StatelessWidget {
       );
     }
 
-    // Las bicis salen de los trabajos: así el filtro sólo ofrece bicis con
-    // algo que mostrar.
-    final bikes = <String, String>{};
-    final counts = <String, int>{};
-    for (final job in jobs) {
-      final id = job['bike_id']?.toString();
-      if (id == null || id.isEmpty) continue;
-      bikes.putIfAbsent(id, () => CustomerWorkshopPresentation.bikeTitle(job));
-      counts[id] = (counts[id] ?? 0) + 1;
-    }
-    final filterId = selectedBikeId != null && selectedBikeId!.isNotEmpty
-        ? selectedBikeId
-        : null;
-    final visible = filterId == null
-        ? jobs
-        : jobs
-            .where((job) => job['bike_id']?.toString() == filterId)
-            .toList(growable: false);
-    final active = [
-      for (final job in visible)
-        if (CustomerWorkshopPresentation.of(job).isActive) job,
-    ]..sort((a, b) {
-        final needsA = CustomerWorkshopPresentation.of(a).needsCustomer;
-        final needsB = CustomerWorkshopPresentation.of(b).needsCustomer;
-        if (needsA != needsB) return needsA ? -1 : 1;
-        return 0;
-      });
-    final historyJobs = [
-      for (final job in visible)
-        if (!CustomerWorkshopPresentation.of(job).isActive) job,
-    ];
+    final plan = CustomerServiceHistoryPlan.of(jobs, bikeId: selectedBikeId);
+    final filterId = plan.filterId;
+    final active = plan.active;
+    final historyJobs = plan.history;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -189,7 +162,7 @@ class CustomerServiceHistoryBody extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (bikes.length > 1 || (filterId != null && bikes.isNotEmpty)) ...[
+            if (plan.showsFilter) ...[
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -200,12 +173,12 @@ class CustomerServiceHistoryBody extends StatelessWidget {
                     selected: filterId == null,
                     onTap: () => onBikeChanged(null),
                   ),
-                  for (final entry in bikes.entries)
+                  for (final entry in plan.bikes.entries)
                     ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 260),
                       child: PortalFilterChip(
                         label: entry.value,
-                        count: counts[entry.key],
+                        count: plan.counts[entry.key],
                         selected: filterId == entry.key,
                         onTap: () => onBikeChanged(entry.key),
                       ),
@@ -214,7 +187,7 @@ class CustomerServiceHistoryBody extends StatelessWidget {
               ),
               const SizedBox(height: 40),
             ],
-            if (visible.isEmpty)
+            if (plan.visible.isEmpty)
               PortalEmptyState(
                 title: 'Esta bicicleta no tiene trabajos registrados.',
                 actions: [
@@ -227,10 +200,7 @@ class CustomerServiceHistoryBody extends StatelessWidget {
             if (active.isNotEmpty)
               PortalSection(
                 label: 'En el taller',
-                count: active
-                    .where((job) =>
-                        CustomerWorkshopPresentation.of(job).needsCustomer)
-                    .length,
+                count: plan.waitingCount,
                 child: PortalTileGrid(width: width, tiles: tiles),
               ),
             if (active.isNotEmpty && historyJobs.isNotEmpty)

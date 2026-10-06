@@ -21,7 +21,7 @@
     },
     {
       "path": "scripts/releases/check_storefront_html_routes.test.mjs",
-      "sha256": "cd1fff6fd77d4303b72ddfce3d1d29d7815763edadb55d9e765a5518ea11e1ae"
+      "sha256": "73376c5634993c0f1f82fdff540aac0ba3ea969e7e19e988518c1ce71478b894"
     },
     {
       "path": "services/storefront_html/lib/src/catalog_page_model.dart",
@@ -33,7 +33,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/public_reads.dart",
-      "sha256": "b63e127c9eaffe06d49b4fb943ce9a92a3fa3bf7fb12fdc6bc3c163adf6102c4"
+      "sha256": "24feb06c062a81e4ffeecdaab646bd8fce52e63d29a7dfb613bd74b062d46f34"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_css.dart",
@@ -41,11 +41,11 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
-      "sha256": "feb430579f1e40564f1130ced3b3114520627e9205adb8da71aacc194dc7d584"
+      "sha256": "9d19777655ec246116c04eb83bc41796a82870e6d4d4bc52ea616809b63ddd3f"
     },
     {
       "path": "services/storefront_html/test/storefront_handler_test.dart",
-      "sha256": "b3b190cbe57dc9ed1c57ef892f520d772eaeaa3bfbdf3fced1910576c6b1463a"
+      "sha256": "72da0ab2c716b081ae9523b6e68763c8a085b9ceb69abcd2b4a8392740efca80"
     }
   ]
 }

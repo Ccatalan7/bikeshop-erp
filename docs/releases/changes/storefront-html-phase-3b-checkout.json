@@ -41,19 +41,19 @@
     },
     {
       "path": "services/storefront_html/lib/src/material_icons.dart",
-      "sha256": "0c7c084aeccf678a6049ed1f97431b1d42cf2a36eb9c4c1a0d20637f536dc093"
+      "sha256": "31770c1df48f82e726f9a8d7276e25f028d58c78e0331e6bbd9a66b6fb70a32c"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
-      "sha256": "feb430579f1e40564f1130ced3b3114520627e9205adb8da71aacc194dc7d584"
+      "sha256": "9d19777655ec246116c04eb83bc41796a82870e6d4d4bc52ea616809b63ddd3f"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_script.dart",
-      "sha256": "65b94268d4868adcc5b54a75f792bab377fcec8f41b3f23041a0beea1eb0602d"
+      "sha256": "5f45f16f155d8375f072bd279cf017e323bb27e09656b025fa5c45bfc2179a11"
     },
     {
       "path": "services/storefront_html/lib/storefront_html.dart",
-      "sha256": "2d43d15d3526765e2d87fc338f1942e5815221473e8cc32976d27ddee6438c30"
+      "sha256": "5c7c37dbea33f5131e0c59d951c0ffb1b1d18c49e4fe9c254ce6c4b5061d0ff9"
     }
   ]
 }

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:vinabike_public_core/public_store/models/customer_portal_snapshot.dart';
 import '../../shared/models/customer_address.dart';
 import '../../shared/services/auth_redirect_urls.dart';
 import '../../shared/services/self_password_service.dart';
@@ -11,7 +12,6 @@ import '../../shared/utils/web_url.dart';
 import '../../modules/website/models/website_models.dart';
 import '../../shared/services/public_catalog_client.dart';
 import '../models/customer_portal_presentation.dart';
-import '../models/public_commerce_product_projection.dart';
 
 /// Service for managing customer accounts on the public store
 ///
@@ -1039,17 +1039,7 @@ class CustomerAccountService extends ChangeNotifier {
           .eq('customer_id', _customerProfile!['id'])
           .order('created_at', ascending: false);
 
-      _orders = (response as List).map((json) {
-        // Extract items from the nested response
-        final itemsJson = json['online_order_items'] as List? ?? [];
-        final items = itemsJson
-            .map((item) =>
-                OnlineOrderItem.fromJson(item as Map<String, dynamic>))
-            .toList();
-
-        // Create order with items
-        return OnlineOrder.fromJson(json).copyWith(items: items);
-      }).toList();
+      _orders = customerOrdersFromRows(response as List);
 
       unawaited(_loadOrderProductImages());
 
@@ -1061,12 +1051,7 @@ class CustomerAccountService extends ChangeNotifier {
 
   Future<void> _loadOrderProductImages() async {
     final tenantId = _tenantId;
-    final ids = _orders
-        .expand((order) => order.items)
-        .map((item) => item.productId?.trim() ?? '')
-        .where((id) => id.isNotEmpty)
-        .toSet()
-        .toList(growable: false);
+    final ids = customerOrderProductIds(_orders);
     if (tenantId == null || tenantId.isEmpty || ids.isEmpty) {
       _orderProductImages = const {};
       return;
@@ -1074,20 +1059,10 @@ class CustomerAccountService extends ChangeNotifier {
     try {
       final rows = await PublicCatalogClient.instance
           .from('products')
-          .select(
-            'id,website_image_url_optimized,website_image_url,'
-            'image_url_optimized,image_url,website_image_urls,image_urls',
-          )
+          .select(customerOrderImageColumns)
           .eq('tenant_id', tenantId)
           .inFilter('id', ids);
-      final images = <String, String>{};
-      for (final raw in rows as List) {
-        final row = Map<String, dynamic>.from(raw as Map);
-        final id = row['id']?.toString() ?? '';
-        final urls = PublicCommerceProductProjection.fromJson(row).imageUrls;
-        if (id.isNotEmpty && urls.isNotEmpty) images[id] = urls.first;
-      }
-      _orderProductImages = images;
+      _orderProductImages = customerOrderImages(rows as List);
       notifyListeners();
     } catch (e) {
       debugPrint('Error loading order product images: $e');
@@ -1151,32 +1126,7 @@ class CustomerAccountService extends ChangeNotifier {
               .eq('customer_id', profile['id'])
               .isFilter('deleted_at', null);
 
-      final counts = <String, int>{};
-      final lastArrival = <String, DateTime>{};
-      for (final job in jobs) {
-        final bikeId = job['bike_id']?.toString();
-        if (bikeId == null) continue;
-        counts[bikeId] = (counts[bikeId] ?? 0) + 1;
-        final arrived = DateTime.tryParse(
-            (job['arrival_date'] ?? job['created_at'] ?? '').toString());
-        if (arrived != null &&
-            (lastArrival[bikeId] == null ||
-                arrived.isAfter(lastArrival[bikeId]!))) {
-          lastArrival[bikeId] = arrived;
-        }
-      }
-
-      for (final bike in bikes) {
-        final bikeId = bike['id']?.toString();
-        bike['service_count'] = counts[bikeId] ?? 0;
-        bike['last_service_date'] = lastArrival[bikeId]?.toIso8601String();
-        if (bike['bike_brands'] != null) {
-          bike['brand_name'] = bike['bike_brands']['name'];
-        }
-        if (bike['bike_models'] != null) {
-          bike['model_name'] = bike['bike_models']['name'];
-        }
-      }
+      completeCustomerBikes(bikes, jobs);
 
       _bikes = bikes;
       notifyListeners();
@@ -1238,10 +1188,7 @@ class CustomerAccountService extends ChangeNotifier {
           .isFilter('deleted_at', null)
           .order('created_at', ascending: false));
 
-      final bikeIds = {
-        for (final job in jobs)
-          if (job['bike_id'] != null) job['bike_id'].toString(),
-      };
+      final bikeIds = customerJobBikeIds(jobs);
       if (bikeIds.isNotEmpty) {
         try {
           final bikes = await _supabase
@@ -1249,18 +1196,7 @@ class CustomerAccountService extends ChangeNotifier {
               .select('id, brand, model, color, bike_type, wheel_size')
               .eq('tenant_id', tenantId)
               .inFilter('id', bikeIds.toList());
-          final byId = {
-            for (final bike in bikes) bike['id'].toString(): bike,
-          };
-          for (final job in jobs) {
-            final bike = byId[job['bike_id']?.toString()];
-            if (bike == null) continue;
-            job['bike_brand'] = bike['brand'] ?? '';
-            job['bike_model'] = bike['model'] ?? '';
-            job['bike_color'] = bike['color'];
-            job['bike_type'] = bike['bike_type'];
-            job['bike_wheel_size'] = bike['wheel_size'];
-          }
+          completeCustomerJobs(jobs, bikes);
         } catch (e) {
           debugPrint('⚠️ Could not load bikes for service history: $e');
         }

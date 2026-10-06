@@ -13,7 +13,7 @@
   "evidence": [
     {
       "path": "firebase.json",
-      "sha256": "87103296b0e6be2eeec11223ade4c918cc6c4b39e1012af67e873289d11f5c36"
+      "sha256": "6bf8ec06152824acaa2f1e151588ebf1358291cdcae003f600824d2a8796a0e6"
     },
     {
       "path": "packages/vinabike_public_core/lib/public_store/models/storefront_tax_summary.dart",
@@ -21,43 +21,43 @@
     },
     {
       "path": "packages/vinabike_public_core/lib/public_store/seo/storefront_html_routes.dart",
-      "sha256": "f7ddf1db8e9c2b6d9aab55c38bdc8f474034beeded54ae1048319100e2227f12"
+      "sha256": "fc4653e4310c1fa4ec03e9d30f5a113fa756e9853f3ae428e9d82ec46c0c42a7"
     },
     {
       "path": "scripts/releases/check_storefront_html_routes.mjs",
-      "sha256": "4a3722e2baa5edaf6de01a7c95eeca12772404e38d57f70767c28ee428be9b9b"
+      "sha256": "abd7d19ce654160dc7944b8e0929d0a9795b3a65790eba1f04bc95dacace80bc"
     },
     {
       "path": "scripts/releases/check_storefront_html_routes.test.mjs",
-      "sha256": "cd1fff6fd77d4303b72ddfce3d1d29d7815763edadb55d9e765a5518ea11e1ae"
+      "sha256": "73376c5634993c0f1f82fdff540aac0ba3ea969e7e19e988518c1ce71478b894"
     },
     {
       "path": "services/storefront_html/lib/src/public_reads.dart",
-      "sha256": "b63e127c9eaffe06d49b4fb943ce9a92a3fa3bf7fb12fdc6bc3c163adf6102c4"
+      "sha256": "24feb06c062a81e4ffeecdaab646bd8fce52e63d29a7dfb613bd74b062d46f34"
     },
     {
       "path": "services/storefront_html/lib/src/site_layout.dart",
-      "sha256": "24838ff91198842b7efbe1afecc942e58a6e0ff4ef175a92c48e8391bf5e0a08"
+      "sha256": "f8543c5c4dfb78e12762f7d1eab43edb6d31591baed011238202cdfb8e1e7c35"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
-      "sha256": "feb430579f1e40564f1130ced3b3114520627e9205adb8da71aacc194dc7d584"
+      "sha256": "9d19777655ec246116c04eb83bc41796a82870e6d4d4bc52ea616809b63ddd3f"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_script.dart",
-      "sha256": "65b94268d4868adcc5b54a75f792bab377fcec8f41b3f23041a0beea1eb0602d"
+      "sha256": "5f45f16f155d8375f072bd279cf017e323bb27e09656b025fa5c45bfc2179a11"
     },
     {
       "path": "services/storefront_html/lib/storefront_html.dart",
-      "sha256": "2d43d15d3526765e2d87fc338f1942e5815221473e8cc32976d27ddee6438c30"
+      "sha256": "5c7c37dbea33f5131e0c59d951c0ffb1b1d18c49e4fe9c254ce6c4b5061d0ff9"
     },
     {
       "path": "services/storefront_html/test/storefront_handler_test.dart",
-      "sha256": "b3b190cbe57dc9ed1c57ef892f520d772eaeaa3bfbdf3fced1910576c6b1463a"
+      "sha256": "72da0ab2c716b081ae9523b6e68763c8a085b9ceb69abcd2b4a8392740efca80"
     },
     {
       "path": "test/unit/product_seo_snapshot_server_routes_test.dart",
-      "sha256": "f1c9703ac0ab1a2aa9945bc16648bd323dd2b10e7ac08711c986f0825adc3955"
+      "sha256": "f53b5adf899f4b9cda6663052bdb6f783be73f304b315ca8cb93456fed765774"
     },
     {
       "path": "lib/public_store/models/storefront_tax_summary.dart",

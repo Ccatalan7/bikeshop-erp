@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:vinabike_public_core/public_store/models/customer_portal_plans.dart';
 
 import '../../shared/utils/chilean_utils.dart';
 import '../../modules/bikeshop/widgets/workshop_asset_gallery.dart';
 import '../models/customer_portal_presentation.dart';
 import 'customer_bike_drawing.dart';
 import 'customer_portal_style.dart';
+
+export 'package:vinabike_public_core/public_store/models/customer_portal_plans.dart'
+    show customerJobMessage;
 
 /// Columnas de la tabla de trabajos en ancho: bici y pedido, número, fecha,
 /// estado y total.
@@ -278,9 +282,7 @@ class CustomerJobTile extends StatelessWidget {
     final bike = CustomerWorkshopPresentation.bikeTitle(job);
     final step = customerWorkshopStep(job);
     final message = customerJobMessage(job);
-    final approval = presentation.needsCustomer &&
-        (job['status'] ?? '').toString().toUpperCase() ==
-            'ESPERANDO_APROBACION';
+    final approval = customerJobAwaitsApproval(job);
 
     final actions = <Widget>[
       if (approval) ...[
@@ -390,27 +392,6 @@ class CustomerJobTile extends StatelessWidget {
       compact: compact,
     );
   }
-}
-
-/// La frase de un trabajo en grande: el presupuesto cuando espera la
-/// aprobación del cliente, lo que pidió en los demás casos.
-String? customerJobMessage(Map<String, dynamic> job) {
-  final request = CustomerWorkshopPresentation.requestSummary(job);
-  final amount = CustomerWorkshopPresentation.total(job);
-  final presentation = CustomerWorkshopPresentation.of(job);
-  final code = (job['status'] ?? '').toString().trim().toUpperCase();
-  if (code == 'ESPERANDO_APROBACION' &&
-      presentation.needsCustomer &&
-      amount != null) {
-    final total = ChileanUtils.formatCurrency(amount);
-    if (request.isEmpty) return 'Presupuesto de $total.';
-    final lower = request[0].toLowerCase() + request.substring(1);
-    return 'Presupuesto de $total por $lower.';
-  }
-  if (presentation.needsCustomer && amount != null && request.isEmpty) {
-    return 'Total ${ChileanUtils.formatCurrency(amount)}.';
-  }
-  return request.isEmpty ? null : request;
 }
 
 /// La ficha de un trabajo: qué se pidió, qué encontró el taller, qué se hizo,

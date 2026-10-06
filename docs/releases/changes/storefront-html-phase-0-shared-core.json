@@ -212,7 +212,7 @@
     },
     {
       "path": "services/storefront_html/bin/server.dart",
-      "sha256": "8da7ac687500e2eb039b4a7c64a68aed8ffc8595db33a9cafeb8efcafc938916"
+      "sha256": "85185a2323ffa1dd56a4f56554184b4153ef3aba5cae80407c4160e9c8e2957c"
     },
     {
       "path": "services/storefront_html/deploy_cloud_run.sh",
@@ -228,7 +228,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/public_reads.dart",
-      "sha256": "b63e127c9eaffe06d49b4fb943ce9a92a3fa3bf7fb12fdc6bc3c163adf6102c4"
+      "sha256": "24feb06c062a81e4ffeecdaab646bd8fce52e63d29a7dfb613bd74b062d46f34"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_config.dart",
@@ -240,11 +240,11 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
-      "sha256": "feb430579f1e40564f1130ced3b3114520627e9205adb8da71aacc194dc7d584"
+      "sha256": "9d19777655ec246116c04eb83bc41796a82870e6d4d4bc52ea616809b63ddd3f"
     },
     {
       "path": "services/storefront_html/lib/storefront_html.dart",
-      "sha256": "2d43d15d3526765e2d87fc338f1942e5815221473e8cc32976d27ddee6438c30"
+      "sha256": "5c7c37dbea33f5131e0c59d951c0ffb1b1d18c49e4fe9c254ce6c4b5061d0ff9"
     },
     {
       "path": "services/storefront_html/pubspec.yaml",

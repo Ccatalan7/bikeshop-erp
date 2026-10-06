@@ -109,6 +109,10 @@ Component sitePage({
   /// Scripts that use what the page script sets up (`window.vinabikeCart`),
   /// so they run after it.
   List<Component> pageScripts = const [],
+
+  /// Flutter's pages that scroll on their own (`_buildPageNoScroll`: the
+  /// customer portal) show no store footer.
+  bool showFooter = true,
 }) {
   final s = context.shell;
   final roles = WebsiteThemeRoles.resolve(s.setting);
@@ -194,7 +198,7 @@ Component sitePage({
       a(classes: 'skip', href: '#contenido', [.text('Ir al contenido')]),
       SiteHeader(context, overlay: meta.overlayHeader),
       main_(id: 'contenido', content),
-      SiteFooter(context),
+      if (showFooter) SiteFooter(context),
       ...afterFooter,
       a(
         classes: 'chat-fab',

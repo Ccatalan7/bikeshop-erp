@@ -10,10 +10,13 @@ import 'dart:io';
 import 'package:jaspr/server.dart';
 import 'package:shelf/shelf.dart' show Pipeline, logRequests;
 import 'package:shelf/shelf_io.dart' as shelf_io;
+import 'package:vinabike_public_core/public_store/models/portal_time_zone.dart';
 import 'package:vinabike_storefront_html/storefront_html.dart';
 
 Future<void> main() async {
   Jaspr.initializeApp();
+  // The portal's dates in the store's time zone: Cloud Run runs in UTC.
+  usePortalTimeZone();
   final config = StorefrontConfig.fromEnvironment(Platform.environment);
   final handler = const Pipeline()
       .addMiddleware(logRequests())

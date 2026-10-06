@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../modules/website/models/website_models.dart';
-import '../models/customer_portal_presentation.dart';
+import 'package:vinabike_public_core/public_store/models/customer_portal_plans.dart';
+import 'package:vinabike_public_core/public_store/models/customer_portal_snapshot.dart';
+
 import '../providers/public_store_tenant_provider.dart';
 import '../services/customer_account_service.dart';
 import '../widgets/customer_bike_card.dart';
@@ -11,6 +13,9 @@ import '../widgets/customer_order_row.dart';
 import '../widgets/customer_portal_layout.dart';
 import '../widgets/customer_portal_style.dart';
 import '../widgets/public_store_layout.dart';
+
+export 'package:vinabike_public_core/public_store/models/customer_portal_plans.dart'
+    show customerDashboardBandMeta;
 
 class CustomerDashboardPage extends StatefulWidget {
   const CustomerDashboardPage({super.key});
@@ -48,10 +53,14 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage>
     final profile = accountService.customerProfile;
     void navigate(String href) =>
         PublicStoreLayout.navigateToHref(context, href);
-    final firstName = customerFirstName(profile);
+    final plan = CustomerDashboardPlan.of(
+      profile: profile,
+      orders: accountService.orders,
+      jobs: accountService.serviceHistory,
+    );
 
     return CustomerPortalLayout(
-      title: firstName == null ? 'Tu cuenta' : 'Hola, $firstName',
+      title: plan.title,
       prominent: true,
       bandMeta: customerDashboardBandMeta(
         profile: profile,
@@ -75,25 +84,6 @@ class _CustomerDashboardPageState extends State<CustomerDashboardPage>
       ),
     );
   }
-}
-
-/// «Cliente desde septiembre de 2025» y «2 bicicletas · 5 pedidos», para la
-/// franja del resumen. Lo que es cero no se dice.
-String? customerDashboardBandMeta({
-  required Map<String, dynamic>? profile,
-  required int bikes,
-  required int orders,
-}) {
-  final since = portalParseDate(profile?['created_at']);
-  final counts = [
-    if (bikes > 0) bikes == 1 ? '1 bicicleta' : '$bikes bicicletas',
-    if (orders > 0) orders == 1 ? '1 pedido' : '$orders pedidos',
-  ].join(' · ');
-  final lines = [
-    if (since != null) 'Cliente desde ${portalMonthYear(since)}',
-    if (counts.isNotEmpty) counts,
-  ];
-  return lines.isEmpty ? null : lines.join('\n');
 }
 
 /// El resumen de la cuenta, sin el marco ni el servicio: recibe los datos y
@@ -125,37 +115,23 @@ class CustomerDashboardBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final firstName = customerFirstName(profile);
-
-    final current = <_CurrentItem>[
-      for (final job in jobs)
-        if (CustomerWorkshopPresentation.of(job).isActive)
-          _CurrentItem.job(job),
-      for (final order in orders)
-        if (CustomerOrderPresentation.of(order).group ==
-            CustomerOrderGroup.inProgress)
-          _CurrentItem.order(order),
-    ]..sort((a, b) => b.date.compareTo(a.date));
-    final forYou = current.where((item) => item.needsCustomer).toList();
-    final inProgress = current.where((item) => !item.needsCustomer).toList();
-    final previous = orders
-        .where((order) =>
-            CustomerOrderPresentation.of(order).group !=
-            CustomerOrderGroup.inProgress)
-        .take(3)
-        .toList(growable: false);
+    final plan = CustomerDashboardPlan.of(
+      profile: profile,
+      orders: orders,
+      jobs: jobs,
+    );
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
         final compact = width < PortalStyle.compactBreakpoint;
 
-        PortalTileBuilder tile(_CurrentItem item) => (layout) {
+        PortalTileBuilder tile(CustomerCurrentItem item) => (layout) {
               final order = item.order;
               if (order != null) {
                 return CustomerOrderTile(
                   order: order,
-                  imageUrl: _firstImage(order),
+                  imageUrl: customerOrderImage(order, orderImages),
                   compact: compact,
                   layout: layout,
                   onOpen: () => onNavigate('/pedido/${order.id}'),
@@ -175,7 +151,7 @@ class CustomerDashboardBody extends StatelessWidget {
             };
 
         final sections = <Widget>[
-          if (firstName == null)
+          if (plan.firstName == null)
             PortalNotice(
               icon: Icons.badge_outlined,
               message: 'Agrega tu nombre para que el taller sepa quién '
@@ -183,24 +159,24 @@ class CustomerDashboardBody extends StatelessWidget {
               actionLabel: 'Completar perfil',
               onAction: () => onNavigate('/cuenta/perfil'),
             ),
-          if (forYou.isNotEmpty)
+          if (plan.forYou.isNotEmpty)
             PortalSection(
               label: 'Para ti ahora',
-              count: forYou.length,
+              count: plan.forYou.length,
               child: PortalTileGrid(
                 width: width,
-                tiles: [for (final item in forYou) tile(item)],
+                tiles: [for (final item in plan.forYou) tile(item)],
               ),
             ),
-          if (inProgress.isNotEmpty)
+          if (plan.inProgress.isNotEmpty)
             PortalSection(
               label: 'En curso',
               child: PortalTileGrid(
                 width: width,
-                tiles: [for (final item in inProgress) tile(item)],
+                tiles: [for (final item in plan.inProgress) tile(item)],
               ),
             ),
-          if (current.isEmpty)
+          if (plan.nothingCurrent)
             PortalSection(
               label: 'En curso',
               child: _NothingInProgress(onNavigate: onNavigate),
@@ -216,7 +192,7 @@ class CustomerDashboardBody extends StatelessWidget {
                 onNavigate: onNavigate,
               ),
             ),
-          if (previous.isNotEmpty)
+          if (plan.previousOrders.isNotEmpty)
             PortalSection(
               label: 'Últimos pedidos',
               actionLabel: 'Ver todos',
@@ -226,10 +202,10 @@ class CustomerDashboardBody extends StatelessWidget {
                     ? const CustomerOrderTableHeader()
                     : null,
                 children: [
-                  for (final order in previous)
+                  for (final order in plan.previousOrders)
                     CustomerOrderRow(
                       order: order,
-                      imageUrl: _firstImage(order),
+                      imageUrl: customerOrderImage(order, orderImages),
                       onTap: () => onNavigate('/pedido/${order.id}'),
                     ),
                 ],
@@ -248,14 +224,6 @@ class CustomerDashboardBody extends StatelessWidget {
         );
       },
     );
-  }
-
-  String? _firstImage(OnlineOrder order) {
-    for (final item in order.items) {
-      final url = orderImages[item.productId];
-      if (url != null) return url;
-    }
-    return null;
   }
 }
 
@@ -311,8 +279,7 @@ class _BikesRow extends StatelessWidget {
       );
     }
 
-    final showWorkshop = bikes.length <= 2;
-    final shown = bikes.take(showWorkshop ? 2 : 3).toList();
+    final (:shown, :showWorkshop) = customerDashboardBikes(bikes);
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -355,65 +322,30 @@ class CustomerDashboardServiceBand extends StatelessWidget {
   final int addressesCount;
   final ValueChanged<String> onNavigate;
 
+  static const _icons = {
+    'chat_bubble_outline': Icons.chat_bubble_outline,
+    'verified_user_outlined': Icons.verified_user_outlined,
+    'location_on_outlined': Icons.location_on_outlined,
+  };
+
   @override
   Widget build(BuildContext context) {
-    final phone = (profile?['phone'] ?? '').toString().trim();
-    final contactMessage = phone.isEmpty
-        ? 'Agrega tu teléfono para que el taller pueda avisarte cuando tu '
-            'bici esté lista.'
-        : addressesCount == 0
-            ? 'Guarda una dirección y no tendrás que escribirla en cada '
-                'compra.'
-            : 'Mantén al día tu teléfono y dónde recibes tus pedidos.';
     return PortalServiceBand(
       items: [
-        PortalServiceItem(
-          icon: Icons.chat_bubble_outline,
-          title: 'Habla con el taller',
-          message: 'Pregunta por tu bici o tu pedido y te responde una '
-              'persona del taller.',
-          actionLabel: 'Ir a soporte',
-          onTap: () => onNavigate('/cuenta/chats'),
-        ),
-        PortalServiceItem(
-          icon: Icons.verified_user_outlined,
-          title: 'Garantía de tus bicis',
-          message: 'Revisa hasta cuándo cubre la garantía de cada bicicleta.',
-          actionLabel: 'Ver bicicletas',
-          onTap: () => onNavigate('/cuenta/bicicletas'),
-        ),
-        PortalServiceItem(
-          icon: Icons.location_on_outlined,
-          title: 'Tus datos y direcciones',
-          message: contactMessage,
-          actionLabel: phone.isEmpty ? 'Agregar teléfono' : 'Ir a perfil',
-          onTap: () => onNavigate(
-            phone.isEmpty || addressesCount > 0
-                ? '/cuenta/perfil'
-                : '/cuenta/direcciones',
+        for (final item in customerServiceBandItems(
+          profile: profile,
+          addressesCount: addressesCount,
+        ))
+          PortalServiceItem(
+            icon: _icons[item.icon]!,
+            title: item.title,
+            message: item.message,
+            actionLabel: item.actionLabel,
+            onTap: () => onNavigate(item.href),
           ),
-        ),
       ],
     );
   }
-}
-
-class _CurrentItem {
-  _CurrentItem.order(OnlineOrder this.order)
-      : job = null,
-        needsCustomer = CustomerOrderPresentation.of(order).needsCustomer,
-        date = order.createdAt;
-
-  _CurrentItem.job(Map<String, dynamic> this.job)
-      : order = null,
-        needsCustomer = CustomerWorkshopPresentation.of(job).needsCustomer,
-        date = portalParseDate(job['created_at']) ??
-            DateTime.fromMillisecondsSinceEpoch(0);
-
-  final OnlineOrder? order;
-  final Map<String, dynamic>? job;
-  final bool needsCustomer;
-  final DateTime date;
 }
 
 class _NothingInProgress extends StatelessWidget {

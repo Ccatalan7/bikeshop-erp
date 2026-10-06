@@ -25,7 +25,7 @@ describe lo que ya está cerrado.
 | Quién | Qué puede |
 |---|---|
 | Visitante sin cuenta (`anon`) | leer 55 columnas de `products` (sin costo ni proveedor), la configuración pública del sitio y llamar las funciones `get_public_*`, `search_public_products`, `resolve_public_product_url_alias`, `quote_public_online_shipping`, `create_public_online_order_with_access`, `get_public_online_order_by_access_token` ([mapa-del-sistema](mapa-del-sistema.md)) |
-| Cliente con cuenta (`authenticated`, sin perfil de personal) | lo mismo, más **sus** pedidos, trabajos, bicis y chats en el portal. No lee el catálogo por la tabla ni los costos |
+| Cliente con cuenta (`authenticated`, sin perfil de personal) | lo mismo, más **sus** pedidos, trabajos, bicis y chats en el portal. No lee el catálogo por la tabla ni los costos. Desde el 2026-10-06 el servidor HTML lee el portal con **el token del cliente** (nunca con una clave de servicio): RLS decide igual que en Flutter, cada lectura filtra la tienda, y el token no se guarda ni se anota |
 | Personal del taller (`authenticated` con `user_profiles`) | el ERP según su rol, siempre dentro de su empresa (`user_tenant_id()` sólo resuelve personal) |
 
 `[Repo]` `[Prod 2026-10-03]`

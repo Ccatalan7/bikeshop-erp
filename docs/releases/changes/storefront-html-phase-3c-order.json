@@ -37,23 +37,23 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
-      "sha256": "feb430579f1e40564f1130ced3b3114520627e9205adb8da71aacc194dc7d584"
+      "sha256": "9d19777655ec246116c04eb83bc41796a82870e6d4d4bc52ea616809b63ddd3f"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_script.dart",
-      "sha256": "65b94268d4868adcc5b54a75f792bab377fcec8f41b3f23041a0beea1eb0602d"
+      "sha256": "5f45f16f155d8375f072bd279cf017e323bb27e09656b025fa5c45bfc2179a11"
     },
     {
       "path": "services/storefront_html/lib/src/public_reads.dart",
-      "sha256": "b63e127c9eaffe06d49b4fb943ce9a92a3fa3bf7fb12fdc6bc3c163adf6102c4"
+      "sha256": "24feb06c062a81e4ffeecdaab646bd8fce52e63d29a7dfb613bd74b062d46f34"
     },
     {
       "path": "services/storefront_html/lib/src/material_icons.dart",
-      "sha256": "0c7c084aeccf678a6049ed1f97431b1d42cf2a36eb9c4c1a0d20637f536dc093"
+      "sha256": "31770c1df48f82e726f9a8d7276e25f028d58c78e0331e6bbd9a66b6fb70a32c"
     },
     {
       "path": "services/storefront_html/lib/storefront_html.dart",
-      "sha256": "2d43d15d3526765e2d87fc338f1942e5815221473e8cc32976d27ddee6438c30"
+      "sha256": "5c7c37dbea33f5131e0c59d951c0ffb1b1d18c49e4fe9c254ce6c4b5061d0ff9"
     },
     {
       "path": "packages/vinabike_public_core/pubspec.yaml",
@@ -69,7 +69,7 @@
     },
     {
       "path": "packages/vinabike_public_core/lib/public_store/seo/storefront_html_routes.dart",
-      "sha256": "f7ddf1db8e9c2b6d9aab55c38bdc8f474034beeded54ae1048319100e2227f12"
+      "sha256": "fc4653e4310c1fa4ec03e9d30f5a113fa756e9853f3ae428e9d82ec46c0c42a7"
     },
     {
       "path": "lib/public_store/pages/order_confirmation_pdf.dart",
@@ -77,15 +77,15 @@
     },
     {
       "path": "lib/modules/website/models/website_models.dart",
-      "sha256": "fc62c40642a2566eaf54d615ec76157f7c364b03672b2a2353e87a1ba03ee887"
+      "sha256": "c3392295f32f98b66b2036fac16de5d2d29d22ee7ad5d7898c9f92983b017053"
     },
     {
       "path": "scripts/releases/check_storefront_html_routes.mjs",
-      "sha256": "4a3722e2baa5edaf6de01a7c95eeca12772404e38d57f70767c28ee428be9b9b"
+      "sha256": "abd7d19ce654160dc7944b8e0929d0a9795b3a65790eba1f04bc95dacace80bc"
     },
     {
       "path": "firebase.json",
-      "sha256": "87103296b0e6be2eeec11223ade4c918cc6c4b39e1012af67e873289d11f5c36"
+      "sha256": "6bf8ec06152824acaa2f1e151588ebf1358291cdcae003f600824d2a8796a0e6"
     }
   ]
 }

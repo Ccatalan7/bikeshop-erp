@@ -2,9 +2,9 @@
 titulo: Portal de clientes
 resumen: lo que ve un cliente con cuenta en /cuenta — pedidos, taller, bicis, soporte — cómo entra, cómo se ve y qué sigue pendiente
 fuentes: [repositorio]
-archivos: [lib/public_store/pages/customer_dashboard_page.dart, lib/public_store/pages/customer_orders_page.dart, lib/public_store/pages/customer_service_history_page.dart, lib/public_store/pages/customer_bikes_page.dart, lib/public_store/pages/customer_chat_hub_page.dart, lib/public_store/pages/customer_auth_page.dart, lib/public_store/widgets/customer_portal_style.dart, lib/public_store/widgets/customer_portal_layout.dart, lib/public_store/models/customer_portal_presentation.dart, lib/public_store/services/customer_account_service.dart]
+archivos: [services/storefront_html/lib/src/portal_page_view.dart, services/storefront_html/lib/src/portal_page_route.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_plans.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_snapshot.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_presentation.dart, lib/public_store/pages/customer_dashboard_page.dart, lib/public_store/pages/customer_orders_page.dart, lib/public_store/pages/customer_service_history_page.dart, lib/public_store/pages/customer_bikes_page.dart, lib/public_store/pages/customer_chat_hub_page.dart, lib/public_store/pages/customer_auth_page.dart, lib/public_store/widgets/customer_portal_style.dart, lib/public_store/widgets/customer_portal_layout.dart, lib/public_store/services/customer_account_service.dart]
 tablas: [customers, bikes, mechanic_jobs, online_orders, website_settings]
-revisado: 2026-10-03
+revisado: 2026-10-06
 ---
 
 # Portal de clientes
@@ -32,6 +32,19 @@ el soporte por chat. No es otra base: lee los mismos `online_orders`,
 | `/cuenta/mensajes`, `/cuenta/mensajes/:id` | `customer_chat_list_page.dart` (legado) | rutas viejas del chat |
 
 Todas llevan `noindex` por cabecera ([rutas](rutas-y-navegacion.md)).
+
+## En HTML desde el 2026-10-06
+
+`/cuenta`, `/cuenta/pedidos`, `/cuenta/servicios` y `/cuenta/bicicletas` las
+responde el servidor HTML; el resto (entrar, perfil, direcciones, soporte)
+sigue en Flutter, y entre unas y otras se pasa con una carga completa. La
+página llega sin datos; el navegador pide `POST /cuenta/vista` con el token
+del cliente y el servidor lee Supabase como ese cliente: la base decide qué
+ve (RLS) y cada lectura filtra la tienda. El token no se guarda ni se anota.
+Las reglas (qué va en «Para ti ahora», los estados, el dibujo de la bici, la
+garantía) están en el núcleo y Flutter usa las mismas `[Repo]`. Medido contra
+Flutter con datos reales anonimizados a 1440 y 412 px: mismos bordes y el
+texto a ±1 px `[Repo 2026-10-06]`.
 
 ## Cómo se ve: dirección «Sendero» (2026-09-26)
 
@@ -67,7 +80,14 @@ Las fotos del portal salen del editor (`theme_customer_portal_image`,
 
 - Estilo y piezas: `customer_portal_style.dart`, `customer_portal_layout.dart`,
   `customer_job_row.dart`, `customer_order_row.dart`, `customer_bike_card.dart`,
-  `customer_bike_drawing.dart`; reglas puras en
-  `customer_portal_presentation.dart`; datos en `customer_account_service.dart`.
+  `customer_bike_drawing.dart`; datos en `customer_account_service.dart`.
+- Reglas puras, en el núcleo (`packages/vinabike_public_core`):
+  `customer_portal_presentation.dart`, `customer_portal_plans.dart`,
+  `customer_portal_snapshot.dart`, `customer_bike_drawing_geometry.dart`,
+  `portal_time_zone.dart`.
+- HTML: `services/storefront_html/lib/src/portal_page_view.dart` (la vista),
+  `portal_page_css.dart`, `portal_page_script.dart` y
+  `portal_page_route.dart` (`/cuenta/vista`, `/cuenta/archivo`); lecturas en
+  `SupabasePublicReads.customerPortal`.
 - Tablas: `customers` (`auth_user_id`), `online_orders`, `mechanic_jobs`, `bikes`.
 - Superficie registrada: fila «Customer portal» de `canonical-ui-surfaces.md`.

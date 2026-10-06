@@ -10,14 +10,14 @@
   "title": "Productos y catálogo cargan mucho más rápido",
   "summary": "La portada, productos, categorías y búsqueda de vinabike.cl llegan armados desde el servidor, con el precio y el stock del momento y las fotos de cada lista en el tamaño de su tarjeta: quien entra desde Google ve la ficha en un segundo en un teléfono lento.",
   "items": [
-    "La portada, productos, el carrito, el checkout, tu pedido y páginas como Envíos llegan armados: en un teléfono lento se leen en 1 a 2 segundos, no en 15 a 20.",
+    "La portada, productos, el carrito, el checkout, tu pedido y tu cuenta llegan armados: en un teléfono lento se leen en 1 a 2 segundos, no en 15 a 20.",
     "Categorías y filtros funcionan sin JavaScript, se comparten como enlace y cada foto de las listas pesa unos 20 KB en vez de 120.",
     "Nosotros, Términos y Privacidad muestran el contacto de la tienda, y con tu sesión iniciada el encabezado muestra tu cuenta en todas las páginas."
   ],
   "evidence": [
     {
       "path": "firebase.json",
-      "sha256": "87103296b0e6be2eeec11223ade4c918cc6c4b39e1012af67e873289d11f5c36"
+      "sha256": "6bf8ec06152824acaa2f1e151588ebf1358291cdcae003f600824d2a8796a0e6"
     },
     {
       "path": "scripts/generate_product_seo_snapshots.dart",
@@ -29,11 +29,11 @@
     },
     {
       "path": "scripts/releases/check_storefront_html_routes.mjs",
-      "sha256": "4a3722e2baa5edaf6de01a7c95eeca12772404e38d57f70767c28ee428be9b9b"
+      "sha256": "abd7d19ce654160dc7944b8e0929d0a9795b3a65790eba1f04bc95dacace80bc"
     },
     {
       "path": "services/storefront_html/bin/server.dart",
-      "sha256": "8da7ac687500e2eb039b4a7c64a68aed8ffc8595db33a9cafeb8efcafc938916"
+      "sha256": "85185a2323ffa1dd56a4f56554184b4153ef3aba5cae80407c4160e9c8e2957c"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_config.dart",
@@ -41,7 +41,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
-      "sha256": "feb430579f1e40564f1130ced3b3114520627e9205adb8da71aacc194dc7d584"
+      "sha256": "9d19777655ec246116c04eb83bc41796a82870e6d4d4bc52ea616809b63ddd3f"
     },
     {
       "path": "services/storefront_html/deploy_cloud_run.sh",
@@ -73,7 +73,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/public_reads.dart",
-      "sha256": "b63e127c9eaffe06d49b4fb943ce9a92a3fa3bf7fb12fdc6bc3c163adf6102c4"
+      "sha256": "24feb06c062a81e4ffeecdaab646bd8fce52e63d29a7dfb613bd74b062d46f34"
     },
     {
       "path": "scripts/generate_public_image_thumbnails.dart",
@@ -89,7 +89,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/site_layout.dart",
-      "sha256": "24838ff91198842b7efbe1afecc942e58a6e0ff4ef175a92c48e8391bf5e0a08"
+      "sha256": "f8543c5c4dfb78e12762f7d1eab43edb6d31591baed011238202cdfb8e1e7c35"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_css.dart",
@@ -97,15 +97,47 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_script.dart",
-      "sha256": "65b94268d4868adcc5b54a75f792bab377fcec8f41b3f23041a0beea1eb0602d"
+      "sha256": "5f45f16f155d8375f072bd279cf017e323bb27e09656b025fa5c45bfc2179a11"
     },
     {
       "path": "services/storefront_html/lib/src/material_icons.dart",
-      "sha256": "0c7c084aeccf678a6049ed1f97431b1d42cf2a36eb9c4c1a0d20637f536dc093"
+      "sha256": "31770c1df48f82e726f9a8d7276e25f028d58c78e0331e6bbd9a66b6fb70a32c"
     },
     {
       "path": "services/storefront_html/lib/src/checkout_page_view.dart",
       "sha256": "35c41c3478b67979647c82b4ea58270b1f57c58753697bfae557bc6d16a2f6f5"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_page_view.dart",
+      "sha256": "82898bfdeb8d12c3980976e3c3acd5439d6943a853b580540a4b5778525df7e8"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_page_css.dart",
+      "sha256": "7f8759ace6d77527475703761199c6e183f3094f486013680ec4e7e4eb2a6082"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_page_script.dart",
+      "sha256": "ff70125a2a9946cf75c40c61963f9d3932960692e96c85d455f604a641d6add2"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_page_route.dart",
+      "sha256": "20b46f62c8057a7a64a1651a6a1871816960d72abb270653653242fcc9865f26"
+    },
+    {
+      "path": "services/storefront_html/lib/storefront_html.dart",
+      "sha256": "5c7c37dbea33f5131e0c59d951c0ffb1b1d18c49e4fe9c254ce6c4b5061d0ff9"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/seo/storefront_html_routes.dart",
+      "sha256": "fc4653e4310c1fa4ec03e9d30f5a113fa756e9853f3ae428e9d82ec46c0c42a7"
+    },
+    {
+      "path": "scripts/releases/check_storefront_html_routes.test.mjs",
+      "sha256": "73376c5634993c0f1f82fdff540aac0ba3ea969e7e19e988518c1ce71478b894"
+    },
+    {
+      "path": "test/unit/product_seo_snapshot_server_routes_test.dart",
+      "sha256": "f53b5adf899f4b9cda6663052bdb6f783be73f304b315ca8cb93456fed765774"
     }
   ]
 }

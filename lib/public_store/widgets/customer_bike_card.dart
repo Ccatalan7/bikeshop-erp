@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:vinabike_public_core/public_store/models/customer_portal_plans.dart';
 
 import '../models/customer_portal_presentation.dart';
 import 'customer_bike_drawing.dart';
@@ -211,7 +212,7 @@ Future<void> showCustomerBikeDetail(
   required Map<String, dynamic> bike,
   required ValueChanged<String> onNavigate,
 }) {
-  final warranty = portalParseDate(bike['warranty_until']);
+  final warranty = customerBikeWarranty(bike);
   final purchased = portalParseDate(bike['purchase_date']);
   final count = (bike['service_count'] as num?)?.toInt() ?? 0;
   String? text(String key) {
@@ -219,8 +220,6 @@ Future<void> showCustomerBikeDetail(
     return value.isEmpty ? null : value;
   }
 
-  final warrantyActive = warranty != null &&
-      !warranty.isBefore(DateUtils.dateOnly(DateTime.now()));
   final details = customerBikeDetails(bike);
 
   return showPortalDetail(
@@ -232,11 +231,11 @@ Future<void> showCustomerBikeDetail(
         : Align(
             alignment: Alignment.centerLeft,
             child: PortalTag(
-              label: warrantyActive
-                  ? 'Garantía hasta el ${portalDate(warranty)}'
-                  : 'Garantía vencida el ${portalDate(warranty)}',
+              label: warranty.active
+                  ? 'Garantía hasta el ${portalDate(warranty.until)}'
+                  : 'Garantía vencida el ${portalDate(warranty.until)}',
               kind:
-                  warrantyActive ? PortalTagKind.success : PortalTagKind.quiet,
+                  warranty.active ? PortalTagKind.success : PortalTagKind.quiet,
             ),
           ),
     body: PortalFacts(

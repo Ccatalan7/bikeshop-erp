@@ -36,6 +36,51 @@ class WebsiteRgba {
   /// `Color.withValues(alpha:)`.
   WebsiteRgba withAlpha(double alpha) => WebsiteRgba(alpha, r, g, b);
 
+  /// `Color.alphaBlend`: [foreground] painted over [background].
+  static WebsiteRgba alphaBlend(
+    WebsiteRgba foreground,
+    WebsiteRgba background,
+  ) {
+    final alpha = foreground.a;
+    if (alpha == 0) return background;
+    final invAlpha = 1 - alpha;
+    var backAlpha = background.a;
+    if (backAlpha == 1) {
+      return WebsiteRgba(
+        1,
+        alpha * foreground.r + invAlpha * background.r,
+        alpha * foreground.g + invAlpha * background.g,
+        alpha * foreground.b + invAlpha * background.b,
+      );
+    }
+    backAlpha = backAlpha * invAlpha;
+    final outAlpha = alpha + backAlpha;
+    return WebsiteRgba(
+      outAlpha,
+      (foreground.r * alpha + background.r * backAlpha) / outAlpha,
+      (foreground.g * alpha + background.g * backAlpha) / outAlpha,
+      (foreground.b * alpha + background.b * backAlpha) / outAlpha,
+    );
+  }
+
+  /// The WCAG contrast ratio between two colors, alpha ignored.
+  static double contrast(WebsiteRgba a, WebsiteRgba b) {
+    final la = a.luminance;
+    final lb = b.luminance;
+    final lighter = math.max(la, lb);
+    final darker = math.min(la, lb);
+    return (lighter + 0.05) / (darker + 0.05);
+  }
+
+  /// White or the store's dark ink, whichever reads better on [background]
+  /// (`_readableForeground` of the Flutter themes).
+  static WebsiteRgba readableOn(WebsiteRgba background) {
+    final ink = WebsiteRgba.fromArgb(0xFF17211B);
+    return contrast(WebsiteRgba.white, background) >= contrast(ink, background)
+        ? WebsiteRgba.white
+        : ink;
+  }
+
   /// `Color.computeLuminance`: relative luminance, alpha ignored.
   double get luminance {
     double linear(double c) => c <= 0.03928

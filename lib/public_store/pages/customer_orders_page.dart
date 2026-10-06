@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:vinabike_public_core/public_store/models/customer_portal_plans.dart';
+import 'package:vinabike_public_core/public_store/models/customer_portal_snapshot.dart';
 
 import '../../modules/website/models/website_models.dart';
 import '../models/customer_portal_presentation.dart';
@@ -72,12 +74,6 @@ class CustomerOrdersBody extends StatelessWidget {
   final ValueChanged<CustomerOrderGroup?> onGroupChanged;
   final ValueChanged<String> onNavigate;
 
-  static const _labels = {
-    CustomerOrderGroup.inProgress: 'En curso',
-    CustomerOrderGroup.delivered: 'Entregados',
-    CustomerOrderGroup.cancelled: 'Cancelados',
-  };
-
   @override
   Widget build(BuildContext context) {
     if (orders.isEmpty) {
@@ -94,19 +90,7 @@ class CustomerOrdersBody extends StatelessWidget {
       );
     }
 
-    final counts = <CustomerOrderGroup, int>{};
-    for (final order in orders) {
-      final g = CustomerOrderPresentation.of(order).group;
-      counts[g] = (counts[g] ?? 0) + 1;
-    }
-    final effectiveGroup =
-        group != null && (counts[group] ?? 0) > 0 ? group : null;
-    final visible = effectiveGroup == null
-        ? orders
-        : orders
-            .where((order) =>
-                CustomerOrderPresentation.of(order).group == effectiveGroup)
-            .toList(growable: false);
+    final plan = CustomerOrdersPlan.of(orders, group: group);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -121,27 +105,26 @@ class CustomerOrdersBody extends StatelessWidget {
                 PortalFilterChip(
                   label: 'Todos',
                   count: orders.length,
-                  selected: effectiveGroup == null,
+                  selected: plan.group == null,
                   onTap: () => onGroupChanged(null),
                 ),
-                for (final entry in _labels.entries)
-                  if ((counts[entry.key] ?? 0) > 0)
-                    PortalFilterChip(
-                      label: entry.value,
-                      count: counts[entry.key]!,
-                      selected: effectiveGroup == entry.key,
-                      onTap: () => onGroupChanged(entry.key),
-                    ),
+                for (final g in plan.groups)
+                  PortalFilterChip(
+                    label: CustomerOrdersPlan.labels[g]!,
+                    count: plan.counts[g]!,
+                    selected: plan.group == g,
+                    onTap: () => onGroupChanged(g),
+                  ),
               ],
             ),
             const SizedBox(height: 40),
             PortalPanel(
               header: table ? const CustomerOrderTableHeader() : null,
               children: [
-                for (final order in visible)
+                for (final order in plan.visible)
                   CustomerOrderRow(
                     order: order,
-                    imageUrl: _firstImage(order),
+                    imageUrl: customerOrderImage(order, orderImages),
                     onTap: () => onNavigate('/pedido/${order.id}'),
                   ),
               ],
@@ -150,13 +133,5 @@ class CustomerOrdersBody extends StatelessWidget {
         );
       },
     );
-  }
-
-  String? _firstImage(OnlineOrder order) {
-    for (final item in order.items) {
-      final url = orderImages[item.productId];
-      if (url != null) return url;
-    }
-    return null;
   }
 }

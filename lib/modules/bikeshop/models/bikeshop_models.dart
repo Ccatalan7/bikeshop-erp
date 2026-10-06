@@ -2,10 +2,14 @@
 
 import 'dart:ui' show Color;
 
+import 'package:vinabike_public_core/modules/bikeshop/models/bike_type.dart';
+
 import '../config/bottom_bracket_canonical_data.dart';
 import '../config/brake_canonical_data.dart';
 import '../config/wheel_canonical_data.dart';
 import '../../../shared/models/tax_treatment.dart';
+
+export 'package:vinabike_public_core/modules/bikeshop/models/bike_type.dart';
 
 /// Sentinel object used in copyWith to distinguish between "not provided" and "explicitly null"
 const Object _sentinel = Object();
@@ -53,69 +57,6 @@ double? normalizeDiagnosisWearPercent(dynamic value) {
 // BIKE MODEL
 // ============================================================
 
-enum BikeType {
-  road,
-  mountain,
-  mountainHardtail,
-  hybrid,
-  electric,
-  bmx,
-  folding,
-  cruiser,
-  gravel,
-  paseo,
-  other;
-
-  String get displayName {
-    switch (this) {
-      case BikeType.road:
-        return 'Ruta';
-      case BikeType.mountain:
-        return 'MTB doble suspensión';
-      case BikeType.mountainHardtail:
-        return 'MTB hardtail';
-      case BikeType.hybrid:
-        return 'Híbrida';
-      case BikeType.electric:
-        return 'Eléctrica';
-      case BikeType.bmx:
-        return 'BMX';
-      case BikeType.folding:
-        return 'Plegable';
-      case BikeType.cruiser:
-        return 'Cruiser';
-      case BikeType.gravel:
-        return 'Gravel';
-      case BikeType.paseo:
-        return 'Paseo / Urbana';
-      case BikeType.other:
-        return 'Otra';
-    }
-  }
-
-  String get dbValue {
-    switch (this) {
-      case BikeType.mountainHardtail:
-        return 'mountain_hardtail';
-      default:
-        return name;
-    }
-  }
-
-  static BikeType? fromDbValue(String? value) {
-    if (value == null || value.isEmpty) return null;
-
-    switch (value) {
-      case 'mountain_hardtail':
-        return BikeType.mountainHardtail;
-      default:
-        return BikeType.values.firstWhere(
-          (type) => type.name == value,
-          orElse: () => BikeType.other,
-        );
-    }
-  }
-}
 
 class Bike {
   final String? id;

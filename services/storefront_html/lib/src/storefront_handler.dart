@@ -15,6 +15,8 @@ import 'cart_page_view.dart';
 import 'checkout_page_view.dart';
 import 'order_page_view.dart';
 import 'order_summary_pdf_route.dart';
+import 'portal_page_route.dart';
+import 'portal_page_view.dart';
 import 'catalog_page_model.dart';
 import 'catalog_page_view.dart';
 import 'flutter_shell.dart';
@@ -82,6 +84,14 @@ Handler storefrontHandler({
       }
       return orderSummaryPdf(request, reads: reads, fonts: fonts);
     }
+    if (path == portalViewPath || path == portalFilePath) {
+      if (request.method != 'POST') {
+        return Response(405, headers: {'allow': 'POST'});
+      }
+      return path == portalViewPath
+          ? portalViewResponse(request, reads: reads)
+          : portalFileResponse(request, reads: reads);
+    }
     if (request.method != 'GET' && request.method != 'HEAD') {
       return Response(405, headers: {'allow': 'GET, HEAD'});
     }
@@ -134,6 +144,8 @@ Handler storefrontHandler({
         ['checkout', 'lineas'] => await route.checkoutLines(),
         ['pedido', final id] when _orderIdPattern.hasMatch(id) =>
           await route.order(id),
+        ['cuenta'] || ['cuenta', 'pedidos' || 'servicios' || 'bicicletas'] =>
+          await route.portal(PortalPage.ofPath('/${segments.join('/')}')!),
         _ => await route.notFound(),
       };
     } on PublicReadException catch (error) {
@@ -416,6 +428,14 @@ class _Route {
         ),
       ),
     );
+  }
+
+  /// `/cuenta/**` (4a): the frame; the customer's page comes from
+  /// [portalViewResponse] with the session this browser keeps.
+  Future<Response> portal(PortalPage which) async {
+    final context = _context(await reads.shell());
+    if (!context.shell.sitePublished) return _unpublished(context);
+    return _render(portalPageDocument(context, which));
   }
 
   /// `/checkout/lineas?l=<id>:<q>,…`: the cart's lines with what the order

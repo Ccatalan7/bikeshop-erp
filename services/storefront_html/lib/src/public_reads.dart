@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:vinabike_public_core/public_store/models/customer_portal_snapshot.dart';
 import 'package:vinabike_public_core/public_store/models/public_commerce_product_projection.dart';
 import 'package:vinabike_public_core/public_store/models/public_policy_content.dart';
 import 'package:vinabike_public_core/public_store/models/public_product_identity_columns.dart';
@@ -109,6 +110,35 @@ typedef CartReads = ({
   List<Object?> thumbnails,
 });
 
+/// The customer's account as the portal reads it, with the customer's own
+/// session (`CustomerAccountService`: the idempotent
+/// `provision_current_public_store_customer`, then `customers` by
+/// `auth_user_id` and tenant, their addresses, orders with their lines,
+/// active bikes with their brand and model rows, and jobs). [profile] is null
+/// when the session is not a customer of this store. [jobBikes] are the
+/// bikes the jobs name, read apart as Flutter reads them; [productImages] the
+/// order lines' products (`customerOrderImageColumns`, public); [jobFiles]
+/// each job file's link to show it, resolved with the same session.
+typedef CustomerPortalReads = ({
+  Map<String, dynamic> shell,
+  Map<String, dynamic>? profile,
+  int addresses,
+  List<Object?> orders,
+  List<Object?> bikes,
+  List<Object?> jobs,
+  List<Object?> jobBikes,
+  List<Object?> productImages,
+  Map<String, String> jobFiles,
+});
+
+/// Supabase refused the customer's session (expired or not valid): the page
+/// renews it and asks again, or shows the way in.
+class CustomerSessionRefused implements Exception {
+  const CustomerSessionRefused();
+  @override
+  String toString() => 'CustomerSessionRefused';
+}
+
 abstract interface class PublicReads {
   Future<ShellReads> shell();
 
@@ -140,6 +170,15 @@ abstract interface class PublicReads {
   /// (`get_public_online_order_by_access_token`, the read Flutter's order
   /// page makes), for its summary PDF; null when the token opens nothing.
   Future<Object?> publicOrder(String accessToken);
+
+  /// The portal's reads with the customer's [accessToken]; throws
+  /// [CustomerSessionRefused] when Supabase does not accept it. The token is
+  /// only sent to Supabase: never kept nor written to a log.
+  Future<CustomerPortalReads> customerPortal(String accessToken);
+
+  /// A link to open one of a job's files now
+  /// (`WorkshopAssetService.resolve`), or null when the session may not.
+  Future<String?> customerJobFile(String accessToken, String reference);
 }
 
 class PublicReadException implements Exception {
@@ -494,6 +533,291 @@ class SupabasePublicReads implements PublicReads {
       brands: completed[1],
       thumbnails: completed[2],
     );
+  }
+
+  @override
+  Future<CustomerPortalReads> customerPortal(String accessToken) async {
+    final userId = _sessionUser(accessToken);
+    if (userId == null) throw const CustomerSessionRefused();
+    final tenant = config.tenantId;
+    Future<List<Object?>> profileRead() =>
+        _customerSelect(accessToken, 'customers', {
+          'select': '*',
+          'auth_user_id': 'eq.$userId',
+          'tenant_id': 'eq.$tenant',
+          'limit': '1',
+        });
+    // The account's creation is idempotent and almost always done: read the
+    // profile beside it, and again after it only when it was missing.
+    final provision = _customerRpc(
+      accessToken,
+      'provision_current_public_store_customer',
+      {'p_tenant_id': tenant},
+    );
+    final first = await Future.wait<Object?>([
+      _shell(),
+      profileRead(),
+      provision.then<Object?>((_) => null),
+    ]);
+    final shell = first[0] as Map<String, dynamic>;
+    var rows = first[1] as List<Object?>;
+    if (rows.isEmpty) rows = await profileRead();
+    final row = rows.isEmpty ? null : rows.first;
+    final profile =
+        row is Map &&
+            row['auth_user_id']?.toString() == userId &&
+            row['tenant_id']?.toString() == tenant
+        ? Map<String, dynamic>.from(row)
+        : null;
+    if (profile == null) {
+      return (
+        shell: shell,
+        profile: null,
+        addresses: 0,
+        orders: const <Object?>[],
+        bikes: const <Object?>[],
+        jobs: const <Object?>[],
+        jobBikes: const <Object?>[],
+        productImages: const <Object?>[],
+        jobFiles: const <String, String>{},
+      );
+    }
+    final customer = profile['id'].toString();
+    final second = await Future.wait<List<Object?>>([
+      _customerSelect(accessToken, 'customer_addresses', {
+        'select': 'id',
+        'customer_id': 'eq.$customer',
+        'tenant_id': 'eq.$tenant',
+      }),
+      _customerSelect(accessToken, 'online_orders', {
+        'select': '*,online_order_items(*)',
+        'customer_id': 'eq.$customer',
+        'tenant_id': 'eq.$tenant',
+        'order': 'created_at.desc',
+      }),
+      _customerSelect(accessToken, 'bikes', {
+        'select': '*,bike_brands(name),bike_models(name)',
+        'tenant_id': 'eq.$tenant',
+        'customer_id': 'eq.$customer',
+        'is_active': 'eq.true',
+        'order': 'created_at.desc',
+      }),
+      _customerSelect(accessToken, 'mechanic_jobs', {
+        'select': '*',
+        'tenant_id': 'eq.$tenant',
+        'customer_id': 'eq.$customer',
+        'deleted_at': 'is.null',
+        'order': 'created_at.desc',
+      }),
+    ]);
+    final orders = second[1];
+    final jobs = second[3];
+    final productIds = <String>{
+      for (final order in orders)
+        if (order is Map)
+          for (final item in order['online_order_items'] as List? ?? const [])
+            if (item is Map &&
+                _uuid.hasMatch(item['product_id']?.toString().trim() ?? ''))
+              item['product_id'].toString().trim(),
+    };
+    final bikeIds = <String>{
+      for (final job in jobs)
+        if (job is Map && _uuid.hasMatch(job['bike_id']?.toString() ?? ''))
+          job['bike_id'].toString(),
+    };
+    final references = <String>{
+      for (final job in jobs)
+        if (job is Map)
+          for (final value in job['image_urls'] as List? ?? const [])
+            if (value is String && value.trim().isNotEmpty) value.trim(),
+    };
+    final third = await Future.wait<Object?>([
+      productIds.isEmpty
+          ? Future.value(const <Object?>[])
+          : _select('products', {
+              'select': customerOrderImageColumns,
+              'tenant_id': 'eq.$tenant',
+              'id': 'in.(${productIds.join(',')})',
+            }).catchError((Object error) {
+              // Flutter shows the rows without photos when this fails.
+              stderr.writeln(
+                'portal order images unavailable: ${error.runtimeType}',
+              );
+              return const <Object?>[];
+            }),
+      bikeIds.isEmpty
+          ? Future.value(const <Object?>[])
+          : _customerSelect(accessToken, 'bikes', {
+              'select': 'id,brand,model,color,bike_type,wheel_size',
+              'tenant_id': 'eq.$tenant',
+              'id': 'in.(${bikeIds.join(',')})',
+            }).catchError((Object error) {
+              if (error is CustomerSessionRefused) throw error;
+              stderr.writeln(
+                'portal job bikes unavailable: ${error.runtimeType}',
+              );
+              return const <Object?>[];
+            }),
+      Future.wait([
+        for (final reference in references)
+          customerJobFile(
+            accessToken,
+            reference,
+          ).then((url) => MapEntry(reference, url)),
+      ]),
+    ]);
+    return (
+      shell: shell,
+      profile: profile,
+      addresses: second[0].length,
+      orders: orders,
+      bikes: second[2],
+      jobs: jobs,
+      jobBikes: third[1] as List<Object?>,
+      productImages: third[0] as List<Object?>,
+      jobFiles: {
+        for (final entry in third[2] as List<MapEntry<String, String?>>)
+          if (entry.value != null) entry.key: entry.value!,
+      },
+    );
+  }
+
+  @override
+  Future<String?> customerJobFile(String accessToken, String reference) async {
+    final uri = Uri.tryParse(reference);
+    final needsResolution =
+        uri != null &&
+        (uri.scheme == 'https' || uri.scheme == 'http') &&
+        uri.path.startsWith(
+          '/storage/v1/object/public/vinabike-assets/mechanic_jobs/',
+        );
+    if (!needsResolution) return reference;
+    final expected =
+        '${config.supabaseUrl}/storage/v1/object/public/vinabike-assets/'
+        'mechanic_jobs/';
+    if (!reference.startsWith(expected)) return null;
+    try {
+      final raw = await _customerRpc(
+        accessToken,
+        'workshop_legacy_asset_read_v1',
+        {'p_reference': reference},
+      );
+      if (raw is! Map) return null;
+      if (raw['mode'] == 'legacy' && raw['url'] == reference) return reference;
+      const bucket = 'workshop-legacy-private';
+      final path = raw['path'];
+      if (raw['mode'] != 'private' ||
+          raw['bucket'] != bucket ||
+          path is! String ||
+          path.split('/').length != 4) {
+        return null;
+      }
+      final signed = await _customerPost(
+        accessToken,
+        '/storage/v1/object/sign/$bucket/$path',
+        {'expiresIn': 300},
+      );
+      final relative = signed is Map ? signed['signedURL'] : null;
+      if (relative is! String || relative.isEmpty) return null;
+      return '${config.supabaseUrl}/storage/v1$relative';
+    } on CustomerSessionRefused {
+      rethrow;
+    } on Object catch (error) {
+      // No server payload nor private link in the log, as Flutter.
+      stderr.writeln('portal job file unavailable: ${error.runtimeType}');
+      return null;
+    }
+  }
+
+  /// The user a session token names (`sub`). Not trusted for anything but
+  /// the filter Flutter also applies: Supabase checks the signature of every
+  /// read that carries it.
+  static String? _sessionUser(String token) {
+    final parts = token.split('.');
+    if (parts.length != 3) return null;
+    try {
+      final payload = jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+      );
+      final sub = payload is Map ? payload['sub']?.toString() : null;
+      return sub != null && _uuid.hasMatch(sub) ? sub : null;
+    } on FormatException {
+      return null;
+    }
+  }
+
+  Future<List<Object?>> _customerSelect(
+    String token,
+    String table,
+    Map<String, String> query,
+  ) async {
+    final decoded = await _retrying(
+      () => _customerSend(
+        token,
+        'GET',
+        Uri.parse(
+          '${config.supabaseUrl}/rest/v1/$table',
+        ).replace(queryParameters: query),
+        null,
+        table,
+      ),
+    );
+    return decoded is List ? decoded : const [];
+  }
+
+  Future<Object?> _customerRpc(
+    String token,
+    String function,
+    Map<String, Object?> body,
+  ) => _retrying(
+    () => _customerSend(
+      token,
+      'POST',
+      Uri.parse('${config.supabaseUrl}/rest/v1/rpc/$function'),
+      body,
+      function,
+    ),
+  );
+
+  Future<Object?> _customerPost(
+    String token,
+    String path,
+    Map<String, Object?> body,
+  ) => _retrying(
+    () => _customerSend(
+      token,
+      'POST',
+      Uri.parse('${config.supabaseUrl}$path'),
+      body,
+      'storage sign',
+    ),
+  );
+
+  Future<Object?> _customerSend(
+    String token,
+    String method,
+    Uri uri,
+    Map<String, Object?>? body,
+    String name,
+  ) async {
+    final request = await _client.openUrl(method, uri).timeout(_timeout);
+    request.headers
+      ..set('apikey', config.publishableKey)
+      ..set('authorization', 'Bearer $token');
+    if (body != null) {
+      request.headers.contentType = ContentType.json;
+      request.write(jsonEncode(body));
+    }
+    final response = await request.close().timeout(_timeout);
+    final text = await response
+        .transform(utf8.decoder)
+        .join()
+        .timeout(_timeout);
+    if (response.statusCode == 401) throw const CustomerSessionRefused();
+    if (response.statusCode >= 300) {
+      throw PublicReadException('$name → ${response.statusCode}');
+    }
+    return text.isEmpty ? null : jsonDecode(text);
   }
 
   static final _uuid = RegExp(

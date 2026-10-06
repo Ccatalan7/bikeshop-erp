@@ -129,7 +129,7 @@ void main() {
 
   test('online order mutations use the optimistic lifecycle commands', () {
     final model = File(
-      'lib/modules/website/models/website_models.dart',
+      'packages/vinabike_public_core/lib/public_store/models/online_order.dart',
     ).readAsStringSync();
     final service = readLibrarySource('lib/modules/website/services/website_service.dart');
     final orders = File(
