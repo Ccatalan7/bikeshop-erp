@@ -1122,6 +1122,48 @@ cualquier página:
 Sigue: el portal y la cuenta (`/cuenta/**`), lo último que dibuja Flutter en
 la web.
 
+## Fase 4: el portal y la cuenta — plan (2026-10-06)
+
+Lo que queda en Flutter es todo de un cliente con sesión: ~5.800 líneas de
+páginas (`lib/public_store/pages/customer_*.dart`) y ~9.500 de piezas
+(`customer_portal_layout.dart`, `customer_portal_style.dart`, filas de pedido
+y de trabajo, tarjeta de bici, chats) más `customer_portal_presentation.dart`
+(663, las reglas de estado). Nada de eso lo indexa Google; la ganancia es la
+velocidad para quien entra a ver su pedido o su bici.
+
+**Cómo se dibuja sin dos dueños.** La sesión vive en el navegador
+(`sb-<ref>-auth-token`; Hosting borra las cookies), así que el servidor no ve
+al cliente al servir la página. Pintar el portal con JavaScript duplicaría
+las reglas de `customer_portal_presentation.dart`. Se hace como el PDF del
+pedido: la página llega con su marco y el script pide al servidor las
+secciones con el token del cliente en la cabecera; el servidor lee Supabase
+**con ese token** (RLS, sin clave de servicio, sin guardarlo) y devuelve el
+HTML armado con las reglas movidas al núcleo. Sin sesión, la página manda a
+`/cuenta/login`.
+
+Lecturas a portar, todas de `CustomerAccountService`: `customers` (por
+`auth_user_id` y `tenant_id`), `customer_addresses`, `online_orders` con sus
+líneas y las fotos de `products`, `bikes` y `mechanic_jobs`. Antes de leer, el
+alta idempotente `provision_current_public_store_customer(p_tenant_id)`.
+
+Orden:
+
+- **4a, leer:** `/cuenta` (resumen), `/cuenta/pedidos`, `/cuenta/bicicletas`,
+  `/cuenta/servicios`, con sus fichas (detalle de bici y de trabajo).
+- **4b, escribir:** `/cuenta/perfil` y `/cuenta/direcciones` (formularios con
+  las mismas validaciones del núcleo; el autocompletado de direcciones es el
+  del checkout HTML).
+- **4c, entrar:** `/cuenta/login` en su modo simple (correo y contraseña,
+  registro, «¿Olvidaste tu contraseña?», Google). Los enlaces que vuelven del
+  correo (`code`, `token_hash`, `type`, invitación, recuperación) siguen
+  abriendo Flutter, que los canjea: para eso el HTML guarda el verificador
+  PKCE donde lo busca `supabase_flutter` en la web —
+  `localStorage["flutter.supabase.auth.token-code-verifier"]`, el texto
+  `"<verificador>/<evento>"` codificado en JSON por `shared_preferences`— y la
+  sesión en `sb-<ref>-auth-token`, que ya lee `window.vinabikeSession`.
+- **4d, chats:** tiempo real; al final, o se quedan en Flutter si no hay
+  ganancia que medir.
+
 ### Pendiente
 
 - Las copias de una foto reemplazada quedan en Storage (pocos KB cada una);

@@ -1552,6 +1552,16 @@ that way. So: count clones, not bytes; one per open browser is normal, several
 per browser is the leak. A restart clears any leftover, together with orphaned
 `flutter_tester` processes.
 
+**Measured again on 2026-10-06 (31 GB free):** 18 clones, 25 GB by `du`,
+all from one night of Playwright measurements that launch the installed
+Chrome (`executablePath`) — every script that threw before
+`browser.close()` (a navigation that destroyed the context, a timeout) left
+one. Wrap the browser in `try { … } finally { await browser.close(); }`, and
+before moving leftovers to the Trash keep the clone created when the running
+Chrome started (`ps -o lstart= -p <pid>` against the clone's date). Moving
+clones does not free space until the Trash is emptied, and APFS may share
+their blocks with `Google Chrome.app`.
+
 #### Headless Chrome profiles in `$TMPDIR` (2026-09-24)
 
 A load-time harness that starts headless Chrome with
