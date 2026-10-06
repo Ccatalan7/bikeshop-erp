@@ -25,6 +25,16 @@ still runs `erp-integrity-gate.yml` before publishing. See
   invariant dashboard. A critical violation fails the release record without
   attempting an automatic data repair.
 
+**A job queued without a runner blocks every later ERP web deploy
+(2026-10-06).** `firebase-hosting-merge.yml` shares one concurrency group
+(`production-erp-main`, `cancel-in-progress: false`). On 2026-10-05 the
+`build_and_deploy` job of `1a8346f0` stayed `queued` on `ubuntu-latest` with
+no runner for 18 hours (no annotations, no pending environment approval), and
+every later push waited behind it as `pending` with no jobs: the ERP web did
+not publish for a day while the store, on its own workflow, did. Check
+`gh run list --status queued` when a deploy shows `pending` without jobs, and
+cancel the stuck run; the next queued one deploys the latest commit.
+
 **Storefront correction, 2026-10-01:** when a storefront push fails its gate,
 a subsequent fix confined to tests/docs does not trigger its `paths` filter.
 Read the live version before reporting delivery; the daily rebuild is pending

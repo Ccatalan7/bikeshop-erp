@@ -188,7 +188,7 @@
     },
     {
       "path": "pubspec.yaml",
-      "sha256": "96fcad6123fd1d64cbdff0cfae3b3715d34fdba3e229657403ed2f6536e4ce0e"
+      "sha256": "68f920a8c871f2a126b81b940f97b6f6a53533d3743d3ea5cb3c55fc542343fa"
     },
     {
       "path": "scripts/releases/reviewed_release_changes.mjs",

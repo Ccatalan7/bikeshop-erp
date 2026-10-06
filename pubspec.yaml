@@ -3,7 +3,7 @@ description: A modular ERP system for bikeshop management built with Flutter
 
 publish_to: 'none'
 
-version: 1.0.7+61
+version: 1.0.8+61
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
