@@ -193,7 +193,7 @@ Widget _host(
 }
 
 Future<void> _openBackups(WidgetTester tester) async {
-  await tester.tap(find.byTooltip('Copias de seguridad'));
+  await tester.tap(find.byKey(const ValueKey('website-editor-pane-versions')));
   await tester.pump();
   await tester.pump();
 }

@@ -82,14 +82,12 @@ part 'editor_panel/catalog_section_controls.dart';
 /// Professional side panel editor for website blocks
 /// Clean, functional, and elegant interface
 class WebsiteEditorPanel extends StatefulWidget {
-  final Future<void> Function()? onSave;
   final Future<void> Function()? onRestoreComplete;
   final VoidCallback? onDiscard;
   final WebsiteBackupService? backupService;
 
   const WebsiteEditorPanel({
     super.key,
-    this.onSave,
     this.onRestoreComplete,
     this.onDiscard,
     this.backupService,
@@ -240,66 +238,41 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
       ),
       child: Row(
         children: [
-          // Undo/Redo buttons
-          Consumer<WebsiteEditModeProvider>(
-            builder: (context, editProvider, _) => _buildIconButton(
-              Icons.undo,
-              'Deshacer',
-              editProvider.canUndo ? () => editProvider.undo() : null,
+          // «Guardar», Deshacer and Rehacer live in the editor's top bar, in
+          // sight on every page (approved proposal, 2026-10-06); the pane
+          // keeps what is its own: the saved versions, and discarding.
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                key: const ValueKey('website-editor-pane-versions'),
+                onPressed: () => _showBackupsDialog(context),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.white70,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  minimumSize: const Size(0, 36),
+                ),
+                icon: const Icon(Icons.history_rounded, size: 18),
+                label: const Text(
+                  'Versiones guardadas',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 13),
+                ),
+              ),
             ),
           ),
-          Consumer<WebsiteEditModeProvider>(
-            builder: (context, editProvider, _) => _buildIconButton(
-              Icons.redo,
-              'Rehacer',
-              editProvider.canRedo ? () => editProvider.redo() : null,
-            ),
-          ),
-          // Backup button
-          _buildIconButton(Icons.backup, 'Copias de seguridad',
-              () => _showBackupsDialog(context)),
-          // Preview button
-          _buildIconButton(Icons.phone_android, 'Vista móvil', () {}),
-          const Spacer(),
-          // Discard button
+          const SizedBox(width: 8),
           TextButton(
-            onPressed: widget.onDiscard,
+            onPressed: editProvider.hasUnsavedChanges ? widget.onDiscard : null,
             style: TextButton.styleFrom(
               foregroundColor: Colors.white70,
+              disabledForegroundColor: Colors.white30,
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              minimumSize: const Size(0, 36),
             ),
             child: const Text('Descartar', style: TextStyle(fontSize: 13)),
-          ),
-          const SizedBox(width: 6),
-          // Save button
-          Builder(
-            builder: (context) {
-              final hasChanges = editProvider.hasUnsavedChanges;
-              return ElevatedButton(
-                onPressed: hasChanges
-                    ? () async {
-                        if (widget.onSave != null) {
-                          await widget.onSave!();
-                        }
-                      }
-                    : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: websiteEditorAccent(context),
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor:
-                      websiteEditorAccent(context).withValues(alpha: 0.5),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(4)),
-                ),
-                child: const Text('Guardar', style: TextStyle(fontSize: 13)),
-              );
-            },
           ),
         ],
       ),
@@ -323,25 +296,6 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
           }
         },
         onRestoreComplete: widget.onRestoreComplete,
-      ),
-    );
-  }
-
-  Widget _buildIconButton(
-      IconData icon, String tooltip, VoidCallback? onPressed) {
-    return Tooltip(
-      message: tooltip,
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(4),
-        child: Container(
-          padding: const EdgeInsets.all(8),
-          child: Icon(
-            icon,
-            color: onPressed != null ? Colors.white70 : Colors.white30,
-            size: 18,
-          ),
-        ),
       ),
     );
   }

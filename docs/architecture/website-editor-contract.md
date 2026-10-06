@@ -203,6 +203,35 @@ campaign can depend on catalog/page/navigation/theme entities managed in the
 top workspace, while the management workspace must remain the canonical owner
 of those entities.
 
+### The top bar: three places and the session's commands (2026-10-06)
+
+Second stage of the approved editor proposal. The top bar is organized as the
+proposal drew it, not as a row of entry points:
+
+- **Three places** in one `Sitio web` menu (`_editorPlacesMenu`, `O-01`
+  seven items): `Páginas` (this canvas, for every page), `Catálogo`, and the
+  site's own settings (`Marca, tema y contacto`, `Menús`, `Destinos y
+  enlaces`, `Lista de páginas`, `Centro del Sitio Web`). When the canvas
+  authorities are not mounted and the width allows it, the inline strip shows
+  `Páginas · Catálogo · Ajustes del sitio ▾ · Más ▾` with the same actions.
+  The actions sheet (`…`) groups them under `Lugares`, `Ajustes del sitio` and
+  `Más`.
+- **The page in sight:** `Página: <nombre> ▾` (`editor-dense-page-picker`) is
+  always on the bar in the page workspace and opens the page navigator; a
+  page is named, not shown as its path.
+- **The session's commands** on the right: view and write scope, `Deshacer` /
+  `Rehacer` at every dense width, `Ver como cliente` (Preview; its eye icon
+  below `denseBarScopeReasonMinWidth`) and `Guardar` (`editor-dense-save`).
+  The unsaved state is always visible: a mark on `Guardar` with its
+  announcement, and the words `Cambios sin guardar` from
+  `denseBarUnsavedLabelMinWidth`. `Guardar` and the state stay on the bar in
+  `Catálogo` and the settings while a draft is pending, so it can be saved
+  from any place. `Guardar` calls `WebsiteEditorCommandScope.onSave` like the
+  compact bar's; the inspector pane no longer has its own and keeps
+  `Versiones guardadas` and `Descartar`. The actions sheet also carries
+  `Deshacer`, `Rehacer` and `Descartar cambios`. Every width from 1050 to 1920
+  is guarded against overflow in light and dark.
+
 For a category campaign, the complete workflow is:
 
 1. Find or configure the real category under `Catálogo web > Categorías`.

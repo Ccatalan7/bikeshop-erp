@@ -307,7 +307,6 @@ class _PersistentEditorShellState extends State<PersistentEditorShell> {
                               width: paneWidth,
                               child: _PersistentEditorPanel(
                                 editProvider: editProvider,
-                                onSave: _handleSave,
                                 onRestoreComplete: _handleRestoreComplete,
                                 onDiscard: _handleDiscard,
                               ),
@@ -464,13 +463,11 @@ class _PersistentEditorShellState extends State<PersistentEditorShell> {
 /// The editor panel widget, designed to be persistent across page navigations.
 class _PersistentEditorPanel extends StatelessWidget {
   final WebsiteEditModeProvider editProvider;
-  final Future<void> Function() onSave;
   final Future<void> Function() onRestoreComplete;
   final VoidCallback onDiscard;
 
   const _PersistentEditorPanel({
     required this.editProvider,
-    required this.onSave,
     required this.onRestoreComplete,
     required this.onDiscard,
   });
@@ -478,7 +475,6 @@ class _PersistentEditorPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DeferredWebsiteEditorPanel(
-      onSave: onSave,
       onRestoreComplete: onRestoreComplete,
       onDiscard: onDiscard,
     );

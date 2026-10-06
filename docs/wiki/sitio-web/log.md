@@ -4,6 +4,9 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-06 — corrección — [editor](paginas/editor-del-sitio.md): etapa 2a,
+  la barra de arriba con los tres lugares, la página a la vista y «Guardar»
+  siempre arriba; [estado](paginas/estado-y-pendientes.md) al día.
 - 2026-10-06 — corrección — [editor](paginas/editor-del-sitio.md): etapa 1
   del rediseño aprobado, `/servicios` se edita sobre la página (secciones,
   textos en el lugar, panel de la selección, «Guardar» común) y la trampa del

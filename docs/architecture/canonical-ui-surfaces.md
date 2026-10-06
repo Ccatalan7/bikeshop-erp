@@ -1676,9 +1676,15 @@ inclusive default, while search, brand, price, stock, sort and pagination
 preserve the selected scope. Direct-scope URLs are transient
 `noindex,follow` with the clean inclusive category route as canonical.
 
-The Website Builder top bar switches workspaces. Only page composition may
-show the persistent block inspector; catalog, structure, settings, and
-operations use the full workspace while preserving the active page draft.
+The Website Builder top bar switches workspaces. Since 2026-10-06 it offers
+three places — `Páginas` (the canvas), `Catálogo` and the site's settings — in
+one `Sitio web` menu, keeps `Página: <nombre> ▾`, `Deshacer`/`Rehacer`,
+`Cambios sin guardar`, `Ver como cliente` and `Guardar` on the bar (one save
+owner, `WebsiteEditorCommandScope`), and the inspector pane keeps only
+`Versiones guardadas` and `Descartar` (`website-editor-contract.md`, «The top
+bar»). Page composition and catalog pages on the canvas show the persistent
+inspector; catalog, structure, settings, and operations use the full
+workspace while preserving the active page draft.
 Category catalog visibility and navigation placement are distinct workflows
 with asymmetric ownership: `product_categories.show_on_website` is the single
 owner of whether a category is a public destination; `website_navigation`

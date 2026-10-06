@@ -107,6 +107,14 @@ abstract final class WebsiteEditorChromeGeometry {
   /// it, every capability the collapsed `O-01` menu does not carry: `O-01`
   /// holds at most 7 items, so the menu is a shortlist of destinations, never
   /// the whole editor.
+  /// From this width the write-scope base says «Escritorio es la base» beside
+  /// its «Común» badge; below it the sentence is its tooltip and semantics.
+  static const double denseBarScopeReasonMinWidth = 1240;
+
+  /// From this width the dense bar also says «Cambios sin guardar» in words;
+  /// at every width the mark on «Guardar» and its announcement say so.
+  static const double denseBarUnsavedLabelMinWidth = 1500;
+
   static bool usesInlineBarExtras({
     required double editorWidth,
     required bool showsCanvasAuthorities,

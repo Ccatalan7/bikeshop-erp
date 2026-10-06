@@ -76,11 +76,12 @@ void main() {
     final source =
         readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
 
-    expect(source, contains("label: 'Editar página'"));
-    expect(source, contains("label: 'Catálogo web'"));
-    expect(source, contains("label: 'Estructura'"));
+    // The editor's three places (approved proposal, 2026-10-06).
+    expect(source, contains("label: 'Páginas'"));
+    expect(source, contains("label: 'Catálogo'"));
+    expect(source, contains("label: 'Ajustes del sitio'"));
     expect(source, contains("label: 'Destinos y enlaces'"));
-    expect(source, contains("label: 'Ajustes'"));
+    expect(source, contains('_editorPlacesMenu'));
     expect(source, isNot(contains("label: 'Productos (publicar en web)'")));
     expect(source, isNot(contains("label: 'Visibilidad de productos'")));
     expect(source, contains('WebsiteCatalogSection.categories'));

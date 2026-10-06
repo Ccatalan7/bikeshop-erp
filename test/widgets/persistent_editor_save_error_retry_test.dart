@@ -7,6 +7,7 @@ import 'package:vinabike_erp/modules/website/models/website_editor_capability.da
 import 'package:vinabike_erp/modules/website/models/website_page_models.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
 import 'package:vinabike_erp/modules/website/services/website_save_coordinator.dart';
+import 'package:vinabike_erp/modules/website/widgets/website_editor_command_scope.dart';
 import 'package:vinabike_erp/public_store/widgets/persistent_editor_shell.dart';
 
 const _tenantId = 'tenant-a';
@@ -82,7 +83,26 @@ void main() {
               body: PersistentEditorShell(
                 saveCoordinator: WebsiteSaveCoordinator(gateway),
                 tenantIdResolver: () async => _tenantId,
-                child: const ColoredBox(color: Colors.white),
+                // «Guardar» lives in the editor's top bar, which calls the
+                // shell's command scope; this stands in for that bar.
+                child: ColoredBox(
+                  color: Colors.white,
+                  child: Builder(
+                    builder: (context) {
+                      final commands =
+                          WebsiteEditorCommandScope.maybeOf(context);
+                      return Align(
+                        alignment: Alignment.topLeft,
+                        child: ElevatedButton(
+                          onPressed: commands == null
+                              ? null
+                              : () => commands.onSave(),
+                          child: const Text('Guardar'),
+                        ),
+                      );
+                    },
+                  ),
+                ),
               ),
             ),
           ),

@@ -278,9 +278,9 @@ void main() {
       expect(semantics.label, contains('escritorio'));
       expect(semantics.label, contains('Editando'));
       // Y la barra densa NO está comprimida dentro.
-      expect(find.text('Catálogo web'), findsNothing);
+      expect(find.text('Catálogo'), findsNothing);
       expect(find.text('Publicado'), findsNothing);
-      expect(find.text('Estructura'), findsNothing);
+      expect(find.text('Ajustes del sitio'), findsNothing);
     });
 
     testWidgets('sin desbordes de Row a 390 en claro y en oscuro',
@@ -491,12 +491,12 @@ void main() {
         'Cambiar de página',
         'Nueva página',
         'Capturar página',
-        'Editar página',
-        'Catálogo web',
         'Páginas',
-        'Navegación y menús',
+        'Catálogo',
+        'Marca, tema y contacto',
+        'Menús',
         'Destinos y enlaces',
-        'Sitio, tema y contacto',
+        'Lista de páginas',
         'SEO',
         'Integraciones',
         'Dominio y URL',
@@ -648,7 +648,7 @@ void main() {
       // Los destinos siguen a un clic de distancia.
       await tester.tap(find.byKey(const ValueKey('editor-dense-nav-menu')));
       await tester.pumpAndSettle();
-      expect(find.text('Catálogo web'), findsOneWidget);
+      expect(find.text('Catálogo'), findsOneWidget);
       expect(find.text('Páginas'), findsOneWidget);
       await tester.tapAt(const Offset(10, 10));
       await tester.pumpAndSettle();
@@ -707,7 +707,44 @@ void main() {
                 lessThanOrEqualTo(WebsiteEditorChromeGeometry.topBarHeight),
               );
             }
-            expect(find.text('Vista previa'), findsOneWidget);
+            // The customer's view in words where they fit, its eye below.
+            expect(
+              width >= WebsiteEditorChromeGeometry.denseBarScopeReasonMinWidth
+                  ? find.text('Ver como cliente')
+                  : find.byKey(const ValueKey('editor-dense-preview')),
+              findsOneWidget,
+            );
+            // The proposal's bar: the page in sight and «Guardar» always
+            // there; the history and the unsaved state in words where they
+            // fit, in the actions sheet where they do not.
+            expect(
+              find.byKey(const ValueKey('editor-dense-page-picker')),
+              findsOneWidget,
+            );
+            expect(
+              find.byKey(const ValueKey('editor-dense-save')),
+              findsOneWidget,
+            );
+            // The history at every dense width; the unsaved state always as
+            // the mark on «Guardar», in words where they fit.
+            expect(
+              find.byKey(const ValueKey('editor-dense-undo')),
+              findsOneWidget,
+            );
+            expect(
+              find.byKey(const ValueKey('editor-dense-redo')),
+              findsOneWidget,
+            );
+            expect(
+              find.byKey(const ValueKey('editor-dense-unsaved-mark')),
+              findsOneWidget,
+            );
+            expect(
+              find.byKey(const ValueKey('editor-dense-unsaved')),
+              width >= WebsiteEditorChromeGeometry.denseBarUnsavedLabelMinWidth
+                  ? findsOneWidget
+                  : findsNothing,
+            );
           },
         );
       }
@@ -744,7 +781,7 @@ void main() {
             find.byKey(const ValueKey('editor-write-scope-base')),
             findsOneWidget,
           );
-          expect(find.text('Vista previa'), findsOneWidget);
+          expect(find.text('Ver como cliente'), findsOneWidget);
 
           await tester.tap(find.byKey(const ValueKey('editor-dense-more')));
           await tester.pumpAndSettle();
@@ -818,9 +855,12 @@ void main() {
       provider.openWorkspace(WebsiteWorkspaceMode.catalog);
       await tester.pumpAndSettle();
 
-      expect(find.text('Catálogo web'), findsOneWidget);
-      expect(find.text('Estructura'), findsOneWidget);
+      expect(find.text('Catálogo'), findsOneWidget);
+      expect(find.text('Ajustes del sitio'), findsOneWidget);
       expect(find.text('Publicado'), findsOneWidget);
+      // A draft started on a page is saved from here too.
+      expect(find.byKey(const ValueKey('editor-dense-save')), findsOneWidget);
+      expect(find.text('Cambios sin guardar'), findsOneWidget);
       expect(
         find.byKey(const ValueKey('editor-dense-nav-menu')),
         findsNothing,
@@ -912,7 +952,7 @@ void main() {
       await pumpEditor(tester, width: 834, height: 640);
 
       expect(find.byKey(const ValueKey('editor-compact-more')), findsOneWidget);
-      expect(find.text('Catálogo web'), findsNothing);
+      expect(find.text('Catálogo'), findsNothing);
       expect(tester.takeException(), isNull);
     });
   });

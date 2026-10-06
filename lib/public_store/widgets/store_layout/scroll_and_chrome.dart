@@ -543,10 +543,15 @@ class _CmsModeButton extends StatefulWidget {
   const _CmsModeButton({
     required this.label,
     required this.onPressed,
+    this.outlined = false,
   });
 
   final String label;
   final VoidCallback? onPressed;
+
+  /// A secondary action beside «Guardar» («Ver como cliente»): an outline,
+  /// so the filled button stays the one primary of the bar.
+  final bool outlined;
 
   @override
   State<_CmsModeButton> createState() => _CmsModeButtonState();
@@ -566,13 +571,24 @@ class _CmsModeButtonState extends State<_CmsModeButton> {
 
   @override
   Widget build(BuildContext context) {
-    final backgroundColor = !_enabled
-        ? Colors.white.withValues(alpha: 0.16)
-        : _pressed
-            ? Colors.red.shade800
-            : _hovered
-                ? Colors.red.shade500
-                : Colors.red.shade600;
+    final Color backgroundColor;
+    if (widget.outlined) {
+      backgroundColor = !_enabled
+          ? Colors.transparent
+          : _pressed
+              ? Colors.white.withValues(alpha: 0.16)
+              : _hovered
+                  ? Colors.white.withValues(alpha: 0.08)
+                  : Colors.transparent;
+    } else {
+      backgroundColor = !_enabled
+          ? Colors.white.withValues(alpha: 0.16)
+          : _pressed
+              ? Colors.red.shade800
+              : _hovered
+                  ? Colors.red.shade500
+                  : Colors.red.shade600;
+    }
 
     return Semantics(
       button: true,
@@ -617,10 +633,14 @@ class _CmsModeButtonState extends State<_CmsModeButton> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
                 color: backgroundColor,
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(widget.outlined ? 6 : 4),
                 border: _focused
                     ? Border.all(color: Colors.white, width: 1.5)
-                    : null,
+                    : widget.outlined
+                        ? Border.all(
+                            color: Colors.white.withValues(alpha: 0.35),
+                          )
+                        : null,
               ),
               child: Text(
                 widget.label,

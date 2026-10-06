@@ -642,6 +642,49 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   double _editorPaneInset(BuildContext context) =>
       WebsiteEditorChromeScope.maybeOf(context)?.paneWidth ?? 0.0;
   static const String _actionPageEditorWorkspace = 'workspace_page_editor';
+
+  /// The editor's three places (approved proposal, 2026-10-06): the pages,
+  /// edited on this canvas; the catalog; and what belongs to the whole site.
+  /// `O-01` caps a menu at seven; the rest of «Ajustes del sitio» lives in the
+  /// actions sheet and in the inline strip when it fits.
+  static const List<_PreviewNavAction> _editorPlacesMenu = [
+    _PreviewNavAction(
+      id: _actionPageEditorWorkspace,
+      label: 'Páginas',
+      icon: Icons.web_outlined,
+    ),
+    _PreviewNavAction(
+      id: _actionEcomCatalog,
+      label: 'Catálogo',
+      icon: Icons.storefront_outlined,
+    ),
+    _PreviewNavAction.divider(),
+    _PreviewNavAction(
+      id: _actionSiteSettings,
+      label: 'Marca, tema y contacto',
+      icon: Icons.palette_outlined,
+    ),
+    _PreviewNavAction(
+      id: _actionSiteNavigation,
+      label: 'Menús',
+      icon: Icons.menu,
+    ),
+    _PreviewNavAction(
+      id: _actionSiteDestinations,
+      label: 'Destinos y enlaces',
+      icon: Icons.account_tree_outlined,
+    ),
+    _PreviewNavAction(
+      id: _actionSitePages,
+      label: 'Lista de páginas',
+      icon: Icons.description_outlined,
+    ),
+    _PreviewNavAction(
+      id: _actionSiteOpenWebsiteHub,
+      label: 'Centro del Sitio Web',
+      icon: Icons.dashboard_outlined,
+    ),
+  ];
   static const String _actionEcomCatalog = 'ecom_catalog';
   static const String _actionSitePages = 'site_pages';
   static const String _actionSiteNavigation = 'site_navigation';
@@ -2493,6 +2536,16 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     final isEditMode = editProvider.isEditMode;
     final sitePublished =
         websiteService.getSetting('site_published', 'true') == 'true';
+    // «Guardar» has one owner, the shell's command scope; this bar and the
+    // compact one only call it.
+    final commands = WebsiteEditorCommandScope.maybeOf(context);
+    final isSaving = commands?.isSaving ?? false;
+    final shellRoles = _hostTheme?.extension<VinabikeThemeRoles>()?.shell;
+    final saveAccent = shellRoles?.accent ?? websiteEditorAccent(context);
+    final onSaveAccent = shellRoles?.onAccent ?? Colors.white;
+    final unsavedTone =
+        _hostTheme?.extension<VinabikeThemeRoles>()?.warning.accent ??
+            Colors.amber.shade300;
     // The bar composes itself for the width it actually has — the same two
     // measurements rule as everywhere else in this editor, and the same owner.
     final editorWidth =
@@ -2522,59 +2575,35 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
           height: WebsiteEditorChromeGeometry.topBarHeight,
           child: Row(
             children: [
-              if (!inlineNavigation)
-                // `O-01` · every destination in one drawer. It is the same menu
-                // builder the inline strip uses for its own groups, so nothing is
-                // reachable here that is not reachable there.
+              if (!inlineNavigation) ...[
+                // `O-01` · the three places of the editor in one menu: the
+                // pages (this canvas), the catalog, and what is the whole
+                // site's. It is the same action handler the inline strip
+                // uses, so nothing is reachable here that is not there.
                 _buildPreviewNavMenu(
                   context: context,
                   editProvider: editProvider,
                   websiteService: websiteService,
                   label: 'Sitio web',
-                  isActive: false,
+                  leadingIcon: Icons.language,
+                  isActive: true,
                   menuKey: const ValueKey('editor-dense-nav-menu'),
-                  actions: const [
-                    _PreviewNavAction(
-                      id: _actionPageEditorWorkspace,
-                      label: 'Editar página',
-                      icon: Icons.edit_outlined,
-                    ),
-                    _PreviewNavAction(
-                      id: _actionEcomCatalog,
-                      label: 'Catálogo web',
-                      icon: Icons.storefront_outlined,
-                    ),
-                    _PreviewNavAction.divider(),
-                    _PreviewNavAction(
-                      id: _actionSitePages,
-                      label: 'Páginas',
-                      icon: Icons.description_outlined,
-                    ),
-                    _PreviewNavAction(
-                      id: _actionSiteNavigation,
-                      label: 'Navegación y menús',
-                      icon: Icons.menu,
-                    ),
-                    _PreviewNavAction(
-                      id: _actionSiteDestinations,
-                      label: 'Destinos y enlaces',
-                      icon: Icons.account_tree_outlined,
-                    ),
-                    _PreviewNavAction.divider(),
-                    _PreviewNavAction(
-                      id: _actionSiteSettings,
-                      label: 'Sitio, tema y contacto',
-                      icon: Icons.tune,
-                    ),
-                    _PreviewNavAction(
-                      id: _actionSiteOpenWebsiteHub,
-                      label: 'Centro del Sitio Web',
-                      icon: Icons.dashboard_outlined,
-                    ),
-                  ],
+                  actions: _editorPlacesMenu,
                 ),
+                if (editProvider.isPageEditorWorkspace) ...[
+                  const SizedBox(width: 8),
+                  // The page being edited, always in sight and one click
+                  // from any other: every page is edited on this canvas.
+                  Flexible(
+                    child: _buildCurrentPageMenu(
+                      context: context,
+                      editProvider: editProvider,
+                      websiteService: websiteService,
+                    ),
+                  ),
+                ],
+              ],
               if (inlineNavigation) ...[
-                // Logo/brand
                 Row(
                   children: [
                     Icon(Icons.language,
@@ -2591,14 +2620,14 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                   ],
                 ),
                 const SizedBox(width: 24),
-                // Task-oriented workspace navigation. Management screens replace
-                // the canvas instead of competing with the block inspector.
+                // The three places. Management screens replace the canvas
+                // instead of competing with the inspector.
                 _buildPreviewWorkspaceButton(
                   context: context,
                   editProvider: editProvider,
                   websiteService: websiteService,
-                  label: 'Editar página',
-                  icon: Icons.edit_outlined,
+                  label: 'Páginas',
+                  icon: Icons.web_outlined,
                   actionId: _actionPageEditorWorkspace,
                   isActive: editProvider.workspaceMode ==
                       WebsiteWorkspaceMode.pageEditor,
@@ -2607,7 +2636,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                   context: context,
                   editProvider: editProvider,
                   websiteService: websiteService,
-                  label: 'Catálogo web',
+                  label: 'Catálogo',
                   icon: Icons.storefront_outlined,
                   actionId: _actionEcomCatalog,
                   isActive: editProvider.workspaceMode ==
@@ -2617,18 +2646,20 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                   context: context,
                   editProvider: editProvider,
                   websiteService: websiteService,
-                  label: 'Estructura',
+                  label: 'Ajustes del sitio',
                   isActive: editProvider.workspaceMode ==
-                      WebsiteWorkspaceMode.structure,
+                          WebsiteWorkspaceMode.settings ||
+                      editProvider.workspaceMode ==
+                          WebsiteWorkspaceMode.structure,
                   actions: const [
                     _PreviewNavAction(
-                      id: _actionSitePages,
-                      label: 'Páginas',
-                      icon: Icons.description_outlined,
+                      id: _actionSiteSettings,
+                      label: 'Marca, tema y contacto',
+                      icon: Icons.palette_outlined,
                     ),
                     _PreviewNavAction(
                       id: _actionSiteNavigation,
-                      label: 'Navegación y menús',
+                      label: 'Menús',
                       icon: Icons.menu,
                     ),
                     _PreviewNavAction(
@@ -2636,30 +2667,16 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                       label: 'Destinos y enlaces',
                       icon: Icons.account_tree_outlined,
                     ),
-                  ],
-                ),
-                _buildPreviewNavMenu(
-                  context: context,
-                  editProvider: editProvider,
-                  websiteService: websiteService,
-                  label: 'Ajustes',
-                  isActive: editProvider.workspaceMode ==
-                      WebsiteWorkspaceMode.settings,
-                  actions: const [
                     _PreviewNavAction(
-                      id: _actionSiteSettings,
-                      label: 'Sitio, tema y contacto',
-                      icon: Icons.tune,
+                      id: _actionSitePages,
+                      label: 'Lista de páginas',
+                      icon: Icons.description_outlined,
                     ),
+                    _PreviewNavAction.divider(),
                     _PreviewNavAction(
                       id: _actionConfigWebsiteSettings,
                       label: 'SEO',
                       icon: Icons.manage_search_outlined,
-                    ),
-                    _PreviewNavAction(
-                      id: _actionConfigIntegrations,
-                      label: 'Integraciones',
-                      icon: Icons.extension_outlined,
                     ),
                     _PreviewNavAction(
                       id: _actionConfigDomain,
@@ -2670,6 +2687,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                       id: _actionConfigPaymentMethods,
                       label: 'Métodos de pago',
                       icon: Icons.payments_outlined,
+                    ),
+                    _PreviewNavAction(
+                      id: _actionConfigIntegrations,
+                      label: 'Integraciones',
+                      icon: Icons.extension_outlined,
                     ),
                   ],
                 ),
@@ -2709,13 +2731,6 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                     ),
                   ],
                 ),
-
-                // Current page actions (copy link, open)
-                _buildCurrentPageMenu(
-                  context: context,
-                  editProvider: editProvider,
-                  websiteService: websiteService,
-                ),
               ],
 
               const Spacer(),
@@ -2753,36 +2768,21 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                   ],
                 ),
                 const SizedBox(width: 16),
-              ] else ...[
-                // The action drawer the compact composition already owns: page
-                // navigation, store actions, publication, undo/redo, Guardar and
-                // Descartar. Nothing is removed from the product at this width —
-                // it is the same sheet, opened from the bar that has no room to
-                // spread those controls out.
-                _CompactBarIconButton(
-                  buttonKey: const ValueKey('editor-dense-more'),
-                  icon: Icons.more_horiz,
-                  label: 'Más acciones del editor',
-                  color: Colors.white70,
-                  onPressed: () => _showCompactEditorActionsSheet(
-                    context: context,
-                    editProvider: editProvider,
-                    websiteService: websiteService,
-                    storeName: storeName,
-                  ),
-                ),
-                const SizedBox(width: 8),
               ],
 
               if (editProvider.isPageEditorWorkspace) ...[
                 // `S-04 VbSegmented`, t10 frame 10a: selection visible without
-                // opening anything, three one-word labels, stable set. It replaces
-                // an unlabelled icon that only a hover tooltip explained.
+                // opening anything, three one-word labels, stable set.
                 _buildViewportSelector(context, editProvider),
                 const SizedBox(width: 8),
                 // `writeScope` is a SEPARATE authority from `previewViewport`.
                 // Desktop is the base, so it can only write Común.
-                _buildWriteScopeSelector(context, editProvider),
+                _buildWriteScopeSelector(
+                  context,
+                  editProvider,
+                  showsBaseReason: editorWidth >=
+                      WebsiteEditorChromeGeometry.denseBarScopeReasonMinWidth,
+                ),
                 const SizedBox(width: 8),
 
                 if (inlineExtras) ...[
@@ -2823,13 +2823,155 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                   const SizedBox(width: 8),
                 ],
 
-                // Main mode button (Preview -> Edit, Edit -> Preview)
+                // The session's history, where the proposal put it: beside
+                // «Guardar», at every width the dense bar has.
+                if (isEditMode) ...[
+                  _CompactBarIconButton(
+                    buttonKey: const ValueKey('editor-dense-undo'),
+                    icon: Icons.undo,
+                    label: 'Deshacer',
+                    disabledReason: 'No hay cambios que deshacer.',
+                    color: Colors.white,
+                    onPressed: editProvider.canUndo ? editProvider.undo : null,
+                  ),
+                  _CompactBarIconButton(
+                    buttonKey: const ValueKey('editor-dense-redo'),
+                    icon: Icons.redo,
+                    label: 'Rehacer',
+                    disabledReason: 'No hay cambios que rehacer.',
+                    color: Colors.white,
+                    onPressed: editProvider.canRedo ? editProvider.redo : null,
+                  ),
+                  const SizedBox(width: 8),
+                ],
+              ],
+
+              // What is still unsaved, and «Guardar», in every place of the
+              // editor: a draft started on a page can be saved from the
+              // catalog or the settings too. One owner, the command scope.
+              if (isEditMode &&
+                  commands != null &&
+                  (editProvider.isPageEditorWorkspace ||
+                      editProvider.hasUnsavedChanges)) ...[
+                if (editProvider.hasUnsavedChanges &&
+                    editorWidth >=
+                        WebsiteEditorChromeGeometry
+                            .denseBarUnsavedLabelMinWidth) ...[
+                  Text(
+                    'Cambios sin guardar',
+                    key: const ValueKey('editor-dense-unsaved'),
+                    style: TextStyle(color: unsavedTone, fontSize: 13),
+                  ),
+                  const SizedBox(width: 12),
+                ],
+                if (editProvider.isPageEditorWorkspace) ...[
+                  // Edit → the customer's view: in words where they fit, its
+                  // eye (named by tooltip and semantics) where they do not.
+                  if (editorWidth >=
+                      WebsiteEditorChromeGeometry.denseBarScopeReasonMinWidth)
+                    _CmsModeButton(
+                      label: 'Ver como cliente',
+                      outlined: true,
+                      onPressed: () => _toggleEditorMode(context, editProvider),
+                    )
+                  else
+                    _CompactBarIconButton(
+                      buttonKey: const ValueKey('editor-dense-preview'),
+                      icon: Icons.visibility_outlined,
+                      label: 'Ver como cliente',
+                      color: Colors.white,
+                      onPressed: () => _toggleEditorMode(context, editProvider),
+                    ),
+                  const SizedBox(width: 8),
+                ],
+                Semantics(
+                  // The unsaved state is said in words where they fit and by
+                  // the mark on the button everywhere; the announcement
+                  // always carries it.
+                  label: editProvider.hasUnsavedChanges
+                      ? 'Hay cambios sin guardar'
+                      : null,
+                  child: FilledButton(
+                    key: const ValueKey('editor-dense-save'),
+                    onPressed: editProvider.hasUnsavedChanges && !isSaving
+                        ? () => commands.onSave()
+                        : null,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: saveAccent,
+                      foregroundColor: onSaveAccent,
+                      disabledBackgroundColor:
+                          Colors.white.withValues(alpha: 0.12),
+                      disabledForegroundColor:
+                          Colors.white.withValues(alpha: 0.45),
+                      minimumSize: const Size(0, 36),
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      tapTargetSize: MaterialTapTargetSize.padded,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      textStyle: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    child: isSaving
+                        ? SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: onSaveAccent,
+                            ),
+                          )
+                        : Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (editProvider.hasUnsavedChanges) ...[
+                                Container(
+                                  key: const ValueKey(
+                                    'editor-dense-unsaved-mark',
+                                  ),
+                                  width: 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    color: unsavedTone,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                              ],
+                              const Text('Guardar'),
+                            ],
+                          ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+              ] else if (editProvider.isPageEditorWorkspace) ...[
+                // Preview → back to editing.
                 _CmsModeButton(
-                  label: isEditMode ? 'Vista previa' : 'Editar',
+                  label: isEditMode ? 'Ver como cliente' : 'Editar',
+                  outlined: isEditMode,
                   onPressed: () => _toggleEditorMode(context, editProvider),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 4),
               ],
+
+              if (!inlineExtras)
+                // Everything else the editor does, grouped and reachable by
+                // touch: page actions, store actions, publication, the
+                // history and Descartar. Nothing is removed at this width.
+                _CompactBarIconButton(
+                  buttonKey: const ValueKey('editor-dense-more'),
+                  icon: Icons.more_horiz,
+                  label: 'Más acciones del editor',
+                  color: Colors.white70,
+                  onPressed: () => _showCompactEditorActionsSheet(
+                    context: context,
+                    editProvider: editProvider,
+                    websiteService: websiteService,
+                    storeName: storeName,
+                  ),
+                ),
 
               // Close/exit button - go back to Website Management
               IconButton(
@@ -3330,25 +3472,30 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                 );
                               },
                             ),
-                            const _CompactSheetGroup(label: 'Trabajo'),
+                            // The editor's three places, in the same words
+                            // as the bar's «Sitio web» menu.
+                            const _CompactSheetGroup(label: 'Lugares'),
                             _CompactSheetRow(
-                              label: 'Editar página',
+                              label: 'Páginas',
                               selected: editProvider.workspaceMode ==
                                   WebsiteWorkspaceMode.pageEditor,
                               onTap: () => run(_actionPageEditorWorkspace),
                             ),
                             _CompactSheetRow(
-                              label: 'Catálogo web',
+                              label: 'Catálogo',
                               selected: editProvider.workspaceMode ==
                                   WebsiteWorkspaceMode.catalog,
                               onTap: () => run(_actionEcomCatalog),
                             ),
-                            _CompactSheetRow(
-                              label: 'Páginas',
-                              onTap: () => run(_actionSitePages),
+                            const _CompactSheetGroup(
+                              label: 'Ajustes del sitio',
                             ),
                             _CompactSheetRow(
-                              label: 'Navegación y menús',
+                              label: 'Marca, tema y contacto',
+                              onTap: () => run(_actionSiteSettings),
+                            ),
+                            _CompactSheetRow(
+                              label: 'Menús',
                               onTap: () => run(_actionSiteNavigation),
                             ),
                             _CompactSheetRow(
@@ -3356,8 +3503,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                               onTap: () => run(_actionSiteDestinations),
                             ),
                             _CompactSheetRow(
-                              label: 'Sitio, tema y contacto',
-                              onTap: () => run(_actionSiteSettings),
+                              label: 'Lista de páginas',
+                              onTap: () => run(_actionSitePages),
                             ),
                             _CompactSheetRow(
                               label: 'SEO',
@@ -3375,6 +3522,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                               label: 'Métodos de pago',
                               onTap: () => run(_actionConfigPaymentMethods),
                             ),
+                            const _CompactSheetGroup(label: 'Más'),
                             _CompactSheetRow(
                               label: 'Pedidos online',
                               onTap: () => run(_actionEcomOrders),
@@ -3421,6 +3569,26 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                             ),
                             if (commands != null) ...[
                               const _CompactSheetGroup(label: 'Cambios'),
+                              _CompactSheetRow(
+                                label: 'Deshacer',
+                                disabledReason: editProvider.canUndo
+                                    ? null
+                                    : 'No hay cambios que deshacer.',
+                                onTap: () {
+                                  Navigator.of(sheetContext).pop();
+                                  editProvider.undo();
+                                },
+                              ),
+                              _CompactSheetRow(
+                                label: 'Rehacer',
+                                disabledReason: editProvider.canRedo
+                                    ? null
+                                    : 'No hay cambios que rehacer.',
+                                onTap: () {
+                                  Navigator.of(sheetContext).pop();
+                                  editProvider.redo();
+                                },
+                              ),
                               _CompactSheetRow(
                                 label: 'Descartar cambios',
                                 destructive: true,
@@ -3518,10 +3686,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   /// of mounting an inert group — see [_buildWriteScopeBase].
   Widget _buildWriteScopeSelector(
     BuildContext context,
-    WebsiteEditModeProvider editProvider,
-  ) {
+    WebsiteEditModeProvider editProvider, {
+    bool showsBaseReason = true,
+  }) {
     if (editProvider.devicePreviewMode == DevicePreviewMode.desktop) {
-      return _buildWriteScopeBase(context);
+      return _buildWriteScopeBase(context, showsReason: showsBaseReason);
     }
     final viewportLabel =
         editProvider.devicePreviewMode == DevicePreviewMode.tablet
@@ -3571,7 +3740,10 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   /// No visual value is invented here: the badge carries the guide's anatomy,
   /// the colour is the shell's muted foreground role and the size is the one
   /// this bar already uses for its own chrome text.
-  Widget _buildWriteScopeBase(BuildContext context) {
+  Widget _buildWriteScopeBase(
+    BuildContext context, {
+    bool showsReason = true,
+  }) {
     final chromeTheme = _erpChromeTheme(context);
     if (chromeTheme == null) return const SizedBox.shrink();
     final onBarMuted =
@@ -3599,15 +3771,18 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                   dense: true,
                 ),
               ),
-              const SizedBox(width: 8),
-              ExcludeSemantics(
-                child: Text(
-                  'Escritorio es la base',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: onBarMuted, fontSize: 13),
+              // Below the width that has room for it, the sentence stays in
+              // the tooltip and the semantics: the bar keeps «Guardar».
+              if (showsReason) const SizedBox(width: 8),
+              if (showsReason)
+                ExcludeSemantics(
+                  child: Text(
+                    'Escritorio es la base',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: onBarMuted, fontSize: 13),
+                  ),
                 ),
-              ),
             ],
           ),
         ),
@@ -3731,6 +3906,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     required bool isActive,
     required List<_PreviewNavAction> actions,
     Key? menuKey,
+    IconData? leadingIcon,
   }) {
     final entries = <PopupMenuEntry<String>>[];
     for (final a in actions) {
@@ -3774,7 +3950,12 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8),
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
+            if (leadingIcon != null) ...[
+              Icon(leadingIcon, size: 18, color: Colors.white),
+              const SizedBox(width: 8),
+            ],
             Text(
               label,
               style: TextStyle(
@@ -3804,37 +3985,51 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     required WebsiteService websiteService,
   }) {
     final title = _currentPageTitle(context, editProvider);
-
-    return InkWell(
-      onTap: () => _showPageNavigator(
-        context: context,
-        editProvider: editProvider,
-        websiteService: websiteService,
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: Row(
-          children: [
-            Icon(
-              Icons.article_outlined,
-              size: 18,
-              color: Colors.white.withValues(alpha: 0.8),
-            ),
-            const SizedBox(width: 6),
-            Text(
-              title,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.8),
-                fontSize: 13,
+    return Tooltip(
+      message: 'Cambiar de página',
+      child: Material(
+        key: const ValueKey('editor-dense-page-picker'),
+        color: Colors.white.withValues(alpha: 0.06),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(color: Colors.white.withValues(alpha: 0.18)),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => _showPageNavigator(
+            context: context,
+            editProvider: editProvider,
+            websiteService: websiteService,
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 36),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  const Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    size: 18,
+                    color: Colors.white,
+                  ),
+                ],
               ),
             ),
-            const SizedBox(width: 2),
-            Icon(
-              Icons.arrow_drop_down,
-              size: 18,
-              color: Colors.white.withValues(alpha: 0.8),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -3845,7 +4040,30 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
     WebsiteEditModeProvider editProvider,
   ) {
     final slug = _getCurrentSlugFromRoute(context, editProvider);
-    if (slug.isEmpty) return 'Página: Inicio';
+    // The page by its name, as the page picker lists it; a CMS page by its
+    // title; a route without one by its path.
+    const names = <String, String>{
+      '': 'Inicio',
+      'productos': 'Productos',
+      'servicios': 'Servicios',
+      'contacto': 'Contacto',
+      'carrito': 'Carrito',
+      'checkout': 'Pago',
+      'cuenta': 'Mi cuenta',
+      'nosotros': 'Nosotros',
+      'terminos': 'Términos',
+      'privacidad': 'Privacidad',
+      'devoluciones': 'Devoluciones',
+      'envios': 'Envíos',
+    };
+    if (names[slug] case final name?) return 'Página: $name';
+    try {
+      for (final page in context.read<WebsiteService>().pages) {
+        if (page.slug == slug && page.title.trim().isNotEmpty) {
+          return 'Página: ${page.title.trim()}';
+        }
+      }
+    } catch (_) {}
     return 'Página: ${_displayPathForSlug(slug)}';
   }
 

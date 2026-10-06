@@ -8,13 +8,11 @@ import 'website_editor_panel.dart' deferred as editor;
 
 class DeferredWebsiteEditorPanel extends StatefulWidget {
   final VoidCallback? onDiscard;
-  final Future<void> Function()? onSave;
   final Future<void> Function()? onRestoreComplete;
 
   const DeferredWebsiteEditorPanel({
     super.key,
     this.onDiscard,
-    this.onSave,
     this.onRestoreComplete,
   });
 
@@ -37,13 +35,6 @@ class _DeferredWebsiteEditorPanelState
         });
       }
     });
-  }
-
-  Future<void> _handleSave() async {
-    final onSave = widget.onSave;
-    if (onSave != null) {
-      await onSave();
-    }
   }
 
   @override
@@ -75,7 +66,6 @@ class _DeferredWebsiteEditorPanelState
             }
 
             return editor.WebsiteEditorPanel(
-              onSave: widget.onSave != null ? _handleSave : null,
               onRestoreComplete: widget.onRestoreComplete,
               onDiscard: widget.onDiscard,
             );

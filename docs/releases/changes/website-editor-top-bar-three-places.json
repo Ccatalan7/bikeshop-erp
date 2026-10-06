@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-editor-top-bar-three-places",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android"
+  ],
+  "title": "Guardar siempre arriba en el editor del sitio",
+  "summary": "La barra del editor muestra la página que editas, Deshacer, Rehacer, lo que falta guardar, Ver como cliente y Guardar a la vista; el menú Sitio web lleva a Páginas, Catálogo y los ajustes del sitio.",
+  "items": [
+    "Página: Servicios abre las demás páginas desde la barra, sin buscarlo en el menú de tres puntos.",
+    "Guardar sigue arriba también en Catálogo y Ajustes mientras queda algo sin guardar.",
+    "El panel derecho deja de tener su propio Guardar; conserva Versiones guardadas y Descartar."
+  ],
+  "evidence": [
+    {
+      "path": "lib/public_store/widgets/public_store_layout.dart",
+      "sha256": "e76cfbd3780f2db754fabda18119f2eec80ff2c8ec85b3c20d1ccbf58ac53d7f"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_editor_panel.dart",
+      "sha256": "9b6ed5684a2d26b6c34f452da941134b32f67bd90536631e287689e3e4679747"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_editor_chrome_geometry.dart",
+      "sha256": "c404b941cdb63318e4f2b606e28e2649ab56afc591d157c98833abaf90897068"
+    },
+    {
+      "path": "lib/public_store/widgets/store_layout/scroll_and_chrome.dart",
+      "sha256": "3f7a8efcb98ee3744ac27d6769b2cc2f27ec3063879d94e193df7048fd8afc65"
+    },
+    {
+      "path": "lib/modules/website/widgets/deferred_website_editor_panel.dart",
+      "sha256": "f14b97733020b1ab39df0f21b81d5f443cfaccf57cc1b9c25528181a7a1294ef"
+    },
+    {
+      "path": "lib/public_store/widgets/persistent_editor_shell.dart",
+      "sha256": "3fa6360008dfc36d3c6c0bd2da6a49e21d3dd4a67429ec8b0d9f28a1bdf78317"
+    }
+  ]
+}

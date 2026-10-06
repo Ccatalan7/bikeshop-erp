@@ -86,10 +86,17 @@ el editor y **se edita encima** `[Repo]`.
   presentaciones quedaron iguales `[Prod 2026-10-06]`.
 - En una ventana angosta, el dock nombra la sección y «Editar» abre la hoja.
 
-Pendiente (etapas 2 y 3, [estado-y-pendientes](estado-y-pendientes.md)): las
-secciones a la izquierda para todas las páginas, la barra de arriba con
-«Guardar» siempre visible, los tres lugares (Páginas, Catálogo, Ajustes del
-sitio) y las plantillas de categoría y de ficha de producto.
+**La barra de arriba (etapa 2a, 2026-10-06):** «Sitio web ▾» lleva a los tres
+lugares — **Páginas** (este lienzo), **Catálogo** y los ajustes del sitio
+(marca, menús, destinos, lista de páginas) —; «Página: Servicios ▾» queda
+siempre a la vista; a la derecha, la vista, Deshacer y Rehacer, «Cambios sin
+guardar», «Ver como cliente» y **«Guardar», siempre arriba**. El panel derecho
+ya no tiene su propio Guardar: guarda «Versiones guardadas» y «Descartar». Lo
+que no cabe a un ancho queda en «…» `[Repo]`.
+
+Pendiente ([estado-y-pendientes](estado-y-pendientes.md)): las secciones a la
+izquierda para todas las páginas (etapa 2b) y las plantillas de categoría y de
+ficha de producto (etapa 3).
 
 ## Bloques
 
@@ -148,6 +155,15 @@ geometría pasa la prueba real de iOS
   escriben en el campo: el evento sube por la cadena de foco y el atajo lo
   consume antes que la entrada de texto. La superficie seleccionable sólo
   reacciona cuando el foco es suyo (`node.hasPrimaryFocus`) `[Repo 2026-10-06]`.
+- Cambiar de página en el editor **apila** la ruta nueva: la anterior sigue
+  montada debajo, con `TickerMode` apagado, y no se desecha. Lo que una página
+  le cuenta al editor (la de servicios publica sus secciones) se publica sólo
+  con `TickerMode.of(context)` encendido y se retira cuando se apaga; si no,
+  Inicio mostraba el panel de «Servicios › Portada» `[Repo 2026-10-06]`.
+- El registro de presentaciones del catálogo es **una fila** con todas las
+  categorías: leerlo y escribirlo entero deja que dos sesiones se pisen. Se
+  escribe como «comparar y reemplazar» sobre su `updated_at`, releyendo ante un
+  conflicto (`_updateCatalogPresentationRegistry`) `[Repo 2026-10-06]`.
 
 - Una página CMS duplicada para que un botón funcione (la categoría ya tiene su
   destino).
