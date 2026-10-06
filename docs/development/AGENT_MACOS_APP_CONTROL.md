@@ -675,6 +675,14 @@ geometría; no aceptes las capturas atrasadas como evidencia ni recargues el
 estado de trabajo para resolver sólo el repintado. El costo observado fueron
 dos capturas inválidas, no una regresión del formulario.
 
+**Precisión 2026-10-06: es el primer recurso cuando la ventana está tapada,
+no el último.** Con la ventana debug detrás de otras todo el día, `read` se
+quedaba sin respuesta y cada `shot` devolvía la barra de la versión anterior;
+`app_control.sh resize <ancho-1> <alto>` y de vuelta antes de cada `shot` dio
+un frame actual en todos los intentos (una decena), sin reiniciar ni perder el
+estado. Lleva la app al frente un instante. El costo de no usarlo antes: la
+prueba visual de dos etapas del editor quedó «pendiente» en dos rondas.
+
 ### Two input backends — the default does not touch the owner's cursor
 
 `click`, `scroll` and `drag` are delivered **inside the app** by default, through
