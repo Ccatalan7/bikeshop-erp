@@ -30,6 +30,14 @@ const _draftCss = '''
   font:700 12px/1 system-ui,-apple-system,sans-serif;white-space:nowrap}
 .vb-bar{max-width:calc(100% - 16px);box-sizing:border-box}
 .vb-bar b{margin-right:6px;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.vb-bar b[data-grip]{cursor:grab;user-select:none}
+.vb-bar b[data-grip]::before{content:"⠿";margin-right:6px;opacity:.6;font-weight:400}
+.vb-drop{position:fixed;z-index:2147483647;height:4px;margin-top:-2px;border-radius:2px;pointer-events:none;display:none}
+.vb-drop::before,.vb-drop::after{content:"";position:absolute;top:-4px;width:12px;height:12px;border-radius:50%;background:inherit}
+.vb-drop::before{left:-6px}.vb-drop::after{right:-6px}
+.vb-ghost{position:fixed;z-index:2147483647;pointer-events:none;padding:6px 10px;border-radius:8px;display:none;
+  box-shadow:0 4px 12px rgb(0 0 0 / .3);font:700 12px/1 system-ui,-apple-system,sans-serif;white-space:nowrap}
+.vb-moving,.vb-moving *{cursor:grabbing!important;user-select:none!important}
 .vb-bar button{flex:none}
 .vb-bar button{all:unset;display:grid;place-items:center;width:30px;height:30px;border-radius:8px;cursor:pointer}
 .vb-bar button:hover,.vb-bar button:focus-visible{background:rgb(0 0 0 / .1)}
@@ -96,6 +104,12 @@ const _draftScript = r'''
     bar.style.color = meta.onFill || '#041e49';
     var name = document.createElement('b');
     name.textContent = pick.target.getAttribute('data-block-label') || '';
+    // A block of the page moves by dragging its name.
+    if (pick.target.classList.contains('blk')) {
+      name.setAttribute('data-grip', '');
+      name.title = 'Arrastra para mover el bloque';
+      name.addEventListener('mousedown', startMoving);
+    }
     bar.appendChild(name);
     function button(action, title, icon, danger) {
       var x = document.createElement('button');
@@ -245,7 +259,15 @@ const _draftScript = r'''
     queued = true;
     requestAnimationFrame(function () { queued = false; refresh(); });
   }
+  // The click that ends a drag (a move, a height) picks nothing.
+  var dragged = 0;
   document.addEventListener('click', function (event) {
+    if (Date.now() - dragged < 500) {
+      dragged = 0;
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     // The picked carousel's arrows and dots move it, as on the store.
     var turn = event.target.closest &&
       event.target.closest('[data-car-prev],[data-car-next],[data-car-go]');
@@ -563,6 +585,7 @@ const _draftScript = r'''
     if (!sizing) return;
     var s = sizing;
     sizing = null;
+    if (s.begun) dragged = Date.now();
     document.documentElement.classList.remove('vb-sizing');
     if (!s.begun) return;
     if (s.to === Math.round(s.from)) { heightMessage(s.id, 'cancel'); restoreSize(s); return; }
@@ -580,6 +603,98 @@ const _draftScript = r'''
     sized = null;
     restoreSize(s);
   };
+  // Dragging the picked block by its name: a line marks the seam it would
+  // land on (between the page's blocks, as they show), the page scrolls near
+  // its edges, and the release asks the editor to move it there
+  // (`vbDraftMove(id, anchor, side)`), which does the canvas's own move.
+  // Escape, or a seam next to the block itself, moves nothing.
+  var moving = null;
+  function pageBlocks() {
+    return [].filter.call(document.querySelectorAll('.blk[data-block-id]'), function (el) {
+      return el.getClientRects().length > 0;
+    });
+  }
+  function startMoving(event) {
+    if (event.button !== 0 || !pick.target || edit || sizing) return;
+    event.preventDefault();
+    event.stopPropagation();
+    var line = document.createElement('div'), ghost = document.createElement('div');
+    line.className = 'vb-drop';
+    ghost.className = 'vb-ghost';
+    line.style.background = (meta && meta.accent) || '#0b57d0';
+    ghost.style.background = (meta && meta.fill) || '#d3e3fd';
+    ghost.style.color = (meta && meta.onFill) || '#041e49';
+    ghost.textContent = 'Mover «' + (pick.target.getAttribute('data-block-label') || '') + '»';
+    document.body.appendChild(line);
+    document.body.appendChild(ghost);
+    moving = { el: pick.target, id: pick.target.getAttribute('data-block-id'), line: line, ghost: ghost,
+      x: event.clientX, y: event.clientY, seam: null, speed: 0 };
+    document.documentElement.classList.add('vb-moving');
+    aim();
+    requestAnimationFrame(scrollWhileMoving);
+  }
+  // The seam under the pointer: before or after the nearest block, unless
+  // that leaves the dragged block where it is.
+  function aim() {
+    var m = moving, blocks = pageBlocks(), seam = null;
+    var index = blocks.indexOf(m.el);
+    blocks.some(function (el, i) {
+      var r = el.getBoundingClientRect();
+      if (m.y > r.bottom && i < blocks.length - 1) return false;
+      var before = m.y < r.top + r.height / 2;
+      var next = before ? i : i + 1;
+      if (el !== m.el && next !== index && next !== index + 1) {
+        seam = { anchor: el.getAttribute('data-block-id'), side: before ? 'before' : 'after',
+          y: before ? r.top : r.bottom, left: r.left, width: r.width };
+      }
+      return true;
+    });
+    m.seam = seam;
+    if (seam) {
+      m.line.style.display = 'block';
+      m.line.style.top = seam.y + 'px';
+      m.line.style.left = seam.left + 'px';
+      m.line.style.width = seam.width + 'px';
+    } else {
+      m.line.style.display = 'none';
+    }
+    m.ghost.style.display = 'block';
+    m.ghost.style.left = (m.x + 14) + 'px';
+    m.ghost.style.top = (m.y + 14) + 'px';
+    var top = cover() + 48, bottom = innerHeight - 48;
+    m.speed = m.y < top ? -Math.min(24, (top - m.y) / 2) : m.y > bottom ? Math.min(24, (m.y - bottom) / 2) : 0;
+  }
+  function scrollWhileMoving() {
+    if (!moving) return;
+    if (moving.speed) { window.scrollBy(0, moving.speed); aim(); }
+    requestAnimationFrame(scrollWhileMoving);
+  }
+  function stopMoving(drop) {
+    var m = moving;
+    if (!m) return;
+    moving = null;
+    dragged = Date.now();
+    m.line.remove();
+    m.ghost.remove();
+    document.documentElement.classList.remove('vb-moving');
+    if (drop && m.seam) {
+      send('vbDraftMove', [m.id, m.seam.anchor, m.seam.side],
+        { type: 'vb-draft-move', id: m.id, anchor: m.seam.anchor, side: m.seam.side });
+    }
+    soon();
+  }
+  document.addEventListener('mousemove', function (event) {
+    if (!moving) return;
+    event.preventDefault();
+    moving.x = event.clientX;
+    moving.y = event.clientY;
+    aim();
+  }, true);
+  document.addEventListener('mouseup', function () { stopMoving(true); }, true);
+  addEventListener('blur', function () { stopMoving(false); });
+  document.addEventListener('keydown', function (event) {
+    if (moving && event.key === 'Escape') { event.preventDefault(); stopMoving(false); }
+  }, true);
   window.vbDraftPicked = function (id, info, show) {
     pickedId = id || null;
     meta = info || null;
