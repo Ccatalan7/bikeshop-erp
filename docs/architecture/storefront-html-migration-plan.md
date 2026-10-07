@@ -2067,6 +2067,15 @@ de 15 px de alto Flutter lo esconde y el HTML lo muestra.
   que la primera carga tras el deploy aún corría el `main.dart.js` viejo del
   worker (lo retira `web/index.html` antes de arrancar).
 - **Lo que falta del 5c/5d:** medir el zoom en Windows.
+- **La vista HTML es el lienzo por defecto (2026-10-07).** Con la vista
+  igualando al lienzo en lo que la tienda usa (bloques, textos, botones,
+  fotos, capas con guías, giro y teclas, superficie de bloque), el editor
+  abre en ella en macOS y en el ERP web; Windows (zoom sin medir) y los
+  teléfonos siguen en Flutter. Cada equipo recuerda la elección del
+  operador (`WebsiteHtmlCanvasPreference`, `SharedPreferences`), y una ruta
+  sin vista HTML (carrito, pago, pedidos, cuenta) deja ver el lienzo en vez
+  de un aviso que lo tapaba. Los renderizadores Flutter siguen: los usan
+  Windows, los teléfonos, esas rutas y los casos que el HTML aún no dibuja.
 - **Un redibujo no salta (2026-10-07).** Cada cambio vuelve a cargar la
   página; la página volvía arriba y luego bajaba a donde estaba el
   operador, y un carrusel mostraba su primera diapositiva un instante antes

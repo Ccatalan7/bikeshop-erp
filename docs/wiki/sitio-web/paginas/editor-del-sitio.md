@@ -191,7 +191,12 @@ tienda no dijo. Dos bandas seguidas se tocan, sin el espacio del tema entre
 ellas. Ninguno de estos tipos estaba en uso salvo `faq` (las cuatro páginas
 de información) `[Repo 2026-10-07]` `[Prod 2026-10-07]`.
 
-**Vista HTML (desde el 2026-10-07).** El botón `<>` de la barra (desde 1540 px;
+**Vista HTML (desde el 2026-10-07).** Es el lienzo con que abre el editor en
+macOS y en el ERP web desde el 2026-10-07; en Windows (su zoom no está medido)
+y en los teléfonos sigue el lienzo Flutter. Cada equipo recuerda si el operador
+la apaga (`WebsiteHtmlCanvasPreference`), y en el carrito, el pago, los pedidos
+y la cuenta, que no tienen vista HTML, se ve el lienzo `[Repo 2026-10-07]`. El
+botón `<>` de la barra (desde 1540 px;
 siempre en «Más acciones › Vista») muestra la página que está en pantalla
 —portada, páginas, información, catálogo, servicios, una categoría, una ficha
 de producto— tal como la arma el servidor HTML **con lo que todavía no se

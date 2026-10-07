@@ -9,7 +9,7 @@
     "web"
   ],
   "title": "Vista HTML en el editor del sitio",
-  "summary": "En el editor del sitio, «Vista HTML» muestra la página en pantalla —inicio, páginas, catálogo, categorías y ficha de producto— tal como la arma la tienda en HTML, con lo que aún no guardas, y se actualiza con cada cambio.",
+  "summary": "En macOS y el ERP web el editor del sitio abre en «Vista HTML»: la página tal como la arma la tienda en HTML, con lo que aún no guardas, y se actualiza con cada cambio.",
   "items": [
     "Un clic elige el bloque o una capa, que se arrastra con guías, se gira y cambia de tamaño; los textos se escriben ahí y botones y fotos se cambian en su lugar."
   ],
@@ -20,11 +20,11 @@
     },
     {
       "path": "lib/modules/website/widgets/website_html_draft_view.dart",
-      "sha256": "90d208ee2f8e412120057026c1f59e4374b2ae6ac78b9d686498d3b12ed3a04c"
+      "sha256": "0af5eeab8182a0397ebd44fd6fab303503454c486c60a142390a6d7451fea337"
     },
     {
       "path": "lib/modules/website/providers/website_edit_mode_provider.dart",
-      "sha256": "c92b3ce784f987ffdfbaa5a79a162f5d6130c08eda2648363776a05ec0dffa3c"
+      "sha256": "8954b6d8546f8ec9203fe5e95faadf4c6ef9e1e6da3e775f51f82080cd15a4c3"
     },
     {
       "path": "lib/modules/website/widgets/website_editor_chrome_geometry.dart",
@@ -193,6 +193,14 @@
     {
       "path": "packages/vinabike_public_core/lib/modules/website/models/website_image_fields.dart",
       "sha256": "60445afcc2c732cbf40e070286ee48155f738e85c76836e7314b2e01d90fcc60"
+    },
+    {
+      "path": "lib/modules/website/services/website_html_canvas_preference.dart",
+      "sha256": "b9538f2a37e09d6a9f2084695d63bd6c94a266bdb7640e03d836eac75d69ce33"
+    },
+    {
+      "path": "lib/main.dart",
+      "sha256": "0f7fcd365de7a521e664703dc8952eb5cd9cb4e362145dc75439d3ee69e84758"
     }
   ]
 }

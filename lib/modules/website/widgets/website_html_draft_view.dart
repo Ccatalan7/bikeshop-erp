@@ -57,6 +57,8 @@ class WebsiteHtmlDraftView extends StatefulWidget {
 }
 
 class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
+  static const _unsupportedKey = ValueKey('editor-html-view-unsupported');
+
   late final WebsiteHtmlDraftClient _client =
       widget.client ?? WebsiteHtmlDraftClient();
   WebsiteEditModeProvider? _provider;
@@ -1210,6 +1212,10 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
     final mode = context.select<WebsiteEditModeProvider, DevicePreviewMode>(
       (provider) => provider.devicePreviewMode,
     );
+    // The cart, the payment, the orders and the customer's account have no
+    // HTML view: the canvas under it shows them, as if it were off (the
+    // view is on by default since 2026-10-07, so it never hides a page).
+    if (!_supported) return const SizedBox.shrink(key: _unsupportedKey);
     final zoom = _windowZoom(context);
     // Opaque to the pointer: a click on the view never reaches the Flutter
     // canvas mounted underneath, which would select its own block there.
@@ -1233,100 +1239,85 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
                     );
               return Stack(
                 children: [
-                  if (!_supported)
-                    Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Text(
-                          'El carrito, el pago, los pedidos y la cuenta del '
-                          'cliente no tienen vista HTML: se ven en el lienzo.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: scheme.onSurfaceVariant),
-                        ),
-                      ),
-                    )
-                  else
-                    Center(
-                      child: Container(
-                        width: width,
-                        height: constraints.maxHeight,
-                        // Framed like the canvas's tablet and phone previews.
-                        decoration: mode == DevicePreviewMode.desktop
-                            ? null
-                            : BoxDecoration(
-                                color: Colors.white,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(alpha: 0.1),
-                                    blurRadius: 20,
-                                    spreadRadius: 2,
-                                  ),
-                                ],
-                              ),
-                        // The native view gets no pointer moves on the desktop
-                        // (measured on macOS, 2026-10-07): the page's hover
-                        // mark follows the pointer as Flutter sees it. In a
-                        // frame (the ERP on the web) the page sees it itself.
-                        child: MouseRegion(
-                          key: _pageKey,
-                          onHover: kIsWeb
-                              ? null
-                              : (event) => _hover(
-                                    event.localPosition,
-                                    Size(width, constraints.maxHeight),
-                                  ),
-                          onExit:
-                              kIsWeb ? null : (_) => _hover(null, Size.zero),
-                          // Under the ERP's window zoom the page is laid out
-                          // at the width it is drawn at, so a click lands where
-                          // it is seen and the page takes the canvas's band.
-                          child: _ZoomedNativeView(
-                            zoom: zoom,
-                            child: InAppWebView(
-                              initialSettings: InAppWebViewSettings(
-                                javaScriptEnabled: true,
-                                isInspectable: kDebugMode,
-                                pageZoom: 1,
-                                supportZoom: false,
-                                transparentBackground: false,
-                              ),
-                              onWebViewCreated: (controller) {
-                                _web = controller;
-                                // On the web the page speaks by message
-                                // (`websiteHtmlDraftPicks`); a frame has no
-                                // handlers.
-                                for (final name in kIsWeb
-                                    ? const <String>[]
-                                    : const [
-                                        'vbDraftPick',
-                                        'vbDraftAction',
-                                        'vbDraftEdit',
-                                        'vbDraftSlide',
-                                        'vbDraftHeight',
-                                        'vbDraftMove',
-                                        'vbDraftButton',
-                                        'vbDraftLayer',
-                                        'vbDraftImage',
-                                        'vbDraftLayerDrag',
-                                      ]) {
-                                  controller.addJavaScriptHandler(
-                                    handlerName: name,
-                                    callback: _handler(name),
-                                  );
-                                }
-                                final html = _html;
-                                final origin = _server;
-                                if (html != null && origin != null) {
-                                  unawaited(_show(html, origin));
-                                }
-                              },
-                              onLoadStop: (controller, _) =>
-                                  _loaded(controller),
+                  Center(
+                    child: Container(
+                      width: width,
+                      height: constraints.maxHeight,
+                      // Framed like the canvas's tablet and phone previews.
+                      decoration: mode == DevicePreviewMode.desktop
+                          ? null
+                          : BoxDecoration(
+                              color: Colors.white,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.1),
+                                  blurRadius: 20,
+                                  spreadRadius: 2,
+                                ),
+                              ],
                             ),
+                      // The native view gets no pointer moves on the desktop
+                      // (measured on macOS, 2026-10-07): the page's hover
+                      // mark follows the pointer as Flutter sees it. In a
+                      // frame (the ERP on the web) the page sees it itself.
+                      child: MouseRegion(
+                        key: _pageKey,
+                        onHover: kIsWeb
+                            ? null
+                            : (event) => _hover(
+                                  event.localPosition,
+                                  Size(width, constraints.maxHeight),
+                                ),
+                        onExit: kIsWeb ? null : (_) => _hover(null, Size.zero),
+                        // Under the ERP's window zoom the page is laid out
+                        // at the width it is drawn at, so a click lands where
+                        // it is seen and the page takes the canvas's band.
+                        child: _ZoomedNativeView(
+                          zoom: zoom,
+                          child: InAppWebView(
+                            initialSettings: InAppWebViewSettings(
+                              javaScriptEnabled: true,
+                              isInspectable: kDebugMode,
+                              pageZoom: 1,
+                              supportZoom: false,
+                              transparentBackground: false,
+                            ),
+                            onWebViewCreated: (controller) {
+                              _web = controller;
+                              // On the web the page speaks by message
+                              // (`websiteHtmlDraftPicks`); a frame has no
+                              // handlers.
+                              for (final name in kIsWeb
+                                  ? const <String>[]
+                                  : const [
+                                      'vbDraftPick',
+                                      'vbDraftAction',
+                                      'vbDraftEdit',
+                                      'vbDraftSlide',
+                                      'vbDraftHeight',
+                                      'vbDraftMove',
+                                      'vbDraftButton',
+                                      'vbDraftLayer',
+                                      'vbDraftImage',
+                                      'vbDraftLayerDrag',
+                                    ]) {
+                                controller.addJavaScriptHandler(
+                                  handlerName: name,
+                                  callback: _handler(name),
+                                );
+                              }
+                              final html = _html;
+                              final origin = _server;
+                              if (html != null && origin != null) {
+                                unawaited(_show(html, origin));
+                              }
+                            },
+                            onLoadStop: (controller, _) => _loaded(controller),
                           ),
                         ),
                       ),
                     ),
+                  ),
                   if (_loading)
                     const Positioned(
                       top: 0,

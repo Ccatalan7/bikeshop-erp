@@ -70,6 +70,7 @@ import 'shared/services/niimbot_printer_service.dart';
 import 'modules/website/services/mercadopago_service.dart';
 import 'modules/website/services/google_business_service.dart';
 import 'modules/website/providers/website_edit_mode_provider.dart';
+import 'modules/website/services/website_html_canvas_preference.dart';
 import 'shared/services/job_role_service.dart';
 import 'public_store/providers/cart_provider.dart';
 import 'public_store/providers/public_store_tenant_provider.dart';
@@ -330,6 +331,9 @@ Future<void> main() async {
       );
     };
 
+    // The site editor's «Vista HTML» choice on this device, read while the
+    // app starts (the editor opens on the default until then).
+    unawaited(WebsiteHtmlCanvasPreference.load());
     runApp(const VinabikeApp());
     _logTiming('RUN_APP');
 

@@ -419,3 +419,5 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   dibuja girado y una capa girada cambia de tamaño en sus propios ejes.
 - El HTML pinta la superficie propia de un bloque (pestaña Estilo) como
   Flutter: antes una página con un bloque con estilo volvía entera a Flutter.
+- La vista HTML es el lienzo con que abre el editor en macOS y el ERP web;
+  cada equipo recuerda si se apaga.

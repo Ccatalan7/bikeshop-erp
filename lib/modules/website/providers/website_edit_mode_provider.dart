@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:uuid/uuid.dart';
@@ -21,6 +23,7 @@ import '../models/website_block_type.dart';
 import '../models/website_responsive_authoring.dart';
 import '../models/website_responsive_field_state.dart';
 import '../models/website_repeater_mutation.dart';
+import '../services/website_html_canvas_preference.dart';
 
 export '../models/website_repeater_mutation.dart';
 
@@ -3724,6 +3727,11 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     // fingerprint from the single capability truth, and a lease revocation
     // (logout, tenant/user/role change) also demotes programmatic sessions.
     _stampDocumentOwnerFromLease();
+    // The editor opens on this device's «Vista HTML» choice, unless the
+    // operator chose otherwise in this run.
+    if (!_htmlCanvasChosen) {
+      _showsHtmlCanvas = WebsiteHtmlCanvasPreference.initial;
+    }
     final changed = _activatePageSnapshot(
       blocks,
       settings,
@@ -3877,17 +3885,23 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _notifyAfterFrame();
   }
 
-  /// Set device preview mode (desktop, tablet, mobile)
   bool _showsHtmlCanvas = false;
 
-  /// The «Vista HTML» (phase 5c of the move to HTML): the canvas shows the
+  /// Whether the operator turned the «Vista HTML» on or off in this run; the
+  /// editor opens on this device's choice until they do
+  /// ([WebsiteHtmlCanvasPreference]).
+  bool _htmlCanvasChosen = false;
+
+  /// The «Vista HTML» (phase 5 of the move to HTML): the canvas shows the
   /// page as the store's HTML server draws it from this draft. The Flutter
   /// canvas stays mounted underneath, so turning it off loses nothing.
   bool get showsHtmlCanvas => _showsHtmlCanvas;
 
   void setShowsHtmlCanvas(bool value) {
+    _htmlCanvasChosen = true;
     if (_showsHtmlCanvas == value) return;
     _showsHtmlCanvas = value;
+    unawaited(WebsiteHtmlCanvasPreference.remember(value));
     notifyListeners();
   }
 
