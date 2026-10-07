@@ -134,7 +134,24 @@ const _draftScript = r'''
   function part(node) {
     return node && node.closest ? node.closest('[data-block-id]') : null;
   }
+  // The part drawn with [id]: a block drawn once per band (a phone copy
+  // and a wide one, `data-bands`) is marked where it shows.
+  function shown(id) {
+    var first = null, seen = null;
+    [].some.call(document.querySelectorAll('[data-block-id]'), function (el) {
+      if (el.getAttribute('data-block-id') !== id) return false;
+      first = first || el;
+      if (el.getClientRects().length) seen = el;
+      return !!seen;
+    });
+    return seen || first;
+  }
   function refresh() {
+    // The window changed band: the picked part shows in its other copy.
+    if (pickedId && !edit && pick.target && !pick.target.getClientRects().length) {
+      var other = shown(pickedId);
+      if (other !== pick.target) { pick.target = other; drawBar(); }
+    }
     place(pick);
     if (hover.target && hover.target === pick.target) hover.el.classList.remove('vb-on');
     else place(hover);
@@ -286,14 +303,7 @@ const _draftScript = r'''
   window.vbDraftPicked = function (id, info) {
     pickedId = id || null;
     meta = info || null;
-    pick.target = null;
-    if (pickedId) {
-      [].some.call(document.querySelectorAll('[data-block-id]'), function (el) {
-        if (el.getAttribute('data-block-id') !== pickedId) return false;
-        pick.target = el;
-        return true;
-      });
-    }
+    pick.target = pickedId ? shown(pickedId) : null;
     drawBar();
     refresh();
   };
