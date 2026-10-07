@@ -781,4 +781,66 @@ void main() {
       expect(fields.beginImage(WebsiteImageFields.about, 0), isNull);
     });
   });
+
+  group('a canvas layer dragged in the HTML view', () {
+    test('the page says the layer, the step and its new place or size', () {
+      final move = WebsiteHtmlDraftMessage.fromHandler('vbDraftLayerDrag', [
+        'b1',
+        2,
+        'camaras_desk_title',
+        'commit',
+        'move',
+        {'x': 96, 'y': 128.5},
+      ])! as WebsiteHtmlDraftLayerDrag;
+      expect(move.slide, 2);
+      expect(move.resize, isFalse);
+      expect(move.step, WebsiteHtmlDraftLayerDragStep.commit);
+      expect(move.values, {'x': 96.0, 'y': 128.5});
+
+      final resize = WebsiteHtmlDraftMessage.fromPost({
+        'type': 'vb-draft-layer-drag',
+        'id': 'c1',
+        'slide': -1,
+        'layer': 'l1',
+        'phase': 'begin',
+        'mode': 'resize',
+      })! as WebsiteHtmlDraftLayerDrag;
+      expect(resize.slide, isNull);
+      expect(resize.resize, isTrue);
+      expect(resize.values, isNull);
+    });
+
+    test('a commit writes only its two keys, as finite numbers in range', () {
+      for (final values in [
+        null,
+        {'x': 1},
+        {'x': 1, 'y': 2, 'w': 3},
+        {'w': 10, 'h': 10},
+        {'x': -1, 'y': 0},
+        {'x': double.infinity, 'y': 0},
+        {'x': 30000, 'y': 0},
+        {'x': '10', 'y': 0},
+      ]) {
+        expect(
+          WebsiteHtmlDraftMessage.fromHandler('vbDraftLayerDrag', [
+            'b1',
+            0,
+            'l1',
+            'commit',
+            'move',
+            values,
+          ]),
+          isNull,
+          reason: '$values',
+        );
+      }
+      expect(
+        WebsiteHtmlDraftMessage.fromHandler(
+          'vbDraftLayerDrag',
+          ['b1', 0, 'l1', 'begin', 'rotate', null],
+        ),
+        isNull,
+      );
+    });
+  });
 }

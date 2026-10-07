@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:vinabike_public_core/modules/website/models/website_catalog_presentation.dart';
 
+import '../models/website_canvas_manipulation.dart';
 import '../models/website_catalog_canvas.dart';
 import '../models/website_product_canvas.dart';
 import '../models/website_responsive_authoring.dart';
@@ -116,6 +117,7 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
   void dispose() {
     _stopWriting();
     _stopSizing();
+    _stopShifting();
     _webPicks?.cancel();
     _debounce?.cancel();
     _provider?.removeListener(_changed);
@@ -156,7 +158,17 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
         when sizing.path != path || provider.getBlock(sizing.blockId) == null) {
       _stopSizing();
     }
-    if (path == null || _writing != null || _sizing != null) return;
+    if (_shifting case final shifting?
+        when shifting.path != path ||
+            provider.canvasManipulationSession != shifting.session) {
+      _stopShifting();
+    }
+    if (path == null ||
+        _writing != null ||
+        _sizing != null ||
+        _shifting != null) {
+      return;
+    }
     final body = websiteHtmlDraftBody(
       path: path,
       pageId: document.pageId,
@@ -525,6 +537,8 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
         _pickLayer(press);
       case final WebsiteHtmlDraftImage press:
         unawaited(_photo(press));
+      case final WebsiteHtmlDraftLayerDrag drag:
+        _layerDrag(drag);
       case WebsiteHtmlDraftSlide(:final id, :final index):
         final provider = _provider;
         final count = _slideCount(provider?.getBlock(id));
@@ -613,6 +627,120 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
     } finally {
       _buttonOpen = false;
     }
+  }
+
+  /// The canvas layer being dragged in the page, while it is: the canvas's
+  /// own manipulation session, admitted when the drag began, with the
+  /// document, epoch and write scope it was admitted against.
+  ({
+    String path,
+    WebsiteCanvasManipulationSession session,
+    Map<String, dynamic> document,
+    int epoch,
+    WebsiteWriteScope scope,
+  })? _shifting;
+
+  /// Lets the layer being dragged go, as it was.
+  void _stopShifting() {
+    final shifting = _shifting;
+    _shifting = null;
+    if (shifting != null) {
+      _provider?.stopCanvasManipulation(expectedSession: shifting.session);
+    }
+  }
+
+  /// The picked canvas layer dragged in the page to a new place (or, from
+  /// its corner grip, a new size): the canvas's direct manipulation, started
+  /// when the drag begins (`startCanvasManipulation`: the layer picked,
+  /// shown, not locked, in the band the canvas is drawn in) and written once
+  /// when it ends (`commitCanvasManipulation`, refused if the document or
+  /// the write scope changed meanwhile). The page puts the layer back if
+  /// either is refused (`vbDraftLayered(false)`).
+  void _layerDrag(WebsiteHtmlDraftLayerDrag drag) {
+    final provider = _provider;
+    if (provider == null) return;
+    switch (drag.step) {
+      case WebsiteHtmlDraftLayerDragStep.begin:
+        _stopShifting();
+        final shifting = _beginShifting(provider, drag);
+        _shifting = shifting;
+        if (shifting == null) unawaited(_tell('vbDraftLayered', [false]));
+      case WebsiteHtmlDraftLayerDragStep.commit:
+        final shifting = _shifting;
+        _shifting = null;
+        final values = drag.values;
+        final written = shifting != null &&
+            values != null &&
+            shifting.session.target.layerId == drag.layer &&
+            shifting.session.target.document.blockId == drag.id &&
+            provider.commitCanvasManipulation(
+              shifting.session,
+              shifting.document,
+              shifting.epoch,
+              values,
+              scope: shifting.scope,
+            );
+        if (!written && shifting != null) {
+          provider.stopCanvasManipulation(expectedSession: shifting.session);
+        }
+        unawaited(_tell('vbDraftLayered', [written]));
+        _changed();
+      case WebsiteHtmlDraftLayerDragStep.cancel:
+        _stopShifting();
+        _changed();
+    }
+  }
+
+  ({
+    String path,
+    WebsiteCanvasManipulationSession session,
+    Map<String, dynamic> document,
+    int epoch,
+    WebsiteWriteScope scope,
+  })? _beginShifting(
+    WebsiteEditModeProvider provider,
+    WebsiteHtmlDraftLayerDrag drag,
+  ) {
+    final path = _path(provider.document.pageId, provider.document.pageSlug);
+    final target = provider.selectedCanvasLayerTarget;
+    // Only the layer picked in the panel, of the picked block.
+    if (path == null ||
+        provider.selectedBlockId != drag.id ||
+        target == null ||
+        target.layerId != drag.layer ||
+        target.document.blockId != drag.id ||
+        target.document.slideIndex != drag.slide) {
+      return null;
+    }
+    final viewport = provider.renderedCanvasViewport(target.document);
+    if (viewport == null ||
+        !provider.startCanvasManipulation(
+          drag.resize
+              ? WebsiteCanvasManipulationMode.resize
+              : WebsiteCanvasManipulationMode.move,
+          target: target,
+          viewport: viewport,
+        )) {
+      return null;
+    }
+    final session = provider.canvasManipulationSession;
+    final document = provider.canvasDocument(
+      drag.id,
+      slideIndex: drag.slide,
+    );
+    if (session == null || document == null) {
+      if (session != null) {
+        provider.stopCanvasManipulation(expectedSession: session);
+      }
+      return null;
+    }
+    return (
+      path: path,
+      session: session,
+      document: document,
+      epoch: provider.pageDocumentEpoch,
+      scope: provider.writeScope,
+    );
   }
 
   /// A click on one of the picked block's photos in the page: the image
@@ -1058,6 +1186,7 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
                                       'vbDraftButton',
                                       'vbDraftLayer',
                                       'vbDraftImage',
+                                      'vbDraftLayerDrag',
                                     ]) {
                                 controller.addJavaScriptHandler(
                                   handlerName: name,

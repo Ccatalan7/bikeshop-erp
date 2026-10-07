@@ -4225,6 +4225,10 @@ void main() {
         expect(html, contains('data-layer="cam_title"'));
         expect(html, contains('data-layer="cam_rule"'));
         expect(html, contains("send('vbDraftLayer'"));
+      // The picked layer moves and resizes in the page, written by the
+      // editor when the drag ends.
+      expect(html, contains("send('vbDraftLayerDrag'"));
+      expect(html, contains('window.vbDraftLayered = function'));
 
         final public = await _get(
           _FakeReads(

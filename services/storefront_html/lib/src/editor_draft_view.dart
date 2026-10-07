@@ -25,6 +25,8 @@ const _draftCss = '''
 .vb-button-hot{outline:1px dashed rgb(26 115 232 / .7);outline-offset:3px;cursor:pointer}
 .vb-mark.vb-layer{border:2px solid #1a73e8;border-radius:0}
 .vb-mark.vb-layer span{display:none}
+.vb-grip{position:absolute;right:-7px;bottom:-7px;width:12px;height:12px;box-sizing:border-box;border-radius:3px;
+  background:#fff;border:2px solid #1a73e8;pointer-events:auto;cursor:nwse-resize}
 .vb-editing{outline:2px solid #1a73e8;outline-offset:3px;cursor:text;text-transform:none!important;
   -webkit-user-select:text;user-select:text;caret-color:currentColor}
 .vb-editing:focus{outline:2px solid #1a73e8}
@@ -185,6 +187,10 @@ const _draftScript = r'''
   // shows.
   var layerPick = mark(true), layerSel = null;
   layerPick.el.classList.add('vb-layer');
+  var layerGrip = document.createElement('i');
+  layerGrip.className = 'vb-grip';
+  layerGrip.title = 'Arrastra para cambiar el tamaño';
+  layerPick.el.appendChild(layerGrip);
   function shownLayer() {
     if (!layerSel || !pick.target) return null;
     var slide = layerSel.slide < 0 ? 'root' : String(layerSel.slide);
@@ -694,6 +700,107 @@ const _draftScript = r'''
     sized = null;
     restoreSize(s);
   };
+  // Moving the picked canvas layer (a press inside it and a drag) or
+  // resizing it (its corner grip): the layer follows the pointer in the
+  // canvas's own units (`--x`/`--y`/`--w`/`--h`), snapped to the canvas's
+  // 8-unit grid within 6, as the canvas snaps, and kept inside the canvas;
+  // the editor writes it when the drag ends, as the canvas's direct
+  // manipulation (`vbDraftLayerDrag` begin / commit / cancel), and the page
+  // puts it back if the write is refused (`vbDraftLayered(false)`). A press
+  // that does not move is a click, which picks as always.
+  var shifting = null, shifted = null;
+  function layerMessage(m, phase, values) {
+    send('vbDraftLayerDrag', [m.id, m.slide, m.layer, phase, m.mode, values || null],
+      { type: 'vb-draft-layer-drag', id: m.id, slide: m.slide, layer: m.layer,
+        phase: phase, mode: m.mode, values: values || null });
+  }
+  function unitsOf(el) {
+    var st = el.style;
+    return {
+      x: parseFloat(st.getPropertyValue('--x')) || 0, y: parseFloat(st.getPropertyValue('--y')) || 0,
+      w: parseFloat(st.getPropertyValue('--w')) || 0, h: parseFloat(st.getPropertyValue('--h')) || 0
+    };
+  }
+  function snap(v) { var g = Math.round(v / 8) * 8; return Math.abs(g - v) <= 6 ? g : v; }
+  function restoreLayer(m) {
+    if (!m) return;
+    if (m.style === null) m.el.removeAttribute('style'); else m.el.setAttribute('style', m.style);
+    soon();
+  }
+  document.addEventListener('mousedown', function (event) {
+    if (event.button !== 0 || edit || sizing || shifting || !layerPick.target || !layerSel) return;
+    var el = layerPick.target;
+    var grip = !!(event.target.closest && event.target.closest('.vb-grip'));
+    var r = el.getBoundingClientRect();
+    var inside = event.clientX >= r.left && event.clientX <= r.right &&
+      event.clientY >= r.top && event.clientY <= r.bottom;
+    if (!grip && !inside) return;
+    var u = unitsOf(el), set = el.closest('.cnv-set');
+    if (!(u.w > 0) || !el.offsetWidth || !set) return;
+    var scale = el.offsetWidth / u.w;
+    // Text and photos would start their own selection or drag.
+    event.preventDefault();
+    if (grip) event.stopPropagation();
+    shifting = {
+      id: pick.target.getAttribute('data-block-id'), slide: layerSel.slide, layer: layerSel.id,
+      mode: grip ? 'resize' : 'move', el: el, style: el.getAttribute('style'), from: u, to: null,
+      sx: event.clientX, sy: event.clientY, s: scale,
+      dw: parseFloat(getComputedStyle(set).getPropertyValue('--dw')) || u.x + u.w,
+      dh: set.getBoundingClientRect().height / scale, begun: false
+    };
+  }, true);
+  document.addEventListener('mousemove', function (event) {
+    var m = shifting;
+    if (!m) return;
+    if (!m.begun) {
+      if (Math.abs(event.clientX - m.sx) < 4 && Math.abs(event.clientY - m.sy) < 4) return;
+      m.begun = true;
+      document.documentElement.classList.add('vb-moving');
+      layerMessage(m, 'begin');
+    }
+    event.preventDefault();
+    var f = m.from, dx = (event.clientX - m.sx) / m.s, dy = (event.clientY - m.sy) / m.s, to;
+    if (m.mode === 'move') {
+      to = {
+        x: Math.round(Math.max(0, Math.min(snap(f.x + dx), Math.max(0, m.dw - f.w)))),
+        y: Math.round(Math.max(0, Math.min(snap(f.y + dy), Math.max(0, m.dh - f.h))))
+      };
+    } else {
+      to = {
+        w: Math.round(Math.max(16, Math.min(snap(f.x + f.w + dx) - f.x, Math.max(16, m.dw - f.x)))),
+        h: Math.round(Math.max(8, Math.min(snap(f.y + f.h + dy) - f.y, Math.max(8, m.dh - f.y))))
+      };
+    }
+    m.to = to;
+    Object.keys(to).forEach(function (k) { m.el.style.setProperty('--' + k, to[k]); });
+    soon();
+  }, true);
+  function endShifting() {
+    var m = shifting;
+    if (!m) return;
+    shifting = null;
+    if (!m.begun) return;
+    dragged = Date.now();
+    document.documentElement.classList.remove('vb-moving');
+    var to = m.to || {};
+    if (Object.keys(to).every(function (k) { return to[k] === m.from[k]; })) {
+      layerMessage(m, 'cancel');
+      restoreLayer(m);
+      return;
+    }
+    shifted = m;
+    layerMessage(m, 'commit', to);
+  }
+  document.addEventListener('mouseup', endShifting, true);
+  addEventListener('blur', endShifting);
+  window.vbDraftLayered = function (ok) {
+    if (ok) { shifted = null; return; }
+    // Refused at the start (the layer cannot be moved now) or at the end.
+    var m = shifting || shifted;
+    if (shifting) { shifting = null; document.documentElement.classList.remove('vb-moving'); }
+    shifted = null;
+    restoreLayer(m);
+  };
   // Dragging the picked block by its name: a line marks the seam it would
   // land on (between the page's blocks, as they show), the page scrolls near
   // its edges, and the release asks the editor to move it there
@@ -802,7 +909,8 @@ const _draftScript = r'''
   // that holds the frame. What `vbDraftPicked` found goes back the same way.
   if (window.parent && window.parent !== window &&
       !(window.flutter_inappwebview && window.flutter_inappwebview.callHandler)) {
-    var CALLS = ['vbDraftPicked', 'vbDraftEditing', 'vbDraftEdited', 'vbDraftSized', 'vbDraftSlides'];
+    var CALLS = ['vbDraftPicked', 'vbDraftEditing', 'vbDraftEdited', 'vbDraftSized', 'vbDraftSlides',
+      'vbDraftLayered'];
     addEventListener('message', function (event) {
       var data = event.data;
       if (event.source !== window.parent || !data || data.type !== 'vb-host' ||

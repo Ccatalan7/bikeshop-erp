@@ -405,3 +405,5 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   un clic en la vista HTML; antes sólo se elegía el carrusel.
 - Las fotos de sobre nosotros, servicios, galería y equipo se cambian con
   un clic en la vista HTML (selector de imágenes del lienzo).
+- La capa elegida se mueve y cambia de tamaño arrastrando en la vista HTML,
+  por la manipulación directa del lienzo.

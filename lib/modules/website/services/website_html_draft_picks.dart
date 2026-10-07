@@ -35,6 +35,15 @@ sealed class WebsiteHtmlDraftMessage {
           'formatting': at(5),
         },
       'vbDraftSlide' => {'type': 'vb-draft-slide', 'id': at(0), 'index': at(1)},
+      'vbDraftLayerDrag' => {
+          'type': 'vb-draft-layer-drag',
+          'id': at(0),
+          'slide': at(1),
+          'layer': at(2),
+          'phase': at(3),
+          'mode': at(4),
+          'values': at(5),
+        },
       'vbDraftImage' => {
           'type': 'vb-draft-image',
           'id': at(0),
@@ -133,6 +142,61 @@ sealed class WebsiteHtmlDraftMessage {
           token,
           written,
           formatting,
+        );
+      case 'vb-draft-layer-drag':
+        final layer = text('layer');
+        final slide = switch (data['slide']) {
+          final num value when value >= -1 && value == value.roundToDouble() =>
+            value.toInt(),
+          _ => null,
+        };
+        final step = switch (data['phase']) {
+          'begin' => WebsiteHtmlDraftLayerDragStep.begin,
+          'commit' => WebsiteHtmlDraftLayerDragStep.commit,
+          'cancel' => WebsiteHtmlDraftLayerDragStep.cancel,
+          _ => null,
+        };
+        final resize = switch (data['mode']) {
+          'move' => false,
+          'resize' => true,
+          _ => null,
+        };
+        if (id == null ||
+            slide == null ||
+            step == null ||
+            resize == null ||
+            layer == null ||
+            layer.length > 120 ||
+            !RegExp(r'^[A-Za-z0-9_.:-]+$').hasMatch(layer)) {
+          return null;
+        }
+        // A commit carries the layer's new place (x, y) or size (w, h), in
+        // the canvas's units: those two keys only, each a finite number.
+        Map<String, double>? values;
+        if (step == WebsiteHtmlDraftLayerDragStep.commit) {
+          final raw = data['values'];
+          final keys = resize ? const ['w', 'h'] : const ['x', 'y'];
+          if (raw is! Map ||
+              raw.length != 2 ||
+              !keys.every((key) => raw[key] is num)) {
+            return null;
+          }
+          values = {
+            for (final key in keys) key: (raw[key] as num).toDouble(),
+          };
+          if (values.values.any(
+            (value) => !value.isFinite || value < 0 || value > 20000,
+          )) {
+            return null;
+          }
+        }
+        return WebsiteHtmlDraftLayerDrag(
+          id,
+          slide < 0 ? null : slide,
+          layer,
+          step,
+          resize: resize,
+          values: values,
         );
       case 'vb-draft-image':
         final spec = text('image');
@@ -251,6 +315,32 @@ final class WebsiteHtmlDraftAction extends WebsiteHtmlDraftMessage {
 
   final String id;
   final String action;
+}
+
+enum WebsiteHtmlDraftLayerDragStep { begin, commit, cancel }
+
+/// The operator dragging the picked canvas layer [layer] (of carousel slide
+/// [slide], or of a canvas block's own canvas when `null`): starting, done
+/// with its new place or size ([values], in the canvas's units), or leaving
+/// it as it was.
+final class WebsiteHtmlDraftLayerDrag extends WebsiteHtmlDraftMessage {
+  const WebsiteHtmlDraftLayerDrag(
+    this.id,
+    this.slide,
+    this.layer,
+    this.step, {
+    required this.resize,
+    this.values,
+  });
+
+  final String id;
+  final int? slide;
+  final String layer;
+  final WebsiteHtmlDraftLayerDragStep step;
+
+  /// A resize from its corner grip (`w`, `h`), or a move (`x`, `y`).
+  final bool resize;
+  final Map<String, double>? values;
 }
 
 /// A click on one of the picked block's photos: its address to replace

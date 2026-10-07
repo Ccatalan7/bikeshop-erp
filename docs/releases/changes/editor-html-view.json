@@ -11,7 +11,7 @@
   "title": "Vista HTML en el editor del sitio",
   "summary": "En el editor del sitio, «Vista HTML» muestra la página en pantalla —inicio, páginas, catálogo, categorías y ficha de producto— tal como la arma la tienda en HTML, con lo que aún no guardas, y se actualiza con cada cambio.",
   "items": [
-    "Un clic elige el bloque o una capa; sus textos se escriben ahí, sus botones abren texto, destino y estilo, y sus fotos se cambian en su lugar."
+    "Un clic elige el bloque o una capa, que se arrastra y cambia de tamaño; los textos se escriben ahí y botones y fotos se cambian en su lugar."
   ],
   "evidence": [
     {
@@ -20,7 +20,7 @@
     },
     {
       "path": "lib/modules/website/widgets/website_html_draft_view.dart",
-      "sha256": "14f131c20cdab98af38ff73f8454d11e4206629b05d28a54203d5ac418b4398f"
+      "sha256": "1a22c52336ad265db9bd39b5f9e12f3f26ec25671d66365ec14c971001544202"
     },
     {
       "path": "lib/modules/website/providers/website_edit_mode_provider.dart",
@@ -48,7 +48,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/editor_draft_view.dart",
-      "sha256": "f3cc6d7fbb8411935554dc518a7f3589741ccef3b74cb8e14adead53d7aad440"
+      "sha256": "522a8c223b9044fa8c3cd88a891e01632ca91d118b0a103912ced12e34e5ad2b"
     },
     {
       "path": "services/storefront_html/lib/src/editor_page_model.dart",
@@ -80,7 +80,7 @@
     },
     {
       "path": "lib/modules/website/services/website_html_draft_picks.dart",
-      "sha256": "32d9c5c7372e2b5265641924780940675f76d76e8a671872279e9117598e9d1a"
+      "sha256": "127b9e2ee0010ffc63ecc61594600ba87c12021f20e7d8d2205a651947cda6be"
     },
     {
       "path": "lib/modules/website/services/website_html_draft_picks_stub.dart",

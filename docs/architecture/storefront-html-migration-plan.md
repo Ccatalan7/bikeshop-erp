@@ -1954,7 +1954,16 @@ de 15 px de alto Flutter lo esconde y el HTML lo muestra.
   desde el panel— se marca en la página. La página nombra la diapositiva
   (`data-canvas-slide`) y la capa (`data-layer`); el editor sólo acepta una
   capa que la diapositiva o el canvas tienen (`websiteHtmlDraftLayerPlace`).
-  Mover y cambiar de tamaño una capa sigue en el lienzo.
+  La capa elegida se mueve arrastrándola y cambia de tamaño desde su
+  esquina: sigue al puntero en las unidades del canvas (`--x`/`--y`/`--w`/
+  `--h`), se ajusta a la grilla de 8 a menos de 6, como el lienzo, y queda
+  dentro del canvas; al soltar el editor la escribe por la manipulación
+  directa del lienzo (`startCanvasManipulation` al empezar, con la capa
+  elegida, visible, sin candado y en la banda dibujada;
+  `commitCanvasManipulation` al soltar, rechazada si el documento o el
+  alcance cambiaron), y la página la devuelve si se rechaza. Un clic sin
+  arrastre elige, como siempre. Las guías de alineación del lienzo no
+  están en el HTML.
 - **Arrastrar para mover (servidor `715a6f0e`).** El nombre del bloque
   elegido, en su barra, se arrastra: una línea marca el borde de destino
   entre los bloques de la página como se ven, la página se desplaza cerca
