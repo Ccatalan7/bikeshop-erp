@@ -286,6 +286,13 @@ configuración: si toca un archivo que un registro abierto cita como evidencia
 (un flujo de `.github/workflows/`, `firebase.json`), ese registro necesita su
 hash nuevo. El 2026-10-05 un cambio al filtro del flujo de la tienda salió sin
 validar y con la huella vieja; lo atrapó la validación del commit siguiente.
+Un archivo puede estar citado por **varios** registros abiertos: se buscan
+todos (`grep -l <ruta> docs/releases/changes/*.json`) y entran al mismo
+commit. Y la validación no va en una cadena `… | head && git commit`: el
+estado de una tubería es el del último comando, así que un validador que
+falla deja pasar el commit. El 2026-10-07 un arreglo del carrusel se
+commiteó así con la huella vieja en `editor-html-view.json` (también lo
+cita) y necesitó un commit aparte.
 
 La base publicada exacta es la que imprime la preparación («Notes base»):
 `resolve_previous_release_commit.sh` da la última versión de escritorio y
