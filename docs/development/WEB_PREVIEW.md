@@ -453,6 +453,15 @@ state". A real foregrounded browser tab — the user's own — does not have thi
 problem, which is why the same build looks fine to a human and broken to the
 automation.
 
+The same holds for a tab of the owner's Chrome driven through Claude in
+Chrome (2026-10-07): its tab-group tab reported `document.visibilityState ===
+'hidden'`, and the published ERP «took 38 s» to show the dashboard — no
+request between second 1 and 38, every step waiting for a frame that only
+the next screenshot forced. It cost a round of investigating a startup delay
+that does not exist. Check `document.visibilityState` before timing anything
+there, and time from network entries (`performance.getEntriesByType`), not
+from what the screenshots show.
+
 ## Trap 5 — the script's tests run on Linux in CI (2026-10-01)
 
 `test/unit/web_preview_local_profile_test.dart` fakes `flutter` and `supabase`

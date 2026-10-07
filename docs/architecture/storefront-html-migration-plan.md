@@ -1848,9 +1848,11 @@ Lo que la medición enseñó y sirve para cualquier paridad que quede:
   a los 10 s) y el ERP arrancó; elegir el carrusel dibuja barra, «Agregar
   aquí» arriba y abajo y «↕ 750 px»; un segundo clic abre la escritura con
   su barra de formato; « (prueba)» con ⌘↵ quedó en el panel y se deshizo
-  (Guardar volvió a apagarse); consola sin errores. Encender la vista tarda
-  unos 4,5 s (3,3 s hasta pedir la página mientras Flutter rearma la
-  pantalla, 1,2 s del servidor). Con una pestaña vieja simulada el editor
+  (Guardar volvió a apagarse); consola sin errores. El servidor dibuja el
+  borrador en 1,2 s; los 3,3 s previos se midieron en una pestaña oculta,
+  donde Flutter sólo avanza cuando una captura le da un cuadro (Trap 4 de
+  `docs/development/WEB_PREVIEW.md`), así que no son el tiempo de una
+  persona. Con una pestaña vieja simulada el editor
   mostró el aviso en el panel y en una línea por bloque; esa prueba mostró
   que el error real de una parte de otro build es «Success callback invoked
   but part … not loaded» (clasificado desde entonces como versión nueva), y
