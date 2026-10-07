@@ -43,6 +43,7 @@ class CatalogPageModel {
     required this.products,
     required this.total,
     required this.facets,
+    required this.selectedBrandNames,
     required this.directCounts,
     required this.queryError,
     required this.priceList,
@@ -77,10 +78,15 @@ class CatalogPageModel {
             presentation,
             (category?['name'] ?? '').toString(),
           );
-    final facets = PublicCatalogFacetSnapshot.fromRows(
-      reads.facets,
-      optionDisplayByKey: publicSpecOptionDisplayFromRows(reads.optionLabels),
-    );
+    final facetRows = reads.facets;
+    final facets = facetRows == null
+        ? const PublicCatalogFacetSnapshot.unavailable()
+        : PublicCatalogFacetSnapshot.fromRows(
+            facetRows,
+            optionDisplayByKey: publicSpecOptionDisplayFromRows(
+              reads.optionLabels,
+            ),
+          );
     final rows = rowsOf(reads.products);
     final thumbnails = PublicImageThumbnail.byUrl(reads.thumbnails);
     // Each card's brand by the store's rule (`_attachCanonicalBrandNames`).
@@ -92,6 +98,12 @@ class CatalogPageModel {
           if ((row['brand_id'] ?? '').toString().isNotEmpty)
             row['brand_id'].toString(),
       ],
+    );
+    // The URL's brands by name, for the ones the facet read no longer lists.
+    final selectedBrandNames = canonicalPublicProductBrandNames(
+      rows: rowsOf(reads.brandRows),
+      tenantId: page.tenantId,
+      requestedBrandIds: query.brandIds,
     );
     // A root laid out as a price list: every row, grouped by its own
     // category in the catalog's order, the plan category apart.
@@ -157,6 +169,7 @@ class CatalogPageModel {
           ? 0
           : (rows.first['total_count'] as num?)?.toInt() ?? rows.length,
       facets: facets,
+      selectedBrandNames: selectedBrandNames,
       directCounts: facets.directCategoryCounts,
       queryError: queryError,
     );
@@ -177,6 +190,9 @@ class CatalogPageModel {
   final List<CatalogProduct> products;
   final int total;
   final PublicCatalogFacetSnapshot facets;
+
+  /// The names of the URL's brands, by id.
+  final Map<String, String> selectedBrandNames;
 
   /// Products per category, without descendants, under the visitor's other
   /// filters: the facet read's `category` rows, which the Flutter catalog
@@ -220,6 +236,13 @@ class CatalogPageModel {
       ? rootPath
       : shell.categoryPath(categoryId!, services: services);
 
+  /// Whether the facet read answered: without it the page knows no counts,
+  /// lists every published category and shows no number beside them.
+  bool get countsKnown => facets.isAvailable;
+
+  bool _listed(String id) =>
+      shell.isPublishedCategory(id) && (!countsKnown || countOf(id) > 0);
+
   /// Products in a category and everything under it.
   int countOf(String id) => shell
       .subtreeOf(id)
@@ -235,16 +258,14 @@ class CatalogPageModel {
   /// roots of the Flutter catalog's category list.
   List<String> get rootCategories => [
     for (final id in shell.categories.keys)
-      if (shell.isPublishedCategory(id) &&
-          !shell.isPublishedCategory(shell.parentOf(id) ?? '') &&
-          countOf(id) > 0)
+      if (_listed(id) && !shell.isPublishedCategory(shell.parentOf(id) ?? ''))
         id,
   ]..sort(shell.compareCategories);
 
   /// Published children with products, in order.
   List<String> visibleChildren(String id) => [
     for (final child in shell.childrenOfCategory(id))
-      if (shell.isPublishedCategory(child) && countOf(child) > 0) child,
+      if (_listed(child)) child,
   ];
 
   /// The selected category and its ancestors: the branches the list opens.
@@ -297,14 +318,56 @@ class CatalogPageModel {
       ? [for (final child in visibleChildren(categoryId!)) linkTo(child)]
       : const [];
 
-  /// The technical filters offered here, as the Flutter catalog picks them.
-  List<PublicCatalogSpecFacet> get specFacets => offeredPublicSpecFacets(
-    facets.specFacets,
-    selected: {
-      for (final entry in query.specFilters.entries)
-        entry.key: entry.value.toSet(),
-    },
-  );
+  /// The technical filters offered here, as the Flutter catalog picks them,
+  /// each with the URL's values the read no longer lists added at 0, for
+  /// the same reason as [brandOptions].
+  late final List<PublicCatalogSpecFacet> specFacets = [
+    for (final facet in offeredPublicSpecFacets(
+      facets.specFacets,
+      selected: {
+        for (final entry in query.specFilters.entries)
+          entry.key: entry.value.toSet(),
+      },
+    ))
+      _withSelected(facet),
+  ];
+
+  PublicCatalogSpecFacet _withSelected(PublicCatalogSpecFacet facet) {
+    final listed = {for (final value in facet.values) value.value};
+    final missing = [
+      for (final value in query.specFilters[facet.key] ?? const <String>[])
+        if (listed.add(value))
+          PublicCatalogSpecFacetValue(value: value, itemCount: 0),
+    ];
+    if (missing.isEmpty) return facet;
+    return PublicCatalogSpecFacet(
+      key: facet.key,
+      label: facet.label,
+      dataType: facet.dataType,
+      unit: facet.unit,
+      values: [...facet.values, ...missing],
+      productCount: facet.productCount,
+      scopeCount: facet.scopeCount,
+      optionDisplay: facet.optionDisplay,
+    );
+  }
+
+  /// The brand filter's rows: the facet read's, and each brand of the URL
+  /// it no longer lists because the other filters leave that brand no
+  /// product. Those stay, checked and with 0, so the visitor sees why the
+  /// list is empty and can take them off, as on any serious store; one
+  /// whose name is unknown rides along unseen ([CatalogPageView]).
+  List<PublicCatalogBrandFacet> get brandOptions {
+    if (!countsKnown) return const [];
+    final listed = {for (final brand in facets.brands) brand.id};
+    return [
+      ...facets.brands,
+      for (final id in query.brandIds)
+        if (!listed.contains(id))
+          if (selectedBrandNames[id] case final name?)
+            PublicCatalogBrandFacet(id: id, label: name, itemCount: 0),
+    ];
+  }
 
   String specValueLabel(PublicCatalogSpecFacet facet, String value) =>
       publicSpecValueLabel(
@@ -343,19 +406,33 @@ class CatalogPageModel {
   /// The same results without the price range («Quitar rango de precio»).
   String get priceClearedHref => hrefWith(_copy(page: 1, clearPrice: true));
 
+  /// Whether a brand, a technical value, a price or availability narrows
+  /// the results (the search does not count: it is what was asked).
+  bool get hasFilters =>
+      query.brandIds.isNotEmpty ||
+      query.specFilters.isNotEmpty ||
+      query.minPrice != null ||
+      query.maxPrice != null ||
+      query.stock != null;
+
+  /// The same search in the same place without any filter: the way out of
+  /// an empty result, whatever filter emptied it, drawn or not.
+  String get filtersClearedHref => hrefWith(_copy(page: 1, clearFilters: true));
+
   WebsiteCatalogQuery _copy({
     int? page,
     WebsiteCatalogSort? sort,
     bool clearPrice = false,
+    bool clearFilters = false,
   }) => WebsiteCatalogQuery(
     searchQuery: query.searchQuery,
     productType: query.productType,
     categoryScope: query.categoryScope,
-    brandIds: query.brandIds,
-    specFilters: query.specFilters,
-    minPrice: clearPrice ? null : query.minPrice,
-    maxPrice: clearPrice ? null : query.maxPrice,
-    stock: query.stock,
+    brandIds: clearFilters ? const [] : query.brandIds,
+    specFilters: clearFilters ? const {} : query.specFilters,
+    minPrice: clearPrice || clearFilters ? null : query.minPrice,
+    maxPrice: clearPrice || clearFilters ? null : query.maxPrice,
+    stock: clearFilters ? null : query.stock,
     sort: sort ?? query.sort,
     page: page ?? query.page,
     pageSize: query.pageSize,

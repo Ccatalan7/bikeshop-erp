@@ -81,6 +81,7 @@ const portalPageScript = r'''
     if (!answer) return false;
     if (answer.state === 'expired' || answer.state === 'signed-out') { boundary('signedOut'); return true; }
     if (answer.state === 'not-customer') { boundary('notCustomer'); return true; }
+    if (answer.state === 'unavailable') { boundary('unavailable'); return true; }
     return false;
   }
 
@@ -90,7 +91,7 @@ const portalPageScript = r'''
     post(viewUrl, { path: path, query: query(), pending: pending() }).then(function (answer) {
       if (answer && typeof answer.html === 'string') { swap(answer.html); return; }
       if (!lost(answer)) boundary('notCustomer');
-    }, function () { boundary('notCustomer'); });
+    }, function () { boundary('unavailable'); });
   }
 
   // ---- the SnackBar -------------------------------------------------------

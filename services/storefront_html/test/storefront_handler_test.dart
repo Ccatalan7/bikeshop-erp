@@ -167,6 +167,7 @@ class _FakeReads implements PublicReads {
   _FakeReads({
     this.page,
     this.fail = false,
+    this.busy = false,
     Map<String, dynamic>? shell,
     this.products = const [],
     this.brandRows = const [],
@@ -201,11 +202,16 @@ class _FakeReads implements PublicReads {
 
   final Map<String, dynamic>? page;
   final bool fail;
+
+  /// The database had no turn in time ([DatabaseGate]).
+  final bool busy;
   final Map<String, dynamic>? shellJson;
   final List<Object?> products;
   final List<Object?> brandRows;
   final List<Object?> thumbnails;
-  final List<Object?> facets;
+
+  /// What the facet read answers; null when it failed.
+  final List<Object?>? facets;
   final Map<String, String> aliases;
   final Map<String, Map<String, dynamic>> byId;
   final List<Object?> policyRows;
@@ -243,6 +249,7 @@ class _FakeReads implements PublicReads {
   }) async {
     requested.add(files ? 'portal' : 'portal without files');
     if (fail) throw PublicReadException('down');
+    if (busy) throw PublicReadException('database busy', busy: true);
     final read = portal;
     if (read == null) throw const CustomerSessionRefused();
     return read;
@@ -260,6 +267,7 @@ class _FakeReads implements PublicReads {
   Future<Map<String, dynamic>?> customerEnter(String accessToken) async {
     requested.add('enter');
     if (fail) throw PublicReadException('down');
+    if (busy) throw PublicReadException('database busy', busy: true);
     final read = portal;
     if (read == null) throw const CustomerSessionRefused();
     return read.profile;
@@ -1007,6 +1015,144 @@ void main() {
           facets: facets,
           shell: shell,
         );
+
+    test(
+      'a failed facet read leaves the products, without counts or filters',
+      () async {
+        // Under a burst `anon`'s 3 s statement timeout cancels the facet
+        // read; the page answered 503 to PerplexityBot 22 times (2026-10-06).
+        final fake = _FakeReads(products: rows(), facets: null);
+        final response = await _get(fake, '/productos');
+        final html = await response.readAsString();
+        expect(response.statusCode, 200);
+        expect(html, contains('Mostrando 1 - 2 de 2 productos'));
+        expect(html, contains('href="/productos/horquilla-vecina/H912"'));
+        // Every published category, with no number it does not know.
+        expect(html, contains('href="/productos/categoria/componentes"'));
+        expect(html, contains('<span>Todas</span>'));
+        expect(html, contains('<span>Componentes</span>'));
+        expect(html, isNot(contains('Todas (')));
+        expect(html, isNot(contains('Interna')));
+        expect(html, isNot(contains('<h2>Marca</h2>')));
+      },
+    );
+
+    test(
+      'a failed facet read keeps the active brand and spec filters',
+      () async {
+        // Their controls are not drawn: applying the price must not widen
+        // the results by dropping them (Codex review, 2026-10-07).
+        final fake = _FakeReads(products: rows(), facets: null);
+        final response = await _get(
+          fake,
+          '/productos?brand=7fac1000-0000-4000-8000-000000000001'
+          '&spec.facet_test_valve=Presta',
+        );
+        final html = await response.readAsString();
+        expect(response.statusCode, 200);
+        final filters = html.substring(html.indexOf('data-autosubmit'));
+        expect(
+          filters,
+          contains('name="brand" value="7fac1000-0000-4000-8000-000000000001"'),
+        );
+        expect(
+          filters,
+          contains('name="spec.facet_test_valve" value="Presta"'),
+        );
+      },
+    );
+
+    test(
+      'an active filter the facet read no longer lists stays, checked, at 0',
+      () async {
+        // Other filters left the brand and the valve no product, so the read
+        // did not list them: applying another filter dropped them silently
+        // (Codex review, 2026-10-07). Now the visitor sees them and can take
+        // them off; a brand whose name is unknown rides along hidden.
+        const kenda = '7fac1000-0000-4000-8000-000000000001';
+        const unnamed = '7fac1000-0000-4000-8000-000000000002';
+        // The root shows its brands, as the editor sets it.
+        final root =
+            WebsiteCatalogPresentation.catalogRoot(
+              WebsiteCatalogRoot.products,
+            ).copyWith(
+              facets: const [
+                WebsiteCatalogFacet.categories,
+                WebsiteCatalogFacet.brand,
+              ],
+            );
+        final fake = _FakeReads(
+          shell: {
+            ..._shell(),
+            'settings': {
+              ...(_shell()['settings'] as Map<String, dynamic>),
+              websiteCatalogPresentationsSettingKey:
+                  const WebsiteCatalogPresentationRegistry(
+                    {},
+                  ).put(root).encode(),
+            },
+          },
+          products: const [],
+          facets: const [
+            {
+              'facet_key': 'brand',
+              'value_id': 'b1',
+              'value_label': 'Suntour',
+              'item_count': 2,
+            },
+            {
+              'facet_key': 'spec:facet_test_valve:single_select:',
+              'value_id': 'Schrader',
+              'value_label': 'Válvula',
+              'item_count': 3,
+              'range_min': 3,
+              'range_max': 3,
+            },
+            {'facet_key': 'summary', 'item_count': 0},
+          ],
+          brandRows: const [
+            {
+              'id': kenda,
+              'name': 'Kenda',
+              'tenant_id': null,
+              'is_active': true,
+            },
+          ],
+        );
+        final response = await _get(
+          fake,
+          '/productos?brand=$kenda,$unnamed&spec.facet_test_valve=Presta',
+        );
+        final html = await response.readAsString();
+        expect(response.statusCode, 200);
+        final start = html.indexOf('data-autosubmit');
+        final filters = html.substring(start, html.indexOf('</form>', start));
+        expect(filters, contains('<h2>Marca</h2>'));
+        expect(filters, contains('name="brand" value="$kenda" checked'));
+        expect(filters, contains('Kenda'));
+        expect(
+          filters,
+          contains('name="spec.facet_test_valve" value="Presta" checked'),
+        );
+        expect(filters, contains('name="brand" value="b1"'));
+        expect(
+          filters,
+          contains('type="hidden" name="brand" value="$unnamed"'),
+        );
+        expect(
+          filters,
+          isNot(contains('type="hidden" name="brand" value="$kenda')),
+        );
+        expect(filters, isNot(contains('type="hidden" name="spec.')));
+        // Nothing listed: one way out, whatever filter emptied it.
+        expect(
+          html,
+          contains(
+            '<a class="empty-clear" href="/productos">Quitar los filtros</a>',
+          ),
+        );
+      },
+    );
 
     test('/productos lists the catalog with its filters, indexable', () async {
       final fake = reads();
@@ -3333,6 +3479,11 @@ void main() {
         (await view(_FakeReads(fail: true), '/cuenta'))['state'],
         'not-customer',
       );
+      // The database busy says nothing about the customer (2026-10-07).
+      expect(
+        (await view(_FakeReads(busy: true), '/cuenta'))['state'],
+        'unavailable',
+      );
     });
 
     test(
@@ -4068,6 +4219,12 @@ void main() {
           'action': 'enter',
         }, auth: 'Bearer ${token()}')).$2,
         {'state': 'not-customer'},
+      );
+      expect(
+        (await login(_FakeReads(busy: true), {
+          'action': 'enter',
+        }, auth: 'Bearer ${token()}')).$2,
+        {'state': 'unavailable'},
       );
       // No session: not an action the login can send.
       expect((await login(reads, {'action': 'enter'})).$1, 400);

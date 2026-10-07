@@ -1794,3 +1794,73 @@ Codex antes del despliegue de `20261002170000`.
   encontró Codex leyendo la migración, no el pgTAP: el read-back final lo
   habría detectado sólo después de escribir.
 
+
+## Antes de guardar un resultado, quitar el trabajo que sobra (2026-10-07)
+
+Las lecturas del catálogo público pasaban el tope de 3 s de `anon` con unas
+doce visitas a la vez. El primer arreglo fue guardar lo que se recalculaba en
+cada visita (texto de búsqueda y valores técnicos de cada producto) en tablas
+mantenidas por disparadores en la misma transacción del cambio. **Se
+descartó entero** después de dos revisiones de Codex que encontraron nueve
+defectos, siete de concurrencia: candados consultivos que se suben de
+compartido a exclusivo, órdenes de candado invertidos entre la fila del
+producto, la cola y el candado consultivo, una reconciliación nocturna que
+escribía texto viejo sobre el nuevo, un cambio compartido que no ve el hecho
+aún sin confirmar de otra transacción, y `TRUNCATE`, que salta todos los
+disparadores. Costó unas tres horas. Una tabla derivada mantenida por
+disparadores es un diseño de concurrencia, no una optimización: se paga en
+cada escritura y en cada camino que escribe.
+
+Lo que sí funcionó fue **hacer que la lectura haga menos y devuelva lo
+mismo** (`20261007020000`): ligar plantillas en un solo `join` en vez de una
+vista por producto, leer el contrato de cada plantilla una vez, calcular los
+valores técnicos sólo de los productos de las categorías pedidas y no
+normalizar texto cuando no hay búsqueda. Filtros 391 → ~120 ms en la raíz y
+399 → ~65 ms en una categoría; listado ~130 → ~25 ms. Sin tablas, disparadores
+ni candados nuevos. Primero se quita el trabajo que sobra; guardar resultados
+viene después, si todavía hace falta.
+
+**Cómo se prueba que devuelve lo mismo, en producción y sin escribir:**
+
+- Se copia la definición viva (`pg_get_functiondef`) antes de tocarla y se
+  compara su `md5(prosrc)` con la de producción justo antes del despliegue.
+- El cuerpo anterior va **en línea** en la consulta: el read-back corre en
+  `begin read only` y ahí no se puede crear una función, ni temporal. Los
+  casos van en un `values` y el cuerpo, una sola vez, en un `cross join
+  lateral` o en una subconsulta escalar por caso. Se compara
+  `md5(string_agg(fila::text, '|' order by rn))` con `row_number() over ()`
+  (mismo orden) y `except all` en los dos sentidos (mismas filas, mismas
+  repeticiones).
+- Al poner en línea un cuerpo: los `p_x` se reemplazan por la columna del
+  caso, pero **no** los de una llamada con nombre (`p_x := p_x` conserva el
+  nombre a la izquierda); el caso necesita un alias que el cuerpo no use (el
+  de los filtros ya tenía su propio `k`, y `k.p_tenant_id` «no se puede
+  referenciar desde esta parte de la consulta»); `= any((select ids from …))`
+  compara con un arreglo de arreglos y falla, se escribe `in (select
+  unnest(…))`.
+- En pgTAP, el cuerpo anterior sí va como función `pg_temp` y la prueba compara
+  sobre un fixture que cubre cada camino (plantilla propia que gana a la de la
+  categoría, plantilla propia inactiva sin caer a la categoría, ligazón
+  pendiente, rol retirado, etiqueta del contrato…).
+
+**Trampas de Postgres que salieron del intento descartado** y siguen
+valiendo:
+
+- `after update of <columnas>` no ve lo que escribe un BEFORE: el disparador
+  se dispara sólo si la columna está en la lista del `UPDATE`
+  (`trg_sync_product_denormalized_fields` llena `category_name`). Se usa
+  `when (old.x is distinct from new.x …)`, que compara la fila final.
+- Una llave foránea desde una tabla nueva a una tabla del respaldo
+  (`products`, entre otras) hace que `restore_backup_uncovered_dependents`
+  rechace toda restauración.
+- Una tabla de transición sirve a un solo evento: `referencing` no se acepta
+  en un disparador `insert or update`.
+- `TRUNCATE` no dispara los disparadores de fila ni de sentencia de
+  `insert/update/delete`.
+
+**La otra mitad no era la base.** Con las lecturas ya baratas, doce páginas
+a la vez seguían dando algún 503: el servidor HTML mandaba unas ochenta
+consultas juntas a la instancia actual (pequeña, de CPU compartida: 60
+conexiones, 256 MB de `shared_buffers`) y cada una tardaba diez veces más. El servidor ahora deja pasar cuatro a la vez
+(`DatabaseGate`, `services/storefront_html/lib/src/database_gate.dart`) y las
+demás esperan su turno en el servidor, donde esperar no cuesta nada.

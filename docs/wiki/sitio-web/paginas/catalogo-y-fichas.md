@@ -63,7 +63,12 @@ la misma URL con la disponibilidad correcta `[GSC]`.
   colección (`get_public_product_facets_v2`) `[Repo]`. Desde el 2026-10-05 esa
   regla (`offeredPublicSpecFacets`) y la lectura de las filas
   (`PublicCatalogFacetSnapshot.fromRows`) viven en el núcleo y las usan Flutter
-  y la tienda HTML.
+  y la tienda HTML. Desde el 2026-10-07, en la tienda HTML, una marca o un
+  valor técnico activo que la lectura ya no trae (los otros filtros lo dejan
+  sin productos) se dibuja marcado y con 0, para que se vea por qué no hay
+  resultados y se pueda quitar; si la lectura de filtros falla, la página
+  lista sus productos sin conteos ni filtros y conserva los activos
+  `[Repo 2026-10-07]`.
 - **Qué categoría abre una URL** (`resolvePublishedCategoryRouteValue`, núcleo,
   2026-10-05): un UUID sólo si está publicada; un slug o alias guardado en
   «Catálogo web» sólo su categoría (si no está publicada o lo reclaman dos, nada
@@ -225,7 +230,11 @@ servicios llevan el logo de Viñabike como imagen.
   (compartida por tienda y editor) y las claves `product_visibility_*`.
 - Funciones: `get_public_products`, `get_public_products_faceted_v2`,
   `get_public_product_facets_v2`, `get_public_product_category_counts`,
-  `search_public_products`, `get_public_featured_products`.
+  `search_public_products`, `get_public_featured_products`. Los valores
+  técnicos de los filtros salen de
+  `spec_public_facet_values_compute_internal_v1(tienda, productos)` (interna;
+  `20261007020000`), que los filtros piden sólo para los productos de las
+  categorías elegidas.
 - Páginas: `product_catalog_page.dart`, `product_detail_page.dart`; editor:
   `product_website_visibility_page.dart`, `featured_products_page.dart`.
 - Lista de precios: reglas en el núcleo (`website_catalog_price_list.dart`:

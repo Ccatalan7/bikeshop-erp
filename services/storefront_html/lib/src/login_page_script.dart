@@ -22,6 +22,7 @@ String loginPageScript() => _script.replaceFirst(
     'signInFailed': customerAuthSignInFailed,
     'signUpFailed': customerAuthSignUpFailed,
     'googleFailed': customerAuthGoogleFailed,
+    'storeBusy': customerAuthStoreBusy,
     'sent': customerAuthVerificationSent('{email}'),
     'resent': customerAuthResent,
     'resendFailed': customerAuthResendFailed,
@@ -185,7 +186,8 @@ const _script = r'''
         method: 'POST', headers: { apikey: sbKey, authorization: 'Bearer ' + session.access_token },
         signal: abort ? abort.signal : undefined, keepalive: true
       }).catch(function () { return null; });
-      throw new Error('not a customer');
+      // The store could not answer: nothing about the account or the data.
+      throw new Error(!answer || answer.state === 'unavailable' ? 'unavailable' : 'not a customer');
     });
   }
   function signIn(v) {
@@ -241,9 +243,9 @@ const _script = r'''
       showErrors(answer.errors);
       if (Object.keys(answer.errors).length) { setBusy(false); return; }
       return sent === 'login' ? signIn(v) : signUp(v);
-    }).catch(function () {
+    }).catch(function (error) {
       setBusy(false);
-      toast(failed, true);
+      toast(error && error.message === 'unavailable' ? W.storeBusy : failed, true);
     });
   });
 

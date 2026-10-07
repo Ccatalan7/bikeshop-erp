@@ -103,6 +103,23 @@ Por eso la recomendación es **renderizar en Dart en el servidor**:
 - **Prueba obligatoria por fase:** cambiar un dato en el ERP y ver el HTML
   público actualizado en ≤5 s (con un producto de prueba no publicado, nunca
   con uno real).
+- **Una ráfaga no tumba la página (2026-10-07).** Con ~12 visitas a la vez
+  la base cortaba las lecturas del catálogo al pasar los 3 s de `anon` y la
+  página entera respondía 503. Tres arreglos, ninguno con caché, así que
+  sigue valiendo «≤5 s»:
+  - **Las lecturas hacen menos y devuelven lo mismo**
+    (`20261007020000`): los valores técnicos se calculan sólo para las
+    categorías pedidas y el listado no normaliza texto si no hay búsqueda.
+    Filtros de una categoría 399 → ~65 ms, listado ~130 → ~25 ms. Un índice
+    mantenido por disparadores se intentó y se descartó: traía nueve defectos
+    de concurrencia (`docs/development/AGENT_DATABASE_CONTRACT.md`).
+  - **El servidor deja pasar cuatro consultas a la vez** por instancia
+    (`DatabaseGate`); las demás esperan su turno en el servidor, hasta 10 s,
+    y comparte las lecturas idénticas que ya van en camino.
+  - **Los filtros son opcionales:** si su lectura falla, la página lista sus
+    productos sin conteos ni filtros y conserva los filtros activos. Un
+    filtro activo que la lectura ya no trae (los otros filtros lo dejan en
+    cero) se dibuja marcado, con 0, para que se vea y se pueda quitar.
 
 ### El editor
 

@@ -131,11 +131,24 @@ class _Filters extends StatelessComponent {
     // The editor's facet order; technical specs follow the brand facet, or
     // close the rail when the presentation shows no brands.
     final sections = <Component>[];
+    // The URL parameters a control below sends. Any other active filter rides
+    // along hidden: a control that is not drawn (every brand and spec when
+    // the facet read failed, or a brand whose name is unknown) must not drop
+    // it.
+    final controlled = <String>{};
+    // The brands that are checkboxes below; a brand of the URL whose name
+    // is unknown is not one, and rides along hidden on its own.
+    final drawnBrands = <String>{};
     var specsAdded = false;
     void addSpecs() {
       if (specsAdded) return;
       specsAdded = true;
-      sections.addAll(page.specFacets.map(_specFacet));
+      for (final facet in page.specFacets) {
+        controlled.add(
+          '${WebsiteCatalogQuery.specParameterPrefix}${facet.key}',
+        );
+        sections.add(_specFacet(facet));
+      }
     }
 
     for (final facet in page.presentation.facets) {
@@ -146,11 +159,20 @@ class _Filters extends StatelessComponent {
             sections.add(_categoryLinks(decision.heading, decision.options));
           }
         case WebsiteCatalogFacet.availability:
-          if (page.availabilityFacetVisible) sections.add(_availability());
+          if (page.availabilityFacetVisible) {
+            controlled.add('stock');
+            sections.add(_availability());
+          }
         case WebsiteCatalogFacet.brand:
-          if (page.facets.brands.isNotEmpty) sections.add(_brands());
+          final brands = page.brandOptions;
+          if (brands.isNotEmpty) {
+            controlled.add('brand');
+            drawnBrands.addAll([for (final brand in brands) brand.id]);
+            sections.add(_brands(brands));
+          }
           addSpecs();
         case WebsiteCatalogFacet.price:
+          controlled.addAll(const {'min_price', 'max_price'});
           sections.add(_price());
       }
     }
@@ -202,16 +224,17 @@ class _Filters extends StatelessComponent {
               method: FormMethod.get,
               attributes: {'data-autosubmit': ''},
               [
-                ..._keep(
-                  q,
-                  except: const {
-                    'brand',
-                    'stock',
-                    'min_price',
-                    'max_price',
-                    'spec',
-                  },
-                ),
+                ..._keep(q, except: controlled),
+                for (final id in q.brandIds)
+                  if (controlled.contains('brand') && !drawnBrands.contains(id))
+                    Component.element(
+                      tag: 'input',
+                      attributes: {
+                        'type': 'hidden',
+                        'name': 'brand',
+                        'value': id,
+                      },
+                    ),
                 ...sections,
                 button(
                   classes: 'apply',
@@ -252,7 +275,7 @@ class _Filters extends StatelessComponent {
           ),
         _categoryRow(
           href: link.path,
-          text: '${link.label} (${link.count})',
+          text: page.countsKnown ? '${link.label} (${link.count})' : link.label,
           current: page.categoryId == id,
           depth: depth,
           toggle: children.isEmpty ? null : toggle,
@@ -268,7 +291,7 @@ class _Filters extends StatelessComponent {
         li(classes: 'all', [
           _categoryRow(
             href: page.rootPath,
-            text: 'Todas (${page.allCount})',
+            text: page.countsKnown ? 'Todas (${page.allCount})' : 'Todas',
             current: page.categoryId == null,
             depth: 0,
           ),
@@ -325,7 +348,10 @@ class _Filters extends StatelessComponent {
                 },
                 [
                   span([.text(link.label)]),
-                  span(classes: 'n', [.text('${link.count}')]),
+                  if (page.countsKnown)
+                    span(classes: 'n', [.text('${link.count}')])
+                  else
+                    span(classes: 'n', []),
                   if (page.visibleChildren(link.id).isNotEmpty)
                     RawText(materialIcon(mdChevronRight, size: 16))
                   else
@@ -360,9 +386,9 @@ class _Filters extends StatelessComponent {
 
   /// Selected brands first, then by name; eight, and the rest behind «Ver N
   /// marcas más».
-  Component _brands() {
+  Component _brands(List<PublicCatalogBrandFacet> options) {
     final selected = page.query.brandIds.toSet();
-    final brands = [...page.facets.brands]
+    final brands = [...options]
       ..sort((left, right) {
         final leftSelected = selected.contains(left.id);
         if (leftSelected != selected.contains(right.id)) {
@@ -549,8 +575,8 @@ Component _sheetScrim(String target) => Component.element(
 );
 
 /// Hidden inputs that carry the rest of the URL's query through a form,
-/// leaving out the page (a new filter starts again on page 1) and [except].
-/// `spec` in [except] drops every `spec.<key>`.
+/// leaving out the page (a new filter starts again on page 1) and [except]
+/// (parameter names, a `spec.<key>` one by one; `spec` drops them all).
 List<Component> _keep(
   WebsiteCatalogQuery query, {
   required Set<String> except,
@@ -695,6 +721,10 @@ class _Results extends StatelessComponent {
               .text('No se encontraron ${page.noun}'),
             ]),
             p([.text('Intenta ajustar los filtros de búsqueda')]),
+            if (page.hasFilters)
+              a(classes: 'empty-clear', href: page.filtersClearedHref, [
+                .text('Quitar los filtros'),
+              ]),
           ])
         else
           div(classes: 'cards-box', [

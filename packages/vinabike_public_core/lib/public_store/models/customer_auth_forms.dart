@@ -154,6 +154,12 @@ const customerAuthSignUpFailed =
 const customerAuthGoogleFailed =
     'No pudimos iniciar sesión con Google. Inténtalo nuevamente.';
 
+/// When the store could not answer in time (too many visits at once, or no
+/// connection to the database): nothing is wrong with the account or the
+/// data typed.
+const customerAuthStoreBusy =
+    'La tienda no respondió a tiempo. Inténtalo de nuevo en unos segundos.';
+
 /// The bar after an account is created and its e-mail must be confirmed.
 String customerAuthVerificationSent(String email) =>
     'Te enviamos un correo a $email para confirmar tu cuenta.';

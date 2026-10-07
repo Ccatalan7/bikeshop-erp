@@ -123,10 +123,23 @@ con datos reales anonimizados `[Prod 2026-10-06]` `[Repo 2026-10-06]`.
   portada HTML bajó de 4,8 a 3,7 s en el teléfono lento, con el mismo texto
   al píxel `[Repo 2026-10-05]`. El TTF completo queda detrás para cualquier
   otro carácter, y como segunda fuente si falta el WOFF2.
-- El catálogo lee ~450–700 ms: `get_public_product_facets_v2` ~410 ms en la
+- El catálogo leía ~450–700 ms: `get_public_product_facets_v2` ~410 ms en la
   base, de eso ~270 ms en `spec_public_facet_values_internal_v1` (valores
   técnicos de todo el catálogo, en cada visita) y ~190 ms en el universo de
-  `get_public_products`. Lo paga igual la tienda Flutter `[Prod 2026-10-05]`.
+  `get_public_products` `[Prod 2026-10-05]`. Desde `20261007020000` los
+  filtros calculan los valores técnicos sólo de las categorías pedidas y el
+  listado no normaliza texto sin búsqueda. Medido en la base, sin cambiar
+  ninguna respuesta (13 listados y 7 filtros comparados fila a fila con la
+  versión anterior): filtros de `/productos` 391 → ~120 ms, de una categoría
+  399 → ~65 ms, listado de una página ~130 → ~20–50 ms; una página de
+  categoría completa son ~100–150 ms de base `[Prod 2026-10-07]`.
+- **Muchas visitas a la vez** (2026-10-07): doce páginas de categoría
+  simultáneas daban 503 en 8 de 12 (antes de `20261007020000`) y todavía en 5
+  de 12 en una de tres ráfagas después: el servidor mandaba unas ochenta
+  consultas juntas a la base, cada una tardaba ~10 veces más y las que
+  pasaban los 3 s de `anon` se cortaban. El servidor ahora deja pasar cuatro
+  a la vez por instancia (`DatabaseGate`) y las demás esperan su turno en el
+  servidor `[Prod 2026-10-07]`.
 
 ## Borde y datos
 

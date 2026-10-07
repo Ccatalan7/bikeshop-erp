@@ -39,6 +39,7 @@ export 'src/portal_page_view.dart'
         portalViewPath;
 export 'src/product_page_model.dart';
 export 'src/product_page_view.dart' show productPageDocument;
+export 'src/database_gate.dart';
 export 'src/public_reads.dart';
 export 'src/site_layout.dart' show PageContext, PageMeta, accountSessionKey;
 export 'src/storefront_config.dart';

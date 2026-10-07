@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "storefront-html-catalog-under-load",
+  "scope": "internal",
+  "platforms": [
+    "web"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "services/storefront_html/lib/src/database_gate.dart",
+      "sha256": "db246a844c433c1a621635d3f162563429788a90600b3618df4e156facea4d98"
+    },
+    {
+      "path": "services/storefront_html/lib/src/public_reads.dart",
+      "sha256": "956e702bf3e298eac60c5b28d4f9a367df5c4ba9dd6e459aaeeffc90c3d632f7"
+    },
+    {
+      "path": "services/storefront_html/lib/src/catalog_page_model.dart",
+      "sha256": "ea82c2ea618888c680a0d3ac3768f3222e66c18652afc73cc75ca61d23b9ac35"
+    },
+    {
+      "path": "services/storefront_html/lib/src/catalog_page_view.dart",
+      "sha256": "0e0af2e54044a69165de8a25f7dd798426283d5bdd7a5ea859883931abf2dd1a"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_css.dart",
+      "sha256": "a3733e52430e9d6f2cd45f14dd205c19c1f0f06c06f8d851c8e7cc2e550ba057"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_page_route.dart",
+      "sha256": "7698cc8d1c0c39cb6ccc44224b4d428639df33c9755413a76eda81a904cb6c95"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_page_view.dart",
+      "sha256": "fc44cc4f8673740e263828cf6f5aaba4e770a9f0c4d325291c4f02d13dab3e9a"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_page_script.dart",
+      "sha256": "4e148f037c5d292b4c80720fab571dbaeb10fddc9c43fd2dada1496d4fab9b3d"
+    },
+    {
+      "path": "services/storefront_html/lib/src/login_page_script.dart",
+      "sha256": "7773c4dc9afcb30a431ce78ebfa4e280091bee0c0f61f14a0bc727c89e6f26ce"
+    },
+    {
+      "path": "services/storefront_html/lib/storefront_html.dart",
+      "sha256": "650cadbed5651e300aa8ff161f0ed491ba775253cfd0b08467a88e180db860d2"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/customer_auth_forms.dart",
+      "sha256": "5f889262d629c64433121c9f155a803d8027288df95275059d6314bd6123af6e"
+    }
+  ]
+}

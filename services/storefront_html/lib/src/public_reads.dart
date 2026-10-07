@@ -7,6 +7,7 @@ import 'package:vinabike_public_core/public_store/models/public_commerce_product
 import 'package:vinabike_public_core/public_store/models/public_policy_content.dart';
 import 'package:vinabike_public_core/public_store/models/public_product_identity_columns.dart';
 
+import 'database_gate.dart';
 import 'storefront_config.dart';
 
 /// What every page reads first: the shell (`get_public_storefront_shell_v1`)
@@ -66,12 +67,13 @@ class CatalogRequest {
 /// photos (`get_public_image_thumbnails_v1`), its filters with the
 /// per-category counts (`get_public_product_facets_v2`) and the option names
 /// (`get_public_spec_option_labels_v1`). The facets read takes longest and
-/// runs beside the others.
+/// runs beside the others; `facets` is `null` when it failed, and the page
+/// keeps its products.
 typedef CatalogReads = ({
   List<Object?> products,
   List<Object?> brandRows,
   List<Object?> thumbnails,
-  List<Object?> facets,
+  List<Object?>? facets,
   List<Object?> optionLabels,
 });
 
@@ -264,15 +266,31 @@ Map<String, Object?> customerSessionClaims(String token) {
 }
 
 class PublicReadException implements Exception {
-  PublicReadException(this.message);
+  PublicReadException(this.message, {this.statusCode, this.busy = false});
   final String message;
+
+  /// What Supabase answered, when it answered.
+  final int? statusCode;
+
+  /// No turn at the database in time ([DatabaseGate]).
+  final bool busy;
+
+  /// Worth asking again in a moment: the database was busy or Supabase
+  /// failed on its side. A refusal (4xx) says something about the request.
+  bool get retryable =>
+      busy ||
+      switch (statusCode) {
+        null => false,
+        408 || 429 => true,
+        final code => code >= 500,
+      };
   @override
   String toString() => 'PublicReadException: $message';
 }
 
 /// Calls the public Supabase functions with the publishable key, as `anon`.
 class SupabasePublicReads implements PublicReads {
-  SupabasePublicReads(this.config, {HttpClient? client})
+  SupabasePublicReads(this.config, {HttpClient? client, DatabaseGate? gate})
     : _client =
           client ??
           (HttpClient()
@@ -280,12 +298,26 @@ class SupabasePublicReads implements PublicReads {
             // Supabase's edge drops a kept-alive connection after a short
             // quiet spell, and the next read on it fails with «Connection
             // reset by peer» (seen 2026-10-05 after ~40 s): close them first.
-            ..idleTimeout = const Duration(seconds: 10));
+            ..idleTimeout = const Duration(seconds: 10)),
+      _gate = gate ?? DatabaseGate();
 
   final StorefrontConfig config;
   final HttpClient _client;
 
+  /// Every round trip to the database, the visitor's own included, takes
+  /// its turn here.
+  final DatabaseGate _gate;
+
   static const _timeout = Duration(seconds: 15);
+
+  /// A read that failed but whose page can go on without it.
+  static final _unavailable = Object();
+
+  /// The answers of public reads already on their way, by function and
+  /// arguments: a burst on one page (a crawler asked `/productos` a dozen
+  /// times in a few seconds) asks Supabase once. Shared as text, so no two
+  /// requests hold the same decoded rows.
+  final _inFlight = <String, Future<String>>{};
 
   @override
   Future<ShellReads> shell() async {
@@ -493,35 +525,73 @@ class SupabasePublicReads implements PublicReads {
       'p_max_price': request.maxPrice,
     };
     List<Object?> list(Object? value) => value is List ? value : const [];
-    final results = await Future.wait<Object?>([
-      _rpc('get_public_products_faceted_v2', {
-        ...filters,
-        'p_sort_by': request.sortBy,
-        'p_limit': request.limit,
-        'p_offset': request.offset,
-      }).then((rows) => _completeRows(list(rows))),
-      if (request.facets) ...[
-        _rpc('get_public_product_facets_v2', filters),
-        _rpc('get_public_spec_option_labels_v1', {
-          'p_tenant_id': config.tenantId,
-        }),
-      ],
-    ]);
-    final listing =
-        results[0]!
-            as ({
-              List<Object?> rows,
-              List<Object?> brands,
-              List<Object?> thumbnails,
-            });
+    // The filters are not the page: under a burst the facet read is the one
+    // `anon`'s 3 s statement timeout cancels (500), and the whole catalog
+    // answered 503 although its products had been read (22 times to
+    // PerplexityBot on 2026-10-06). Without them the page lists its products
+    // and leaves the counts and filters out, like Flutter's unavailable
+    // snapshot.
+    Future<Object?> optional(String name, Future<Object?> read) =>
+        read.catchError((Object error) {
+          stderr.writeln('catalog $name unavailable: $error');
+          return _unavailable;
+        });
+    final listingRead = _rpc('get_public_products_faceted_v2', {
+      ...filters,
+      'p_sort_by': request.sortBy,
+      'p_limit': request.limit,
+      'p_offset': request.offset,
+    }).then((rows) => _completeRows(list(rows)));
+    final facetsRead = request.facets
+        ? optional('facets', _rpc('get_public_product_facets_v2', filters))
+        : Future<Object?>.value(const <Object?>[]);
+    final labelsRead = request.facets
+        ? optional(
+            'option labels',
+            _rpc('get_public_spec_option_labels_v1', {
+              'p_tenant_id': config.tenantId,
+            }),
+          )
+        : Future<Object?>.value(const <Object?>[]);
+    // The brands the URL filters by, named even when the other filters
+    // leave them no product and the facet read no longer lists them: their
+    // checkbox stays, checked, so the visitor sees why nothing is listed
+    // and can take them off.
+    final selectedBrandIds = request.brandIds.where(_uuid.hasMatch).toSet();
+    final selectedBrandsRead = request.facets && selectedBrandIds.isNotEmpty
+        ? optional('selected brands', _brandRows(selectedBrandIds))
+        : Future<Object?>.value(const <Object?>[]);
+    final listing = await listingRead;
+    final facets = await facetsRead;
+    final labels = await labelsRead;
+    final selectedBrands = list(await selectedBrandsRead);
+    final listedBrandIds = {
+      for (final row in listing.brands)
+        if (row is Map) row['id']?.toString(),
+    };
     return (
       products: listing.rows,
-      brandRows: listing.brands,
+      brandRows: [
+        ...listing.brands,
+        for (final row in selectedBrands)
+          if (row is Map && !listedBrandIds.contains(row['id']?.toString()))
+            row,
+      ],
       thumbnails: listing.thumbnails,
-      facets: request.facets ? list(results[1]) : const <Object?>[],
-      optionLabels: request.facets ? list(results[2]) : const <Object?>[],
+      facets: identical(facets, _unavailable) ? null : list(facets),
+      optionLabels: list(labels),
     );
   }
+
+  /// Active brands by id: the store's own and the shared catalog's
+  /// (`tenant_id` null), never another store's.
+  Future<List<Object?>> _brandRows(Iterable<String> ids) =>
+      _select('product_brands', {
+        'select': 'id,name,tenant_id,is_active',
+        'id': 'in.(${ids.join(',')})',
+        'is_active': 'eq.true',
+        'or': '(tenant_id.is.null,tenant_id.eq.${config.tenantId})',
+      });
 
   @override
   Future<Map<String, dynamic>?> productById(String id) async {
@@ -566,9 +636,11 @@ class SupabasePublicReads implements PublicReads {
         thumbnails: const <Object?>[],
       );
     }
-    final brandIds = ids(
-      rows.map((row) => row is Map ? row['brand_id'] : null),
-    );
+    final brandIds = {
+      for (final row in rows)
+        if (row is Map && _uuid.hasMatch(row['brand_id']?.toString() ?? ''))
+          row['brand_id'].toString(),
+    };
     // The identity columns carry no photo: the card's is the listing row's.
     final photos = {
       for (final row in rows)
@@ -596,14 +668,7 @@ class SupabasePublicReads implements PublicReads {
       if (brandIds.isEmpty)
         Future.value(const <Object?>[])
       else
-        layer(
-          'brands',
-          _select('product_brands', {
-            'select': 'id,name,tenant_id,is_active',
-            'id': 'in.($brandIds)',
-            'is_active': 'eq.true',
-          }),
-        ),
+        layer('brands', _brandRows(brandIds)),
       if (photos.isEmpty)
         Future.value(const <Object?>[])
       else
@@ -843,6 +908,9 @@ class SupabasePublicReads implements PublicReads {
         {'p_tenant_id': config.tenantId},
       );
     } on PublicReadException catch (error) {
+      // The database busy or failing is not an answer about the customer:
+      // the page says «try again», not «not a customer».
+      if (error.retryable) rethrow;
       // Refused (an unconfirmed e-mail, an inactive or taken customer): not
       // a customer of this store. Only the kind is logged.
       stderr.writeln('customer enter refused: ${error.message}');
@@ -927,11 +995,7 @@ class SupabasePublicReads implements PublicReads {
       request.headers.contentType = ContentType.json;
       request.write(jsonEncode(body));
     }
-    final response = await request.close().timeout(_timeout);
-    final text = await response
-        .transform(utf8.decoder)
-        .join()
-        .timeout(_timeout);
+    final (response, text) = await _exchange(request);
     Object? decoded;
     try {
       decoded = text.isEmpty ? null : jsonDecode(text);
@@ -1031,7 +1095,7 @@ class SupabasePublicReads implements PublicReads {
     Map<String, Object?>? body,
     String name, {
     String? prefer,
-  }) async {
+  }) => _atTheDatabase(() async {
     final request = await _client.openUrl(method, uri).timeout(_timeout);
     request.headers
       ..set('apikey', config.publishableKey)
@@ -1041,16 +1105,44 @@ class SupabasePublicReads implements PublicReads {
       request.headers.contentType = ContentType.json;
       request.write(jsonEncode(body));
     }
-    final response = await request.close().timeout(_timeout);
-    final text = await response
-        .transform(utf8.decoder)
-        .join()
-        .timeout(_timeout);
+    final (response, text) = await _exchange(request);
     if (response.statusCode == 401) throw const CustomerSessionRefused();
     if (response.statusCode >= 300) {
-      throw PublicReadException('$name → ${response.statusCode}');
+      throw PublicReadException(
+        '$name → ${response.statusCode}',
+        statusCode: response.statusCode,
+      );
     }
     return text.isEmpty ? null : jsonDecode(text);
+  });
+
+  /// Sends [request] and reads its answer, each step within [_timeout].
+  /// Past it the request is aborted, not only abandoned: the place it held
+  /// at the database is handed on, and it must really be free.
+  Future<(HttpClientResponse, String)> _exchange(
+    HttpClientRequest request,
+  ) async {
+    try {
+      final response = await request.close().timeout(_timeout);
+      final text = await response
+          .transform(utf8.decoder)
+          .join()
+          .timeout(_timeout);
+      return (response, text);
+    } on TimeoutException {
+      request.abort();
+      rethrow;
+    }
+  }
+
+  /// [send] when the database has a place for it; a read that waited too
+  /// long fails like any other, so its page answers «try again».
+  Future<T> _atTheDatabase<T>(Future<T> Function() send) async {
+    try {
+      return await _gate.run(send);
+    } on DatabaseBusy {
+      throw PublicReadException('database busy', busy: true);
+    }
   }
 
   static final _uuid = RegExp(
@@ -1074,28 +1166,25 @@ class SupabasePublicReads implements PublicReads {
   Future<List<Object?>> _select(String table, Map<String, String> query) =>
       _retrying(() => _selectOnce(table, query));
 
-  Future<List<Object?>> _selectOnce(
-    String table,
-    Map<String, String> query,
-  ) async {
-    final uri = Uri.parse(
-      '${config.supabaseUrl}/rest/v1/$table',
-    ).replace(queryParameters: query);
-    final request = await _client.getUrl(uri).timeout(_timeout);
-    request.headers
-      ..set('apikey', config.publishableKey)
-      ..set('authorization', 'Bearer ${config.publishableKey}');
-    final response = await request.close().timeout(_timeout);
-    final text = await response
-        .transform(utf8.decoder)
-        .join()
-        .timeout(_timeout);
-    if (response.statusCode >= 300) {
-      throw PublicReadException('$table → ${response.statusCode}');
-    }
-    final decoded = jsonDecode(text);
-    return decoded is List ? decoded : const [];
-  }
+  Future<List<Object?>> _selectOnce(String table, Map<String, String> query) =>
+      _atTheDatabase(() async {
+        final uri = Uri.parse(
+          '${config.supabaseUrl}/rest/v1/$table',
+        ).replace(queryParameters: query);
+        final request = await _client.getUrl(uri).timeout(_timeout);
+        request.headers
+          ..set('apikey', config.publishableKey)
+          ..set('authorization', 'Bearer ${config.publishableKey}');
+        final (response, text) = await _exchange(request);
+        if (response.statusCode >= 300) {
+          throw PublicReadException(
+            '$table → ${response.statusCode}',
+            statusCode: response.statusCode,
+          );
+        }
+        final decoded = jsonDecode(text);
+        return decoded is List ? decoded : const <Object?>[];
+      });
 
   Future<Map<String, dynamic>> _shell() async {
     final shell = await _rpc('get_public_storefront_shell_v1', {
@@ -1118,30 +1207,38 @@ class SupabasePublicReads implements PublicReads {
     }
   }
 
-  Future<Object?> _rpc(String function, Map<String, Object?> body) =>
-      _retrying(() => _rpcOnce(function, body));
-
-  Future<Object?> _rpcOnce(String function, Map<String, Object?> body) async {
-    final uri = Uri.parse('${config.supabaseUrl}/rest/v1/rpc/$function');
-    final request = await _client.postUrl(uri).timeout(_timeout);
-    request.headers
-      ..set('apikey', config.publishableKey)
-      ..set('authorization', 'Bearer ${config.publishableKey}')
-      ..contentType = ContentType.json;
-    request.write(
-      jsonEncode({
-        for (final entry in body.entries)
-          if (entry.value != null) entry.key: entry.value,
-      }),
-    );
-    final response = await request.close().timeout(_timeout);
-    final text = await response
-        .transform(utf8.decoder)
-        .join()
-        .timeout(_timeout);
-    if (response.statusCode >= 300) {
-      throw PublicReadException('$function → ${response.statusCode}');
-    }
+  Future<Object?> _rpc(String function, Map<String, Object?> body) async {
+    final key = '$function ${jsonEncode(body)}';
+    // A block body: `remove` returns this very future, and `whenComplete`
+    // would wait for it forever.
+    final text = await (_inFlight[key] ??=
+        _retrying(() => _rpcOnce(function, body)).whenComplete(() {
+          _inFlight.remove(key);
+        }));
     return text.isEmpty ? null : jsonDecode(text);
   }
+
+  Future<String> _rpcOnce(String function, Map<String, Object?> body) =>
+      _atTheDatabase(() async {
+        final uri = Uri.parse('${config.supabaseUrl}/rest/v1/rpc/$function');
+        final request = await _client.postUrl(uri).timeout(_timeout);
+        request.headers
+          ..set('apikey', config.publishableKey)
+          ..set('authorization', 'Bearer ${config.publishableKey}')
+          ..contentType = ContentType.json;
+        request.write(
+          jsonEncode({
+            for (final entry in body.entries)
+              if (entry.value != null) entry.key: entry.value,
+          }),
+        );
+        final (response, text) = await _exchange(request);
+        if (response.statusCode >= 300) {
+          throw PublicReadException(
+            '$function → ${response.statusCode}',
+            statusCode: response.statusCode,
+          );
+        }
+        return text;
+      });
 }

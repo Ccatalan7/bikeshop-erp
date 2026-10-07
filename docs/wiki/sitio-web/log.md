@@ -4,6 +4,12 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-07 — corrección — [rendimiento](paginas/rendimiento.md),
+  [catálogo](paginas/catalogo-y-fichas.md) y
+  [estado](paginas/estado-y-pendientes.md): el 503 del catálogo con muchas
+  visitas juntas; lecturas que hacen menos (`20261007020000`), cuatro
+  consultas a la vez desde el servidor, filtros opcionales y filtros activos
+  que no desaparecen. Números antes y después.
 - 2026-10-06 — corrección — [estado](paginas/estado-y-pendientes.md) y
   [editor](paginas/editor-del-sitio.md): la causa real del cuelgue de debug
   entre catálogo, categoría y ficha (una página tapada en el `Navigator` de la

@@ -105,6 +105,7 @@ Component portalPageDocument(PageContext page, PortalPage which) {
           _portalBoundary(images, _BoundaryState.signedOut),
           _portalBoundary(images, _BoundaryState.loading, hidden: true),
           _portalBoundary(images, _BoundaryState.notCustomer, hidden: true),
+          _portalBoundary(images, _BoundaryState.unavailable, hidden: true),
           // Before the first paint: with a session in this browser the
           // frame says it is preparing the account, as Flutter does while it
           // reads the customer.
@@ -163,7 +164,7 @@ class PortalImages {
   final String workshop;
 }
 
-enum _BoundaryState { signedOut, loading, notCustomer }
+enum _BoundaryState { signedOut, loading, notCustomer, unavailable }
 
 /// What someone sees at `/cuenta/**` without a session (or one that is not
 /// a customer of this store): the band and a short column with what is
@@ -182,6 +183,11 @@ Component _portalBoundary(
       'No pudimos abrir esta cuenta',
       'Tu sesión está abierta, pero no está registrada como cliente '
           'de esta tienda.',
+    ),
+    // Too many visits at once, or no connection: nothing about the account.
+    _BoundaryState.unavailable => (
+      'No pudimos abrir tu cuenta ahora',
+      'La tienda no respondió a tiempo. Inténtalo de nuevo en unos segundos.',
     ),
     _BoundaryState.signedOut => (
       'Entra a tu cuenta',
@@ -202,6 +208,12 @@ Component _portalBoundary(
               classes: 'pt-spin',
               attributes: {'role': 'progressbar', 'aria-label': 'Cargando'},
               [RawText(_spinner)],
+            )
+          else if (state == _BoundaryState.unavailable)
+            _button(
+              'Reintentar',
+              expand: true,
+              attributes: {'data-act': 'portal-retry'},
             )
           else if (state == _BoundaryState.notCustomer) ...[
             _button(

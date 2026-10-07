@@ -337,6 +337,9 @@ $light .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rg
 .empty{display:grid;justify-items:center;padding:64px;text-align:center;color:#757575;font-size:13px}
 .empty svg{margin-bottom:16px;color:#bdbdbd}.empty p{margin:0}
 .empty-title{margin-bottom:8px!important;font:500 16px/1.4 var(--body);color:rgba(0,0,0,.54)}
+.empty-clear{display:inline-flex;align-items:center;min-height:44px;margin-top:12px;padding:10px 16px;font:700 13px/1.2 var(--body);color:var(--primary);text-decoration:none;border-radius:4px}
+.empty-clear:hover{background:color-mix(in srgb,var(--primary) 6%,transparent)}
+.empty-clear:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
 .pager{display:flex;justify-content:center;align-items:center;flex-wrap:wrap;margin-top:32px}
 .pager .step{display:inline-flex;align-items:center;min-height:40px;padding:10px 14px;border-radius:20px;color:#616161;font:600 14px/20px var(--body);text-decoration:none}
 .pager .step:hover{background:color-mix(in srgb,var(--primary) 8%,transparent)}

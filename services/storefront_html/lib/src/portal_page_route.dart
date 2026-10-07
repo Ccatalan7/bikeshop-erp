@@ -79,7 +79,10 @@ Future<({Map<String, Object?> answer, int dataMs})> _drawn(
       'portal read failed: '
       '${error is PublicReadException ? error.message : error.runtimeType}',
     );
-    return (answer: const {'state': 'not-customer'}, dataMs: 0);
+    return (
+      answer: {'state': _passing(error) ? 'unavailable' : 'not-customer'},
+      dataMs: 0,
+    );
   }
   if (read.profile == null) {
     return (answer: const {'state': 'not-customer'}, dataMs: 0);
@@ -151,7 +154,9 @@ Future<Response> portalActionResponse(
         'portal enter failed: '
         '${error is PublicReadException ? error.message : error.runtimeType}',
       );
-      return _json(request, 200, {'state': 'not-customer'});
+      return _json(request, 200, {
+        'state': _passing(error) ? 'unavailable' : 'not-customer',
+      });
     }
   }
   if (token == null || page == null || query.length > 512) {
@@ -615,3 +620,12 @@ Response _json(
     },
   );
 }
+
+/// A failure that says nothing about the customer: the database busy or
+/// failing, or no connection to it. The page says «try again in a moment»,
+/// never «this session is not a customer here».
+bool _passing(Object error) =>
+    (error is PublicReadException && error.retryable) ||
+    error is TimeoutException ||
+    error is SocketException ||
+    error is HttpException;
