@@ -1242,6 +1242,24 @@ Dos trampas más de una vista nativa (la «Vista HTML» del editor del sitio, un
   `_ZoomedNativeView` en `website_html_draft_view.dart`. El navegador del ERP
   compensa sólo «× zoom» y podría tener el mismo desfase (pendiente de
   verificar).
+- **Tampoco le llegan los movimientos del puntero** (medido el mismo día, con
+  movimientos reales del sistema): ni `mouseover` ni `:hover` en la página.
+  Flutter sí los recibe sobre la vista (`MouseRegion.onHover`), así que el
+  editor se los pasa a la página como fracciones de su ventana
+  (`vbDraftHover(fx, fy)` + `elementFromPoint`), una llamada a la vez.
+
+### La captura de una ventana en segundo plano es vieja (2026-10-07)
+
+Con el ERP detrás de otra app, `app_screenshot` de la herramienta de control
+del computador devuelve **el último cuadro que la ventana pintó**, no el
+actual: después de navegar a otra página, la barra seguía diciendo la de antes
+y la vista HTML no había cambiado; no era un defecto. `app_control.sh window`
+captura la región de la pantalla, así que muestra lo que esté encima (la app de
+Claude). Para ver el estado real: traer la app al frente (control de pantalla
+completa) y capturar ahí, o leer la semántica (`app_control.sh read`), que sí
+es actual. Y `app_control.sh type` sin un campo con foco no escribe en el
+lienzo: el ERP lo toma como «escribir abre el buscador» y abre la paleta
+global.
 
 ## Probar un atajo de teclado: tres trampas, una detrás de otra (2026-09-17)
 

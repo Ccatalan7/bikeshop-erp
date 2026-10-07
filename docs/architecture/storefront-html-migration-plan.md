@@ -1668,7 +1668,27 @@ Lo que la medición enseñó y sirve para cualquier paridad que quede:
   acciones › Vista». Probado en macOS contra producción: portada, sección
   elegida por clic, título cambiado en el panel y visto en HTML en ~2 s,
   Tablet y Móvil.
-- **Lo que falta del 5c:** las plantillas del catálogo y de la ficha de
-  producto (hoy dicen que la vista HTML no las dibuja todavía); medir el zoom
-  en Windows; en el ERP web el clic llega por `postMessage` y falta
-  escucharlo.
+- **5b y 5c, cualquier página (2026-10-07, `7e269eb9`→`5b1d5577`).** El
+  borrador ya no es «la portada o una página»: lleva la ruta pública en
+  pantalla y el servidor la dibuja con **el mismo manejador de las visitas**
+  (`storefrontHandler(draft: true)`), a través de `EditorDraftReads`, una capa
+  sobre las lecturas que pone los ajustes sin guardar sobre cada shell y los
+  bloques de la página abierta en su lugar (también antes de publicarla). Así
+  salen el catálogo, servicios, categorías (portada y plantilla), la ficha
+  (plantilla) y las páginas de información sin un dibujo aparte. En modo
+  borrador el manejador ignora «sitio no publicado», no responde con Flutter,
+  y cada parte elegible lleva `data-block-id` y `data-block-label` con los
+  mismos ids del lienzo (`header`, `footer`, `catalog:<dueño>:<sección>`,
+  `product-page:<sección>`). Carrito, pago, pedidos y cuenta responden
+  `invalid`. El cliente manda la ruta de `GoRouter.state.uri` sin `edit` ni
+  `preview`, y el registro de presentaciones con los borradores puestos
+  (`prepareForSave` + `put`, como lo dejará el «Guardar»).
+- **Marcas como capa.** La selección y el paso del puntero se dibujan en una
+  capa fija sobre la página (como Shopify y Wix), no como estilo del elemento:
+  el contorno quedaba tapado por la foto del producto y el
+  `position: relative` que pedía le quitaba al encabezado su lugar fijo. En
+  macOS la vista nativa no recibe los movimientos del puntero; el editor se
+  los pasa como fracciones de la ventana (`vbDraftHover`).
+- **Lo que falta del 5c:** medir el zoom en Windows; el pie en borrador
+  (enlaces del pie sin guardar no pasan todavía: viven en `website_navigation`,
+  no en ajustes); probar el ERP web con una sesión real.

@@ -171,14 +171,24 @@ El lienzo del editor sigue siendo Flutter; el plan para que sea el HTML real
 está en la fase 5 de `storefront-html-migration-plan.md` `[Repo]`.
 
 **Vista HTML (desde el 2026-10-07).** El botón `<>` de la barra (desde 1540 px;
-siempre en «Más acciones › Vista») muestra la portada o una página del editor
-tal como la arma el servidor HTML **con lo que todavía no se guarda**, y se
-redibuja ~350 ms después de cada cambio del panel. Un clic en una sección la
-elige en el panel; los enlaces no navegan. Una sección que el HTML aún no
-dibuja aparece señalada en su lugar, así se ve qué le falta al HTML antes de
-publicar. Sólo la ve quien puede guardar el sitio, y no cuenta como visita en
-Analytics. Las plantillas del catálogo y de la ficha todavía no se ven ahí
-`[Repo 2026-10-07]` `[Prod 2026-10-07]`.
+siempre en «Más acciones › Vista») muestra la página que está en pantalla
+—portada, páginas, información, catálogo, servicios, una categoría, una ficha
+de producto— tal como la arma el servidor HTML **con lo que todavía no se
+guarda** (bloques, tema, encabezado, pie, portadas y plantilla de categoría,
+plantilla de ficha), y se redibuja ~350 ms después de cada cambio del panel o
+de la página. Es el mismo servidor que atiende las visitas: lo que se ve ahí es
+lo que verá el cliente. Un clic elige en el panel el bloque, el encabezado, el
+pie o la sección del catálogo o de la ficha que está debajo; el puntero marca
+con su nombre lo que va a elegir; los enlaces no navegan. Una sección que el
+HTML aún no dibuja aparece señalada en su lugar. Carrito, pago, pedidos y
+cuenta siguen en el lienzo. Sólo la ve quien puede guardar el sitio, y no
+cuenta como visita en Analytics `[Repo 2026-10-07]` `[Prod 2026-10-07]`.
+
+Medido al probarla (2026-10-07): el lienzo Flutter del ERP (Editar y «Ver como
+cliente») lista 1.615 productos en `/productos` y la tienda pública 538, con
+`product_visibility_stock_policy = available_only`. La vista HTML muestra los
+538 del cliente; la diferencia del lienzo está en
+[estado y pendientes](estado-y-pendientes.md) `[Prod 2026-10-07]`.
 
 Lo que arma un agente (campañas, banners, diapositivas, secciones) son
 operaciones reales del editor: mismos valores por defecto, validaciones, esquema

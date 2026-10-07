@@ -312,3 +312,16 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   el texto, altura mínima, `Wrap` arriba, color del ítem actual) quedaron en
   el plan de migración. Abrir `/` queda en
   [estado y pendientes](paginas/estado-y-pendientes.md).
+
+## 2026-10-07 — La vista HTML del editor dibuja cualquier página
+
+- El borrador lleva la ruta pública en pantalla y el servidor la dibuja con el
+  manejador de las visitas, a través de lecturas que llevan el borrador
+  (`EditorDraftReads`): catálogo, categorías, ficha e información salen sin un
+  dibujo aparte. Las marcas son una capa sobre la página.
+- Trampas medidas: una categoría entrada desde el catálogo se empuja y sólo
+  `GoRouter.state` la nombra; la vista nativa de macOS no recibe movimientos
+  del puntero; la captura de una ventana en segundo plano es vieja (runbook
+  de control de la app).
+- Hallazgo: el lienzo Flutter lista 1.615 productos y la tienda 538; queda en
+  [estado y pendientes](paginas/estado-y-pendientes.md).
