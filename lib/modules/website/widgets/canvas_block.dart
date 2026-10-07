@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
@@ -168,6 +169,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
   // Ids already asked for: one hidden or out of stock never comes back, and
   // asking again on every build would read the catalog without end.
   final Set<String> _requestedProductIds = {};
+  final Set<String> _pendingProductIds = {};
   // Cache for latest products queries to prevent FutureBuilder reset on rebuild
   final Map<int, Future<List<Product>>> _latestProductsCache = {};
 
@@ -229,13 +231,24 @@ class _CanvasBlockState extends State<CanvasBlock> {
     }
   }
 
-  Future<void> _ensureProductsLoaded(Set<String> productIds) async {
-    if (productIds.isEmpty) return;
+  /// Asks for [productIds] together with what the other layers ask for in
+  /// the same build: one read for the whole canvas, as the HTML storefront
+  /// reads its page's products at once.
+  void _ensureProductsLoaded(Set<String> productIds) {
     final missing = productIds
         .where((id) => !_requestedProductIds.contains(id))
         .toList(growable: false);
     if (missing.isEmpty) return;
     _requestedProductIds.addAll(missing);
+    final first = _pendingProductIds.isEmpty;
+    _pendingProductIds.addAll(missing);
+    if (first) scheduleMicrotask(_loadPendingProducts);
+  }
+
+  Future<void> _loadPendingProducts() async {
+    final missing = _pendingProductIds.toList(growable: false);
+    _pendingProductIds.clear();
+    if (missing.isEmpty || !mounted) return;
     final tenantId = await _effectiveTenantId();
     if (tenantId == null || tenantId.isEmpty) {
       _requestedProductIds.removeAll(missing);

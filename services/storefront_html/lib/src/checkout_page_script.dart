@@ -225,10 +225,12 @@ const checkoutPageScript = r'''
       .catch(function () { if (mine === linesSeq) show('failed'); });
   }
 
+  // What the steps measure is the cart as last read (also after coming
+  // back from the cart through the browser's cache); `begin_checkout` goes
+  // once.
   var begun = false, measured = null, steps = {};
   function measureBegin(data) {
-    if (begun || !data.valid || data.gross == null) return;
-    begun = true;
+    if (!data.valid || data.gross == null) return;
     var m = window.vinabikeMeasure;
     if (!m) return;
     var items = data.items.map(function (it) {
@@ -239,6 +241,8 @@ const checkoutPageScript = r'''
       value: data.gross,
       items: items.map(function (it) { return { item_id: it.id, item_name: it.name, price: it.price, quantity: it.quantity }; })
     };
+    if (begun) return;
+    begun = true;
     m.pixel('InitiateCheckout', {
       content_ids: items.map(function (it) { return it.id; }), content_type: 'product',
       contents: items.map(function (it) { return { id: it.id, quantity: it.quantity, item_price: it.price }; }),
@@ -346,7 +350,9 @@ const checkoutPageScript = r'''
     setValue('comuna', r.comuna); setValue('city', normalizedCity(r.city, r.comuna, r.region));
     setValue('region', r.region); setValue('postal_code', r.postal || '');
   }
-  function applySaved(addr) {
+  // `auto`: the account's default, applied as the page loads; the customer
+  // did not choose it (no `add_shipping_info` until they confirm).
+  function applySaved(addr, auto) {
     var r = { street: addr.street_address || '', number: addr.street_number, apartment: addr.apartment, comuna: addr.comuna || '', city: addr.city || '', region: addr.region || '', postal: addr.postal_code };
     state.selected = addr;
     state.resolved = r;
@@ -358,7 +364,7 @@ const checkoutPageScript = r'''
     if (!value('phone')) setValue('phone', addr.phone || '');
     field('saved').value = addr.id;
     paintDelivery();
-    measureStep('shipping');
+    if (!auto) measureStep('shipping');
   }
   // _shippingAddressForOrder
   function orderAddress() {
@@ -453,7 +459,7 @@ const checkoutPageScript = r'''
               var o = document.createElement('option'); o.value = a.id; o.textContent = (a.label || '') + ' • ' + (a.comuna || ''); picker.appendChild(o);
             });
             var def = state.addresses.filter(function (a) { return a.is_default; })[0] || state.addresses[0];
-            if (def) applySaved(def); else field('save_address').checked = true;
+            if (def) applySaved(def, true); else field('save_address').checked = true;
             paintDelivery();
           });
       });

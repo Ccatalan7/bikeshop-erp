@@ -17,11 +17,11 @@
     },
     {
       "path": "services/storefront_html/lib/src/cart_page_view.dart",
-      "sha256": "fb6072e97380139361006b8cf7a475a7694590f6ad37af6466cf7da9a260707f"
+      "sha256": "e57b10b9d54e507decff4d12ae7a642bea409d851563f45b57175e9f63e8e9fd"
     },
     {
       "path": "services/storefront_html/lib/src/checkout_page_script.dart",
-      "sha256": "453393be6dc891c2f3289312c0de5dc1af3733651fa884a43b79baab040d91fd"
+      "sha256": "f40999e5a6bff23d6d15cf4c8bec4f4407de0239ebe06a5d632fff74c113fae4"
     },
     {
       "path": "services/storefront_html/lib/src/product_card.dart",
@@ -37,7 +37,7 @@
     },
     {
       "path": "services/storefront_html/test/storefront_handler_test.dart",
-      "sha256": "57a01628f983d42d3f442825024b69ccdc1b1787ee40fec311a89401edc97881"
+      "sha256": "191d4618f9ed67052ec386553723ca6540bfcee53401559be720212f69eb839d"
     }
   ]
 }

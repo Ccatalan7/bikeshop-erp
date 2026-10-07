@@ -280,6 +280,13 @@ Vista previa → Edit conserva la selección y el scroll. Cualquier cambio de es
 geometría pasa la prueba real de iOS
 `integration_test/website_phone_authoring_ios_smoke_test.dart` `[Repo]`.
 
+La vista HTML responde al dedo desde el 2026-10-07 (eventos de puntero en el
+guion del borrador): la capa elegida y las manillas toman el dedo, el resto
+de la página se desplaza. Es la que abre el ERP en la web, también en el
+navegador de un teléfono; la app nativa de Android y los teléfonos siguen
+abriendo el lienzo Flutter hasta medir la vista HTML en el dispositivo
+`[Repo 2026-10-07]`.
+
 ## Trampas
 
 - Un atajo de teclado `Espacio`/`Enter` (`FocusableActionDetector`) en una

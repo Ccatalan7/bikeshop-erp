@@ -2222,3 +2222,25 @@ de 15 px de alto Flutter lo esconde y el HTML lo muestra.
   del producto, o la propia si el producto no está. En producción no hay
   ninguna capa de producto (2026-10-07). Probado en Chrome y con una prueba
   de widgets que exige la lectura pública.
+- **Sexta revisión de Codex (2026-10-07, sólo lectura), sobre `28d9a64b` y
+  `da7136af`.** Sin P1; cuatro P2 confirmados y corregidos: el lienzo
+  Flutter hacía una lectura por capa de producto (ahora las junta en una por
+  dibujo, `_loadPendingProducts`, como el HTML lee la página);
+  `add_shipping_info` salía cuando el checkout aplicaba solo la dirección
+  guardada del cliente (ahora sólo por su elección, o al confirmar); una
+  pestaña atrasada del carrito podía mandar `add_to_cart`/`remove_from_cart`
+  sin cambio real (ahora cuenta lo que cambió bajo el candado); y al volver
+  al checkout desde la caché del navegador los pasos medían el carrito viejo
+  (ahora la foto del carrito se renueva en cada lectura de líneas).
+- **La vista HTML del editor con el dedo (2026-10-07).** El guion del
+  borrador movía bloques, alto y capas sólo con el mouse; el ERP en la web
+  abre la vista HTML por defecto, también en el navegador de un teléfono, y
+  ahí no se podía arrastrar nada. Ahora usa eventos de puntero (mouse, dedo
+  y lápiz con el mismo código; sólo el primario), `touch-action:none` sólo
+  en las manillas y en la capa elegida (el resto de la página sigue
+  desplazándose con un dedo), un dedo que el navegador toma
+  (`pointercancel`) devuelve la capa, y con puntero grueso las manillas
+  crecen y su zona de toque llega a ~44 px. Probado en Chrome con toques
+  reales (CDP): la capa se mueve sin desplazar la página y un dedo fuera
+  de ella la desplaza. El ERP nativo de Android y los teléfonos siguen
+  abriendo el lienzo Flutter por defecto hasta medirlo en el dispositivo.

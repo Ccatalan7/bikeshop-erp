@@ -383,15 +383,21 @@ const cartPageScript = r'''
     line.querySelector('[data-line-total]').textContent = money(Number(line.dataset.price) * next);
     line.querySelector('[data-act=dec]').disabled = next <= 1;
     line.querySelector('[data-act=inc]').disabled = limit !== null && next >= limit;
+    // What the saved cart really changed by (another tab may have changed
+    // it first) is what Google Analytics hears.
+    var changedBy = 0;
     cart.update(function (current) {
+      changedBy = 0;
       return current.map(function (l) {
         if (l.id !== id) return l;
         var q = l.q + delta;
         if (limit !== null && q > limit) q = limit;
+        if (q < 1) q = 1;
+        changedBy = q - l.q;
         return { id: l.id, q: q };
       });
     }).then(function () {
-      measure(delta > 0 ? 'add_to_cart' : 'remove_from_cart', [lineItem(line, Math.abs(delta))]);
+      if (changedBy) measure(changedBy > 0 ? 'add_to_cart' : 'remove_from_cart', [lineItem(line, Math.abs(changedBy))]);
       cart.badge(); refresh();
     }, function () { show('failed'); });
   }
@@ -406,10 +412,13 @@ const cartPageScript = r'''
   function remove() {
     var line = removing; removing = null;
     if (!line) return;
-    var id = line.dataset.id;
-    cart.update(function (current) { return current.filter(function (l) { return l.id !== id; }); })
+    var id = line.dataset.id, removedQ = 0;
+    cart.update(function (current) {
+      removedQ = 0;
+      return current.filter(function (l) { if (l.id !== id) return true; removedQ = l.q; return false; });
+    })
       .then(function () {
-        measure('remove_from_cart', [lineItem(line, Number(line.dataset.q))]);
+        if (removedQ) measure('remove_from_cart', [lineItem(line, removedQ)]);
         cart.badge();
         toast.hidden = false;
         clearTimeout(toastTimer);

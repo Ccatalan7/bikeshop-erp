@@ -445,3 +445,8 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 - El embudo de GA4 está completo: la tienda manda también qué listas se ven
   y cuál tarjeta se abre, el carrito (ver, sumar, restar, quitar) y los pasos
   de envío y pago del checkout. Probado en la tienda local de prueba.
+- La vista HTML del editor responde al dedo: mover, cambiar de tamaño y
+  girar capas, mover bloques y cambiar su alto, sin perder el desplazamiento
+  de la página. Codex revisó las capas de producto y el embudo de GA4:
+  cuatro arreglos (una lectura por lienzo, pasos del checkout medidos sólo
+  por decisión del cliente, carrito sin eventos falsos).

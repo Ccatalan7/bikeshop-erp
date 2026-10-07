@@ -78,6 +78,14 @@ const _draftCss = '''
 .vb-fmt output{min-width:28px;text-align:center;font-weight:600;font-variant-numeric:tabular-nums}
 .vb-fmt i{width:1px;height:18px;margin:0 4px;background:currentColor;opacity:.3}
 .vb-sizing,.vb-sizing *{cursor:ns-resize!important;user-select:none!important}
+[data-vb-touch],.vb-grip,.vb-rot,.vb-size,.vb-bar b[data-grip]{touch-action:none}
+@media (pointer:coarse){
+.vb-grip::before,.vb-rot::before,.vb-size::before{content:"";position:absolute;inset:-14px}
+.vb-grip{width:18px;height:18px;right:-10px;bottom:-10px}
+.vb-rot{width:30px;height:30px;margin-left:-15px;top:-42px}
+.vb-rot::after{top:29px;height:12px}
+.vb-angle{top:-72px}
+}
 .draft-missing{display:grid;place-items:center;gap:4px;min-height:160px;margin:0;padding:24px;
   border:1px dashed #9aa0a6;border-radius:8px;background:repeating-linear-gradient(135deg,#f8f9fa 0 12px,#f1f3f4 12px 24px);
   color:#5f6368;font:400 14px/1.4 var(--body,system-ui);text-align:center}
@@ -123,7 +131,7 @@ const _draftScript = r'''
     if (pick.target.classList.contains('blk')) {
       name.setAttribute('data-grip', '');
       name.title = 'Arrastra para mover el bloque';
-      name.addEventListener('mousedown', startMoving);
+      name.addEventListener('pointerdown', startMoving);
     }
     bar.appendChild(name);
     function button(action, title, icon, danger) {
@@ -154,7 +162,7 @@ const _draftScript = r'''
       size.style.background = meta.fill || '#d3e3fd';
       size.style.color = meta.onFill || '#041e49';
       size.textContent = '↕ ' + Math.round(pick.target.getBoundingClientRect().height) + ' px';
-      size.addEventListener('mousedown', startSizing);
+      size.addEventListener('pointerdown', startSizing);
       size.addEventListener('dblclick', function (event) {
         event.preventDefault();
         var id = pick.target && pick.target.getAttribute('data-block-id');
@@ -309,7 +317,14 @@ const _draftScript = r'''
       if (other !== pick.target) { pick.target = other; drawBar(); }
     }
     place(pick);
-    layerPick.target = edit ? null : shownLayer();
+    var held = edit ? null : shownLayer();
+    // The picked layer keeps a finger's drag for itself; the rest of the
+    // page still scrolls under one.
+    if (layerPick.target !== held) {
+      if (layerPick.target) layerPick.target.removeAttribute('data-vb-touch');
+      if (held) held.setAttribute('data-vb-touch', '');
+    }
+    layerPick.target = held;
     place(layerPick);
     if (hover.target && hover.target === pick.target) hover.el.classList.remove('vb-on');
     else place(hover);
@@ -677,7 +692,7 @@ const _draftScript = r'''
     soon();
   }
   function startSizing(event) {
-    if (event.button !== 0 || !pick.target || !meta || !meta.height || edit) return;
+    if (event.button !== 0 || !event.isPrimary || !pick.target || !meta || !meta.height || edit) return;
     event.preventDefault();
     event.stopPropagation();
     var el = pick.target, child = el.firstElementChild;
@@ -692,8 +707,8 @@ const _draftScript = r'''
     sized = null;
     document.documentElement.classList.add('vb-sizing');
   }
-  document.addEventListener('mousemove', function (event) {
-    if (!sizing) return;
+  document.addEventListener('pointermove', function (event) {
+    if (!sizing || !event.isPrimary) return;
     event.preventDefault();
     var h = sizing.from + event.clientY - sizing.y;
     h = Math.max(meta.height.min, Math.min(meta.height.max, Math.round(h / 10) * 10));
@@ -719,7 +734,8 @@ const _draftScript = r'''
     sized = s;
     heightMessage(s.id, 'commit', s.to);
   }
-  document.addEventListener('mouseup', endSizing, true);
+  document.addEventListener('pointerup', endSizing, true);
+  document.addEventListener('pointercancel', endSizing, true);
   // A release the page never sees (outside its frame) ends the drag too.
   addEventListener('blur', endSizing);
   window.vbDraftSized = function (ok) {
@@ -834,8 +850,8 @@ const _draftScript = r'''
     if (m.style === null) m.el.removeAttribute('style'); else m.el.setAttribute('style', m.style);
     soon();
   }
-  document.addEventListener('mousedown', function (event) {
-    if (event.button !== 0 || edit || sizing || shifting || !layerPick.target || !layerSel) return;
+  document.addEventListener('pointerdown', function (event) {
+    if (event.button !== 0 || !event.isPrimary || edit || sizing || shifting || !layerPick.target || !layerSel) return;
     var el = layerPick.target;
     var turn = !!(event.target.closest && event.target.closest('.vb-rot'));
     var grip = !turn && !!(event.target.closest && event.target.closest('.vb-grip'));
@@ -944,9 +960,9 @@ const _draftScript = r'''
     showGuides(z, lineX, lineY);
     return to;
   }
-  document.addEventListener('mousemove', function (event) {
+  document.addEventListener('pointermove', function (event) {
     var m = shifting;
-    if (!m) return;
+    if (!m || !event.isPrimary) return;
     if (!m.begun) {
       if (Math.abs(event.clientX - m.sx) < 4 && Math.abs(event.clientY - m.sy) < 4) return;
       m.begun = true;
@@ -984,7 +1000,10 @@ const _draftScript = r'''
     shifted = m;
     layerMessage(m, 'commit', to);
   }
-  document.addEventListener('mouseup', endShifting, true);
+  document.addEventListener('pointerup', endShifting, true);
+  // The browser took the finger (a scroll, a second finger): the layer goes
+  // back where it was.
+  document.addEventListener('pointercancel', function () { letGo(); }, true);
   addEventListener('blur', endShifting);
   // Escape lets a drag go: the layer goes back where it was.
   function letGo() {
@@ -1080,7 +1099,7 @@ const _draftScript = r'''
     });
   }
   function startMoving(event) {
-    if (event.button !== 0 || !pick.target || edit || sizing) return;
+    if (event.button !== 0 || !event.isPrimary || !pick.target || edit || sizing) return;
     event.preventDefault();
     event.stopPropagation();
     var line = document.createElement('div'), ghost = document.createElement('div');
@@ -1148,14 +1167,15 @@ const _draftScript = r'''
     }
     soon();
   }
-  document.addEventListener('mousemove', function (event) {
-    if (!moving) return;
+  document.addEventListener('pointermove', function (event) {
+    if (!moving || !event.isPrimary) return;
     event.preventDefault();
     moving.x = event.clientX;
     moving.y = event.clientY;
     aim();
   }, true);
-  document.addEventListener('mouseup', function () { stopMoving(true); }, true);
+  document.addEventListener('pointerup', function () { stopMoving(true); }, true);
+  document.addEventListener('pointercancel', function () { stopMoving(false); }, true);
   addEventListener('blur', function () { stopMoving(false); });
   document.addEventListener('keydown', function (event) {
     if (moving && event.key === 'Escape') { event.preventDefault(); stopMoving(false); }

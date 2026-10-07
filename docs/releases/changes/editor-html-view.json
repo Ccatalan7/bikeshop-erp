@@ -11,7 +11,7 @@
   "title": "Vista HTML en el editor del sitio",
   "summary": "En macOS y el ERP web el editor del sitio abre en «Vista HTML»: la página tal como la arma la tienda en HTML, con lo que aún no guardas, y se actualiza con cada cambio.",
   "items": [
-    "Un clic elige el bloque o una capa, que se arrastra con guías, se gira y cambia de tamaño; los textos se escriben ahí y botones y fotos se cambian en su lugar."
+    "Un clic o un toque elige el bloque o una capa, que se arrastra con guías, se gira y cambia de tamaño; textos, botones y fotos se cambian en su lugar."
   ],
   "evidence": [
     {
@@ -48,7 +48,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/editor_draft_view.dart",
-      "sha256": "5a17ba0d33d157fe6835cfeaa1514d134db59ccae61a804bae54094e712cb387"
+      "sha256": "d4a672e9a2f2a357857294f629e934a075e26d1f64f1fd0cbe5f3d0063562c07"
     },
     {
       "path": "services/storefront_html/lib/src/editor_page_model.dart",

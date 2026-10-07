@@ -4836,6 +4836,19 @@ void main() {
         // Its rotation handle, as the canvas's.
         expect(html, contains("layerTurn.className = 'vb-rot'"));
         expect(html, contains("send('vbDraftLayerCommand'"));
+        // A finger moves them too (pointer events), and only the picked
+        // layer and the handles keep the finger from scrolling the page.
+        expect(html, contains("addEventListener('pointerdown'"));
+        expect(html, isNot(contains("addEventListener('mousemove'")));
+        expect(
+          html,
+          contains(
+            '[data-vb-touch],.vb-grip,.vb-rot,.vb-size,'
+            '.vb-bar b[data-grip]{touch-action:none}',
+          ),
+        );
+        final preview = Platform.environment['DRAFT_PREVIEW_OUT'];
+        if (preview != null) File(preview).writeAsStringSync(html);
 
         final public = await _get(
           _FakeReads(

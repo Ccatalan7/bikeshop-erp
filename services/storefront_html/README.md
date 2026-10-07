@@ -92,6 +92,13 @@ python3 services/storefront_html/tool/parity.py --html http://localhost:4325
 python3 services/storefront_html/tool/parity.py --skus <archivo-de-skus>
 ```
 
+La compuerta de CI corre `dart analyze` aquí y falla con **cualquier**
+aviso, también un `info` de estilo en una prueba. Se corre
+`../../.fvm/flutter_sdk/bin/dart analyze lib test` después de la última edición
+y antes del commit, no antes de editar la prueba: el 2026-10-07 un `if` sin
+llaves que el formateador dejó al agregar un gancho de vista previa a una
+prueba tumbó la compuerta de `28d9a64b` y su publicación de la tienda.
+
 `parity.py` compara, para cada ficha y categoría del sitemap, la página que
 publica la tienda Flutter (la instantánea del build) con la del servidor HTML:
 título, descripción, robots, canónica, h1, el nodo `Product` (nombre, SKU,

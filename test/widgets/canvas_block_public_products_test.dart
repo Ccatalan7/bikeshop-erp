@@ -150,8 +150,9 @@ void main() {
     await tester.pump();
     await tester.pump();
 
+    // One read for every layer that names a product.
     final byIds = inventory.asked.where((ask) => ask.ids != null).toList();
-    expect(byIds, isNotEmpty);
+    expect(byIds, hasLength(1));
     expect(byIds.every((ask) => ask.inStock), isTrue);
     expect(byIds.expand((ask) => ask.ids!).toSet(), {'p1', 'p2'});
     final newest = inventory.asked.singleWhere((ask) => ask.ids == null);
