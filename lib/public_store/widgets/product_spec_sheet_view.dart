@@ -140,6 +140,10 @@ class ProductSpecSheetView extends StatelessWidget {
     this.description = '',
     this.onAsk,
     this.askLabel,
+    this.showOriginNote = true,
+    this.showHelp = true,
+    this.helpTitle,
+    this.helpText,
   });
 
   final PublicProductSpecSheet sheet;
@@ -151,6 +155,14 @@ class ProductSpecSheetView extends StatelessWidget {
   /// store has no channel configured.
   final VoidCallback? onAsk;
   final String? askLabel;
+
+  /// The product page template's choices: the note on where the data comes
+  /// from, and the card that leads to a person (its words, when it names
+  /// them; else the sheet's own, by whether the product is technical).
+  final bool showOriginNote;
+  final bool showHelp;
+  final String? helpTitle;
+  final String? helpText;
 
   @override
   Widget build(BuildContext context) {
@@ -198,7 +210,7 @@ class ProductSpecSheetView extends StatelessWidget {
             if (i > 0) const SizedBox(height: 28),
             _group(theme, sheet.groups[i]),
           ],
-          if (sheet.hasTechnicalData) ...[
+          if (sheet.hasTechnicalData && showOriginNote) ...[
             const SizedBox(height: 16),
             Text(
               'Ficha preparada por nuestro equipo con información del '
@@ -218,6 +230,18 @@ class ProductSpecSheetView extends StatelessWidget {
     final hasContent = description.trim().isNotEmpty ||
         sheet.groups.isNotEmpty ||
         (isLoading && sheet.isEmpty);
+    if (!showHelp) {
+      return KeyedSubtree(
+        key: const ValueKey('product_technical_specs_tab'),
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 820),
+            child: content,
+          ),
+        ),
+      );
+    }
     return KeyedSubtree(
       key: const ValueKey('product_technical_specs_tab'),
       child: !hasContent
@@ -363,9 +387,10 @@ class ProductSpecSheetView extends StatelessWidget {
               color: theme.commerceAccent),
           const SizedBox(height: 12),
           Text(
-            sheet.hasTechnicalData
-                ? '¿Le sirve a tu bicicleta?'
-                : '¿Tienes una duda?',
+            helpTitle ??
+                (sheet.hasTechnicalData
+                    ? '¿Le sirve a tu bicicleta?'
+                    : '¿Tienes una duda?'),
             style: theme.text.titleMedium?.copyWith(
               fontSize: 17,
               fontWeight: FontWeight.w700,
@@ -375,11 +400,12 @@ class ProductSpecSheetView extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            sheet.hasTechnicalData
-                ? 'Cuéntanos qué bicicleta tienes y te ayudamos a elegir '
-                    'la medida correcta antes de comprar.'
-                : 'Escríbenos y te ayudamos con lo que necesites saber de '
-                    'este producto antes de comprar.',
+            helpText ??
+                (sheet.hasTechnicalData
+                    ? 'Cuéntanos qué bicicleta tienes y te ayudamos a elegir '
+                        'la medida correcta antes de comprar.'
+                    : 'Escríbenos y te ayudamos con lo que necesites saber de '
+                        'este producto antes de comprar.'),
             style: theme.text.bodyMedium?.copyWith(
               fontSize: 14,
               color: theme.commerceTextSecondary,

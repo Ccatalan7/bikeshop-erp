@@ -114,6 +114,7 @@ $light .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rg
 .crumbs .plain{font:400 16px/1.4 var(--body);color:var(--c-muted)}
 .crumbs [aria-current] span{font:500 14px/1.4 var(--body);color:var(--c-muted)}
 .product{display:grid;grid-template-columns:minmax(0,54fr) minmax(0,46fr);column-gap:56px;align-items:start}
+.photos-right{grid-template-columns:minmax(0,46fr) minmax(0,54fr)}.photos-right>.gallery{order:2}
 .gallery{container-type:inline-size;min-width:0}
 .stage{position:relative;display:grid;place-items:center;height:clamp(400px,82cqw,540px);margin:0;background:#fff;color:var(--c-muted)}
 .stage img{position:absolute;inset:4px;width:calc(100% - 8px);height:calc(100% - 8px);object-fit:contain}
@@ -187,7 +188,7 @@ $light .tools>a.login:hover{background:linear-gradient(rgb(255 255 255 / .08),rg
 .group .hint{grid-column:1/-1;margin:4px 0 0;font-size:12.5px;line-height:1.45;color:var(--c-muted)}
 .origin{margin:16px 0 0;font-size:12.5px;color:var(--c-muted)}
 .help{padding:22px;border:1px solid var(--c-line);border-radius:8px;background:var(--c-soft);color:var(--primary)}
-.sheet-row.only-help{grid-template-columns:minmax(0,420px)}
+.sheet-row.only-help{grid-template-columns:minmax(0,420px)}.sheet-row.no-help{grid-template-columns:minmax(0,1fr)}
 .help-title{margin:12px 0 8px;font:400 17px/1.3 var(--head);color:var(--ink)}
 .help p:not(.help-title){margin:0;font-size:14px;line-height:1.55;color:var(--c-2nd)}
 .ask{display:flex;align-items:center;justify-content:center;gap:8px;height:46px;margin-top:16px;border:1px solid var(--primary);border-radius:5px;color:var(--primary);font:700 14px var(--body);text-decoration:none}
@@ -448,11 +449,12 @@ summary.sheet-item::-webkit-details-marker{display:none}
 @media (max-width:1099px){
 .pdp,.details-in,.related{width:calc(100% - 48px)}
 .product{grid-template-columns:minmax(0,52fr) minmax(0,48fr);column-gap:32px}
+.photos-right{grid-template-columns:minmax(0,48fr) minmax(0,52fr)}
 }
 @media (max-width:767px){
 .pdp,.details-in,.related{width:calc(100% - 32px)}.pdp{margin-top:18px}
 .crumbs{display:none}
-.product{grid-template-columns:minmax(0,1fr);row-gap:24px}
+.product{grid-template-columns:minmax(0,1fr);row-gap:24px}.photos-right>.gallery{order:0}
 .stage{height:clamp(300px,88cqw,420px)}.stage img{inset:2px;width:calc(100% - 4px);height:calc(100% - 4px)}
 .thumbs{gap:12px;margin-top:16px}.thumbs button{width:72px;height:72px}
 .buy h1{font-size:30px;line-height:1.18}.buy hr{margin:20px 0}.price{font-size:38px}

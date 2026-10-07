@@ -262,11 +262,12 @@ página` around it.
 - **Only the page in view.** A block page lists its blocks only while it owns
   the open document *and* is on the canvas: `WebsiteEditorDocumentBinding.bind`
   publishes the page State as `publishBlockCanvas` and takes it back offstage,
-  before its document is ready and on dispose. A cart or product page binds no
+  before its document is ready and on dispose. A cart page binds no
   document, so the previous page's blocks are never offered there; the list
   shows the header and footer and says the page has no sections of its own. A
   catalog page lists its own sections (`catalogCanvas`), with what comes from
-  the catalog and the way to Inventario.
+  the catalog and the way to Inventario; a product page lists the product
+  page template's (`productCanvas`, see «The product page on the canvas»).
 - **What a row does.** Tap selects; from the list it also asks the canvas to
   show the block (`selectBlockFromOutline` → `blockRevealRequest`), which a tap
   on the canvas never does. The handle drags (`SliverReorderableList` →
@@ -747,6 +748,40 @@ Fundas y piolas and Servicio) names the published one. Judged against every
 category, `/productos/categoria/frenos` was refused by the editor's
 navigation guard (and dropped from the HTML grid cards) while the page itself
 opened (2026-10-06).
+
+## The product page on the canvas (stage 3d, 2026-10-06)
+
+Every product page draws one template (approved proposal: «Ficha de producto ·
+una plantilla»): the website setting `product_page_template_v1`
+(`WebsiteProductPageTemplate`, in the shared core). It decides what the page
+shows around the product's own data and in what words: the side the photos
+take on a wide screen (always above on a phone), the note under the price
+(blank hides it), the key data next to the price, the add-to-cart label, the
+buy-now button and its label, the delivery/pickup promises, the sheet title
+(blank: «Ficha técnica» or «Detalles del producto» by what the product has),
+the origin note, the help card (shown or not, its question and text, blank
+being the product's own by whether it is technical) and the related products
+(shown or not, their title). The product itself — name, price, photos, stock,
+description, technical sheet, related items — stays the catalog's, edited in
+Inventario. The Flutter page and the HTML server read the same model; with no
+template saved the page is drawn as before.
+
+In Edit the product page describes itself to the editor
+(`publishProductCanvas` / `releaseProductCanvas`, by the page instance, in
+Edit and Preview while it is in front), and «Secciones» lists `Foto y
+compra`, `Ficha técnica` and `Relacionados` (`WebsiteProductSectionTarget`,
+selection ids `product-page:<section>`, never in the block document). Each
+section's inspector says «Plantilla · cambia todas las fichas» and stages
+through the site-settings draft (`stageProductPageTemplate`; a value equal to
+the saved one is no draft), saved by the global «Guardar». The section titles
+and the note under the price are written on the page. While editing, the
+quantity, cart and buy-now controls, the WhatsApp button and the related
+cards keep their look but are inert: a tap selects the section. «Foto y
+compra» also edits the site's delivery and pickup texts
+(`shipping_promise_title`, `shipping_promise_detail`, `pickup_promise_detail`),
+which had no control before; without them delivery says the cheapest shipping
+tier the checkout charges (`get_public_online_shipping_tiers`) and pickup the
+store's address, in Flutter as in the HTML server.
 
 ## Management workspaces and canonical ownership
 

@@ -30,6 +30,8 @@ import '../models/website_canvas_alignment.dart';
 import '../models/website_canvas_responsive_document.dart';
 import '../models/website_catalog_canvas.dart';
 import '../models/website_catalog_presentation.dart';
+import '../models/website_product_canvas.dart';
+import 'package:vinabike_public_core/modules/website/models/website_product_page_template.dart';
 import '../models/website_responsive_field_state.dart';
 import '../models/website_page_composition.dart';
 import '../models/website_editor_capability.dart';
@@ -80,6 +82,7 @@ part 'editor_panel/header_footer_controls.dart';
 part 'editor_panel/backups_dialog.dart';
 part 'editor_panel/style_controls.dart';
 part 'editor_panel/catalog_section_controls.dart';
+part 'editor_panel/product_page_controls.dart';
 part 'editor_panel/sections_outline.dart';
 
 /// Opens «Versiones guardadas» from outside the pane — the «Ajustes del

@@ -181,6 +181,27 @@ servicios llevan el logo de Viñabike como imagen.
   el contrato de fichas (ver el [wiki de compatibilidad](../../compatibilidad/index.md)).
 - URL canónica: `/productos/<slug>/<sku>`; el slug sale de `product_url_slug` y un
   cambio deja alias en `product_url_aliases` ([rutas](rutas-y-navegacion.md)).
+- **Una plantilla para todas las fichas (etapa 3d, 2026-10-06)** `[Repo]`: el
+  ajuste `product_page_template_v1` (`WebsiteProductPageTemplate`, en el núcleo)
+  decide lo que rodea a los datos del producto: de qué lado van las fotos en
+  escritorio, la nota bajo el precio (vacía no sale), los datos clave junto al
+  precio, el texto del botón de agregar, si sale «Comprar ahora» y con qué
+  texto, si salen despacho y retiro, el título de la ficha técnica (vacío:
+  «Ficha técnica» o «Detalles del producto» según el producto), la nota de
+  origen, la tarjeta de ayuda (si sale, su pregunta y su texto) y los
+  relacionados (si salen y su título). La leen la ficha Flutter y el servidor
+  HTML; sin plantilla guardada todo queda como antes (así estaba en producción
+  el 2026-10-06 `[Prod 2026-10-06]`). Se edita en el editor, sobre la ficha:
+  «Foto y compra», «Ficha técnica» y «Relacionados» en «Secciones»; los títulos
+  y la nota se escriben en la página, y el carrito, «Comprar ahora», WhatsApp y
+  los relacionados no responden mientras se edita.
+- **Despacho y retiro:** sus textos son del sitio (`shipping_promise_title`,
+  `shipping_promise_detail`, `pickup_promise_detail`) y desde la etapa 3d se
+  editan en «Foto y compra»; antes no tenían control y en producción no hay
+  ninguno `[Prod 2026-10-06]`. Sin ellos, el despacho dice la tarifa más barata
+  del checkout («desde $ 6.990, 3 a 12 días hábiles») y el retiro, la dirección
+  de la tienda. Hasta el 2026-10-06 la ficha Flutter no mostraba despacho sin
+  esos textos y la HTML sí: ahora ambas leen `get_public_online_shipping_tiers`.
 
 ## Búsqueda
 
@@ -218,3 +239,10 @@ servicios llevan el logo de Viñabike como imagen.
   filtros son formularios GET: el servidor junta los valores repetidos de una
   casilla (`brand=a&brand=b`) y descarta los campos vacíos antes de
   `WebsiteCatalogQuery.tryParse`.
+- Plantillas: la de categorías es el dueño `@catalog/categories` de
+  `website_catalog_presentation.dart` (`withCategoryTemplate`,
+  `drawnCategory`); la de fichas, `website_product_page_template.dart`
+  (ajuste `product_page_template_v1`), ambas en el núcleo. En el editor:
+  `editor_panel/catalog_section_controls.dart` (`_CategoryLookScope`) y
+  `editor_panel/product_page_controls.dart`, con las secciones de la ficha en
+  `website_product_canvas.dart`.

@@ -44,8 +44,10 @@ class _SectionsOutline extends StatelessWidget {
     final theme = Theme.of(context);
     final roles = VinabikeThemeRoles.maybeOf(context);
     final catalog = provider.catalogCanvas;
-    final blocks =
-        catalog == null && provider.hasBlockCanvas ? provider.blocks : null;
+    final product = catalog == null ? provider.productCanvas : null;
+    final blocks = catalog == null && product == null && provider.hasBlockCanvas
+        ? provider.blocks
+        : null;
     final onAddSection =
         WebsiteEditorCommandScope.maybeOf(context)?.onAddSection;
     final selected = provider.selectedBlockId;
@@ -119,6 +121,13 @@ class _SectionsOutline extends StatelessWidget {
             padding: gutter,
             sliver: SliverList.list(
               children: _catalogOutlineRows(provider, catalog, selected),
+            ),
+          )
+        else if (product != null)
+          SliverPadding(
+            padding: gutter,
+            sliver: SliverList.list(
+              children: _productOutlineRows(provider, product, selected),
             ),
           )
         else if (blocks != null && blocks.isNotEmpty)
@@ -200,6 +209,13 @@ class _SectionsOutline extends StatelessWidget {
               children: _catalogOutlineTail(provider, catalog, selected),
             ),
           ),
+        if (product != null)
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(12, 14, 12, 0),
+            sliver: SliverToBoxAdapter(
+              child: _ProductSourceNote(provider: provider, canvas: product),
+            ),
+          ),
         const SliverToBoxAdapter(child: SizedBox(height: 24)),
       ],
     );
@@ -213,6 +229,7 @@ String? _outlinePageName(
   WebsiteEditModeProvider provider,
 ) {
   if (provider.catalogCanvas case final canvas?) return canvas.rootLabel;
+  if (provider.productCanvas != null) return 'Ficha de producto';
   if (!provider.hasBlockCanvas) return null;
   if (provider.isEditingHomePage) return 'Inicio';
   final pageId = provider.currentPageId;
@@ -387,6 +404,53 @@ List<Widget> _catalogOutlineRows(
       icon: Icons.call_to_action_outlined,
       label: 'Cierre',
       note: shown.hasClosing ? null : 'vacío',
+    ),
+  ];
+}
+
+/// The product page's sections, in page order: the template every product
+/// page draws.
+List<Widget> _productOutlineRows(
+  WebsiteEditModeProvider provider,
+  WebsiteProductCanvasContext canvas,
+  String? selected,
+) {
+  final template = provider.effectiveProductPageTemplate;
+  Widget row(
+    WebsiteProductPageSection section, {
+    required IconData icon,
+    String? note,
+    bool hidden = false,
+  }) {
+    final id = WebsiteProductSectionTarget(section).selectionId;
+    return _SectionRow(
+      key: ValueKey('website-sections-row-$id'),
+      icon: icon,
+      label: section.label,
+      note: note,
+      noteTone: hidden ? _SectionNoteTone.warning : _SectionNoteTone.plain,
+      hidden: hidden,
+      selected: selected == id,
+      onTap: () => provider.selectBlock(id),
+    );
+  }
+
+  return [
+    row(
+      WebsiteProductPageSection.buy,
+      icon: Icons.shopping_bag_outlined,
+      note: 'plantilla de todas',
+    ),
+    row(
+      WebsiteProductPageSection.sheet,
+      icon: Icons.list_alt_rounded,
+      note: canvas.technical ? 'con datos' : 'sin datos técnicos',
+    ),
+    row(
+      WebsiteProductPageSection.related,
+      icon: Icons.grid_view_rounded,
+      note: template.showRelated ? null : 'oculta',
+      hidden: !template.showRelated,
     ),
   ];
 }

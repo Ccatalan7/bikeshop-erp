@@ -130,4 +130,39 @@ void main() {
     expect(find.text('Escríbenos'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets(
+      'the product page template words the help card and can hide it and '
+      'the origin note', (tester) async {
+    await tester.pumpWidget(_host(
+      ProductSpecSheetView(
+        sheet: _tomahawk(),
+        isLoading: false,
+        isMobile: false,
+        onAsk: () {},
+        askLabel: 'Preguntar por WhatsApp',
+        helpTitle: '¿Dudas con la medida?',
+        helpText: 'Escríbenos con el modelo de tu bicicleta.',
+      ),
+    ));
+    expect(find.text('¿Dudas con la medida?'), findsOneWidget);
+    expect(find.text('Escríbenos con el modelo de tu bicicleta.'),
+        findsOneWidget);
+    expect(find.byKey(const ValueKey('product-spec-origin')), findsOneWidget);
+
+    await tester.pumpWidget(_host(
+      ProductSpecSheetView(
+        sheet: _tomahawk(),
+        isLoading: false,
+        isMobile: false,
+        onAsk: () {},
+        showHelp: false,
+        showOriginNote: false,
+      ),
+    ));
+    expect(find.byKey(const ValueKey('product-spec-help')), findsNothing);
+    expect(find.byKey(const ValueKey('product-spec-origin')), findsNothing);
+    expect(find.text('Aro'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }

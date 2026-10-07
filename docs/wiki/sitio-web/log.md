@@ -4,6 +4,12 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-06 — corrección — [catálogo](paginas/catalogo-y-fichas.md),
+  [editor](paginas/editor-del-sitio.md) y [estado](paginas/estado-y-pendientes.md):
+  etapa 3d, la ficha de producto como plantilla en el lienzo; despacho y retiro
+  editables y la tarifa más barata también en Flutter; la propuesta del editor
+  completa; la aserción de debug también entre categoría y ficha, y por qué
+  cambiar el visor de la tienda no la arregla.
 - 2026-10-06 — corrección — [catálogo](paginas/catalogo-y-fichas.md) y
   [editor](paginas/editor-del-sitio.md): etapa 3c, una plantilla para las 11
   categorías (`@catalog/categories`, «Diseño propio» por categoría, la misma

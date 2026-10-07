@@ -244,7 +244,16 @@ Future<void> _serveOriginRequest(HttpRequest request) async {
     return;
   }
 
-  // This isolated origin exists only for the product alias RPC used by the
+  // The store's shipping tiers (the delivery promise's fallback): none here.
+  if (request.uri.path.endsWith('/rpc/get_public_online_shipping_tiers')) {
+    request.response.statusCode = HttpStatus.ok;
+    request.response.headers.contentType = ContentType.json;
+    request.response.write('[]');
+    await request.response.close();
+    return;
+  }
+
+  // Otherwise this isolated origin answers the product alias RPC used by the
   // page after a direct lookup returns null. An empty scalar is PostgREST's
   // confirmed "no alias" result and is deliberately different from a broken
   // transport.

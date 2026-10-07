@@ -1,5 +1,6 @@
 import 'package:jaspr/dom.dart';
 import 'package:jaspr/server.dart';
+import 'package:vinabike_public_core/modules/website/models/website_product_page_template.dart';
 import 'package:vinabike_public_core/public_store/models/public_product_spec_sheet.dart';
 
 import 'material_icons.dart';
@@ -69,10 +70,15 @@ class _ProductSection extends StatelessComponent {
   Component build(BuildContext context) {
     final c = page.commerce;
     final photos = page.photos;
-    final highlights = page.sheet.highlights;
+    final template = page.template;
+    final highlights = template.showHighlights
+        ? page.sheet.highlights
+        : const <PublicSpecItem>[];
     final canBuy = page.inStock && c.price > 0;
     return section(
-      classes: 'product',
+      classes: template.photoSide == WebsiteProductPhotoSide.right
+          ? 'product photos-right'
+          : 'product',
       attributes: {
         // What the page script needs for the cart and the events.
         'data-product-id': c.id,
@@ -133,7 +139,8 @@ class _ProductSection extends StatelessComponent {
           h1([.text(c.title)]),
           hr(),
           p(classes: 'price', [.text(publicHeroPrice(c.price))]),
-          p(classes: 'tax', [.text('Precio final con IVA incluido')]),
+          if (template.taxNote.trim().isNotEmpty)
+            p(classes: 'tax', [.text(template.taxNote.trim())]),
           if (highlights.isNotEmpty) ...[
             _Highlights(highlights),
             a(classes: 'to-sheet', href: '#ficha', [
@@ -208,15 +215,16 @@ class _ProductSection extends StatelessComponent {
                     ),
                   span(
                     attributes: {'data-add-label': ''},
-                    [.text('Agregar al carrito')],
+                    [.text(template.resolvedAddToCartLabel)],
                   ),
                 ],
               ),
-              button(
-                classes: 'buy-now',
-                attributes: {'type': 'submit', 'data-buy-now': ''},
-                [.text('Comprar ahora')],
-              ),
+              if (template.showBuyNow)
+                button(
+                  classes: 'buy-now',
+                  attributes: {'type': 'submit', 'data-buy-now': ''},
+                  [.text(template.resolvedBuyNowLabel)],
+                ),
             ])
           else
             p(classes: 'unavailable', [
@@ -232,7 +240,7 @@ class _ProductSection extends StatelessComponent {
               a(href: '/carrito', [.text('Ver carrito')]),
             ],
           ),
-          _Promises(page),
+          if (template.showPromises) _Promises(page),
         ]),
       ],
     );
@@ -320,6 +328,7 @@ class _SpecSheet extends StatelessComponent {
     final technical = page.sheet.hasTechnicalData;
     final whatsapp = page.shell.whatsappDigits;
     final c = page.commerce;
+    final template = page.template;
     final help = aside(classes: 'help', [
       RawText(
         materialIcon(
@@ -328,17 +337,9 @@ class _SpecSheet extends StatelessComponent {
         ),
       ),
       p(classes: 'help-title', [
-        .text(technical ? '¿Le sirve a tu bicicleta?' : '¿Tienes una duda?'),
+        .text(template.resolvedHelpTitle(technical: technical)),
       ]),
-      p([
-        .text(
-          technical
-              ? 'Cuéntanos qué bicicleta tienes y te ayudamos a elegir la '
-                    'medida correcta antes de comprar.'
-              : 'Escríbenos y te ayudamos con lo que necesites saber de este '
-                    'producto antes de comprar.',
-        ),
-      ]),
+      p([.text(template.resolvedHelpText(technical: technical))]),
       if (whatsapp.isNotEmpty)
         a(
           classes: 'ask',
@@ -352,12 +353,17 @@ class _SpecSheet extends StatelessComponent {
         ),
     ]);
     final hasContent = groups.isNotEmpty || paragraphs.isNotEmpty;
+    final rowClass = !template.showHelp
+        ? 'sheet-row no-help'
+        : hasContent
+        ? 'sheet-row'
+        : 'sheet-row only-help';
     return section(classes: 'details', id: 'ficha', [
       div(classes: 'details-in', [
         h2(classes: 'section-title accent', [
-          .text(technical ? 'Ficha técnica' : 'Detalles del producto'),
+          .text(template.resolvedSheetTitle(technical: technical)),
         ]),
-        div(classes: hasContent ? 'sheet-row' : 'sheet-row only-help', [
+        div(classes: rowClass, [
           if (hasContent)
             div(classes: 'sheet', [
               if (paragraphs.isNotEmpty) ...[
@@ -383,15 +389,12 @@ class _SpecSheet extends StatelessComponent {
                       ]),
                   ]),
                 ]),
-              if (technical)
+              if (technical && template.showOriginNote)
                 p(classes: 'origin', [
-                  .text(
-                    'Ficha preparada por nuestro equipo con información del '
-                    'fabricante y del proveedor.',
-                  ),
+                  .text(WebsiteProductPageTemplate.originNote),
                 ]),
             ]),
-          help,
+          if (template.showHelp) help,
         ]),
       ]),
     ]);
@@ -415,9 +418,12 @@ class _Related extends StatelessComponent {
 
   @override
   Component build(BuildContext context) {
-    if (page.related.isEmpty) return const Component.empty();
+    final template = page.template;
+    if (page.related.isEmpty || !template.showRelated) {
+      return const Component.empty();
+    }
     return section(classes: 'related', [
-      h2(classes: 'section-title', [.text('Productos relacionados')]),
+      h2(classes: 'section-title', [.text(template.resolvedRelatedTitle)]),
       div(classes: 'related-box', [
         ul(classes: 'related-cards', [
           for (final item in page.related)

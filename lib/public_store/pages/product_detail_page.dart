@@ -31,6 +31,11 @@ import '../../modules/inventory/models/category_models.dart';
 import 'package:vinabike_erp/modules/website/models/website_seo_settings_aliases.dart';
 import 'package:vinabike_erp/modules/website/services/website_service.dart';
 import 'package:vinabike_erp/modules/website/models/website_catalog_presentation.dart';
+import 'package:vinabike_erp/modules/website/models/website_product_canvas.dart';
+import 'package:vinabike_erp/modules/website/widgets/inline_editable_text_v2.dart';
+import 'package:vinabike_erp/modules/website/widgets/text_formatting_toolbar.dart';
+import 'package:vinabike_erp/modules/website/widgets/website_editor_selectable_surface.dart';
+import 'package:vinabike_public_core/modules/website/models/website_product_page_template.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
 import 'package:vinabike_erp/public_store/utils/product_url.dart';
 import 'package:vinabike_erp/public_store/utils/structured_data.dart';
@@ -93,6 +98,29 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   int _relatedRequestGeneration = 0;
   List<PublicProductSpecRow> _technicalSpecs = const [];
   final GlobalKey _specSheetKey = GlobalKey();
+
+  /// The cheapest shipping tier the checkout would charge, read once per
+  /// store: «Despacho a domicilio» says it when the site has no delivery
+  /// promise of its own, as the HTML storefront does.
+  static final Map<String, Future<({double price, String days})?>>
+      _cheapestShippingByTenant = {};
+  ({double price, String days})? _cheapestShipping;
+  String? _cheapestShippingTenantId;
+
+  /// The product page template this build draws: the editor's draft while
+  /// Edit or Preview shows the page, else the site's saved one.
+  WebsiteProductPageTemplate _template = const WebsiteProductPageTemplate();
+
+  /// The editor while Edit shows this page on the canvas (its sections are
+  /// selectable and its titles written on the page); null anywhere else.
+  WebsiteEditModeProvider? _canvasEditor;
+
+  /// The editor while Edit or Preview has this page in front: it is told
+  /// which product page is on the canvas.
+  WebsiteEditModeProvider? _authoringEditor;
+
+  /// The editor this page last described itself to, so it can take it back.
+  WebsiteEditModeProvider? _publishedCanvasEditor;
   OverlayEntry? _productFeedbackOverlay;
   Timer? _productFeedbackTimer;
   Timer? _productFeedbackRemovalTimer;
@@ -176,6 +204,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
 
   @override
   void dispose() {
+    _publishedCanvasEditor?.releaseProductCanvas(this);
     _observedInventoryService
         ?.removeListener(_handlePublicInventoryInvalidated);
     _hideProductFeedbackBanner(animated: false);
@@ -255,6 +284,15 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) unawaited(_loadProduct());
       });
+    }
+
+    // The shipping rate is the store's: bound to this tenant before anything
+    // of it is painted, and a reply for another one is dropped.
+    if (tenantId.isNotEmpty) {
+      _loadCheapestShipping(tenantId);
+    } else if (tenantRouteChanged) {
+      _cheapestShippingTenantId = null;
+      _cheapestShipping = null;
     }
 
     if (tenantId.isEmpty) return;
@@ -435,6 +473,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         _productValidationFailed = false;
         _lastValidatedAt = DateTime.now();
         _validatedTenantId = tenantId;
+        _loadCheapestShipping(tenantId);
         if (_trackedProductIdForRoute != _product!.id) {
           _trackedProductIdForRoute = _product!.id;
           MetaPixelService.instance.trackViewContent(
@@ -1182,7 +1221,10 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   }
 
   void _addToCart() {
-    if (_product == null || !_isProductValidated) return;
+    // On the editor's canvas the page is drawn, not used.
+    if (_product == null || !_isProductValidated || _canvasEditor != null) {
+      return;
+    }
 
     final isStockTracked =
         _product!.productType != ProductType.service && _product!.trackStock;
@@ -1220,7 +1262,9 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   }
 
   void _buyNow() {
-    if (_product == null || !_isProductValidated) return;
+    if (_product == null || !_isProductValidated || _canvasEditor != null) {
+      return;
+    }
 
     final isStockTracked =
         _product!.productType != ProductType.service && _product!.trackStock;
@@ -1405,6 +1449,8 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   @override
   Widget build(BuildContext context) {
     super.build(context); // Required for AutomaticKeepAliveClientMixin
+    _followTemplate();
+    if (_isLoading || _product == null) _describeCanvas(null);
     if (_isLoading) {
       return const FullPageLoading();
     }
@@ -1469,7 +1515,18 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       );
     }
 
-    // Get edit mode for key to prevent element reactivation conflicts
+    _describeCanvas(
+      _canvasEditor == null
+          ? null
+          : WebsiteProductCanvasContext(
+              productName: _commerceProjection(_product!).title,
+              technical: _specSheet().hasTechnicalData,
+              highlightCount: _specSheet().highlights.length,
+              relatedCount: _relatedProducts.length,
+              hasPromises: _fulfilmentPromises().isNotEmpty,
+              service: _product!.productType == ProductType.service,
+            ),
+    );
 
     return MediaQueryLayoutBuilder(
       key: const ValueKey('product_detail_layout'),
@@ -1500,76 +1557,99 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                   children: [
                     if (!isMobile) _buildBreadcrumb(),
                     if (!isMobile) const SizedBox(height: 30),
-                    if (isMobile) ...[
-                      _buildImageGallery(isMobile: true),
-                      const SizedBox(height: 24),
-                      _buildProductInfo(isMobile: true),
-                    ] else ...[
-                      LayoutBuilder(
-                        builder: (context, rowConstraints) {
-                          final rowWidth = rowConstraints.maxWidth.isFinite
-                              ? rowConstraints.maxWidth
-                              : constraints.maxWidth - (horizontalMargin * 2);
-                          final columnGap = isTablet ? 32.0 : 56.0;
-                          final galleryWidth = isTablet
-                              ? ((rowWidth - columnGap) * 0.52)
-                              : ((rowWidth - columnGap) * 0.54);
-                          final infoWidth = rowWidth - columnGap - galleryWidth;
+                    if (isMobile)
+                      _canvasSection(
+                        WebsiteProductPageSection.buy,
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildImageGallery(isMobile: true),
+                            const SizedBox(height: 24),
+                            _buildProductInfo(isMobile: true),
+                          ],
+                        ),
+                      )
+                    else
+                      _canvasSection(
+                        WebsiteProductPageSection.buy,
+                        LayoutBuilder(
+                          builder: (context, rowConstraints) {
+                            final rowWidth = rowConstraints.maxWidth.isFinite
+                                ? rowConstraints.maxWidth
+                                : constraints.maxWidth - (horizontalMargin * 2);
+                            final columnGap = isTablet ? 32.0 : 56.0;
+                            final galleryWidth = isTablet
+                                ? ((rowWidth - columnGap) * 0.52)
+                                : ((rowWidth - columnGap) * 0.54);
+                            final infoWidth =
+                                rowWidth - columnGap - galleryWidth;
+                            final gallery = SizedBox(
+                              width: galleryWidth,
+                              child: _buildImageGallery(),
+                            );
+                            final info = SizedBox(
+                              width: infoWidth,
+                              child: _buildProductInfo(),
+                            );
+                            final photosRight = _template.photoSide ==
+                                WebsiteProductPhotoSide.right;
 
-                          return Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              SizedBox(
-                                width: galleryWidth,
-                                child: _buildImageGallery(),
-                              ),
-                              SizedBox(width: columnGap),
-                              SizedBox(
-                                width: infoWidth,
-                                child: _buildProductInfo(),
-                              ),
-                            ],
-                          );
-                        },
+                            return Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                photosRight ? info : gallery,
+                                SizedBox(width: columnGap),
+                                photosRight ? gallery : info,
+                              ],
+                            );
+                          },
+                        ),
                       ),
-                    ],
                   ],
                 ),
               ),
             ),
             SizedBox(height: isMobile ? 48 : 64),
-            _buildProductDetails(
-              isMobile: isMobile,
-              horizontalMargin: horizontalMargin,
+            _canvasSection(
+              WebsiteProductPageSection.sheet,
+              _buildProductDetails(
+                isMobile: isMobile,
+                horizontalMargin: horizontalMargin,
+              ),
             ),
             SizedBox(height: isMobile ? 56 : 80),
-            if (_isLoadingRelated || _relatedProducts.isNotEmpty)
-              Align(
-                alignment: Alignment.topCenter,
-                child: Container(
-                  constraints: const BoxConstraints(maxWidth: 1320),
-                  margin: EdgeInsets.symmetric(horizontal: horizontalMargin),
-                  child: _isLoadingRelated && _relatedProducts.isEmpty
-                      ? const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 24),
-                          child: Center(
-                            child: SizedBox(
-                              width: 40,
-                              height: 40,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          ),
-                        )
-                      : Column(
-                          children: [
-                            if (_isLoadingRelated)
-                              const SizedBox(
-                                height: 2,
-                                child: LinearProgressIndicator(minHeight: 2),
+            if (_template.showRelated &&
+                (_isLoadingRelated || _relatedProducts.isNotEmpty))
+              _canvasSection(
+                WebsiteProductPageSection.related,
+                Align(
+                  alignment: Alignment.topCenter,
+                  child: Container(
+                    constraints: const BoxConstraints(maxWidth: 1320),
+                    margin: EdgeInsets.symmetric(horizontal: horizontalMargin),
+                    child: _isLoadingRelated && _relatedProducts.isEmpty
+                        ? const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 24),
+                            child: Center(
+                              child: SizedBox(
+                                width: 40,
+                                height: 40,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
                               ),
-                            _buildRelatedProducts(),
-                          ],
-                        ),
+                            ),
+                          )
+                        : Column(
+                            children: [
+                              if (_isLoadingRelated)
+                                const SizedBox(
+                                  height: 2,
+                                  child: LinearProgressIndicator(minHeight: 2),
+                                ),
+                              _buildRelatedProducts(),
+                            ],
+                          ),
+                  ),
                 ),
               ),
             SizedBox(height: isMobile ? 72 : 88),
@@ -1776,7 +1856,9 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     final inStock = commerce.availability == PublicCommerceAvailability.inStock;
     final canIncrease =
         !isStockTracked || _quantity < _product!.availableStockQuantity;
-    final highlights = _specSheet().highlights;
+    final highlights = _template.showHighlights
+        ? _specSheet().highlights
+        : const <PublicSpecItem>[];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1803,14 +1885,20 @@ class _ProductDetailPageState extends State<ProductDetailPage>
             height: 0.95,
           ),
         ),
-        const SizedBox(height: 6),
-        Text(
-          'Precio final con IVA incluido',
-          style: _storeTheme.text.bodySmall?.copyWith(
-            fontSize: 13,
-            color: _storeTheme.commerceTextSecondary,
+        if (_template.taxNote.trim().isNotEmpty || _canvasEditor != null) ...[
+          const SizedBox(height: 6),
+          _pageText(
+            field: 'tax_note',
+            text: _template.taxNote.trim(),
+            placeholder: 'Nota bajo el precio (vacía, no se muestra)',
+            style: _storeTheme.text.bodySmall?.copyWith(
+              fontSize: 13,
+              color: _storeTheme.commerceTextSecondary,
+            ),
+            section: WebsiteProductPageSection.buy,
+            stage: (current, value) => current.copyWith(taxNote: value),
           ),
-        ),
+        ],
         if (highlights.isNotEmpty) ...[
           SizedBox(height: isMobile ? 20 : 24),
           ProductSpecHighlights(
@@ -1830,78 +1918,85 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         ),
         SizedBox(height: isMobile ? 18 : 22),
         if (inStock)
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (isMobile) ...[
-                _buildQuantitySelector(
-                  canIncrease: _isProductValidated && canIncrease,
-                  expand: true,
-                ),
-                const SizedBox(height: 14),
-                _buildCartAction(
-                  inCart: inCart,
-                  width: double.infinity,
-                ),
-              ] else
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildQuantitySelector(
-                      canIncrease: _isProductValidated && canIncrease,
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: _buildCartAction(
-                        inCart: inCart,
-                        width: double.infinity,
+          // Drawn as the customer sees it, but on the canvas a tap selects
+          // the section: nothing is added to a cart while editing.
+          _InertWhileEditing(
+            editing: _canvasEditor != null,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (isMobile) ...[
+                  _buildQuantitySelector(
+                    canIncrease: _isProductValidated && canIncrease,
+                    expand: true,
+                  ),
+                  const SizedBox(height: 14),
+                  _buildCartAction(
+                    inCart: inCart,
+                    width: double.infinity,
+                  ),
+                ] else
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildQuantitySelector(
+                        canIncrease: _isProductValidated && canIncrease,
                       ),
-                    ),
-                  ],
-                ),
-              const SizedBox(height: 14),
-              _buildBuyNowAction(isMobile: isMobile),
-              if (inCart) ...[
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.shopping_bag_outlined,
-                      size: 16,
-                      color: _storeTheme.commerceAccent,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Ya tienes este producto en el carrito.',
-                        style: _storeTheme.text.bodySmall?.copyWith(
-                          fontSize: 13,
-                          color: _storeTheme.commerceTextSecondary,
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _buildCartAction(
+                          inCart: inCart,
+                          width: double.infinity,
                         ),
                       ),
-                    ),
-                    TextButton(
-                      onPressed: () =>
-                          PublicStoreLayout.navigateToHref(context, '/carrito'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: _storeTheme.commerceAccent,
-                        padding: EdgeInsets.zero,
-                        minimumSize: const Size(0, 0),
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ],
+                  ),
+                if (_template.showBuyNow) ...[
+                  const SizedBox(height: 14),
+                  _buildBuyNowAction(isMobile: isMobile),
+                ],
+                if (inCart) ...[
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.shopping_bag_outlined,
+                        size: 16,
+                        color: _storeTheme.commerceAccent,
                       ),
-                      child: const Text(
-                        'Ver carrito',
-                        style: TextStyle(
-                          fontFamily: null,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Ya tienes este producto en el carrito.',
+                          style: _storeTheme.text.bodySmall?.copyWith(
+                            fontSize: 13,
+                            color: _storeTheme.commerceTextSecondary,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
+                      TextButton(
+                        onPressed: () => PublicStoreLayout.navigateToHref(
+                            context, '/carrito'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: _storeTheme.commerceAccent,
+                          padding: EdgeInsets.zero,
+                          minimumSize: const Size(0, 0),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: const Text(
+                          'Ver carrito',
+                          style: TextStyle(
+                            fontFamily: null,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
-            ],
+            ),
           )
         else
           Padding(
@@ -1916,8 +2011,10 @@ class _ProductDetailPageState extends State<ProductDetailPage>
               ),
             ),
           ),
-        const SizedBox(height: 28),
-        _buildFulfilmentPromises(),
+        if (_template.showPromises) ...[
+          const SizedBox(height: 28),
+          _buildFulfilmentPromises(),
+        ],
       ],
     );
   }
@@ -1929,35 +2026,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
   /// stating them for a store that never agreed to them misleads the customer,
   /// and the address belonged to a different tenant entirely.
   Widget _buildFulfilmentPromises() {
-    final websiteService = context.read<WebsiteService>();
-    String setting(List<String> keys) {
-      for (final key in keys) {
-        final value = websiteService.getSetting(key, '').trim();
-        if (value.isNotEmpty) return value;
-      }
-      return '';
-    }
-
-    final shippingTitle = setting(const ['shipping_promise_title']);
-    final shippingDetail = setting(const ['shipping_promise_detail']);
-    final pickupDetail = setting(
-      const ['pickup_promise_detail', 'contact_address'],
-    );
-
-    final promises = <({IconData icon, String title, String subtitle})>[
-      if (shippingTitle.isNotEmpty || shippingDetail.isNotEmpty)
-        (
-          icon: Icons.local_shipping_outlined,
-          title: shippingTitle.isEmpty ? 'Despacho' : shippingTitle,
-          subtitle: shippingDetail,
-        ),
-      if (pickupDetail.isNotEmpty)
-        (
-          icon: Icons.storefront_outlined,
-          title: 'Retiro en tienda',
-          subtitle: pickupDetail.replaceAll('\n', ', '),
-        ),
-    ];
+    final promises = _fulfilmentPromises();
     if (promises.isEmpty) return const SizedBox.shrink();
 
     return Container(
@@ -1976,6 +2045,102 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         ],
       ),
     );
+  }
+
+  void _loadCheapestShipping(String tenantId) {
+    // Another store's rate is never shown, not even while this one's loads.
+    if (_cheapestShippingTenantId != tenantId) {
+      _cheapestShippingTenantId = tenantId;
+      _cheapestShipping = null;
+    }
+    final future = _cheapestShippingByTenant.putIfAbsent(
+      tenantId,
+      () => _fetchCheapestShipping(tenantId),
+    );
+    unawaited(future.then((value) {
+      if (mounted &&
+          _cheapestShippingTenantId == tenantId &&
+          value != _cheapestShipping) {
+        setState(() => _cheapestShipping = value);
+      }
+    }));
+  }
+
+  static Future<({double price, String days})?> _fetchCheapestShipping(
+    String tenantId,
+  ) async {
+    try {
+      final rows = await Supabase.instance.client.rpc(
+        'get_public_online_shipping_tiers',
+        params: {'p_tenant_id': tenantId},
+      );
+      ({double price, String days})? cheapest;
+      for (final row in (rows as List? ?? const []).whereType<Map>()) {
+        final price = (row['shipping_gross'] as num?)?.toDouble();
+        if (price == null) continue;
+        if (cheapest == null || price < cheapest.price) {
+          cheapest = (
+            price: price,
+            days: '${row['estimated_min_business_days']} a '
+                '${row['estimated_max_business_days']}',
+          );
+        }
+      }
+      return cheapest;
+    } catch (error) {
+      // Read again on the next product page; no promise until then.
+      _cheapestShippingByTenant.remove(tenantId);
+      debugPrint('[ProductDetailPage] Shipping tiers failed: $error');
+      return null;
+    }
+  }
+
+  List<({IconData icon, String title, String subtitle})> _fulfilmentPromises() {
+    final websiteService = context.read<WebsiteService>();
+    // While the editor draws the page, its drafts of these texts (a blank
+    // one included) are what the page says.
+    final editor = _authoringEditor;
+    String setting(List<String> keys) {
+      for (final key in keys) {
+        final saved = websiteService.getSetting(key, '');
+        final value = (editor == null
+                ? saved
+                : editor.getEffectiveSiteSetting(key, saved))
+            .trim();
+        if (value.isNotEmpty) return value;
+      }
+      return '';
+    }
+
+    final shippingTitle = setting(const ['shipping_promise_title']);
+    final shippingDetail = setting(const ['shipping_promise_detail']);
+    final pickupDetail = setting(
+      const ['pickup_promise_detail', 'contact_address'],
+    );
+
+    final promises = <({IconData icon, String title, String subtitle})>[
+      if (shippingTitle.isNotEmpty || shippingDetail.isNotEmpty)
+        (
+          icon: Icons.local_shipping_outlined,
+          title: shippingTitle.isEmpty ? 'Despacho' : shippingTitle,
+          subtitle: shippingDetail,
+        )
+      else if (_cheapestShipping case final shipping?)
+        (
+          icon: Icons.local_shipping_outlined,
+          title: 'Despacho a domicilio',
+          subtitle: 'Chile continental, desde '
+              '${ChileanUtils.formatCurrency(shipping.price)}, '
+              '${shipping.days} días hábiles.',
+        ),
+      if (pickupDetail.isNotEmpty)
+        (
+          icon: Icons.storefront_outlined,
+          title: 'Retiro en tienda',
+          subtitle: pickupDetail.replaceAll('\n', ', '),
+        ),
+    ];
+    return promises;
   }
 
   Widget _buildProductDetails({
@@ -2011,11 +2176,23 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                   _buildSectionHeading(
                     // A product with nothing technical to say (food, a
                     // souvenir) is not announced as a technical sheet.
-                    _isLoadingTechnicalSpecs || sheet.hasTechnicalData
-                        ? 'Ficha técnica'
-                        : 'Detalles del producto',
+                    _template.resolvedSheetTitle(
+                      technical:
+                          _isLoadingTechnicalSpecs || sheet.hasTechnicalData,
+                    ),
                     foreground: _storeTheme.commerceAccent,
                     lineColor: _storeTheme.commerceAccent,
+                    editable: (
+                      field: 'sheet_title',
+                      automatic:
+                          _template.copyWith(sheetTitle: '').resolvedSheetTitle(
+                                technical: _isLoadingTechnicalSpecs ||
+                                    sheet.hasTechnicalData,
+                              ),
+                      section: WebsiteProductPageSection.sheet,
+                      stage: (current, value) =>
+                          current.copyWith(sheetTitle: value),
+                    ),
                   ),
                   Positioned(
                     top: -96,
@@ -2025,13 +2202,25 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                 ],
               ),
               SizedBox(height: isMobile ? 24 : 32),
-              ProductSpecSheetView(
-                sheet: sheet,
-                isLoading: _isLoadingTechnicalSpecs,
-                isMobile: isMobile,
-                description: description,
-                onAsk: _askAboutProductAction(),
-                askLabel: hasWhatsApp ? 'Preguntar por WhatsApp' : 'Escríbenos',
+              _InertWhileEditing(
+                editing: _canvasEditor != null,
+                child: ProductSpecSheetView(
+                  sheet: sheet,
+                  isLoading: _isLoadingTechnicalSpecs,
+                  isMobile: isMobile,
+                  description: description,
+                  onAsk: _askAboutProductAction(),
+                  askLabel:
+                      hasWhatsApp ? 'Preguntar por WhatsApp' : 'Escríbenos',
+                  showOriginNote: _template.showOriginNote,
+                  showHelp: _template.showHelp,
+                  helpTitle: _template.resolvedHelpTitle(
+                    technical: sheet.hasTechnicalData,
+                  ),
+                  helpText: _template.resolvedHelpText(
+                    technical: sheet.hasTechnicalData,
+                  ),
+                ),
               ),
             ],
           ),
@@ -2058,21 +2247,33 @@ class _ProductDetailPageState extends State<ProductDetailPage>
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildSectionHeading('Productos relacionados'),
-            const SizedBox(height: 28),
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: crossAxisCount,
-                childAspectRatio: aspectRatio,
-                crossAxisSpacing: spacing,
-                mainAxisSpacing: spacing + 4,
+            _buildSectionHeading(
+              _template.resolvedRelatedTitle,
+              editable: (
+                field: 'related_title',
+                automatic: WebsiteProductPageTemplate.defaultRelatedTitle,
+                section: WebsiteProductPageSection.related,
+                stage: (current, value) =>
+                    current.copyWith(relatedTitle: value),
               ),
-              itemCount: _relatedProducts.length,
-              itemBuilder: (context, index) {
-                return _buildRelatedProductCard(_relatedProducts[index]);
-              },
+            ),
+            const SizedBox(height: 28),
+            _InertWhileEditing(
+              editing: _canvasEditor != null,
+              child: GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: crossAxisCount,
+                  childAspectRatio: aspectRatio,
+                  crossAxisSpacing: spacing,
+                  mainAxisSpacing: spacing + 4,
+                ),
+                itemCount: _relatedProducts.length,
+                itemBuilder: (context, index) {
+                  return _buildRelatedProductCard(_relatedProducts[index]);
+                },
+              ),
             ),
           ],
         );
@@ -2403,9 +2604,9 @@ class _ProductDetailPageState extends State<ProductDetailPage>
             ),
             padding: const EdgeInsets.symmetric(horizontal: 16),
           ),
-          child: const Text(
-            'Comprar ahora',
-            style: TextStyle(
+          child: Text(
+            _template.resolvedBuyNowLabel,
+            style: const TextStyle(
               fontFamily: null,
               fontSize: 14,
               fontWeight: FontWeight.w700,
@@ -2526,7 +2727,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
               ? 'Agregado al carrito'
               : inCart
                   ? 'Añadir otra unidad'
-                  : 'Agregar al carrito',
+                  : _template.resolvedAddToCartLabel,
           style: const TextStyle(
             fontFamily: null,
             fontSize: 14,
@@ -2599,25 +2800,169 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     );
   }
 
+  /// Reads the template this build draws and whether Edit shows this page:
+  /// the editor's draft while Edit or Preview has the page in front, else the
+  /// site's saved template.
+  void _followTemplate() {
+    ({bool edit, bool authoring, String raw, String promises})? editor;
+    try {
+      editor = context.select<WebsiteEditModeProvider,
+          ({bool edit, bool authoring, String raw, String promises})>(
+        (provider) => (
+          edit: provider.isEditMode,
+          authoring: provider.isEditMode || provider.isPreviewMode,
+          raw: provider.getEffectiveSiteSetting(
+            websiteProductPageTemplateSettingKey,
+            '',
+          ),
+          // The site texts the buy column shows, so their drafts redraw it.
+          promises: [
+            for (final key in _promiseSettingKeys)
+              provider.getEffectiveSiteSetting(key, '\u0000'),
+          ].join('\u0001'),
+        ),
+      );
+    } catch (_) {
+      // A standalone public storefront has no editor.
+      editor = null;
+    }
+    // A route pushed over this page keeps it mounted with its tickers off:
+    // it is not the page on the canvas then.
+    final inFront = TickerMode.of(context);
+    if (editor != null && editor.authoring) {
+      _template = WebsiteProductPageTemplate.decode(editor.raw);
+      final provider = context.read<WebsiteEditModeProvider>();
+      _authoringEditor = inFront ? provider : null;
+      _canvasEditor = editor.edit && inFront ? provider : null;
+      return;
+    }
+    _authoringEditor = null;
+    _canvasEditor = null;
+    var raw = '';
+    try {
+      raw = context
+          .read<WebsiteService>()
+          .getSetting(websiteProductPageTemplateSettingKey);
+    } catch (_) {}
+    _template = WebsiteProductPageTemplate.decode(raw);
+  }
+
+  /// Tells the editor this product page is on the canvas (Edit or Preview),
+  /// or that it no longer is, after the frame.
+  void _describeCanvas(WebsiteProductCanvasContext? canvas) {
+    final editor = canvas == null ? null : _authoringEditor;
+    if (editor == null && _publishedCanvasEditor == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final previous = _publishedCanvasEditor;
+      if (previous != null && !identical(previous, editor)) {
+        previous.releaseProductCanvas(this);
+      }
+      _publishedCanvasEditor = editor;
+      editor?.publishProductCanvas(canvas!, publisher: this);
+    });
+  }
+
+  /// [child] as a section of the product page on the canvas: selected on a
+  /// tap, with its name, like a block. As is anywhere else.
+  Widget _canvasSection(WebsiteProductPageSection section, Widget child) {
+    if (_canvasEditor == null) return child;
+    final target = WebsiteProductSectionTarget(section);
+    return WebsiteEditorSelectableSurface(
+      key: ValueKey('product-section-${target.selectionId}'),
+      selectionId: target.selectionId,
+      label: section.label,
+      semanticsLabel: '${section.label} de la ficha de producto',
+      child: child,
+    );
+  }
+
+  /// A text of the template written on the page in Edit (staged into the
+  /// editor's draft, saved by its «Guardar»); plain text anywhere else.
+  Widget _pageText({
+    required String field,
+    required String text,
+    required String placeholder,
+    required TextStyle? style,
+    required WebsiteProductPageSection section,
+    required _TemplateEdit stage,
+    bool uppercase = false,
+    String? automatic,
+  }) {
+    final editor = _canvasEditor;
+    if (editor == null) {
+      return Text(uppercase ? text.toUpperCase() : text, style: style);
+    }
+    final target = WebsiteProductSectionTarget(section);
+    return InlineEditableTextV2(
+      key: ValueKey('product-inline-$field'),
+      text: text,
+      baseStyle: style,
+      isEditMode: true,
+      placeholder: placeholder,
+      fieldKey: 'product-page-$field',
+      toolbarPreset: TextToolbarPreset.textOnly,
+      allowWidthResize: false,
+      editorPadding: EdgeInsets.zero,
+      displayTransform: uppercase ? (value) => value.toUpperCase() : null,
+      maxLines: 2,
+      onSessionStart: () {
+        if (editor.selectedBlockId != target.selectionId) {
+          editor.selectBlock(target.selectionId);
+        }
+        return target;
+      },
+      onSessionCommit: (session, commit) {
+        if (commit.text == text) return true;
+        final value = commit.text.replaceAll(RegExp(r'\s*\n\s*'), ' ').trim();
+        editor.stageProductPageTemplate(
+          stage(
+            editor.effectiveProductPageTemplate,
+            automatic != null && value == automatic ? '' : value,
+          ),
+        );
+        return true;
+      },
+      onSessionCancel: (_) {},
+    );
+  }
+
   Widget _buildSectionHeading(
     String title, {
     Color? foreground,
     Color? lineColor,
+    ({
+      String field,
+      String automatic,
+      WebsiteProductPageSection section,
+      _TemplateEdit stage,
+    })? editable,
   }) {
     final effectiveForeground = foreground ?? _storeTheme.commerceTextPrimary;
     final effectiveLineColor = lineColor ?? _storeTheme.commerceAccent;
+    final style = _storeTheme.text.headlineMedium?.copyWith(
+      fontSize: 28,
+      fontWeight: FontWeight.w700,
+      letterSpacing: 0.2,
+      color: effectiveForeground,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          title.toUpperCase(),
-          style: _storeTheme.text.headlineMedium?.copyWith(
-            fontSize: 28,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.2,
-            color: effectiveForeground,
-          ),
-        ),
+        if (editable != null && _canvasEditor != null)
+          _pageText(
+            field: editable.field,
+            text: title,
+            placeholder: editable.automatic,
+            style: style,
+            uppercase: true,
+            section: editable.section,
+            stage: editable.stage,
+            // Written back as the page's own words, it stays automatic.
+            automatic: editable.automatic,
+          )
+        else
+          Text(title.toUpperCase(), style: style),
         const SizedBox(height: 10),
         Container(
           width: 72,
@@ -2628,3 +2973,35 @@ class _ProductDetailPageState extends State<ProductDetailPage>
     );
   }
 }
+
+/// The site settings the buy column's delivery and pickup promises read.
+const _promiseSettingKeys = [
+  'shipping_promise_title',
+  'shipping_promise_detail',
+  'pickup_promise_detail',
+  'contact_address',
+];
+
+/// [child] drawn as the customer sees it but not usable on the editor's
+/// canvas: no pointer and no keyboard focus reach it, so a tap selects the
+/// section and nothing is bought or opened while editing. The same widgets in
+/// both states, so nothing inside is rebuilt from scratch when Edit ends.
+class _InertWhileEditing extends StatelessWidget {
+  const _InertWhileEditing({required this.editing, required this.child});
+
+  final bool editing;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => ExcludeFocus(
+        excluding: editing,
+        child: IgnorePointer(ignoring: editing, child: child),
+      );
+}
+
+/// A change to the product page template from a text written on the page:
+/// the template as it is now, with [value] in its place.
+typedef _TemplateEdit = WebsiteProductPageTemplate Function(
+  WebsiteProductPageTemplate current,
+  String value,
+);

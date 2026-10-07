@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-editor-product-page-template",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android"
+  ],
+  "title": "La ficha de producto se diseña en el editor, una vez para todas",
+  "summary": "La página de cada producto sigue una plantilla que se edita sobre la ficha en el lienzo: de qué lado van las fotos, los botones y sus textos, la ficha técnica, la ayuda y los relacionados. El producto mismo sigue editándose en Inventario.",
+  "items": [
+    "En el editor, una ficha muestra «Foto y compra», «Ficha técnica» y «Relacionados»; lo que se cambia ahí cambia en todas las fichas.",
+    "Los títulos se escriben sobre la página; el carrito y «Comprar ahora» no responden mientras se edita.",
+    "Los textos de despacho y retiro se editan en «Foto y compra»; sin ellos, la ficha dice la tarifa de envío más barata."
+  ],
+  "evidence": [
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_product_page_template.dart",
+      "sha256": "5c5c6d3220b3d1da1e7dbd1bab91354dd86dfde5e59d2624f162cd193294eeb3"
+    },
+    {
+      "path": "lib/modules/website/models/website_product_canvas.dart",
+      "sha256": "50f6b65c260eb17430bf3fa53b3a37c828fc590f20119c4fb42efa1dc16abf44"
+    },
+    {
+      "path": "lib/modules/website/providers/website_edit_mode_provider.dart",
+      "sha256": "84d9c2c9f1c102fad26c3c8b935ae66a183447e3901da7d8ccb6c690dbf2bf83"
+    },
+    {
+      "path": "lib/modules/website/widgets/editor_panel/product_page_controls.dart",
+      "sha256": "bbca82ff2c4b7f3ac383c658c1110ab27faf87689776634ea9533428bd885ab7"
+    },
+    {
+      "path": "lib/modules/website/widgets/editor_panel/sections_outline.dart",
+      "sha256": "041f625ec452daace2ad46cadb601483c5a897918c6aa5beaee1586b9db89f9d"
+    },
+    {
+      "path": "lib/modules/website/widgets/editor_panel/edit_block_tab.dart",
+      "sha256": "a3feeccbb2ce335c5f89d4aa6681158b4cc3337ee2e7c43f1df7f272aca4706c"
+    },
+    {
+      "path": "lib/modules/website/widgets/editor_panel/catalog_section_controls.dart",
+      "sha256": "4449397f1799dd2e94e9b297d6098a90e20a5f99022e6a4ffb600d6c80428433"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_editor_panel.dart",
+      "sha256": "babe01e5f9e47b49efbd3c021042fd35d5cd46c168514403ae668ab5b8e3210d"
+    },
+    {
+      "path": "lib/public_store/pages/product_detail_page.dart",
+      "sha256": "dde8d9a08a3f281f593845db5a950c508a9ae3f0ce4b400045d8d45cf62ff7c6"
+    },
+    {
+      "path": "lib/public_store/widgets/product_spec_sheet_view.dart",
+      "sha256": "3bbff83d04648eba7a25f5d608fd855cbf02cb70e81620d1f5065b367ade82ea"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_page_model.dart",
+      "sha256": "cf44d36ae0a8922e8a77643c0fc776fdb2c0a954e05ed27f0aefd645671914be"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_page_view.dart",
+      "sha256": "66b389bece434d1a5ee2fa4c00a92ff9b14cd4a2b8a13bf5924549ccd5fb021b"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_css.dart",
+      "sha256": "705648c0c50c08a643b70ebdc51691fd217b004a0837a7e6a13b04a0a8599b59"
+    }
+  ]
+}

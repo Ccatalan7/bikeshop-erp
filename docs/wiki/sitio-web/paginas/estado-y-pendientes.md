@@ -13,16 +13,19 @@ Se actualiza cada vez que algo cambia de estado; cada línea con su fecha.
 
 ## En vivo (2026-10-06) `[Prod]`
 
-- Build de la tienda: commit `f2967a7b` (`release.json`, 2026-10-06 21:12
-  UTC); servidor HTML `core-bfcba35e141d.server-fc5aa6abc72c`
-  (`storefront-html-00032-fxr`, con `/servicios` como lista de precios).
+- Servidor HTML `core-d53543082007.server-f01700d5ee5a`
+  (`storefront-html-00034-cbx`, 2026-10-06: las categorías dibujan la
+  plantilla; `/productos/categoria/categorias` es 404).
   Todo lo que ve un cliente es del servidor: el carrito, el checkout, la
   página del pedido, el portal y el login (2026-10-06, `32336525`); Flutter
   sólo arranca en los chats del portal, la descarga de la app del personal,
   `/auth/callback` y al canjear un enlace del correo.
-- ERP 1.0.13 (macOS `macos-v1.0.13-328` y Android, APK 2088) publicado desde
-  `53b55fac` (2026-10-06): `/productos` y las categorías se editan sobre su
-  página (etapa 3a). Antes, el mismo día: 1.0.12 (`b4b4d810`, la lista
+- ERP 1.0.15 (Android APK 2090; macOS publicándose) desde `4243884f`
+  (2026-10-06): la plantilla de las 11 categorías (etapa 3c). Antes, el mismo
+  día: 1.0.14 (macOS `macos-v1.0.14-332`, APK 2089, `7952cfc0`: Catálogo en
+  tablas, Ajustes del sitio, versiones al guardar) y 1.0.13 (macOS
+  `macos-v1.0.13-328` y APK 2088, `53b55fac`): `/productos` y las categorías
+  se editan sobre su página (etapa 3a). Antes, el mismo día: 1.0.12 (`b4b4d810`, la lista
   «Secciones») y 1.0.11 (`fea927df`, `/servicios` sobre la página y la barra
   con «Guardar» siempre arriba).
 - Las páginas que crea el editor (`/pagina/<slug>`) las dibuja el servidor
@@ -72,8 +75,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 | 2026-09-24 | Imágenes pesadas: campaña de cámaras en PNG de 2 MB, WebP de 312 KB en la grilla de categorías | [rendimiento](rendimiento.md) |
 | 2026-09-26 | Login `/cuenta/login` sin la dirección «Sendero» | [portal](portal-de-clientes.md) |
 | 2026-10-06 | **Rediseño de los bloques del editor:** propuesta en Claude Design con datos reales (cifras, carta del taller, mantenciones, reseñas, galería, equipo, preguntas, marcas, llamado); espera el visto bueno del dueño, y la tercera tanda de la fase 5a espera eso | `docs/architecture/storefront-html-migration-plan.md` |
-| 2026-10-06 | **Rediseño del editor (propuesta aprobada, «dale, construye la propuesta del editor»):** hechas la etapa 1 (`/servicios` sobre la página), la 2a (barra con los tres lugares y «Guardar» siempre visible), la 2b (lista «Secciones»), la 3a (`/productos` y las categorías sobre su página) y la 3b sin plantillas (Catálogo en tablas con el porqué de cada fila, todo lo de una categoría en su página, Ajustes del sitio con índice, versiones automáticas al guardar, copiar y pegar secciones entre páginas, palabras simples), ver [editor](editor-del-sitio.md). **Falta:** una plantilla que cambie las 11 categorías a la vez (decide el modelo de datos y obliga a reflejarlo en el servidor HTML) y la ficha de producto en el lienzo. Propuesta: https://claude.ai/artifact/Eg75Q9vj2oZYWKiyGFDCHU | [editor](editor-del-sitio.md) |
-| 2026-10-06 | **Aserción de Flutter en debug al pasar de `/productos` a una categoría** (también en «Ver como cliente», o sea anterior al lienzo): `ProductCatalogPage` cambia su raíz (`FullPageLoading` ↔ contenido) mientras un `LayoutBuilder` la reconstruye en plena medición y `dropChild` dispara `_debugRelayoutBoundaryAlreadyMarkedNeedsLayout`; la página queda en blanco y la sesión de debug se traba (hay que `stop` + `start`). En Release no hay aserciones y abre bien. Arreglo probable: no cambiar el tipo de la raíz (un `Stack`/`AnimatedSwitcher` estable o la carga dentro del mismo árbol) | [editor](editor-del-sitio.md) |
+| 2026-10-06 | **Aserción de Flutter en debug al pasar de `/productos` a una categoría** (también en «Ver como cliente», o sea anterior al lienzo): `ProductCatalogPage` cambia su raíz (`FullPageLoading` ↔ contenido) mientras un `LayoutBuilder` la reconstruye en plena medición y `dropChild` dispara `_debugRelayoutBoundaryAlreadyMarkedNeedsLayout`; la página queda en blanco y la sesión de debug se traba (hay que `stop` + `start`). En Release no hay aserciones y abre bien. **También al pasar de una categoría a una ficha** (2026-10-06, en «Ver como cliente»): la pila muestra el `Navigator` de la tienda reconstruido dentro del `LayoutBuilder` real del visor (`storefront_content_viewport`, `PublicStoreLayout`), y el foco de la ruta nueva marca `LayoutBuilder` de las páginas a mitad del layout. Cambiar ese visor por un `CustomSingleChildLayout` sólo en escritorio **no sirve**: rompe la cadena única de widgets y la página pierde su `State` al pasar entre escritorio, tableta y teléfono (`public_store_layout_navigation_stability_test`); el arreglo tiene que conservar la misma cadena en todos los modos. Para verificar una ficha en debug mientras tanto: entrar desde un destacado de Inicio en «Ver como cliente» y luego «Editar» (no pasa por el catálogo) | [editor](editor-del-sitio.md) |
 | 2026-10-06 | **Lienzo del editor en HTML:** el sitio real en un visor web dentro del ERP (requisito 1 del dueño); los chats se quedan en Flutter (7 conversaciones del portal en total, 0 en 90 días) | `docs/architecture/storefront-html-migration-plan.md` |
 | 2026-10-06 | Pasar al HTML el canje de los enlaces de Auth (vuelta de Google en `/auth/callback`, confirmar con `code`), hoy en Flutter: el verificador PKCE ya está donde ambos lo leen | `docs/architecture/storefront-html-migration-plan.md` |
 | 2026-10-03 | Código muerto: `banners_management_page.dart`, `content_management_page.dart`, `customer_account_page.dart`, `premium_dashboard_widgets.dart`, ruta `/cuenta/mensajes`; clave `header_nav_links` | [editor](editor-del-sitio.md) |
@@ -86,6 +88,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 
 | Fecha | Qué | Página |
 |---|---|---|
+| 2026-10-06 | **Rediseño del editor completo** (propuesta aprobada, «dale, construye la propuesta del editor», https://claude.ai/artifact/Eg75Q9vj2oZYWKiyGFDCHU): etapa 1 (`/servicios` sobre la página), 2a (barra con Páginas, Catálogo y Ajustes del sitio y «Guardar» siempre visible), 2b (lista «Secciones»), 3a (`/productos` y las categorías sobre su página), 3b (Catálogo en tablas, todo lo de una categoría en su página, Ajustes del sitio con índice, versiones al guardar, copiar y pegar secciones; ERP 1.0.14), 3c (una plantilla para las 11 categorías; ERP 1.0.15, Cloud Run `00034`) y 3d (la ficha de producto como plantilla en el lienzo, con despacho y retiro editables). Codex revisó cada etapa | [editor](editor-del-sitio.md) |
 | 2026-10-06 | **`/servicios` como lista de precios**, en vivo (`91360c26`, Cloud Run `storefront-html-00032-fxr`, fuente `core-bfcba35e141d.server-fc5aa6abc72c`): portada con WhatsApp y la calificación de Google, las 3 mantenciones como planes con lo que incluye cada una, los otros 59 servicios en 9 grupos con buscador y la banda de cierre; configurado desde el editor (`Catálogo web > Presentación > Todos los servicios`) y leído de vuelta en la base. Antes del deploy, Codex revisó en dos pasadas (8 hallazgos y 3 de los arreglos, corregidos con pruebas) | [catálogo](catalogo-y-fichas.md) |
 | 2026-10-06 | **El login en HTML** (fase 4c): entrar, crear la cuenta, Google y «¿Olvidaste tu contraseña?», con Supabase Auth desde el navegador y la sesión y el verificador donde los lee Flutter; los enlaces del correo siguen en Flutter; al píxel de Flutter a 1440, 900 y 412 px y 60 comportamientos en los dos anchos contra un Supabase falso; revisión de Codex con 3 arreglos; el teléfono de la cuenta nueva ya no se pierde | [portal](portal-de-clientes.md) |
 | 2026-10-06 | **Perfil y direcciones en HTML** (fase 4b): datos, contraseña (con código y cierre de las demás sesiones), agregar, editar, principal y borrar una dirección con la búsqueda de Maps; se guardan por `POST /cuenta/accion` como el cliente; al píxel de Flutter a 1440 y 412 px y 52 comportamientos verificados. En las dos tiendas: borrar el RUT o el teléfono ya los borra, un obligatorio con espacios no pasa y las fechas de una dirección van en UTC | [portal](portal-de-clientes.md) |

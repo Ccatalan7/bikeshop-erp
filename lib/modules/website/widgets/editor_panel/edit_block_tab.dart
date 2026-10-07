@@ -188,6 +188,18 @@ class _EditBlockTabState extends State<_EditBlockTab> {
       );
     }
 
+    if (WebsiteProductSectionTarget.parse(selectedId) case final target?) {
+      _syncSelection(selectedId);
+      // The product page's sections, only while a product page is drawn.
+      if (editProvider.productCanvas == null) return _buildNoSelection();
+      return _ProductPageSectionControls(
+        key: ValueKey('product_controls_${target.selectionId}'),
+        provider: editProvider,
+        target: target,
+        showHeader: widget.showBlockHeader,
+      );
+    }
+
     // Handle special elements (header/footer) - these are not blocks
     // Use ValueKey to preserve state across rebuilds
     if (selectedId == 'header') {

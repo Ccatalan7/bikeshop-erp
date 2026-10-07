@@ -1,3 +1,4 @@
+import 'package:vinabike_public_core/modules/website/models/website_product_page_template.dart';
 import 'package:vinabike_public_core/public_store/models/public_commerce_product_projection.dart';
 import 'package:vinabike_public_core/public_store/models/public_product_brand_names.dart';
 import 'package:vinabike_public_core/public_store/models/public_product_seo_copy.dart';
@@ -153,6 +154,12 @@ class ProductPageModel {
   final List<ProductImage> photos;
 
   StorefrontShell get shell => page.shell;
+
+  /// The product page template the editor saved: what the page shows around
+  /// the product and in what words (as Flutter's product page draws it).
+  WebsiteProductPageTemplate get template => WebsiteProductPageTemplate.decode(
+    shell.setting(websiteProductPageTemplateSettingKey),
+  );
 
   String? get model => textOf(row['model']);
 

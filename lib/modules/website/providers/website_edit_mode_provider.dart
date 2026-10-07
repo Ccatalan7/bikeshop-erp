@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:uuid/uuid.dart';
 import 'package:vinabike_public_core/modules/website/models/website_catalog_presentation.dart';
+import 'package:vinabike_public_core/modules/website/models/website_product_page_template.dart';
 
 import '../models/website_page_models.dart';
 import '../models/website_catalog_canvas.dart';
+import '../models/website_product_canvas.dart';
 import '../models/website_action.dart';
 import '../models/website_editor_capability.dart';
 import '../models/website_block_document_sanitizer.dart';
@@ -626,6 +628,11 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   /// and the page instance that described it (only it may take it back).
   WebsiteCatalogCanvasContext? _catalogCanvas;
   Object? _catalogCanvasPublisher;
+
+  /// The product page on the canvas, as it describes itself, and the page
+  /// instance that described it (only it may take it back).
+  WebsiteProductCanvasContext? _productCanvas;
+  Object? _productCanvasPublisher;
 
   /// The block page drawn on the canvas right now (Inicio, a CMS page, a
   /// policy page), by the composition that draws it. The open document can
@@ -2247,7 +2254,10 @@ class WebsiteEditModeProvider extends ChangeNotifier {
       return true;
     }
     final catalog = WebsiteCatalogSectionTarget.parse(selectionId);
-    return catalog != null && isCatalogSectionAvailable(catalog);
+    if (catalog != null) return isCatalogSectionAvailable(catalog);
+    // The product page's sections, while a product page is drawn.
+    return WebsiteProductSectionTarget.parse(selectionId) != null &&
+        _productCanvas != null;
   }
 
   /// Transient inspector/canvas selection. This is UI state and must never be
@@ -3144,6 +3154,67 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     _notifyAfterFrame();
   }
 
+  /// The product page on the canvas, or null on any other page.
+  WebsiteProductCanvasContext? get productCanvas => _productCanvas;
+
+  /// Called by the product page after it draws while Edit shows it; like the
+  /// catalog description, it never counts as a change.
+  void publishProductCanvas(
+    WebsiteProductCanvasContext context, {
+    required Object publisher,
+  }) {
+    if (identical(_productCanvasPublisher, publisher) &&
+        _productCanvas == context) {
+      return;
+    }
+    _productCanvas = context;
+    _productCanvasPublisher = publisher;
+    _notifyAfterFrame();
+  }
+
+  /// The product page that described itself left the canvas: a section of it
+  /// that was selected is no longer in view.
+  void releaseProductCanvas(Object publisher) {
+    if (!identical(_productCanvasPublisher, publisher)) return;
+    _productCanvas = null;
+    _productCanvasPublisher = null;
+    if (WebsiteProductSectionTarget.parse(_selectedBlockId) != null) {
+      _selectedBlockId = null;
+      _resetCanvasTouchMode();
+      _selectionVersion++;
+    }
+    _notifyAfterFrame();
+  }
+
+  /// The product page template as saved.
+  WebsiteProductPageTemplate get savedProductPageTemplate =>
+      WebsiteProductPageTemplate.decode(
+        _settings[websiteProductPageTemplateSettingKey]?.toString(),
+      );
+
+  /// What every product page shows while it is edited: the draft, or the
+  /// template as saved.
+  WebsiteProductPageTemplate get effectiveProductPageTemplate =>
+      WebsiteProductPageTemplate.decode(
+        getEffectiveSiteSetting(websiteProductPageTemplateSettingKey, ''),
+      );
+
+  /// Stages the product page template (saved on the global «Guardar» with the
+  /// rest of the site's settings). A value equal to the saved one is no
+  /// change, so undoing an edit by hand leaves nothing to save.
+  void stageProductPageTemplate(WebsiteProductPageTemplate next) {
+    const key = websiteProductPageTemplateSettingKey;
+    if (next == savedProductPageTemplate) {
+      if (_sitewideDraft.pendingSiteSettings.remove(key) == null) return;
+      _markSitewideBucketMutation(WebsiteSitewideDraftBucket.siteSettings);
+      _sitewideDraft.hasSiteSettingsChanges =
+          _sitewideDraft.pendingSiteSettings.isNotEmpty;
+      notifyListeners();
+      return;
+    }
+    updateSiteSetting(key, next.encode());
+  }
+
   /// Whether the page on the canvas is the open block document.
   bool get hasBlockCanvas => _blockCanvasPublisher != null;
 
@@ -3165,7 +3236,8 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     final selected = _selectedBlockId;
     if (selected != null &&
         WebsiteEditorChromeTarget.forSelection(selected) == null &&
-        WebsiteCatalogSectionTarget.parse(selected) == null) {
+        WebsiteCatalogSectionTarget.parse(selected) == null &&
+        WebsiteProductSectionTarget.parse(selected) == null) {
       _selectedBlockId = null;
       _resetCanvasTouchMode();
       _selectionVersion++;
@@ -3353,6 +3425,8 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     // The page on the canvas describes itself again on its next frame.
     _catalogCanvas = null;
     _catalogCanvasPublisher = null;
+    _productCanvas = null;
+    _productCanvasPublisher = null;
     _selectedFooterNavId = null;
   }
 

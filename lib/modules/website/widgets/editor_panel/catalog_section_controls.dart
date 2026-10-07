@@ -18,11 +18,20 @@ WebsiteCatalogPresentation _savedCatalogPresentation(
           : WebsiteCatalogPresentation.catalogRoot(root));
 }
 
-/// Where the catalog page's content is changed: a category's, in its
-/// categories; a catalog's items, in its own list.
+/// Where the page's content is changed: a category's, in its categories; a
+/// catalog's items, in its own list; a product page's product, in its list.
 ({String route, String label}) _catalogSourceFor(
-  WebsiteCatalogCanvasContext? canvas,
+  WebsiteEditModeProvider provider,
 ) {
+  if (provider.productCanvas case final product?) {
+    return product.service
+        ? (route: '/inventory/services', label: 'Abrir servicios en Inventario')
+        : (
+            route: '/inventory/products',
+            label: 'Abrir productos en Inventario'
+          );
+  }
+  final canvas = provider.catalogCanvas;
   if (canvas != null && canvas.collection) {
     return (
       route: '/inventory/categories',
@@ -44,7 +53,7 @@ Future<void> _openCatalogSource(
   BuildContext context,
   WebsiteEditModeProvider provider,
 ) async {
-  final route = _catalogSourceFor(provider.catalogCanvas).route;
+  final route = _catalogSourceFor(provider).route;
   final decision = await WebsiteEditorNavigationGuard.authorize(
     context,
     intent: WebsiteEditorNavigationIntent.leaveEditor,
@@ -108,7 +117,7 @@ class _CatalogSourceNote extends StatelessWidget {
             ),
             icon: const Icon(Icons.open_in_new_rounded, size: 16),
             label: Text(
-              _catalogSourceFor(provider.catalogCanvas).label,
+              _catalogSourceFor(provider).label,
               style: const TextStyle(
                 fontSize: 12.5,
                 fontWeight: FontWeight.w600,

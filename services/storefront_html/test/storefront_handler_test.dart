@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:jaspr/server.dart';
 import 'package:test/test.dart';
 import 'package:vinabike_public_core/modules/website/models/website_catalog_presentation.dart';
+import 'package:vinabike_public_core/modules/website/models/website_product_page_template.dart';
 import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
 import 'package:vinabike_public_core/public_store/models/customer_portal_presentation.dart';
 import 'package:vinabike_public_core/public_store/models/portal_time_zone.dart';
@@ -542,6 +543,59 @@ void main() {
       expect(html, contains('"@type":"Product"'));
       expect(html, contains('"@type":"BreadcrumbList"'));
       expect(html, contains('href="/productos/horquilla-vecina/H912"'));
+    },
+  );
+
+  test(
+    'the product page draws the editor\'s template: its words, what it shows '
+    'and which side the photos take',
+    () async {
+      final plain = await _html();
+      expect(
+        plain,
+        contains('<p class="tax">Precio final con IVA incluido</p>'),
+      );
+      expect(plain, contains('Comprar ahora'));
+      expect(plain, contains('<section class="product"'));
+      expect(plain, contains('Productos relacionados'));
+
+      final shell = _shell();
+      shell['settings'] = {
+        ...shell['settings'] as Map,
+        websiteProductPageTemplateSettingKey: const WebsiteProductPageTemplate(
+          photoSide: WebsiteProductPhotoSide.right,
+          taxNote: '',
+          addToCartLabel: 'Lo quiero',
+          showBuyNow: false,
+          sheetTitle: 'Especificaciones',
+          showOriginNote: false,
+          showHelp: false,
+          relatedTitle: 'También te puede servir',
+        ).encode(),
+      };
+      final html = await _html(shell: shell);
+      expect(html, contains('<section class="product photos-right"'));
+      expect(html, isNot(contains('class="tax"')));
+      expect(html, contains('>Lo quiero</span>'));
+      expect(html, isNot(contains('class="buy-now"')));
+      expect(html, contains('Especificaciones'));
+      expect(html, isNot(contains('Ficha preparada por nuestro equipo')));
+      expect(html, isNot(contains('<aside class="help"')));
+      expect(html, contains('sheet-row no-help'));
+      expect(html, contains('También te puede servir'));
+
+      shell['settings'] = {
+        ...shell['settings'] as Map,
+        websiteProductPageTemplateSettingKey: const WebsiteProductPageTemplate(
+          showRelated: false,
+          showPromises: false,
+          showHighlights: false,
+        ).encode(),
+      };
+      final bare = await _html(shell: shell);
+      expect(bare, isNot(contains('class="related"')));
+      expect(bare, isNot(contains('class="promises"')));
+      expect(bare, isNot(contains('class="highlights"')));
     },
   );
 

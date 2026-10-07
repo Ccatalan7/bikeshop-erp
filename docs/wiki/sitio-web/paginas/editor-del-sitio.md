@@ -140,8 +140,12 @@ plantilla, que dibujan todas las que no tienen diseño propio; «Diseño propio
 para X» la separa. Detalle en [catálogo y fichas](catalogo-y-fichas.md)
 `[Repo]`.
 
-Sigue pendiente ([estado-y-pendientes](estado-y-pendientes.md)): la ficha de
-producto en el lienzo.
+**La ficha de producto en el lienzo (etapa 3d, 2026-10-06):** una plantilla
+para todas las fichas, con «Foto y compra», «Ficha técnica» y «Relacionados»
+como secciones, el aviso «Plantilla · cambia todas las fichas», los títulos
+escritos en la página y los textos de despacho y retiro del sitio, que antes
+no tenían control. Detalle en [catálogo y fichas](catalogo-y-fichas.md)
+`[Repo]`. Con esto la propuesta aprobada quedó completa.
 
 ## Bloques
 
