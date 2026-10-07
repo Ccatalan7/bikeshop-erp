@@ -10,9 +10,9 @@
   "title": "Vista HTML en el editor del sitio",
   "summary": "En el editor del sitio, «Vista HTML» muestra la página en pantalla —inicio, páginas, catálogo, categorías y ficha de producto— tal como la arma la tienda en HTML, con lo que aún no guardas, y se actualiza con cada cambio.",
   "items": [
-    "Un clic en la vista HTML elige lo que tocas (bloque, encabezado, pie, sección); el bloque elegido trae su barra para moverlo, ocultarlo o eliminarlo.",
-    "Los cambios sin guardar del catálogo (portadas, plantilla de categoría), de la plantilla de ficha y del pie se ven al momento.",
-    "Mover una sección del pie en el editor ya no deja el pie sin dibujar."
+    "Un clic en la vista HTML elige el bloque, el encabezado, el pie o la sección, con su barra para moverlo, ocultarlo o eliminarlo.",
+    "Los títulos y textos del bloque elegido se escriben ahí mismo con otro clic: ⌘↵ o un clic afuera lo deja, Esc lo cancela y se deshace en un paso.",
+    "Lo que no guardas del catálogo, de la ficha y del pie se ve al momento, y mover una sección del pie ya no deja el pie sin dibujar."
   ],
   "evidence": [
     {
@@ -21,7 +21,7 @@
     },
     {
       "path": "lib/modules/website/widgets/website_html_draft_view.dart",
-      "sha256": "18f75e90f75de6b5e324d5d0f7db52024dcf61c523c60aeb742808b1bb7718aa"
+      "sha256": "53f4619123e5d4756f2d728fc4f2a35e18d1a403f2eb8e8a41ce707e179b4c84"
     },
     {
       "path": "lib/modules/website/providers/website_edit_mode_provider.dart",
@@ -49,7 +49,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/editor_draft_view.dart",
-      "sha256": "9e67e6c43145fd80f0aaadcc9eb252603ef91310ad2bdf3efc8a23bb5cd2b5a7"
+      "sha256": "7cc6ce549ca189a1e0e716c225d22eaa6fa333d94c223dfffcc694241ea6de24"
     },
     {
       "path": "services/storefront_html/lib/src/editor_page_model.dart",
@@ -57,7 +57,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/editor_page_view.dart",
-      "sha256": "d9db28b8512607b7393e383daa90e25ae25ad5245b642da549c9d65c71d193e8"
+      "sha256": "711bbba34e84716dc1105c6d062869234af1e6a34218dae1dd7d1a865d056e48"
     },
     {
       "path": "services/storefront_html/lib/src/home_page_model.dart",
@@ -65,7 +65,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/home_page_view.dart",
-      "sha256": "07ff910717b9f89248d3008fc616dd177589ccb02aa58e372d5714c0a0dccff2"
+      "sha256": "c27b163fafcd3d13882b3e3c575cdeb28078e4bb8133a92f0bb8c6c6abf8876a"
     },
     {
       "path": "services/storefront_html/lib/src/public_reads.dart",
@@ -77,11 +77,11 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_blocks_view.dart",
-      "sha256": "e3d5f6cc1aef513a64cf59494cc6b9e2f3b1d31cd1c0083aaf60b3b4be86db16"
+      "sha256": "3e0113a230e01acb1dafa189badf1355eac1e941c5a91b45122b48bd813c2801"
     },
     {
       "path": "lib/modules/website/services/website_html_draft_picks.dart",
-      "sha256": "e7ef31cf3d3bfe03f5e5d0dae630f41c67d6b756f51bc1960b369b2133daed0f"
+      "sha256": "3a5b163c4077b3bf1e5dfbbe4fdeea846a57833bbbfa0a08bae5e4f68e051ed2"
     },
     {
       "path": "lib/modules/website/services/website_html_draft_picks_stub.dart",
@@ -89,7 +89,7 @@
     },
     {
       "path": "lib/modules/website/services/website_html_draft_picks_web.dart",
-      "sha256": "13f7714a711c2f6cc1cf2761cd59d30579876a8fadb8c9a7c17a90d76a3e4681"
+      "sha256": "cb85119f3558c10ea8ce4f5a638e9870b43727af515226304c7fb9c62fbf2a73"
     },
     {
       "path": "services/storefront_html/lib/src/editor_draft_reads.dart",
@@ -117,7 +117,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/policy_page_view.dart",
-      "sha256": "855218e121e39efc475882a03f84af710ea9eaf9ce2599d27fc1ad538912b5b1"
+      "sha256": "6f5fb2f7039364685c873804708e8240185f1744902f2c38c0209730cc12de74"
     },
     {
       "path": "lib/modules/website/widgets/block_action_bar.dart",
@@ -125,7 +125,19 @@
     },
     {
       "path": "lib/modules/website/widgets/editable_block_renderer.dart",
-      "sha256": "110c181a286be6b0375fee2ac64c0664ee338745b4954bec20861da4500b94d4"
+      "sha256": "259151c0ff630c0d579598b51928dfa03a3fb8edb0ec99c6f71679445dbbb9a2"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_inline_field_binding.dart",
+      "sha256": "46d7ac317daa4eeb5fd0f0f848d4eba6aace67ac3e7935f24c307914eb2c4036"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_carousel_view.dart",
+      "sha256": "521e75d762b723c6739683e9711fa4f76753665f347997bea947315f55804ec4"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_content_blocks_view.dart",
+      "sha256": "8b29ef2abebbea68f1e60817f5ed589469193d5824353d323ef988e30fd66b85"
     }
   ]
 }

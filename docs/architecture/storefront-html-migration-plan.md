@@ -1719,6 +1719,33 @@ Lo que la medición enseñó y sirve para cualquier paridad que quede:
   que el editor nombra por su fila (`{slug: "inicio"}`) y el borrador sólo
   reconocía como `{home: true}`: en el inicio la vista HTML mostraba lo
   guardado.
+- **5d, segunda parte: escribir los textos sobre el HTML (servidor
+  `8ef44635`→`d24c5da2`, Cloud Run `00046`→`00048`; el editor en el commit
+  siguiente).** En el borrador, cada texto de un
+  bloque que el HTML dibuja (portada, carrusel, preguntas, llamado a la
+  acción, características, nosotros, contacto, texto) lleva el campo que
+  dibuja (`data-edit-text`: `title`, `subtitle,description`,
+  `question@items#2`), el mismo que nombra el `WebsiteInlineTextSlot` del
+  lienzo. Un clic en un texto del bloque elegido lo pide al editor
+  (`vbDraftEdit … begin`); el editor lo arrienda por el mismo camino que el
+  lienzo (`WebsiteInlineFieldBinding.beginText`: sólo un campo de texto que
+  el esquema del bloque declara, en la banda en que se dibuja, con el bloque
+  elegido) y contesta con el texto como está en el borrador para esa banda
+  (`vbDraftEditing`); la página lo vuelve editable ahí mismo, y al salir
+  (clic afuera, ⌘↵) se escribe como un paso del historial
+  (`commitInlineManipulation`); Esc lo deja como estaba, y si el borrador
+  cambió entretanto la escritura se rechaza y la página repone su texto
+  (`vbDraftEdited(false)`). Mientras se escribe la vista no se redibuja. Lo
+  que el lienzo arma en `editable_block_renderer.dart` (campo del esquema,
+  propiedad, objetivo, arriendo) pasó a ese dueño y lo usan los dos. En el
+  borrador el carrusel no avanza solo, como en el lienzo, y sus flechas lo
+  mueven.
+  Al probarlo en la app salió un defecto anterior: un bloque que se dibuja
+  una vez por banda (`data-bands`, la copia del teléfono y la ancha) se
+  marcaba en su primera copia aunque estuviera oculta; el carrusel del
+  inicio quedaba elegido sin marco ni barra. Ahora se marca la copia que se
+  ve.
 - **Lo que falta del 5c/5d:** medir el zoom en Windows; probar el ERP web con
-  una sesión real; editar textos sobre el HTML; arrastrar para reordenar y
-  la manilla de alto.
+  una sesión real; arrastrar para reordenar y la manilla de alto; el formato
+  del texto (negrita, tamaño, color) sigue en el panel; el carrusel del HTML
+  no sigue a la diapositiva elegida en el panel.

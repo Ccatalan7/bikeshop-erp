@@ -325,3 +325,14 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   de control de la app).
 - Hallazgo: el lienzo Flutter lista 1.615 productos y la tienda 538; queda en
   [estado y pendientes](paginas/estado-y-pendientes.md).
+
+## 2026-10-07 — Escribir los textos sobre la vista HTML (5d)
+
+- Con el bloque elegido, un clic en un título o texto lo vuelve editable en
+  la página; el editor lo arrienda por el mismo dueño que el lienzo
+  (`WebsiteInlineFieldBinding`) y lo escribe como un paso del historial.
+- Trampa medida en la app: un bloque dibujado una vez por banda tiene dos
+  elementos con el mismo `data-block-id`, uno oculto; la página marcaba el
+  primero. Se marca el que se ve.
+- El carrusel no avanza solo en el borrador (como el lienzo), y sus flechas
+  lo mueven.

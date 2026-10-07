@@ -19,6 +19,8 @@ import '../services/website_html_draft_picks.dart';
 import '../services/website_service.dart';
 import '../../../shared/themes/vinabike_theme_roles.dart';
 import 'block_action_bar.dart';
+import 'website_block_content_presenters.dart';
+import 'website_inline_field_binding.dart';
 import 'website_editor_host_theme.dart';
 import '../../../shared/services/window_zoom_service.dart';
 import 'website_editor_chrome_geometry.dart';
@@ -82,11 +84,7 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
   void initState() {
     super.initState();
     if (kIsWeb) {
-      _webPicks = websiteHtmlDraftPicks(_nonce).listen(
-        (message) => message.action == null
-            ? _picked([message.id])
-            : _acted([message.id, message.action]),
-      );
+      _webPicks = websiteHtmlDraftPicks(_nonce).listen(_received);
     }
   }
 
@@ -108,6 +106,7 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
 
   @override
   void dispose() {
+    _stopWriting();
     _webPicks?.cancel();
     _debounce?.cancel();
     _provider?.removeListener(_changed);
@@ -128,6 +127,14 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
       _markSelection();
     }
     if (path == null) return;
+    if (_writing case final writing?) {
+      // The operator is writing in the page: a redraw would take the text
+      // from under them. Once they are done the view draws what is wanted.
+      if (writing.path == path && provider.getBlock(writing.blockId) != null) {
+        return;
+      }
+      _stopWriting();
+    }
     final body = websiteHtmlDraftBody(
       path: path,
       pageId: document.pageId,
@@ -353,15 +360,29 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
     };
   }
 
+  void _received(WebsiteHtmlDraftMessage message) {
+    switch (message) {
+      case WebsiteHtmlDraftPick(:final id):
+        _picked(id);
+      case WebsiteHtmlDraftAction(:final id, :final action):
+        _acted(id, action);
+      case final WebsiteHtmlDraftEdit edit:
+        _edit(edit);
+    }
+  }
+
+  /// A web view handler for the page's [name] message.
+  JavaScriptHandlerCallback _handler(String name) => (arguments) {
+        final message = WebsiteHtmlDraftMessage.fromHandler(name, arguments);
+        if (message != null) _received(message);
+      };
+
   /// A press on the picked block's bar in the page: the same actions as the
   /// bar on the Flutter canvas.
-  void _acted(List<dynamic> arguments) {
+  void _acted(String id, String action) {
     final provider = _provider;
-    if (provider == null || arguments.length < 2) return;
-    final id = arguments[0]?.toString();
-    final action = arguments[1]?.toString();
-    final block = id == null ? null : provider.getBlock(id);
-    if (id == null || block == null) return;
+    final block = provider?.getBlock(id);
+    if (provider == null || block == null) return;
     switch (action) {
       case 'up':
         provider.moveBlockUp(id);
@@ -382,11 +403,10 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
     }
   }
 
-  void _picked(List<dynamic> arguments) {
+  void _picked(String? id) {
     final provider = _provider;
     if (provider == null) return;
-    final id = arguments.isEmpty ? null : arguments.first?.toString();
-    if (id == null || id.isEmpty) {
+    if (id == null) {
       provider.selectBlock(null);
       return;
     }
@@ -397,6 +417,97 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
         (WebsiteProductSectionTarget.parse(id) != null &&
             provider.productCanvas != null);
     if (selectable) provider.selectBlock(id);
+  }
+
+  /// The text the operator is writing in the page, while they write it.
+  _Writing? _writing;
+
+  /// One of the page's texts written where it is drawn
+  /// (`data-edit-text`), through the same transaction as the canvas's
+  /// `InlineEditableTextV2`: the start leases the field (the block picked,
+  /// in the band it is drawn in) and answers the page with the text as the
+  /// draft holds it for that band (`vbDraftEditing`; `null` refuses); the
+  /// end writes the text as one step of the history, or lets the lease go.
+  /// The page puts its text back if the write is refused (`vbDraftEdited`).
+  void _edit(WebsiteHtmlDraftEdit edit) {
+    final provider = _provider;
+    if (provider == null) return;
+    switch (edit.step) {
+      case WebsiteHtmlDraftEditStep.begin:
+        _stopWriting();
+        final writing = _beginWriting(provider, edit);
+        _writing = writing;
+        unawaited(_tell(
+          'vbDraftEditing',
+          [writing?.write.text, writing == null ? null : edit.field.spec],
+        ));
+      case WebsiteHtmlDraftEditStep.commit:
+        final writing = _writing;
+        _writing = null;
+        final matches = writing != null &&
+            writing.blockId == edit.id &&
+            writing.field == edit.field.spec;
+        final written = matches && writing.write.commit(edit.text!);
+        if (!matches) writing?.write.cancel();
+        unawaited(_tell('vbDraftEdited', [written]));
+        _changed();
+      case WebsiteHtmlDraftEditStep.cancel:
+        _stopWriting();
+        _changed();
+    }
+  }
+
+  _Writing? _beginWriting(
+    WebsiteEditModeProvider provider,
+    WebsiteHtmlDraftEdit edit,
+  ) {
+    final block = provider.getBlock(edit.id);
+    final path = _path(provider.document.pageId, provider.document.pageSlug);
+    if (block == null || path == null) return null;
+    if (provider.selectedBlockId != edit.id) provider.selectBlock(edit.id);
+    final fields = WebsiteInlineFieldBinding(
+      provider: provider,
+      blockId: edit.id,
+      blockType: (block['block_type'] ?? block['type'] ?? '').toString(),
+    );
+    final field = edit.field;
+    final write = fields.beginText(
+      field.collectionKeys.isEmpty
+          ? null
+          : WebsiteInlineRepeaterTarget(
+              collectionKeys: field.collectionKeys,
+              itemIndex: field.index,
+            ),
+      field.keys,
+    );
+    if (write == null) return null;
+    return _Writing(
+      blockId: edit.id,
+      field: field.spec,
+      path: path,
+      write: write,
+    );
+  }
+
+  /// Lets the text being written go, as it was.
+  void _stopWriting() {
+    final writing = _writing;
+    _writing = null;
+    writing?.write.cancel();
+  }
+
+  /// Calls the page's [function] with [arguments], if the page has it.
+  Future<void> _tell(String function, List<Object?> arguments) async {
+    final web = _web;
+    if (web == null || !mounted) return;
+    try {
+      await web.evaluateJavascript(
+        source: 'window.$function && window.$function('
+            '${arguments.map(jsonEncode).join(', ')});',
+      );
+    } on Object {
+      // The page is between loads: the new one starts without the edit.
+    }
   }
 
   @override
@@ -482,15 +593,16 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
                             ),
                             onWebViewCreated: (controller) {
                               _web = controller;
-                              controller
-                                ..addJavaScriptHandler(
-                                  handlerName: 'vbDraftPick',
-                                  callback: _picked,
-                                )
-                                ..addJavaScriptHandler(
-                                  handlerName: 'vbDraftAction',
-                                  callback: _acted,
+                              for (final name in const [
+                                'vbDraftPick',
+                                'vbDraftAction',
+                                'vbDraftEdit',
+                              ]) {
+                                controller.addJavaScriptHandler(
+                                  handlerName: name,
+                                  callback: _handler(name),
                                 );
+                              }
                               final html = _html;
                               final origin = _server;
                               if (html != null && origin != null) {
@@ -613,4 +725,20 @@ String _withBase(String html, Uri origin, String nonce) {
   final head = RegExp('<head[^>]*>', caseSensitive: false).firstMatch(html);
   if (head == null) return '$base$html';
   return html.replaceRange(head.end, head.end, base);
+}
+
+/// The text the operator is writing in the page: which block and field, on
+/// which page, and the write that holds it.
+class _Writing {
+  const _Writing({
+    required this.blockId,
+    required this.field,
+    required this.path,
+    required this.write,
+  });
+
+  final String blockId;
+  final String field;
+  final String path;
+  final WebsiteInlineTextWrite write;
 }

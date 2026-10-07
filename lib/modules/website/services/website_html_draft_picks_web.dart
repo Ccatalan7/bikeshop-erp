@@ -13,18 +13,8 @@ Stream<WebsiteHtmlDraftMessage> websiteHtmlDraftPicksImpl(String nonce) {
       listener = ((web.MessageEvent event) {
         final data = event.data.dartify();
         if (data is! Map || data['nonce'] != nonce) return;
-        final id = switch (data['id']) {
-          final String id when id.isNotEmpty => id,
-          _ => null,
-        };
-        switch (data['type']) {
-          case 'vb-draft-pick':
-            controller.add((id: id, action: null));
-          case 'vb-draft-action':
-            if (data['action'] case final String action when id != null) {
-              controller.add((id: id, action: action));
-            }
-        }
+        final message = WebsiteHtmlDraftMessage.fromPost(data);
+        if (message != null) controller.add(message);
       }).toJS;
       web.window.addEventListener('message', listener);
     },

@@ -181,7 +181,11 @@ lo que verá el cliente. Un clic elige en el panel el bloque, el encabezado, el
 pie o la sección del catálogo o de la ficha que está debajo; el puntero marca
 con su nombre lo que va a elegir; un bloque elegido trae la misma barra que en
 el lienzo (subir, bajar, ocultar, duplicar, copiar, eliminar); los enlaces no
-navegan. Una sección que el
+navegan. Con el bloque elegido, otro clic en uno de sus títulos o textos lo
+escribe ahí mismo: ⌘↵ o un clic afuera lo deja (un paso del historial,
+como en el lienzo), Esc lo cancela; el formato sigue en el panel. En el
+borrador el carrusel no avanza solo y sus flechas lo mueven
+`[Repo 2026-10-07]` `[Prod 2026-10-07]`. Una sección que el
 HTML aún no dibuja aparece señalada en su lugar. Carrito, pago, pedidos y
 cuenta siguen en el lienzo. Sólo la ve quien puede guardar el sitio, y no
 cuenta como visita en Analytics `[Repo 2026-10-07]` `[Prod 2026-10-07]`.

@@ -12,7 +12,6 @@ import '../models/website_action.dart';
 import '../models/website_block_capabilities.dart';
 import '../models/website_block_definition.dart';
 import '../models/website_block_geometry.dart';
-import '../models/website_block_registry.dart';
 import '../models/website_block_type.dart';
 import '../models/website_canvas_manipulation.dart';
 import '../models/website_responsive_authoring.dart';
@@ -22,6 +21,7 @@ import 'website_editor_chrome_geometry.dart';
 import 'website_canvas_editor_binding.dart';
 import 'website_carousel_edit_binding.dart';
 import 'website_inline_action_editor.dart';
+import 'website_inline_field_binding.dart';
 import 'website_media_picker.dart';
 import '../services/website_service.dart';
 import '../../../shared/models/product.dart';
@@ -678,97 +678,11 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
       },
     );
 
-    WebsiteInlineManipulationOwner manipulationOwnerFor(
-      WebsiteInlineRepeaterTarget? target,
-    ) {
-      if (target == null) return const WebsiteInlineBlockOwner();
-      return WebsiteInlineRepeaterOwner(
-        collectionKeys: target.collectionKeys,
-        itemIndex: target.itemIndex,
-        identityKey: target.identityKey,
-        identityValue: target.identityValue,
-      );
-    }
-
-    WebsiteBlockFieldSchema? schemaFieldFor(
-      WebsiteInlineRepeaterTarget? target,
-      List<String> keys,
-    ) {
-      final type = _registeredBlockType(widget.blockType);
-      if (type == null) return null;
-      if (target == null) {
-        for (final key in keys) {
-          final field = WebsiteBlockRegistry.fieldForPath(type, key);
-          if (field != null) return field;
-        }
-        return null;
-      }
-      for (final collectionKey in target.collectionKeys) {
-        for (final key in keys) {
-          final field = WebsiteBlockRegistry.fieldForPath(
-            type,
-            '$collectionKey.$key',
-          );
-          if (field != null) return field;
-        }
-      }
-      return null;
-    }
-
-    WebsiteInlineManipulationProperty? manipulationPropertyFor(
-      WebsiteInlineRepeaterTarget? target,
-      List<String> keys, {
-      List<String> policyKeys = const <String>[],
-      bool mayLackSchema = false,
-    }) {
-      if (keys.isEmpty) return null;
-      final policySource = policyKeys.isEmpty ? keys : policyKeys;
-      final field = schemaFieldFor(target, policySource);
-      assert(
-        _registeredBlockType(widget.blockType) == null ||
-            field != null ||
-            mayLackSchema,
-        'Inline transaction for "${keys.first}" has no schema field on '
-        '${widget.blockType}.',
-      );
-      final canonical =
-          policyKeys.isEmpty && field != null ? field.key : keys.first;
-      final companions = <String>{
-        ...keys,
-        if (policyKeys.isEmpty && field != null) ...field.migrationAliases,
-      }..remove(canonical);
-      return WebsiteInlineManipulationProperty(
-        canonicalKey: canonical,
-        policy: field?.responsivePolicy ??
-            WebsiteResponsivePropertyPolicy.sharedOnly,
-        sharedCompanionKeys: companions,
-      );
-    }
-
-    WebsiteInlineManipulationTarget? discreteTargetFor(
-      WebsiteInlineRepeaterTarget? target,
-      List<WebsiteInlineManipulationProperty> properties, {
-      bool requiresSelection = true,
-    }) {
-      final viewport = editProvider.renderedBlockViewportFor(widget.blockId);
-      if (viewport == null || properties.isEmpty) return null;
-      return WebsiteInlineManipulationTarget(
-        blockId: widget.blockId,
-        owner: manipulationOwnerFor(target),
-        viewport: viewport,
-        properties: properties,
-        requiresSelection: requiresSelection,
-      );
-    }
-
-    WebsiteInlineManipulationLease? captureDiscreteLease(
-      WebsiteInlineManipulationTarget? target,
-    ) {
-      return target == null
-          ? null
-          : editProvider.captureInlineMutationLease(target);
-    }
-
+    final fields = WebsiteInlineFieldBinding(
+      provider: editProvider,
+      blockId: widget.blockId,
+      blockType: widget.blockType,
+    );
     WebsiteAsyncFieldBinding? asyncFieldBindingFor(
       WebsiteInlineManipulationTarget? target, {
       required String kind,
@@ -849,16 +763,16 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
 
     final contentPresenters = WebsiteBlockContentPresenters(
       text: (presenterContext, slot) {
-        final textProperty = manipulationPropertyFor(
+        final textProperty = fields.propertyFor(
           slot.repeaterTarget,
           slot.valueKeys,
         );
-        final formattingProperty = manipulationPropertyFor(
+        final formattingProperty = fields.propertyFor(
           slot.repeaterTarget,
           slot.formattingKeys,
           policyKeys: slot.valueKeys,
         );
-        final widthProperty = manipulationPropertyFor(
+        final widthProperty = fields.propertyFor(
           slot.repeaterTarget,
           slot.widthKeys,
         );
@@ -868,15 +782,15 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
           if (widthProperty != null) widthProperty,
         ];
         final discreteTarget =
-            discreteTargetFor(slot.repeaterTarget, properties);
-        var discreteLease = captureDiscreteLease(discreteTarget);
+            fields.targetFor(slot.repeaterTarget, properties);
+        var discreteLease = fields.captureLease(discreteTarget);
 
         void writeDiscrete(Map<String, Object?> values) {
           final lease = discreteLease;
           if (lease == null) return;
           final result = editProvider.commitInlineMutation(lease, values);
           discreteLease =
-              result.accepted ? captureDiscreteLease(discreteTarget) : null;
+              result.accepted ? fields.captureLease(discreteTarget) : null;
         }
 
         return InlineEditableTextV2(
@@ -897,7 +811,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
           editorPadding: EdgeInsets.zero,
           displayTransform: slot.displayTransform,
           onSessionStart: () {
-            final target = discreteTargetFor(slot.repeaterTarget, properties);
+            final target = fields.targetFor(slot.repeaterTarget, properties);
             return target == null
                 ? null
                 : editProvider.beginInlineManipulation(target);
@@ -949,17 +863,17 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
         );
       },
       media: (presenterContext, slot) {
-        final property = manipulationPropertyFor(
+        final property = fields.propertyFor(
           slot.repeaterTarget,
           slot.valueKeys,
         );
-        final target = discreteTargetFor(
+        final target = fields.targetFor(
           slot.repeaterTarget,
           <WebsiteInlineManipulationProperty>[
             if (property != null) property,
           ],
         );
-        var lease = captureDiscreteLease(target);
+        var lease = fields.captureLease(target);
         return InlineEditableImage(
           key: ValueKey<String>(
             'website-inline-media-${widget.blockId}-${slot.id}',
@@ -988,25 +902,25 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
                     current,
                     <String, Object?>{property.canonicalKey: url},
                   );
-                  lease = result.accepted ? captureDiscreteLease(target) : null;
+                  lease = result.accepted ? fields.captureLease(target) : null;
                 },
         );
       },
       action: (presenterContext, slot) {
-        final labelProperty = manipulationPropertyFor(
+        final labelProperty = fields.propertyFor(
           slot.repeaterTarget,
           slot.labelKeys,
         );
-        final hrefProperty = manipulationPropertyFor(
+        final hrefProperty = fields.propertyFor(
           slot.repeaterTarget,
           slot.hrefKeys,
         );
-        final variantProperty = manipulationPropertyFor(
+        final variantProperty = fields.propertyFor(
           slot.repeaterTarget,
           slot.variantKeys,
           mayLackSchema: true,
         );
-        final actionsProperty = manipulationPropertyFor(
+        final actionsProperty = fields.propertyFor(
           slot.repeaterTarget,
           <String>[slot.actionsKey],
           mayLackSchema: true,
@@ -1017,8 +931,8 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
           if (variantProperty != null) variantProperty,
           if (actionsProperty != null) actionsProperty,
         ];
-        final target = discreteTargetFor(slot.repeaterTarget, properties);
-        var lease = captureDiscreteLease(target);
+        final target = fields.targetFor(slot.repeaterTarget, properties);
+        var lease = fields.captureLease(target);
         return WebsiteInlineActionEditor(
           key: ValueKey<String>(slot.id == 'standalone-button'
               ? 'website-button-inline-label-${widget.blockId}'
@@ -1054,7 +968,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
                 ),
               },
             );
-            lease = result.accepted ? captureDiscreteLease(target) : null;
+            lease = result.accepted ? fields.captureLease(target) : null;
             return result;
           },
           onOpen: widget.onNavigate == null ||
