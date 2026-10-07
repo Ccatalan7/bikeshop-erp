@@ -485,17 +485,33 @@ const _draftScript = r'''
   document.addEventListener('mousedown', function (event) {
     if (event.target.closest && event.target.closest('.vb-fmt')) event.preventDefault();
   }, true);
+  // The text being written and its toolbar are one session: focus moving
+  // between them keeps it; leaving both ends it (written).
+  function inSession(node) {
+    return !!(node && edit && edit.on &&
+      (edit.el.contains(node) || (node.closest && node.closest('.vb-fmt'))));
+  }
   document.addEventListener('focusout', function (event) {
-    if (edit && edit.on && event.target === edit.el) done(true);
+    if (inSession(event.target) && !inSession(event.relatedTarget)) done(true);
   }, true);
   document.addEventListener('keydown', function (event) {
-    if (!edit || !edit.on || !edit.el.contains(event.target)) return;
+    if (!inSession(event.target)) return;
     event.stopPropagation();
     var shortcut = (event.metaKey || event.ctrlKey) &&
       { b: 'bold', i: 'italic', u: 'underline' }[event.key.toLowerCase()];
     if (shortcut) { event.preventDefault(); applyFormatting(shortcut); return; }
-    if (event.key === 'Escape') { event.preventDefault(); done(false); }
-    else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); done(true); }
+    if (event.key === 'Escape') { event.preventDefault(); done(false); return; }
+    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); done(true); return; }
+    // Tab goes from the text to its toolbar and around it, back to the text.
+    if (event.key === 'Tab') {
+      var buttons = [].slice.call(pick.el.querySelectorAll('.vb-fmt button'));
+      if (!buttons.length) return;
+      var stops = [edit.el].concat(buttons);
+      var at = stops.indexOf(event.target);
+      if (at < 0) at = 0;
+      event.preventDefault();
+      stops[(at + (event.shiftKey ? stops.length - 1 : 1)) % stops.length].focus();
+    }
   }, true);
   // The carousels show the slide picked in the editor's panel, as on the
   // canvas (`vbDraftSlides({blockId: index}, instant)`; instant when the
