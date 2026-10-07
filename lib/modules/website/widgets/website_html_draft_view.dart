@@ -292,11 +292,19 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
     // The operator keeps their place on the page across redraws.
     // (A frame of another origin, on the web, keeps no place to read.)
     _restoreScroll = kIsWeb ? 0 : await web.getScrollY() ?? 0;
+    // The new page opens there, on the slides picked in the panel, before
+    // it is first painted: a redraw neither jumps from the top nor shows a
+    // carousel's first slide for an instant.
+    final opened = websiteHtmlDraftOpenedAt(
+      html,
+      scrollY: _restoreScroll,
+      slides: _slidesWanted(),
+    );
     await web.loadData(
       // In a frame (the ERP on the web) the base URL does not reach the
       // page: its fonts, logo and photos are found through `<base>`, which
       // the server leaves out because a public page's anchors need it out.
-      data: kIsWeb ? _withBase(html, origin, _nonce) : html,
+      data: kIsWeb ? _withBase(opened, origin, _nonce) : opened,
       mimeType: 'text/html',
       encoding: 'utf-8',
       // Relative photos, fonts and icons come from the store itself.
@@ -323,9 +331,19 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
   /// canvas shows them (`carouselSlideSelection`); at once when the page
   /// has just been drawn.
   void _showSlides({bool instant = false}) {
+    final slides = _slidesWanted();
+    if (slides == null) return;
+    final encoded = jsonEncode(slides);
+    if (encoded == _shownSlides) return;
+    _shownSlides = encoded;
+    unawaited(_tell('vbDraftSlides', [slides, instant]));
+  }
+
+  /// The slide picked in the panel for each carousel of the open page.
+  Map<String, int>? _slidesWanted() {
     final provider = _provider;
-    if (provider == null) return;
-    final slides = <String, int>{
+    if (provider == null) return null;
+    return {
       for (final block in provider.blocks)
         if ((block['block_type'] ?? block['type']) == 'carousel' &&
             block['id'] is String)
@@ -334,10 +352,6 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
             _slideCount(block),
           ),
     };
-    final encoded = jsonEncode(slides);
-    if (encoded == _shownSlides) return;
-    _shownSlides = encoded;
-    unawaited(_tell('vbDraftSlides', [slides, instant]));
   }
 
   /// How many slides a carousel block has, counted as the canvas counts
@@ -1487,6 +1501,27 @@ class _ZoomedNativeView extends StatelessWidget {
 
 /// [html] with a `<base>` at the store's [origin], first in its `<head>`,
 /// and the [nonce] its picks are signed with (`window.vbDraftNonce`).
+/// [html] opened at [scrollY] with each carousel on its slide in [slides]
+/// before it is first painted: a script at the end of its body, after the
+/// carousels' and the draft's own (`vbDraftSlides`, at once).
+@visibleForTesting
+String websiteHtmlDraftOpenedAt(
+  String html, {
+  required int scrollY,
+  Map<String, int>? slides,
+}) {
+  final end = html.toLowerCase().lastIndexOf('</body>');
+  if (end < 0 || (scrollY <= 0 && (slides == null || slides.isEmpty))) {
+    return html;
+  }
+  final script = [
+    if (slides != null && slides.isNotEmpty)
+      'window.vbDraftSlides&&vbDraftSlides(${jsonEncode(slides)},true);',
+    if (scrollY > 0) 'scrollTo(0,$scrollY);',
+  ].join();
+  return html.replaceRange(end, end, '<script>$script</script>');
+}
+
 String _withBase(String html, Uri origin, String nonce) {
   final base = '<base href="${origin.replace(path: '/')}">'
       '<script>window.vbDraftNonce=${jsonEncode(nonce)};</script>';

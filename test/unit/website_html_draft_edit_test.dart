@@ -1149,4 +1149,20 @@ void main() {
       expect(layers(provider), ['l1', 'l2']);
     });
   });
+
+  test('a redraw opens where the operator was, on the slides picked', () {
+    const html = '<html><body><main>x</main><script>draft()</script></body>'
+        '</html>';
+    expect(
+      websiteHtmlDraftOpenedAt(html, scrollY: 640, slides: {'b1': 2}),
+      '<html><body><main>x</main><script>draft()</script>'
+      '<script>window.vbDraftSlides&&vbDraftSlides({"b1":2},true);'
+      'scrollTo(0,640);</script></body></html>',
+    );
+    expect(websiteHtmlDraftOpenedAt(html, scrollY: 0, slides: {}), html);
+    expect(
+      websiteHtmlDraftOpenedAt('<p>sin cuerpo</p>', scrollY: 9, slides: null),
+      '<p>sin cuerpo</p>',
+    );
+  });
 }

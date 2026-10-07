@@ -20,7 +20,7 @@
     },
     {
       "path": "lib/modules/website/widgets/website_html_draft_view.dart",
-      "sha256": "01bc8eeda5d978dab1711cb47022121696cffeb25a5000f66cf9935e53998a2f"
+      "sha256": "90d208ee2f8e412120057026c1f59e4374b2ae6ac78b9d686498d3b12ed3a04c"
     },
     {
       "path": "lib/modules/website/providers/website_edit_mode_provider.dart",

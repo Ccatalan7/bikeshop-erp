@@ -2067,6 +2067,13 @@ de 15 px de alto Flutter lo esconde y el HTML lo muestra.
   que la primera carga tras el deploy aún corría el `main.dart.js` viejo del
   worker (lo retira `web/index.html` antes de arrancar).
 - **Lo que falta del 5c/5d:** medir el zoom en Windows.
+- **Un redibujo no salta (2026-10-07).** Cada cambio vuelve a cargar la
+  página; la página volvía arriba y luego bajaba a donde estaba el
+  operador, y un carrusel mostraba su primera diapositiva un instante antes
+  de volver a la elegida. Ahora el editor agrega al final del cuerpo un
+  script que la abre en su desplazamiento y en las diapositivas del panel
+  (`websiteHtmlDraftOpenedAt`) antes de que se pinte. Probado en macOS con
+  la diapositiva 3: ningún cuadro mostró la 1.
 - **El carrusel sigue al panel (servidor `f3d97f23`, Cloud Run `00049`).** El
   carrusel acepta un giro (`car:go`) y avisa cuál muestra (`car:shown`); en
   el borrador el editor le dice la diapositiva elegida en el panel
