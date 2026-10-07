@@ -383,6 +383,9 @@ String carouselCss(WebsiteThemeRoles theme) {
 @container cv (min-width:900px){.cv-st[data-vp~=desktop]{display:block}}
 .cv-bg{position:relative;height:100%;overflow:hidden}
 .cv-bg img,.cv-veil{position:absolute;inset:0;width:100%;height:100%}
+.cv-media{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+.cv-media iframe{position:absolute;top:50%;left:50%;width:100%;height:100%;min-width:177.78vh;min-height:56.25vw;border:0;translate:-50% -50%}
+.cv-media video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 @media (prefers-reduced-motion:reduce){.car-slide,.car-slide.on{transition:none}.cl{animation:none!important}}
 ''';
 }

@@ -43,7 +43,6 @@ void main() {
     final grid = surface(WebsiteBlockType.categoryGrid, {
       'style': {'paddingLeft': 8},
     });
-    expect(grid.isDrawn, isTrue);
     expect(grid.paddingVars, ['--sp-l:8px', '--sp-lx:0px']);
   });
 
@@ -82,27 +81,24 @@ void main() {
     );
   });
 
-  test('a canvas and the footer have no surface; a fixed-height call to '
-      'action with a padding set is not drawn yet', () {
+  test('a canvas and the footer have no surface; a call to action knows '
+      'when a side was set', () {
     final canvas = surface(WebsiteBlockType.canvas, {
       'style': {'backgroundColor': '#000000', 'paddingTop': 20},
     });
     expect(canvas.wraps, isFalse);
     expect(canvas.ownsBackground, isFalse);
     expect(canvas.paddingVars, isEmpty);
-    expect(canvas.isDrawn, isTrue);
+    expect(canvas.hasPadding, isFalse);
+    final cta = surface(WebsiteBlockType.cta, {
+      'blockHeight': 420,
+      'style': {'paddingTop': 20},
+    });
+    expect(cta.hasPadding, isTrue);
+    expect(cta.paddingVars, ['--sp-t:20px']);
     expect(
-      surface(WebsiteBlockType.cta, {
-        'blockHeight': 420,
-        'style': {'paddingTop': 20},
-      }).isDrawn,
+      surface(WebsiteBlockType.cta, {'blockHeight': 420}).hasPadding,
       isFalse,
-    );
-    expect(
-      surface(WebsiteBlockType.cta, {
-        'style': {'paddingTop': 20},
-      }).isDrawn,
-      isTrue,
     );
   });
 }

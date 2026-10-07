@@ -37,12 +37,12 @@ List<Map<String, dynamic>> categoryGridShownCards(
       [
         for (final row in shell.categories.values)
           if (shell.publication.isPublished(row['id']?.toString())) row,
-      ]..sort((a, b) {
-        final byOrder = order(a).compareTo(order(b));
+      ]..sort((one, other) {
+        final byOrder = order(one).compareTo(order(other));
         return byOrder != 0
             ? byOrder
-            : (a['name'] ?? '').toString().compareTo(
-                (b['name'] ?? '').toString(),
+            : (one['name'] ?? '').toString().compareTo(
+                (other['name'] ?? '').toString(),
               );
       });
   return [

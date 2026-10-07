@@ -55,14 +55,11 @@ class BlockSurface {
     WebsiteBlockType.partnersBanner,
   }.contains(type);
 
-  /// Whether the HTML draws this surface as Flutter does. Not yet: padding
-  /// set on a call to action of a fixed height (its unset sides take the
-  /// band's whole design there).
-  bool get isDrawn {
-    if (_ignored || !spec.hasAuthoredPadding) return true;
-    return type != WebsiteBlockType.cta ||
-        _positive(_data['blockHeight']) == null;
-  }
+  /// Whether the operator set a side of the block's padding at this
+  /// viewport: a call to action of a fixed height then keeps its design at
+  /// the sides left unset (`WebsiteCtaBlockContent`), and drops its
+  /// vertical design otherwise.
+  bool get hasPadding => !_ignored && spec.hasAuthoredPadding;
 
   /// The families with an inset of their own inside the padding at a side
   /// (a category grid's header, a brand strip's row), which a side set
@@ -174,15 +171,6 @@ class BlockSurface {
 
   static String _px2(double value) =>
       cssPx(double.parse(value.toStringAsFixed(2)));
-
-  static double? _positive(Object? raw) {
-    final value = switch (raw) {
-      final num number => number.toDouble(),
-      final String text => double.tryParse(text.trim()),
-      _ => null,
-    };
-    return value != null && value.isFinite && value > 0 ? value : null;
-  }
 }
 
 /// The wrapper and the families' backgrounds under a block's own.

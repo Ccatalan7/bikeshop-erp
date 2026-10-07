@@ -9,6 +9,7 @@ import 'material_icons.dart';
 import 'site_layout.dart';
 import 'website_blocks_view.dart';
 import 'website_brand_logos_view.dart';
+import 'website_canvas_view.dart';
 import 'website_carousel_view.dart';
 import 'website_products_view.dart';
 
@@ -81,6 +82,13 @@ Component editorPageDocument(EditorPageModel model) {
             sharedBlockCovers(composed, pageCoveredBlockTypes),
       ))
         script(content: productsCarouselScript),
+      if (blocks.any(
+        (composed) =>
+            composed.block.type == WebsiteBlockType.canvas &&
+            canvasBlockPlaysVideo(composed.block.blockData) &&
+            sharedBlockCovers(composed, pageCoveredBlockTypes),
+      ))
+        script(content: canvasMediaScript),
     ],
   );
 }

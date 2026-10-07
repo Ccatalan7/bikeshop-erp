@@ -398,20 +398,36 @@ class CanvasLayersView extends StatelessComponent {
 }
 
 /// Whether the HTML storefront draws a canvas block: every layer it holds in
-/// every viewport, and no video behind them.
-bool canvasBlockIsCovered(Map<String, dynamic> data) {
-  for (final viewport in _viewportsOf(data)) {
-    final projected = WebsiteCanvasResponsiveDocument.project(
-      data: data,
-      viewport: viewport,
-    );
-    if ((projected['backgroundVideoUrl'] ?? '').toString().trim().isNotEmpty ||
-        (projected['backgroundYoutubeId'] ?? '').toString().trim().isNotEmpty) {
-      return false;
-    }
-  }
-  return canvasDocumentIsCovered(data);
-}
+/// every viewport (a video behind them plays in HTML too).
+bool canvasBlockIsCovered(Map<String, dynamic> data) =>
+    canvasDocumentIsCovered(data);
+
+/// Whether a viewport of the canvas plays a background video
+/// ([canvasMediaScript] loads it).
+bool canvasBlockPlaysVideo(Map<String, dynamic> data) =>
+    _viewportsOf(data).any((viewport) {
+      final projected = WebsiteCanvasResponsiveDocument.project(
+        data: data,
+        viewport: viewport,
+      );
+      return (projected['backgroundVideoUrl'] ?? '')
+              .toString()
+              .trim()
+              .isNotEmpty ||
+          (projected['backgroundYoutubeId'] ?? '').toString().trim().isNotEmpty;
+    });
+
+/// Loads the background video of the canvas stages on screen once the page
+/// has loaded, and pauses (a YouTube one unloads) one whose stage a resize
+/// hid; nothing for a visitor who asks for less motion. A stage for another
+/// width never fetches its video.
+const canvasMediaScript = r'''
+(function(){if(matchMedia("(prefers-reduced-motion: reduce)").matches)return;
+function run(){document.querySelectorAll(".cv-media video,.cv-media iframe").forEach(function(v){if(!v.offsetParent){if(v.tagName==="VIDEO")v.pause();else if(!v.dataset.vsrc&&v.src){v.dataset.vsrc=v.src;v.src="about:blank"}return}if(v.dataset.vsrc){v.src=v.dataset.vsrc;v.removeAttribute("data-vsrc")}if(v.play)v.play().catch(function(){})})}
+var t=0;function later(){clearTimeout(t);t=setTimeout(run,200)}
+if(document.readyState==="complete")run();else addEventListener("load",run);addEventListener("resize",later);
+})();
+''';
 
 /// The `canvas` block (`CanvasBlock`) as a visitor sees it: its stage — the
 /// background color, the photo with its focal point and fit, the veil —
@@ -510,12 +526,48 @@ class CanvasBlockView extends StatelessComponent {
                   '${cssPx(height * 2)})',
     ];
     final alt = (document['backgroundImageAltText'] ?? '').toString();
+    // The video plays under the photo, as `CanvasBlock` stacks them (a photo
+    // set over a video covers it); a YouTube one by its id.
+    final file = (data['backgroundVideoUrl'] ?? '').toString().trim();
+    final youtube = (data['backgroundYoutubeId'] ?? '').toString().trim();
     return (
-      [style, image, contain, fx, fy, veil, veilColor.css, alt],
+      [style, image, contain, fx, fy, veil, veilColor.css, alt, file, youtube],
       div(
         classes: 'cv-bg',
         attributes: {'style': style.join(';')},
         [
+          if (youtube.isNotEmpty || file.isNotEmpty)
+            div(
+              classes: 'cv-media',
+              attributes: {'aria-hidden': 'true'},
+              [
+                if (youtube.isNotEmpty)
+                  Component.element(
+                    tag: 'iframe',
+                    attributes: {
+                      'data-vsrc':
+                          'https://www.youtube.com/embed/$youtube?autoplay=1'
+                          '&mute=1&loop=1&playlist=$youtube&controls=0&rel=0'
+                          '&modestbranding=1&playsinline=1'
+                          '&origin=${Uri.encodeQueryComponent(context.storeUrl)}',
+                      'title': 'Video',
+                      'allow': 'autoplay; encrypted-media',
+                      'tabindex': '-1',
+                    },
+                  )
+                else
+                  Component.element(
+                    tag: 'video',
+                    attributes: {
+                      'data-vsrc': file,
+                      'muted': '',
+                      'loop': '',
+                      'playsinline': '',
+                      'preload': 'none',
+                    },
+                  ),
+              ],
+            ),
           if (image.isNotEmpty)
             Component.element(
               tag: 'img',

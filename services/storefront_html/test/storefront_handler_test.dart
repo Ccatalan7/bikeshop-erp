@@ -2566,18 +2566,11 @@ void main() {
       );
     });
 
-    test('a block the HTML does not draw yet, or one with a surface it does '
-        'not draw as Flutter yet, leaves the page to Flutter', () async {
+    test('a block the HTML does not draw yet leaves the page to '
+        'Flutter', () async {
       final flutter = _FakeFlutterShell();
       for (final extra in [
         block('footer', 'footer', 9, {'companyName': 'Viñabike'}),
-        // A call to action of a fixed height with a padding set: its unset
-        // sides take the band's whole design there.
-        block('tall', 'cta', 9, {
-          'title': 'Reserva',
-          'blockHeight': 420,
-          'style': {'paddingTop': 32},
-        }),
       ]) {
         final reads = _FakeReads(
           editorPages: {
@@ -2610,6 +2603,37 @@ void main() {
         flutterShell: flutter,
       );
       expect(button.headers['x-storefront-fallback'], isNull);
+    });
+
+    test('a call to action of a fixed height keeps its design at the sides '
+        'the operator did not set, and none without a side set', () async {
+      final response = await _get(
+        _FakeReads(
+          editorPages: {
+            'arriendo': page([
+              block('tall', 'cta', 0, {
+                'title': 'Reserva',
+                'blockHeight': 420,
+                'style': {'paddingTop': 32},
+              }),
+              block('flat', 'cta', 1, {'title': 'Agenda', 'blockHeight': 300}),
+            ]),
+          },
+        ),
+        '/pagina/arriendo',
+      );
+      final html = await response.readAsString();
+      final preview = Platform.environment['CTA_PREVIEW_OUT'];
+      if (preview != null) File(preview).writeAsStringSync(html);
+      expect(response.headers['x-storefront-fallback'], isNull);
+      expect(response.headers['x-storefront-uncovered'], isNull);
+      expect(
+        html,
+        contains('<section class="ct fixed pad" style="height:420px">'),
+      );
+      expect(html, contains('--sp-t:32px'));
+      expect(html, contains('<section class="ct fixed" style="height:300px">'));
+      expect(html, contains('.ct.fixed:not(.pad) .ct-in{padding-block:0}'));
     });
 
     test('a block with a surface of its own is drawn with it, as '
@@ -3158,134 +3182,170 @@ void main() {
       expect(html, contains('<dt>WhatsApp</dt><dd>+56 9 9835 7797</dd>'));
     });
 
-    test(
-      'draws a canvas block: its stage under the layers, a theme button '
-      'as the site button; products and a video leave it to Flutter',
-      () async {
-        Map<String, dynamic> canvas(
-          List<Map<String, dynamic>> elements, [
-          Map<String, dynamic> extra = const {},
-        ]) => {
-          'canvasResponsiveVersion': 2,
-          'blockHeight': 480.0,
-          'heightMode': 'fixed',
-          'backgroundColor': '#FF0E2A47',
-          'backgroundImageUrl': 'https://example.invalid/taller.webp',
-          'backgroundImageAltText': 'El taller',
-          'focalPointX': 0.25,
-          'focalPointY': 0.5,
-          'overlayEnabled': true,
-          'overlayColor': '#000000',
-          'overlayOpacity': 0.4,
-          'elements': elements,
-          ...extra,
-        };
-        const text = {
-          'id': 't1',
-          'type': 'text',
-          'x': 80,
-          'y': 120,
-          'w': 520,
-          'h': 80,
-          'text': 'Mantención de temporada',
-          'fontSize': 44,
-          'color': '#FFFFFFFF',
-        };
-        const themeButton = {
-          'id': 'b1',
-          'type': 'button',
-          'x': 80,
-          'y': 260,
-          'w': 220,
-          'h': 52,
-          'label': 'Agendar',
-          'link': '/contacto',
-          'style': 'filled',
-          'inheritTheme': true,
-        };
-        final shell = _shell();
-        Future<(int, String, String?)> page(Map<String, dynamic> data) async {
-          final reads = _FakeReads(
-            shell: {
-              ...shell,
-              'settings': {
-                ...(shell['settings'] as Map<String, dynamic>),
-                'theme_accent_color': '4294930176',
-                'theme_heading_font': 'Oswald',
-                'theme_body_font': 'Barlow',
-              },
+    test('draws a canvas block: its stage under the layers, a theme button '
+        'as the site button, a video under the photo; a product card leaves '
+        'it to Flutter', () async {
+      Map<String, dynamic> canvas(
+        List<Map<String, dynamic>> elements, [
+        Map<String, dynamic> extra = const {},
+      ]) => {
+        'canvasResponsiveVersion': 2,
+        'blockHeight': 480.0,
+        'heightMode': 'fixed',
+        'backgroundColor': '#FF0E2A47',
+        'backgroundImageUrl': 'https://example.invalid/taller.webp',
+        'backgroundImageAltText': 'El taller',
+        'focalPointX': 0.25,
+        'focalPointY': 0.5,
+        'overlayEnabled': true,
+        'overlayColor': '#000000',
+        'overlayOpacity': 0.4,
+        'elements': elements,
+        ...extra,
+      };
+      const text = {
+        'id': 't1',
+        'type': 'text',
+        'x': 80,
+        'y': 120,
+        'w': 520,
+        'h': 80,
+        'text': 'Mantención de temporada',
+        'fontSize': 44,
+        'color': '#FFFFFFFF',
+      };
+      const themeButton = {
+        'id': 'b1',
+        'type': 'button',
+        'x': 80,
+        'y': 260,
+        'w': 220,
+        'h': 52,
+        'label': 'Agendar',
+        'link': '/contacto',
+        'style': 'filled',
+        'inheritTheme': true,
+      };
+      final shell = _shell();
+      Future<(int, String, String?)> page(Map<String, dynamic> data) async {
+        final reads = _FakeReads(
+          shell: {
+            ...shell,
+            'settings': {
+              ...(shell['settings'] as Map<String, dynamic>),
+              'theme_accent_color': '4294930176',
+              'theme_heading_font': 'Oswald',
+              'theme_body_font': 'Barlow',
             },
-            editorPages: {
-              'campana': {
-                'id': 'p9',
-                'slug': 'campana',
-                'title': 'Campaña',
-                'is_published': true,
-                'website_blocks': [
-                  {
-                    'id': 'cv',
-                    'block_type': 'canvas',
-                    'order_index': 0,
-                    'is_visible': true,
-                    'block_data': data,
-                  },
-                ],
-              },
+          },
+          editorPages: {
+            'campana': {
+              'id': 'p9',
+              'slug': 'campana',
+              'title': 'Campaña',
+              'is_published': true,
+              'website_blocks': [
+                {
+                  'id': 'cv',
+                  'block_type': 'canvas',
+                  'order_index': 0,
+                  'is_visible': true,
+                  'block_data': data,
+                },
+              ],
             },
-          );
-          final response = await _get(reads, '/pagina/campana');
-          return (
-            response.statusCode,
-            await response.readAsString(),
-            response.headers['x-storefront-uncovered'],
-          );
-        }
+          },
+        );
+        final response = await _get(reads, '/pagina/campana');
+        return (
+          response.statusCode,
+          await response.readAsString(),
+          response.headers['x-storefront-uncovered'],
+        );
+      }
 
-        final (status, html, uncovered) = await page(
-          canvas([text, themeButton]),
-        );
-        final preview = Platform.environment['CANVAS_PREVIEW_OUT'];
-        if (preview != null) File(preview).writeAsStringSync(html);
-        expect(status, 200);
-        expect(uncovered, isNull);
-        // The saved height is the block's, as PageComposition gives it.
-        expect(html, contains('style="height:480px"'));
-        expect(html, contains('<div class="cv exact">'));
-        expect(
-          html,
-          contains('<div class="cv-st" data-vp="mobile tablet desktop">'),
-        );
-        expect(html, contains('background:rgb(14 42 71)'));
-        expect(html, contains('alt="El taller"'));
-        expect(html, contains('object-position:25% 50%'));
-        expect(
-          html,
-          contains('<div class="cv-veil" style="background:rgb(0 0 0 / 0.4)">'),
-        );
-        expect(html, contains('Mantención de temporada'));
-        expect(
-          html,
-          contains(
-            'class="cl cl-tbtn w-btn filled" '
-            'style="--x:80;--y:260;--w:220;--h:52" href="/contacto">Agendar</a>',
-          ),
-        );
+      final (status, html, uncovered) = await page(canvas([text, themeButton]));
+      final preview = Platform.environment['CANVAS_PREVIEW_OUT'];
+      if (preview != null) File(preview).writeAsStringSync(html);
+      expect(status, 200);
+      expect(uncovered, isNull);
+      // The saved height is the block's, as PageComposition gives it.
+      expect(html, contains('style="height:480px"'));
+      expect(html, contains('<div class="cv exact">'));
+      expect(
+        html,
+        contains('<div class="cv-st" data-vp="mobile tablet desktop">'),
+      );
+      expect(html, contains('background:rgb(14 42 71)'));
+      expect(html, contains('alt="El taller"'));
+      expect(html, contains('object-position:25% 50%'));
+      expect(
+        html,
+        contains('<div class="cv-veil" style="background:rgb(0 0 0 / 0.4)">'),
+      );
+      expect(html, contains('Mantención de temporada'));
+      expect(
+        html,
+        contains(
+          'class="cl cl-tbtn w-btn filled" '
+          'style="--x:80;--y:260;--w:220;--h:52" href="/contacto">Agendar</a>',
+        ),
+      );
 
-        // A product card reads products the page does not load yet, and a
-        // video plays behind: Flutter draws those.
-        final product = await page(
-          canvas([
-            text,
-            {'id': 'p1', 'type': 'product', 'productId': 'x', 'x': 0, 'y': 0},
-          ]),
-        );
-        expect(product.$3, isNotNull);
-        final video = await page(
-          canvas([text], {'backgroundYoutubeId': 'dQw4w9WgXcQ'}),
-        );
-        expect(video.$3, isNotNull);
-      },
-    );
+      // A product card reads products the page does not load yet: Flutter
+      // draws it.
+      final product = await page(
+        canvas([
+          text,
+          {'id': 'p1', 'type': 'product', 'productId': 'x', 'x': 0, 'y': 0},
+        ]),
+      );
+      expect(product.$3, isNotNull);
+
+      // A video plays under the photo, YouTube before a file as
+      // `VideoBannerPlatform`; its source waits for the page to load.
+      final video = await page(
+        canvas(
+          [text],
+          {
+            'backgroundYoutubeId': 'dQw4w9WgXcQ',
+            'backgroundVideoUrl': 'https://cdn.example/taller.mp4',
+          },
+        ),
+      );
+      if (preview != null) {
+        File('$preview.video.html').writeAsStringSync(video.$2);
+      }
+      expect(video.$3, isNull);
+      expect(video.$2, contains('<div class="cv-media" aria-hidden="true">'));
+      expect(
+        video.$2,
+        contains('data-vsrc="https://www.youtube.com/embed/dQw4w9WgXcQ?'),
+      );
+      expect(video.$2, isNot(contains(' src="https://www.youtube.com')));
+      expect(video.$2, isNot(contains('taller.mp4')));
+      expect(
+        video.$2.indexOf('class="cv-media"'),
+        lessThan(video.$2.indexOf('alt="El taller"')),
+      );
+      expect(video.$2, contains('.cv-media video,.cv-media iframe'));
+      final file = await page(
+        canvas(
+          [text],
+          {'backgroundVideoUrl': 'https://cdn.example/taller.mp4'},
+        ),
+      );
+      expect(file.$3, isNull);
+      expect(
+        file.$2,
+        contains(
+          '<video data-vsrc="https://cdn.example/taller.mp4" muted loop '
+          'playsinline preload="none">',
+        ),
+      );
+      // Without a video the page carries no script for it.
+      expect(html, isNot(contains('.cv-media video,.cv-media iframe')));
+    });
 
     test('a page that does not exist answers 404, an upper-case slug the '
         'lower-case page Flutter reads', () async {

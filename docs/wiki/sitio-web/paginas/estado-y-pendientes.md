@@ -36,9 +36,10 @@ Se actualiza cada vez que algo cambia de estado; cada línea con su fecha.
   2026-10-06), y desde el 2026-10-07 también cifras, carta del taller,
   planes, testimonios, galería, equipo y franja de marcas, rediseñadas desde
   el lienzo aprobado junto con preguntas y llamado; hoy no hay ninguna
-  publicada. Un bloque con fondo, borde o
-  relleno propio todavía lo dibuja Flutter (página entera, también en la
-  portada).
+  publicada. El fondo, borde, sombra y relleno propios de un bloque los
+  pinta el HTML desde el 2026-10-07; lo único de un bloque agregable que
+  todavía manda una página a Flutter es un lienzo (`canvas`) con una capa de
+  producto (hoy no hay ningún lienzo en producción).
 - Sitemap: 1.315 URL. La tienda lista 539 productos con stock y 62 servicios
   (2026-10-06, con los 7 servicios que estaban guardados como producto).
 - Checkout con Mercado Pago y transferencia funcionando (desde el 2026-09-23).
@@ -78,6 +79,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 | 2026-09-24 | La tienda llama `get_public_store_data` directo además de usar la precarga (sin investigar) | [rendimiento](rendimiento.md) |
 | 2026-09-24 | Imágenes pesadas: campaña de cámaras en PNG de 2 MB, WebP de 312 KB en la grilla de categorías | [rendimiento](rendimiento.md) |
 | 2026-09-26 | Login `/cuenta/login` sin la dirección «Sendero» | [portal](portal-de-clientes.md) |
+| 2026-10-07 | **Capas de producto del lienzo (`canvas`) en HTML**, lo último de un bloque agregable que manda la página a Flutter. No es sólo dibujarlas: el lienzo de Flutter lee `products` directo (sin mirar stock, sólo `image_url`, «lo último» por `updated_at`), distinto de la lectura pública que usa el bloque de productos (`get_public_products`). Primero alinear los dos a la lectura pública y después dibujar tarjeta, galería y foto del producto | `docs/architecture/storefront-html-migration-plan.md` |
 | 2026-10-07 | Precio de un servicio o de un plan sacado del catálogo (un campo que elija el producto), para que la carta del taller no quede vieja cuando cambia un precio | `docs/architecture/storefront-html-migration-plan.md` |
 | 2026-10-06 | **Lienzo del editor en HTML:** el sitio real en un visor web dentro del ERP (requisito 1 del dueño); los chats se quedan en Flutter (7 conversaciones del portal en total, 0 en 90 días) | `docs/architecture/storefront-html-migration-plan.md` |
 | 2026-10-06 | Pasar al HTML el canje de los enlaces de Auth (vuelta de Google en `/auth/callback`, confirmar con `code`), hoy en Flutter: el verificador PKCE ya está donde ambos lo leen | `docs/architecture/storefront-html-migration-plan.md` |
@@ -90,7 +92,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 
 | Fecha | Qué | Página |
 |---|---|---|
-| 2026-10-07 | **Formato, fondo y video iguales en el lienzo y la tienda**: el HTML dibuja el formato del hero, la nota de testimonios, el cargo del equipo y el título de reseñas, y el color propio de las reseñas; el banner de video dibuja su formato en los dos (antes en ninguno); «Formato» se quitó donde nadie lo usaba; el título de reseñas lee el fondo real (era blanco sobre blanco en el lienzo); las diapositivas con video se dibujan en HTML. Reseñas, banner, carrusel con video, productos (destacados, lo nuevo, una categoría, carrusel), categorías y marcas con superficie ya no mandan la página a Flutter. Una prueba de contrato exige que todo «Formato» del esquema se dibuje | [editor](editor-del-sitio.md) |
+| 2026-10-07 | **Formato, fondo y video iguales en el lienzo y la tienda**: el HTML dibuja el formato del hero, la nota de testimonios, el cargo del equipo y el título de reseñas, y el color propio de las reseñas; el banner de video dibuja su formato en los dos (antes en ninguno); «Formato» se quitó donde nadie lo usaba; el título de reseñas lee el fondo real (era blanco sobre blanco en el lienzo); las diapositivas con video y el video de fondo del lienzo se dibujan en HTML. Reseñas, banner, carrusel con video, productos (destacados, lo nuevo, una categoría, carrusel), categorías, marcas con superficie, lienzo con video y llamado de alto fijo con relleno ya no mandan la página a Flutter. Una prueba de contrato exige que todo «Formato» del esquema se dibuje | [editor](editor-del-sitio.md) |
 | 2026-10-07 | **Contenido real y visible en el HTML** (brecha 1 de SEO, del 2026-10-04): con la tienda en HTML, la ficha medida trae 390 palabras y 90 enlaces sin JavaScript (antes 13 y 3), la categoría Componentes 575 y 133, sin `<noscript>` | [seo-de-referentes](seo-de-referentes.md) |
 | 2026-10-07 | **El lienzo muestra el catálogo del cliente**: Editar cargaba también lo no publicado y lo agotado (1.615 en `/productos` contra 538) y lo filtraba en la app; ahora pide al servidor como la tienda. 537 y 425 en Componentes, igual que vinabike.cl | [editor](editor-del-sitio.md) |
 | 2026-10-07 | **Código muerto fuera**: `banners_management_page.dart`, `content_management_page.dart`, `customer_account_page.dart`, `premium_dashboard_widgets.dart` y las páginas viejas del chat (`customer_chat_list_page.dart`, `customer_chat_detail_page.dart`); `/cuenta/mensajes` y `/cuenta/mensajes/:id` redirigen ahora al centro de chats (`/cuenta/chats`) | [portal](portal-de-clientes.md) |

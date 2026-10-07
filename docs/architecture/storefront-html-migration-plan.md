@@ -1541,9 +1541,9 @@ pasos, con el lienzo Flutter como predeterminado hasta que el HTML lo iguale:
   cuando el relleno cambia por pantalla. La grilla de categorías y la cinta
   de marcas quitan su sangría propia (encabezado, fila) en el lado fijado
   (`--sp-lx`/`--sp-rx` en 0), como `_AutoCategoryGrid` y la cinta de
-  Flutter. Sigue en Flutter, a propósito, sólo un caso raro: el relleno de
-  un llamado a la acción de alto fijo (sus lados sin fijar toman ahí todo
-  el diseño de su banda). Los degradados diagonales usan las «esquinas
+  Flutter. El relleno de un llamado a la acción de alto fijo, que al
+  principio se dejó en Flutter, se dibuja desde el 2026-10-07 (ver «El
+  llamado de alto fijo con relleno»). Los degradados diagonales usan las «esquinas
   mágicas» de CSS (`to bottom right`): en un bloque no cuadrado el ángulo
   difiere del de Flutter, que va de esquina a esquina en píxeles.
 
@@ -1770,7 +1770,7 @@ hereda el tema es el botón Material del tema del sitio (fondo
 `surfaceContainerLow`, texto primario, `labelLarge`, elevación 1), no el
 acento del bloque Botón: el tema del sitio no le da colores propios. Sigue
 cayendo a Flutter un canvas con una capa de producto (tarjeta, galería o
-foto del producto) o con un video de fondo.
+foto del producto); el video de fondo se dibuja desde el 2026-10-07.
 
 Comparado contra Flutter a 1392, 786 y 342 (prueba de render con Oswald y
 Barlow y el tema real, `WebsiteThemeBuilder`): el escenario y las capas
@@ -2170,3 +2170,22 @@ de 15 px de alto Flutter lo esconde y el HTML lo muestra.
   (`categoryGridShownCards`), y el formato del título de la grilla, que la
   prueba de contrato ya no deja pasar (antes la pasaba porque la grilla por
   defecto volvía a Flutter).
+- **Video de fondo del lienzo en HTML (2026-10-07).** Un `canvas` con
+  `backgroundVideoUrl` o `backgroundYoutubeId` mandaba la página a Flutter.
+  Ahora cada escenario lleva su video bajo la foto y el velo, como
+  `CanvasBlock` los apila (YouTube antes que el archivo, como
+  `VideoBannerPlatform`; el iframe cubre con el mismo `min-width:177.78vh`
+  y `min-height:56.25vw` que Flutter). La fuente espera en `data-vsrc`:
+  `canvasMediaScript` la carga sólo en el escenario visible y después de
+  `load`, pausa (o descarga, si es YouTube) el que un cambio de ancho
+  oculta, y no hace nada con movimiento reducido. Probado en Chrome. En
+  producción no hay ningún bloque `canvas` (2026-10-07).
+- **El llamado de alto fijo con relleno (2026-10-07).** Era el último caso
+  de superficie en Flutter (`BlockSurface.isDrawn`, ya borrado). Con alto
+  fijo, `WebsiteCtaBlockContent` deja en 0 el relleno vertical si nadie fijó
+  un lado, pero si el operador fijó alguno, los demás toman el diseño de la
+  banda (120/96 arriba y abajo; 72/64 en teléfono). El HTML ponía siempre
+  `padding-block:0`; ahora la clase `pad` lo evita y los lados sin fijar caen
+  al diseño por `--sp-*`. Medido en Chrome: alto 420, arriba 32, el contenido
+  queda centrado entre 32 y 120 (escritorio) y entre 32 y 64 (teléfono), como
+  el `Align` de Flutter.

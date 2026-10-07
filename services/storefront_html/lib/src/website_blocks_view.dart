@@ -248,16 +248,11 @@ const pageCoveredBlockTypes = {
 };
 
 /// Whether a page that draws [types] draws this block: its type, and what
-/// the block holds (a carousel with a video slide is not drawn yet): a block
+/// the block holds (a canvas with a product layer is not drawn yet): a block
 /// whose saved look the HTML would leave out is not drawn.
 bool sharedBlockCovers(ComposedBlock composed, Set<WebsiteBlockType> types) {
   final type = composed.block.type;
   if (type == null || !types.contains(type)) return false;
-  // A surface the HTML cannot draw as Flutter does yet is not drawn
-  // without it ([BlockSurface.isDrawn]).
-  if (!BlockSurface(type, composed.data, composed.viewport).isDrawn) {
-    return false;
-  }
   return switch (type) {
     WebsiteBlockType.carousel => carouselIsCovered(composed.data),
     // A canvas reads its whole document: it resolves its own viewports.

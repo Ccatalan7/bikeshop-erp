@@ -8,6 +8,7 @@ import 'package:vinabike_public_core/modules/website/theme/website_section_palet
 import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
 
 import 'block_composition.dart';
+import 'block_surface.dart';
 import 'css_values.dart';
 import 'material_icons.dart';
 import 'storefront_fonts.dart';
@@ -1123,8 +1124,19 @@ class CtaSectionView extends StatelessComponent {
       final num value when value > 0 => value.toDouble(),
       _ => null,
     };
+    // A side the operator set keeps the design at the others, also at a
+    // fixed height ([BlockSurface.hasPadding]).
+    final padded = BlockSurface(
+      WebsiteBlockType.cta,
+      data,
+      composed.viewport,
+    ).hasPadding;
     return section(
-      classes: ['ct', if (height != null) 'fixed'].join(' '),
+      classes: [
+        'ct',
+        if (height != null) 'fixed',
+        if (height != null && padded) 'pad',
+      ].join(' '),
       attributes: {
         if (height != null)
           'style':
@@ -1525,7 +1537,7 @@ ${_plansStackRules(head)}
 .ct-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .ct-ov{position:absolute;inset:0;background:${tones.deeper.css};opacity:.8;pointer-events:none}
 .ct-in{position:relative;box-sizing:border-box;width:100%;max-width:calc(1136px + var(--sp-l,32px) + var(--sp-r,32px));margin:0 auto;${surfacePadding(120, 32, 120, 32)};display:flex;justify-content:space-between;align-items:flex-end;gap:48px}
-.ct.fixed .ct-in{padding-block:0}
+.ct.fixed:not(.pad) .ct-in{padding-block:0}
 .ct-main{flex:1 1 0;min-width:0}
 .ct-t{margin:0;font:$head 72px/72px var(--head);text-transform:uppercase;color:#fff;overflow-wrap:break-word}
 .ct-s{margin:24px 0 0;max-width:520px;font:400 19px/${_lh(19, 1.5)} var(--body);color:rgb(255 255 255 / .8)}

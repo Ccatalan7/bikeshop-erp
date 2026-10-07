@@ -431,3 +431,9 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 - Todo bloque de productos se dibuja en HTML: destacados, lo nuevo y una
   categoría (antes sólo los elegidos a mano) y el diseño carrusel. La tienda
   no tiene productos destacados hoy: un bloque nuevo sale vacío.
+- La grilla de categorías sin fotos se dibuja en HTML con las categorías
+  publicadas, como Flutter.
+- El video de fondo de un lienzo se dibuja en HTML (sólo en el escenario
+  visible, después de cargar la página) y el llamado de alto fijo con
+  relleno también: ya ningún estilo de bloque manda la página a Flutter.
+  Queda la capa de producto del lienzo, anotada en pendientes con su causa.
