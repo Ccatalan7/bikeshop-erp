@@ -13,16 +13,18 @@ Se actualiza cada vez que algo cambia de estado; cada línea con su fecha.
 
 ## En vivo (2026-10-06) `[Prod]`
 
-- Servidor HTML `core-d53543082007.server-f01700d5ee5a`
-  (`storefront-html-00034-cbx`, 2026-10-06: las categorías dibujan la
-  plantilla; `/productos/categoria/categorias` es 404).
+- Servidor HTML `core-77a7eb3f1290.server-4e272c85a24b`
+  (`storefront-html-00035-xcs`, 2026-10-06): las categorías y las fichas
+  dibujan sus plantillas; sin ninguna guardada se ven como antes
+  (`/productos/categoria/categorias` es 404).
   Todo lo que ve un cliente es del servidor: el carrito, el checkout, la
   página del pedido, el portal y el login (2026-10-06, `32336525`); Flutter
   sólo arranca en los chats del portal, la descarga de la app del personal,
   `/auth/callback` y al canjear un enlace del correo.
-- ERP 1.0.15 (Android APK 2090; macOS publicándose) desde `4243884f`
-  (2026-10-06): la plantilla de las 11 categorías (etapa 3c). Antes, el mismo
-  día: 1.0.14 (macOS `macos-v1.0.14-332`, APK 2089, `7952cfc0`: Catálogo en
+- ERP 1.0.16 (macOS `macos-v1.0.16-339`, Android APK 2091) desde `6225e668`
+  (2026-10-06): la ficha de producto como plantilla en el editor (etapa 3d);
+  web `71f7b476`. Antes, el mismo día: 1.0.15 (macOS `macos-v1.0.15-335`, APK
+  2090, `4243884f`: la plantilla de las 11 categorías, etapa 3c); 1.0.14 (macOS `macos-v1.0.14-332`, APK 2089, `7952cfc0`: Catálogo en
   tablas, Ajustes del sitio, versiones al guardar) y 1.0.13 (macOS
   `macos-v1.0.13-328` y APK 2088, `53b55fac`): `/productos` y las categorías
   se editan sobre su página (etapa 3a). Antes, el mismo día: 1.0.12 (`b4b4d810`, la lista
@@ -88,7 +90,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 
 | Fecha | Qué | Página |
 |---|---|---|
-| 2026-10-06 | **Rediseño del editor completo** (propuesta aprobada, «dale, construye la propuesta del editor», https://claude.ai/artifact/Eg75Q9vj2oZYWKiyGFDCHU): etapa 1 (`/servicios` sobre la página), 2a (barra con Páginas, Catálogo y Ajustes del sitio y «Guardar» siempre visible), 2b (lista «Secciones»), 3a (`/productos` y las categorías sobre su página), 3b (Catálogo en tablas, todo lo de una categoría en su página, Ajustes del sitio con índice, versiones al guardar, copiar y pegar secciones; ERP 1.0.14), 3c (una plantilla para las 11 categorías; ERP 1.0.15, Cloud Run `00034`) y 3d (la ficha de producto como plantilla en el lienzo, con despacho y retiro editables). Codex revisó cada etapa | [editor](editor-del-sitio.md) |
+| 2026-10-06 | **Rediseño del editor completo** (propuesta aprobada, «dale, construye la propuesta del editor», https://claude.ai/artifact/Eg75Q9vj2oZYWKiyGFDCHU): etapa 1 (`/servicios` sobre la página), 2a (barra con Páginas, Catálogo y Ajustes del sitio y «Guardar» siempre visible), 2b (lista «Secciones»), 3a (`/productos` y las categorías sobre su página), 3b (Catálogo en tablas, todo lo de una categoría en su página, Ajustes del sitio con índice, versiones al guardar, copiar y pegar secciones; ERP 1.0.14), 3c (una plantilla para las 11 categorías; ERP 1.0.15, Cloud Run `00034`) y 3d (la ficha de producto como plantilla en el lienzo, con despacho y retiro editables; ERP 1.0.16, Cloud Run `00035`). Codex revisó cada etapa | [editor](editor-del-sitio.md) |
 | 2026-10-06 | **`/servicios` como lista de precios**, en vivo (`91360c26`, Cloud Run `storefront-html-00032-fxr`, fuente `core-bfcba35e141d.server-fc5aa6abc72c`): portada con WhatsApp y la calificación de Google, las 3 mantenciones como planes con lo que incluye cada una, los otros 59 servicios en 9 grupos con buscador y la banda de cierre; configurado desde el editor (`Catálogo web > Presentación > Todos los servicios`) y leído de vuelta en la base. Antes del deploy, Codex revisó en dos pasadas (8 hallazgos y 3 de los arreglos, corregidos con pruebas) | [catálogo](catalogo-y-fichas.md) |
 | 2026-10-06 | **El login en HTML** (fase 4c): entrar, crear la cuenta, Google y «¿Olvidaste tu contraseña?», con Supabase Auth desde el navegador y la sesión y el verificador donde los lee Flutter; los enlaces del correo siguen en Flutter; al píxel de Flutter a 1440, 900 y 412 px y 60 comportamientos en los dos anchos contra un Supabase falso; revisión de Codex con 3 arreglos; el teléfono de la cuenta nueva ya no se pierde | [portal](portal-de-clientes.md) |
 | 2026-10-06 | **Perfil y direcciones en HTML** (fase 4b): datos, contraseña (con código y cierre de las demás sesiones), agregar, editar, principal y borrar una dirección con la búsqueda de Maps; se guardan por `POST /cuenta/accion` como el cliente; al píxel de Flutter a 1440 y 412 px y 52 comportamientos verificados. En las dos tiendas: borrar el RUT o el teléfono ya los borra, un obligatorio con espacios no pasa y las fechas de una dirección van en UTC | [portal](portal-de-clientes.md) |
