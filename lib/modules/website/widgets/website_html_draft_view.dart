@@ -17,6 +17,9 @@ import '../providers/website_edit_mode_provider.dart';
 import '../services/website_html_draft_client.dart';
 import '../services/website_html_draft_picks.dart';
 import '../services/website_service.dart';
+import '../../../shared/themes/vinabike_theme_roles.dart';
+import 'block_action_bar.dart';
+import 'website_editor_host_theme.dart';
 import '../../../shared/services/window_zoom_service.dart';
 import 'website_editor_chrome_geometry.dart';
 
@@ -66,7 +69,7 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
 
   /// On the ERP on the web, the page's clicks arrive as messages, signed
   /// with this view's [_nonce].
-  StreamSubscription<String?>? _webPicks;
+  StreamSubscription<WebsiteHtmlDraftMessage>? _webPicks;
   final String _nonce = [
     for (var i = 0; i < 16; i++)
       Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0'),
@@ -79,7 +82,11 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
   void initState() {
     super.initState();
     if (kIsWeb) {
-      _webPicks = websiteHtmlDraftPicks(_nonce).listen((id) => _picked([id]));
+      _webPicks = websiteHtmlDraftPicks(_nonce).listen(
+        (message) => message.action == null
+            ? _picked([message.id])
+            : _acted([message.id, message.action]),
+      );
     }
   }
 
@@ -264,11 +271,12 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
 
   Future<void> _markSelection() async {
     final web = _web;
-    if (web == null) return;
+    if (web == null || !mounted) return;
     try {
       await web.evaluateJavascript(
         source: 'window.vbDraftPicked && '
-            'window.vbDraftPicked(${jsonEncode(_selected)});',
+            'window.vbDraftPicked(${jsonEncode(_selected)}, '
+            '${jsonEncode(_selectionInfo())});',
       );
     } on Object {
       // The page is between loads; the next load marks it.
@@ -308,6 +316,70 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
       }
     }
     _hoverSending = false;
+  }
+
+  /// What the page needs to draw the picked part's marks: for a block of
+  /// the open page, its bar (`BlockActionBar`: which moves apply, whether it
+  /// is shown) in the ERP's selection colours; nothing for any other part.
+  Map<String, Object?>? _selectionInfo() {
+    final provider = _provider;
+    final id = _selected;
+    if (provider == null || id == null || provider.getBlock(id) == null) {
+      return null;
+    }
+    final blocks = provider.blocks;
+    final index = blocks.indexWhere((block) => block['id'] == id);
+    if (index < 0) return null;
+    final host = WebsiteEditorHostTheme.maybeOf(context);
+    final theme = host?.theme ?? Theme.of(context);
+    final roles = host?.roles ?? VinabikeThemeRoles.maybeOf(context);
+    String css(Color color) => 'rgb(${(color.r * 255).round()} '
+        '${(color.g * 255).round()} ${(color.b * 255).round()} '
+        '/ ${color.a.toStringAsFixed(3)})';
+    return {
+      'bar': {
+        'first': index == 0,
+        'last': index == blocks.length - 1,
+        'visible': blocks[index]['is_visible'] != false,
+        'copy': true,
+      },
+      'fill': css(
+        roles?.selectionContainer ?? theme.colorScheme.primaryContainer,
+      ),
+      'onFill': css(
+        roles?.onSelectionContainer ?? theme.colorScheme.onPrimaryContainer,
+      ),
+      'danger': css(roles?.danger.accent ?? theme.colorScheme.error),
+    };
+  }
+
+  /// A press on the picked block's bar in the page: the same actions as the
+  /// bar on the Flutter canvas.
+  void _acted(List<dynamic> arguments) {
+    final provider = _provider;
+    if (provider == null || arguments.length < 2) return;
+    final id = arguments[0]?.toString();
+    final action = arguments[1]?.toString();
+    final block = id == null ? null : provider.getBlock(id);
+    if (id == null || block == null) return;
+    switch (action) {
+      case 'up':
+        provider.moveBlockUp(id);
+      case 'down':
+        provider.moveBlockDown(id);
+      case 'visibility':
+        provider.toggleBlockVisibility(id);
+      case 'duplicate':
+        provider.duplicateBlock(id);
+      case 'copy':
+        copyWebsiteBlockForPaste(
+          context,
+          blockId: id,
+          blockType: (block['block_type'] ?? block['type'] ?? '').toString(),
+        );
+      case 'delete':
+        unawaited(confirmWebsiteBlockDelete(context, id));
+    }
   }
 
   void _picked(List<dynamic> arguments) {
@@ -410,10 +482,15 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
                             ),
                             onWebViewCreated: (controller) {
                               _web = controller;
-                              controller.addJavaScriptHandler(
-                                handlerName: 'vbDraftPick',
-                                callback: _picked,
-                              );
+                              controller
+                                ..addJavaScriptHandler(
+                                  handlerName: 'vbDraftPick',
+                                  callback: _picked,
+                                )
+                                ..addJavaScriptHandler(
+                                  handlerName: 'vbDraftAction',
+                                  callback: _acted,
+                                );
                               final html = _html;
                               final origin = _server;
                               if (html != null && origin != null) {

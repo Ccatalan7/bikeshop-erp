@@ -519,24 +519,13 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
                 onMoveUp: () => editProvider.moveBlockUp(widget.blockId),
                 onMoveDown: () => editProvider.moveBlockDown(widget.blockId),
                 onDuplicate: () => editProvider.duplicateBlock(widget.blockId),
-                onCopy: () {
-                  final label = blockActionBarLabel(widget.blockType);
-                  editProvider.copyBlockToClipboard(
-                    widget.blockId,
-                    label: label,
-                  );
-                  ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        '«$label» copiada: pégala desde «Secciones» aquí o '
-                        'en otra página.',
-                      ),
-                    ),
-                  );
-                },
-                onDelete: () {
-                  _confirmDelete(context, editProvider);
-                },
+                onCopy: () => copyWebsiteBlockForPaste(
+                  context,
+                  blockId: widget.blockId,
+                  blockType: widget.blockType,
+                ),
+                onDelete: () =>
+                    confirmWebsiteBlockDelete(context, widget.blockId),
                 onToggleVisibility: () =>
                     editProvider.toggleBlockVisibility(widget.blockId),
               ),
@@ -1559,42 +1548,5 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
       canvasEditBinding: canvasEditBinding,
       tenantId: widget.tenantId,
     );
-  }
-
-  Future<void> _confirmDelete(
-    BuildContext context,
-    WebsiteEditModeProvider editProvider,
-  ) async {
-    final blockId = widget.blockId;
-    final intent = editProvider.captureAsyncIntent(blockId: blockId);
-    if (intent == null) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Eliminar Bloque'),
-        content:
-            const Text('¿Estás seguro de que deseas eliminar este bloque?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Eliminar'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !context.mounted) return;
-    final live = context.read<WebsiteEditModeProvider>();
-    live.commitAsyncIntent(intent, () {
-      final before = live.blocks.length;
-      live.deleteBlock(blockId);
-      return live.blocks.length < before
-          ? WebsiteInlineMutationResult.committed
-          : WebsiteInlineMutationResult.unchanged;
-    });
   }
 }

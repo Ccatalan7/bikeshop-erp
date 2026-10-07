@@ -10,7 +10,7 @@
   "title": "Vista HTML en el editor del sitio",
   "summary": "En el editor del sitio, «Vista HTML» muestra la página en pantalla —inicio, páginas, catálogo, categorías y ficha de producto— tal como la arma la tienda en HTML, con lo que aún no guardas, y se actualiza con cada cambio.",
   "items": [
-    "Un clic en la vista HTML elige en el panel lo que tocas (bloque, encabezado, pie, sección del catálogo o de la ficha), en Escritorio, Tablet y Móvil.",
+    "Un clic en la vista HTML elige lo que tocas (bloque, encabezado, pie, sección); el bloque elegido trae su barra para moverlo, ocultarlo o eliminarlo.",
     "Los cambios sin guardar del catálogo (portadas, plantilla de categoría), de la plantilla de ficha y del pie se ven al momento.",
     "Mover una sección del pie en el editor ya no deja el pie sin dibujar."
   ],
@@ -21,7 +21,7 @@
     },
     {
       "path": "lib/modules/website/widgets/website_html_draft_view.dart",
-      "sha256": "e69f472b098f537c6f201097b700c892ab58ebdb8c0e54228bfc94e52485b085"
+      "sha256": "78378a3e6e183b6bd69cd3ccac2fdd476f8342bd0a28b6fcd48e4e9b778cdb92"
     },
     {
       "path": "lib/modules/website/providers/website_edit_mode_provider.dart",
@@ -49,7 +49,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/editor_draft_view.dart",
-      "sha256": "c2907e28e425775821de925018d83737d58ce10079efbd025db96d4b1db25571"
+      "sha256": "fff02f1fd9c4973e4a1b256be3b997817db6cedd38b6a56c36ecc1b6ac8876a6"
     },
     {
       "path": "services/storefront_html/lib/src/editor_page_model.dart",
@@ -81,15 +81,15 @@
     },
     {
       "path": "lib/modules/website/services/website_html_draft_picks.dart",
-      "sha256": "57d6e57e0ff1dbb1fe8d67fa50beafacd16349f279292824fcc812f2c9cf47f4"
+      "sha256": "e7ef31cf3d3bfe03f5e5d0dae630f41c67d6b756f51bc1960b369b2133daed0f"
     },
     {
       "path": "lib/modules/website/services/website_html_draft_picks_stub.dart",
-      "sha256": "747ff3042adb2910c9cb26ebf9830bb937dcf60eed1b352eaf3119b7a9621cef"
+      "sha256": "d69a7f6de990eca0d3ab4578359979c9fbfdbfc06e99c8a2dedd6eeafac84d88"
     },
     {
       "path": "lib/modules/website/services/website_html_draft_picks_web.dart",
-      "sha256": "9386fe2a3c0b69eaf275163ad11687edfc64059fc82c4cb1e1c42aa9500663a7"
+      "sha256": "13f7714a711c2f6cc1cf2761cd59d30579876a8fadb8c9a7c17a90d76a3e4681"
     },
     {
       "path": "services/storefront_html/lib/src/editor_draft_reads.dart",
@@ -118,6 +118,14 @@
     {
       "path": "services/storefront_html/lib/src/policy_page_view.dart",
       "sha256": "855218e121e39efc475882a03f84af710ea9eaf9ce2599d27fc1ad538912b5b1"
+    },
+    {
+      "path": "lib/modules/website/widgets/block_action_bar.dart",
+      "sha256": "32292a0de2e63bf10771708c6531ea5b9531e65b92e3b87e309f21e3528da828"
+    },
+    {
+      "path": "lib/modules/website/widgets/editable_block_renderer.dart",
+      "sha256": "110c181a286be6b0375fee2ac64c0664ee338745b4954bec20861da4500b94d4"
     }
   ]
 }

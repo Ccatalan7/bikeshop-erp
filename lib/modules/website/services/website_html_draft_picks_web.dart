@@ -3,18 +3,27 @@ import 'dart:js_interop';
 
 import 'package:web/web.dart' as web;
 
-Stream<String?> websiteHtmlDraftPicksImpl(String nonce) {
-  late final StreamController<String?> controller;
+import 'website_html_draft_picks.dart';
+
+Stream<WebsiteHtmlDraftMessage> websiteHtmlDraftPicksImpl(String nonce) {
+  late final StreamController<WebsiteHtmlDraftMessage> controller;
   web.EventListener? listener;
-  controller = StreamController<String?>(
+  controller = StreamController<WebsiteHtmlDraftMessage>(
     onListen: () {
       listener = ((web.MessageEvent event) {
         final data = event.data.dartify();
-        if (data is Map &&
-            data['type'] == 'vb-draft-pick' &&
-            data['nonce'] == nonce) {
-          final id = data['id'];
-          controller.add(id is String && id.isNotEmpty ? id : null);
+        if (data is! Map || data['nonce'] != nonce) return;
+        final id = switch (data['id']) {
+          final String id when id.isNotEmpty => id,
+          _ => null,
+        };
+        switch (data['type']) {
+          case 'vb-draft-pick':
+            controller.add((id: id, action: null));
+          case 'vb-draft-action':
+            if (data['action'] case final String action when id != null) {
+              controller.add((id: id, action: action));
+            }
         }
       }).toJS;
       web.window.addEventListener('message', listener);

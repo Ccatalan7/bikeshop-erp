@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../../shared/themes/vinabike_theme_roles.dart';
+import '../providers/website_edit_mode_provider.dart';
 import '../models/website_block_registry.dart';
 import '../models/website_block_type.dart';
 import 'website_editor_host_theme.dart';
@@ -112,6 +114,65 @@ class BlockActionBar extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The bar's «Copiar para otra página»: the block goes to the editor's
+/// clipboard and the operator is told where to paste it. The same on the
+/// Flutter canvas and in the «Vista HTML».
+void copyWebsiteBlockForPaste(
+  BuildContext context, {
+  required String blockId,
+  required String blockType,
+}) {
+  final label = blockActionBarLabel(blockType);
+  context
+      .read<WebsiteEditModeProvider>()
+      .copyBlockToClipboard(blockId, label: label);
+  ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+    SnackBar(
+      content: Text(
+        '«$label» copiada: pégala desde «Secciones» aquí o en otra página.',
+      ),
+    ),
+  );
+}
+
+/// The bar's «Eliminar»: asks first, then deletes [blockId] only if the
+/// draft it was asked about is still the one being edited.
+Future<void> confirmWebsiteBlockDelete(
+  BuildContext context,
+  String blockId,
+) async {
+  final editProvider = context.read<WebsiteEditModeProvider>();
+  final intent = editProvider.captureAsyncIntent(blockId: blockId);
+  if (intent == null) return;
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Eliminar Bloque'),
+      content: const Text('¿Estás seguro de que deseas eliminar este bloque?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancelar'),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context, true),
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+          child: const Text('Eliminar'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true || !context.mounted) return;
+  final live = context.read<WebsiteEditModeProvider>();
+  live.commitAsyncIntent(intent, () {
+    final before = live.blocks.length;
+    live.deleteBlock(blockId);
+    return live.blocks.length < before
+        ? WebsiteInlineMutationResult.committed
+        : WebsiteInlineMutationResult.unchanged;
+  });
 }
 
 /// The block's name in the editor's words, the same the «Secciones» list
