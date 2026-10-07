@@ -394,7 +394,10 @@ class CarouselBlockView extends StatelessComponent {
 /// Plays every carousel on the page as `_WebsiteCarouselBlockContentState`:
 /// the next slide every interval (none when the visitor asks for less
 /// motion), arrows, dots and a swipe. Only the slide on screen plays its
-/// video, from the page's load on, and none plays for less motion. A slide is shown once its images are
+/// video, from the page's load on, and none plays for less motion. A
+/// YouTube player is told to pause only once it said it is ready (the
+/// `listening` handshake of its iframe API); hidden before then, it is
+/// unloaded, or it would start on its own (`autoplay`) off screen. A slide is shown once its images are
 /// ready, and the one after it is fetched while it shows; the second one
 /// only once the page has loaded, so it never competes with the first. The
 /// editor's draft turns it to a slide (`car:go`) and hears where it is
@@ -402,9 +405,13 @@ class CarouselBlockView extends StatelessComponent {
 const carouselScript = r'''
 document.querySelectorAll("[data-car]").forEach(function(c){
 var slides=[].slice.call(c.querySelectorAll(":scope>.car-slide")),dots=[].slice.call(c.querySelectorAll(".car-dot"));
-var n=slides.length,cur=0,want=-1,timer=0,ms=+c.dataset.interval||0,loaded=false;
+var n=slides.length,cur=0,want=-1,timer=0,ms=+c.dataset.interval||0,loaded=false,frames=[].slice.call(c.querySelectorAll(".car-media iframe"));
 var still=matchMedia("(prefers-reduced-motion: reduce)").matches;
-function media(i,on){[].forEach.call(slides[i].querySelectorAll(".car-media video,.car-media iframe"),function(v){if(on){if(still||!loaded)return;if(v.dataset.vsrc){v.src=v.dataset.vsrc;v.removeAttribute("data-vsrc")}if(v.play)v.play().catch(function(){});else v.contentWindow&&v.contentWindow.postMessage('{"event":"command","func":"playVideo","args":[]}',"*")}else if(!v.dataset.vsrc){if(v.pause)v.pause();else v.contentWindow&&v.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":[]}',"*")}})}
+function yt(v,f){if(v.contentWindow)v.contentWindow.postMessage('{"event":"command","func":"'+f+'","args":[]}',"*")}
+function blank(v){return !v.src||v.src==="about:blank"}
+function hear(v){if(v.dataset.hears)return;v.dataset.hears="1";v.addEventListener("load",function(){if(blank(v))return;var k=0,t=setInterval(function(){if(v.dataset.ready||blank(v)||++k>40){clearInterval(t);return}if(v.contentWindow)v.contentWindow.postMessage('{"event":"listening","id":"car","channel":"widget"}',"*")},250)})}
+function media(i,on){[].forEach.call(slides[i].querySelectorAll(".car-media video,.car-media iframe"),function(v){var frame=!v.play;if(on){if(still||!loaded)return;if(v.dataset.vsrc){if(frame)hear(v);v.src=v.dataset.vsrc;v.removeAttribute("data-vsrc");if(!frame)v.play().catch(function(){})}else if(frame)yt(v,"playVideo");else v.play().catch(function(){})}else if(!v.dataset.vsrc){if(!frame)v.pause();else if(v.dataset.ready)yt(v,"pauseVideo");else{v.dataset.vsrc=v.src;v.src="about:blank"}}})}
+addEventListener("message",function(e){if(!/^https:\/\/www\.youtube(-nocookie)?\.com$/.test(e.origin))return;var v=frames.filter(function(f){return f.contentWindow===e.source})[0],d;if(!v||v.dataset.ready)return;try{d=JSON.parse(e.data)}catch(_){return}if(!d||!/^(onReady|initialDelivery|infoDelivery)$/.test(d.event))return;v.dataset.ready="1";if(slides.indexOf(v.closest(".car-slide"))!==cur)yt(v,"pauseVideo")});
 function ready(i){return Promise.all([].map.call(slides[i].querySelectorAll("img"),function(m){if(m.dataset.src){m.src=m.dataset.src;m.removeAttribute("data-src")}m.loading="eager";return m.decode?m.decode().catch(function(){}):0}))}
 function restart(){clearInterval(timer);if(ms&&!still&&n>1)timer=setInterval(function(){go(cur+1)},ms)}
 function show(i){var old=slides[cur];media(cur,false);media(i,true);old.classList.remove("on");old.inert=true;slides[i].classList.add("on");slides[i].inert=false;dots.forEach(function(d,k){d.setAttribute("aria-pressed",k===i?"true":"false")});cur=i;ready((i+1)%n);restart();c.dispatchEvent(new CustomEvent("car:shown",{detail:i,bubbles:true}))}

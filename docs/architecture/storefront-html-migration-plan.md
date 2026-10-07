@@ -2129,3 +2129,15 @@ de 15 px de alto Flutter lo esconde y el HTML lo muestra.
   lienzo de macOS, sin video, muestra esa foto), y el video espera en
   `data-vsrc` hasta que la página cargó y su diapositiva está en pantalla;
   sólo la que se ve reproduce y nadie reproduce con movimiento reducido.
+- **Cuarta revisión de Codex (2026-10-07, sólo lectura), sobre `82dcb503`.**
+  Sin P1. Un P2 real: una diapositiva de YouTube que se deja antes de que su
+  reproductor esté listo no recibe la pausa (YouTube descarta las órdenes
+  previas) y su `autoplay` la hace sonar fuera de pantalla. Ahora el
+  carrusel hace el saludo `listening` de la API del iframe, pausa sólo a un
+  reproductor que respondió (`onReady`/`infoDelivery`) y descarga
+  (`about:blank`) al que no. Probado en Chrome contra YouTube real: salir de
+  inmediato deja el iframe en blanco y sin reproducir; tras 8 s reproduce
+  (estado 1) y al salir queda en pausa (estado 2). El otro P2 (base del
+  formato del banner fija en 40/18 px) no es defecto: el `displayMedium` y el
+  `titleLarge` de Flutter vienen de la tipografía de Material, no del tema
+  del editor, y el HTML se midió contra ellos a píxel en la fase 2b.
