@@ -793,6 +793,39 @@ const _draftScript = r'''
   }
   document.addEventListener('mouseup', endShifting, true);
   addEventListener('blur', endShifting);
+  // The arrows nudge the picked layer by one unit (ten with Shift), as on
+  // the canvas: each press is a whole move, written as one step.
+  document.addEventListener('keydown', function (event) {
+    if (edit || shifting || shifted || !layerPick.target || !layerSel ||
+        event.metaKey || event.ctrlKey || event.altKey) return;
+    // Keys typed in a field of the page are the field's.
+    var t = event.target;
+    if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+    var dx = { ArrowLeft: -1, ArrowRight: 1 }[event.key] || 0;
+    var dy = { ArrowUp: -1, ArrowDown: 1 }[event.key] || 0;
+    if (!dx && !dy) return;
+    var el = layerPick.target, u = unitsOf(el), set = el.closest('.cnv-set');
+    if (!(u.w > 0) || !el.offsetWidth || !set) return;
+    event.preventDefault();
+    var step = event.shiftKey ? 10 : 1, scale = el.offsetWidth / u.w;
+    var dw = parseFloat(getComputedStyle(set).getPropertyValue('--dw')) || u.x + u.w;
+    var dh = set.getBoundingClientRect().height / scale;
+    var to = {
+      x: Math.round(Math.max(0, Math.min(u.x + dx * step, Math.max(0, dw - u.w)))),
+      y: Math.round(Math.max(0, Math.min(u.y + dy * step, Math.max(0, dh - u.h))))
+    };
+    if (to.x === u.x && to.y === u.y) return;
+    var m = {
+      id: pick.target.getAttribute('data-block-id'), slide: layerSel.slide, layer: layerSel.id,
+      mode: 'move', el: el, style: el.getAttribute('style'), from: u, to: to
+    };
+    layerMessage(m, 'begin');
+    el.style.setProperty('--x', to.x);
+    el.style.setProperty('--y', to.y);
+    shifted = m;
+    layerMessage(m, 'commit', to);
+    soon();
+  }, true);
   window.vbDraftLayered = function (ok) {
     if (ok) { shifted = null; return; }
     // Refused at the start (the layer cannot be moved now) or at the end.

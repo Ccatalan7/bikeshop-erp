@@ -1962,8 +1962,9 @@ de 15 px de alto Flutter lo esconde y el HTML lo muestra.
   elegida, visible, sin candado y en la banda dibujada;
   `commitCanvasManipulation` al soltar, rechazada si el documento o el
   alcance cambiaron), y la página la devuelve si se rechaza. Un clic sin
-  arrastre elige, como siempre. Las guías de alineación del lienzo no
-  están en el HTML.
+  arrastre elige, como siempre. Las flechas la empujan 1 unidad (10 con
+  Mayús), cada pulsación un paso, como en el lienzo. Las guías de
+  alineación del lienzo no están en el HTML.
 - **Arrastrar para mover (servidor `715a6f0e`).** El nombre del bloque
   elegido, en su barra, se arrastra: una línea marca el borde de destino
   entre los bloques de la página como se ven, la página se desplaza cerca

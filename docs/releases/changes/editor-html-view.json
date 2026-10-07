@@ -48,7 +48,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/editor_draft_view.dart",
-      "sha256": "522a8c223b9044fa8c3cd88a891e01632ca91d118b0a103912ced12e34e5ad2b"
+      "sha256": "fadd2f14b5777cbdcc5e15dd8b62af2ba0fb9a45ebe468211363fa84d2237500"
     },
     {
       "path": "services/storefront_html/lib/src/editor_page_model.dart",
