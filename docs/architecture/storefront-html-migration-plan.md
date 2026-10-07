@@ -2141,3 +2141,10 @@ de 15 px de alto Flutter lo esconde y el HTML lo muestra.
   formato del banner fija en 40/18 px) no es defecto: el `displayMedium` y el
   `titleLarge` de Flutter vienen de la tipografía de Material, no del tema
   del editor, y el HTML se midió contra ellos a píxel en la fase 2b.
+- **Lo que el plan ya decía, ahora también el código (2026-10-07).** La nota
+  de superficies dice que sólo el relleno de un llamado de alto fijo queda en
+  Flutter, pero productos, grilla de categorías y cinta de marcas seguían
+  mandando la página a Flutter si tenían cualquier `style` (en esas familias
+  es sólo la superficie, que el HTML ya pinta), y la cinta también por el
+  formato de su título. Se quitaron esas condiciones y la cinta dibuja su
+  formato; una prueba arma las tres con superficie propia.

@@ -40,7 +40,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_blocks_view.dart",
-      "sha256": "56f5d8258d0ee5f0170542193e42b6fcdb38f74d47d065acebfe5504040b2fbd"
+      "sha256": "23e9944ec8be18b026ce161622496bb157c42da228ce03c55c656de24158aa72"
     },
     {
       "path": "services/storefront_html/lib/src/website_carousel_view.dart",
@@ -64,7 +64,7 @@
     },
     {
       "path": "services/storefront_html/test/storefront_handler_test.dart",
-      "sha256": "d1c40187a067fec70f893c8d43e3c073209ad3946528cffdeebbae8824721557"
+      "sha256": "efc8368afaf8952e0f4c442d531233a094a36d990b3e5dfba5728d3bf07c34c2"
     },
     {
       "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_surface_presence.dart",
@@ -76,11 +76,19 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_brand_logos_view.dart",
-      "sha256": "452aaef54b62a925fdae24052d5bbfe95f17243bbb8db9a2879cc6a6a18e2d4f"
+      "sha256": "4ed8a99a9ed7279acd875c89c046b72de9fc87b81a0bc7d91fc292e195a3d3e2"
     },
     {
       "path": "services/storefront_html/test/block_surface_test.dart",
       "sha256": "56c704d8e384f256db6734d8684d9de52f424b6fe92fec447ae399d360ffc86e"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_category_grid_view.dart",
+      "sha256": "50994c76de29f39c15e7e665670faef849d53801005d7a7f6060ff6547c23b48"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_products_view.dart",
+      "sha256": "945ad1dadd40a1e38d3eac3d9bb1f3294713a1dc2b527b6f13952afd75d7a6e5"
     }
   ]
 }

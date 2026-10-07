@@ -15,15 +15,11 @@ List<Map<String, dynamic>> categoryGridCards(Map<String, dynamic> data) => [
       if (card is Map) Map<String, dynamic>.from(card),
 ];
 
-/// What the HTML category grid draws: the author's cards on the block's own
-/// white.
-bool categoryGridIsCovered(Map<String, dynamic> data) {
-  final style = data['style'];
-  return categoryGridCards(
-        data,
-      ).any((card) => (card['imageUrl']?.toString().trim() ?? '').isNotEmpty) &&
-      (style is! Map || style.isEmpty);
-}
+/// What the HTML category grid draws: the author's cards, at least one with
+/// its photo.
+bool categoryGridIsCovered(Map<String, dynamic> data) => categoryGridCards(
+  data,
+).any((card) => (card['imageUrl']?.toString().trim() ?? '').isNotEmpty);
 
 /// `_CategoryCard.resolveHref`: `ctaLink` or `link`, the specific one when
 /// one of them is the whole catalog, `link` when both are specific.

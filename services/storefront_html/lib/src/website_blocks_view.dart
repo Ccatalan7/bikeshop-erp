@@ -257,7 +257,6 @@ bool sharedBlockCovers(ComposedBlock composed, Set<WebsiteBlockType> types) {
     WebsiteBlockType.carousel => carouselIsCovered(composed.data),
     WebsiteBlockType.products => productsBlockIsCovered(composed.data),
     WebsiteBlockType.categoryGrid => categoryGridIsCovered(composed.data),
-    WebsiteBlockType.brandLogos => brandLogosIsCovered(composed.data),
     // A canvas reads its whole document: it resolves its own viewports.
     WebsiteBlockType.canvas => canvasBlockIsCovered(composed.block.blockData),
     _ => true,

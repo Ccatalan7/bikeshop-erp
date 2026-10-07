@@ -12,16 +12,12 @@ import 'block_composition.dart';
 import 'material_icons.dart';
 import 'website_blocks_view.dart';
 
-/// What the HTML products block draws: a grid of hand-picked products on the
-/// block's own white. A carousel layout, another source (the featured,
-/// newest or a category's products, which the page does not read yet) or a
-/// surface the author styled are not drawn yet.
+/// What the HTML products block draws: a grid of hand-picked products. A
+/// carousel layout or another source (the featured, newest or a category's
+/// products, which the page does not read yet) are not drawn yet.
 bool productsBlockIsCovered(Map<String, dynamic> data) {
   final contract = WebsiteProductsBlockContract.fromData(data);
-  final style = data['style'];
-  return contract.layout == 'grid' &&
-      contract.productSource == 'manual' &&
-      (style is! Map || style.isEmpty);
+  return contract.layout == 'grid' && contract.productSource == 'manual';
 }
 
 /// The products the block shows: the picked ones that are public and in

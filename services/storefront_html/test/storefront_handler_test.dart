@@ -3324,6 +3324,59 @@ void main() {
       },
     );
 
+    test('products, a category grid and the brand strip with a surface of '
+        'their own stay in HTML and wear it', () async {
+      const surface = {
+        'backgroundColor': '#FFEEDD',
+        'borderRadius': 14,
+        'paddingTop': 20,
+      };
+      final response = await _get(
+        _FakeReads(
+          editorPages: {
+            'arriendo': page([
+              block('p', 'products', 0, {
+                'title': 'Destacados',
+                'productSource': 'manual',
+                'layout': 'grid',
+                'style': surface,
+              }),
+              block('c', 'categoryGrid', 1, {
+                'title': 'Categorías',
+                'categories': [
+                  {
+                    'name': 'Ruedas',
+                    'imageUrl': 'https://example.invalid/r.jpg',
+                    'link': '/productos',
+                  },
+                ],
+                'style': surface,
+              }),
+              block('b', 'brandLogos', 2, {
+                'title': 'Marcas',
+                'brands': [
+                  {
+                    'name': 'Shimano',
+                    'imageUrl': 'https://example.invalid/s.png',
+                  },
+                ],
+                'titleFormatting': {'textColor': 0xFFAB1234},
+                'style': surface,
+              }),
+            ]),
+          },
+        ),
+        '/pagina/arriendo',
+      );
+      expect(response.headers['x-storefront-uncovered'], isNull);
+      final html = await response.readAsString();
+      expect(
+        'background:rgb(255 238 221);border-radius:14px'.allMatches(html),
+        hasLength(3),
+      );
+      expect(html, contains('color:rgb(171 18 52)'));
+    });
+
     test('a carousel slide plays its video behind its content: the file '
         'first, else the YouTube it links; a link to anything else is a '
         'plain slide', () async {

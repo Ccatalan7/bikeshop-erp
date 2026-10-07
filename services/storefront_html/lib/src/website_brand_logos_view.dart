@@ -24,14 +24,6 @@ List<Map<String, dynamic>> brandLogoItems(Map<String, dynamic> data) {
   ];
 }
 
-/// What the HTML logo block draws: the brands on the block's own white.
-bool brandLogosIsCovered(Map<String, dynamic> data) {
-  final style = data['style'];
-  final formatting = data['titleFormatting'];
-  return (style is! Map || style.isEmpty) &&
-      (formatting is! Map || formatting.isEmpty);
-}
-
 /// `_buildBrandLogos` and `_BrandLogosCarousel`: the title, then the logos
 /// sharing the row with 80 px between them, as many to a page as fit at
 /// 180 px each, in pages that swipe with a dot per page. The page script
@@ -61,7 +53,21 @@ class BrandLogosView extends StatelessComponent {
       attributes: {'style': '--logo-h:${height}px'},
       [
         div(classes: 'brands-in', [
-          h2(classes: 'brands-t', [.text(title.toUpperCase())]),
+          h2(
+            classes: 'brands-t',
+            attributes: {
+              ...context.editText(const ['title']),
+              ...formattedStyle(
+                data['titleFormatting'],
+                family: context.theme.headingFont,
+                weight: 800,
+                fallback: 'var(--head)',
+                fontSize: 24,
+                lineHeight: 1.5,
+              ),
+            },
+            [.text(title.toUpperCase())],
+          ),
           div(
             classes: 'brand-pages',
             attributes: {'data-brands': '${brands.length}'},
