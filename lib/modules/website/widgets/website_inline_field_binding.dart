@@ -1,3 +1,4 @@
+import '../models/website_action.dart';
 import '../models/website_block_capabilities.dart';
 import '../models/website_block_definition.dart';
 import '../models/website_block_geometry.dart';
@@ -14,8 +15,8 @@ import 'website_block_content_presenters.dart';
 /// value the slot shows.
 ///
 /// One owner for every surface that edits a block where it is drawn: the
-/// Flutter canvas's text, image and action slots and the texts of the
-/// editor's «Vista HTML».
+/// Flutter canvas's text, image and action slots and the texts and buttons
+/// of the editor's «Vista HTML».
 class WebsiteInlineFieldBinding {
   const WebsiteInlineFieldBinding({
     required this.provider,
@@ -106,6 +107,104 @@ class WebsiteInlineFieldBinding {
           field?.responsivePolicy ?? WebsiteResponsivePropertyPolicy.sharedOnly,
       sharedCompanionKeys: companions,
     );
+  }
+
+  /// The fields one of the block's buttons writes (of [item], for one in a
+  /// list): label, destination and look and, for the block's primary
+  /// action, its `actions` mirror ([actionsKey]), as one step of the
+  /// history (`WebsiteInlineActionFields.changes`).
+  WebsiteInlineActionFields actionFields(
+    WebsiteInlineRepeaterTarget? item, {
+    required List<String> labelKeys,
+    required List<String> hrefKeys,
+    List<String> variantKeys = const <String>[],
+    String? actionsKey,
+  }) {
+    return WebsiteInlineActionFields._(
+      label: propertyFor(item, labelKeys),
+      href: propertyFor(item, hrefKeys),
+      variant: propertyFor(item, variantKeys, mayLackSchema: true),
+      actions: actionsKey == null
+          ? null
+          : propertyFor(item, <String>[actionsKey], mayLackSchema: true),
+      actionsKey: actionsKey,
+    );
+  }
+
+  /// Starts editing one of the block's buttons where the page draws it (the
+  /// editor's «Vista HTML»): [spec]'s, of the item stored at [index] for a
+  /// button of a list, guarded from now as the canvas's action slot guards
+  /// its card. `null` for a block not drawn yet or not picked, or a button
+  /// whose fields the block's schema does not have.
+  WebsiteInlineButtonWrite? beginButton(WebsiteButtonFields spec, int index) {
+    final item = _buttonItem(spec, index);
+    final fields = actionFields(
+      item,
+      labelKeys: spec.label,
+      hrefKeys: spec.href,
+      variantKeys: spec.variant,
+      actionsKey: spec.actionsKey,
+    );
+    final value = _buttonValue(spec, item);
+    final lease = captureLease(targetFor(item, fields.properties));
+    if (value == null || lease == null || fields.changes(value, null) == null) {
+      return null;
+    }
+    return WebsiteInlineButtonWrite._(
+      provider,
+      fields,
+      lease,
+      value,
+      // Under the destination, what an empty one does: the block's own
+      // rule, as its schema says it.
+      destinationHelp: schemaFieldFor(item, spec.href)?.helpText,
+      owner: () => _storedOwner(item),
+    );
+  }
+
+  /// The item a button of [fields] belongs to: the one stored at [index]
+  /// of its list, or none for a button of the block itself.
+  WebsiteInlineRepeaterTarget? _buttonItem(
+    WebsiteButtonFields fields,
+    int index,
+  ) =>
+      fields.collection.isEmpty
+          ? null
+          : WebsiteInlineRepeaterTarget(
+              collectionKeys: fields.collection,
+              itemIndex: index,
+            );
+
+  /// The button of [fields] (of [item]) as the draft holds it for the band
+  /// the block is drawn in ([WebsiteButtonFields.storedIn]), or `null` when
+  /// the block, the item or the band is not there.
+  WebsiteActionValue? _buttonValue(
+    WebsiteButtonFields fields,
+    WebsiteInlineRepeaterTarget? item,
+  ) {
+    final viewport = provider.renderedBlockViewportFor(blockId);
+    final node = viewport == null ? null : _node(item, viewport);
+    if (node == null) return null;
+    return fields.storedIn(<String, dynamic>{
+      for (final MapEntry(:key, :value) in node.entries) key.toString(): value,
+    });
+  }
+
+  /// The block's data, or [item]'s as stored: what a primary action's
+  /// `actions` mirror is merged into.
+  Map<dynamic, dynamic>? _storedOwner(WebsiteInlineRepeaterTarget? item) {
+    final raw = provider.getBlock(blockId)?['block_data'];
+    if (raw is! Map) return null;
+    if (item == null) return raw;
+    for (final key in item.collectionKeys) {
+      if (!raw.containsKey(key)) continue;
+      final stored = raw[key];
+      final index = item.itemIndex;
+      if (stored is! List || index < 0 || index >= stored.length) return null;
+      final entry = stored[index];
+      return entry is Map ? entry : null;
+    }
+    return null;
   }
 
   /// The target the provider leases: the block in the band it is drawn in
@@ -305,6 +404,100 @@ class WebsiteInlineFieldBinding {
       formattingKey: formattingProperty?.canonicalKey,
       formatting: formatting,
     );
+  }
+}
+
+/// The fields of one button ([WebsiteInlineFieldBinding.actionFields]).
+class WebsiteInlineActionFields {
+  const WebsiteInlineActionFields._({
+    required this.label,
+    required this.href,
+    required this.variant,
+    required this.actions,
+    required this.actionsKey,
+  });
+
+  final WebsiteInlineManipulationProperty? label;
+  final WebsiteInlineManipulationProperty? href;
+  final WebsiteInlineManipulationProperty? variant;
+  final WebsiteInlineManipulationProperty? actions;
+
+  /// Where the block's primary action is mirrored; `null` for a button that
+  /// is not it, which never writes over the primary there.
+  final String? actionsKey;
+
+  /// What a write leases.
+  List<WebsiteInlineManipulationProperty> get properties => [
+        if (label case final property?) property,
+        if (href case final property?) property,
+        if (variant case final property?) property,
+        if (actions case final property?) property,
+      ];
+
+  /// The values that write [action], merged into [owner]'s `actions` for
+  /// the primary one; `null` when a field the button needs is not there.
+  Map<String, Object?>? changes(
+    WebsiteActionValue action,
+    Map<dynamic, dynamic>? owner,
+  ) {
+    final label = this.label;
+    final href = this.href;
+    final variant = this.variant;
+    final actions = this.actions;
+    final actionsKey = this.actionsKey;
+    if (label == null ||
+        href == null ||
+        (actionsKey != null && actions == null)) {
+      return null;
+    }
+    return <String, Object?>{
+      label.canonicalKey: action.label,
+      href.canonicalKey: action.href,
+      if (variant != null) variant.canonicalKey: action.variant.storageValue,
+      if (actions != null && actionsKey != null)
+        actions.canonicalKey: WebsiteActionValue.mergePrimary(
+          owner?[actionsKey],
+          action,
+        ),
+    };
+  }
+}
+
+/// A button being edited where the page draws it
+/// ([WebsiteInlineFieldBinding.beginButton]).
+class WebsiteInlineButtonWrite {
+  WebsiteInlineButtonWrite._(
+    this._provider,
+    this._fields,
+    this._lease,
+    this.value, {
+    required this.destinationHelp,
+    required Map<dynamic, dynamic>? Function() owner,
+  }) : _owner = owner;
+
+  final WebsiteEditModeProvider _provider;
+  final WebsiteInlineActionFields _fields;
+  final WebsiteInlineManipulationLease _lease;
+  final Map<dynamic, dynamic>? Function() _owner;
+
+  /// The button as the draft held it when the editing began.
+  final WebsiteActionValue value;
+
+  /// What an empty destination does, as the block's schema says it.
+  final String? destinationHelp;
+
+  /// Writes [action] as one step of the history; `false` when it changes
+  /// nothing or the draft changed since the editing began (nothing is
+  /// written then).
+  bool commit(WebsiteActionValue action) {
+    if (action.label == value.label &&
+        action.href == value.href &&
+        action.variant == value.variant) {
+      return false;
+    }
+    final changes = _fields.changes(action, _owner());
+    if (changes == null) return false;
+    return _provider.commitInlineMutation(_lease, changes).accepted;
   }
 }
 

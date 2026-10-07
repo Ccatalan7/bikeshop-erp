@@ -8,7 +8,6 @@ import '../widgets/inline_editable_image.dart';
 import '../widgets/block_resize_handle.dart';
 import '../widgets/block_action_bar.dart';
 import '../models/website_font_registry.dart';
-import '../models/website_action.dart';
 import '../models/website_block_capabilities.dart';
 import '../models/website_block_definition.dart';
 import '../models/website_block_geometry.dart';
@@ -862,34 +861,15 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
         );
       },
       action: (presenterContext, slot) {
-        final labelProperty = fields.propertyFor(
+        final buttonFields = fields.actionFields(
           slot.repeaterTarget,
-          slot.labelKeys,
+          labelKeys: slot.labelKeys,
+          hrefKeys: slot.hrefKeys,
+          variantKeys: slot.variantKeys,
+          actionsKey: slot.actionsKey,
         );
-        final hrefProperty = fields.propertyFor(
-          slot.repeaterTarget,
-          slot.hrefKeys,
-        );
-        final variantProperty = fields.propertyFor(
-          slot.repeaterTarget,
-          slot.variantKeys,
-          mayLackSchema: true,
-        );
-        final actionsKey = slot.actionsKey;
-        final actionsProperty = actionsKey == null
-            ? null
-            : fields.propertyFor(
-                slot.repeaterTarget,
-                <String>[actionsKey],
-                mayLackSchema: true,
-              );
-        final properties = <WebsiteInlineManipulationProperty>[
-          if (labelProperty != null) labelProperty,
-          if (hrefProperty != null) hrefProperty,
-          if (variantProperty != null) variantProperty,
-          if (actionsProperty != null) actionsProperty,
-        ];
-        final target = fields.targetFor(slot.repeaterTarget, properties);
+        final target =
+            fields.targetFor(slot.repeaterTarget, buttonFields.properties);
         var lease = fields.captureLease(target);
         return WebsiteInlineActionEditor(
           key: ValueKey<String>(slot.id == 'standalone-button'
@@ -908,26 +888,11 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
                 ? widget.data
                 : currentRepeaterItem(ownerTarget);
             final current = lease;
-            if (current == null ||
-                labelProperty == null ||
-                hrefProperty == null ||
-                (actionsKey != null && actionsProperty == null)) {
+            final changes = buttonFields.changes(action, actionOwner);
+            if (current == null || changes == null) {
               return WebsiteInlineMutationResult.rejected;
             }
-            final result = editProvider.commitInlineMutation(
-              current,
-              <String, Object?>{
-                labelProperty.canonicalKey: action.label,
-                hrefProperty.canonicalKey: action.href,
-                if (variantProperty != null)
-                  variantProperty.canonicalKey: action.variant.storageValue,
-                if (actionsProperty != null)
-                  actionsProperty.canonicalKey: WebsiteActionValue.mergePrimary(
-                    actionOwner?[actionsKey],
-                    action,
-                  ),
-              },
-            );
+            final result = editProvider.commitInlineMutation(current, changes);
             lease = result.accepted ? fields.captureLease(target) : null;
             return result;
           },

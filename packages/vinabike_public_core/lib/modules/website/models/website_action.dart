@@ -162,3 +162,138 @@ enum WebsiteActionVariant {
     };
   }
 }
+
+/// Where a block keeps one of its buttons: the keys of its label, its
+/// destination and its look, the list it belongs to (a slide, a plan) and
+/// whether it is the block's primary action, which `actions` mirrors.
+///
+/// One owner for the editor (2026-10-07): the Flutter canvas's action slots
+/// and the buttons of the editor's «Vista HTML» name the same fields, and
+/// the HTML page names a button by [spec], never by its keys, so a page can
+/// only ask to edit a button the block has.
+enum WebsiteButtonFields {
+  /// The standalone button block.
+  button(['label', 'text'], ['link'], variant: ['style']),
+
+  /// The hero's button: outlined unless the block says otherwise.
+  hero(
+    ['ctaText', 'buttonText', 'label'],
+    ['ctaLink', 'buttonLink', 'link'],
+    defaultVariant: WebsiteActionVariant.outline,
+  ),
+
+  /// A carousel slide's button, outlined as the hero's.
+  slide(
+    ['ctaText', 'buttonText'],
+    ['ctaLink', 'buttonLink'],
+    collection: ['slides'],
+    defaultVariant: WebsiteActionVariant.outline,
+  ),
+
+  /// The call to action's main button.
+  cta(['buttonText', 'ctaText'], ['buttonLink', 'ctaLink']),
+
+  /// The call to action's second button: never the block's primary action,
+  /// always outlined.
+  ctaSecondary(
+    ['secondaryText'],
+    ['secondaryLink'],
+    variant: [],
+    mirrorsPrimary: false,
+    defaultVariant: WebsiteActionVariant.outline,
+  ),
+
+  /// A pricing plan's button.
+  plan(
+    ['ctaText', 'buttonText'],
+    ['ctaLink', 'buttonLink'],
+    collection: ['plans', 'items'],
+  );
+
+  const WebsiteButtonFields(
+    this.label,
+    this.href, {
+    this.variant = const ['actionVariant'],
+    this.collection = const [],
+    this.mirrorsPrimary = true,
+    this.defaultVariant = WebsiteActionVariant.filled,
+  });
+
+  final List<String> label;
+  final List<String> href;
+  final List<String> variant;
+
+  /// The list the button's item is in (its canonical key first); empty for
+  /// a button of the block itself.
+  final List<String> collection;
+  final bool mirrorsPrimary;
+
+  /// The look the button has when the block does not say one.
+  final WebsiteActionVariant defaultVariant;
+
+  /// The button as [data] (the block's, or its item's) stores it, for the
+  /// editor to edit: the visible fields where present, otherwise the
+  /// block's first navigate action (`actions`, written before the fields).
+  /// An empty label or destination stays empty: what the block shows then
+  /// is its own rule, and writing it back changes nothing.
+  WebsiteActionValue storedIn(Map<String, dynamic> data) {
+    ({bool present, String value}) first(List<String> keys) {
+      for (final key in keys) {
+        if (data.containsKey(key)) {
+          return (present: true, value: data[key]?.toString().trim() ?? '');
+        }
+      }
+      return (present: false, value: '');
+    }
+
+    final structured = mirrorsPrimary
+        ? WebsiteActionValue.resolvePrimary(
+            data,
+            labelKeys: const [],
+            hrefKeys: const [],
+            variantKeys: const [],
+            defaultLabel: '',
+            defaultVariant: defaultVariant,
+          )
+        : null;
+    final storedLabel = first(label);
+    final storedHref = first(href);
+    final storedVariant = first(variant);
+    return WebsiteActionValue(
+      label: storedLabel.present ? storedLabel.value : structured?.label ?? '',
+      href: storedHref.present ? storedHref.value : structured?.href ?? '',
+      variant: storedVariant.present
+          ? WebsiteActionVariant.fromStorage(
+              storedVariant.value,
+              fallback: defaultVariant,
+            )
+          : structured?.variant ?? defaultVariant,
+    );
+  }
+
+  /// Where the block's primary action is mirrored, or `null` for a button
+  /// that is not it.
+  String? get actionsKey => mirrorsPrimary ? 'actions' : null;
+
+  /// How the editor's HTML names this button: `cta`, or `plan#2` for the
+  /// one of the item stored at [index].
+  String spec([int index = 0]) => collection.isEmpty ? name : '$name#$index';
+
+  /// The button and item position a [spec] names; `null` for anything else.
+  static ({WebsiteButtonFields fields, int index})? parse(String spec) {
+    final hash = spec.indexOf('#');
+    final name = hash < 0 ? spec : spec.substring(0, hash);
+    WebsiteButtonFields? fields;
+    for (final value in values) {
+      if (value.name == name) fields = value;
+    }
+    if (fields == null) return null;
+    if (fields.collection.isEmpty) {
+      return hash < 0 ? (fields: fields, index: 0) : null;
+    }
+    if (hash < 0) return null;
+    final raw = spec.substring(hash + 1);
+    final index = RegExp(r'^\d{1,4}$').hasMatch(raw) ? int.parse(raw) : null;
+    return index == null ? null : (fields: fields, index: index);
+  }
+}

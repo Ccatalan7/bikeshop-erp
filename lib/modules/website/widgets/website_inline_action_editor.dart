@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 
@@ -86,6 +87,10 @@ class WebsiteInlineActionEditor extends StatefulWidget {
 
   @visibleForTesting
   static const Key sheetOpenKey = Key('website-inline-action-sheet-open');
+
+  /// The card of the editor's «Vista HTML» ([showWebsiteButtonCard]).
+  @visibleForTesting
+  static const Key cardKey = Key('website-button-card');
 
   @override
   State<WebsiteInlineActionEditor> createState() =>
@@ -678,6 +683,174 @@ class _ActionEditorCard extends StatelessWidget {
       border: const OutlineInputBorder(),
       enabledBorder: const OutlineInputBorder(
         borderSide: BorderSide(color: Colors.white24),
+      ),
+    );
+  }
+}
+
+/// The button's card for a surface that draws the button itself — the
+/// editor's «Vista HTML» (2026-10-07): the canvas's action fields
+/// ([WebsiteActionEditor]: label, destination and look) in a card under the
+/// button the operator pressed ([anchor], in the root overlay's
+/// coordinates; centered without one), or over it when there is no room
+/// below.
+///
+/// Returns what to write, or `null` when the operator chose «Cancelar».
+/// A press outside or Esc closes it applying what is on screen, as the
+/// canvas's card and sheet do: the only way to throw the edit away is to
+/// say so.
+Future<WebsiteActionValue?> showWebsiteButtonCard(
+  BuildContext context, {
+  required WebsiteActionValue action,
+  Rect? anchor,
+  String? destinationHelp,
+}) async {
+  var draft = action;
+  final outcome = await showGeneralDialog<_InlineActionOutcome>(
+    context: context,
+    useRootNavigator: true,
+    barrierDismissible: true,
+    barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+    barrierColor: Colors.transparent,
+    transitionDuration: const Duration(milliseconds: 120),
+    pageBuilder: (_, __, ___) => CustomSingleChildLayout(
+      delegate: _ButtonCardPlacement(anchor),
+      child: _WebsiteButtonCard(
+        initialValue: action,
+        destinationHelp: destinationHelp,
+        onDraftChanged: (value) => draft = value,
+      ),
+    ),
+  );
+  return outcome == _InlineActionOutcome.discarded ? null : draft;
+}
+
+/// Under [anchor] with an 8 px gap, centered on it and kept 12 px inside
+/// the window; over it when it does not fit below; centered without one.
+class _ButtonCardPlacement extends SingleChildLayoutDelegate {
+  const _ButtonCardPlacement(this.anchor);
+
+  final Rect? anchor;
+
+  static const _margin = 12.0;
+  static const _gap = 8.0;
+
+  @override
+  BoxConstraints getConstraintsForChild(BoxConstraints constraints) =>
+      BoxConstraints.loose(constraints.biggest).deflate(
+        const EdgeInsets.all(_margin),
+      );
+
+  @override
+  Offset getPositionForChild(Size size, Size child) {
+    final anchor = this.anchor;
+    if (anchor == null) {
+      return Offset(
+        (size.width - child.width) / 2,
+        (size.height - child.height) / 2,
+      );
+    }
+    final maxX = max(_margin, size.width - child.width - _margin);
+    final maxY = max(_margin, size.height - child.height - _margin);
+    final x = (anchor.center.dx - child.width / 2).clamp(_margin, maxX);
+    final below = anchor.bottom + _gap;
+    final above = anchor.top - _gap - child.height;
+    final y = below + child.height <= size.height - _margin || above < _margin
+        ? below.clamp(_margin, maxY)
+        : above;
+    return Offset(x.toDouble(), y.toDouble());
+  }
+
+  @override
+  bool shouldRelayout(_ButtonCardPlacement oldDelegate) =>
+      oldDelegate.anchor != anchor;
+}
+
+class _WebsiteButtonCard extends StatefulWidget {
+  const _WebsiteButtonCard({
+    required this.initialValue,
+    required this.onDraftChanged,
+    this.destinationHelp,
+  });
+
+  final WebsiteActionValue initialValue;
+  final String? destinationHelp;
+  final ValueChanged<WebsiteActionValue> onDraftChanged;
+
+  @override
+  State<_WebsiteButtonCard> createState() => _WebsiteButtonCardState();
+}
+
+class _WebsiteButtonCardState extends State<_WebsiteButtonCard> {
+  late WebsiteActionValue _draft = widget.initialValue;
+
+  void _update(WebsiteActionValue value) {
+    setState(() => _draft = value);
+    widget.onDraftChanged(value);
+  }
+
+  void _close(_InlineActionOutcome outcome) =>
+      Navigator.of(context).pop(outcome);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    return Material(
+      key: WebsiteInlineActionEditor.cardKey,
+      color: scheme.surfaceContainerHigh,
+      surfaceTintColor: Colors.transparent,
+      elevation: 8,
+      shadowColor: Colors.black54,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: scheme.outlineVariant),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: SizedBox(
+        width: 380,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Botón',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 12),
+              WebsiteActionEditor(
+                key: WebsiteInlineActionEditor.sheetFieldsKey,
+                value: _draft,
+                onChanged: _update,
+                showVariant: true,
+                destinationHelp: widget.destinationHelp,
+                title: '',
+                darkStyle: theme.brightness == Brightness.dark,
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    key: WebsiteInlineActionEditor.sheetCancelKey,
+                    onPressed: () => _close(_InlineActionOutcome.discarded),
+                    child: const Text('Cancelar'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    key: WebsiteInlineActionEditor.sheetApplyKey,
+                    onPressed: () => _close(_InlineActionOutcome.applied),
+                    child: const Text('Aplicar'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -1,3 +1,5 @@
+import 'package:vinabike_public_core/modules/website/models/website_action.dart';
+
 import 'website_html_draft_picks_stub.dart'
     if (dart.library.js_interop) 'website_html_draft_picks_web.dart';
 
@@ -32,6 +34,12 @@ sealed class WebsiteHtmlDraftMessage {
           'formatting': at(5),
         },
       'vbDraftSlide' => {'type': 'vb-draft-slide', 'id': at(0), 'index': at(1)},
+      'vbDraftButton' => {
+          'type': 'vb-draft-button',
+          'id': at(0),
+          'button': at(1),
+          'where': at(2),
+        },
       'vbDraftMove' => {
           'type': 'vb-draft-move',
           'id': at(0),
@@ -114,6 +122,34 @@ sealed class WebsiteHtmlDraftMessage {
           written,
           formatting,
         );
+      case 'vb-draft-button':
+        final spec = text('button');
+        final button = spec == null || spec.length > 40
+            ? null
+            : WebsiteButtonFields.parse(spec);
+        // Where the button is, as fractions of the page's window: four
+        // finite numbers, or nothing (the editor then places its card
+        // itself).
+        final raw = data['where'];
+        final where = raw is List &&
+                raw.length == 4 &&
+                raw.every((value) => value is num && value.isFinite)
+            ? [for (final value in raw) (value as num).toDouble()]
+            : null;
+        if (id == null || button == null) return null;
+        return WebsiteHtmlDraftButton(
+          id,
+          button.fields,
+          button.index,
+          where == null
+              ? null
+              : (
+                  left: where[0],
+                  top: where[1],
+                  width: where[2],
+                  height: where[3]
+                ),
+        );
       case 'vb-draft-slide':
         final slide = switch (data['index']) {
           final num value when value >= 0 && value == value.roundToDouble() =>
@@ -180,6 +216,18 @@ final class WebsiteHtmlDraftAction extends WebsiteHtmlDraftMessage {
 
   final String id;
   final String action;
+}
+
+/// A press on one of the picked block's buttons: its label, destination and
+/// look to edit ([fields], of the item stored at [index] for a button of a
+/// list), and where the page draws it, as fractions of its window.
+final class WebsiteHtmlDraftButton extends WebsiteHtmlDraftMessage {
+  const WebsiteHtmlDraftButton(this.id, this.fields, this.index, this.where);
+
+  final String id;
+  final WebsiteButtonFields fields;
+  final int index;
+  final ({double left, double top, double width, double height})? where;
 }
 
 /// A carousel of the page turned to slide [index] with its arrows or dots.

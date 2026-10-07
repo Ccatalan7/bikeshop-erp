@@ -92,6 +92,14 @@ nominal constant.
 - Edit -> Preview -> Edit retains the selected block and scroll context. On
   return to Edit, a selection that no longer belongs to the active document is
   cleared rather than redirected to another block.
+- A block's buttons are named once, by `WebsiteButtonFields` in the core
+  (label, destination and look keys, the list they belong to, whether the
+  button is the block's primary action): the canvas's
+  `WebsiteInlineActionSlot.button` and the «Vista HTML» page
+  (`data-edit-button`, `cta` or `plan#2`) name the same fields, and both
+  write through `WebsiteInlineFieldBinding` (`actionFields`, `beginButton`).
+  The page names a button, never its keys: a spec the core does not know is
+  refused (2026-10-07).
 - Edit, Preview and public read the same catalog. A catalog page asks the
   server, which applies publication and `product_visibility_stock_policy`, in
   every mode; Edit never loads a wider set of its own (unpublished or out of

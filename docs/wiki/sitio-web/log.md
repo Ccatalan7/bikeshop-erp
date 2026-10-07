@@ -393,3 +393,11 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   tienda, cargaba todo lo editable (no publicado y agotado) y filtraba y
   paginaba en la app. «Ver como cliente» lo heredaba porque cambiar de modo
   no vuelve a cargar. Se quitó ese camino: los tres modos piden al servidor.
+
+## 2026-10-07 — Los botones en la vista HTML
+
+- Un botón del bloque elegido se edita en su lugar con la tarjeta del
+  lienzo (texto, destino, estilo). Los campos de cada botón los nombra el
+  núcleo (`WebsiteButtonFields`) y la página los pide por nombre.
+- Comprobado antes con clics reales: un diálogo de Flutter sobre la vista web
+  de macOS recibe los clics.

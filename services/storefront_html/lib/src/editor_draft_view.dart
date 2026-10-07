@@ -22,6 +22,7 @@ const _draftCss = '''
 .vb-mark.vb-writing>span{display:block}
 .vb-mark.vb-writing .vb-bar{display:none}
 .vb-text-hot{outline:1px dashed rgb(26 115 232 / .7);outline-offset:3px;cursor:text}
+.vb-button-hot{outline:1px dashed rgb(26 115 232 / .7);outline-offset:3px;cursor:pointer}
 .vb-editing{outline:2px solid #1a73e8;outline-offset:3px;cursor:text;text-transform:none!important;
   -webkit-user-select:text;user-select:text;caret-color:currentColor}
 .vb-editing:focus{outline:2px solid #1a73e8}
@@ -288,6 +289,8 @@ const _draftScript = r'''
       return;
     }
     if (event.target.closest && event.target.closest('.vb-mark')) return;
+    var pressed = edit ? null : pressable(event.target);
+    if (pressed) { askButton(pressed); return; }
     var text = editable(event.target);
     if (text && !edit) { begin(text); return; }
     var found = part(event.target);
@@ -332,12 +335,28 @@ const _draftScript = r'''
     var text = node && node.closest ? node.closest('[data-edit-text]') : null;
     return text && pick.target && part(text) === pick.target ? text : null;
   }
+  // A button of the picked block (`data-edit-button`): a click on it asks
+  // the editor to open its label, destination and look
+  // (`vbDraftButton(id, spec, where)`, where = the button's box as
+  // fractions of the page's window, for the editor to place its card).
+  function pressable(node) {
+    var b = node && node.closest ? node.closest('[data-edit-button]') : null;
+    return b && pick.target && part(b) === pick.target ? b : null;
+  }
   function heat(node) {
-    var text = edit ? null : editable(node);
-    if (text === hot) return;
-    if (hot) hot.classList.remove('vb-text-hot');
-    hot = text;
-    if (hot) hot.classList.add('vb-text-hot');
+    var target = edit ? null : (pressable(node) || editable(node));
+    if (target === hot) return;
+    if (hot) hot.classList.remove('vb-text-hot', 'vb-button-hot');
+    hot = target;
+    if (hot) hot.classList.add(hot.hasAttribute('data-edit-button') ? 'vb-button-hot' : 'vb-text-hot');
+  }
+  function askButton(b) {
+    var id = pick.target.getAttribute('data-block-id');
+    var spec = b.getAttribute('data-edit-button');
+    var r = b.getBoundingClientRect();
+    var where = [r.left / innerWidth, r.top / innerHeight, r.width / innerWidth, r.height / innerHeight];
+    send('vbDraftButton', [id, spec, where],
+      { type: 'vb-draft-button', id: id, button: spec, where: where });
   }
   // Each edit carries its own token, and an answer for another one (late,
   // or for the page before a redraw) is ignored.

@@ -7,8 +7,8 @@ import 'website_action.dart';
 WebsiteActionValue? resolveWebsiteHeroAction(Map<String, dynamic> data) =>
     _resolveVisibleFieldAction(
       data,
-      labelKeys: const <String>['ctaText', 'buttonText', 'label'],
-      hrefKeys: const <String>['ctaLink', 'buttonLink', 'link'],
+      labelKeys: WebsiteButtonFields.hero.label,
+      hrefKeys: WebsiteButtonFields.hero.href,
     );
 
 /// A carousel slide's button, by the hero's rule with the slide's fields
@@ -18,8 +18,8 @@ WebsiteActionValue? resolveWebsiteCarouselSlideAction(
   Map<String, dynamic> slide,
 ) => _resolveVisibleFieldAction(
   slide,
-  labelKeys: const <String>['ctaText', 'buttonText'],
-  hrefKeys: const <String>['ctaLink', 'buttonLink'],
+  labelKeys: WebsiteButtonFields.slide.label,
+  hrefKeys: WebsiteButtonFields.slide.href,
 );
 
 WebsiteActionValue? _resolveVisibleFieldAction(

@@ -158,6 +158,20 @@ class WebsiteInlineActionSlot {
   })  : assert(labelKeys.length > 0),
         assert(hrefKeys.length > 0);
 
+  /// The slot of one of the block's buttons, by the fields the editor's
+  /// «Vista HTML» names too ([WebsiteButtonFields]).
+  WebsiteInlineActionSlot.button(
+    WebsiteButtonFields fields, {
+    required this.id,
+    required this.action,
+    required this.child,
+    this.repeaterTarget,
+    this.destinationHelp,
+  })  : labelKeys = fields.label,
+        hrefKeys = fields.href,
+        variantKeys = fields.variant,
+        actionsKey = fields.actionsKey;
+
   final String id;
   final WebsiteActionValue action;
   final List<String> labelKeys;

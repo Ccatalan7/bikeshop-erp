@@ -266,6 +266,15 @@ base), se funden los dos en él con tres ítems y la evidencia unida; un
 registro nuevo sólo cabe si el módulo tiene ítems libres. El registro conserva
 la evidencia completa; no se recortan afirmaciones para cumplir los límites.
 
+El módulo dueño lo decide `moduleForReleasePath` por palabras de la ruta, en
+orden (taller, inventario, ventas…, sitio web después), no por la carpeta:
+`lib/public_store/pages/product_catalog_page.dart` cuenta como **Inventario**
+por `product_`, y `checkout_page.dart` como Ventas. Un registro `website` cuya
+única fuente es una de ésas falla con «A release module needs evidence from
+its source owner» (2026-10-07, arreglo del catálogo del editor). Se funde en
+un registro abierto del sitio que ya tenga fuente del sitio; poner
+`inventory` sería mentirle a quien lee las notas.
+
 `--check-index` valida lo que está **en el índice de git**, no el árbol de
 trabajo: hay que hacer `git add` del registro y de sus fuentes antes de
 correrlo. Sin eso valida la versión anterior y dice «verified» igual; el

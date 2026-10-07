@@ -44,7 +44,7 @@ class WebsitePricingBlockContent extends StatelessWidget {
   static ValueKey<String> priceKey(int index) =>
       ValueKey<String>('website-pricing-price-$index');
 
-  static const _collection = <String>['plans', 'items'];
+  static final _collection = WebsiteButtonFields.plan.collection;
 
   final Map<String, dynamic> data;
   final Color primaryColor;
@@ -215,9 +215,9 @@ class _Plan extends StatelessWidget {
     ];
     final action = WebsiteActionValue.resolvePrimary(
       plan,
-      labelKeys: const <String>['ctaText', 'buttonText'],
-      hrefKeys: const <String>['ctaLink', 'buttonLink'],
-      variantKeys: const <String>['actionVariant'],
+      labelKeys: WebsiteButtonFields.plan.label,
+      hrefKeys: WebsiteButtonFields.plan.href,
+      variantKeys: WebsiteButtonFields.plan.variant,
       defaultLabel: '',
     );
     final href = action?.href.trim() ?? '';
@@ -318,9 +318,7 @@ class _Plan extends StatelessWidget {
               presenters: presenters,
               id: 'pricing.plan.$index.action',
               action: action,
-              labelKeys: const <String>['ctaText', 'buttonText'],
-              hrefKeys: const <String>['ctaLink', 'buttonLink'],
-              variantKeys: const <String>['actionVariant'],
+              fields: WebsiteButtonFields.plan,
               kind: featured
                   ? WebsiteSectionButtonKind.accent
                   : WebsiteSectionButtonKind.line,

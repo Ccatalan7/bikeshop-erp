@@ -199,9 +199,7 @@ class WebsiteCtaBlockContent extends StatelessWidget {
             actions.primary!,
             colors,
             id: 'cta.action',
-            labelKeys: const ['buttonText', 'ctaText'],
-            hrefKeys: const ['buttonLink', 'ctaLink'],
-            variantKeys: const ['actionVariant'],
+            fields: WebsiteButtonFields.cta,
             variant: primaryVariant,
             kind: primaryVariant == WebsiteActionVariant.filled
                 ? WebsiteSectionButtonKind.accent
@@ -218,12 +216,10 @@ class WebsiteCtaBlockContent extends StatelessWidget {
             actions.secondary!,
             colors,
             id: 'cta.secondary',
-            labelKeys: const ['secondaryText'],
-            hrefKeys: const ['secondaryLink'],
+            fields: WebsiteButtonFields.ctaSecondary,
             variant: WebsiteActionVariant.outline,
             kind: WebsiteSectionButtonKind.ghost,
             expand: phone,
-            mirrorsPrimary: false,
             destinationHelp: 'Vacío, abre el mapa del negocio.',
           ),
         ),
@@ -437,13 +433,10 @@ class WebsiteCtaBlockContent extends StatelessWidget {
     WebsiteSectionAction action,
     WebsiteSectionColors colors, {
     required String id,
-    required List<String> labelKeys,
-    required List<String> hrefKeys,
+    required WebsiteButtonFields fields,
     required WebsiteActionVariant variant,
     required WebsiteSectionButtonKind kind,
     required bool expand,
-    List<String> variantKeys = const <String>[],
-    bool mirrorsPrimary = true,
     String? destinationHelp,
   }) {
     return websiteSectionAction(
@@ -455,9 +448,7 @@ class WebsiteCtaBlockContent extends StatelessWidget {
         href: action.href,
         variant: variant,
       ),
-      labelKeys: labelKeys,
-      hrefKeys: hrefKeys,
-      variantKeys: variantKeys,
+      fields: fields,
       kind: kind,
       colors: colors,
       onNavigate: onNavigate,
@@ -466,8 +457,7 @@ class WebsiteCtaBlockContent extends StatelessWidget {
       minHeight: 52,
       horizontalPadding: 26,
       expand: expand,
-      storedHref: websiteSectionText(data, hrefKeys),
-      mirrorsPrimary: mirrorsPrimary,
+      storedHref: websiteSectionText(data, fields.href),
       destinationHelp: destinationHelp,
     );
   }

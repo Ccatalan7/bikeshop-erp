@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:jaspr/dom.dart';
 import 'package:jaspr/server.dart';
+import 'package:vinabike_public_core/modules/website/models/website_action.dart';
 import 'package:vinabike_public_core/modules/website/models/website_canvas_responsive_document.dart';
 import 'package:vinabike_public_core/modules/website/models/website_hero_content.dart';
 import 'package:vinabike_public_core/modules/website/models/website_responsive_authoring.dart';
@@ -268,6 +269,10 @@ class CarouselBlockView extends StatelessComponent {
                   a(
                     classes: 'w-btn on-dark ${action.variant.storageValue}',
                     href: href,
+                    attributes: context.editButton(
+                      WebsiteButtonFields.slide,
+                      index: stored,
+                    ),
                     [.text(action.label.toUpperCase())],
                   ),
               ]),

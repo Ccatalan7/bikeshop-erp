@@ -628,12 +628,10 @@ Widget websiteSectionAction(
   required WebsiteBlockContentPresenters? presenters,
   required String id,
   required WebsiteActionValue action,
-  required List<String> labelKeys,
-  required List<String> hrefKeys,
+  required WebsiteButtonFields fields,
   required WebsiteSectionButtonKind kind,
   required WebsiteSectionColors colors,
   required void Function(String route)? onNavigate,
-  List<String> variantKeys = const <String>[],
   WebsiteInlineRepeaterTarget? repeaterTarget,
   String? bodyFont,
   IconData? icon,
@@ -641,7 +639,6 @@ Widget websiteSectionAction(
   double horizontalPadding = 24,
   bool expand = false,
   String? storedHref,
-  bool mirrorsPrimary = true,
   String? destinationHelp,
 }) {
   final href = action.href.trim();
@@ -669,16 +666,13 @@ Widget websiteSectionAction(
   if (presenter == null) return button;
   return presenter(
     context,
-    WebsiteInlineActionSlot(
+    WebsiteInlineActionSlot.button(
+      fields,
       id: id,
       // Edit changes what is stored: an empty destination stays empty (the
       // button follows the store's WhatsApp or map) when only the label is
       // written.
       action: storedHref == null ? action : action.copyWith(href: storedHref),
-      labelKeys: labelKeys,
-      hrefKeys: hrefKeys,
-      variantKeys: variantKeys,
-      actionsKey: mirrorsPrimary ? 'actions' : null,
       destinationHelp: destinationHelp,
       child: button,
       repeaterTarget: repeaterTarget,

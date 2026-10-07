@@ -4066,6 +4066,116 @@ void main() {
       expect(visit, contains('data-interval="5000"'));
     });
 
+    test('its buttons name the block button they draw, so the operator '
+        'edits them where they are; a visitor never sees the names', () async {
+      final blocks = [
+        {
+          ...hero('b-hero', 'Portada'),
+          'block_data': {
+            'title': 'Portada',
+            'ctaText': 'Agendar',
+            'ctaLink': '/contacto',
+          },
+        },
+        {
+          'id': 'b-cta',
+          'block_type': 'cta',
+          'block_data': {
+            'title': 'Agenda',
+            'buttonText': 'Escríbenos',
+            'buttonLink': '/contacto',
+            'secondaryText': 'Cómo llegar',
+            'secondaryLink': '/productos',
+          },
+          'is_visible': true,
+          'order_index': 1,
+        },
+        {
+          'id': 'b-pr',
+          'block_type': 'pricing',
+          'block_data': {
+            'title': 'Planes',
+            'plans': [
+              {
+                'name': 'Básica',
+                'price': r'$24.990',
+                'ctaText': 'Agendar',
+                'ctaLink': '/contacto',
+              },
+              {
+                'name': 'Full',
+                'price': r'$70.000',
+                'ctaText': 'Agendar full',
+                'ctaLink': '/contacto',
+              },
+            ],
+          },
+          'is_visible': true,
+          'order_index': 2,
+        },
+        {
+          'id': 'b-btn',
+          'block_type': 'button',
+          'block_data': {'label': 'Ver tienda', 'link': '/productos'},
+          'is_visible': true,
+          'order_index': 3,
+        },
+        {
+          'id': 'b-car',
+          'block_type': 'carousel',
+          'block_data': {
+            'slides': [
+              {
+                'title': 'Primera',
+                'ctaText': 'Comprar',
+                'ctaLink': '/productos',
+              },
+            ],
+          },
+          'is_visible': true,
+          'order_index': 4,
+        },
+      ];
+      final (status, answer, _) = await draft(_FakeReads(), {
+        'page': {'home': true},
+        'blocks': blocks,
+      });
+      expect(status, 200);
+      final html = answer['html'] as String;
+      for (final spec in [
+        'hero',
+        'cta',
+        'ctaSecondary',
+        'plan#0',
+        'plan#1',
+        'button',
+        'slide#0',
+      ]) {
+        expect(html, contains('data-edit-button="$spec"'), reason: spec);
+      }
+      // The button owns its label: the label is not a text of its own.
+      expect(html, isNot(contains('data-edit-text="buttonText"')));
+      expect(html, isNot(contains('data-edit-text="secondaryText"')));
+      expect(html, contains("send('vbDraftButton'"));
+
+      final public = await _get(
+        _FakeReads(
+          homeRow: {
+            'id': 'home-row',
+            'slug': 'inicio',
+            'title': 'Inicio',
+            'is_published': true,
+            'website_blocks': blocks,
+          },
+        ),
+        '/_html/',
+      );
+      final visit = await public.readAsString();
+      expect(visit, contains('Agendar full'));
+      expect(visit, isNot(contains('data-edit-button')));
+      expect(visit, isNot(contains('vbDraftButton')));
+    });
+
     test('the home named by its row, as the editor names it', () async {
       final reads = _FakeReads(
         homeRow: {

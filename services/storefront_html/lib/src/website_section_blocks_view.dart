@@ -1,5 +1,6 @@
 import 'package:jaspr/dom.dart';
 import 'package:jaspr/server.dart';
+import 'package:vinabike_public_core/modules/website/models/website_action.dart';
 import 'package:vinabike_public_core/modules/website/models/website_block_type.dart';
 import 'package:vinabike_public_core/modules/website/models/website_section_content.dart';
 import 'package:vinabike_public_core/modules/website/theme/website_section_palette.dart';
@@ -382,12 +383,12 @@ class PricingSectionView extends StatelessComponent {
         for (final feature in raw)
           if (feature.toString().trim().isNotEmpty) feature.toString().trim(),
     ];
-    final label = websiteSectionText(plan, const [
-      'ctaText',
-      'buttonText',
-    ]).trim();
+    final label = websiteSectionText(
+      plan,
+      WebsiteButtonFields.plan.label,
+    ).trim();
     final href = context.publicHref(
-      websiteSectionText(plan, const ['ctaLink', 'buttonLink']),
+      websiteSectionText(plan, WebsiteButtonFields.plan.href),
     );
     const collection = ['plans', 'items'];
     Map<String, String> edit(String key) =>
@@ -443,9 +444,15 @@ class PricingSectionView extends StatelessComponent {
       ],
       if (label.isNotEmpty && href != null)
         div(classes: 'pr-cta', [
-          a(classes: 'sec-btn ${featured ? 'acc' : 'line'}', href: href, [
-            .text(label),
-          ]),
+          a(
+            classes: 'sec-btn ${featured ? 'acc' : 'line'}',
+            href: href,
+            attributes: context.editButton(
+              WebsiteButtonFields.plan,
+              index: index,
+            ),
+            [.text(label)],
+          ),
         ]),
     ]);
   }
@@ -1152,23 +1159,30 @@ class CtaSectionView extends StatelessComponent {
               div(classes: 'ct-btns', [
                 if (actions.primary case final primary?
                     when primaryHref != null)
-                  a(classes: 'sec-btn $primaryLook', href: primaryHref, [
-                    if (primary.whatsapp)
-                      RawText(
-                        materialIcon(mdChatBubbleOutlineRounded, size: 20),
-                      ),
-                    span(attributes: context.editText(const ['buttonText']), [
-                      .text(primary.label),
-                    ]),
-                  ]),
+                  a(
+                    classes: 'sec-btn $primaryLook',
+                    href: primaryHref,
+                    attributes: context.editButton(WebsiteButtonFields.cta),
+                    [
+                      if (primary.whatsapp)
+                        RawText(
+                          materialIcon(mdChatBubbleOutlineRounded, size: 20),
+                        ),
+                      span([.text(primary.label)]),
+                    ],
+                  ),
                 if (actions.secondary case final secondary?
                     when secondaryHref != null)
-                  a(classes: 'sec-btn ghost', href: secondaryHref, [
-                    span(
-                      attributes: context.editText(const ['secondaryText']),
-                      [.text(secondary.label)],
+                  a(
+                    classes: 'sec-btn ghost',
+                    href: secondaryHref,
+                    attributes: context.editButton(
+                      WebsiteButtonFields.ctaSecondary,
                     ),
-                  ]),
+                    [
+                      span([.text(secondary.label)]),
+                    ],
+                  ),
               ]),
           ]),
           if (contacts.isNotEmpty) ...[

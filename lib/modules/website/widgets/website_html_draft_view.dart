@@ -25,6 +25,7 @@ import '../models/website_editor_drag_payload.dart';
 import '../models/website_block_catalog.dart';
 import '../models/website_block_geometry.dart';
 import 'block_action_bar.dart';
+import 'website_inline_action_editor.dart';
 import 'website_block_content_presenters.dart';
 import 'website_inline_field_binding.dart';
 import 'website_editor_host_theme.dart';
@@ -460,6 +461,8 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
         _height(height);
       case WebsiteHtmlDraftMove(:final id, :final anchor, :final side):
         _move(id, anchor, side);
+      case final WebsiteHtmlDraftButton press:
+        unawaited(_button(press));
       case WebsiteHtmlDraftSlide(:final id, :final index):
         final provider = _provider;
         final count = _slideCount(provider?.getBlock(id));
@@ -505,6 +508,76 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
       case 'insert-before' || 'insert-after':
         unawaited(_insert(provider, id, action));
     }
+  }
+
+  /// One button card at a time.
+  bool _buttonOpen = false;
+
+  /// The page as the editor draws it: where a button the page names is.
+  final GlobalKey _pageKey = GlobalKey(debugLabel: 'editor-html-view-page');
+
+  /// A press on one of the picked block's buttons in the page: its label,
+  /// destination and look in the button's card under it
+  /// ([showWebsiteButtonCard], the canvas's action fields), written as the
+  /// canvas's action slot writes them ([WebsiteInlineFieldBinding.beginButton])
+  /// — one step of the history, guarded from when the card opens, so a
+  /// draft that changed meanwhile refuses it.
+  Future<void> _button(WebsiteHtmlDraftButton press) async {
+    final provider = _provider;
+    final block = provider?.getBlock(press.id);
+    // The buttons are the picked block's: a press for another is not one.
+    if (_buttonOpen ||
+        provider == null ||
+        block == null ||
+        provider.selectedBlockId != press.id) {
+      return;
+    }
+    final write = WebsiteInlineFieldBinding(
+      provider: provider,
+      blockId: press.id,
+      blockType: (block['block_type'] ?? block['type'] ?? '').toString(),
+    ).beginButton(press.fields, press.index);
+    if (write == null) return;
+    _buttonOpen = true;
+    try {
+      final edited = await showWebsiteButtonCard(
+        context,
+        action: write.value,
+        anchor: _buttonRect(press.where),
+        destinationHelp: write.destinationHelp,
+      );
+      if (!mounted || edited == null) return;
+      if (write.commit(edited)) _changed();
+    } finally {
+      _buttonOpen = false;
+    }
+  }
+
+  /// A box the page gave as fractions of its window, in the root overlay's
+  /// coordinates (the button card's), or `null`.
+  Rect? _buttonRect(
+    ({double left, double top, double width, double height})? where,
+  ) {
+    final page = _pageKey.currentContext?.findRenderObject();
+    final overlay = Navigator.of(context, rootNavigator: true)
+        .overlay
+        ?.context
+        .findRenderObject();
+    if (where == null ||
+        page is! RenderBox ||
+        !page.hasSize ||
+        overlay is! RenderBox) {
+      return null;
+    }
+    final size = page.size;
+    Offset at(double fx, double fy) => page.localToGlobal(
+          Offset(fx * size.width, fy * size.height),
+          ancestor: overlay,
+        );
+    return Rect.fromPoints(
+      at(where.left, where.top),
+      at(where.left + where.width, where.top + where.height),
+    );
   }
 
   /// The picked block dropped on a seam in the page: the canvas's own move
@@ -825,6 +898,7 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
                       // mark follows the pointer as Flutter sees it. In a
                       // frame (the ERP on the web) the page sees it itself.
                       child: MouseRegion(
+                        key: _pageKey,
                         onHover: kIsWeb
                             ? null
                             : (event) => _hover(
@@ -859,6 +933,7 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
                                       'vbDraftSlide',
                                       'vbDraftHeight',
                                       'vbDraftMove',
+                                      'vbDraftButton',
                                     ]) {
                                 controller.addJavaScriptHandler(
                                   handlerName: name,

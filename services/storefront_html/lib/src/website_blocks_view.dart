@@ -77,6 +77,16 @@ class BlockRenderContext {
     };
   }
 
+  /// For the editor's draft, which of the block's buttons an element draws
+  /// ([WebsiteButtonFields.spec]: `cta`, `plan#2` for the plan stored at
+  /// [index]), so the operator edits its label, destination and look where
+  /// it is, as the Flutter canvas's `WebsiteInlineActionSlot`. Nothing for a
+  /// visitor.
+  Map<String, String> editButton(WebsiteButtonFields fields, {int index = 0}) {
+    if (!draft) return const {};
+    return {'data-edit-button': fields.spec(index)};
+  }
+
   /// A link a visitor may follow, as the public path; `null` hides the
   /// control (`PublicStoreLayout.isHrefPubliclyEligible`).
   String? publicHref(String href) {
@@ -416,9 +426,9 @@ class _ButtonBlock extends StatelessComponent {
   Component build(BuildContext _) {
     final action = WebsiteActionValue.resolvePrimary(
       composed.data,
-      labelKeys: const ['label', 'text'],
-      hrefKeys: const ['link'],
-      variantKeys: const ['style'],
+      labelKeys: WebsiteButtonFields.button.label,
+      hrefKeys: WebsiteButtonFields.button.href,
+      variantKeys: WebsiteButtonFields.button.variant,
       defaultLabel: 'Botón',
       defaultVariant: WebsiteActionVariant.fromStorage(
         composed.data['style']?.toString(),
@@ -426,9 +436,12 @@ class _ButtonBlock extends StatelessComponent {
     );
     final href = action == null ? null : context.publicHref(action.href);
     if (action == null || href == null) return Component.fragment(const []);
-    return a(classes: 'w-btn b-blk ${action.variant.name}', href: href, [
-      .text(action.label),
-    ]);
+    return a(
+      classes: 'w-btn b-blk ${action.variant.name}',
+      href: href,
+      attributes: context.editButton(WebsiteButtonFields.button),
+      [.text(action.label)],
+    );
   }
 }
 
@@ -564,9 +577,12 @@ class _HeroBlock extends StatelessComponent {
                 [.text(subtitle)],
               ),
             if (action != null && href != null)
-              a(classes: 'w-btn on-dark ${action.variant.name}', href: href, [
-                .text(action.label.toUpperCase()),
-              ]),
+              a(
+                classes: 'w-btn on-dark ${action.variant.name}',
+                href: href,
+                attributes: context.editButton(WebsiteButtonFields.hero),
+                [.text(action.label.toUpperCase())],
+              ),
           ],
         ),
       ],

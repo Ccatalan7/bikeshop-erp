@@ -237,20 +237,10 @@ class WebsiteHeroBlockContent extends StatelessWidget {
               ? button
               : actionPresenter(
                   context,
-                  WebsiteInlineActionSlot(
+                  WebsiteInlineActionSlot.button(
+                    WebsiteButtonFields.hero,
                     id: 'hero.action',
                     action: visibleAction,
-                    labelKeys: const <String>[
-                      'ctaText',
-                      'buttonText',
-                      'label',
-                    ],
-                    hrefKeys: const <String>[
-                      'ctaLink',
-                      'buttonLink',
-                      'link',
-                    ],
-                    variantKeys: const <String>['actionVariant'],
                     child: button,
                   ),
                 );

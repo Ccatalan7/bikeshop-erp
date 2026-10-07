@@ -206,7 +206,10 @@ un bloque elegido en el panel o recién agregado baja hasta quedar a la vista;
 los enlaces no navegan. Con el bloque elegido, otro clic en uno de sus títulos o textos lo
 escribe ahí mismo, con una barra de negrita, cursiva, subrayado y tamaño
 (⌘B/⌘I/⌘U): ⌘↵ o un clic afuera lo deja (un paso del historial, como en el
-lienzo), Esc lo cancela; alineación y color siguen en el panel. En el
+lienzo), Esc lo cancela; alineación y color siguen en el panel. Un clic en
+uno de sus botones abre bajo él una tarjeta con su texto, destino y estilo,
+los mismos campos y la misma escritura del lienzo (`WebsiteButtonFields`,
+`WebsiteInlineFieldBinding.beginButton`) `[Repo 2026-10-07]`. En el
 borrador el carrusel no avanza solo, muestra la diapositiva elegida en el
 panel y, si se gira con sus flechas, la elige en el panel
 `[Repo 2026-10-07]` `[Prod 2026-10-07]`. Una sección que el

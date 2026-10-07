@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:vinabike_erp/modules/website/models/website_action.dart';
 import 'package:vinabike_erp/modules/website/models/website_responsive_authoring.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
 import 'package:vinabike_erp/modules/website/services/website_html_draft_picks.dart';
@@ -468,6 +469,160 @@ void main() {
           reason: '$value',
         );
       }
+    });
+  });
+
+  group('a button of the HTML view, written as the canvas writes it', () {
+    test('the page names it by its fields and says where it is', () {
+      final press = WebsiteHtmlDraftMessage.fromHandler('vbDraftButton', [
+        'b1',
+        'plan#2',
+        [0.1, 0.5, 0.2, 0.04],
+      ])! as WebsiteHtmlDraftButton;
+      expect(press.fields, WebsiteButtonFields.plan);
+      expect(press.index, 2);
+      expect(press.where?.left, 0.1);
+      expect(press.where?.height, 0.04);
+
+      final posted = WebsiteHtmlDraftMessage.fromPost({
+        'type': 'vb-draft-button',
+        'id': 'b1',
+        'button': 'cta',
+        'where': ['x', 0, 0, 0],
+      })! as WebsiteHtmlDraftButton;
+      expect(posted.fields, WebsiteButtonFields.cta);
+      expect(posted.where, isNull);
+
+      // A page names a button the editor knows, never a field of its own.
+      for (final spec in ['title', 'plan', 'cta#1', 'actions', null]) {
+        expect(
+          WebsiteHtmlDraftMessage.fromHandler('vbDraftButton', ['b1', spec]),
+          isNull,
+          reason: '$spec',
+        );
+      }
+    });
+
+    test(
+        'label, destination and look in one step of the history, the '
+        'primary mirrored in actions; an empty destination stays empty', () {
+      final provider = _provider('cta', {
+        'title': 'Agenda',
+        'buttonText': 'Escríbenos',
+        'buttonLink': '',
+      });
+      addTearDown(provider.dispose);
+      final write = _fields(provider, 'cta').beginButton(
+        WebsiteButtonFields.cta,
+        0,
+      )!;
+      expect(write.value.label, 'Escríbenos');
+      expect(write.value.href, '');
+      expect(write.value.variant, WebsiteActionVariant.filled);
+      expect(write.destinationHelp, 'Vacío, abre el WhatsApp de la tienda.');
+
+      expect(
+        write.commit(
+          const WebsiteActionValue(
+            label: 'Agendar',
+            href: '/contacto',
+            variant: WebsiteActionVariant.outline,
+          ),
+        ),
+        isTrue,
+      );
+      final data = _data(provider);
+      expect(data['buttonText'], 'Agendar');
+      expect(data['buttonLink'], '/contacto');
+      expect(data['actionVariant'], 'outline');
+      expect((data['actions'] as List).single, containsPair('to', '/contacto'));
+      provider.undo();
+      expect(_data(provider)['buttonText'], 'Escríbenos');
+    });
+
+    test('the second button never writes over the primary', () {
+      final primary = {
+        'type': 'navigate',
+        'label': 'Escríbenos',
+        'to': '/contacto',
+        'variant': 'filled',
+      };
+      final provider = _provider('cta', {
+        'title': 'Agenda',
+        'buttonText': 'Escríbenos',
+        'buttonLink': '/contacto',
+        'secondaryText': 'Ver mapa',
+        'actions': [primary],
+      });
+      addTearDown(provider.dispose);
+      final write = _fields(provider, 'cta').beginButton(
+        WebsiteButtonFields.ctaSecondary,
+        0,
+      )!;
+      expect(write.value.label, 'Ver mapa');
+      expect(write.value.href, '');
+      expect(
+        write.commit(
+            const WebsiteActionValue(label: 'Cómo llegar', href: '/mapa')),
+        isTrue,
+      );
+      final data = _data(provider);
+      expect(data['secondaryText'], 'Cómo llegar');
+      expect(data['secondaryLink'], '/mapa');
+      expect(data['actions'], [primary]);
+      expect(data['buttonText'], 'Escríbenos');
+    });
+
+    test('a plan\'s button, in the plan stored where the page says', () {
+      final provider = _provider('pricing', {
+        'title': 'Planes',
+        'plans': [
+          {'name': 'Básica', 'ctaText': 'Agendar', 'ctaLink': '/a'},
+          {'name': 'Full', 'ctaText': 'Agendar full', 'ctaLink': '/b'},
+        ],
+      });
+      addTearDown(provider.dispose);
+      final write = _fields(provider, 'pricing').beginButton(
+        WebsiteButtonFields.plan,
+        1,
+      )!;
+      expect(write.value.label, 'Agendar full');
+      expect(
+        write.commit(const WebsiteActionValue(label: 'Reservar', href: '/b')),
+        isTrue,
+      );
+      final plans = _data(provider)['plans'] as List;
+      expect(plans[1], containsPair('ctaText', 'Reservar'));
+      expect(plans[0], containsPair('ctaText', 'Agendar'));
+    });
+
+    test(
+        'nothing changed writes nothing; a draft changed meanwhile is not '
+        'overwritten; a block not picked has no button to edit', () {
+      final provider = _provider('hero', {
+        'title': 'Portada',
+        'ctaText': 'Agendar',
+        'ctaLink': '/contacto',
+      });
+      addTearDown(provider.dispose);
+      final fields = _fields(provider, 'hero');
+      final same = fields.beginButton(WebsiteButtonFields.hero, 0)!;
+      // The hero's button is outlined unless the block says otherwise:
+      // applying the card untouched does not change its look.
+      expect(same.value.variant, WebsiteActionVariant.outline);
+      expect(same.commit(same.value), isFalse);
+      expect(provider.canUndo, isFalse);
+
+      final stale = fields.beginButton(WebsiteButtonFields.hero, 0)!;
+      provider.updateBlockData('b1', 'title', 'Desde el panel');
+      expect(
+        stale.commit(const WebsiteActionValue(label: 'Ver', href: '/')),
+        isFalse,
+      );
+      expect(_data(provider)['ctaText'], 'Agendar');
+
+      provider.selectBlock(null);
+      expect(fields.beginButton(WebsiteButtonFields.hero, 0), isNull);
     });
   });
 }

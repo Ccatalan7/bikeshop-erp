@@ -645,12 +645,10 @@ class WebsiteBlockRenderer {
     );
     final content = actionPresenter?.call(
           context,
-          WebsiteInlineActionSlot(
+          WebsiteInlineActionSlot.button(
+            WebsiteButtonFields.button,
             id: 'standalone-button',
             action: renderedAction,
-            labelKeys: const ['label', 'text'],
-            hrefKeys: const ['link'],
-            variantKeys: const ['style'],
             child: button,
           ),
         ) ??
@@ -2476,7 +2474,7 @@ class _WebsiteCarouselBlockContentState
                 isNavigationEligible: widget.isNavigationEligible,
               );
     final repeaterTarget = WebsiteInlineRepeaterTarget(
-      collectionKeys: const <String>['slides'],
+      collectionKeys: WebsiteButtonFields.slide.collection,
       itemIndex: index,
     );
     final imageUrl = slide['imageUrl'];
@@ -2651,18 +2649,10 @@ class _WebsiteCarouselBlockContentState
                       );
                       return widget.presenters?.action?.call(
                             context,
-                            WebsiteInlineActionSlot(
+                            WebsiteInlineActionSlot.button(
+                              WebsiteButtonFields.slide,
                               id: 'carousel.slide.$index.action',
                               action: action,
-                              labelKeys: const <String>[
-                                'ctaText',
-                                'buttonText',
-                              ],
-                              hrefKeys: const <String>[
-                                'ctaLink',
-                                'buttonLink',
-                              ],
-                              variantKeys: const <String>['actionVariant'],
                               child: button,
                               repeaterTarget: repeaterTarget,
                             ),

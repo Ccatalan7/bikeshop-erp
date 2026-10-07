@@ -1921,6 +1921,21 @@ de 15 px de alto Flutter lo esconde y el HTML lo muestra.
   panel, deshecho en un paso. Alineación y color siguen en el panel (la
   alineación «izquierda» de un texto centrado por el bloque no se puede
   guardar: `start` es «sin elegir»).
+- **Los botones, en su lugar (2026-10-07).** Con el bloque elegido, un clic
+  en uno de sus botones (portada, diapositiva, llamado y su segundo botón,
+  plan, botón suelto) abre bajo él una tarjeta con su texto, destino y
+  estilo: los mismos campos del lienzo (`WebsiteActionEditor`), con la ayuda
+  del destino que da el esquema («Vacío, abre el WhatsApp de la tienda.»).
+  Aplicar escribe como la ranura de acción del lienzo, en un paso del
+  historial (`WebsiteInlineFieldBinding.beginButton`): el principal también
+  en `actions`, el segundo botón del llamado nunca. Un clic afuera aplica
+  y «Cancelar» descarta, como en el lienzo. Los campos de cada botón los
+  nombra una vez el núcleo (`WebsiteButtonFields`), y la página los pide
+  por ese nombre (`data-edit-button="plan#2"`), nunca por sus claves. El
+  texto del botón del llamado deja de ser un texto suelto: lo lleva la
+  tarjeta, como en el lienzo. Antes de construirlo se comprobó con clics
+  reales en macOS que un diálogo de Flutter abierto sobre la vista web
+  recibe los clics (no se los lleva la vista nativa de abajo).
 - **Arrastrar para mover (servidor `715a6f0e`).** El nombre del bloque
   elegido, en su barra, se arrastra: una línea marca el borde de destino
   entre los bloques de la página como se ven, la página se desplaza cerca
