@@ -21,7 +21,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/catalog_page_model.dart",
-      "sha256": "05a709b9b7c0fffdaa0799ae7b560d43628680168452e13f9ff5ec88cf918873"
+      "sha256": "d3400f1b20c870012effb2770f7687dd86002ccdebbf64a79c15ab12a769499b"
     },
     {
       "path": "services/storefront_html/lib/src/catalog_page_view.dart",

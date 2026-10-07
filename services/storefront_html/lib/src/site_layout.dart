@@ -103,11 +103,13 @@ class PageContext {
   /// named on the page ([pick]).
   final bool draft;
 
-  /// In the editor's draft, the attribute that makes an element the part
+  /// In the editor's draft, the attributes that make an element the part
   /// [selectionId] names (a block's id, `header`, `footer`, a catalog or
-  /// product page section): a click on it selects that part in the panel.
-  Map<String, String> pick(String selectionId) =>
-      draft ? {'data-block-id': selectionId} : const {};
+  /// product page section), called [label] as on the canvas: a click on it
+  /// selects that part in the panel.
+  Map<String, String> pick(String selectionId, String label) => draft
+      ? {'data-block-id': selectionId, 'data-block-label': label}
+      : const {};
 }
 
 /// The whole document around a page's content.
@@ -295,7 +297,7 @@ class SiteHeader extends StatelessComponent {
     );
     return header(
       classes: overlay ? 'top over' : 'top',
-      attributes: page.pick('header'),
+      attributes: page.pick('header', 'Encabezado'),
       [
         if (banner.isNotEmpty) p(classes: 'banner', [.text(banner)]),
         // Without JavaScript a checkbox opens the phone menu (a sheet from the
@@ -698,82 +700,86 @@ class SiteFooter extends StatelessComponent {
 
     // Flutter draws one footer from 800 px up and another below; so does
     // this page, with the same breakpoint.
-    return footer(classes: 'foot', attributes: page.pick('footer'), [
-      div(classes: 'foot-wide', [
-        div(classes: 'foot-grid', [
-          div(classes: 'foot-brand', [
-            logoLink(60),
-            if (s.storeDescription.isNotEmpty)
-              p(classes: 'foot-about', [.text(s.storeDescription)]),
-            socialLinks(round: false),
+    return footer(
+      classes: 'foot',
+      attributes: page.pick('footer', 'Pie de página'),
+      [
+        div(classes: 'foot-wide', [
+          div(classes: 'foot-grid', [
+            div(classes: 'foot-brand', [
+              logoLink(60),
+              if (s.storeDescription.isNotEmpty)
+                p(classes: 'foot-about', [.text(s.storeDescription)]),
+              socialLinks(round: false),
+            ]),
+            for (final column in _footerFor(s, desktop: true))
+              div(classes: 'foot-col', [
+                p(classes: 'foot-title', [.text(column.title)]),
+                ul([
+                  for (final link in column.links)
+                    li([
+                      // Bold for the page being read, as Flutter's desktop
+                      // footer (`matchedLocation == href`).
+                      a(
+                        href: s.hrefFor(link)!,
+                        attributes: {
+                          if (s.hrefFor(link) == page.path)
+                            'aria-current': 'page',
+                        },
+                        [.text(link.label)],
+                      ),
+                    ]),
+                ]),
+              ]),
+            if (hasContact)
+              div(classes: 'foot-col', [
+                p(classes: 'foot-title', [.text('Contacto')]),
+                contactList(),
+              ]),
           ]),
-          for (final column in _footerFor(s, desktop: true))
-            div(classes: 'foot-col', [
-              p(classes: 'foot-title', [.text(column.title)]),
+          if (s.paymentClaims.isNotEmpty)
+            div(
+              classes: 'payments',
+              attributes: {
+                'role': 'group',
+                'aria-label': 'Medios de pago aceptados',
+              },
+              [
+                p([.text('Medios de Pago')]),
+                ul([
+                  for (final code in s.paymentClaims) li([_paymentBadge(code)]),
+                ]),
+              ],
+            ),
+          hr(classes: 'foot-rule'),
+          legal,
+        ]),
+        div(classes: 'foot-narrow', [
+          logoLink(50),
+          for (final column in mobileColumns) ...[
+            collapsible(
+              column.title,
               ul([
                 for (final link in column.links)
                   li([
-                    // Bold for the page being read, as Flutter's desktop
-                    // footer (`matchedLocation == href`).
-                    a(
-                      href: s.hrefFor(link)!,
-                      attributes: {
-                        if (s.hrefFor(link) == page.path)
-                          'aria-current': 'page',
-                      },
-                      [.text(link.label)],
-                    ),
+                    a(href: s.hrefFor(link)!, [.text(link.label)]),
                   ]),
               ]),
-            ]),
-          if (hasContact)
-            div(classes: 'foot-col', [
-              p(classes: 'foot-title', [.text('Contacto')]),
-              contactList(),
-            ]),
+            ),
+            hr(classes: 'foot-rule'),
+          ],
+          if (hasContact) ...[
+            collapsible('Contacto', contactList()),
+            hr(classes: 'foot-rule'),
+          ],
+          if (socials.any((entry) => entry.$2 != null)) ...[
+            p(classes: 'follow', [.text('¡SÍGUENOS!')]),
+            socialLinks(round: true),
+          ],
+          legal,
         ]),
-        if (s.paymentClaims.isNotEmpty)
-          div(
-            classes: 'payments',
-            attributes: {
-              'role': 'group',
-              'aria-label': 'Medios de pago aceptados',
-            },
-            [
-              p([.text('Medios de Pago')]),
-              ul([
-                for (final code in s.paymentClaims) li([_paymentBadge(code)]),
-              ]),
-            ],
-          ),
-        hr(classes: 'foot-rule'),
-        legal,
-      ]),
-      div(classes: 'foot-narrow', [
-        logoLink(50),
-        for (final column in mobileColumns) ...[
-          collapsible(
-            column.title,
-            ul([
-              for (final link in column.links)
-                li([
-                  a(href: s.hrefFor(link)!, [.text(link.label)]),
-                ]),
-            ]),
-          ),
-          hr(classes: 'foot-rule'),
-        ],
-        if (hasContact) ...[
-          collapsible('Contacto', contactList()),
-          hr(classes: 'foot-rule'),
-        ],
-        if (socials.any((entry) => entry.$2 != null)) ...[
-          p(classes: 'follow', [.text('¡SÍGUENOS!')]),
-          socialLinks(round: true),
-        ],
-        legal,
-      ]),
-    ]);
+      ],
+    );
   }
 
   static bool _hasContact(StorefrontShell shell) =>

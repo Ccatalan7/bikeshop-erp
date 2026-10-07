@@ -43,7 +43,9 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
   late final WebsiteHtmlDraftClient _client =
       widget.client ?? WebsiteHtmlDraftClient();
   WebsiteEditModeProvider? _provider;
-  GoRouterDelegate? _router;
+
+  /// Tells when the page on screen changes; [GoRouter.state] names it.
+  GoRouter? _router;
   InAppWebViewController? _web;
   Timer? _debounce;
 
@@ -78,10 +80,10 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     final provider = context.read<WebsiteEditModeProvider>();
-    final router = GoRouter.maybeOf(context)?.routerDelegate;
+    final router = GoRouter.maybeOf(context);
     if (!identical(router, _router)) {
-      _router?.removeListener(_changed);
-      _router = router?..addListener(_changed);
+      _router?.routerDelegate.removeListener(_changed);
+      _router = router?..routerDelegate.addListener(_changed);
     }
     if (!identical(provider, _provider)) {
       _provider?.removeListener(_changed);
@@ -95,7 +97,7 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
     _webPicks?.cancel();
     _debounce?.cancel();
     _provider?.removeListener(_changed);
-    _router?.removeListener(_changed);
+    _router?.routerDelegate.removeListener(_changed);
     if (widget.client == null) _client.close();
     super.dispose();
   }
@@ -131,10 +133,14 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
 
   /// The public path on screen; without a router (a test), the open
   /// document's own.
+  ///
+  /// Measured 2026-10-07: a category entered from the catalog is pushed over
+  /// it, and only [GoRouter.state] names it; the delegate's configuration and
+  /// the route information still said `/tienda/productos`.
   String? _path(String? pageId, String? pageSlug) {
     final router = _router;
     if (router != null) {
-      return websiteHtmlDraftPath(router.currentConfiguration.uri);
+      return websiteHtmlDraftPath(router.state.uri);
     }
     if (pageId == null) return '/';
     final slug = (pageSlug ?? '').trim().toLowerCase();

@@ -196,9 +196,16 @@ class CatalogPageModel {
       (services ? WebsiteCatalogRoot.services : WebsiteCatalogRoot.products)
           .presentationId;
 
-  /// In the editor's draft, [section] of this page picked by a click.
-  Map<String, String> pickSection(WebsiteCatalogDraftSection section) =>
-      page.pick('catalog:$presentationOwnerId:${section.name}');
+  /// In the editor's draft, [section] of this page picked by a click, named
+  /// as the canvas names it.
+  Map<String, String> pickSection(WebsiteCatalogDraftSection section) => page
+      .pick('catalog:$presentationOwnerId:${section.name}', switch (section) {
+        WebsiteCatalogDraftSection.hero => 'Portada',
+        WebsiteCatalogDraftSection.plans => 'Planes',
+        WebsiteCatalogDraftSection.list =>
+          services ? 'Todos los servicios' : 'Todos los productos',
+        WebsiteCatalogDraftSection.closing => 'Cierre',
+      });
   final WebsiteCatalogPresentation presentation;
   final String displayTitle;
   final String intro;

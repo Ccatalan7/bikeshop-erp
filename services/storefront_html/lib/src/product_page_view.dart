@@ -86,7 +86,7 @@ class _ProductSection extends StatelessComponent {
         'data-item-name': c.title,
         'data-price': c.price.toStringAsFixed(0),
         'data-max': '${page.cartLimit}',
-        ...page.page.pick('product-page:buy'),
+        ...page.page.pick('product-page:buy', 'Foto y compra'),
       },
       [
         div(classes: 'gallery', [
@@ -362,7 +362,7 @@ class _SpecSheet extends StatelessComponent {
     return section(
       classes: 'details',
       id: 'ficha',
-      attributes: page.page.pick('product-page:sheet'),
+      attributes: page.page.pick('product-page:sheet', 'Ficha técnica'),
       [
         div(classes: 'details-in', [
           h2(classes: 'section-title accent', [
@@ -430,7 +430,7 @@ class _Related extends StatelessComponent {
     }
     return section(
       classes: 'related',
-      attributes: page.page.pick('product-page:related'),
+      attributes: page.page.pick('product-page:related', 'Relacionados'),
       [
         h2(classes: 'section-title', [.text(template.resolvedRelatedTitle)]),
         div(classes: 'related-box', [

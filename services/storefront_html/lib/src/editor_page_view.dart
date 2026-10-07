@@ -1,6 +1,5 @@
 import 'package:jaspr/dom.dart';
 import 'package:jaspr/server.dart';
-import 'package:vinabike_public_core/modules/website/models/website_block_base_definitions.dart';
 import 'package:vinabike_public_core/modules/website/models/website_block_type.dart';
 import 'package:vinabike_public_core/public_store/models/public_image_thumbnail.dart';
 
@@ -82,10 +81,7 @@ Component editorPageDocument(EditorPageModel model) {
 /// the operator sees it is there and that the HTML view lacks it (the
 /// published page still shows it, drawn by Flutter).
 Component draftMissingBlock(ComposedBlock composed) {
-  final type = composed.block.type;
-  final name = type == null
-      ? composed.block.blockType
-      : websiteBaseBlockDefinitions[type]?.title ?? composed.block.blockType;
+  final name = draftBlockName(composed);
   return composedBlock(
     composed,
     fill: true,

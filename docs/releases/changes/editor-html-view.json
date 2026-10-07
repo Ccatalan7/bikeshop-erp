@@ -17,11 +17,11 @@
   "evidence": [
     {
       "path": "lib/modules/website/services/website_html_draft_client.dart",
-      "sha256": "025254e35d0e5baaec3e2cb2d0f26010458d66f3d6eea1629d60318131cfb725"
+      "sha256": "7efaa6ad739f4e13a09c53608b7a714bfa1e026bb3ebd2dcfa55ad1e039d55b4"
     },
     {
       "path": "lib/modules/website/widgets/website_html_draft_view.dart",
-      "sha256": "89b0938829c10fd8fb08822fb5ce5628936aac0b5dbeb82312abd119d7119dab"
+      "sha256": "7012febabe182ee08d09af94244ca2f6b48050983542b9d3d29892bb32c976bf"
     },
     {
       "path": "lib/modules/website/providers/website_edit_mode_provider.dart",
@@ -49,7 +49,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/editor_draft_view.dart",
-      "sha256": "05e4f0f84a4d00e706c90f4fc73109726bf26a1f4744a8f8e0453e9cdc3c003b"
+      "sha256": "67764afb667fbf8b71ee11d6cf025d376130a2d99710eb10a1e73a7a58edbdd9"
     },
     {
       "path": "services/storefront_html/lib/src/editor_page_model.dart",
@@ -57,7 +57,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/editor_page_view.dart",
-      "sha256": "7196fef75286d9d0106c3993060bce39dcc44f87e8c6b34ada99ebb358e339a1"
+      "sha256": "d9db28b8512607b7393e383daa90e25ae25ad5245b642da549c9d65c71d193e8"
     },
     {
       "path": "services/storefront_html/lib/src/home_page_model.dart",
@@ -77,7 +77,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_blocks_view.dart",
-      "sha256": "f3baf7697ddc570f3a53b1fd31a6904a4e343fe177fb4f35fcaa7442ad6eb59c"
+      "sha256": "e3d5f6cc1aef513a64cf59494cc6b9e2f3b1d31cd1c0083aaf60b3b4be86db16"
     },
     {
       "path": "lib/modules/website/services/website_html_draft_picks.dart",
@@ -97,11 +97,11 @@
     },
     {
       "path": "services/storefront_html/lib/src/site_layout.dart",
-      "sha256": "56c2f5a6af7e4bb6c8aff4acf9f1a6799a65f1a8f22201f580eeb1964b482d5f"
+      "sha256": "0978b068f7374d33b78cb3134e045fd5c97fa851188000d77645aa834a70a970"
     },
     {
       "path": "services/storefront_html/lib/src/catalog_page_model.dart",
-      "sha256": "05a709b9b7c0fffdaa0799ae7b560d43628680168452e13f9ff5ec88cf918873"
+      "sha256": "d3400f1b20c870012effb2770f7687dd86002ccdebbf64a79c15ab12a769499b"
     },
     {
       "path": "services/storefront_html/lib/src/catalog_page_view.dart",
@@ -113,7 +113,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/product_page_view.dart",
-      "sha256": "3f353948b9c26506672f32a0f10894e79b1112f4bf8459bb77047f4a19dace03"
+      "sha256": "1f74367c84281e36f6a238f5b0202b02da51808ef26b8187aeaa1c1f3404570f"
     },
     {
       "path": "services/storefront_html/lib/src/policy_page_view.dart",

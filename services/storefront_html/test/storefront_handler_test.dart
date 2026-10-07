@@ -3521,6 +3521,12 @@ void main() {
       expect(html, contains('data-block-id="catalog:$_parent:list"'));
       expect(html, contains('data-block-id="header"'));
       expect(html, contains('data-block-id="footer"'));
+      // Named as the canvas names them, for the editor's marks.
+      expect(html, contains('data-block-label="Portada"'));
+      expect(html, contains('data-block-label="Encabezado"'));
+      // The marks are a layer: the page's own elements keep their layout
+      // (a forced `position: relative` took the header off its sticky place).
+      expect(html, isNot(contains('[data-block-id]{position:relative}')));
       // The home's draft blocks belong to the home, not to this page.
       expect(html, isNot(contains('data-block-id="b-hero"')));
       expect(html, contains('<meta name="robots" content="noindex,follow"'));

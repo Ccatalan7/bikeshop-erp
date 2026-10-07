@@ -4,6 +4,9 @@ import 'package:http/http.dart' as http;
 import 'package:vinabike_public_core/public_store/models/public_policy_content.dart';
 import 'package:vinabike_public_core/public_store/seo/storefront_seo_route.dart';
 
+import '../models/website_editor_mode_route_binding.dart';
+import '../providers/website_edit_mode_provider.dart' show WebsiteEditorMode;
+
 /// The page on the editor's screen, as the store's HTML server draws it from
 /// the unsaved draft (`POST /_html/editor/borrador`, phase 5b of the move to
 /// HTML): the «Vista HTML» shows the real site while it is edited, from the
@@ -95,9 +98,14 @@ class WebsiteHtmlDraftAnswer {
 
 /// The public path the HTML view draws for the editor's [location] (the
 /// store as the ERP mounts it: `/tienda/productos` is `/productos`), with
-/// its query, or null when the server draws no page there: the cart, the
-/// checkout, an order or the customer's account stay on the canvas.
+/// its query but without the editor's own flags (`edit`, `preview`), or
+/// null when the server draws no page there: the cart, the checkout, an
+/// order or the customer's account stay on the canvas.
 String? websiteHtmlDraftPath(Uri location) {
+  location = projectWebsiteEditorModeOntoUri(
+    location,
+    WebsiteEditorMode.public,
+  );
   final path = normalizeStorefrontSeoPath(location.path);
   final segments = path.split('/').where((s) => s.isNotEmpty).toList();
   final page = segments.isEmpty ||

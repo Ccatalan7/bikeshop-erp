@@ -65,6 +65,12 @@ void main() {
     expect(path('/tienda'), '/');
     expect(path('/tienda/'), '/');
     expect(path('/tienda/productos'), '/productos');
+    // The editor's own flags are not the page's.
+    expect(
+      path('/tienda/productos/categoria/componentes?edit=true&marca=b1'),
+      '/productos/categoria/componentes?marca=b1',
+    );
+    expect(path('/tienda?preview=true'), '/');
     expect(
       path('/tienda/productos/categoria/horquillas?marca=b1&orden=precio'),
       '/productos/categoria/horquillas?marca=b1&orden=precio',

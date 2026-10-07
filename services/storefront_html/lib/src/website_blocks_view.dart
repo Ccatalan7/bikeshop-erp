@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:jaspr/dom.dart';
 import 'package:jaspr/server.dart';
 import 'package:vinabike_public_core/modules/website/models/website_action.dart';
+import 'package:vinabike_public_core/modules/website/models/website_block_base_definitions.dart';
 import 'package:vinabike_public_core/modules/website/models/website_block_surface_presence.dart';
 import 'package:vinabike_public_core/modules/website/models/website_block_type.dart';
 import 'package:vinabike_public_core/modules/website/models/website_hero_content.dart';
@@ -102,8 +103,9 @@ Component composedBlock(
     ].join(' '),
     attributes: {
       'data-block': composed.block.blockType,
-      // The editor's draft: which block a click picks.
+      // The editor's draft: which block a click picks, and its name.
       if (draft) 'data-block-id': composed.block.id,
+      if (draft) 'data-block-label': draftBlockName(composed),
       if (composed.bands case final bands?) 'data-bands': bands.join(' '),
       if (composed.gapAfter > 0 || exact != null || minimum != null)
         'style': [
@@ -114,6 +116,14 @@ Component composedBlock(
     },
     [child],
   );
+}
+
+/// What the editor calls [composed]'s block: its type's name.
+String draftBlockName(ComposedBlock composed) {
+  final type = composed.block.type;
+  return type == null
+      ? composed.block.blockType
+      : websiteBaseBlockDefinitions[type]?.title ?? composed.block.blockType;
 }
 
 /// The block types an information page draws with [sharedBlock].
