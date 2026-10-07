@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../shared/services/deferred_load_failure.dart';
+import '../../../shared/widgets/deferred_load_notice.dart';
 import '../providers/website_edit_mode_provider.dart';
 import 'website_block_edit_section.dart';
 import 'website_editor_chrome_geometry.dart';
@@ -20,6 +22,31 @@ Future<void> showDeferredWebsiteVersionsDialog(
   );
 }
 
+/// The editor's library, loaded for a widget that holds its place until it
+/// is there; a page older than the last deploy cannot load it and shows
+/// [libraryFailure] instead (`DeferredLoadNotice`), never a spinner forever.
+mixin _EditorLibrary<T extends StatefulWidget> on State<T> {
+  bool libraryLoaded = false;
+  DeferredLoadFailure? libraryFailure;
+
+  @override
+  void initState() {
+    super.initState();
+    editor.loadLibrary().then(
+      (_) {
+        if (mounted) setState(() => libraryLoaded = true);
+      },
+      onError: (Object error) {
+        if (!mounted) return;
+        setState(() {
+          libraryFailure =
+              DeferredLoadFailure.of(error) ?? DeferredLoadFailure.unavailable;
+        });
+      },
+    );
+  }
+}
+
 class DeferredWebsiteEditorPanel extends StatefulWidget {
   final VoidCallback? onDiscard;
   final Future<void> Function()? onRestoreComplete;
@@ -35,22 +62,8 @@ class DeferredWebsiteEditorPanel extends StatefulWidget {
       _DeferredWebsiteEditorPanelState();
 }
 
-class _DeferredWebsiteEditorPanelState
-    extends State<DeferredWebsiteEditorPanel> {
-  bool _libraryLoaded = false;
-
-  @override
-  void initState() {
-    super.initState();
-    editor.loadLibrary().then((_) {
-      if (mounted) {
-        setState(() {
-          _libraryLoaded = true;
-        });
-      }
-    });
-  }
-
+class _DeferredWebsiteEditorPanelState extends State<DeferredWebsiteEditorPanel>
+    with _EditorLibrary {
   @override
   Widget build(BuildContext context) {
     // The deferred boundary is the earliest owner of the desktop inspector.
@@ -63,19 +76,22 @@ class _DeferredWebsiteEditorPanelState
         color: inspectorTheme.colorScheme.surface,
         child: Builder(
           builder: (context) {
-            if (!_libraryLoaded) {
+            if (!libraryLoaded) {
+              final failure = libraryFailure;
               return SizedBox(
                 // Same owner as the loaded panel: the placeholder must not
                 // shift the layout when the deferred library finishes loading.
                 width: WebsiteEditorChromeScope.maybeOf(context)?.paneWidth ??
                     WebsiteEditorChromeGeometry.inspectorWidth,
-                child: const Center(
-                  child: SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ),
+                child: failure != null
+                    ? DeferredLoadNotice(failure: failure)
+                    : const Center(
+                        child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
               );
             }
 
@@ -113,23 +129,16 @@ class DeferredWebsiteBlockEditSurface extends StatefulWidget {
 }
 
 class _DeferredWebsiteBlockEditSurfaceState
-    extends State<DeferredWebsiteBlockEditSurface> {
-  bool _libraryLoaded = false;
-
-  @override
-  void initState() {
-    super.initState();
-    editor.loadLibrary().then((_) {
-      if (mounted) setState(() => _libraryLoaded = true);
-    });
-  }
-
+    extends State<DeferredWebsiteBlockEditSurface> with _EditorLibrary {
   @override
   Widget build(BuildContext context) {
     // O-05 owns one Material and one inspector theme around its complete
     // chrome. This deferred consumer stays transparent so loading and loaded
     // states cannot create a second surface or a light/dark seam.
-    return _libraryLoaded
+    if (libraryFailure case final failure?) {
+      return DeferredLoadNotice(failure: failure);
+    }
+    return libraryLoaded
         ? editor.WebsiteBlockEditSurface(
             editProvider: widget.editProvider,
             section: widget.section,
@@ -156,17 +165,7 @@ class DeferredWebsiteEditorSectionsRail extends StatefulWidget {
 }
 
 class _DeferredWebsiteEditorSectionsRailState
-    extends State<DeferredWebsiteEditorSectionsRail> {
-  bool _libraryLoaded = false;
-
-  @override
-  void initState() {
-    super.initState();
-    editor.loadLibrary().then((_) {
-      if (mounted) setState(() => _libraryLoaded = true);
-    });
-  }
-
+    extends State<DeferredWebsiteEditorSectionsRail> with _EditorLibrary {
   @override
   Widget build(BuildContext context) {
     final inspectorTheme = WebsiteEditorInspectorTheme.resolveFrom(context);
@@ -174,7 +173,7 @@ class _DeferredWebsiteEditorSectionsRailState
       data: inspectorTheme,
       child: Material(
         color: inspectorTheme.colorScheme.surface,
-        child: _libraryLoaded
+        child: libraryLoaded
             ? editor.WebsiteEditorSectionsRail()
             : const SizedBox.expand(),
       ),

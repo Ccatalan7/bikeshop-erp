@@ -125,10 +125,12 @@ du -h "build/web_store/$WEB_BUNDLE_NAME" | awk '{print $1}'
 
 echo "Building ERP..."
 clean_web_build_output build/web_erp
-"$FLUTTER_BIN" build web "${WEB_BUILD_MODE[@]}" --release \
+"$FLUTTER_BIN" build web "${WEB_BUILD_MODE[@]}" --release --pwa-strategy=none \
     --dart-define=STORE_PERF_LOGS="$STORE_PERF_LOGS_VALUE" \
     --dart-define=VINABIKE_BUILD_TAG="$STORE_BUILD_TAG" \
     -t lib/main.dart -o build/web_erp
+# Retires the offline worker browsers still have (see the file).
+cp scripts/erp_web/flutter_service_worker.js build/web_erp/flutter_service_worker.js
 
 echo "ERP bundle size:"
 du -h "build/web_erp/$WEB_BUNDLE_NAME" | awk '{print $1}'

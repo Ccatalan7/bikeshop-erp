@@ -34,3 +34,6 @@ String? getOrderIdFromBrowserUrl() {
 Map<String, String> getBrowserQueryParameters() {
   return {};
 }
+
+/// Reloads the page (stub for non-web: there is no page to reload)
+void reloadBrowserPage() {}

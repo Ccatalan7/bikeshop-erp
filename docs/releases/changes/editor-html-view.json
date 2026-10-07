@@ -38,7 +38,7 @@
     },
     {
       "path": "lib/public_store/widgets/public_store_layout.dart",
-      "sha256": "d2e7591753da1674813af3a00c5310bf0059f8ad57a3b359cce221e784bfbadf"
+      "sha256": "6099dd8d8607b59e005d0dad5c4401ea8fee33673261e29d939eab4486b7dadd"
     },
     {
       "path": "lib/public_store/widgets/store_layout/compact_editor_chrome.dart",
@@ -90,7 +90,7 @@
     },
     {
       "path": "lib/modules/website/services/website_html_draft_picks_web.dart",
-      "sha256": "7bb16562b1f80350af4aee6cdb032ed8c74de9278a2e352606e8d80383727c15"
+      "sha256": "8a34d7cf3c65e5e58b6e0edd40b8d9a171b309e6c8ca6cdf5d90e28cfca564d8"
     },
     {
       "path": "services/storefront_html/lib/src/editor_draft_reads.dart",

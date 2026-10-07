@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../shared/services/deferred_load_failure.dart';
+import '../../../shared/widgets/deferred_load_notice.dart';
 import '../models/website_block_type.dart';
 import '../models/website_responsive_authoring.dart';
 import '../../../shared/models/product.dart';
@@ -81,11 +83,11 @@ class DeferredEditableBlockRenderer {
         }
 
         if (snapshot.hasError) {
-          return Center(
-            child: Text(
-              'Error cargando editor: ${snapshot.error}',
-              textAlign: TextAlign.center,
-            ),
+          // A page older than the last deploy: each block says how to go on,
+          // in one line.
+          return DeferredLoadNotice.compact(
+            failure: DeferredLoadFailure.of(snapshot.error) ??
+                DeferredLoadFailure.unavailable,
           );
         }
 

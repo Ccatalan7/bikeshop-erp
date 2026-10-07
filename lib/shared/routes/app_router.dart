@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../widgets/deferred_load_notice.dart';
 import '../widgets/main_layout.dart';
 import '../widgets/erp_authorization_gate.dart';
 import '../pages/auth_callback_page.dart';
@@ -16,6 +17,7 @@ import '../../modules/purchases/models/purchase_invoice_draft_seed.dart';
 import '../../public_store/widgets/persistent_editor_shell.dart';
 import 'public_store_shell_page.dart';
 import '../services/auth_service.dart';
+import '../services/deferred_load_failure.dart';
 // ERP / Admin Modules (Deferred to reduce initial bundle size)
 import 'workspace_page_key.dart';
 import 'erp_routes_barrel.dart' deferred as erp
@@ -3118,6 +3120,18 @@ class AppRouter {
       child: FutureBuilder(
         future: _erpLibraryOnce,
         builder: (context, snapshot) {
+          // A page older than the last deploy cannot load the ERP's part
+          // (`DeferredLoadFailure`): it says so beside the sidebar instead
+          // of building the route without its code.
+          if (snapshot.hasError) {
+            return MainLayout(
+              title: '...',
+              body: DeferredLoadNotice(
+                failure: DeferredLoadFailure.of(snapshot.error) ??
+                    DeferredLoadFailure.unavailable,
+              ),
+            );
+          }
           if (snapshot.connectionState == ConnectionState.done) {
             return widgetBuilder();
           }

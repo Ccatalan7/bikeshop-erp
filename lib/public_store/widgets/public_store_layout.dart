@@ -61,6 +61,8 @@ import '../../modules/website/widgets/deferred_website_editor_panel.dart'
 import '../../modules/website/widgets/website_editor_command_scope.dart';
 import '../../modules/website/widgets/website_editor_navigation_guard.dart';
 import '../../modules/website/widgets/website_workspace_scope.dart';
+import '../../shared/services/deferred_load_failure.dart';
+import '../../shared/widgets/deferred_load_notice.dart';
 import '../../shared/widgets/vb_segmented.dart';
 import '../../shared/widgets/vb_status_badge.dart';
 import '../../shared/widgets/window_chrome_layout_region_scope.dart';
@@ -8414,6 +8416,12 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       return FutureBuilder(
         future: _ensureErpLibraryLoaded(),
         builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return DeferredLoadNotice(
+              failure: DeferredLoadFailure.of(snapshot.error) ??
+                  DeferredLoadFailure.unavailable,
+            );
+          }
           if (snapshot.connectionState != ConnectionState.done) {
             return const Center(
               child: SizedBox(

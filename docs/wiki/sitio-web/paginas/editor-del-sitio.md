@@ -285,7 +285,12 @@ geometría pasa la prueba real de iOS
   (`lib/modules/website/widgets/website_html_draft_view.dart`) y
   `WebsiteHtmlDraftClient`; en el servidor, `POST /_html/editor/borrador`
   (`services/storefront_html/lib/src/editor_draft_route.dart`) con
-  `can_edit_tenant_settings`.
+  `can_edit_tenant_settings`. En macOS la página y el editor se hablan por
+  los handlers de la vista nativa; en el ERP web la página es un marco de
+  otro origen y se hablan por mensajes firmados con la ficha de la vista
+  (`lib/modules/website/services/website_html_draft_picks_web.dart`): esa
+  ventana sólo se guarda y se le escribe, porque leerla (un `!` de Dart lo
+  hace) lanza `SecurityError` (2026-10-07) `[Repo]`.
 - Tablas: `website_pages`, `website_blocks`, `website_navigation`,
   `website_settings`, `featured_products`.
 - Superficies registradas: filas «Website …» de

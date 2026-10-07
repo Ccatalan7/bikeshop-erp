@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "general",
+  "id": "erp-web-new-version-notice",
+  "scope": "release",
+  "platforms": [
+    "web"
+  ],
+  "title": "El ERP web arranca después de cada publicación",
+  "summary": "Una publicación nueva ya no deja el ERP web en «Algo salió mal» al abrirlo; si la pestaña quedó abierta de antes, avisa que hay una versión nueva y ofrece «Recargar».",
+  "items": [
+    "El ERP web ya no guarda partes de dos versiones juntas: abre bien después de cada publicación, sin borrar nada a mano.",
+    "Una pestaña abierta antes de una publicación dice «Hay una versión nueva del ERP» con «Recargar», en vez de «Algo salió mal» o quedarse cargando."
+  ],
+  "evidence": [
+    {
+      "path": "lib/shared/services/deferred_load_failure.dart",
+      "sha256": "6b552f7b61d343dd558694fdf4a59e74180a7fd85b7023703d8da93bcf66248f"
+    },
+    {
+      "path": "lib/shared/widgets/deferred_load_notice.dart",
+      "sha256": "0b7591754f96a3fe0d32ee5622448a14f393db1797e03fefc10394242357fa12"
+    },
+    {
+      "path": "lib/main.dart",
+      "sha256": "76514681cc40c2aab6f190a71145ffc5f9409b1d3337d31bcbd1ac9b60464561"
+    },
+    {
+      "path": "lib/shared/routes/app_router.dart",
+      "sha256": "5d56d625b5f4ba99db82db3f156f8960c3bdf5a17b9fe40f356e65f4e1fece92"
+    },
+    {
+      "path": "lib/modules/website/widgets/deferred_website_editor_panel.dart",
+      "sha256": "b418d6bff5adf22507c87b97b9e471da23be99f1698fda83051ae88aee5b3a4e"
+    },
+    {
+      "path": "lib/modules/website/widgets/deferred_editable_block_renderer.dart",
+      "sha256": "20bc1f412af61ad2f06b71515962f5e226d949c158d85bbfbdf6f3b7c257c535"
+    },
+    {
+      "path": "lib/public_store/widgets/public_store_layout.dart",
+      "sha256": "6099dd8d8607b59e005d0dad5c4401ea8fee33673261e29d939eab4486b7dadd"
+    },
+    {
+      "path": "scripts/erp_web/flutter_service_worker.js",
+      "sha256": "7ed833e70bb5fa4e52cadd74b89d18a39ab4bfb9395194c34323e4ce45b98aa7"
+    },
+    {
+      "path": ".github/workflows/firebase-hosting-merge.yml",
+      "sha256": "7cc8fbebbed6e084dae759f92e895ccc4c8732a1aa261be39952579bbdb4d3f7"
+    },
+    {
+      "path": ".github/workflows/firebase-hosting-preview.yml",
+      "sha256": "875809820c33f6205564a0ca1ecf259ae6a9a35d7fc036f2c0cb4a5397d7f0f5"
+    },
+    {
+      "path": "lib/shared/utils/browser_url_stub.dart",
+      "sha256": "802848696f044be9972bdfa3f600b05e1598d1b2a71a9fae2e05c5bf4b85abe9"
+    },
+    {
+      "path": "lib/shared/utils/browser_url_web.dart",
+      "sha256": "c4c084775ffe4291f0b965d9629e986c14e4a2ecbdcca1b3812c35ef478911d9"
+    },
+    {
+      "path": "scripts/deploy.sh",
+      "sha256": "42f17bf508852a5a2e9fd401e09d8e865d977f0dfdd56938a1da58d728b60c51"
+    }
+  ]
+}

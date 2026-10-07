@@ -7,7 +7,17 @@ import 'website_html_draft_picks.dart';
 
 /// The page of each view, by the view's nonce, once it said it is ready:
 /// the frame is of another origin and cannot be scripted, only written to.
-final _pages = <String, web.Window>{};
+final _pages = <String, _Frame>{};
+
+/// A window of another origin: the browser lets it be written to and
+/// nothing else. Reading any of its properties throws a `SecurityError`, and
+/// dart2js compiles a null check (`!`) or a type check into exactly such a
+/// read (`source.toString`): measured in the published ERP on 2026-10-07,
+/// where `event.source!` threw and the editor never answered its page. So it
+/// is wrapped as it comes, without a check, and only `postMessage` is called.
+extension type _Frame._(JSObject _) {
+  external void postMessage(JSAny? message, JSString targetOrigin);
+}
 
 Stream<WebsiteHtmlDraftMessage> websiteHtmlDraftPicksImpl(String nonce) {
   late final StreamController<WebsiteHtmlDraftMessage> controller;
@@ -17,8 +27,9 @@ Stream<WebsiteHtmlDraftMessage> websiteHtmlDraftPicksImpl(String nonce) {
       listener = ((web.MessageEvent event) {
         final data = event.data.dartify();
         if (data is! Map || data['nonce'] != nonce) return;
-        if (data['type'] == 'vb-draft-ready' && event.source != null) {
-          _pages[nonce] = event.source! as web.Window;
+        final source = event.source;
+        if (data['type'] == 'vb-draft-ready' && source != null) {
+          _pages[nonce] = _Frame._(source);
         }
         final message = WebsiteHtmlDraftMessage.fromPost(data);
         if (message != null) controller.add(message);

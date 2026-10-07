@@ -1827,8 +1827,24 @@ Lo que la medición enseñó y sirve para cualquier paridad que quede:
   la ficha); lo que encontró `vbDraftPicked` vuelve igual
   (`vb-draft-result`). En la web no se recuerda el desplazamiento entre
   redibujos (no se puede leer el de otro origen).
+- **Segunda prueba en el ERP web publicado (2026-10-07, `33e1622d`).** La
+  página avisaba que estaba lista, pero el editor nunca le contestaba: al
+  guardar la ventana del marco, `event.source!` compila en dart2js a una
+  lectura (`source.toString`), y una ventana de otro origen no deja leer
+  nada (`SecurityError`); el listener se cortaba antes de guardarla. Con el
+  mensaje mandado a mano la página dibujaba barra, «Agregar aquí» y alto, así
+  que la página estaba bien. Corrección: la ventana se guarda tal como llega,
+  en un tipo de extensión sin `!` ni `as`, y sólo se le llama `postMessage`
+  (comprobado leyendo el listener compilado por `dart compile js`).
+- **El ERP web no arrancaba tras el deploy (misma prueba).** El panel quedaba
+  en «Algo salió mal» al cargar y en cada recarga: el service worker de
+  Flutter tenía `main.dart.js` nuevo con 17 partes del build anterior. El ERP
+  web se construye desde entonces sin service worker y publica uno que
+  retira el viejo; una pestaña abierta antes de un deploy dice «Hay una
+  versión nueva del ERP» con «Recargar» (`.github/copilot-instructions.md`,
+  «El ERP web no tiene service worker»).
 - **Lo que falta del 5c/5d:** medir el zoom en Windows; verificar en el ERP
-  web publicado la escritura y la barra tras esta corrección.
+  web publicado la escritura y la barra tras estas dos correcciones.
 - **El carrusel sigue al panel (servidor `f3d97f23`, Cloud Run `00049`).** El
   carrusel acepta un giro (`car:go`) y avisa cuál muestra (`car:shown`); en
   el borrador el editor le dice la diapositiva elegida en el panel

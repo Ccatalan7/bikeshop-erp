@@ -93,9 +93,12 @@ Notes:
 
 ### 3. Build the ERP (Full)
 // turbo
-Build the ERP with the full entry point (includes all modules).
+Build the ERP with the full entry point (includes all modules), without
+Flutter's offline service worker, and put the retiring worker in its place
+(`scripts/erp_web/flutter_service_worker.js` says why).
 ```bash
-flutter build web --release -o build/web_erp
+flutter build web --release --pwa-strategy=none -o build/web_erp
+cp scripts/erp_web/flutter_service_worker.js build/web_erp/flutter_service_worker.js
 ```
 
 ### 4. Deploy to Firebase

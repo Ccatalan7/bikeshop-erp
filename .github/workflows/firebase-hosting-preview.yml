@@ -119,9 +119,10 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number || '' }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
-          flutter build web --release --no-wasm-dry-run \
+          flutter build web --release --no-wasm-dry-run --pwa-strategy=none \
             --dart-define=VINABIKE_BUILD_TAG=${{ github.sha }} \
             -t lib/main.dart -o build/web_erp
+          cp scripts/erp_web/flutter_service_worker.js build/web_erp/flutter_service_worker.js
           jq -n \
             --arg commit "${{ github.sha }}" \
             --arg head "$HEAD_SHA" \

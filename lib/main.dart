@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'firebase_options.dart';
+import 'shared/services/deferred_load_failure.dart';
 import 'shared/services/memory_hygiene.dart';
 import 'shared/services/notification_service.dart';
 import 'shared/services/tenant_broadcast_channel.dart';
@@ -33,6 +34,7 @@ import 'shared/services/employee_self_service_service.dart';
 import 'shared/services/user_management_service.dart';
 import 'shared/services/workspace_manager.dart';
 import 'shared/config/supabase_config.dart';
+import 'shared/widgets/deferred_load_notice.dart';
 import 'shared/widgets/workspace_tab_bar.dart';
 import 'shared/widgets/workspace_shell_scope.dart';
 import 'shared/utils/web_url.dart';
@@ -297,6 +299,10 @@ Future<void> main() async {
     // Global error boundary - show user-friendly error UI instead of red screen
     // This prevents widget crashes from looking catastrophic to users
     ErrorWidget.builder = (FlutterErrorDetails details) {
+      // On the web, a part of the program that did not load (a page older
+      // than the last deploy) is told as what it is, with its reload.
+      final failure = kIsWeb ? DeferredLoadFailure.of(details.exception) : null;
+      if (failure != null) return DeferredLoadNotice(failure: failure);
       return Material(
         child: Container(
           padding: const EdgeInsets.all(24),

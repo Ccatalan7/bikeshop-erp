@@ -112,7 +112,10 @@ preview-stop:
 
 build-erp:
     #!/usr/bin/env bash
-    exec scripts/dev/flutter.sh build web --release --no-wasm-dry-run -t lib/main.dart -o build/web_erp
+    set -euo pipefail
+    scripts/dev/flutter.sh build web --release --no-wasm-dry-run --pwa-strategy=none -t lib/main.dart -o build/web_erp
+    # Retires the offline worker browsers still have (see the file).
+    cp scripts/erp_web/flutter_service_worker.js build/web_erp/flutter_service_worker.js
 
 build-store:
     #!/usr/bin/env bash

@@ -1377,6 +1377,22 @@ Current reference implementations:
 - Browser workspaces: `lib/shared/widgets/webview_module_page.dart`
 - Mail reader WebView: `lib/modules/mail/widgets/email_detail_view_unified.dart`
 
+### Una ventana de otro origen no se lee en Dart web (2026-10-07)
+
+En el ERP web una vista de otro origen es un `<iframe>` (la vista HTML del
+editor del sitio es un `data:`), y el navegador sólo deja escribirle
+(`postMessage`) y compararla (`typeof`, `instanceof`, `== null`). dart2js
+compila un `!` como una lectura (`source.toString`) y una conversión de tipo
+como una lectura de propiedades, y las dos lanzan `SecurityError`. Pasó con
+`event.source!` del mensaje «listo» de la página: el listener se cortaba, el
+editor nunca le contestaba y la vista HTML perdió su barra, «Agregar aquí» y
+la edición de textos sólo en la web (en macOS va por los handlers de la
+vista nativa). La ventana se guarda tal como llega, envuelta en un tipo de
+extensión propio sin `!` ni `as`, y sólo se le llama `postMessage`
+(`website_html_draft_picks_web.dart`). Se comprueba compilando con
+`dart compile js` y leyendo el listener compilado, porque las pruebas de la VM
+no lo ven.
+
 ### macOS HTML-to-PDF needs an attached, ready WebKit document
 
 **2026-08-17 — the fixed-delay renderer failed only on another Mac.** The
@@ -3741,8 +3757,9 @@ evidence, not a deployment path.
 # ⚠️ STORE: MUST use -t lib/main_store.dart!!!
 flutter build web --release -t lib/main_store.dart -o build/web_store
 
-# ERP: Uses default main.dart
-flutter build web --release -o build/web_erp
+# ERP: Uses default main.dart, without Flutter's offline worker (2026-10-07)
+flutter build web --release --pwa-strategy=none -o build/web_erp
+cp scripts/erp_web/flutter_service_worker.js build/web_erp/flutter_service_worker.js
 ```
 
 ## ❌ WRONG Build Commands (WILL BREAK THE STORE!)
@@ -5700,6 +5717,36 @@ Deployment/cache rules:
 - Debug reset flags such as `PUBLIC_STORE_DEBUG_RESET_LOCAL_STATE` must stay local/debug-only and must never be required for normal production freshness.
 
 When optimizing first-load speed, improve parallelism, bundle size, image payloads, or edge warm-up first. Treat slower website-editor reflection as a regression, even if Lighthouse improves.
+
+### El ERP web no tiene service worker (2026-10-07)
+
+El ERP en la web se construía con el service worker «offline-first» de
+Flutter. Guarda cada archivo por su nombre fijo (`main.dart.js`,
+`main.dart.js_1.part.js`…) y una petición que estaba en vuelo cuando llega un
+deploy reescribe una parte vieja después de la limpieza del worker nuevo: la
+caché queda con partes de dos builds. Medido en el Chrome del dueño el
+2026-10-07: `main.dart.js` de 33e1622d junto a 17 partes del build anterior,
+el panel en «Algo salió mal» al cargar y en cada recarga, hasta borrar la
+caché a mano. Costó media ronda de verificación creer que era el código nuevo.
+
+- Todo build del ERP web va con `--pwa-strategy=none`, y el que se publica
+  copia `scripts/erp_web/flutter_service_worker.js` encima del archivo vacío
+  que deja Flutter: el navegador que todavía tiene el worker viejo se lo
+  cambia por ése, que borra las cachés `flutter-*` y se desregistra sin
+  recargar la página. La prueba es
+  `test/unit/erp_web_service_worker_retirement_test.dart`.
+- Sin worker, una pestaña abierta antes de un deploy no puede cargar las
+  partes que no había usado (dart2js compara el hash de cada parte). Eso no se
+  esconde ni se recarga solo —puede haber trabajo sin guardar en otra pestaña
+  del ERP—: `DeferredLoadFailure` lo reconoce y `DeferredLoadNotice` dice
+  «Hay una versión nueva del ERP» con «Recargar», en la pantalla de error
+  global, el esqueleto de las rutas diferidas y los cargadores del editor. Un
+  cargador diferido nuevo que muestre su espera también muestra ese aviso si
+  la carga falla; nunca un spinner para siempre.
+- Para mirar qué corre una pestaña: `caches.keys()` y el hash de cada parte
+  (`a["<hash>"]=a.current` al final del archivo) contra `deferredPartHashes`
+  de `main.dart.js`. Un `fetch` desde la página pasa por el worker aunque diga
+  `cache: 'no-store'`: comparar con `curl`, no desde la página.
 
 ### HTML-first storefront evolution is allowed
 

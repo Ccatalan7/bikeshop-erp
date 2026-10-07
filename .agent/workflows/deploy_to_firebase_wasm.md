@@ -38,7 +38,8 @@ dart run scripts/generate_product_seo_snapshots.dart \
 // turbo
 Builds with `--wasm`.
 ```bash
-flutter build web --wasm --release -t lib/main.dart -o build/web_erp
+flutter build web --wasm --release --pwa-strategy=none -t lib/main.dart -o build/web_erp
+cp scripts/erp_web/flutter_service_worker.js build/web_erp/flutter_service_worker.js
 ```
 
 ### 5. Deploy

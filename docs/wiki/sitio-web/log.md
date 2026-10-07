@@ -343,3 +343,12 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   página como `data:` URL, de otro origen; el editor no podía ejecutar nada
   en ella (ni marco, ni barra, ni escritura). Ahora se hablan por mensajes en
   los dos sentidos, firmados con la ficha de la vista.
+
+## 2026-10-07 — Segunda prueba de la vista HTML en el ERP web
+
+- El editor no le contestaba a la página: guardar la ventana del marco con
+  `event.source!` la lee, y una ventana de otro origen no se deja leer. Se
+  guarda sin leerla y sólo se le escribe.
+- El ERP web no arrancaba después del deploy: el service worker de Flutter
+  mezclaba partes de dos builds. El ERP web va sin service worker y retira el
+  viejo; una pestaña de antes de un deploy avisa «Hay una versión nueva».

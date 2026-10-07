@@ -65,3 +65,8 @@ Map<String, String> getBrowserQueryParameters() {
   }
   return params;
 }
+
+/// Reloads the page from the server.
+void reloadBrowserPage() {
+  web.window.location.reload();
+}
