@@ -157,6 +157,18 @@ Al cambiar instrucciones de UI, actualizar esa aserción según el contrato
 vigente y correr sólo ese test antes del push. No restaurar una regla superada
 para satisfacer una coincidencia de texto.
 
+**2026-10-07 — pruebas que leen el código fuente:** unas 20 pruebas de
+contrato leen el texto de `lib/` (`readLibrarySource`, `readAsStringSync`) y
+buscan una frase literal. Un cambio que conserva el contrato pero cambia la
+frase las rompe y el gate bloquea la publicación: el pie del editor pasó de
+`forAllAudiences(footerNavItems)` a proyectar el pie del borrador, y la web
+del ERP y la tienda quedaron sin publicar cinco pushes seguidos (~2 h) sin
+que se notara, porque no se miró el resultado de los deploys. Antes de
+empujar un cambio en `lib/`: `grep -rl <archivo> test/` y correr esas pruebas,
+o `flutter test test/unit` entero (~5 min, 6.500 pruebas). Después del push,
+`gh run list` hasta ver los deploys en verde. Al arreglar la prueba se afirma
+el contrato (una expresión sobre la forma que importa), no la frase vieja.
+
 ## Dónde va cada aprendizaje
 
 | Lo que aprendiste | Documento |

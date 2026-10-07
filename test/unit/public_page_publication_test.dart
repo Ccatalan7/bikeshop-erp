@@ -197,9 +197,14 @@ void main() {
     final service = readLibrarySource('lib/modules/website/services/website_service.dart');
 
     expect(bootstrap, contains('pagePublicationPreflight'));
+    // The footer as the editor has it (saved, or drafted while editing)
+    // goes through the same boundary.
     expect(
       layout,
-      contains('_pagePublication.forAllAudiences(footerNavItems)'),
+      matches(RegExp(
+        r'_pagePublication\.forAllAudiences\(\s*'
+        r'editProvider\.draftedFooterNavigation\(',
+      )),
     );
     expect(layout, contains('_pagePublication.allowsHref(href)'));
     expect(
