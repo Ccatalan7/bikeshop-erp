@@ -163,41 +163,62 @@ sealed class WebsiteHtmlDraftMessage {
           'cancel' => WebsiteHtmlDraftLayerDragStep.cancel,
           _ => null,
         };
-        final resize = switch (data['mode']) {
-          'move' => false,
-          'resize' => true,
+        final mode = switch (data['mode']) {
+          'move' => WebsiteHtmlDraftLayerDragMode.move,
+          'resize' => WebsiteHtmlDraftLayerDragMode.resize,
+          'rotate' => WebsiteHtmlDraftLayerDragMode.rotate,
           _ => null,
         };
         if (id == null ||
             slide == null ||
             step == null ||
-            resize == null ||
+            mode == null ||
             layer == null ||
             layer.length > 120 ||
             !RegExp(r'^[A-Za-z0-9_.:-]+$').hasMatch(layer)) {
           return null;
         }
-        // A commit carries the layer's new place (x, y) or size (w, h), in
-        // the canvas's units: those two keys only, each a finite number. A
-        // place may be left of or above the canvas when the document lets
-        // layers bleed; a size is never empty.
+        // A commit carries, in the canvas's units, the layer's new place
+        // (x, y), its new size (w, h, and its place too when it is turned:
+        // the corner opposite the grip stays put) or its new turn (rotation,
+        // in degrees), those keys only, each a finite number. A place may
+        // be left of or above the canvas when the document lets layers
+        // bleed; a size is never empty; a turn is within ±180°.
         Map<String, double>? values;
         if (step == WebsiteHtmlDraftLayerDragStep.commit) {
           final raw = data['values'];
-          final keys = resize ? const ['w', 'h'] : const ['x', 'y'];
-          if (raw is! Map ||
-              raw.length != 2 ||
-              !keys.every((key) => raw[key] is num)) {
-            return null;
-          }
+          final shapes = switch (mode) {
+            WebsiteHtmlDraftLayerDragMode.move => const [
+                ['x', 'y'],
+              ],
+            WebsiteHtmlDraftLayerDragMode.resize => const [
+                ['w', 'h'],
+                ['x', 'y', 'w', 'h'],
+              ],
+            WebsiteHtmlDraftLayerDragMode.rotate => const [
+                ['rotation'],
+              ],
+          };
+          final keys = raw is Map
+              ? shapes
+                  .where(
+                    (shape) =>
+                        raw.length == shape.length &&
+                        shape.every((key) => raw[key] is num),
+                  )
+                  .firstOrNull
+              : null;
+          if (raw is! Map || keys == null) return null;
           values = {
             for (final key in keys) key: (raw[key] as num).toDouble(),
           };
-          if (values.values.any(
-            (value) =>
-                !value.isFinite ||
-                value > 20000 ||
-                (resize ? value <= 0 : value < -20000),
+          bool fits(String key, double value) => switch (key) {
+                'w' || 'h' => value > 0 && value <= 20000,
+                'rotation' => value >= -180 && value <= 180,
+                _ => value >= -20000 && value <= 20000,
+              };
+          if (values.entries.any(
+            (entry) => !entry.value.isFinite || !fits(entry.key, entry.value),
           )) {
             return null;
           }
@@ -207,7 +228,7 @@ sealed class WebsiteHtmlDraftMessage {
           slide < 0 ? null : slide,
           layer,
           step,
-          resize: resize,
+          mode: mode,
           values: values,
         );
       case 'vb-draft-image':
@@ -350,17 +371,21 @@ final class WebsiteHtmlDraftAction extends WebsiteHtmlDraftMessage {
 
 enum WebsiteHtmlDraftLayerDragStep { begin, commit, cancel }
 
+/// What a drag of the picked canvas layer does: moves it (pressed inside
+/// it), resizes it (its corner grip) or turns it (its rotation handle).
+enum WebsiteHtmlDraftLayerDragMode { move, resize, rotate }
+
 /// The operator dragging the picked canvas layer [layer] (of carousel slide
 /// [slide], or of a canvas block's own canvas when `null`): starting, done
-/// with its new place or size ([values], in the canvas's units), or leaving
-/// it as it was.
+/// with its new place, size or turn ([values], in the canvas's units), or
+/// leaving it as it was.
 final class WebsiteHtmlDraftLayerDrag extends WebsiteHtmlDraftMessage {
   const WebsiteHtmlDraftLayerDrag(
     this.id,
     this.slide,
     this.layer,
     this.step, {
-    required this.resize,
+    required this.mode,
     this.values,
   });
 
@@ -368,9 +393,7 @@ final class WebsiteHtmlDraftLayerDrag extends WebsiteHtmlDraftMessage {
   final int? slide;
   final String layer;
   final WebsiteHtmlDraftLayerDragStep step;
-
-  /// A resize from its corner grip (`w`, `h`), or a move (`x`, `y`).
-  final bool resize;
+  final WebsiteHtmlDraftLayerDragMode mode;
   final Map<String, double>? values;
 }
 

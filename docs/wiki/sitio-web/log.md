@@ -415,3 +415,5 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 - En macOS las flechas de la vista HTML no hacían nada: un clic no le da el
   teclado a la vista nativa. El editor lo toma y se lo pasa; Suprimir y ⌘D
   borran y duplican la capa como en el lienzo.
+- La capa elegida se gira en la vista HTML con su manilla; su marco se
+  dibuja girado y una capa girada cambia de tamaño en sus propios ejes.

@@ -27,6 +27,14 @@ const _draftCss = '''
 .vb-mark.vb-layer span{display:none}
 .vb-grip{position:absolute;right:-7px;bottom:-7px;width:12px;height:12px;box-sizing:border-box;border-radius:3px;
   background:#fff;border:2px solid #1a73e8;pointer-events:auto;cursor:nwse-resize}
+.vb-rot{position:absolute;left:50%;top:-34px;width:22px;height:22px;margin-left:-11px;box-sizing:border-box;
+  border-radius:50%;background:#fff;border:1.5px solid #1a73e8;box-shadow:0 1px 4px rgb(0 0 0 / .3);
+  pointer-events:auto;cursor:grab;display:flex;align-items:center;justify-content:center}
+.vb-rot::after{content:"";position:absolute;left:50%;top:21px;width:1px;height:12px;background:#1a73e8}
+.vb-rot svg{width:14px;height:14px;fill:none;stroke:#1a73e8;stroke-width:2.2;stroke-linecap:round}
+.vb-angle{position:absolute;left:50%;top:-62px;transform:translateX(-50%);padding:2px 6px;border-radius:4px;
+  background:#1a73e8;color:#fff;font:600 11px/16px system-ui,-apple-system,sans-serif;display:none;white-space:nowrap}
+.vb-rotating .vb-angle{display:block}
 .vb-editing{outline:2px solid #1a73e8;outline-offset:3px;cursor:text;text-transform:none!important;
   -webkit-user-select:text;user-select:text;caret-color:currentColor}
 .vb-editing:focus{outline:2px solid #1a73e8}
@@ -193,6 +201,17 @@ const _draftScript = r'''
   layerGrip.className = 'vb-grip';
   layerGrip.title = 'Arrastra para cambiar el tamaño';
   layerPick.el.appendChild(layerGrip);
+  // Its rotation handle above it, as the canvas's (Shift snaps to 15°).
+  var layerTurn = document.createElement('i');
+  layerTurn.className = 'vb-rot';
+  layerTurn.title = 'Arrastra para girar. Mayús ajusta a 15 grados.';
+  layerTurn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v4.5h-4.5"/></svg>';
+  layerPick.el.appendChild(layerTurn);
+  var layerAngle = document.createElement('b');
+  layerAngle.className = 'vb-angle';
+  layerPick.el.appendChild(layerAngle);
+  // A layer's turn in degrees, as its style says (`rotate`).
+  function turnOf(el) { return parseFloat(el.style.getPropertyValue('rotate')) || 0; }
   function shownLayer() {
     if (!layerSel || !pick.target) return null;
     var slide = layerSel.slide < 0 ? 'root' : String(layerSel.slide);
@@ -212,6 +231,15 @@ const _draftScript = r'''
     var t = m.target;
     if (!t || !t.isConnected) { m.el.classList.remove('vb-on'); return; }
     var r = t.getBoundingClientRect();
+    if (m === layerPick && t.offsetParent) {
+      // The layer's own frame, turned with it: a turned layer's bounds
+      // are not where its handles go.
+      var o = t.offsetParent.getBoundingClientRect();
+      r = { left: o.left + t.offsetLeft, top: o.top + t.offsetTop, width: t.offsetWidth, height: t.offsetHeight };
+      r.bottom = r.top + r.height;
+      var turn = turnOf(t);
+      m.el.style.rotate = turn ? turn + 'deg' : '';
+    }
     if (r.width === 0 && r.height === 0) { m.el.classList.remove('vb-on'); return; }
     var s = m.el.style;
     s.left = r.left + 'px'; s.top = r.top + 'px';
@@ -809,28 +837,64 @@ const _draftScript = r'''
   document.addEventListener('mousedown', function (event) {
     if (event.button !== 0 || edit || sizing || shifting || !layerPick.target || !layerSel) return;
     var el = layerPick.target;
-    var grip = !!(event.target.closest && event.target.closest('.vb-grip'));
+    var turn = !!(event.target.closest && event.target.closest('.vb-rot'));
+    var grip = !turn && !!(event.target.closest && event.target.closest('.vb-grip'));
     var r = el.getBoundingClientRect();
     var inside = event.clientX >= r.left && event.clientX <= r.right &&
       event.clientY >= r.top && event.clientY <= r.bottom;
-    if (!grip && !inside) return;
+    if (!grip && !turn && !inside) return;
     var z = landing(el);
     if (!z) return;
     // Text and photos would start their own selection or drag.
     event.preventDefault();
-    if (grip) event.stopPropagation();
+    if (grip || turn) event.stopPropagation();
+    var from = z.u;
+    from.rotation = turnOf(el);
+    // A turn goes around the layer's center, where its turned frame's is.
+    var c = layerPick.el.getBoundingClientRect();
+    var cx = c.left + c.width / 2, cy = c.top + c.height / 2;
     shifting = {
       id: pick.target.getAttribute('data-block-id'), slide: layerSel.slide, layer: layerSel.id,
-      mode: grip ? 'resize' : 'move', el: el, style: el.getAttribute('style'), from: z.u, to: null,
-      sx: event.clientX, sy: event.clientY, z: z, lock: null, begun: false
+      mode: turn ? 'rotate' : grip ? 'resize' : 'move', el: el, style: el.getAttribute('style'),
+      from: from, to: null, sx: event.clientX, sy: event.clientY, z: z, lock: null, begun: false,
+      cx: cx, cy: cy, a0: Math.atan2(event.clientY - cy, event.clientX - cx)
     };
   }, true);
-  // Where the drag puts the layer: a place (Shift keeps it on one axis) or
-  // a size from the corner (Shift keeps its proportions; the canvas's
-  // smallest frame, larger for a button).
+  // Where the drag puts the layer: a place (Shift keeps it on one axis), a
+  // size from the corner (Shift keeps its proportions; the canvas's
+  // smallest frame, larger for a button) or a turn around its center
+  // (Shift snaps to 15°), as the canvas does each.
   function shiftedTo(m, event) {
     var z = m.z, f = m.from, dx = (event.clientX - m.sx) / z.s, dy = (event.clientY - m.sy) / z.s;
     var lineX = null, lineY = null, to, hit;
+    if (m.mode === 'rotate') {
+      var a = Math.atan2(event.clientY - m.cy, event.clientX - m.cx);
+      var deg = f.rotation + (a - m.a0) * 180 / Math.PI;
+      if (event.shiftKey) deg = Math.round(deg / 15) * 15;
+      deg = Math.round((((deg % 360) + 540) % 360 - 180) * 10) / 10;
+      if (deg === -180) deg = 180;
+      layerAngle.textContent = Math.round(deg) + '°';
+      showGuides(z, null, null);
+      return { rotation: deg };
+    }
+    var th = m.mode === 'resize' ? (f.rotation || 0) * Math.PI / 180 : 0;
+    if (th) {
+      // A turned layer grows in its own axes, and the corner opposite the
+      // grip stays where it is: its place moves with its size.
+      var minTW = z.button ? 120 : 40, minTH = z.button ? 44 : 32;
+      var ldx = dx * Math.cos(th) + dy * Math.sin(th), ldy = dy * Math.cos(th) - dx * Math.sin(th);
+      var tw = f.w + ldx, thh = f.h + ldy, tr = f.w / Math.max(f.h, 1);
+      if (event.shiftKey) { if (Math.abs(ldx) >= Math.abs(ldy)) thh = tw / tr; else tw = thh * tr; }
+      tw = Math.max(minTW, Math.min(tw, 20000));
+      thh = Math.max(minTH, Math.min(thh, 20000));
+      var hx = (tw - f.w) / 2, hy = (thh - f.h) / 2;
+      var mx = f.x + f.w / 2 + hx * Math.cos(th) - hy * Math.sin(th);
+      var my = f.y + f.h / 2 + hx * Math.sin(th) + hy * Math.cos(th);
+      to = { x: Math.round(mx - tw / 2), y: Math.round(my - thh / 2), w: Math.round(tw), h: Math.round(thh) };
+      if (!z.bleed) { to.x = Math.max(0, to.x); to.y = Math.max(0, to.y); }
+      showGuides(z, null, null);
+      return to;
+    }
     if (m.mode === 'move') {
       if (event.shiftKey) {
         if (!m.lock) m.lock = Math.abs(dx) >= Math.abs(dy) ? 'x' : 'y';
@@ -887,18 +951,23 @@ const _draftScript = r'''
       if (Math.abs(event.clientX - m.sx) < 4 && Math.abs(event.clientY - m.sy) < 4) return;
       m.begun = true;
       document.documentElement.classList.add('vb-moving');
+      if (m.mode === 'rotate') layerPick.el.classList.add('vb-rotating');
       layerMessage(m, 'begin');
     }
     event.preventDefault();
     var to = shiftedTo(m, event);
     m.to = to;
-    Object.keys(to).forEach(function (k) { m.el.style.setProperty('--' + k, to[k]); });
+    Object.keys(to).forEach(function (k) {
+      if (k === 'rotation') m.el.style.setProperty('rotate', to[k] + 'deg');
+      else m.el.style.setProperty('--' + k, to[k]);
+    });
     soon();
   }, true);
   function stopShifting() {
     shifting = null;
     showGuides(null, null, null);
     document.documentElement.classList.remove('vb-moving');
+    layerPick.el.classList.remove('vb-rotating');
   }
   function endShifting() {
     var m = shifting;

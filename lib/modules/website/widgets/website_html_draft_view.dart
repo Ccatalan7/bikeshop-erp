@@ -740,7 +740,8 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
   }
 
   /// The picked canvas layer dragged in the page to a new place (or, from
-  /// its corner grip, a new size): the canvas's direct manipulation, started
+  /// its corner grip, a new size; from its handle, a new turn): the canvas's
+  /// direct manipulation, started
   /// when the drag begins (`startCanvasManipulation`: the layer picked,
   /// shown, not locked, in the band the canvas is drawn in) and written once
   /// when it ends (`commitCanvasManipulation`, refused if the document or
@@ -764,7 +765,7 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
         final inside = values == null ||
             shifting == null ||
             shifting.document['constrainElementsToSafeArea'] == false ||
-            values.values.every((value) => value >= 0);
+            ['x', 'y'].every((key) => (values[key] ?? 0) >= 0);
         final written = shifting != null &&
             values != null &&
             inside &&
@@ -812,9 +813,14 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
     final viewport = provider.renderedCanvasViewport(target.document);
     if (viewport == null ||
         !provider.startCanvasManipulation(
-          drag.resize
-              ? WebsiteCanvasManipulationMode.resize
-              : WebsiteCanvasManipulationMode.move,
+          switch (drag.mode) {
+            WebsiteHtmlDraftLayerDragMode.move =>
+              WebsiteCanvasManipulationMode.move,
+            WebsiteHtmlDraftLayerDragMode.resize =>
+              WebsiteCanvasManipulationMode.resize,
+            WebsiteHtmlDraftLayerDragMode.rotate =>
+              WebsiteCanvasManipulationMode.rotate,
+          },
           target: target,
           viewport: viewport,
         )) {

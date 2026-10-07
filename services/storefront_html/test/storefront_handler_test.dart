@@ -4236,6 +4236,8 @@ void main() {
         // The keys of the canvas: the page's own, or the editor's when it
         // holds the keyboard (macOS).
         expect(html, contains('window.vbDraftKey = function'));
+        // Its rotation handle, as the canvas's.
+        expect(html, contains("layerTurn.className = 'vb-rot'"));
         expect(html, contains("send('vbDraftLayerCommand'"));
 
         final public = await _get(

@@ -884,7 +884,7 @@ void main() {
         {'x': 96, 'y': 128.5},
       ])! as WebsiteHtmlDraftLayerDrag;
       expect(move.slide, 2);
-      expect(move.resize, isFalse);
+      expect(move.mode, WebsiteHtmlDraftLayerDragMode.move);
       expect(move.step, WebsiteHtmlDraftLayerDragStep.commit);
       expect(move.values, {'x': 96.0, 'y': 128.5});
 
@@ -897,11 +897,11 @@ void main() {
         'mode': 'resize',
       })! as WebsiteHtmlDraftLayerDrag;
       expect(resize.slide, isNull);
-      expect(resize.resize, isTrue);
+      expect(resize.mode, WebsiteHtmlDraftLayerDragMode.resize);
       expect(resize.values, isNull);
     });
 
-    test('a commit writes only its two keys, as finite numbers in range', () {
+    test('a commit writes only its keys, as finite numbers in range', () {
       for (final values in [
         null,
         {'x': 1},
@@ -928,7 +928,7 @@ void main() {
       expect(
         WebsiteHtmlDraftMessage.fromHandler(
           'vbDraftLayerDrag',
-          ['b1', 0, 'l1', 'begin', 'rotate', null],
+          ['b1', 0, 'l1', 'begin', 'crop', null],
         ),
         isNull,
       );
@@ -949,6 +949,46 @@ void main() {
           ]),
           isNull,
           reason: '$size',
+        );
+      }
+      // A turned layer's size moves its place too; a turn is within ±180°.
+      final turnedSize = WebsiteHtmlDraftMessage.fromHandler(
+        'vbDraftLayerDrag',
+        [
+          'b1',
+          0,
+          'l1',
+          'commit',
+          'resize',
+          {'x': 70, 'y': 110, 'w': 640, 'h': 96},
+        ],
+      )! as WebsiteHtmlDraftLayerDrag;
+      expect(turnedSize.values, {'x': 70.0, 'y': 110.0, 'w': 640.0, 'h': 96.0});
+      final turn = WebsiteHtmlDraftMessage.fromHandler('vbDraftLayerDrag', [
+        'b1',
+        0,
+        'l1',
+        'commit',
+        'rotate',
+        {'rotation': -45},
+      ])! as WebsiteHtmlDraftLayerDrag;
+      expect(turn.mode, WebsiteHtmlDraftLayerDragMode.rotate);
+      expect(turn.values, {'rotation': -45.0});
+      for (final (mode, values) in [
+        ('rotate', {'rotation': 200}),
+        ('rotate', {'rotation': 10, 'x': 1}),
+        ('rotate', {'x': 1, 'y': 1}),
+        ('resize', {'x': 1, 'y': 1, 'w': 10}),
+        ('resize', {'rotation': 10}),
+        ('move', {'rotation': 10}),
+      ]) {
+        expect(
+          WebsiteHtmlDraftMessage.fromHandler(
+            'vbDraftLayerDrag',
+            ['b1', 0, 'l1', 'commit', mode, values],
+          ),
+          isNull,
+          reason: '$mode $values',
         );
       }
       final bleed = WebsiteHtmlDraftMessage.fromHandler('vbDraftLayerDrag', [

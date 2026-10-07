@@ -1973,7 +1973,12 @@ de 15 px de alto Flutter lo esconde y el HTML lo muestra.
   `commitCanvasManipulation` al soltar, rechazada si el documento o el
   alcance cambiaron), y la página la devuelve si se rechaza. Un clic sin
   arrastre elige, como siempre. Las flechas la empujan 1 unidad (10 con
-  Mayús), cada pulsación un paso, como en el lienzo; Suprimir la borra y
+  Mayús), cada pulsación un paso, como en el lienzo. Se gira con su
+  manilla de arriba, sobre su centro (Mayús ajusta a 15°, la página muestra
+  el ángulo; `rotation` entre ±180 por la manipulación `rotate`), y el marco
+  de la capa elegida se dibuja girado con ella; una capa girada cambia de
+  tamaño en sus propios ejes con la esquina opuesta fija, así que escribe
+  también su lugar, como `_updateFrameGesture` del lienzo. Suprimir la borra y
   ⌘D la duplica (`removeCanvasLayer`, `duplicateCanvasLayer`, la selección
   pasa a ninguna o a la copia). En macOS un clic en la vista nativa no le
   da el teclado a la página (medido: `document.hasFocus()` en falso), así
