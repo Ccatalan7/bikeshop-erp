@@ -1463,6 +1463,13 @@ These are safe to remove when disk space is low because they are regenerated fro
   a live canonical session, unless a `flutter test` is running right now. The
   same day `build/app/` (Android output, 3.7 GB) was the other big piece.
 - root `.dart_tool/` and `mobile_scanner_app/.dart_tool/`
+- **`.dart_tool/flutter_build/` grows like `build/test_cache/`** (2026-10-07):
+  one hashed folder per build configuration ever compiled (web, macOS
+  debug, release, test…), never pruned — 58 folders, 7.6 GB, of which two
+  were in use. Move the folders untouched for more than two days
+  (`find .dart_tool/flutter_build -mindepth 1 -maxdepth 1 -type d -mtime +2`)
+  and keep `package_config.json`; a folder moved by mistake is only
+  rebuilt on the next compile.
 - Android Gradle intermediates such as `android/.gradle/` and `mobile_scanner_app/android/.gradle/`
 - Flutter ephemeral folders such as `macos/Flutter/ephemeral/`, `ios/Flutter/ephemeral/`, and their `mobile_scanner_app/` equivalents
 - local dependency installs such as root `node_modules/`, `cloudflare-worker/node_modules/`, `ios/Pods/`, `macos/Pods/`, and mobile scanner Pods when the relevant lockfiles are present
