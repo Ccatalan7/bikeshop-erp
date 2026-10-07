@@ -10,7 +10,7 @@
   "title": "Vista HTML en el editor del sitio",
   "summary": "En el editor del sitio, «Vista HTML» muestra la página en pantalla —inicio, páginas, catálogo, categorías y ficha de producto— tal como la arma la tienda en HTML, con lo que aún no guardas, y se actualiza con cada cambio.",
   "items": [
-    "Un clic en la vista HTML elige el bloque, el encabezado, el pie o la sección; el bloque trae su barra y «Agregar aquí» arriba y abajo.",
+    "Un clic en la vista HTML elige el bloque, el encabezado, el pie o la sección; el bloque trae su barra, «Agregar aquí» en sus bordes y su alto para arrastrar.",
     "Los títulos y textos del bloque elegido se escriben ahí mismo con otro clic: ⌘↵ o un clic afuera lo deja, Esc lo cancela y se deshace en un paso.",
     "Se ve al momento lo que no guardas del catálogo, la ficha y el pie; el carrusel sigue al panel, y mover una sección del pie ya no deja el pie sin dibujar."
   ],
@@ -21,7 +21,7 @@
     },
     {
       "path": "lib/modules/website/widgets/website_html_draft_view.dart",
-      "sha256": "3667b698b4b7cba8da3bfc720d178da422ba4fbec8d54f6eee0a8c4cb25b9207"
+      "sha256": "96fd775f4cf6d085bbfdb4e059cb7e3dce02cf9cc2f758968f3bad215b3913b2"
     },
     {
       "path": "lib/modules/website/providers/website_edit_mode_provider.dart",
@@ -49,7 +49,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/editor_draft_view.dart",
-      "sha256": "9109c7409550b34827e6de6d90edf6c7ead50a73cadeb6f708a215c899b6e3f5"
+      "sha256": "d5eb4b0cffa13a2cb199fe45e3eedf7fe5058ca571e6bda5d37992521c03febd"
     },
     {
       "path": "services/storefront_html/lib/src/editor_page_model.dart",
@@ -81,7 +81,7 @@
     },
     {
       "path": "lib/modules/website/services/website_html_draft_picks.dart",
-      "sha256": "23fe8b18dd7714be632546e0a03b828dd4411669946ac2369ae186c0eecefabf"
+      "sha256": "46d2ebde47ca09d8784a1dfc5d441e568e5bbdb0d584d0744e1fd7074fbab0e5"
     },
     {
       "path": "lib/modules/website/services/website_html_draft_picks_stub.dart",
@@ -125,11 +125,11 @@
     },
     {
       "path": "lib/modules/website/widgets/editable_block_renderer.dart",
-      "sha256": "259151c0ff630c0d579598b51928dfa03a3fb8edb0ec99c6f71679445dbbb9a2"
+      "sha256": "dbba10c04a918df2efc3fce569a9ba4423ee221e355c57dfb490b1b2459f028e"
     },
     {
       "path": "lib/modules/website/widgets/website_inline_field_binding.dart",
-      "sha256": "46d7ac317daa4eeb5fd0f0f848d4eba6aace67ac3e7935f24c307914eb2c4036"
+      "sha256": "c4206c15cc81f1c2ddfda1b41f5858368324220dc686d027c5b9ab50d3e070e3"
     },
     {
       "path": "services/storefront_html/lib/src/website_carousel_view.dart",

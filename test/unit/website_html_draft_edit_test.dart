@@ -261,4 +261,68 @@ void main() {
       expect(data[write.key], 'Esta semana');
     });
   });
+
+  group('the picked block\'s height, from the HTML view\'s handle', () {
+    test(
+        'one drag, one step of the history; a reset gives the content its '
+        'own height back', () {
+      final provider = _provider('hero', {'title': 'Portada'});
+      addTearDown(provider.dispose);
+      final fields = _fields(provider, 'hero');
+      expect(fields.heightRange, (min: 200.0, max: 1000.0));
+
+      final lease = fields.beginHeight()!;
+      expect(fields.commitHeight(lease, 520), isTrue);
+      expect(_data(provider)['blockHeight'], 520);
+      expect(provider.canUndo, isTrue);
+
+      expect(fields.commitHeight(fields.beginHeight()!, null), isTrue);
+      expect(_data(provider)['blockHeight'], isNull);
+      provider.undo();
+      expect(_data(provider)['blockHeight'], 520);
+    });
+
+    test('a block whose content owns its height has no handle', () {
+      final provider = _provider('text', {'text': 'Un párrafo'});
+      addTearDown(provider.dispose);
+      expect(_fields(provider, 'text').beginHeight(), isNull);
+    });
+
+    test('a draft changed during the drag is not overwritten', () {
+      final provider = _provider('hero', {'title': 'Portada'});
+      addTearDown(provider.dispose);
+      final fields = _fields(provider, 'hero');
+      final lease = fields.beginHeight()!;
+      provider.updateBlockData('b1', 'title', 'Desde el panel');
+      expect(fields.commitHeight(lease, 520), isFalse);
+      expect(_data(provider)['blockHeight'], isNull);
+    });
+
+    test('the page\'s messages for it', () {
+      final commit = WebsiteHtmlDraftMessage.fromHandler(
+        'vbDraftHeight',
+        ['b1', 'commit', 520],
+      )! as WebsiteHtmlDraftHeight;
+      expect(commit.step, WebsiteHtmlDraftHeightStep.commit);
+      expect(commit.value, 520);
+      expect(
+        (WebsiteHtmlDraftMessage.fromHandler(
+          'vbDraftHeight',
+          ['b1', 'reset', null],
+        )! as WebsiteHtmlDraftHeight)
+            .step,
+        WebsiteHtmlDraftHeightStep.reset,
+      );
+      for (final value in [null, -5, double.nan, '520']) {
+        expect(
+          WebsiteHtmlDraftMessage.fromHandler(
+            'vbDraftHeight',
+            ['b1', 'commit', value],
+          ),
+          isNull,
+          reason: '$value',
+        );
+      }
+    });
+  });
 }

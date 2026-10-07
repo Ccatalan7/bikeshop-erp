@@ -1755,9 +1755,20 @@ Lo que la medición enseñó y sirve para cualquier paridad que quede:
   siguiente tiene) baja hasta quedar a la vista
   (`vbDraftPicked(id, info, show)`); un redibujo normal deja al operador
   donde estaba.
+- **La manilla de alto (servidor `daf466d4`, Cloud Run `00052`).** Un bloque
+  cuyo alto se elige (`heightBehavior` exacto o mínimo) trae «↕ alto» en su
+  esquina inferior; al arrastrarla el bloque toma el alto en vivo (el
+  envoltorio y, si lo fija, su primer elemento), de 10 en 10 entre los
+  límites del tipo; al soltarla el editor lo escribe por la transacción de
+  la manilla del lienzo (`WebsiteInlineFieldBinding.beginHeight` /
+  `commitHeight`, que ahora también dan los límites y el comportamiento al
+  lienzo); doble clic vuelve al alto automático. El arriendo se pide al
+  primer paso, no al apretar, para que el doble clic no deje arriendos
+  sueltos. Probado en macOS: carrusel del inicio de 750 a 660 px en vivo y
+  escrito, deshecho en un paso.
 - **Lo que falta del 5c/5d:** medir el zoom en Windows; probar el ERP web con
-  una sesión real; arrastrar para reordenar y la manilla de alto; el formato
-  del texto (negrita, tamaño, color) sigue en el panel.
+  una sesión real; arrastrar para reordenar; el formato del texto (negrita,
+  tamaño, color) sigue en el panel.
 - **El carrusel sigue al panel (servidor `f3d97f23`, Cloud Run `00049`).** El
   carrusel acepta un giro (`car:go`) y avisa cuál muestra (`car:shown`); en
   el borrador el editor le dice la diapositiva elegida en el panel

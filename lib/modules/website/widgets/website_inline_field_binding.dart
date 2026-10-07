@@ -1,4 +1,6 @@
+import '../models/website_block_capabilities.dart';
 import '../models/website_block_definition.dart';
+import '../models/website_block_geometry.dart';
 import '../models/website_block_registry.dart';
 import '../models/website_block_type.dart';
 import '../models/website_responsive_authoring.dart';
@@ -170,6 +172,58 @@ class WebsiteInlineFieldBinding {
       if (node.containsKey(key)) return node[key]?.toString() ?? '';
     }
     return '';
+  }
+
+  /// How the block's height is authored: exactly, as a minimum, or not at
+  /// all (its content owns it).
+  WebsitePageBlockHeightBehavior get heightBehavior {
+    final type = registeredType;
+    return type == null
+        ? WebsitePageBlockHeightBehavior.intrinsic
+        : WebsiteBlockCapabilityRegistry.profileFor(type).heightBehavior;
+  }
+
+  /// The heights the block's handle may set, by its type.
+  ({double min, double max}) get heightRange => (
+        min: switch (blockType) {
+          'hero' || 'carousel' => 200,
+          'canvas' => 100,
+          'products' => 250,
+          'services' || 'features' => 150,
+          'testimonials' || 'gallery' => 200,
+          _ => 100,
+        },
+        max: switch (blockType) {
+          'hero' || 'carousel' => 1000,
+          'products' => 900,
+          'canvas' => 1600,
+          _ => 800,
+        },
+      );
+
+  /// The block's height transaction, leased now for one drag of its handle;
+  /// `null` for a block whose content owns its height, one not drawn yet or
+  /// not picked.
+  WebsiteInlineManipulationLease? beginHeight() {
+    if (heightBehavior == WebsitePageBlockHeightBehavior.intrinsic) {
+      return null;
+    }
+    final target = targetFor(null, [
+      WebsiteInlineManipulationProperty.fromSchema(
+        WebsiteBlockMetaFields.blockHeight,
+      ),
+    ]);
+    return target == null ? null : provider.beginInlineManipulation(target);
+  }
+
+  /// Writes [height] (`null`: back to the content's own) with [lease], as
+  /// one step of the history; `false` when the draft changed under it.
+  bool commitHeight(WebsiteInlineManipulationLease lease, double? height) {
+    final written = provider.commitInlineManipulation(lease, {
+      WebsiteBlockMetaFields.blockHeight.key: height,
+    });
+    if (!written) provider.cancelInlineManipulation(lease);
+    return written;
   }
 
   /// Starts writing the text field of [keys] (of [item], for one in a list)

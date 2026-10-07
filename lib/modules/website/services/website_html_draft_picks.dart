@@ -14,86 +14,88 @@ sealed class WebsiteHtmlDraftMessage {
     String name,
     List<dynamic> arguments,
   ) {
-    String? at(int index) {
-      if (index >= arguments.length) return null;
-      final value = arguments[index];
-      return value is String && value.isNotEmpty ? value : null;
-    }
-
-    return _read(
-      kind: name,
-      id: at(0),
-      action: at(1),
-      field: at(1),
-      phase: at(2),
-      text: arguments.length > 3 && arguments[3] is String
-          ? arguments[3] as String
-          : null,
-      index: arguments.length > 1 ? arguments[1] : null,
-    );
+    Object? at(int index) => index < arguments.length ? arguments[index] : null;
+    return fromPost(switch (name) {
+      'vbDraftPick' => {'type': 'vb-draft-pick', 'id': at(0)},
+      'vbDraftAction' => {
+          'type': 'vb-draft-action',
+          'id': at(0),
+          'action': at(1),
+        },
+      'vbDraftEdit' => {
+          'type': 'vb-draft-edit',
+          'id': at(0),
+          'field': at(1),
+          'phase': at(2),
+          'text': at(3),
+        },
+      'vbDraftSlide' => {'type': 'vb-draft-slide', 'id': at(0), 'index': at(1)},
+      'vbDraftHeight' => {
+          'type': 'vb-draft-height',
+          'id': at(0),
+          'phase': at(1),
+          'value': at(2),
+        },
+      _ => const <String, Object?>{},
+    });
   }
 
-  /// The message a frame posted (`{type, id, …, nonce}`), already checked
-  /// against the view's nonce.
+  /// The message a frame posted (`{type, id, …, nonce}`, already checked
+  /// against the view's nonce), or a handler's as the same map.
   static WebsiteHtmlDraftMessage? fromPost(Map<dynamic, dynamic> data) {
     String? text(String key) => switch (data[key]) {
           final String value when value.isNotEmpty => value,
           _ => null,
         };
-    return _read(
-      kind: switch (data['type']) {
-        'vb-draft-pick' => 'vbDraftPick',
-        'vb-draft-action' => 'vbDraftAction',
-        'vb-draft-edit' => 'vbDraftEdit',
-        'vb-draft-slide' => 'vbDraftSlide',
-        _ => '',
-      },
-      id: text('id'),
-      action: text('action'),
-      field: text('field'),
-      phase: text('phase'),
-      text: data['text'] is String ? data['text'] as String : null,
-      index: data['index'],
-    );
-  }
-
-  static WebsiteHtmlDraftMessage? _read({
-    required String kind,
-    required String? id,
-    required String? action,
-    required String? field,
-    required String? phase,
-    required String? text,
-    required Object? index,
-  }) {
-    switch (kind) {
-      case 'vbDraftPick':
+    final id = text('id');
+    switch (data['type']) {
+      case 'vb-draft-pick':
         return WebsiteHtmlDraftPick(id);
-      case 'vbDraftAction':
+      case 'vb-draft-action':
+        final action = text('action');
         if (id == null || action == null) return null;
         return WebsiteHtmlDraftAction(id, action);
-      case 'vbDraftEdit':
+      case 'vb-draft-edit':
+        final field = text('field');
         final parsed =
             field == null ? null : WebsiteHtmlDraftTextField.parse(field);
-        final step = switch (phase) {
+        final step = switch (data['phase']) {
           'begin' => WebsiteHtmlDraftEditStep.begin,
           'commit' => WebsiteHtmlDraftEditStep.commit,
           'cancel' => WebsiteHtmlDraftEditStep.cancel,
           _ => null,
         };
+        final written = data['text'] is String ? data['text'] as String : null;
         if (id == null || parsed == null || step == null) return null;
-        if (step == WebsiteHtmlDraftEditStep.commit && text == null) {
+        if (step == WebsiteHtmlDraftEditStep.commit && written == null) {
           return null;
         }
-        return WebsiteHtmlDraftEdit(id, parsed, step, text);
-      case 'vbDraftSlide':
-        final slide = switch (index) {
+        return WebsiteHtmlDraftEdit(id, parsed, step, written);
+      case 'vb-draft-slide':
+        final slide = switch (data['index']) {
           final num value when value >= 0 && value == value.roundToDouble() =>
             value.toInt(),
           _ => null,
         };
         if (id == null || slide == null) return null;
         return WebsiteHtmlDraftSlide(id, slide);
+      case 'vb-draft-height':
+        final step = switch (data['phase']) {
+          'begin' => WebsiteHtmlDraftHeightStep.begin,
+          'commit' => WebsiteHtmlDraftHeightStep.commit,
+          'cancel' => WebsiteHtmlDraftHeightStep.cancel,
+          'reset' => WebsiteHtmlDraftHeightStep.reset,
+          _ => null,
+        };
+        final value = switch (data['value']) {
+          final num value when value.isFinite && value > 0 => value.toDouble(),
+          _ => null,
+        };
+        if (id == null || step == null) return null;
+        if (step == WebsiteHtmlDraftHeightStep.commit && value == null) {
+          return null;
+        }
+        return WebsiteHtmlDraftHeight(id, step, value);
     }
     return null;
   }
@@ -123,6 +125,19 @@ final class WebsiteHtmlDraftSlide extends WebsiteHtmlDraftMessage {
 }
 
 enum WebsiteHtmlDraftEditStep { begin, commit, cancel }
+
+enum WebsiteHtmlDraftHeightStep { begin, commit, cancel, reset }
+
+/// The operator dragging the picked block's height handle: starting, done
+/// at [value] CSS px (the canvas's logical px), leaving it, or asking for
+/// the content's own height back.
+final class WebsiteHtmlDraftHeight extends WebsiteHtmlDraftMessage {
+  const WebsiteHtmlDraftHeight(this.id, this.step, [this.value]);
+
+  final String id;
+  final WebsiteHtmlDraftHeightStep step;
+  final double? value;
+}
 
 /// The operator writing one of block [id]'s texts where it is drawn: asking
 /// to start, done with [text], or leaving it as it was.

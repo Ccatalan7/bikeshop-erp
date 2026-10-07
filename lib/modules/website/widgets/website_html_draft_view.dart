@@ -20,6 +20,7 @@ import '../services/website_service.dart';
 import '../../../shared/themes/vinabike_theme_roles.dart';
 import '../../../public_store/widgets/website_insertion_host.dart';
 import '../models/website_block_catalog.dart';
+import '../models/website_block_geometry.dart';
 import 'block_action_bar.dart';
 import 'website_block_content_presenters.dart';
 import 'website_inline_field_binding.dart';
@@ -131,6 +132,8 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
     }
     _showSlides();
     if (path == null) return;
+    // A drag of the height handle is drawn by the page until it ends.
+    if (_sizing != null) return;
     if (_writing case final writing?) {
       // The operator is writing in the page: a redraw would take the text
       // from under them. Once they are done the view draws what is wanted.
@@ -389,7 +392,21 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
     String css(Color color) => 'rgb(${(color.r * 255).round()} '
         '${(color.g * 255).round()} ${(color.b * 255).round()} '
         '/ ${color.a.toStringAsFixed(3)})';
+    final fields = WebsiteInlineFieldBinding(
+      provider: provider,
+      blockId: id,
+      blockType: (blocks[index]['block_type'] ?? blocks[index]['type'] ?? '')
+          .toString(),
+    );
+    final behavior = fields.heightBehavior;
     return {
+      // The height handle, for a block whose height is authored.
+      if (behavior != WebsitePageBlockHeightBehavior.intrinsic)
+        'height': {
+          'min': fields.heightRange.min,
+          'max': fields.heightRange.max,
+          'exact': behavior == WebsitePageBlockHeightBehavior.exact,
+        },
       'bar': {
         'first': index == 0,
         'last': index == blocks.length - 1,
@@ -417,6 +434,8 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
         _acted(id, action);
       case final WebsiteHtmlDraftEdit edit:
         _edit(edit);
+      case final WebsiteHtmlDraftHeight height:
+        _height(height);
       case WebsiteHtmlDraftSlide(:final id, :final index):
         final provider = _provider;
         final count = _slideCount(provider?.getBlock(id));
@@ -576,6 +595,58 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
     );
   }
 
+  /// The height handle being dragged in the page, while it is.
+  ({String blockId, WebsiteInlineManipulationLease lease})? _sizing;
+
+  /// The picked block's height handle in the page, through the canvas's own
+  /// height transaction (`WebsiteInlineFieldBinding.beginHeight`): leased
+  /// when the drag starts, written once when it ends, as one step of the
+  /// history; a reset gives the content its own height back. The page puts
+  /// the block back as it was if the write is refused (`vbDraftSized`).
+  void _height(WebsiteHtmlDraftHeight message) {
+    final provider = _provider;
+    final block = provider?.getBlock(message.id);
+    if (provider == null || block == null) return;
+    final fields = WebsiteInlineFieldBinding(
+      provider: provider,
+      blockId: message.id,
+      blockType: (block['block_type'] ?? block['type'] ?? '').toString(),
+    );
+    final sizing = _sizing;
+    switch (message.step) {
+      case WebsiteHtmlDraftHeightStep.begin:
+        if (sizing != null) provider.cancelInlineManipulation(sizing.lease);
+        final lease = fields.beginHeight();
+        _sizing = lease == null ? null : (blockId: message.id, lease: lease);
+        if (lease == null) unawaited(_tell('vbDraftSized', [false]));
+      case WebsiteHtmlDraftHeightStep.commit:
+        _sizing = null;
+        final range = fields.heightRange;
+        final written = sizing != null &&
+            sizing.blockId == message.id &&
+            fields.commitHeight(
+              sizing.lease,
+              ((message.value! / 10).round() * 10)
+                  .clamp(range.min, range.max)
+                  .toDouble(),
+            );
+        if (sizing != null && sizing.blockId != message.id) {
+          provider.cancelInlineManipulation(sizing.lease);
+        }
+        unawaited(_tell('vbDraftSized', [written]));
+        _changed();
+      case WebsiteHtmlDraftHeightStep.cancel:
+        _sizing = null;
+        if (sizing != null) provider.cancelInlineManipulation(sizing.lease);
+        _changed();
+      case WebsiteHtmlDraftHeightStep.reset:
+        if (sizing != null) provider.cancelInlineManipulation(sizing.lease);
+        _sizing = null;
+        final lease = fields.beginHeight();
+        if (lease != null) fields.commitHeight(lease, null);
+    }
+  }
+
   /// Lets the text being written go, as it was.
   void _stopWriting() {
     final writing = _writing;
@@ -685,6 +756,7 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
                                 'vbDraftAction',
                                 'vbDraftEdit',
                                 'vbDraftSlide',
+                                'vbDraftHeight',
                               ]) {
                                 controller.addJavaScriptHandler(
                                   handlerName: name,

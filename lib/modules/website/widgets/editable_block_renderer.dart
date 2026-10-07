@@ -381,12 +381,14 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
     // Get block height: use local drag height during drag, otherwise from Provider
     final providerHeight = (widget.data['blockHeight'] as num?)?.toDouble();
     final configuredHeight = _isDragging ? _localDragHeight : providerHeight;
-    final minHeight = _getMinHeight(widget.blockType);
-    final maxHeight = _getMaxHeight(widget.blockType);
-    final blockType = _registeredBlockType(widget.blockType);
-    final heightBehavior = blockType == null
-        ? WebsitePageBlockHeightBehavior.intrinsic
-        : WebsiteBlockCapabilityRegistry.profileFor(blockType).heightBehavior;
+    final fields = WebsiteInlineFieldBinding(
+      provider: editProvider,
+      blockId: widget.blockId,
+      blockType: widget.blockType,
+    );
+    final minHeight = fields.heightRange.min;
+    final maxHeight = fields.heightRange.max;
+    final heightBehavior = fields.heightBehavior;
     final displayHeight =
         heightBehavior == WebsitePageBlockHeightBehavior.intrinsic
             ? null
@@ -601,53 +603,6 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
         ],
       ),
     );
-  }
-
-  WebsiteBlockType? _registeredBlockType(String raw) {
-    final normalized = raw.trim().toLowerCase();
-    for (final type in WebsiteBlockType.values) {
-      if (type.name.toLowerCase() == normalized) return type;
-    }
-    return null;
-  }
-
-  /// Get minimum height for block type
-  double _getMinHeight(String type) {
-    switch (type) {
-      case 'hero':
-      case 'carousel':
-        return 200;
-      case 'canvas':
-        return 100;
-      case 'products':
-        return 250;
-      case 'services':
-      case 'features':
-        return 150;
-      case 'testimonials':
-        return 200;
-      case 'gallery':
-        return 200;
-      case 'cta':
-        return 100;
-      default:
-        return 100;
-    }
-  }
-
-  /// Get maximum height for block type
-  double _getMaxHeight(String type) {
-    switch (type) {
-      case 'hero':
-      case 'carousel':
-        return 1000;
-      case 'products':
-        return 900;
-      case 'canvas':
-        return 1600;
-      default:
-        return 800;
-    }
   }
 
   Widget _buildEditableBlock(BuildContext context) {
