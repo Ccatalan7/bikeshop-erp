@@ -110,6 +110,7 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
   @override
   void dispose() {
     _stopWriting();
+    _stopSizing();
     _webPicks?.cancel();
     _debounce?.cancel();
     _provider?.removeListener(_changed);
@@ -131,17 +132,19 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
       _markSelection();
     }
     _showSlides();
-    if (path == null) return;
-    // A drag of the height handle is drawn by the page until it ends.
-    if (_sizing != null) return;
-    if (_writing case final writing?) {
-      // The operator is writing in the page: a redraw would take the text
-      // from under them. Once they are done the view draws what is wanted.
-      if (writing.path == path && provider.getBlock(writing.blockId) != null) {
-        return;
-      }
+    // The operator is writing in the page or dragging a block's height: a
+    // redraw would take it from under them, so the view draws what is
+    // wanted once they are done; unless the page or the block is gone.
+    if (_writing case final writing?
+        when writing.path != path ||
+            provider.getBlock(writing.blockId) == null) {
       _stopWriting();
     }
+    if (_sizing case final sizing?
+        when sizing.path != path || provider.getBlock(sizing.blockId) == null) {
+      _stopSizing();
+    }
+    if (path == null || _writing != null || _sizing != null) return;
     final body = websiteHtmlDraftBody(
       path: path,
       pageId: document.pageId,
@@ -439,7 +442,8 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
       case WebsiteHtmlDraftSlide(:final id, :final index):
         final provider = _provider;
         final count = _slideCount(provider?.getBlock(id));
-        if (provider != null && count > 0) {
+        // Only the picked carousel turns with its arrows in the page.
+        if (provider != null && count > 0 && provider.selectedBlockId == id) {
           provider.selectCarouselSlide(id, index, count);
         }
     }
@@ -456,7 +460,10 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
   void _acted(String id, String action) {
     final provider = _provider;
     final block = provider?.getBlock(id);
-    if (provider == null || block == null) return;
+    // The bar is the picked block's: a press for any other is not one.
+    if (provider == null || block == null || provider.selectedBlockId != id) {
+      return;
+    }
     switch (action) {
       case 'up':
         provider.moveBlockUp(id);
@@ -543,22 +550,24 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
         _stopWriting();
         final writing = _beginWriting(provider, edit);
         _writing = writing;
-        unawaited(_tell(
-          'vbDraftEditing',
-          [writing?.write.text, writing == null ? null : edit.field.spec],
-        ));
+        unawaited(_tell('vbDraftEditing', [
+          writing?.write.text,
+          writing == null ? null : edit.field.spec,
+          edit.token,
+        ]));
       case WebsiteHtmlDraftEditStep.commit:
         final writing = _writing;
         _writing = null;
         final matches = writing != null &&
             writing.blockId == edit.id &&
-            writing.field == edit.field.spec;
+            writing.field == edit.field.spec &&
+            writing.token == edit.token;
         final written = matches && writing.write.commit(edit.text!);
         if (!matches) writing?.write.cancel();
-        unawaited(_tell('vbDraftEdited', [written]));
+        unawaited(_tell('vbDraftEdited', [written, edit.token]));
         _changed();
       case WebsiteHtmlDraftEditStep.cancel:
-        _stopWriting();
+        if (_writing?.token == edit.token) _stopWriting();
         _changed();
     }
   }
@@ -569,8 +578,11 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
   ) {
     final block = provider.getBlock(edit.id);
     final path = _path(provider.document.pageId, provider.document.pageSlug);
-    if (block == null || path == null) return null;
-    if (provider.selectedBlockId != edit.id) provider.selectBlock(edit.id);
+    // Only a text of the picked block: the page asks for no other, and a
+    // message for another one is not the operator's.
+    if (block == null || path == null || provider.selectedBlockId != edit.id) {
+      return null;
+    }
     final fields = WebsiteInlineFieldBinding(
       provider: provider,
       blockId: edit.id,
@@ -590,13 +602,25 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
     return _Writing(
       blockId: edit.id,
       field: field.spec,
+      token: edit.token,
       path: path,
       write: write,
     );
   }
 
   /// The height handle being dragged in the page, while it is.
-  ({String blockId, WebsiteInlineManipulationLease lease})? _sizing;
+  ({
+    String blockId,
+    String path,
+    WebsiteInlineManipulationLease lease
+  })? _sizing;
+
+  /// Lets the height being dragged go, as it was.
+  void _stopSizing() {
+    final sizing = _sizing;
+    _sizing = null;
+    if (sizing != null) _provider?.cancelInlineManipulation(sizing.lease);
+  }
 
   /// The picked block's height handle in the page, through the canvas's own
   /// height transaction (`WebsiteInlineFieldBinding.beginHeight`): leased
@@ -615,9 +639,15 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
     final sizing = _sizing;
     switch (message.step) {
       case WebsiteHtmlDraftHeightStep.begin:
-        if (sizing != null) provider.cancelInlineManipulation(sizing.lease);
-        final lease = fields.beginHeight();
-        _sizing = lease == null ? null : (blockId: message.id, lease: lease);
+        _stopSizing();
+        final path = _path(
+          provider.document.pageId,
+          provider.document.pageSlug,
+        );
+        final lease = path == null ? null : fields.beginHeight();
+        _sizing = lease == null
+            ? null
+            : (blockId: message.id, path: path!, lease: lease);
         if (lease == null) unawaited(_tell('vbDraftSized', [false]));
       case WebsiteHtmlDraftHeightStep.commit:
         _sizing = null;
@@ -893,12 +923,14 @@ class _Writing {
   const _Writing({
     required this.blockId,
     required this.field,
+    required this.token,
     required this.path,
     required this.write,
   });
 
   final String blockId;
   final String field;
+  final String? token;
   final String path;
   final WebsiteInlineTextWrite write;
 }

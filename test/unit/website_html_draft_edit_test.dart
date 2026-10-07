@@ -100,6 +100,23 @@ void main() {
       expect(commit.step, WebsiteHtmlDraftEditStep.commit);
       expect(commit.field.collectionKeys, ['items']);
       expect(commit.text, '¿Arman bicis?');
+      expect(commit.token, isNull);
+      // Each edit carries the page's token; a malformed one is no message.
+      expect(
+        (WebsiteHtmlDraftMessage.fromHandler(
+          'vbDraftEdit',
+          ['b1', 'title', 'begin', null, 'lq3x.4'],
+        )! as WebsiteHtmlDraftEdit)
+            .token,
+        'lq3x.4',
+      );
+      expect(
+        WebsiteHtmlDraftMessage.fromHandler(
+          'vbDraftEdit',
+          ['b1', 'title', 'begin', null, '<x>'],
+        ),
+        isNull,
+      );
       // A written text may be empty; a commit without one is no message.
       expect(
         (WebsiteHtmlDraftMessage.fromHandler(
@@ -196,6 +213,36 @@ void main() {
       provider.undo();
       expect(((_data(provider)['items'] as List)[0] as Map)['question'],
           '¿Arman?');
+    });
+
+    test(
+        'an item is addressed where it is stored, past an entry that is '
+        'not one', () {
+      final provider = _provider('faq', {
+        'title': 'Preguntas',
+        'items': [
+          {'question': '¿Arman?', 'answer': 'Sí'},
+          'no es una pregunta',
+          {'question': '¿Despachan?', 'answer': 'A todo Chile'},
+        ],
+      });
+      addTearDown(provider.dispose);
+      final write = _fields(provider, 'faq').beginText(
+        WebsiteInlineRepeaterTarget(collectionKeys: ['items'], itemIndex: 2),
+        ['question'],
+      )!;
+      expect(write.text, '¿Despachan?');
+      expect(write.commit('¿Despachan a regiones?'), isTrue);
+      final items = _data(provider)['items'] as List;
+      expect(items[1], 'no es una pregunta');
+      expect((items[2] as Map)['question'], '¿Despachan a regiones?');
+      expect(
+        _fields(provider, 'faq').beginText(
+          WebsiteInlineRepeaterTarget(collectionKeys: ['items'], itemIndex: 1),
+          ['question'],
+        ),
+        isNull,
+      );
     });
 
     test('only a text field the block declares', () {

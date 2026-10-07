@@ -28,6 +28,7 @@ sealed class WebsiteHtmlDraftMessage {
           'field': at(1),
           'phase': at(2),
           'text': at(3),
+          'token': at(4),
         },
       'vbDraftSlide' => {'type': 'vb-draft-slide', 'id': at(0), 'index': at(1)},
       'vbDraftHeight' => {
@@ -70,7 +71,13 @@ sealed class WebsiteHtmlDraftMessage {
         if (step == WebsiteHtmlDraftEditStep.commit && written == null) {
           return null;
         }
-        return WebsiteHtmlDraftEdit(id, parsed, step, written);
+        final token = text('token');
+        if (token != null &&
+            (token.length > 64 ||
+                !RegExp(r'^[A-Za-z0-9._-]+$').hasMatch(token))) {
+          return null;
+        }
+        return WebsiteHtmlDraftEdit(id, parsed, step, written, token);
       case 'vb-draft-slide':
         final slide = switch (data['index']) {
           final num value when value >= 0 && value == value.roundToDouble() =>
@@ -142,12 +149,22 @@ final class WebsiteHtmlDraftHeight extends WebsiteHtmlDraftMessage {
 /// The operator writing one of block [id]'s texts where it is drawn: asking
 /// to start, done with [text], or leaving it as it was.
 final class WebsiteHtmlDraftEdit extends WebsiteHtmlDraftMessage {
-  const WebsiteHtmlDraftEdit(this.id, this.field, this.step, [this.text]);
+  const WebsiteHtmlDraftEdit(
+    this.id,
+    this.field,
+    this.step, [
+    this.text,
+    this.token,
+  ]);
 
   final String id;
   final WebsiteHtmlDraftTextField field;
   final WebsiteHtmlDraftEditStep step;
   final String? text;
+
+  /// The page's name for this one edit: the answers carry it back, and a
+  /// commit or cancel for another edit is not this one's.
+  final String? token;
 }
 
 /// One text of a block as the store's HTML server marks it for the editor

@@ -1766,6 +1766,24 @@ Lo que la medición enseñó y sirve para cualquier paridad que quede:
   primer paso, no al apretar, para que el doble clic no deje arriendos
   sueltos. Probado en macOS: carrusel del inicio de 750 a 660 px en vivo y
   escrito, deshecho en un paso.
+- **Revisión de Codex del 5d (2026-10-07, sólo lectura, sobre
+  `0f3bc4ae..847107d4`).** Cuatro hallazgos, los cuatro corregidos:
+  (P1) un mensaje de la página podía elegir otro bloque antes de arrendar
+  su texto: ahora escribir, la barra y el giro del carrusel exigen el
+  bloque elegido y nunca eligen; (P2) un arriendo del alto quedaba tomado
+  si la vista se cerraba o cambiaba de ruta a mitad del arrastre
+  (`_stopSizing` en `dispose` y en `_changed`), y un arrastre soltado fuera
+  del marco termina con `blur`; (P2) una respuesta atrasada de «empezar a
+  escribir» podía aplicarse a otro texto: cada edición lleva su ficha
+  (`token`) de ida y vuelta; (P3) preguntas y características numeraban los
+  ítems sin contar las entradas que no son ítems, y el arriendo los busca
+  por su posición guardada: ahora el HTML da la posición guardada y el
+  valor se lee igual (las diapositivas ya llegan limpias: la normalización
+  compartida las filtra al cargar, en el editor y en el servidor). Sin
+  hallazgos de XSS ni de aislamiento. En producción no hay listas con
+  entradas inválidas (2026-10-07: 3 diapositivas, 22 preguntas, 12
+  características, todas objetos); el lienzo Flutter numera esas listas
+  comprimidas y queda con el mismo defecto latente (pendiente).
 - **Lo que falta del 5c/5d:** medir el zoom en Windows; probar el ERP web con
   una sesión real; arrastrar para reordenar; el formato del texto (negrita,
   tamaño, color) sigue en el panel.

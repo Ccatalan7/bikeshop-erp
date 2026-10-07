@@ -152,19 +152,29 @@ class WebsiteInlineFieldBinding {
     );
     Map<dynamic, dynamic>? node = data;
     if (target != null) {
-      Object? collection;
+      // The item is addressed where it is stored, as the lease writes it;
+      // the band's projection may have left out what is not an item.
+      Object? stored;
+      Object? projected;
       for (final key in target.collectionKeys) {
-        if (data.containsKey(key)) {
-          collection = data[key];
+        if (raw.containsKey(key)) {
+          stored = raw[key];
+          projected = data[key];
           break;
         }
       }
-      if (collection is! List ||
-          target.itemIndex < 0 ||
-          target.itemIndex >= collection.length) {
+      final index = target.itemIndex;
+      if (stored is! List ||
+          projected is! List ||
+          index < 0 ||
+          index >= stored.length ||
+          stored[index] is! Map) {
         return null;
       }
-      final item = collection[target.itemIndex];
+      final at = projected.length == stored.length
+          ? index
+          : stored.take(index).whereType<Map>().length;
+      final item = at < projected.length ? projected[at] : null;
       node = item is Map ? item : null;
     }
     if (node == null) return null;
