@@ -482,6 +482,16 @@ Map<String, dynamic> normalizeWebsiteBlockData({
   }
 
   if (rawTypeLower == 'carousel') {
+    // A slide is a map. An entry that is not one is never drawn, and keeping
+    // it would make the canvas count slides one way (without it) and the
+    // editor write by another (the stored place): the slide next to it would
+    // receive the edit (2026-10-07).
+    if (normalized['slides'] case final List<Object?> slides) {
+      normalized['slides'] = [
+        for (final slide in slides)
+          if (slide is Map) slide,
+      ];
+    }
     syncNestedActions(
       'slides',
       labelKeys: const ['ctaText', 'buttonText'],

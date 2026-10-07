@@ -273,5 +273,32 @@ void main() {
       );
       expect(itemDescription.formatting.isUnderline, isTrue);
     });
+
+    testWidgets(
+        'an entry that is not an item is skipped, and the next item writes '
+        'to its own stored place', (tester) async {
+      final slots = <WebsiteInlineTextSlot>[];
+      await _pumpFeatures(
+        tester,
+        width: 834,
+        presenters: WebsiteBlockContentPresenters(
+          text: (context, slot) {
+            slots.add(slot);
+            return Text(slot.value);
+          },
+        ),
+        data: const <String, dynamic>{
+          'features': [
+            {'title': 'Primera'},
+            'no es un ítem',
+            {'title': 'Tercera'},
+          ],
+        },
+      );
+      final third = slots.firstWhere((slot) => slot.value == 'Tercera');
+      expect(third.id, 'features.item.2.title');
+      expect(third.repeaterTarget?.itemIndex, 2);
+      expect(find.byKey(WebsiteFeaturesBlockContent.itemKey(1)), findsNothing);
+    });
   });
 }

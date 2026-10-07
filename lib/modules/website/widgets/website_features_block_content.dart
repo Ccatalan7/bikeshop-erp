@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:vinabike_public_core/modules/website/models/website_section_content.dart';
 
 import 'text_formatting_toolbar.dart';
 import 'website_block_content_presenters.dart';
@@ -175,7 +176,9 @@ class _FeaturesGrid extends StatelessWidget {
     required this.isCompact,
   });
 
-  final List<Map<String, dynamic>> features;
+  /// Each item with its place in the stored list, which is what the editor
+  /// writes to (an entry that is not an item is skipped, not counted).
+  final List<(int, Map<String, dynamic>)> features;
   final Color primaryColor;
   final String? headingFont;
   final String? bodyFont;
@@ -197,11 +200,11 @@ class _FeaturesGrid extends StatelessWidget {
           children: [
             for (var index = 0; index < features.length; index++)
               SizedBox(
-                key: WebsiteFeaturesBlockContent.itemKey(index),
+                key: WebsiteFeaturesBlockContent.itemKey(features[index].$1),
                 width: isCompact ? compactWidth : 320,
                 child: _FeatureGridCard(
-                  item: features[index],
-                  index: index,
+                  item: features[index].$2,
+                  index: features[index].$1,
                   primaryColor: primaryColor,
                   headingFont: headingFont,
                   bodyFont: bodyFont,
@@ -318,7 +321,9 @@ class _FeaturesList extends StatelessWidget {
     required this.presenters,
   });
 
-  final List<Map<String, dynamic>> features;
+  /// Each item with its place in the stored list, which is what the editor
+  /// writes to (an entry that is not an item is skipped, not counted).
+  final List<(int, Map<String, dynamic>)> features;
   final Color primaryColor;
   final String? headingFont;
   final String? bodyFont;
@@ -332,13 +337,13 @@ class _FeaturesList extends StatelessWidget {
       children: [
         for (var index = 0; index < features.length; index++)
           Padding(
-            key: WebsiteFeaturesBlockContent.itemKey(index),
+            key: WebsiteFeaturesBlockContent.itemKey(features[index].$1),
             padding: EdgeInsets.only(
               bottom: index == features.length - 1 ? 0 : 32,
             ),
             child: _FeatureListItem(
-              item: features[index],
-              index: index,
+              item: features[index].$2,
+              index: features[index].$1,
               primaryColor: primaryColor,
               headingFont: headingFont,
               bodyFont: bodyFont,
@@ -462,28 +467,12 @@ Widget _presentItemText(
       );
 }
 
-List<Map<String, dynamic>> _resolveCollection(
+List<(int, Map<String, dynamic>)> _resolveCollection(
   Map<String, dynamic> data, {
   required String canonicalKey,
   required List<String> aliases,
-}) {
-  Object? raw;
-  if (data.containsKey(canonicalKey)) {
-    raw = data[canonicalKey];
-  } else {
-    for (final alias in aliases) {
-      if (data.containsKey(alias)) {
-        raw = data[alias];
-        break;
-      }
-    }
-  }
-  if (raw is! List) return const <Map<String, dynamic>>[];
-  return raw
-      .whereType<Map>()
-      .map((item) => Map<String, dynamic>.from(item))
-      .toList(growable: false);
-}
+}) =>
+    websiteSectionItems(data, canonicalKey, aliases);
 
 TextFormatting _formatting(Object? raw) {
   if (raw is! Map) return const TextFormatting();
