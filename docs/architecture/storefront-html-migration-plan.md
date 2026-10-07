@@ -1538,10 +1538,12 @@ pasos, con el lienzo Flutter como predeterminado hasta que el HTML lo iguale:
   diseño de respaldo (sólo los lados fijados; las bandas de sección, los
   cuatro con los valores por defecto de la superficie, como
   `WebsiteSectionBand`), y las versiones del bloque por banda se separan
-  cuando el relleno cambia por pantalla. Siguen en Flutter, a propósito,
-  sólo tres casos raros: relleno en una grilla de categorías o en la cinta
-  de marcas (mueven su encabezado o su fila según el lado), y en un llamado
-  a la acción de alto fijo. Los degradados diagonales usan las «esquinas
+  cuando el relleno cambia por pantalla. La grilla de categorías y la cinta
+  de marcas quitan su sangría propia (encabezado, fila) en el lado fijado
+  (`--sp-lx`/`--sp-rx` en 0), como `_AutoCategoryGrid` y la cinta de
+  Flutter. Sigue en Flutter, a propósito, sólo un caso raro: el relleno de
+  un llamado a la acción de alto fijo (sus lados sin fijar toman ahí todo
+  el diseño de su banda). Los degradados diagonales usan las «esquinas
   mágicas» de CSS (`to bottom right`): en un bloque no cuadrado el ángulo
   difiere del de Flutter, que va de esquina a esquina en píxeles.
 

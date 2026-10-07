@@ -116,9 +116,10 @@ layout();addEventListener("resize",layout);
 /// The block's stylesheet; the logo row's height is `--logo-h`.
 const brandLogosCss = '''
 /* Its padding (48 and 16) and the row's own 16 at the sides; with an exact
-   height, only the 16 at the sides. */
-.brands{display:flex;flex-direction:column;justify-content:center;background:#fff;padding:48px 32px}
-.brands.fixed{height:100%;padding:0 16px}
+   height, only the 16 at the sides. A side the operator set replaces the
+   padding there and drops the row's own (`--sp-*`, BlockSurface). */
+.brands{display:flex;flex-direction:column;justify-content:center;background:#fff;padding:var(--sp-t,48px) calc(var(--sp-r,16px) + var(--sp-rx,16px)) var(--sp-b,48px) calc(var(--sp-l,16px) + var(--sp-lx,16px))}
+.brands.fixed{height:100%;padding:var(--sp-t,0px) var(--sp-r,16px) var(--sp-b,0px) var(--sp-l,16px)}
 .brands-in{display:flex;flex-direction:column;align-items:center;min-width:0}
 .brands-t{margin:0;font:400 24px/36px var(--head);letter-spacing:2px;color:rgb(0 0 0 / .87);-webkit-text-stroke:.032em currentColor;text-align:center}
 .brand-pages{display:flex;width:100%;height:var(--logo-h);overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;overscroll-behavior-x:contain}

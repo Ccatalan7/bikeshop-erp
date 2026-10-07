@@ -56,17 +56,21 @@ class BlockSurface {
   }.contains(type);
 
   /// Whether the HTML draws this surface as Flutter does. Not yet: padding
-  /// set on a category grid or a brand strip (each moves its header or its
-  /// row by the sides set), nor on a call to action of a fixed height (its
-  /// unset sides take the band's whole design there).
+  /// set on a call to action of a fixed height (its unset sides take the
+  /// band's whole design there).
   bool get isDrawn {
     if (_ignored || !spec.hasAuthoredPadding) return true;
-    return switch (type) {
-      WebsiteBlockType.categoryGrid || WebsiteBlockType.brandLogos => false,
-      WebsiteBlockType.cta => _positive(_data['blockHeight']) == null,
-      _ => true,
-    };
+    return type != WebsiteBlockType.cta ||
+        _positive(_data['blockHeight']) == null;
   }
+
+  /// The families with an inset of their own inside the padding at a side
+  /// (a category grid's header, a brand strip's row), which a side set
+  /// replaces: `--sp-lx`/`--sp-rx` are 0 there.
+  bool get _dropsInsetAtSetSide => const {
+    WebsiteBlockType.categoryGrid,
+    WebsiteBlockType.brandLogos,
+  }.contains(type);
 
   /// Whether the block gets the wrapper: a decoration, or a padding the
   /// wrapper takes.
@@ -142,6 +146,10 @@ class BlockSurface {
       for (final side in WebsiteSurfaceSide.values)
         if (whole != null || spec.isPaddingAuthored(side))
           '--sp-${side.name[0]}:${cssPx(whole?.sides[side.index] ?? spec.padding(side).value ?? 0)}',
+      if (_dropsInsetAtSetSide) ...[
+        if (spec.isPaddingAuthored(WebsiteSurfaceSide.right)) '--sp-rx:0px',
+        if (spec.isPaddingAuthored(WebsiteSurfaceSide.left)) '--sp-lx:0px',
+      ],
     ];
   }
 
@@ -181,7 +189,7 @@ class BlockSurface {
 const blockSurfaceCss = '''
 .srf{box-sizing:border-box;width:100%;height:100%}
 .blk.minh>.srf{display:flex;flex-direction:column}.blk.minh>.srf>*{flex:1 0 auto}
-.own-bg .sec,.own-bg .pb,.own-bg .rv,.own-bg .prod-blk,.own-bg .cat-blk,.own-bg .brands,.own-bg .vb,.own-bg .hero-blk{background:transparent}
-.own-bg .hero-fallback{display:none}
+.own-bg .sec,.own-bg .pb,.own-bg .rv,.own-bg .prod-blk,.own-bg .cat-blk,.own-bg .brands,.own-bg .vb{background:transparent}
+.own-bg .hero-blk:not(:has(>.hero-img)){background:transparent}.own-bg .hero-fallback{display:none}
 .own-bg .car-slide.dflt{background:transparent!important}
 ''';

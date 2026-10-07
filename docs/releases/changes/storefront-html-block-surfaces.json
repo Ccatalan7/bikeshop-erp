@@ -28,7 +28,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/block_surface.dart",
-      "sha256": "45c0e2cd319894a09e08b7d2a81db7116f1e63800e446fb1dede7a32fe4b6e29"
+      "sha256": "bea3286f2349863cd4165ddc70b9e0d111f232b13ec3a04ba85f4cb49b6ace0e"
     },
     {
       "path": "services/storefront_html/lib/src/block_composition.dart",
@@ -48,7 +48,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_page_css.dart",
-      "sha256": "4839a0db4cbcd8184a5eb894ff28c62d24158b71c440569db16e1af308cc3176"
+      "sha256": "c40f362e740ecb45c7a3bcac835f4c671f9b7ac72d32b500c409c53eae7d3c19"
     },
     {
       "path": "services/storefront_html/lib/src/website_reviews_view.dart",
@@ -73,6 +73,14 @@
     {
       "path": "test/unit/website_block_surface_presence_test.dart",
       "sha256": "6838a0a31d13af456788ccf4eeb9909b0d832fe73ccc157a2d46b642a784c728"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_brand_logos_view.dart",
+      "sha256": "452aaef54b62a925fdae24052d5bbfe95f17243bbb8db9a2879cc6a6a18e2d4f"
+    },
+    {
+      "path": "services/storefront_html/test/block_surface_test.dart",
+      "sha256": "56c704d8e384f256db6734d8684d9de52f424b6fe92fec447ae399d360ffc86e"
     }
   ]
 }

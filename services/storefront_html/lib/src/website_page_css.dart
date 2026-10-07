@@ -430,9 +430,9 @@ final productsBlockCss = '''
 String categoryGridCss(WebsiteThemeRoles theme) {
   final subtitle = (theme.bodySize + 2).clamp(10, 40).toDouble();
   return '''
-.cat-blk{background:#fff;padding:48px 0}
-.cat-t{margin:0;padding:0 24px;font:400 32px/40px var(--head);color:rgb(0 0 0 / .87);-webkit-text-stroke:.032em currentColor}
-.cat-s{margin:8px 0 0;padding:0 24px;font:400 ${_n(subtitle)}px/1.5 var(--body);letter-spacing:.5px;color:rgb(0 0 0 / .54)}
+.cat-blk{background:#fff;${surfacePadding(48, 0, 48, 0)}}
+.cat-t{margin:0;padding:0 var(--sp-rx,24px) 0 var(--sp-lx,24px);font:400 32px/40px var(--head);color:rgb(0 0 0 / .87);-webkit-text-stroke:.032em currentColor}
+.cat-s{margin:8px 0 0;padding:0 var(--sp-rx,24px) 0 var(--sp-lx,24px);font:400 ${_n(subtitle)}px/1.5 var(--body);letter-spacing:.5px;color:rgb(0 0 0 / .54)}
 .cat-t~.cat-grid{margin-top:32px}
 .cat-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:4px}
 .cat-grid.no-lg{padding-top:4px}

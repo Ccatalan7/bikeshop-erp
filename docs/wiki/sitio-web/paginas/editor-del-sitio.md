@@ -168,8 +168,8 @@ el 2026-10-07, salvo que tenga una capa de producto o un video de fondo; el
 borde, sombra y relleno propios de un bloque (pestaña Estilo) los pinta el
 HTML como Flutter desde el 2026-10-07 (`WebsiteBlockSurfaceSpec` en el
 núcleo, `BlockSurface` en el servidor) `[Repo 2026-10-07]`. Una página con
-otro tipo, o con un relleno en una grilla de categorías, la cinta de marcas
-o un llamado de alto fijo (`BlockSurface.isDrawn`), la responde Flutter
+otro tipo, o con un relleno en un llamado de alto fijo
+(`BlockSurface.isDrawn`), la responde Flutter
 entera: el visitante nunca pierde lo que el editor guardó.
 El lienzo del editor sigue siendo Flutter; el plan para que sea el HTML real
 está en la fase 5 de `storefront-html-migration-plan.md` `[Repo]`.
