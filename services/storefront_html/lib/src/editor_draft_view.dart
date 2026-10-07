@@ -19,6 +19,12 @@ const _draftCss = '''
   background:#1a73e8;color:#fff;font:600 11px/16px system-ui,-apple-system,sans-serif;white-space:nowrap}
 .vb-mark.vb-inside span{top:0;left:0;border-radius:0 0 4px 0}
 .vb-mark.vb-has-bar>span{display:none}
+.vb-mark.vb-writing>span{display:block}
+.vb-mark.vb-writing .vb-bar{display:none}
+.vb-text-hot{outline:1px dashed rgb(26 115 232 / .7);outline-offset:3px;cursor:text}
+.vb-editing{outline:2px solid #1a73e8;outline-offset:3px;cursor:text;text-transform:none!important;
+  -webkit-user-select:text;user-select:text;caret-color:currentColor}
+.vb-editing:focus{outline:2px solid #1a73e8}
 .vb-bar{position:absolute;right:8px;top:8px;display:flex;align-items:center;gap:2px;padding:2px 4px 2px 10px;
   border-radius:10px;box-shadow:0 2px 6px rgb(0 0 0 / .3);pointer-events:auto;
   font:700 12px/1 system-ui,-apple-system,sans-serif;white-space:nowrap}
@@ -108,7 +114,8 @@ const _draftScript = r'''
     var s = m.el.style;
     s.left = r.left + 'px'; s.top = r.top + 'px';
     s.width = r.width + 'px'; s.height = r.height + 'px';
-    m.el.firstChild.textContent = t.getAttribute('data-block-label') || '';
+    m.el.firstChild.textContent = m === pick && edit && edit.on ? HINT
+      : t.getAttribute('data-block-label') || '';
     m.el.firstChild.style.display = m.el.firstChild.textContent ? '' : 'none';
     m.el.classList.toggle('vb-inside', r.top < 24);
     m.el.classList.add('vb-on');
@@ -141,6 +148,10 @@ const _draftScript = r'''
   document.addEventListener('click', function (event) {
     event.preventDefault();
     event.stopPropagation();
+    // Inside the text being written (or the key press a summary turns into
+    // a click): the caret moves, nothing is picked.
+    if (edit && (edit.el.contains(event.target) ||
+        (event.target.tagName === 'SUMMARY' && event.target.contains(edit.el)))) return;
     var act = event.target.closest && event.target.closest('.vb-bar [data-action]');
     if (act) {
       var id = pick.target && pick.target.getAttribute('data-block-id');
@@ -149,12 +160,21 @@ const _draftScript = r'''
       return;
     }
     if (event.target.closest && event.target.closest('.vb-mark')) return;
+    var text = editable(event.target);
+    if (text && !edit) { begin(text); return; }
     var found = part(event.target);
+    // A question of the picked block opens and closes, as on the store.
+    var question = event.target.closest && event.target.closest('summary');
+    if (question && found && found === pick.target && question.parentElement) {
+      question.parentElement.open = !question.parentElement.open;
+      soon();
+    }
     tell(found ? found.getAttribute('data-block-id') : null);
   }, true);
   document.addEventListener('submit', function (event) { event.preventDefault(); }, true);
   document.addEventListener('mouseover', function (event) {
     hover.target = part(event.target);
+    heat(event.target);
     soon();
   }, true);
   document.addEventListener('mouseleave', function () { hover.target = null; soon(); });
@@ -165,10 +185,100 @@ const _draftScript = r'''
   // The desktop editor's native view gets no pointer moves: the editor
   // tells where its pointer is, as fractions of the window (-1: gone).
   window.vbDraftHover = function (fx, fy) {
-    hover.target = fx < 0 ? null
-      : part(document.elementFromPoint(fx * innerWidth, fy * innerHeight));
+    var node = fx < 0 ? null : document.elementFromPoint(fx * innerWidth, fy * innerHeight);
+    hover.target = part(node);
+    heat(node);
     soon();
   };
+  // Writing a text where it is drawn (`data-edit-text`): a click on a text
+  // of the picked block asks the editor (`vbDraftEdit … 'begin'`), which
+  // answers with the text as the draft holds it (`vbDraftEditing`, or null
+  // to refuse); leaving it (a click elsewhere, ⌘/Ctrl+Enter) writes it
+  // (`'commit'`), Escape leaves it as it was (`'cancel'`). The text written
+  // stays until the editor redraws the page, or goes back if the editor
+  // refuses it (`vbDraftEdited(false)`).
+  var edit = null, written = null, hot = null;
+  var HINT = 'Escribiendo · ' + (/Mac|iP/.test(navigator.platform) ? '⌘↵' : 'Ctrl+↵') +
+    ' listo · Esc cancela';
+  function editable(node) {
+    var text = node && node.closest ? node.closest('[data-edit-text]') : null;
+    return text && pick.target && part(text) === pick.target ? text : null;
+  }
+  function heat(node) {
+    var text = edit ? null : editable(node);
+    if (text === hot) return;
+    if (hot) hot.classList.remove('vb-text-hot');
+    hot = text;
+    if (hot) hot.classList.add('vb-text-hot');
+  }
+  function editMessage(e, phase, text) {
+    send('vbDraftEdit', [e.id, e.field, phase, text === undefined ? null : text],
+      { type: 'vb-draft-edit', id: e.id, field: e.field, phase: phase, text: text });
+  }
+  function begin(el) {
+    heat(null);
+    written = null;
+    edit = {
+      el: el, id: pick.target.getAttribute('data-block-id'),
+      field: el.getAttribute('data-edit-text'), html: el.innerHTML, on: false
+    };
+    editMessage(edit, 'begin');
+  }
+  window.vbDraftEditing = function (raw, field) {
+    if (!edit || edit.on) return;
+    if (raw === null || raw === undefined || field !== edit.field) { edit = null; return; }
+    var el = edit.el;
+    edit.on = true;
+    edit.raw = raw;
+    el.classList.add('vb-editing');
+    el.textContent = raw;
+    el.setAttribute('contenteditable', 'plaintext-only');
+    if (el.contentEditable !== 'plaintext-only') el.setAttribute('contenteditable', 'true');
+    el.setAttribute('spellcheck', 'true');
+    el.focus();
+    var range = document.createRange();
+    range.selectNodeContents(el);
+    var selection = getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    pick.el.classList.add('vb-writing');
+    refresh();
+  };
+  function done(keep) {
+    var e = edit;
+    if (!e) return;
+    // First: leaving the element (below) takes its focus, and the focusout
+    // that follows must not end the edit a second time.
+    edit = null;
+    if (!e.on) { editMessage(e, 'cancel'); return; }
+    var text = e.el.innerText;
+    if (text.slice(-1) === '\n' && e.raw.slice(-1) !== '\n') text = text.slice(0, -1);
+    e.el.removeAttribute('contenteditable');
+    e.el.removeAttribute('spellcheck');
+    e.el.classList.remove('vb-editing');
+    pick.el.classList.remove('vb-writing');
+    if (keep && text !== e.raw) {
+      editMessage(e, 'commit', text);
+      written = e;
+    } else {
+      editMessage(e, 'cancel');
+      e.el.innerHTML = e.html;
+    }
+    soon();
+  }
+  window.vbDraftEdited = function (ok) {
+    if (!ok && written) written.el.innerHTML = written.html;
+    written = null;
+  };
+  document.addEventListener('focusout', function (event) {
+    if (edit && edit.on && event.target === edit.el) done(true);
+  }, true);
+  document.addEventListener('keydown', function (event) {
+    if (!edit || !edit.on || !edit.el.contains(event.target)) return;
+    event.stopPropagation();
+    if (event.key === 'Escape') { event.preventDefault(); done(false); }
+    else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); done(true); }
+  }, true);
   window.vbDraftPicked = function (id, info) {
     pickedId = id || null;
     meta = info || null;

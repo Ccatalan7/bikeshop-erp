@@ -19,6 +19,7 @@ Component policyPageDocument(PolicyPageModel model) {
     shell: model.page.shell,
     theme: model.theme,
     storeUrl: model.page.storeUrl,
+    draft: model.page.draft,
   );
   return sitePage(
     context: model.page,

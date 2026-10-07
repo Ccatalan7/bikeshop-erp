@@ -3459,6 +3459,105 @@ void main() {
       expect(reads.requested, ['can edit', 'draft']);
     });
 
+    test('its texts name the field they draw, so the operator writes them '
+        'where they are; a visitor never sees the names', () async {
+      final blocks = [
+        {
+          ...hero('b-hero', 'Portada'),
+          'block_data': {'title': 'Portada', 'subtitle': 'Taller'},
+        },
+        {
+          'id': 'b-faq',
+          'block_type': 'faq',
+          'block_data': {
+            'title': 'Preguntas',
+            'items': [
+              {'question': '¿Arman?', 'answer': 'Sí'},
+              {'question': '¿Despachan?', 'answer': 'A todo Chile'},
+            ],
+          },
+          'is_visible': true,
+          'order_index': 1,
+        },
+        {
+          'id': 'b-ft',
+          'block_type': 'features',
+          'block_data': {
+            'title': 'Por qué',
+            'items': [
+              {'title': 'Rápido', 'description': 'En el día'},
+            ],
+          },
+          'is_visible': true,
+          'order_index': 2,
+        },
+        {
+          'id': 'b-cta',
+          'block_type': 'cta',
+          'block_data': {'title': 'Agenda', 'description': 'Hoy mismo'},
+          'is_visible': true,
+          'order_index': 3,
+        },
+        {
+          'id': 'b-text',
+          'block_type': 'text',
+          'block_data': {'text': 'Un párrafo'},
+          'is_visible': true,
+          'order_index': 4,
+        },
+        {
+          'id': 'b-car',
+          'block_type': 'carousel',
+          'block_data': {
+            'slides': [
+              {'title': 'Primera', 'subtitle': 'Uno'},
+              {'title': 'Segunda', 'subtitle': 'Dos'},
+            ],
+          },
+          'is_visible': true,
+          'order_index': 5,
+        },
+      ];
+      final (status, answer, _) = await draft(_FakeReads(), {
+        'page': {'home': true},
+        'blocks': blocks,
+      });
+      expect(status, 200);
+      final html = answer['html'] as String;
+      for (final field in [
+        'title',
+        'subtitle',
+        'question@items#0',
+        'answer@items#1',
+        'title@features,items#0',
+        'description@features,items#0',
+        'subtitle,description',
+        'text',
+        'title@slides#1',
+        'subtitle@slides#0',
+      ]) {
+        expect(html, contains('data-edit-text="$field"'), reason: field);
+      }
+      expect(html, contains('window.vbDraftEditing = function'));
+
+      final public = await _get(
+        _FakeReads(
+          homeRow: {
+            'id': 'home-row',
+            'slug': 'inicio',
+            'title': 'Inicio',
+            'is_published': true,
+            'website_blocks': blocks,
+          },
+        ),
+        '/_html/',
+      );
+      final visit = await public.readAsString();
+      expect(visit, contains('Despachan'));
+      expect(visit, isNot(contains('data-edit-text')));
+      expect(visit, isNot(contains('vbDraftEditing')));
+    });
+
     test('the home named by its row, as the editor names it', () async {
       final reads = _FakeReads(
         homeRow: {

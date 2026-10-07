@@ -36,6 +36,7 @@ class BlockRenderContext {
     required this.storeUrl,
     this.products = const {},
     this.thumbnails = const {},
+    this.draft = false,
   });
 
   final StorefrontShell shell;
@@ -48,6 +49,31 @@ class BlockRenderContext {
   /// Smaller copies of product photos, by the photo's URL.
   final Map<String, PublicImageThumbnail> thumbnails;
   final uncovered = <String>{};
+
+  /// The editor's draft ([PageContext.draft]): its texts say which field
+  /// they draw ([editText]).
+  final bool draft;
+
+  /// For the editor's draft, which field of the block an element draws, so
+  /// the operator edits it where it is, as the Flutter canvas's
+  /// `WebsiteInlineTextSlot`: the field's [keys] (its own and its aliases)
+  /// and, for an item of a list (a slide, a question), the list's
+  /// [collection] keys and the item's [index] —
+  /// `title`, `subtitle,description`, `question@items#2`. Nothing for a
+  /// visitor.
+  Map<String, String> editText(
+    List<String> keys, {
+    List<String> collection = const [],
+    int index = 0,
+  }) {
+    if (!draft) return const {};
+    final field = keys.join(',');
+    return {
+      'data-edit-text': collection.isEmpty
+          ? field
+          : '$field@${collection.join(',')}#$index',
+    };
+  }
 
   /// A link a visitor may follow, as the public path; `null` hides the
   /// control (`PublicStoreLayout.isHrefPubliclyEligible`).
@@ -256,6 +282,7 @@ class _TextBlock extends StatelessComponent {
       classes: 'txt $preset',
       text: text,
       style: style,
+      attributes: context.editText(const ['text']),
     );
   }
 }
@@ -269,14 +296,19 @@ Component flutterText(
   required String classes,
   required String text,
   List<String> style = const [],
+  Map<String, String> attributes = const {},
 }) {
   final css = style.isEmpty
       ? ''
       : ' style="${_attribute.convert(style.join(';'))}"';
+  final extra = [
+    for (final MapEntry(:key, :value) in attributes.entries)
+      ' $key="${_attribute.convert(value)}"',
+  ].join();
   final lines = text.replaceAll('\r\n', '\n');
   final content = _content.convert(lines).replaceAll('\n', '&#10;');
   final last = lines.endsWith('\n') ? ' data-break' : '';
-  return RawText('<$tag class="ft $classes"$css$last>$content</$tag>');
+  return RawText('<$tag class="ft $classes"$css$extra$last>$content</$tag>');
 }
 
 /// [TextFormatting.applyTo] as declarations over a preset's own style
@@ -495,8 +527,17 @@ class _HeroBlock extends StatelessComponent {
           classes: 'hero-in',
           attributes: {'data-align': alignment},
           [
-            h2(classes: 'hero-t', [.text(title.toUpperCase())]),
-            if (subtitle.isNotEmpty) p(classes: 'hero-s', [.text(subtitle)]),
+            h2(
+              classes: 'hero-t',
+              attributes: context.editText(const ['title']),
+              [.text(title.toUpperCase())],
+            ),
+            if (subtitle.isNotEmpty)
+              p(
+                classes: 'hero-s',
+                attributes: context.editText(const ['subtitle']),
+                [.text(subtitle)],
+              ),
             if (action != null && href != null)
               a(classes: 'w-btn on-dark ${action.variant.name}', href: href, [
                 .text(action.label.toUpperCase()),
@@ -585,8 +626,17 @@ class _ContactBlock extends StatelessComponent {
     ];
     return section(classes: 'contact-blk', [
       div(classes: 'contact-in', [
-        h2(classes: 'contact-t', [.text(title)]),
-        if (subtitle.isNotEmpty) p(classes: 'contact-s', [.text(subtitle)]),
+        h2(
+          classes: 'contact-t',
+          attributes: context.editText(const ['title']),
+          [.text(title)],
+        ),
+        if (subtitle.isNotEmpty)
+          p(
+            classes: 'contact-s',
+            attributes: context.editText(const ['subtitle']),
+            [.text(subtitle)],
+          ),
         if (cards.isNotEmpty)
           div(
             classes: 'contact-cards',

@@ -16,6 +16,7 @@ Component homePageDocument(HomePageModel model) {
     storeUrl: model.page.storeUrl,
     products: model.products,
     thumbnails: PublicImageThumbnail.byUrl(model.thumbnails),
+    draft: model.draft,
   );
   final drawn = windowPageBlocks(model.blocks, render, draft: model.draft);
   return sitePage(

@@ -78,10 +78,12 @@ Component _slot(
   required double fontSize,
   required double lineHeight,
   bool responsiveSize = false,
+  Map<String, String> attributes = const {},
 }) => flutterText(
   tag,
   classes: classes,
   text: text,
+  attributes: attributes,
   style: textFormattingCss(
     _map(formatting),
     family: family,
@@ -124,6 +126,7 @@ class FaqBlockView extends StatelessComponent {
           fontSize: 40,
           lineHeight: 1.15,
           responsiveSize: true,
+          attributes: context.editText(const ['title']),
         ),
         if (subtitle.trim().isNotEmpty)
           _slot(
@@ -136,10 +139,11 @@ class FaqBlockView extends StatelessComponent {
             fallback: 'var(--body)',
             fontSize: 17,
             lineHeight: 1.45,
+            attributes: context.editText(const ['subtitle']),
           ),
         if (items.isNotEmpty)
           div(classes: 'faq-list', [
-            for (final item in items)
+            for (final (index, item) in items.indexed)
               details(classes: 'faq-it', [
                 summary(classes: 'faq-q', [
                   _slot(
@@ -152,6 +156,11 @@ class FaqBlockView extends StatelessComponent {
                     fallback: 'var(--head)',
                     fontSize: 16,
                     lineHeight: 1.5,
+                    attributes: context.editText(
+                      const ['question'],
+                      collection: const ['items'],
+                      index: index,
+                    ),
                   ),
                   RawText(materialIcon(mdExpandMore, classes: 'faq-chev')),
                 ]),
@@ -166,6 +175,11 @@ class FaqBlockView extends StatelessComponent {
                     fallback: 'var(--body)',
                     fontSize: theme.bodySize,
                     lineHeight: 1.5,
+                    attributes: context.editText(
+                      const ['answer'],
+                      collection: const ['items'],
+                      index: index,
+                    ),
                   ),
                 ]),
               ]),
@@ -275,6 +289,7 @@ class CtaBlockView extends StatelessComponent {
             fallback: 'var(--head)',
             fontSize: 24,
             lineHeight: 1.5,
+            attributes: context.editText(const ['title']),
           ),
           if (subtitle.isNotEmpty)
             _slot(
@@ -287,6 +302,7 @@ class CtaBlockView extends StatelessComponent {
               fallback: 'var(--body)',
               fontSize: theme.bodySize + 2,
               lineHeight: 1.5,
+              attributes: context.editText(const ['subtitle', 'description']),
             ),
           if (cta != null && (cta.href.isEmpty || href != null))
             href == null
@@ -334,17 +350,22 @@ class FeaturesBlockView extends StatelessComponent {
           fontSize: 40,
           lineHeight: 1.15,
           responsiveSize: true,
+          attributes: context.editText(const ['title']),
         ),
         if (features.isNotEmpty)
           div(classes: list ? 'ft-list' : 'ft-grid', [
-            for (final item in features)
-              list ? _listItem(item, theme) : _card(item, theme),
+            for (final (index, item) in features.indexed)
+              list ? _listItem(item, index, theme) : _card(item, index, theme),
           ]),
       ]),
     ]);
   }
 
-  Component _card(Map<String, dynamic> item, WebsiteThemeRoles theme) {
+  Component _card(
+    Map<String, dynamic> item,
+    int index,
+    WebsiteThemeRoles theme,
+  ) {
     final description = (item['description'] ?? '').toString();
     return div(classes: 'ft-card', [
       RawText(
@@ -364,6 +385,11 @@ class FeaturesBlockView extends StatelessComponent {
         fallback: 'var(--head)',
         fontSize: 18,
         lineHeight: 28 / 22,
+        attributes: context.editText(
+          const ['title'],
+          collection: const ['features', 'items'],
+          index: index,
+        ),
       ),
       if (description.trim().isNotEmpty)
         _slot(
@@ -376,11 +402,20 @@ class FeaturesBlockView extends StatelessComponent {
           fallback: 'var(--body)',
           fontSize: theme.bodySize,
           lineHeight: 1.5,
+          attributes: context.editText(
+            const ['description'],
+            collection: const ['features', 'items'],
+            index: index,
+          ),
         ),
     ]);
   }
 
-  Component _listItem(Map<String, dynamic> item, WebsiteThemeRoles theme) {
+  Component _listItem(
+    Map<String, dynamic> item,
+    int index,
+    WebsiteThemeRoles theme,
+  ) {
     final description = (item['description'] ?? '').toString();
     return div(classes: 'ft-row', [
       span(classes: 'ft-dot', [
@@ -399,6 +434,11 @@ class FeaturesBlockView extends StatelessComponent {
           fallback: 'var(--head)',
           fontSize: 18,
           lineHeight: 1.5,
+          attributes: context.editText(
+            const ['title'],
+            collection: const ['features', 'items'],
+            index: index,
+          ),
         ),
         if (description.trim().isNotEmpty)
           _slot(
@@ -411,6 +451,11 @@ class FeaturesBlockView extends StatelessComponent {
             fallback: 'var(--body)',
             fontSize: 15,
             lineHeight: 1.5,
+            attributes: context.editText(
+              const ['description'],
+              collection: const ['features', 'items'],
+              index: index,
+            ),
           ),
       ]),
     ]);
@@ -448,6 +493,7 @@ class AboutBlockView extends StatelessComponent {
         fontSize: 40,
         lineHeight: 1.15,
         responsiveSize: true,
+        attributes: context.editText(const ['title']),
       ),
       _slot(
         'p',
@@ -460,6 +506,7 @@ class AboutBlockView extends StatelessComponent {
         fontSize: 17,
         lineHeight: 1.6,
         responsiveSize: true,
+        attributes: context.editText(const ['content', 'description']),
       ),
     ]);
     return section(

@@ -217,6 +217,11 @@ class CarouselBlockView extends StatelessComponent {
                     tag: first ? 'h1' : 'h2',
                     classes: 'car-t',
                     attributes: {
+                      ...context.editText(
+                        const ['title'],
+                        collection: const ['slides'],
+                        index: index,
+                      ),
                       'style': _textStyle(
                         slide['titleFormatting'],
                         size: context.theme.headingSize,
@@ -229,6 +234,11 @@ class CarouselBlockView extends StatelessComponent {
                   p(
                     classes: 'car-s',
                     attributes: {
+                      ...context.editText(
+                        const ['subtitle'],
+                        collection: const ['slides'],
+                        index: index,
+                      ),
                       'style': _textStyle(
                         slide['subtitleFormatting'],
                         size: context.theme.bodySize * 1.2,
