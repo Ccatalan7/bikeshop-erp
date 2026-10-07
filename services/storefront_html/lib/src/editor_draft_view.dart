@@ -300,6 +300,40 @@ const _draftScript = r'''
     if (event.key === 'Escape') { event.preventDefault(); done(false); }
     else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); done(true); }
   }, true);
+  // The carousels show the slide picked in the editor's panel, as on the
+  // canvas (`vbDraftSlides({blockId: index}, instant)`; instant when the
+  // page has just been drawn), and a turn of one with its arrows or dots
+  // picks that slide in the panel (`vbDraftSlide`).
+  var slides = {};
+  window.vbDraftSlides = function (wanted, instant) {
+    slides = wanted || {};
+    [].forEach.call(document.querySelectorAll('[data-block-id]'), function (block) {
+      var id = block.getAttribute('data-block-id');
+      if (!(id in slides)) return;
+      [].forEach.call(block.querySelectorAll('[data-car]'), function (c) {
+        var on = c.querySelector(':scope>.car-slide.on');
+        if (on && +on.getAttribute('data-slide') === slides[id]) return;
+        if (instant) {
+          c.vbDur = c.vbDur || c.style.getPropertyValue('--car-dur');
+          c.style.setProperty('--car-dur', '0ms');
+        }
+        c.dispatchEvent(new CustomEvent('car:go', { detail: slides[id] }));
+      });
+    });
+  };
+  document.addEventListener('car:shown', function (event) {
+    var c = event.target;
+    if (c.vbDur) {
+      var dur = c.vbDur;
+      c.vbDur = null;
+      requestAnimationFrame(function () { c.style.setProperty('--car-dur', dur); });
+    }
+    soon();
+    var block = part(c), id = block && block.getAttribute('data-block-id');
+    if (!id || slides[id] === event.detail) return;
+    slides[id] = event.detail;
+    send('vbDraftSlide', [id, event.detail], { type: 'vb-draft-slide', id: id, index: event.detail });
+  });
   window.vbDraftPicked = function (id, info) {
     pickedId = id || null;
     meta = info || null;
