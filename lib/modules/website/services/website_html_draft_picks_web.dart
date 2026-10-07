@@ -3,14 +3,16 @@ import 'dart:js_interop';
 
 import 'package:web/web.dart' as web;
 
-Stream<String?> websiteHtmlDraftPicksImpl() {
+Stream<String?> websiteHtmlDraftPicksImpl(String nonce) {
   late final StreamController<String?> controller;
   web.EventListener? listener;
   controller = StreamController<String?>(
     onListen: () {
       listener = ((web.MessageEvent event) {
         final data = event.data.dartify();
-        if (data is Map && data['type'] == 'vb-draft-pick') {
+        if (data is Map &&
+            data['type'] == 'vb-draft-pick' &&
+            data['nonce'] == nonce) {
           final id = data['id'];
           controller.add(id is String && id.isNotEmpty ? id : null);
         }

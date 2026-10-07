@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
@@ -3680,6 +3681,24 @@ void main() {
         expect(code, 400, reason: path);
         expect(refused, {'state': 'invalid'}, reason: path);
       }
+    });
+
+    test('without a session the body is never read', () async {
+      // A body that never ends: the answer must not wait for it.
+      final endless = StreamController<List<int>>();
+      // Not awaited: closing a stream nobody listens to never completes.
+      addTearDown(() => unawaited(endless.close()));
+      final reads = _FakeReads();
+      final response = await _get(
+        reads,
+        '/_html/editor/borrador',
+        method: 'POST',
+        headers: {'content-type': 'application/json'},
+        body: endless.stream,
+      ).timeout(const Duration(seconds: 2));
+      expect(response.statusCode, 400);
+      expect(endless.hasListener, isFalse);
+      expect(reads.requested, isEmpty);
     });
 
     test('the ERP on the web may ask; another site may not', () async {

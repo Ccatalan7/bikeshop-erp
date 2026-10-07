@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -49,10 +50,8 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
   InAppWebViewController? _web;
   Timer? _debounce;
 
-  /// The body of the page on screen, and of the one on its way.
-  String? _shownBody;
-  String? _pendingBody;
-  int _sequence = 0;
+  /// The draft on screen and the one wanted.
+  final _queue = WebsiteHtmlDraftQueue();
   String? _selected;
   bool _loading = false;
   String? _message;
@@ -65,14 +64,22 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
   /// a field sends one request when the operator pauses, not one per key.
   static const _settle = Duration(milliseconds: 350);
 
-  /// On the ERP on the web, the page's clicks arrive as messages.
+  /// On the ERP on the web, the page's clicks arrive as messages, signed
+  /// with this view's [_nonce].
   StreamSubscription<String?>? _webPicks;
+  final String _nonce = [
+    for (var i = 0; i < 16; i++)
+      Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0'),
+  ].join();
+
+  /// The store's HTML server ([websiteHtmlDraftServer]).
+  final Uri? _server = websiteHtmlDraftServer();
 
   @override
   void initState() {
     super.initState();
     if (kIsWeb) {
-      _webPicks = websiteHtmlDraftPicks().listen((id) => _picked([id]));
+      _webPicks = websiteHtmlDraftPicks(_nonce).listen((id) => _picked([id]));
     }
   }
 
@@ -128,13 +135,20 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
             )
           : null,
     );
-    if (body == _shownBody || body == _pendingBody) return;
-    _pendingBody = body;
-    _debounce?.cancel();
-    if (immediately) {
-      unawaited(_draw(body));
-    } else {
-      _debounce = Timer(_settle, () => _draw(body));
+    switch (_queue.want(body)) {
+      case WebsiteHtmlDraftNeed.waiting:
+        return;
+      case WebsiteHtmlDraftNeed.onScreen:
+        // What was scheduled or on its way is not wanted any more.
+        _debounce?.cancel();
+        if (_loading) setState(() => _loading = false);
+      case WebsiteHtmlDraftNeed.ask:
+        _debounce?.cancel();
+        if (immediately) {
+          unawaited(_draw(body));
+        } else {
+          _debounce = Timer(_settle, () => _draw(body));
+        }
     }
   }
 
@@ -177,19 +191,19 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
   }
 
   Future<void> _draw(String body) async {
-    final sequence = ++_sequence;
-    final origin = Uri.tryParse(
-      context.read<WebsiteService>().getSetting('store_url', '').trim(),
-    );
+    final ticket = _queue.send();
+    final origin = _server;
     final token = Supabase.instance.client.auth.currentSession?.accessToken;
-    if (origin == null || !origin.hasScheme || origin.host.isEmpty) {
+    if (origin == null) {
+      _queue.failed();
       setState(() {
-        _message = 'Falta la dirección de la tienda (Ajustes del sitio > '
-            'Dominio) para dibujar la vista HTML.';
+        _message = 'Esta versión del ERP no tiene una dirección segura del '
+            'servidor de la tienda para dibujar la vista HTML.';
       });
       return;
     }
     if (token == null) {
+      _queue.failed();
       setState(() => _message = const WebsiteHtmlDraftAnswer.state(
             WebsiteHtmlDraftState.expired,
           ).message);
@@ -201,18 +215,18 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
       accessToken: token,
       body: body,
     );
-    // A later change already asked again: this answer is old.
-    if (!mounted || sequence != _sequence) return;
-    _pendingBody = null;
+    // The draft changed meanwhile: this answer is old.
+    if (!mounted || !_queue.wanted(ticket)) return;
     final html = answer.html;
     if (html == null) {
+      _queue.failed();
       setState(() {
         _loading = false;
         _message = answer.message;
       });
       return;
     }
-    _shownBody = body;
+    _queue.shown(body);
     setState(() {
       _loading = false;
       _message = null;
@@ -231,7 +245,7 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
       // In a frame (the ERP on the web) the base URL does not reach the
       // page: its fonts, logo and photos are found through `<base>`, which
       // the server leaves out because a public page's anchors need it out.
-      data: kIsWeb ? _withBase(html, origin) : html,
+      data: kIsWeb ? _withBase(html, origin, _nonce) : html,
       mimeType: 'text/html',
       encoding: 'utf-8',
       // Relative photos, fonts and icons come from the store itself.
@@ -401,12 +415,7 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
                                 callback: _picked,
                               );
                               final html = _html;
-                              final origin = Uri.tryParse(
-                                context
-                                    .read<WebsiteService>()
-                                    .getSetting('store_url', '')
-                                    .trim(),
-                              );
+                              final origin = _server;
                               if (html != null && origin != null) {
                                 unawaited(_show(html, origin));
                               }
@@ -515,9 +524,11 @@ class _ZoomedNativeView extends StatelessWidget {
   }
 }
 
-/// [html] with a `<base>` at the store's [origin], first in its `<head>`.
-String _withBase(String html, Uri origin) {
-  final base = '<base href="${origin.replace(path: '/')}">';
+/// [html] with a `<base>` at the store's [origin], first in its `<head>`,
+/// and the [nonce] its picks are signed with (`window.vbDraftNonce`).
+String _withBase(String html, Uri origin, String nonce) {
+  final base = '<base href="${origin.replace(path: '/')}">'
+      '<script>window.vbDraftNonce=${jsonEncode(nonce)};</script>';
   final head = RegExp('<head[^>]*>', caseSensitive: false).firstMatch(html);
   if (head == null) return '$base$html';
   return html.replaceRange(head.end, head.end, base);

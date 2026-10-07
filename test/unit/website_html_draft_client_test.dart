@@ -127,6 +127,54 @@ void main() {
     expect(rows.first['menu_location'], 'footer');
   });
 
+  test('only the draft wanted now lands: A shown, B scheduled, back to A', () {
+    final queue = WebsiteHtmlDraftQueue();
+    expect(queue.want('A'), WebsiteHtmlDraftNeed.ask);
+    final a = queue.send();
+    expect(queue.want('A'), WebsiteHtmlDraftNeed.waiting);
+    expect(queue.wanted(a), isTrue);
+    queue.shown('A');
+
+    expect(queue.want('B'), WebsiteHtmlDraftNeed.ask);
+    final b = queue.send();
+    // Back to the page on screen before B's answer: B must not land.
+    expect(queue.want('A'), WebsiteHtmlDraftNeed.onScreen);
+    expect(queue.wanted(b), isFalse);
+
+    // B again is a new request; an answer that failed may be asked again.
+    expect(queue.want('B'), WebsiteHtmlDraftNeed.ask);
+    queue.failed();
+    expect(queue.want('B'), WebsiteHtmlDraftNeed.ask);
+  });
+
+  test('the editor asks only a safe, configured server', () {
+    expect(
+      websiteHtmlDraftServer('https://vinabike.cl').toString(),
+      'https://vinabike.cl',
+    );
+    expect(
+      websiteHtmlDraftServer('https://vinabike.cl/').toString(),
+      'https://vinabike.cl',
+    );
+    expect(
+      websiteHtmlDraftServer('http://localhost:8080').toString(),
+      'http://localhost:8080',
+    );
+    for (final unsafe in [
+      'http://vinabike.cl',
+      'https://vinabike.cl:8443',
+      'https://vinabike.cl/tienda',
+      'https://user@vinabike.cl',
+      'ftp://localhost',
+      '',
+      'vinabike.cl',
+    ]) {
+      expect(websiteHtmlDraftServer(unsafe), isNull, reason: unsafe);
+    }
+    // The build's own default.
+    expect(websiteHtmlDraftServer().toString(), 'https://vinabike.cl');
+  });
+
   test('asks the store with the session and reads its answer', () async {
     late http.Request sent;
     var answer = <String, Object?>{'html': '<!DOCTYPE html><p>ok</p>'};

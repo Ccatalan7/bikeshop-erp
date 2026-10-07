@@ -37,7 +37,8 @@ const _draftScript = r'''
     var host = window.flutter_inappwebview;
     if (host && host.callHandler) { host.callHandler('vbDraftPick', id); return; }
     if (window.parent && window.parent !== window) {
-      window.parent.postMessage({ type: 'vb-draft-pick', id: id }, '*');
+      window.parent.postMessage(
+        { type: 'vb-draft-pick', id: id, nonce: window.vbDraftNonce || null }, '*');
     }
   }
   function mark(picked) {

@@ -17,11 +17,11 @@
   "evidence": [
     {
       "path": "lib/modules/website/services/website_html_draft_client.dart",
-      "sha256": "37b863722af5a7fe47e13bf5fa1310eb9b24abe3c0ff8ee5f7f037d4583d0f7b"
+      "sha256": "85b2c777d810719aa96deb204274683a0d33420e7f8fbdee5ce8ac84ba859731"
     },
     {
       "path": "lib/modules/website/widgets/website_html_draft_view.dart",
-      "sha256": "865c17baefab5dc432572d5a88377f07d0b272384f0865c59b4d7a97ca7f7136"
+      "sha256": "e69f472b098f537c6f201097b700c892ab58ebdb8c0e54228bfc94e52485b085"
     },
     {
       "path": "lib/modules/website/providers/website_edit_mode_provider.dart",
@@ -45,11 +45,11 @@
     },
     {
       "path": "services/storefront_html/lib/src/editor_draft_route.dart",
-      "sha256": "268657ebbfc1da0c24855305b53556fb3ad0a8e1d4a92be11a1006d59e188932"
+      "sha256": "9e10104e46dc8ebf5328c76523cc245d56848b05cd94934d94bfd3373142ae84"
     },
     {
       "path": "services/storefront_html/lib/src/editor_draft_view.dart",
-      "sha256": "86ec53edbdd889cadb771f99841e89e7bbcf5ff1b788641e3a0371c8ed28dc99"
+      "sha256": "c2907e28e425775821de925018d83737d58ce10079efbd025db96d4b1db25571"
     },
     {
       "path": "services/storefront_html/lib/src/editor_page_model.dart",
@@ -81,15 +81,15 @@
     },
     {
       "path": "lib/modules/website/services/website_html_draft_picks.dart",
-      "sha256": "6f308e91719e384eb5a20e896d32136757d88c4435e535db98667dc7f50a1bd1"
+      "sha256": "57d6e57e0ff1dbb1fe8d67fa50beafacd16349f279292824fcc812f2c9cf47f4"
     },
     {
       "path": "lib/modules/website/services/website_html_draft_picks_stub.dart",
-      "sha256": "caf14c944a0c6bed612d69a7db96e5458f63047df58bdab9aad90e452bb29c3f"
+      "sha256": "747ff3042adb2910c9cb26ebf9830bb937dcf60eed1b352eaf3119b7a9621cef"
     },
     {
       "path": "lib/modules/website/services/website_html_draft_picks_web.dart",
-      "sha256": "c72c9ab84ec14ed922472daa5afa36647e2efd4d4a8a5cd86500bb552032e616"
+      "sha256": "9386fe2a3c0b69eaf275163ad11687edfc64059fc82c4cb1e1c42aa9500663a7"
     },
     {
       "path": "services/storefront_html/lib/src/editor_draft_reads.dart",

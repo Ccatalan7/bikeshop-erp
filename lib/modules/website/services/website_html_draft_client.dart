@@ -71,6 +71,55 @@ class WebsiteHtmlDraftClient {
   void close() => _client.close();
 }
 
+enum WebsiteHtmlDraftNeed {
+  /// Ask for it (after the pause).
+  ask,
+
+  /// It is already asked for, or about to be.
+  waiting,
+
+  /// It is the page on screen: drop whatever was scheduled.
+  onScreen,
+}
+
+/// Which draft the «Vista HTML» asks for, and whether an answer is still
+/// wanted when it arrives. Every change of the draft makes the answers on
+/// their way old; a change back to the page on screen asks for nothing, and
+/// the page that was on its way never lands (Codex review, 2026-10-07: with
+/// A shown, B scheduled and the editor back on A, B used to land).
+class WebsiteHtmlDraftQueue {
+  String? _shown;
+  String? _wanted;
+  int _generation = 0;
+
+  /// [body] is the draft now: what the view has to do about it.
+  WebsiteHtmlDraftNeed want(String body) {
+    if (body == _wanted) return WebsiteHtmlDraftNeed.waiting;
+    _generation++;
+    if (body == _shown) {
+      _wanted = null;
+      return WebsiteHtmlDraftNeed.onScreen;
+    }
+    _wanted = body;
+    return WebsiteHtmlDraftNeed.ask;
+  }
+
+  /// A request for the wanted draft leaves: the ticket its answer carries.
+  int send() => _generation;
+
+  /// Whether the answer to [ticket] is still the one wanted.
+  bool wanted(int ticket) => ticket == _generation;
+
+  /// The answer to the wanted draft is on screen.
+  void shown(String body) {
+    _shown = body;
+    _wanted = null;
+  }
+
+  /// The wanted draft got no page; the same draft may be asked again.
+  void failed() => _wanted = null;
+}
+
 enum WebsiteHtmlDraftState { expired, forbidden, invalid, unavailable }
 
 class WebsiteHtmlDraftAnswer {
@@ -95,6 +144,40 @@ class WebsiteHtmlDraftAnswer {
           'La tienda no respondió a tiempo. Reintentando con el próximo '
               'cambio.',
       };
+}
+
+/// Where the editor asks for its drafts: the store's HTML server, as the
+/// build names it (`--dart-define=STOREFRONT_HTML_ORIGIN`, the same address
+/// as the server's own `STOREFRONT_ORIGIN`), or null when that is not a safe
+/// address. Never the store address of «Ajustes del sitio» (`store_url`):
+/// the request carries the editor's session, and a value that anyone who
+/// edits the site's settings can change would send that session anywhere
+/// (Codex review, 2026-10-07). Only `https` on its default port; `http` and
+/// a port only for this computer, to try a local server.
+Uri? websiteHtmlDraftServer([
+  String configured = const String.fromEnvironment(
+    'STOREFRONT_HTML_ORIGIN',
+    defaultValue: 'https://vinabike.cl',
+  ),
+]) {
+  final uri = Uri.tryParse(configured.trim());
+  if (uri == null || uri.host.isEmpty || uri.userInfo.isNotEmpty) return null;
+  if ((uri.path.isNotEmpty && uri.path != '/') ||
+      uri.hasQuery ||
+      uri.hasFragment) {
+    return null;
+  }
+  final local = uri.host == 'localhost' || uri.host == '127.0.0.1';
+  if (local
+      ? !const {'http', 'https'}.contains(uri.scheme)
+      : uri.scheme != 'https' || uri.hasPort) {
+    return null;
+  }
+  return Uri(
+    scheme: uri.scheme,
+    host: uri.host,
+    port: uri.hasPort ? uri.port : null,
+  );
 }
 
 /// The public path the HTML view draws for the editor's [location] (the

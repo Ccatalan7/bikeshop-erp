@@ -1,1 +1,2 @@
-Stream<String?> websiteHtmlDraftPicksImpl() => const Stream<String?>.empty();
+Stream<String?> websiteHtmlDraftPicksImpl(String nonce) =>
+    const Stream<String?>.empty();

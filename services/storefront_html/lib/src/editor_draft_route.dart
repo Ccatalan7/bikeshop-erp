@@ -83,12 +83,10 @@ Future<Response> editorDraftResponse(
     );
   }
   final watch = Stopwatch()..start();
+  // The session first: nobody without one gets the server to read up to two
+  // megabytes of body for them (Codex review, 2026-10-07).
   final token = _bearer(request);
-  final body = await _body(request);
-  final draft = body == null ? null : EditorDraft.tryParse(body);
-  if (token == null || draft == null) {
-    return _json(request, cors, 400, {'state': 'invalid'});
-  }
+  if (token == null) return _json(request, cors, 400, {'state': 'invalid'});
   try {
     if (!await reads.canEditSite(token)) {
       return _json(request, cors, 403, {'state': 'forbidden'});
@@ -102,6 +100,9 @@ Future<Response> editorDraftResponse(
     );
     return _json(request, cors, 503, {'state': 'unavailable'});
   }
+  final body = await _body(request);
+  final draft = body == null ? null : EditorDraft.tryParse(body);
+  if (draft == null) return _json(request, cors, 400, {'state': 'invalid'});
   final handler = storefrontHandler(
     config: config,
     reads: EditorDraftReads(
