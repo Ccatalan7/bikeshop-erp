@@ -3384,6 +3384,35 @@ void main() {
       expect(namesIn('Sin categoría'), isEmpty);
     });
 
+    test('a category grid without a photo on any card lists the published '
+        'categories itself, the first two large', () async {
+      final response = await _get(
+        _FakeReads(
+          editorPages: {
+            'arriendo': page([
+              block('g', 'categoryGrid', 0, {
+                'title': 'Categorías',
+                'titleFormatting': {'textAlign': 'center'},
+                'categories': [
+                  {'title': 'Sin foto', 'link': '/productos'},
+                ],
+              }),
+            ]),
+          },
+        ),
+        '/pagina/arriendo',
+      );
+      expect(response.headers['x-storefront-uncovered'], isNull);
+      final html = await response.readAsString();
+      expect(html, contains('>COMPONENTES<'));
+      expect(html, contains('>HORQUILLAS<'));
+      // Not published, and the author's photo-less card is not shown.
+      expect(html, isNot(contains('>INTERNA<')));
+      expect(html, isNot(contains('>SIN FOTO<')));
+      expect('class="cat lg dark'.allMatches(html), hasLength(2));
+      expect(html, contains('text-align:center'));
+    });
+
     test('a products carousel is a row of cards as wide as the author\'s '
         'count, with dots and the script that turns it on a phone', () async {
       Map<String, dynamic> row(String id, String name) => {

@@ -3,23 +3,60 @@ import 'package:jaspr/server.dart';
 
 import 'block_composition.dart';
 import 'css_values.dart';
+import 'storefront_shell.dart';
 import 'material_icons.dart';
 import 'website_blocks_view.dart';
 
-/// The cards of a category grid the author drew by hand. A grid without a
-/// photo on any card lists the published categories by itself, which the
-/// page does not read yet.
+/// The cards of a category grid the author drew by hand.
 List<Map<String, dynamic>> categoryGridCards(Map<String, dynamic> data) => [
   if (data['categories'] case final List<Object?> cards)
     for (final card in cards)
       if (card is Map) Map<String, dynamic>.from(card),
 ];
 
-/// What the HTML category grid draws: the author's cards, at least one with
-/// its photo.
-bool categoryGridIsCovered(Map<String, dynamic> data) => categoryGridCards(
-  data,
-).any((card) => (card['imageUrl']?.toString().trim() ?? '').isNotEmpty);
+/// The cards the grid shows, as `_AutoCategoryGrid._loadCategories`: the
+/// author's cards whose category is published, when one of them has a
+/// photo; otherwise every published category of the catalog by its order
+/// and name, the first two large, each to its products.
+List<Map<String, dynamic>> categoryGridShownCards(
+  Map<String, dynamic> data,
+  StorefrontShell shell,
+) {
+  final manual = categoryGridCards(data);
+  if (manual.any(
+    (card) => (card['imageUrl']?.toString().trim() ?? '').isNotEmpty,
+  )) {
+    return [
+      for (final card in manual)
+        if (shell.publication.allowsHref(categoryCardHref(card))) card,
+    ];
+  }
+  int order(Map<String, dynamic> row) =>
+      (row['sort_order'] as num?)?.toInt() ?? 0;
+  final published =
+      [
+        for (final row in shell.categories.values)
+          if (shell.publication.isPublished(row['id']?.toString())) row,
+      ]..sort((a, b) {
+        final byOrder = order(a).compareTo(order(b));
+        return byOrder != 0
+            ? byOrder
+            : (a['name'] ?? '').toString().compareTo(
+                (b['name'] ?? '').toString(),
+              );
+      });
+  return [
+    for (final (index, row) in published.indexed)
+      {
+        'title': (row['name'] ?? '').toString(),
+        'subtitle': (row['description'] ?? '').toString(),
+        'imageUrl': (row['image_url'] ?? '').toString(),
+        'ctaText': 'Ver productos',
+        'ctaLink': '/productos?category=${row['id']}',
+        'size': index < 2 ? 'large' : 'medium',
+      },
+  ];
+}
 
 /// `_CategoryCard.resolveHref`: `ctaLink` or `link`, the specific one when
 /// one of them is the whole catalog, `link` when both are specific.
@@ -37,11 +74,11 @@ String categoryCardHref(Map<String, dynamic> card) {
   return link;
 }
 
-/// `_AutoCategoryGrid` with the author's cards: the large ones two to a row
+/// `_AutoCategoryGrid` ([categoryGridShownCards]): the large ones two to a row
 /// (380 px) and the rest four to a row (220 px) with 4 px between them, edge
 /// to edge; on a window under 600 px the large ones stacked (300 px) and the
 /// rest two to a row. A desktop shows the first two large and first four
-/// others, as Flutter. Only cards whose category is published are drawn.
+/// others, as Flutter.
 class CategoryGridView extends StatelessComponent {
   const CategoryGridView(this.composed, this.context, {super.key});
 
@@ -51,10 +88,7 @@ class CategoryGridView extends StatelessComponent {
   @override
   Component build(BuildContext _) {
     final data = composed.data;
-    final cards = [
-      for (final card in categoryGridCards(data))
-        if (context.shell.publication.allowsHref(categoryCardHref(card))) card,
-    ];
+    final cards = categoryGridShownCards(data, context.shell);
     if (cards.isEmpty) return div(const []);
     final large = [
       for (final card in cards)
@@ -70,7 +104,21 @@ class CategoryGridView extends StatelessComponent {
     final shownOthers = others.take(4).length;
     return section(classes: 'cat-blk', [
       if (title.isNotEmpty) ...[
-        h2(classes: 'cat-t', [.text(title)]),
+        h2(
+          classes: 'cat-t',
+          attributes: {
+            ...context.editText(const ['title']),
+            ...formattedStyle(
+              data['titleFormatting'],
+              family: context.theme.headingFont,
+              weight: 700,
+              fallback: 'var(--head)',
+              fontSize: 32,
+              lineHeight: 40 / 32,
+            ),
+          },
+          [.text(title)],
+        ),
         if (subtitle.isNotEmpty) p(classes: 'cat-s', [.text(subtitle)]),
       ],
       div(

@@ -2162,3 +2162,11 @@ de 15 px de alto Flutter lo esconde y el HTML lo muestra.
   que se desplaza con tarjetas de 350/300/260 según el conteo por fila.
   Probado en Chrome a 1440 y 390. En producción (2026-10-07) no hay ningún
   producto marcado como destacado: un bloque nuevo sale vacío en los dos.
+- **La grilla de categorías sin fotos (2026-10-07).** Sin una foto en
+  ninguna tarjeta, Flutter (`_AutoCategoryGrid`) lista solo las categorías
+  publicadas del catálogo (por orden y nombre, las dos primeras grandes, cada
+  una a sus productos), y el HTML mandaba la página a Flutter. Ahora la
+  dibuja con las categorías que ya trae el `shell`
+  (`categoryGridShownCards`), y el formato del título de la grilla, que la
+  prueba de contrato ya no deja pasar (antes la pasaba porque la grilla por
+  defecto volvía a Flutter).
