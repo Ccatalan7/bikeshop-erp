@@ -29,7 +29,8 @@ const _draftCss = '''
 /// through the web view's handler (`vbDraftPick`) or, in the ERP on the
 /// web, a message to the page that holds the frame. The editor marks its
 /// selection with `vbDraftPicked(id)`; the pointer's part is marked as it
-/// passes, both following the page as it scrolls or changes size.
+/// passes (`vbDraftHover` where the page sees no pointer), both following
+/// the page as it scrolls or changes size.
 const _draftScript = r'''
 (function () {
   function tell(id) {
@@ -90,6 +91,13 @@ const _draftScript = r'''
   addEventListener('resize', soon);
   addEventListener('load', soon);
   if (window.ResizeObserver) new ResizeObserver(soon).observe(document.body);
+  // The desktop editor's native view gets no pointer moves: the editor
+  // tells where its pointer is, as fractions of the window (-1: gone).
+  window.vbDraftHover = function (fx, fy) {
+    hover.target = fx < 0 ? null
+      : part(document.elementFromPoint(fx * innerWidth, fy * innerHeight));
+    soon();
+  };
   window.vbDraftPicked = function (id) {
     pickedId = id || null;
     pick.target = null;

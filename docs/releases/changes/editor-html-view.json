@@ -21,7 +21,7 @@
     },
     {
       "path": "lib/modules/website/widgets/website_html_draft_view.dart",
-      "sha256": "7012febabe182ee08d09af94244ca2f6b48050983542b9d3d29892bb32c976bf"
+      "sha256": "f0c8ca06f1e6b725d8c3cb451e8e1f78273ff4f6802c1aea7c4de6ec0a0f72ab"
     },
     {
       "path": "lib/modules/website/providers/website_edit_mode_provider.dart",
@@ -49,7 +49,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/editor_draft_view.dart",
-      "sha256": "67764afb667fbf8b71ee11d6cf025d376130a2d99710eb10a1e73a7a58edbdd9"
+      "sha256": "86ec53edbdd889cadb771f99841e89e7bbcf5ff1b788641e3a0371c8ed28dc99"
     },
     {
       "path": "services/storefront_html/lib/src/editor_page_model.dart",

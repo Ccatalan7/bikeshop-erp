@@ -254,6 +254,41 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
     }
   }
 
+  /// The pointer at [position] of a page of [size], or gone (null): told to
+  /// the page as fractions of its window, whatever the zoom. One call at a
+  /// time; a move while one is on its way waits for it, and only the last
+  /// position is sent.
+  void _hover(Offset? position, Size size) {
+    _hoverAt = position == null || size.isEmpty
+        ? null
+        : Offset(position.dx / size.width, position.dy / size.height);
+    _hoverQueued = true;
+    if (_hoverSending) return;
+    unawaited(_sendHover());
+  }
+
+  Offset? _hoverAt;
+  bool _hoverQueued = false;
+  bool _hoverSending = false;
+
+  Future<void> _sendHover() async {
+    _hoverSending = true;
+    while (_hoverQueued && mounted) {
+      _hoverQueued = false;
+      final at = _hoverAt;
+      try {
+        await _web?.evaluateJavascript(
+          source: 'window.vbDraftHover && window.vbDraftHover('
+              '${at?.dx.toStringAsFixed(4) ?? '-1'}, '
+              '${at?.dy.toStringAsFixed(4) ?? '-1'});',
+        );
+      } on Object {
+        // The page is between loads; the next move tells the new one.
+      }
+    }
+    _hoverSending = false;
+  }
+
   void _picked(List<dynamic> arguments) {
     final provider = _provider;
     if (provider == null) return;
@@ -327,37 +362,50 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
                                 ),
                               ],
                             ),
-                      // Under the ERP's window zoom the page is laid out at
-                      // the width it is drawn at, so a click lands where it
-                      // is seen and the page takes the canvas's own band.
-                      child: _ZoomedNativeView(
-                        zoom: zoom,
-                        child: InAppWebView(
-                          initialSettings: InAppWebViewSettings(
-                            javaScriptEnabled: true,
-                            isInspectable: kDebugMode,
-                            pageZoom: zoom,
-                            supportZoom: false,
-                            transparentBackground: false,
+                      // The native view gets no pointer moves on the desktop
+                      // (measured on macOS, 2026-10-07): the page's hover
+                      // mark follows the pointer as Flutter sees it. In a
+                      // frame (the ERP on the web) the page sees it itself.
+                      child: MouseRegion(
+                        onHover: kIsWeb
+                            ? null
+                            : (event) => _hover(
+                                  event.localPosition,
+                                  Size(width, constraints.maxHeight),
+                                ),
+                        onExit: kIsWeb ? null : (_) => _hover(null, Size.zero),
+                        // Under the ERP's window zoom the page is laid out
+                        // at the width it is drawn at, so a click lands where
+                        // it is seen and the page takes the canvas's band.
+                        child: _ZoomedNativeView(
+                          zoom: zoom,
+                          child: InAppWebView(
+                            initialSettings: InAppWebViewSettings(
+                              javaScriptEnabled: true,
+                              isInspectable: kDebugMode,
+                              pageZoom: zoom,
+                              supportZoom: false,
+                              transparentBackground: false,
+                            ),
+                            onWebViewCreated: (controller) {
+                              _web = controller;
+                              controller.addJavaScriptHandler(
+                                handlerName: 'vbDraftPick',
+                                callback: _picked,
+                              );
+                              final html = _html;
+                              final origin = Uri.tryParse(
+                                context
+                                    .read<WebsiteService>()
+                                    .getSetting('store_url', '')
+                                    .trim(),
+                              );
+                              if (html != null && origin != null) {
+                                unawaited(_show(html, origin));
+                              }
+                            },
+                            onLoadStop: (controller, _) => _loaded(controller),
                           ),
-                          onWebViewCreated: (controller) {
-                            _web = controller;
-                            controller.addJavaScriptHandler(
-                              handlerName: 'vbDraftPick',
-                              callback: _picked,
-                            );
-                            final html = _html;
-                            final origin = Uri.tryParse(
-                              context
-                                  .read<WebsiteService>()
-                                  .getSetting('store_url', '')
-                                  .trim(),
-                            );
-                            if (html != null && origin != null) {
-                              unawaited(_show(html, origin));
-                            }
-                          },
-                          onLoadStop: (controller, _) => _loaded(controller),
                         ),
                       ),
                     ),
