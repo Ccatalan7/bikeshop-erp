@@ -51,10 +51,12 @@ const _draftCss = '''
 /// A click picks the part under it and goes nowhere: the editor hears it
 /// through the web view's handler (`vbDraftPick`) or, in the ERP on the
 /// web, a message to the page that holds the frame. The editor marks its
-/// selection with `vbDraftPicked(id, info)`, `info.bar` saying which of the
-/// block bar's buttons apply (a press goes back as `vbDraftAction`); the pointer's part is marked as it
-/// passes (`vbDraftHover` where the page sees no pointer), both following
-/// the page as it scrolls or changes size.
+/// selection with `vbDraftPicked(id, info, show)`: `info.bar` says which of
+/// the block bar's buttons apply (a press, or one of the seams' «Agregar
+/// aquí», goes back as `vbDraftAction`), and `show` brings a selection made
+/// outside the page into sight. The pointer's part is marked as it passes
+/// (`vbDraftHover` where the page sees no pointer), both following the page
+/// as it scrolls or changes size.
 const _draftScript = r'''
 (function () {
   function send(name, args, message) {
@@ -147,16 +149,27 @@ const _draftScript = r'''
       // In sight while the block is: below the header that stays on top
       // (sticky, or fixed over the home's first block), inside the block,
       // and under the «Agregar aquí» of its upper seam.
-      var header = document.querySelector('header.top');
-      var position = header ? getComputedStyle(header).position : '';
-      var cover = position === 'sticky' || position === 'fixed'
-        ? Math.max(0, header.getBoundingClientRect().bottom) : 0;
-      var hidden = Math.max(0, cover - r.top);
+      var hidden = Math.max(0, cover() - r.top);
       var add = m.el.querySelector('.vb-add.vb-before');
       if (add) add.style.top = (hidden ? hidden + 18 : 0) + 'px';
       var top = hidden ? hidden + 40 : 22;
       bar.style.top = Math.min(top, Math.max(8, r.height - 52)) + 'px';
     }
+  }
+  // How much of the window the header that stays on top (sticky, or fixed
+  // over the home's first block) covers.
+  function cover() {
+    var header = document.querySelector('header.top');
+    var position = header ? getComputedStyle(header).position : '';
+    return position === 'sticky' || position === 'fixed'
+      ? Math.max(0, header.getBoundingClientRect().bottom) : 0;
+  }
+  // A part picked from the panel (or just added) out of sight comes under
+  // the header, as the canvas scrolls to its selection.
+  function bring(el) {
+    var r = el.getBoundingClientRect(), top = cover();
+    if (r.bottom > top + 48 && r.top < innerHeight - 48) return;
+    window.scrollBy({ top: r.top - top - 24, behavior: 'smooth' });
   }
   function part(node) {
     return node && node.closest ? node.closest('[data-block-id]') : null;
@@ -361,12 +374,14 @@ const _draftScript = r'''
     slides[id] = event.detail;
     send('vbDraftSlide', [id, event.detail], { type: 'vb-draft-slide', id: id, index: event.detail });
   });
-  window.vbDraftPicked = function (id, info) {
+  window.vbDraftPicked = function (id, info, show) {
     pickedId = id || null;
     meta = info || null;
     pick.target = pickedId ? shown(pickedId) : null;
     drawBar();
+    if (show && pick.target) bring(pick.target);
     refresh();
+    return !!pick.target;
   };
 })();
 ''';
