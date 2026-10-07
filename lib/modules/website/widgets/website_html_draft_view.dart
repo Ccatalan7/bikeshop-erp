@@ -476,7 +476,7 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
                             initialSettings: InAppWebViewSettings(
                               javaScriptEnabled: true,
                               isInspectable: kDebugMode,
-                              pageZoom: zoom,
+                              pageZoom: 1,
                               supportZoom: false,
                               transparentBackground: false,
                             ),
@@ -553,33 +553,37 @@ double _windowZoom(BuildContext context) {
   }
 }
 
-/// Lays a native web view out so it is drawn where it is hit under the ERP's
+/// Lays a native web view out so it is hit where it is drawn under the ERP's
 /// window zoom, which scales the Flutter scene by [zoom].
 ///
-/// Measured on macOS (2026-10-07, zoom 0.8): the web view's native frame
-/// comes out as its logical size divided by the zoom, and the engine shrinks
-/// it back to fit only in the drawing. Laid out at the canvas width (1248),
-/// the page took 1559 CSS px and was drawn into 998 points, and a click on
-/// the second section landed on the first. Laid out at width × zoom² and
-/// drawn back with the inverse scale, the native frame is exactly the drawn
-/// size, and `pageZoom = zoom` gives the page the canvas's own width (1247
-/// CSS px, the same band as the Flutter canvas). Other platforms keep the
-/// zoom as is: Windows is not measured yet, phones have no window zoom.
+/// Measured on macOS (2026-10-07, zoom 0.8), reading the page's own click
+/// coordinates: AppKit hit-tests the native view by its frame, without the
+/// scale Flutter draws it with. Under the plain window zoom a click on the
+/// second section landed on the first. Under a net scale of 1/zoom (laid out
+/// at width × zoom², the first fix) the drawing was right but the frame for
+/// clicks was 80 % of it: a click lit 1,32 CSS px per point less than the
+/// page showed, and nothing on the right or the bottom fifth reached the
+/// page (the block bar's buttons never answered). Laid out at width × zoom
+/// and drawn back with 1/zoom, the net scale is 1: the frame is the drawing,
+/// clicks land on what is under them (1,32 CSS px per point, both), and with
+/// `pageZoom` 1 the page takes the canvas's own width (1247 CSS px). Other
+/// platforms keep the zoom as is: Windows is not measured yet, phones have
+/// no window zoom.
 class _ZoomedNativeView extends StatelessWidget {
   const _ZoomedNativeView({required this.zoom, required this.child});
 
   final double zoom;
   final Widget child;
 
-  // The structure is measured too: the same sizes under an `OverflowBox`
-  // gave the page 1948 CSS px instead of 1247.
+  // The structure is measured too: under an `OverflowBox` the page took
+  // 1948 CSS px instead of 1247.
   @override
   Widget build(BuildContext context) {
     if ((zoom - 1).abs() < 0.001 ||
         defaultTargetPlatform != TargetPlatform.macOS) {
       return child;
     }
-    final factor = zoom * zoom;
+    final factor = zoom;
     return LayoutBuilder(
       builder: (context, constraints) => ClipRect(
         child: SizedBox.expand(

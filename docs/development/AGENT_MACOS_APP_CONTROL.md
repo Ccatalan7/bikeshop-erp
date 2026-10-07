@@ -1230,18 +1230,26 @@ Dos trampas más de una vista nativa (la «Vista HTML» del editor del sitio, un
   en segundo plano el clic llega pero WebKit no lo procesa). Y una vista que
   tapa a otra se marca opaca al puntero (`Listener(behavior: opaque)`) para
   que nada la atraviese.
-- **Bajo el zoom de ventana del ERP (0,8) el marco nativo sale «tamaño lógico
-  ÷ zoom».** La vista medía 1248 lógicos, la página se armó a 1559 px CSS, se
-  dibujó achicada en ~998 puntos y un clic en la segunda sección cayó en la
-  primera. La compensación medida: armarla a «ancho × zoom²» y dibujarla de
-  vuelta con `Transform.scale(1 / zoom²)` (`ClipRect > SizedBox.expand >
-  Align > Transform.scale > SizedBox`; con un `OverflowBox` en vez de
-  `Align` dio 1948 px), más `pageZoom = zoom`. Se comprueba leyendo
-  `innerWidth` y `devicePixelRatio` desde `evaluateJavascript`: tiene que dar
-  el ancho lógico de la caja (1247) a 0,8. Código:
-  `_ZoomedNativeView` en `website_html_draft_view.dart`. El navegador del ERP
-  compensa sólo «× zoom» y podría tener el mismo desfase (pendiente de
-  verificar).
+- **Bajo el zoom de ventana del ERP (0,8) AppKit decide los clics por el
+  marco de la vista nativa, sin la escala con que Flutter la dibuja.** La
+  vista medía 1248 lógicos, la página se armó a 1559 px CSS, se dibujó
+  achicada en ~998 puntos y un clic en la segunda sección cayó en la primera.
+  **Corrección (mismo día, más tarde):** la primera compensación (armarla a
+  «ancho × zoom²», dibujarla con `Transform.scale(1 / zoom²)` y
+  `pageZoom = zoom`) dejaba bien el dibujo y `innerWidth` (1247), pero no los
+  clics: el marco para clics era el 80 % del dibujo, cada clic caía 1,32 px
+  CSS por punto más corto de lo que se veía, y nada del quinto derecho o de
+  abajo llegaba a la página —los botones de la barra del bloque nunca
+  respondieron—. Costó media ronda creer que fallaban los botones. Lo que
+  vale: armarla a «ancho × zoom» y dibujarla con `Transform.scale(1 / zoom)`
+  (escala neta 1: el marco es el dibujo) con `pageZoom = 1`; da `innerWidth`
+  1247 y la misma escala en dibujo y clics. **Medir con clics, no con
+  `innerWidth`:** un escucha de `mousedown` que devuelve `clientX/clientY`
+  por el canal del visor, comparado con dos puntos de pantalla conocidos.
+  Estructura `ClipRect > SizedBox.expand > Align > Transform.scale >
+  SizedBox` (con un `OverflowBox` dio 1948 px). Código: `_ZoomedNativeView`
+  en `website_html_draft_view.dart`. El navegador del ERP compensa sólo
+  «× zoom» y podría tener el mismo desfase (pendiente de verificar).
 - **Tampoco le llegan los movimientos del puntero** (medido el mismo día, con
   movimientos reales del sistema): ni `mouseover` ni `:hover` en la página.
   Flutter sí los recibe sobre la vista (`MouseRegion.onHover`), así que el

@@ -3459,6 +3459,36 @@ void main() {
       expect(reads.requested, ['can edit', 'draft']);
     });
 
+    test('the home named by its row, as the editor names it', () async {
+      final reads = _FakeReads(
+        homeRow: {
+          'id': 'home-row',
+          'slug': 'inicio',
+          'title': 'Inicio',
+          'is_published': true,
+          'website_blocks': [hero('saved', 'Portada guardada')],
+        },
+      );
+      final (status, answer, _) = await draft(reads, {
+        'path': '/',
+        'page': {'slug': 'inicio'},
+        'blocks': [hero('b2', 'Segunda'), hero('b1', 'Primera', order: 1)],
+      });
+      expect(status, 200);
+      final html = answer['html'] as String;
+      expect(html, isNot(contains('PORTADA GUARDADA')));
+      // In the draft's order.
+      expect(html.indexOf('SEGUNDA'), lessThan(html.indexOf('PRIMERA')));
+      // Another page is not the home's draft.
+      final (_, other, _) = await draft(reads, {
+        'path': '/',
+        'page': {'slug': 'nosotros'},
+        'blocks': [hero('b3', 'Otra página')],
+      });
+      expect(other['html'], contains('PORTADA GUARDADA'));
+      expect(other['html'], isNot(contains('OTRA PÁGINA')));
+    });
+
     test('a page the editor creates, by its slug', () async {
       final (status, answer, _) = await draft(_FakeReads(), {
         'page': {'slug': 'Nosotros', 'title': 'Nosotros'},

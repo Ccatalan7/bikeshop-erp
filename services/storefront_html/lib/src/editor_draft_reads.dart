@@ -72,18 +72,23 @@ class EditorDraftReads implements PublicReads {
     'website_blocks': blocks,
   };
 
-  /// [read] of the open page, its blocks replaced by the draft's and the
-  /// products they pick read for them. A page that is not published yet is
+  /// [read] of a page, its blocks replaced by the draft's (and the products
+  /// they pick read for them) when [isOpen] says it is the page the editor
+  /// has open. The open page that is not published yet ([mustBeOpen]) is
   /// drawn from the draft alone.
   Future<HomePageReads> _open(
     Future<HomePageReads> Function(
       List<String> Function(Map<String, dynamic> page) productIds,
     )
     read,
-    List<String> Function(Map<String, dynamic> page) productIds,
-  ) async {
-    final data = await read((saved) => productIds(_page(saved)));
-    if (data.page == null) {
+    List<String> Function(Map<String, dynamic> page) productIds, {
+    required bool Function(Map<String, dynamic>? saved) isOpen,
+    required bool mustBeOpen,
+  }) async {
+    final data = await read(
+      (saved) => productIds(isOpen(saved) ? _page(saved) : saved),
+    );
+    if (data.page == null && mustBeOpen) {
       final drawn = await _saved.draftPage(_page(null), productIds);
       return (
         shell: _shell(drawn.shell),
@@ -97,7 +102,9 @@ class EditorDraftReads implements PublicReads {
     return (
       shell: _shell(data.shell),
       payments: data.payments,
-      page: _page(data.page),
+      page: data.page != null && isOpen(data.page)
+          ? _page(data.page)
+          : data.page,
       products: data.products,
       brandRows: data.brandRows,
       thumbnails: data.thumbnails,
@@ -122,17 +129,26 @@ class EditorDraftReads implements PublicReads {
   @override
   Future<HomePageReads> homePage(
     List<String> Function(Map<String, dynamic> page) productIds,
-  ) async => home
-      ? _open(_saved.homePage, productIds)
-      : _withShell(await _saved.homePage(productIds));
+  ) => _open(
+    _saved.homePage,
+    productIds,
+    // The editor names the home by its row as well (`{slug: "inicio"}`,
+    // measured 2026-10-07): the published home with that slug is the open
+    // page too.
+    isOpen: (saved) => home || (document != null && saved?['slug'] == document),
+    mustBeOpen: home,
+  );
 
   @override
   Future<HomePageReads> websitePage(
     String slug,
     List<String> Function(Map<String, dynamic> page) productIds,
-  ) async => !home && slug == document
-      ? _open((ids) => _saved.websitePage(slug, ids), productIds)
-      : _withShell(await _saved.websitePage(slug, productIds));
+  ) => _open(
+    (ids) => _saved.websitePage(slug, ids),
+    productIds,
+    isOpen: (_) => !home && slug == document,
+    mustBeOpen: !home && slug == document,
+  );
 
   @override
   Future<PolicyPagesReads> policyPages() async {
