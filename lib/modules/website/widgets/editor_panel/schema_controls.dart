@@ -1442,21 +1442,33 @@ class _GenericBlockControls extends StatelessWidget {
           final fallbackVariant = WebsiteActionVariant.fromStorage(
             variantKey == null ? null : currentData[variantKey]?.toString(),
           );
-          final action = WebsiteActionValue.resolvePrimary(
-                currentData,
-                labelKeys: labelKeys,
-                hrefKeys: hrefKeys,
-                variantKeys:
-                    variantKey == null ? const ['actionVariant'] : [variantKey],
-                defaultLabel: label,
-                defaultHref: current,
-                defaultVariant: fallbackVariant,
-              ) ??
-              WebsiteActionValue(
-                label: label,
-                href: current,
-                variant: fallbackVariant,
-              );
+          // A second button is read and written by its own fields only: the
+          // structured `actions` mirror belongs to the primary action.
+          final secondary =
+              field.resolvedActionRole == WebsiteActionRole.secondary;
+          final action = secondary
+              // An empty label is no second button: never a «Ver más».
+              ? WebsiteActionValue(
+                  label: currentData[actionLabelKey]?.toString().trim() ?? '',
+                  href: current,
+                  variant: fallbackVariant,
+                )
+              : WebsiteActionValue.resolvePrimary(
+                    currentData,
+                    labelKeys: labelKeys,
+                    hrefKeys: hrefKeys,
+                    variantKeys: variantKey == null
+                        ? const ['actionVariant']
+                        : [variantKey],
+                    defaultLabel: label,
+                    defaultHref: current,
+                    defaultVariant: fallbackVariant,
+                  ) ??
+                  WebsiteActionValue(
+                    label: label,
+                    href: current,
+                    variant: fallbackVariant,
+                  );
           final actionProperties = <WebsiteInlineManipulationProperty>[
             WebsiteInlineManipulationProperty.fromSchema(field),
             actionLabelField == null
@@ -1472,10 +1484,11 @@ class _GenericBlockControls extends StatelessWidget {
                 canonicalKey: variantKey,
                 policy: WebsiteResponsivePropertyPolicy.sharedOnly,
               ),
-            WebsiteInlineManipulationProperty(
-              canonicalKey: 'actions',
-              policy: WebsiteResponsivePropertyPolicy.sharedOnly,
-            ),
+            if (!secondary)
+              WebsiteInlineManipulationProperty(
+                canonicalKey: 'actions',
+                policy: WebsiteResponsivePropertyPolicy.sharedOnly,
+              ),
           ];
           final writeAction = _schemaTransaction(
             context: context,
@@ -1494,6 +1507,8 @@ class _GenericBlockControls extends StatelessWidget {
               const SizedBox(height: 6),
               WebsiteActionEditor(
                 value: action,
+                title: secondary ? 'Segundo botón' : 'Acción principal',
+                destinationHelp: field.helpText,
                 darkStyle: true,
                 dense: true,
                 asyncBinding: asyncBinding,
@@ -1509,12 +1524,16 @@ class _GenericBlockControls extends StatelessWidget {
                   if (editsVariantHere) {
                     updates[variantKey] = next.variant.storageValue;
                   }
-                  updates['actions'] = WebsiteActionValue.mergePrimary(
-                    workingActions,
-                    next,
-                  );
+                  if (!secondary) {
+                    updates['actions'] = WebsiteActionValue.mergePrimary(
+                      workingActions,
+                      next,
+                    );
+                  }
                   final result = writeAction(updates);
-                  if (result.accepted) workingActions = updates['actions'];
+                  if (result.accepted && !secondary) {
+                    workingActions = updates['actions'];
+                  }
                   return result;
                 },
               ),

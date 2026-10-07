@@ -52,10 +52,14 @@ class WebsiteInlineActionEditor extends StatefulWidget {
     this.onOpen,
     this.openOnFirstTap = false,
     this.asyncBinding,
+    this.destinationHelp,
   });
 
   final WebsiteActionValue action;
   final Widget child;
+
+  /// Under the destination: what an empty one does.
+  final String? destinationHelp;
 
   /// Persists the action and reports whether the canonical owner admitted it.
   /// `onOpen` is gated on this exact result, never merely on dialog Apply.
@@ -241,6 +245,7 @@ class _WebsiteInlineActionEditorState extends State<WebsiteInlineActionEditor> {
       builder: (_) => _InlineActionSheet(
         initialValue: draft,
         canOpen: widget.onOpen != null,
+        destinationHelp: widget.destinationHelp,
         onDraftChanged: (value) => draft = value,
       ),
     );
@@ -431,10 +436,12 @@ class _InlineActionSheet extends StatefulWidget {
     required this.initialValue,
     required this.canOpen,
     required this.onDraftChanged,
+    this.destinationHelp,
   });
 
   final WebsiteActionValue initialValue;
   final bool canOpen;
+  final String? destinationHelp;
   final ValueChanged<WebsiteActionValue> onDraftChanged;
 
   @override
@@ -481,6 +488,7 @@ class _InlineActionSheetState extends State<_InlineActionSheet> {
               value: _draft,
               onChanged: _update,
               showVariant: true,
+              destinationHelp: widget.destinationHelp,
               // The sheet is already titled; a second heading over the first
               // field would name the same thing twice.
               title: '',

@@ -4,6 +4,7 @@ import 'block_composition.dart';
 import 'home_page_model.dart';
 import 'website_brand_logos_view.dart';
 import 'website_reviews_view.dart';
+import 'website_section_blocks_view.dart';
 import 'website_video_banner_view.dart';
 import 'policy_page_model.dart';
 
@@ -203,74 +204,27 @@ $brandLogosCss
 $videoBannerCss
 $googleReviewsCss
 ${contentBlocksCss(theme)}
+${sectionBlocksCss(theme)}
 ${bandVisibilityCss(homeBands)}
 ''';
 
-/// The content blocks (website_content_blocks_view.dart): FAQ, call to
-/// action, features and «about us». Their titles change size by the width
-/// of their column, as their LayoutBuilders read it.
+/// The content blocks (website_content_blocks_view.dart): features and
+/// «about us». Their titles change size by the width of their column, as
+/// their LayoutBuilders read it.
 String contentBlocksCss(WebsiteThemeRoles theme) {
   final body = theme.bodySize;
-  final cta = body + 2;
   // A phone is a canvas under 640 (the block less the theme's side
   // padding): the side padding of these blocks is 16 there, 24 otherwise.
   final phone = _n(640 - 2 * theme.containerPadding - 0.02);
-  final dark = WebsiteRgba.lerp(
-    theme.primary,
-    const WebsiteRgba(1, 0, 0, 0),
-    0.2,
-  );
   final highest = WebsiteRgba.lerp(theme.background, theme.onSurface, 0.13);
   return '''
-/* FAQ: ExpansionTile cards (Card radius 16, the theme's low container).
-   A Material 3 card at elevation 1 with the theme's 14 % shadow, as
+/* A Material 3 card at elevation 1 with the theme's 14 % shadow, as
    measured against Flutter's. */
 :root{--card-shadow:0 2px 3.5px -1px rgb(0 0 0 / .05),0 0 1px rgb(0 0 0 / .01)}
-.faq-blk,.ft-blk,.ab-blk{padding:64px 24px}
-@container (max-width:${phone}px){.faq-blk,.ft-blk,.ab-blk{padding-inline:16px}}
-.faq-in{max-width:900px;margin:0 auto;container-type:inline-size}
-.faq-t,.ft-t{margin:0;text-align:center;font:400 26px/${_lh(26, 1.15)} var(--head);letter-spacing:.25px;color:var(--w-on)}
-@container (min-width:600px){.faq-t{font-size:34px;line-height:${_lh(34, 1.15)}}}
-@container (min-width:900px){.faq-t{font-size:40px;line-height:${_lh(40, 1.15)}}}
-.faq-s{margin:12px 0 0;text-align:center;font:400 17px/${_lh(17, 1.45)} var(--body);letter-spacing:.25px;color:var(--w-onv)}
-.faq-list{margin-top:32px}
-.faq-it{margin-bottom:16px;border-radius:16px;background:var(--w-low);box-shadow:var(--card-shadow);overflow:hidden}
-.faq-q{display:flex;align-items:center;gap:16px;min-height:54px;padding:0 24px 0 16px;list-style:none;cursor:pointer;transition:background-color .15s}
-.faq-q::-webkit-details-marker{display:none}
-/* ListTile's hover is the theme's hoverColor: black at 4 %. */
-.faq-q:hover{background:rgb(0 0 0 / .04)}
-.faq-q:focus-visible{outline:2px solid var(--w-prim);outline-offset:-2px}
-/* The question row as measured: at least 54 tall, 9 above and below a
-   question of several lines. */
-.faq-qt{flex:1;min-width:0;font:400 16px/24px var(--head);letter-spacing:.15px;color:var(--w-on);padding-block:9px}
-.faq-chev{flex:none;color:var(--w-prim);transition:transform .2s}
-.faq-it[open] .faq-chev{transform:rotate(180deg)}
-.faq-a{padding:12px 16px}
-.faq-at{margin:0;font:400 ${_n(body)}px/${_lh(body, 1.5)} var(--body);letter-spacing:.25px;color:var(--w-onv)}
-.faq-it::details-content{block-size:0;overflow:hidden;transition:block-size .2s,content-visibility .2s allow-discrete}
-.faq-it[open]::details-content{block-size:auto}
+.ft-blk,.ab-blk{padding:64px 24px}
+@container (max-width:${phone}px){.ft-blk,.ab-blk{padding-inline:16px}}
 @supports (interpolate-size:allow-keywords){:root{interpolate-size:allow-keywords}}
-
-/* Call to action: the photo with its veil, or the primary color running to
-   20 % black along the diagonal (Flutter's top-left to bottom-right; the
-   page script sets the angle by the block's shape). Its content is never
-   clipped: a height smaller than it runs past the bottom, as Flutter's
-   Stack. */
-.cta-blk{position:relative;display:flex;flex-direction:column;justify-content:safe center;padding:56px 24px;background:linear-gradient(var(--diag,to bottom right),${theme.primary.css},${dark.css})}
-.cta-blk.fixed{padding-block:0}
-@container (max-width:${phone}px){.cta-blk{padding-inline:16px}}
-.cta-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.cta-ov{position:absolute;inset:0;pointer-events:none}
-.cta-in{position:relative;display:flex;flex-direction:column;align-items:center;max-width:800px;width:100%;margin:0 auto}
-.cta-t{margin:0;max-width:100%;text-align:center;font:400 24px/36px var(--head);letter-spacing:1px;color:#fff}
-.cta-s{margin:12px 0 0;max-width:100%;text-align:center;font:400 ${_n(cta)}px/${_lh(cta, 1.5)} var(--body);letter-spacing:.5px;color:rgb(255 255 255 / .702)}
-.cta-btn{margin-top:24px;min-height:44px;max-width:100%;letter-spacing:1px;white-space:normal;overflow-wrap:anywhere;text-align:center;font-family:var(--body)}
-.cta-btn.outline{border-color:#fff;color:#fff}
-.cta-btn.text{color:#fff}
-.cta-btn.filled{background:var(--w-accent);border-color:var(--w-accent);color:#fff;box-shadow:0 .7px 1px rgb(0 0 0 / .18),0 0 1px rgb(0 0 0 / .04);transition:background-color .2s,box-shadow .2s}
-.cta-btn.filled:hover{background:color-mix(in srgb,#fff 8%,var(--w-accent));box-shadow:0 2px 3px rgb(0 0 0 / .18),0 1px 5px rgb(0 0 0 / .08)}
-.cta-btn.outline:hover,.cta-btn.text:hover{background:rgb(255 255 255 / .08)}
-.cta-btn.off{border-color:rgb(255 255 255 / .12);background:transparent;color:rgb(255 255 255 / .38);cursor:default}
+.ft-t{margin:0;text-align:center;font:400 26px/${_lh(26, 1.15)} var(--head);letter-spacing:.25px;color:var(--w-on)}
 
 /* Features: cards of 320 in a centered wrap (the whole column on a phone),
    or a list with the icon in a circle of the primary at 10 %. */

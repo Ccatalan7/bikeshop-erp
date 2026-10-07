@@ -139,6 +139,60 @@ class WebsiteProductsBlockContract {
   }
 }
 
+/// The small capitals above a section's title («Servicios», «El taller en
+/// números»): what the section is about, before what it says. The section
+/// blocks share it (`WebsiteSectionPalette`); empty, nothing is drawn.
+const _sectionEyebrowField = WebsiteBlockFieldSchema(
+  key: 'eyebrow',
+  label: 'Antetítulo',
+  type: WebsiteBlockFieldType.text,
+  helpText: 'Palabras cortas sobre el título. Vacío, no se muestra.',
+  group: 'content',
+  textRole: WebsiteTextRole.caption,
+  authoringSurfaces: {
+    WebsiteAuthoringSurface.inline,
+    WebsiteAuthoringSurface.inspector,
+  },
+);
+
+/// The section's background (`WebsiteSectionTone`): the site's own, a light
+/// band of the brand color or a dark one. Each section type keeps its own
+/// default (`websiteSectionDefaultTone`), so these differ only in that.
+const _sectionToneOptions = [
+  WebsiteBlockFieldOption(value: 'light', label: 'Claro'),
+  WebsiteBlockFieldOption(value: 'band', label: 'Gris'),
+  WebsiteBlockFieldOption(value: 'dark', label: 'Oscuro'),
+];
+const _sectionToneHelp =
+    'Alterna claro, gris y oscuro para separar una sección de la siguiente.';
+const _sectionToneLight = WebsiteBlockFieldSchema(
+  key: 'tone',
+  label: 'Fondo de la sección',
+  type: WebsiteBlockFieldType.select,
+  defaultValue: 'light',
+  options: _sectionToneOptions,
+  helpText: _sectionToneHelp,
+  group: 'layout',
+);
+const _sectionToneBand = WebsiteBlockFieldSchema(
+  key: 'tone',
+  label: 'Fondo de la sección',
+  type: WebsiteBlockFieldType.select,
+  defaultValue: 'band',
+  options: _sectionToneOptions,
+  helpText: _sectionToneHelp,
+  group: 'layout',
+);
+const _sectionToneDark = WebsiteBlockFieldSchema(
+  key: 'tone',
+  label: 'Fondo de la sección',
+  type: WebsiteBlockFieldType.select,
+  defaultValue: 'dark',
+  options: _sectionToneOptions,
+  helpText: _sectionToneHelp,
+  group: 'layout',
+);
+
 /// Central catalogue of website block definitions used across the editor and
 /// the public storefront. This enables declarative registration of block
 /// metadata, default payloads, and generic field schemas for quick wins while
@@ -696,26 +750,62 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
     ],
     usesCustomEditor: true,
   ),
-  // Servicios es deliberadamente auto-layout: el renderer elige lista
-  // compacta bajo 600 y filas de escritorio sobre ese ancho, sin leer
-  // ninguna propiedad persistida para hacerlo. No hay nada que personalizar
-  // por viewport, y no se inventa una propiedad para fingir que sí. Ícono,
-  // título y descripción de cada servicio son contenido. Matriz:
+  // Servicios es la carta del taller: filas numeradas con nombre, detalle y
+  // precio, y una foto del taller al costado en escritorio. La composición
+  // sale del ancho del bloque (sin número ni foto en el teléfono) y no
+  // persiste nada por viewport: nombre, detalle y precio son el servicio.
+  // El ícono de cada servicio se dejó de dibujar con el diseño de secciones
+  // (2026-10-07); un `icon` guardado se conserva sin efecto. Matriz:
   // `website_content_responsive_policies_test.dart`.
   WebsiteBlockType.services: const WebsiteBlockDefinition(
     type: WebsiteBlockType.services,
     title: 'Servicios',
-    description: 'Describe servicios clave con iconos, títulos y detalle.',
+    description:
+        'La carta del taller: cada servicio con su detalle y su precio.',
     defaultData: {
-      'title': 'Nuestros Servicios',
-      'services': <Map<String, dynamic>>[],
+      'eyebrow': 'Servicios',
+      'title': 'Carta del taller',
+      'subtitle':
+          'Precios con IVA incluido. Antes de empezar te mandamos el '
+          'presupuesto para que lo apruebes.',
+      'tone': 'light',
+      'services': [
+        {
+          'title': 'Regulación de frenos',
+          'description': '',
+          'price': r'$4.000',
+        },
+        {
+          'title': 'Regulación de cambios',
+          'description': '',
+          'price': r'$4.000',
+        },
+        {
+          'title': 'Centrado de rueda',
+          'description': 'Por rueda.',
+          'price': r'$10.000',
+        },
+      ],
+      'imageUrl': null,
     },
     fields: [
+      _sectionEyebrowField,
       WebsiteBlockFieldSchema(
         key: 'title',
         label: 'Título de la sección',
         type: WebsiteBlockFieldType.text,
         group: 'content',
+        textRole: WebsiteTextRole.heading,
+        supportsFormatting: true,
+      ),
+      WebsiteBlockFieldSchema(
+        key: 'subtitle',
+        label: 'Nota',
+        type: WebsiteBlockFieldType.textarea,
+        helpText: 'Junto al título: qué incluyen los precios, cómo se agenda.',
+        group: 'content',
+        textRole: WebsiteTextRole.paragraph,
+        supportsFormatting: true,
       ),
       WebsiteBlockFieldSchema(
         key: 'services',
@@ -725,24 +815,8 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
         migrationAliases: ['items'],
         itemFields: [
           WebsiteBlockFieldSchema(
-            key: 'icon',
-            label: 'Ícono',
-            type: WebsiteBlockFieldType.select,
-            defaultValue: 'build',
-            options: [
-              WebsiteBlockFieldOption(value: 'build', label: 'Herramientas'),
-              WebsiteBlockFieldOption(value: 'support_agent', label: 'Soporte'),
-              WebsiteBlockFieldOption(value: 'shopping_bag', label: 'Tienda'),
-              WebsiteBlockFieldOption(
-                value: 'directions_bike',
-                label: 'Bicicleta',
-              ),
-              WebsiteBlockFieldOption(value: 'favorite', label: 'Favorito'),
-            ],
-          ),
-          WebsiteBlockFieldSchema(
             key: 'title',
-            label: 'Título',
+            label: 'Nombre',
             type: WebsiteBlockFieldType.text,
             defaultValue: 'Servicio',
             textRole: WebsiteTextRole.heading,
@@ -750,20 +824,70 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
           ),
           WebsiteBlockFieldSchema(
             key: 'description',
-            label: 'Descripción',
+            label: 'Detalle',
             type: WebsiteBlockFieldType.textarea,
-            defaultValue: 'Describe el servicio',
+            defaultValue: '',
             textRole: WebsiteTextRole.paragraph,
+            supportsFormatting: true,
+          ),
+          WebsiteBlockFieldSchema(
+            key: 'price',
+            label: 'Precio',
+            type: WebsiteBlockFieldType.text,
+            defaultValue: '',
+            helpText: 'Como se lee: \$8.000, desde \$8.000, a cotizar.',
+            textRole: WebsiteTextRole.statValue,
             supportsFormatting: true,
           ),
         ],
       ),
+      WebsiteBlockFieldSchema(
+        key: 'imageUrl',
+        label: 'Foto del taller',
+        type: WebsiteBlockFieldType.image,
+        helpText: 'Al costado de la carta en escritorio; no va en el teléfono.',
+        group: 'media',
+        mediaRole: WebsiteMediaRole.inline,
+        supportsFocalPoint: true,
+        supportsAltText: true,
+        altTextKey: 'imageAltText',
+        authoringSurfaces: {
+          WebsiteAuthoringSurface.inline,
+          WebsiteAuthoringSurface.contextSheet,
+          WebsiteAuthoringSurface.inspector,
+        },
+      ),
+      WebsiteBlockFieldSchema(
+        key: 'caption',
+        label: 'Pie de foto',
+        type: WebsiteBlockFieldType.text,
+        group: 'media',
+        textRole: WebsiteTextRole.caption,
+      ),
+      WebsiteBlockFieldSchema(
+        key: 'captionDetail',
+        label: 'Pie de foto, a la derecha',
+        type: WebsiteBlockFieldType.text,
+        group: 'media',
+        textRole: WebsiteTextRole.caption,
+      ),
+      _sectionToneLight,
     ],
     controlSections: [
       WebsiteBlockControlSection(
         id: 'content',
         label: 'Contenido',
-        fieldKeys: ['title', 'services'],
+        fieldKeys: ['eyebrow', 'title', 'subtitle', 'services'],
+      ),
+      WebsiteBlockControlSection(
+        id: 'media',
+        label: 'Foto',
+        fieldKeys: ['imageUrl', 'caption', 'captionDetail'],
+      ),
+      WebsiteBlockControlSection(
+        id: 'layout',
+        label: 'Diseño',
+        fieldKeys: ['tone'],
       ),
     ],
   ),
@@ -860,25 +984,56 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
       ),
     ],
   ),
-  // Testimonios no declara ninguna propiedad responsive, y no es un olvido:
-  // su renderer calcula el ancho de tarjeta desde el ancho disponible y no
-  // lee ninguna otra propiedad de presentación. Nombre, rol, comentario y
-  // valoración son contenido del cliente. Un override aquí sería un control
-  // que no cambia nada en la tienda. Matriz: `website_collections_
-  // responsive_policies_test.dart`.
+  // Testimonios es una sección de dos columnas: a la izquierda la nota de la
+  // tienda en Google (la que sincroniza «Reseñas de Google», nunca una cifra
+  // escrita a mano que se queda vieja) y a la derecha las citas, cada una con
+  // la inicial del cliente. No declara ninguna propiedad responsive: la
+  // composición sale del ancho del bloque, y nombre, rol, comentario y
+  // valoración son contenido del cliente. Sin citas de ejemplo a propósito:
+  // un testimonio inventado publicado sería una reseña falsa. Matriz:
+  // `website_collections_responsive_policies_test.dart`.
   WebsiteBlockType.testimonials: const WebsiteBlockDefinition(
     type: WebsiteBlockType.testimonials,
     title: 'Testimonios',
-    description: 'Destaca comentarios de clientes para generar confianza.',
+    description:
+        'Lo que dicen tus clientes, junto a la nota de la tienda en Google.',
     defaultData: {
-      'title': 'Lo que dicen nuestros clientes',
+      'eyebrow': 'Reseñas en Google',
+      'title': '',
+      'subtitle': '',
+      'showGoogleRating': true,
+      'tone': 'light',
       'testimonials': <Map<String, dynamic>>[],
     },
     fields: [
+      _sectionEyebrowField,
       WebsiteBlockFieldSchema(
         key: 'title',
         label: 'Título',
         type: WebsiteBlockFieldType.text,
+        group: 'content',
+        textRole: WebsiteTextRole.heading,
+        supportsFormatting: true,
+      ),
+      WebsiteBlockFieldSchema(
+        key: 'subtitle',
+        label: 'Nota',
+        type: WebsiteBlockFieldType.text,
+        helpText:
+            'Bajo la nota de Google. Vacío, dice cuántas reseñas tiene la '
+            'tienda.',
+        group: 'content',
+        textRole: WebsiteTextRole.paragraph,
+        supportsFormatting: true,
+      ),
+      WebsiteBlockFieldSchema(
+        key: 'showGoogleRating',
+        label: 'Mostrar la nota de Google',
+        type: WebsiteBlockFieldType.toggle,
+        defaultValue: true,
+        helpText:
+            'La nota y las reseñas que trae la sincronización con Google, '
+            'con el enlace al perfil del negocio.',
         group: 'content',
       ),
       WebsiteBlockFieldSchema(
@@ -889,6 +1044,15 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
         migrationAliases: ['items'],
         itemFields: [
           WebsiteBlockFieldSchema(
+            key: 'comment',
+            label: 'Comentario',
+            type: WebsiteBlockFieldType.textarea,
+            defaultValue: 'Lo que dijo el cliente',
+            textRole: WebsiteTextRole.quote,
+            supportsFormatting: true,
+            migrationAliases: ['quote', 'text'],
+          ),
+          WebsiteBlockFieldSchema(
             key: 'name',
             label: 'Nombre',
             type: WebsiteBlockFieldType.text,
@@ -898,20 +1062,12 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
           ),
           WebsiteBlockFieldSchema(
             key: 'role',
-            label: 'Rol',
+            label: 'Detalle',
             type: WebsiteBlockFieldType.text,
-            defaultValue: 'Cliente',
+            defaultValue: 'Cliente del taller',
+            helpText: 'Junto al nombre: cuándo o por qué vino.',
             textRole: WebsiteTextRole.caption,
             supportsFormatting: true,
-          ),
-          WebsiteBlockFieldSchema(
-            key: 'comment',
-            label: 'Comentario',
-            type: WebsiteBlockFieldType.textarea,
-            defaultValue: 'Escribe el testimonio',
-            textRole: WebsiteTextRole.paragraph,
-            supportsFormatting: true,
-            migrationAliases: ['quote', 'text'],
           ),
           WebsiteBlockFieldSchema(
             key: 'rating',
@@ -924,12 +1080,24 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
           ),
         ],
       ),
+      _sectionToneLight,
     ],
     controlSections: [
       WebsiteBlockControlSection(
         id: 'content',
         label: 'Contenido',
-        fieldKeys: ['title', 'testimonials'],
+        fieldKeys: [
+          'eyebrow',
+          'title',
+          'subtitle',
+          'showGoogleRating',
+          'testimonials',
+        ],
+      ),
+      WebsiteBlockControlSection(
+        id: 'layout',
+        label: 'Diseño',
+        fieldKeys: ['tone'],
       ),
     ],
   ),
@@ -1023,21 +1191,30 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
       ),
     ],
   ),
+  // El cierre de una página: el título grande sobre la foto (o sobre el
+  // tono oscuro de la marca), dos botones y, a la derecha, cómo ubicar a la
+  // tienda con los datos de Configuración → Contacto. El botón principal
+  // vacío abre el WhatsApp de la tienda y el secundario vacío su mapa: así
+  // el bloque nuevo ya lleva a algún lado sin que nadie escriba un enlace.
   WebsiteBlockType.cta: const WebsiteBlockDefinition(
     type: WebsiteBlockType.cta,
     title: 'Llamado a la Acción',
-    description: 'Invita a tus visitantes a realizar la siguiente acción.',
+    description:
+        'Cierra la página con lo que el visitante debe hacer: escribir, '
+        'agendar, venir.',
     defaultData: {
-      'title': 'Agenda tu mantención hoy',
-      'subtitle': 'Estamos listos para ayudarte con tu bicicleta',
-      'buttonText': 'Agendar',
-      'buttonLink': '/contacto',
-      'actions': [
-        {'type': 'navigate', 'label': 'Agendar', 'to': '/contacto'},
-      ],
+      'title': 'Agenda tu mantención',
+      'subtitle':
+          'Escríbenos por WhatsApp y coordinamos el día, o pasa por el taller.',
+      'buttonText': 'Escribir por WhatsApp',
+      'buttonLink': '',
+      'actionVariant': 'filled',
+      'secondaryText': 'Cómo llegar',
+      'secondaryLink': '',
+      'showContact': true,
       'backgroundImage': null,
-      'overlayColor': '#000000',
-      'overlayOpacity': 0.5,
+      'overlayColor': '',
+      'overlayOpacity': 0.8,
     },
     fields: [
       WebsiteBlockFieldSchema(
@@ -1068,11 +1245,38 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
         key: 'buttonLink',
         label: 'Enlace del botón',
         type: WebsiteBlockFieldType.link,
-        defaultValue: '/contacto',
+        defaultValue: '',
+        helpText: 'Vacío, abre el WhatsApp de la tienda.',
         actionRole: WebsiteActionRole.primary,
         actionLabelKey: 'buttonText',
         actionVariantKey: 'actionVariant',
         migrationAliases: ['ctaLink'],
+      ),
+      WebsiteBlockFieldSchema(
+        key: 'secondaryText',
+        label: 'Texto del segundo botón',
+        type: WebsiteBlockFieldType.text,
+        defaultValue: '',
+        helpText: 'Vacío, no hay segundo botón.',
+        textRole: WebsiteTextRole.buttonLabel,
+      ),
+      WebsiteBlockFieldSchema(
+        key: 'secondaryLink',
+        label: 'Enlace del segundo botón',
+        type: WebsiteBlockFieldType.link,
+        defaultValue: '',
+        helpText: 'Vacío, abre el mapa del negocio.',
+        actionRole: WebsiteActionRole.secondary,
+        actionLabelKey: 'secondaryText',
+      ),
+      WebsiteBlockFieldSchema(
+        key: 'showContact',
+        label: 'Mostrar los datos de contacto',
+        type: WebsiteBlockFieldType.toggle,
+        defaultValue: true,
+        helpText:
+            'WhatsApp, correo y dirección de Configuración → Contacto, al '
+            'costado.',
       ),
       WebsiteBlockFieldSchema(
         key: 'backgroundImage',
@@ -1097,7 +1301,8 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
         key: 'overlayColor',
         label: 'Color de superposición',
         type: WebsiteBlockFieldType.color,
-        defaultValue: '#000000',
+        defaultValue: '',
+        helpText: 'Vacío, el tono oscuro de la marca.',
         responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
         propertyFamily: WebsiteResponsivePropertyFamily.color,
       ),
@@ -1108,7 +1313,7 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
         min: 0,
         max: 1,
         step: 0.05,
-        defaultValue: 0.5,
+        defaultValue: 0.8,
         responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
         propertyFamily: WebsiteResponsivePropertyFamily.color,
       ),
@@ -1117,7 +1322,15 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
       WebsiteBlockControlSection(
         id: 'content',
         label: 'Contenido',
-        fieldKeys: ['title', 'subtitle', 'buttonText', 'buttonLink'],
+        fieldKeys: [
+          'title',
+          'subtitle',
+          'buttonText',
+          'buttonLink',
+          'secondaryText',
+          'secondaryLink',
+          'showContact',
+        ],
       ),
       WebsiteBlockControlSection(
         id: 'design',
@@ -1130,30 +1343,48 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
     type: WebsiteBlockType.gallery,
     title: 'Galería',
     description:
-        'Muestra fotografías del taller, eventos o productos destacados.',
+        'Fotos del taller y de la ruta en un mosaico, con la dirección de la '
+        'tienda.',
     defaultData: {
-      'title': 'Galería',
-      'layout': 'grid',
-      'images': <Map<String, dynamic>>[],
+      'eyebrow': 'Galería',
+      'title': 'Del taller a la ruta',
+      'layout': 'masonry',
+      'showAddress': true,
+      'tone': 'band',
+      // Four places for the shop's own photos: the editor draws the mosaic
+      // with them so each photo is chosen where it goes, and a visitor's page
+      // leaves out a place still without one. Never stock photos.
+      'images': <Map<String, dynamic>>[
+        {'imageUrl': '', 'caption': ''},
+        {'imageUrl': '', 'caption': ''},
+        {'imageUrl': '', 'caption': ''},
+        {'imageUrl': '', 'caption': ''},
+      ],
     },
     fields: [
+      _sectionEyebrowField,
       WebsiteBlockFieldSchema(
         key: 'title',
         label: 'Título',
         type: WebsiteBlockFieldType.text,
+        textRole: WebsiteTextRole.heading,
+        supportsFormatting: true,
       ),
-      // El renderer decide la proporción de cada tile con este valor —
-      // mosaico alterna 1.2 / 0.8 / 1.0 y cuadrícula es 1.0— en los tres
+      // El renderer arma con este valor dos composiciones distintas —el
+      // mosaico (una foto grande, una alta, dos chicas y una ancha, en
+      // grupos que nunca dejan huecos) o la cuadrícula pareja— en los tres
       // viewports, así que un override cambia la composición visible. Las
       // columnas las calcula el propio renderer por ancho y no se declaran.
+      // El valor guardado del mosaico sigue siendo `masonry`, como antes del
+      // diseño de secciones: los documentos existentes no cambian.
       WebsiteBlockFieldSchema(
         key: 'layout',
         label: 'Diseño',
         type: WebsiteBlockFieldType.select,
-        defaultValue: 'grid',
+        defaultValue: 'masonry',
         options: [
-          WebsiteBlockFieldOption(value: 'grid', label: 'Cuadrícula'),
           WebsiteBlockFieldOption(value: 'masonry', label: 'Mosaico'),
+          WebsiteBlockFieldOption(value: 'grid', label: 'Cuadrícula'),
         ],
         responsivePolicy: WebsiteResponsivePropertyPolicy.responsiveOptional,
         propertyFamily: WebsiteResponsivePropertyFamily.geometry,
@@ -1195,17 +1426,27 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
           ),
         ],
       ),
+      WebsiteBlockFieldSchema(
+        key: 'showAddress',
+        label: 'Mostrar la dirección',
+        type: WebsiteBlockFieldType.toggle,
+        defaultValue: true,
+        helpText:
+            'Un recuadro del mosaico con la dirección de Configuración → '
+            'Contacto (no va en el teléfono).',
+      ),
+      _sectionToneBand,
     ],
     controlSections: [
       WebsiteBlockControlSection(
         id: 'content',
         label: 'Contenido',
-        fieldKeys: ['title', 'images'],
+        fieldKeys: ['eyebrow', 'title', 'images', 'showAddress'],
       ),
       WebsiteBlockControlSection(
         id: 'layout',
         label: 'Diseño',
-        fieldKeys: ['layout'],
+        fieldKeys: ['layout', 'tone'],
       ),
     ],
   ),
@@ -1264,32 +1505,42 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
       ),
     ],
   ),
-  // FAQ tampoco declara propiedades responsive: el tamaño del título ya lo
-  // deriva el renderer del ancho útil, y pregunta y respuesta son contenido
-  // indexable que debe ser el mismo en los tres dispositivos.
+  // FAQ tampoco declara propiedades responsive: la composición (título a la
+  // izquierda y preguntas a la derecha en escritorio, una columna en el
+  // teléfono) la deriva el renderer del ancho del bloque, y pregunta y
+  // respuesta son contenido indexable que debe ser el mismo en los tres
+  // dispositivos.
   WebsiteBlockType.faq: const WebsiteBlockDefinition(
     type: WebsiteBlockType.faq,
     title: 'Preguntas Frecuentes',
     description:
         'Listado de dudas habituales con respuestas claras y editables.',
     defaultData: {
-      'title': 'Preguntas Frecuentes',
-      'subtitle': 'Respondemos lo que más nos consultan',
+      'eyebrow': 'Preguntas frecuentes',
+      'title': 'Lo que más nos preguntan',
+      'subtitle': '',
+      'showContact': true,
+      'tone': 'band',
+      // What the shop does for sure (the quote the client approves in the
+      // workshop, the store's checkout): never a promise of times or
+      // certifications the operator has not written.
       'items': [
         {
-          'question': '¿Cuánto se demora una mantención?',
+          'question': '¿Me avisan el precio antes de arreglar mi bici?',
           'answer':
-              'Depende del nivel de servicio, pero normalmente entre 24 y 48 horas.',
+              'Sí. La revisamos, te mandamos el presupuesto y empezamos '
+              'cuando lo apruebas.',
         },
         {
-          'question': '¿Trabajan con bicicletas eléctricas?',
-          'answer': 'Sí, contamos con técnicos certificados en e-bikes.',
+          'question': '¿Cómo puedo pagar una compra en la tienda?',
+          'answer': 'Con Mercado Pago o por transferencia bancaria.',
         },
       ],
     },
     fields: [
       // Both renderers draw them with their formatting (`titleFormatting`,
       // `subtitleFormatting`), as the questions and answers.
+      _sectionEyebrowField,
       WebsiteBlockFieldSchema(
         key: 'title',
         label: 'Título principal',
@@ -1303,6 +1554,15 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
         type: WebsiteBlockFieldType.text,
         textRole: WebsiteTextRole.paragraph,
         supportsFormatting: true,
+      ),
+      WebsiteBlockFieldSchema(
+        key: 'showContact',
+        label: 'Invitar a escribir',
+        type: WebsiteBlockFieldType.toggle,
+        defaultValue: true,
+        helpText:
+            '«¿Otra duda? Escríbenos…» con el WhatsApp y el correo de '
+            'Configuración → Contacto.',
       ),
       WebsiteBlockFieldSchema(
         key: 'items',
@@ -1328,12 +1588,18 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
           ),
         ],
       ),
+      _sectionToneBand,
     ],
     controlSections: [
       WebsiteBlockControlSection(
         id: 'content',
         label: 'Contenido',
-        fieldKeys: ['title', 'subtitle', 'items'],
+        fieldKeys: ['eyebrow', 'title', 'subtitle', 'showContact', 'items'],
+      ),
+      WebsiteBlockControlSection(
+        id: 'layout',
+        label: 'Diseño',
+        fieldKeys: ['tone'],
       ),
     ],
   ),
@@ -1348,46 +1614,74 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
     type: WebsiteBlockType.pricing,
     title: 'Planes y Precios',
     description:
-        'Comparador de planes con precios, beneficios y llamado a la acción.',
+        'Niveles de un servicio lado a lado: precio, qué incluye y el botón '
+        'para agendarlo.',
     defaultData: {
-      'title': 'Planes de Servicio',
+      'eyebrow': 'Mantenciones',
+      'title': 'Tu bici, de punta a punta',
       'subtitle':
-          'Elige el plan que mejor se ajuste a tus necesidades y presupuesto.',
+          'Tres niveles según lo que necesite tu bicicleta. Te confirmamos el '
+          'precio al revisarla.',
+      'tone': 'band',
       'plans': [
         {
-          'name': 'Mantención Básica',
-          'price': '29.990',
+          'name': 'Básica',
+          'tag': 'Nivel 1',
+          'price': r'$24.990',
           'features': [
-            'Revisión de frenos',
-            'Ajuste de cambios',
-            'Limpieza básica',
+            'Regulación de frenos y cambios',
+            'Lubricación de cadena',
+            'Revisión de presión y aprietes',
           ],
-          'ctaText': 'Reservar',
-          'ctaLink': '/productos',
+          'ctaText': 'Agendar',
+          'ctaLink': '/contacto',
         },
         {
-          'name': 'Full Service',
-          'price': '59.990',
+          'name': 'Semi',
+          'tag': 'Nivel 2',
+          'price': r'$40.000',
           'features': [
-            'Incluye plan básico',
-            'Lubricación completa',
-            'Ajuste integral',
+            'Limpieza profunda de transmisión',
+            'Piolas nuevas',
+            'Regulación de frenos y cambios',
+            'Limpieza general de marco y ruedas',
           ],
-          'ctaText': 'Reservar',
-          'ctaLink': '/productos',
+          'ctaText': 'Agendar',
+          'ctaLink': '/contacto',
+        },
+        {
+          'name': 'Full',
+          'tag': 'Nivel 3',
+          'badge': 'Desarme completo',
+          'price': r'$70.000',
+          'note': '',
+          'features': [
+            'Desarme completo de la bicicleta',
+            'Cables, piolas y fundas nuevas',
+            'Mantención de frenos y cambios',
+            'Apertura y limpieza de los ejes',
+          ],
+          'ctaText': 'Agendar la Full',
+          'ctaLink': '/contacto',
+          'highlighted': true,
         },
       ],
     },
     fields: [
+      _sectionEyebrowField,
       WebsiteBlockFieldSchema(
         key: 'title',
         label: 'Título',
         type: WebsiteBlockFieldType.text,
+        textRole: WebsiteTextRole.heading,
+        supportsFormatting: true,
       ),
       WebsiteBlockFieldSchema(
         key: 'subtitle',
-        label: 'Subtítulo',
-        type: WebsiteBlockFieldType.text,
+        label: 'Nota',
+        type: WebsiteBlockFieldType.textarea,
+        textRole: WebsiteTextRole.paragraph,
+        supportsFormatting: true,
       ),
       WebsiteBlockFieldSchema(
         key: 'plans',
@@ -1405,18 +1699,40 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
             supportsFormatting: true,
           ),
           WebsiteBlockFieldSchema(
+            key: 'tag',
+            label: 'Etiqueta',
+            type: WebsiteBlockFieldType.text,
+            defaultValue: '',
+            helpText: 'Junto al nombre, como «Nivel 1».',
+            textRole: WebsiteTextRole.caption,
+          ),
+          WebsiteBlockFieldSchema(
             key: 'price',
             label: 'Precio',
             type: WebsiteBlockFieldType.text,
-            defaultValue: '0',
-            textRole: WebsiteTextRole.heading,
+            defaultValue: '',
+            textRole: WebsiteTextRole.statValue,
             supportsFormatting: true,
+          ),
+          WebsiteBlockFieldSchema(
+            key: 'note',
+            label: 'Nota del precio',
+            type: WebsiteBlockFieldType.text,
+            defaultValue: '',
+            helpText: 'Bajo el precio: una condición o una variante.',
+            textRole: WebsiteTextRole.paragraph,
+          ),
+          WebsiteBlockFieldSchema(
+            key: 'features',
+            label: 'Qué incluye',
+            type: WebsiteBlockFieldType.chips,
+            defaultValue: <String>[],
           ),
           WebsiteBlockFieldSchema(
             key: 'ctaText',
             label: 'Texto del botón',
             type: WebsiteBlockFieldType.text,
-            defaultValue: 'Reservar',
+            defaultValue: 'Agendar',
             textRole: WebsiteTextRole.buttonLabel,
             migrationAliases: ['buttonText'],
           ),
@@ -1424,33 +1740,44 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
             key: 'ctaLink',
             label: 'Enlace del botón',
             type: WebsiteBlockFieldType.link,
-            defaultValue: '/productos',
+            defaultValue: '/contacto',
             actionRole: WebsiteActionRole.primary,
             actionLabelKey: 'ctaText',
             actionVariantKey: 'actionVariant',
             migrationAliases: ['buttonLink'],
           ),
           WebsiteBlockFieldSchema(
-            key: 'features',
-            label: 'Beneficios',
-            type: WebsiteBlockFieldType.chips,
-            defaultValue: <String>[],
-          ),
-          WebsiteBlockFieldSchema(
             key: 'highlighted',
             label: 'Destacar plan',
             type: WebsiteBlockFieldType.toggle,
             defaultValue: false,
+            helpText: 'Va en el tono oscuro, con el botón de acento.',
             migrationAliases: ['isFeatured'],
+          ),
+          WebsiteBlockFieldSchema(
+            key: 'badge',
+            label: 'Distintivo',
+            type: WebsiteBlockFieldType.text,
+            defaultValue: '',
+            helpText:
+                'Sólo en el plan destacado, en lugar de la etiqueta: '
+                '«Desarme completo».',
+            textRole: WebsiteTextRole.caption,
           ),
         ],
       ),
+      _sectionToneBand,
     ],
     controlSections: [
       WebsiteBlockControlSection(
         id: 'content',
         label: 'Contenido',
-        fieldKeys: ['title', 'subtitle', 'plans'],
+        fieldKeys: ['eyebrow', 'title', 'subtitle', 'plans'],
+      ),
+      WebsiteBlockControlSection(
+        id: 'layout',
+        label: 'Diseño',
+        fieldKeys: ['tone'],
       ),
     ],
   ),
@@ -1702,39 +2029,47 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
       ),
     ],
   ),
+  // Una franja oscura y baja: la etiqueta en versalitas y los nombres en
+  // fila con la tipografía de títulos (marcas, sucursales o garantías). Los
+  // nombres van como texto y no como logos: para logos está «Logos de
+  // Marcas». Una foto de fondo guardada se sigue dibujando bajo un velo.
   WebsiteBlockType.partnersBanner: const WebsiteBlockDefinition(
     type: WebsiteBlockType.partnersBanner,
-    title: 'Partners',
-    description: 'Banner de partners/sucursales con texto simple.',
+    title: 'Franja de marcas',
+    description:
+        'Una franja oscura con los nombres de las marcas que trabajas, o de tus '
+        'sucursales o garantías.',
     defaultData: {
-      'title': 'Partners',
+      'title': 'Marcas que trabajamos',
       'imageUrl': null,
       'items': [
-        {'label': 'Envíos a Chile continental'},
-        {'label': 'Marcas líderes'},
-        {'label': 'Servicio técnico certificado'},
+        {'label': 'Shimano'},
+        {'label': 'SRAM'},
+        {'label': 'Maxxis'},
+        {'label': 'KMC'},
       ],
     },
     fields: [
       WebsiteBlockFieldSchema(
         key: 'title',
-        label: 'Título',
+        label: 'Etiqueta',
         type: WebsiteBlockFieldType.text,
-        textRole: WebsiteTextRole.heading,
+        textRole: WebsiteTextRole.caption,
         supportsFormatting: true,
       ),
       WebsiteBlockFieldSchema(
         key: 'items',
-        label: 'Mensajes',
+        label: 'Nombres',
         type: WebsiteBlockFieldType.repeater,
-        itemLabel: 'Mensaje',
+        itemLabel: 'Nombre',
         minItems: 1,
         itemFields: [
           WebsiteBlockFieldSchema(
             key: 'label',
             label: 'Texto',
             type: WebsiteBlockFieldType.text,
-            defaultValue: 'Nuevo mensaje',
+            defaultValue: 'Marca',
+            textRole: WebsiteTextRole.heading,
           ),
         ],
       ),
@@ -1904,36 +2239,39 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
     type: WebsiteBlockType.team,
     title: 'Equipo',
     description:
-        'Presenta a los mecánicos y especialistas del taller con su rol.',
+        'Presenta a los mecánicos del taller: foto, nombre, cargo y especialidad.',
     defaultData: {
-      'title': 'Nuestro Equipo',
+      'eyebrow': 'Equipo',
+      'title': 'Quién arregla tu bici',
       'description': '',
+      'tone': 'light',
       'members': [
         {
-          'name': 'Daniela Torres',
-          'role': 'Jefa de taller',
-          'bio':
-              'Especialista en bike fitting y suspensiones con 8 años de experiencia.',
+          'name': 'Nombre',
+          'role': 'Jefe de taller',
+          'bio': 'Una línea sobre su especialidad.',
           'avatarUrl': null,
         },
         {
-          'name': 'Pablo Fuentes',
-          'role': 'Mecánico Senior',
-          'bio':
-              'Experto en transmisión y sistemas hidráulicos. Apasionado por el gravel.',
+          'name': 'Nombre',
+          'role': 'Mecánico',
+          'bio': 'Una línea sobre su especialidad.',
           'avatarUrl': null,
         },
       ],
     },
     fields: [
+      _sectionEyebrowField,
       WebsiteBlockFieldSchema(
         key: 'title',
         label: 'Título',
         type: WebsiteBlockFieldType.text,
+        textRole: WebsiteTextRole.heading,
+        supportsFormatting: true,
       ),
       WebsiteBlockFieldSchema(
         key: 'description',
-        label: 'Descripción',
+        label: 'Nota',
         type: WebsiteBlockFieldType.textarea,
         migrationAliases: ['subtitle'],
         textRole: WebsiteTextRole.paragraph,
@@ -1993,60 +2331,110 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
           ),
         ],
       ),
+      _sectionToneLight,
     ],
     controlSections: [
       WebsiteBlockControlSection(
         id: 'content',
         label: 'Contenido',
-        fieldKeys: ['title', 'description', 'members'],
+        fieldKeys: ['eyebrow', 'title', 'description', 'members'],
+      ),
+      WebsiteBlockControlSection(
+        id: 'layout',
+        label: 'Diseño',
+        fieldKeys: ['tone'],
       ),
     ],
   ),
-  // Indicadores también es auto-layout: el `Wrap` deriva el ancho de cada
-  // tarjeta del ancho disponible —una columna bajo 600— y no persiste
-  // ninguna propiedad de composición. Etiqueta, valor, sufijo e ícono son el
-  // dato del logro; personalizarlos por dispositivo sería publicar tres
-  // cifras distintas.
+  // Indicadores es una sección: antetítulo, título y nota arriba, y las
+  // cifras en fila separadas por líneas (dos columnas en el teléfono). La
+  // composición sale del ancho del bloque y no persiste nada por viewport:
+  // valor, sufijo y etiqueta son el dato del logro, y personalizarlos por
+  // dispositivo sería publicar tres cifras distintas. El ícono de cada cifra
+  // se dejó de dibujar con el diseño de secciones (2026-10-07): la cifra es
+  // la imagen; un `icon` guardado se conserva sin efecto.
   WebsiteBlockType.stats: const WebsiteBlockDefinition(
     type: WebsiteBlockType.stats,
     title: 'Indicadores',
     description:
-        'Muestra logros del taller: bicis reparadas, clientes felices, etc.',
+        'Cifras del taller en una banda: la nota y las reseñas en Google, y '
+        'las que escribas.',
     defaultData: {
-      'title': 'Resultados que nos respaldan',
+      'eyebrow': 'El taller en números',
+      'title': 'Lo que dicen los ciclistas',
+      'subtitle': '',
+      'tone': 'dark',
+      // The two figures the store has for sure, read from the Google sync.
+      // A written figure is the operator's to add: none is invented here.
       'metrics': [
-        {'label': 'Bicis reparadas', 'value': '1.200+'},
-        {'label': 'Clientes felices', 'value': '980+'},
-        {'label': 'Años en el mercado', 'value': '10'},
+        {
+          'source': 'google_rating',
+          'value': '',
+          'suffix': '★',
+          'label': 'de nota en Google',
+        },
+        {
+          'source': 'google_reviews',
+          'value': '',
+          'suffix': '',
+          'label': 'reseñas en Google',
+        },
       ],
     },
     fields: [
+      _sectionEyebrowField,
       WebsiteBlockFieldSchema(
         key: 'title',
         label: 'Título',
         type: WebsiteBlockFieldType.text,
+        textRole: WebsiteTextRole.heading,
+        supportsFormatting: true,
+      ),
+      WebsiteBlockFieldSchema(
+        key: 'subtitle',
+        label: 'Nota',
+        type: WebsiteBlockFieldType.text,
+        helpText: 'Una línea junto al título, como la dirección del taller.',
+        textRole: WebsiteTextRole.paragraph,
+        supportsFormatting: true,
       ),
       WebsiteBlockFieldSchema(
         key: 'metrics',
-        label: 'Indicadores',
+        label: 'Cifras',
         type: WebsiteBlockFieldType.repeater,
-        itemLabel: 'Indicador',
+        itemLabel: 'Cifra',
         migrationAliases: ['stats', 'items'],
         itemFields: [
           WebsiteBlockFieldSchema(
-            key: 'label',
-            label: 'Etiqueta',
-            type: WebsiteBlockFieldType.text,
-            defaultValue: 'Métrica',
-            textRole: WebsiteTextRole.caption,
-            supportsFormatting: true,
+            key: 'source',
+            label: 'Cifra',
+            type: WebsiteBlockFieldType.select,
+            defaultValue: 'written',
+            helpText:
+                'La nota y las reseñas se leen de la sincronización con '
+                'Google y se actualizan solas; el valor escrito queda de '
+                'respaldo.',
+            options: [
+              WebsiteBlockFieldOption(
+                value: 'written',
+                label: 'La que escribo',
+              ),
+              WebsiteBlockFieldOption(
+                value: 'google_rating',
+                label: 'La nota en Google',
+              ),
+              WebsiteBlockFieldOption(
+                value: 'google_reviews',
+                label: 'Las reseñas en Google',
+              ),
+            ],
           ),
           WebsiteBlockFieldSchema(
             key: 'value',
             label: 'Valor',
             type: WebsiteBlockFieldType.text,
             defaultValue: '0',
-            textRole: WebsiteTextRole.heading,
+            textRole: WebsiteTextRole.statValue,
             supportsFormatting: true,
           ),
           WebsiteBlockFieldSchema(
@@ -2054,31 +2442,32 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
             label: 'Sufijo',
             type: WebsiteBlockFieldType.text,
             defaultValue: '',
-            textRole: WebsiteTextRole.heading,
+            helpText: 'Va junto al valor en el color de acento: +, %, ★.',
+            textRole: WebsiteTextRole.statValue,
             supportsFormatting: true,
           ),
           WebsiteBlockFieldSchema(
-            key: 'icon',
-            label: 'Ícono',
-            type: WebsiteBlockFieldType.select,
-            options: [
-              WebsiteBlockFieldOption(value: 'military_tech', label: 'Medalla'),
-              WebsiteBlockFieldOption(value: 'emoji_events', label: 'Trofeo'),
-              WebsiteBlockFieldOption(
-                value: 'directions_bike',
-                label: 'Bicicleta',
-              ),
-              WebsiteBlockFieldOption(value: 'insights', label: 'Insights'),
-            ],
+            key: 'label',
+            label: 'Etiqueta',
+            type: WebsiteBlockFieldType.text,
+            defaultValue: 'qué cuenta esta cifra',
+            textRole: WebsiteTextRole.caption,
+            supportsFormatting: true,
           ),
         ],
       ),
+      _sectionToneDark,
     ],
     controlSections: [
       WebsiteBlockControlSection(
         id: 'content',
         label: 'Contenido',
-        fieldKeys: ['title', 'metrics'],
+        fieldKeys: ['eyebrow', 'title', 'subtitle', 'metrics'],
+      ),
+      WebsiteBlockControlSection(
+        id: 'layout',
+        label: 'Diseño',
+        fieldKeys: ['tone'],
       ),
     ],
   ),

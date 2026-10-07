@@ -1,20 +1,24 @@
 {
   "type": "cta",
   "title": "Llamado a la Acción",
-  "description": "Invita a tus visitantes a realizar la siguiente acción.",
+  "description": "Cierra la página con lo que el visitante debe hacer: escribir, agendar, venir.",
   "usesCustomEditor": false,
   "category": "Conversión",
   "tags": ["cta", "botón", "acción"],
   "version": 1,
   "supportsResponsive": true,
   "defaultData": {
-    "title": "Agenda tu mantención hoy",
-    "subtitle": "Estamos listos para ayudarte con tu bicicleta",
-    "buttonText": "Agendar",
-    "buttonLink": "/contacto",
+    "title": "Agenda tu mantención",
+    "subtitle": "Escríbenos por WhatsApp y coordinamos el día, o pasa por el taller.",
+    "buttonText": "Escribir por WhatsApp",
+    "buttonLink": "",
+    "actionVariant": "filled",
+    "secondaryText": "Cómo llegar",
+    "secondaryLink": "",
+    "showContact": true,
     "backgroundImage": null,
-    "overlayColor": "#000000",
-    "overlayOpacity": 0.5
+    "overlayColor": "",
+    "overlayOpacity": 0.8
   },
   "fields": [
     {

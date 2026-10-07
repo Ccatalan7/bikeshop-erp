@@ -59,15 +59,20 @@ void main() {
       expect(
         fields.keys.toSet(),
         <String>{
+          'eyebrow',
           'title',
           'subtitle',
           'plans',
           'plans.name',
+          'plans.tag',
           'plans.price',
+          'plans.note',
+          'plans.features',
           'plans.ctaText',
           'plans.ctaLink',
-          'plans.features',
           'plans.highlighted',
+          'plans.badge',
+          'tone',
         },
       );
       for (final entry in fields.entries) {
@@ -78,9 +83,9 @@ void main() {
         );
       }
 
-      // La composición sale del ancho disponible, no de un dato guardado.
-      expect(pricingSource, contains('final compact = availableWidth < 600'));
-      expect(pricingSource, contains('final cardWidth ='));
+      // La composición sale del ancho disponible, no de un dato guardado:
+      // lado a lado mientras cada plan tenga 260, apilados si no.
+      expect(pricingSource, contains('websitePlansSideBySide('));
       expect(
         pricingSource,
         isNot(contains("data['layout']")),
@@ -103,9 +108,17 @@ void main() {
       expect(highlighted.canResetResponsiveOverride, isFalse);
       expect(highlighted.migrationAliases, contains('isFeatured'));
       // Su consumer, para que este veredicto se pueda reevaluar con evidencia.
-      expect(pricingSource,
-          contains("const <String>['highlighted', 'isFeatured']"));
-      expect(pricingSource, contains('elevation: highlighted ? 4 : 1'));
+      expect(
+        pricingSource,
+        contains(
+          "plan['highlighted'] == true || plan['isFeatured'] == true",
+        ),
+      );
+      // Destacado = el tono oscuro, igual en los tres anchos.
+      expect(
+        pricingSource,
+        contains('final colors = featured ? scope.inverse : scope.colors;'),
+      );
       expect(
         pricingSource,
         isNot(contains('compact ? highlighted')),

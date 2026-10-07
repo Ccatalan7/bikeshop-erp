@@ -23,6 +23,7 @@ import 'website_carousel_view.dart';
 import 'website_category_grid_view.dart';
 import 'website_content_blocks_view.dart';
 import 'website_products_view.dart';
+import 'website_section_blocks_view.dart';
 import 'website_reviews_view.dart';
 import 'website_video_banner_view.dart';
 
@@ -102,6 +103,11 @@ class BlockRenderContext {
     phone: shell.setting('contact_phone'),
     email: shell.setting('contact_email'),
     address: shell.setting('contact_address'),
+    whatsapp: shell.setting('whatsapp'),
+    mapsUrl: shell.setting(
+      'business_google_maps_url',
+      shell.setting('google_maps_url'),
+    ),
   );
 }
 
@@ -176,6 +182,13 @@ const pageCoveredBlockTypes = {
   WebsiteBlockType.cta,
   WebsiteBlockType.features,
   WebsiteBlockType.about,
+  WebsiteBlockType.stats,
+  WebsiteBlockType.services,
+  WebsiteBlockType.pricing,
+  WebsiteBlockType.testimonials,
+  WebsiteBlockType.gallery,
+  WebsiteBlockType.team,
+  WebsiteBlockType.partnersBanner,
 };
 
 /// Whether a page that draws [types] draws this block: its type, and what
@@ -213,10 +226,17 @@ Component? sharedBlock(ComposedBlock composed, BlockRenderContext context) {
     WebsiteBlockType.text => _TextBlock(composed, context),
     WebsiteBlockType.button => _ButtonBlock(composed, context),
     WebsiteBlockType.divider => _DividerBlock(composed),
-    WebsiteBlockType.faq => FaqBlockView(composed, context),
-    WebsiteBlockType.cta => CtaBlockView(composed, context),
+    WebsiteBlockType.faq => FaqSectionView(composed, context),
+    WebsiteBlockType.cta => CtaSectionView(composed, context),
     WebsiteBlockType.features => FeaturesBlockView(composed, context),
     WebsiteBlockType.about => AboutBlockView(composed, context),
+    WebsiteBlockType.stats => StatsSectionView(composed, context),
+    WebsiteBlockType.services => ServicesSectionView(composed, context),
+    WebsiteBlockType.pricing => PricingSectionView(composed, context),
+    WebsiteBlockType.testimonials => TestimonialsSectionView(composed, context),
+    WebsiteBlockType.gallery => GallerySectionView(composed, context),
+    WebsiteBlockType.team => TeamSectionView(composed, context),
+    WebsiteBlockType.partnersBanner => PartnersStripView(composed, context),
     _ => null,
   };
 }

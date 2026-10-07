@@ -46,6 +46,7 @@ import 'website_faq_block_content.dart';
 import 'website_features_block_content.dart';
 import 'website_gallery_block_content.dart';
 import 'website_hero_block_content.dart';
+import 'website_partners_strip_content.dart';
 import 'website_pricing_block_content.dart';
 import 'website_services_block_content.dart';
 import 'website_stats_block_content.dart';
@@ -253,20 +254,18 @@ class WebsiteBlockRenderer {
             tenantId: tenantId,
           );
         case WebsiteBlockType.services:
-          return _withResponsiveContentPadding(
-            surfaceStyle: surfaceStyle,
-            blockType: WebsiteBlockType.services,
+          return WebsiteServicesBlockContent(
             data: data,
-            builder: (padding) => WebsiteServicesBlockContent(
+            primaryColor: primaryColor,
+            accentColor: accentColor,
+            headingFont: headingFont,
+            bodyFont: bodyFont,
+            presenters: contentPresenters,
+            paintSurface: !surfaceStyle.hasAuthoredBackground,
+            padding: _authoredPadding(
+              surfaceStyle,
+              blockType: WebsiteBlockType.services,
               data: data,
-              primaryColor: primaryColor,
-              headingFont: headingFont,
-              bodyFont: bodyFont,
-              presenters: contentPresenters,
-              backgroundColor: surfaceStyle.hasAuthoredBackground
-                  ? Colors.transparent
-                  : null,
-              padding: padding,
             ),
           );
         case WebsiteBlockType.about:
@@ -287,6 +286,7 @@ class WebsiteBlockRenderer {
             surfaceStyle: surfaceStyle,
             primaryColor: primaryColor,
             accentColor: accentColor,
+            siteContact: _siteContactFacts(context),
             previewMode: previewMode,
             headingFont: headingFont,
             bodyFont: bodyFont,
@@ -312,54 +312,56 @@ class WebsiteBlockRenderer {
             ),
           );
         case WebsiteBlockType.testimonials:
-          return _withResponsiveContentPadding(
-            surfaceStyle: surfaceStyle,
-            blockType: WebsiteBlockType.testimonials,
+          return WebsiteTestimonialsBlockContent(
             data: data,
-            builder: (padding) => WebsiteTestimonialsBlockContent(
+            primaryColor: primaryColor,
+            accentColor: accentColor,
+            setting: _settingReader(context),
+            mapsUrl: _siteContactFacts(context).mapsUrl,
+            headingFont: headingFont,
+            bodyFont: bodyFont,
+            presenters: contentPresenters,
+            onNavigate: onNavigate,
+            isNavigationEligible: isNavigationEligible,
+            paintSurface: !surfaceStyle.hasAuthoredBackground,
+            padding: _authoredPadding(
+              surfaceStyle,
+              blockType: WebsiteBlockType.testimonials,
               data: data,
-              primaryColor: primaryColor,
-              headingFont: headingFont,
-              bodyFont: bodyFont,
-              presenters: contentPresenters,
-              backgroundColor: surfaceStyle.hasAuthoredBackground
-                  ? Colors.transparent
-                  : null,
-              padding: padding,
             ),
           );
         case WebsiteBlockType.pricing:
-          return _withResponsiveContentPadding(
-            surfaceStyle: surfaceStyle,
-            blockType: WebsiteBlockType.pricing,
+          return WebsitePricingBlockContent(
             data: data,
-            builder: (padding) => WebsitePricingBlockContent(
+            primaryColor: primaryColor,
+            accentColor: accentColor,
+            headingFont: headingFont,
+            bodyFont: bodyFont,
+            previewMode: previewMode,
+            onNavigate: onNavigate,
+            isNavigationEligible: isNavigationEligible,
+            presenters: contentPresenters,
+            paintSurface: !surfaceStyle.hasAuthoredBackground,
+            padding: _authoredPadding(
+              surfaceStyle,
+              blockType: WebsiteBlockType.pricing,
               data: data,
-              primaryColor: primaryColor,
-              accentColor: accentColor,
-              headingFont: headingFont,
-              bodyFont: bodyFont,
-              previewMode: previewMode,
-              onNavigate: onNavigate,
-              isNavigationEligible: isNavigationEligible,
-              presenters: contentPresenters,
-              backgroundColor: surfaceStyle.hasAuthoredBackground
-                  ? Colors.transparent
-                  : null,
-              padding: padding,
             ),
           );
         case WebsiteBlockType.gallery:
-          return _withResponsiveContentPadding(
-            surfaceStyle: surfaceStyle,
-            blockType: WebsiteBlockType.gallery,
+          return WebsiteGalleryBlockContent(
             data: data,
-            builder: (padding) => WebsiteGalleryBlockContent(
+            primaryColor: primaryColor,
+            accentColor: accentColor,
+            address: _siteContactFacts(context).address,
+            headingFont: headingFont,
+            bodyFont: bodyFont,
+            presenters: contentPresenters,
+            paintSurface: !surfaceStyle.hasAuthoredBackground,
+            padding: _authoredPadding(
+              surfaceStyle,
+              blockType: WebsiteBlockType.gallery,
               data: data,
-              headingFont: headingFont,
-              bodyFont: bodyFont,
-              presenters: contentPresenters,
-              padding: padding,
             ),
           );
         case WebsiteBlockType.contact:
@@ -381,49 +383,54 @@ class WebsiteBlockRenderer {
             ),
           );
         case WebsiteBlockType.faq:
-          return _withResponsiveContentPadding(
-            surfaceStyle: surfaceStyle,
-            blockType: WebsiteBlockType.faq,
+          return WebsiteFaqBlockContent(
             data: data,
-            builder: (padding) => WebsiteFaqBlockContent(
+            primaryColor: primaryColor,
+            accentColor: accentColor,
+            siteContact: _siteContactFacts(context),
+            headingFont: headingFont,
+            bodyFont: bodyFont,
+            presenters: contentPresenters,
+            onNavigate: onNavigate,
+            paintSurface: !surfaceStyle.hasAuthoredBackground,
+            padding: _authoredPadding(
+              surfaceStyle,
+              blockType: WebsiteBlockType.faq,
               data: data,
-              primaryColor: primaryColor,
-              headingFont: headingFont,
-              bodyFont: bodyFont,
-              presenters: contentPresenters,
-              padding: padding,
             ),
           );
         case WebsiteBlockType.stats:
-          return _withResponsiveContentPadding(
-            surfaceStyle: surfaceStyle,
-            blockType: WebsiteBlockType.stats,
+          return WebsiteStatsBlockContent(
             data: data,
-            builder: (padding) => WebsiteStatsBlockContent(
+            primaryColor: primaryColor,
+            accentColor: accentColor,
+            headingFont: headingFont,
+            bodyFont: bodyFont,
+            presenters: contentPresenters,
+            setting: _settingReader(context),
+            paintSurface: !surfaceStyle.hasAuthoredBackground,
+            padding: _authoredPadding(
+              surfaceStyle,
+              blockType: WebsiteBlockType.stats,
               data: data,
-              primaryColor: primaryColor,
-              accentColor: accentColor,
-              headingFont: headingFont,
-              bodyFont: bodyFont,
-              presenters: contentPresenters,
-              padding: padding,
             ),
           );
         case WebsiteBlockType.team:
-          return _withResponsiveContentPadding(
-            surfaceStyle: surfaceStyle,
-            blockType: WebsiteBlockType.team,
+          return WebsiteTeamBlockContent(
             data: data,
-            builder: (padding) => WebsiteTeamBlockContent(
+            primaryColor: primaryColor,
+            accentColor: accentColor,
+            headingFont: headingFont,
+            bodyFont: bodyFont,
+            previewMode: previewMode,
+            onNavigate: onNavigate,
+            isNavigationEligible: isNavigationEligible,
+            presenters: contentPresenters,
+            paintSurface: !surfaceStyle.hasAuthoredBackground,
+            padding: _authoredPadding(
+              surfaceStyle,
+              blockType: WebsiteBlockType.team,
               data: data,
-              accentColor: accentColor,
-              headingFont: headingFont,
-              bodyFont: bodyFont,
-              previewMode: previewMode,
-              onNavigate: onNavigate,
-              isNavigationEligible: isNavigationEligible,
-              presenters: contentPresenters,
-              padding: padding,
             ),
           );
         case WebsiteBlockType.footer:
@@ -455,13 +462,19 @@ class WebsiteBlockRenderer {
             isNavigationEligible: isNavigationEligible,
           );
         case WebsiteBlockType.partnersBanner:
-          return _buildPartnersBanner(
-            context: context,
+          return WebsitePartnersStripContent(
             data: data,
-            surfaceStyle: surfaceStyle,
             primaryColor: primaryColor,
+            accentColor: accentColor,
             headingFont: headingFont,
             bodyFont: bodyFont,
+            presenters: contentPresenters,
+            paintSurface: !surfaceStyle.hasAuthoredBackground,
+            padding: _authoredPadding(
+              surfaceStyle,
+              blockType: WebsiteBlockType.partnersBanner,
+              data: data,
+            ),
           );
         case WebsiteBlockType.brandLogos:
           return _buildBrandLogos(
@@ -710,10 +723,13 @@ class WebsiteBlockRenderer {
       return value.trim();
     }
 
+    final businessMaps = read('business_google_maps_url');
     return PublicWebsiteContactFacts(
       phone: read('contact_phone'),
       email: read('contact_email'),
       address: read('contact_address'),
+      whatsapp: read('whatsapp'),
+      mapsUrl: businessMaps.isNotEmpty ? businessMaps : read('google_maps_url'),
     );
   }
 
@@ -731,6 +747,29 @@ class WebsiteBlockRenderer {
             data: data,
           ),
     );
+  }
+
+  /// The padding the operator set on a section block; `null` keeps the
+  /// section's own design (`WebsiteSectionBand`).
+  static EdgeInsets? _authoredPadding(
+    WebsiteBlockSurfaceStyle surfaceStyle, {
+    required WebsiteBlockType blockType,
+    required Map<String, dynamic> data,
+  }) {
+    if (!surfaceStyle.hasAuthoredPadding) return null;
+    return _surfacePadding(surfaceStyle, blockType: blockType, data: data);
+  }
+
+  /// The store's settings as the editor shows them (its pending changes
+  /// included), '' for any it lacks or without the website service.
+  static String Function(String key) _settingReader(BuildContext context) {
+    final WebsiteService service;
+    try {
+      service = Provider.of<WebsiteService>(context, listen: false);
+    } on ProviderNotFoundException {
+      return (_) => '';
+    }
+    return (key) => service.getSetting(key, '').trim();
   }
 
   static Widget _applySurfacePadding(
@@ -979,133 +1018,6 @@ class WebsiteBlockRenderer {
   /// Extract YouTube video ID from various URL formats.
   static String? _extractYouTubeVideoId(String url) =>
       websiteYouTubeVideoId(url);
-
-  // ============================================================================
-  // PARTNERS BANNER BLOCK
-  // Dark background with centered text/list (partners, locations, etc.)
-  // ============================================================================
-  static Widget _buildPartnersBanner({
-    required BuildContext context,
-    required Map<String, dynamic> data,
-    required WebsiteBlockSurfaceStyle surfaceStyle,
-    required Color primaryColor,
-    String? headingFont,
-    String? bodyFont,
-  }) {
-    final theme = Theme.of(context);
-    final title = (data['title'] ?? '').toString().trim();
-    final titleFormatting = _resolveTextFormatting(data, 'titleFormatting');
-    final imageUrl = data['imageUrl']?.toString();
-
-    // Parse items (list of text lines)
-    List<String> items = [];
-    final rawItems = data['items'];
-    if (rawItems is List) {
-      items = rawItems
-          .map((item) => item is Map
-              ? (item['label'] ?? item['text'] ?? '').toString()
-              : item.toString())
-          .where((item) => item.trim().isNotEmpty)
-          .toList();
-    }
-
-    if (items.isEmpty) {
-      items = [
-        'Santiago, Chile',
-        'Viña del Mar, Chile',
-        'Concepción, Chile',
-      ];
-    }
-
-    final hasImage = imageUrl != null && imageUrl.isNotEmpty;
-
-    // Use LayoutBuilder to fill available height and center content
-    return ConstraintLayoutBuilder(
-      builder: (context, constraints) {
-        final hasFixedHeight = constraints.maxHeight.isFinite;
-        final containerPadding = _surfacePadding(
-          surfaceStyle,
-          blockType: WebsiteBlockType.partnersBanner,
-          data: data,
-        );
-        final fixedPadding = EdgeInsets.only(
-          top: surfaceStyle
-                  .isPaddingAuthored(WebsiteBlockSurfaceFields.paddingTop)
-              ? containerPadding.top
-              : 0,
-          right: containerPadding.right,
-          bottom: surfaceStyle
-                  .isPaddingAuthored(WebsiteBlockSurfaceFields.paddingBottom)
-              ? containerPadding.bottom
-              : 0,
-          left: containerPadding.left,
-        );
-
-        return Container(
-          width: double.infinity,
-          height: hasFixedHeight ? constraints.maxHeight : null,
-          decoration: BoxDecoration(
-            color: surfaceStyle.hasAuthoredBackground
-                ? Colors.transparent
-                : const Color(0xFF1a1a1a),
-            image: hasImage
-                ? DecorationImage(
-                    image: NetworkImage(imageUrl),
-                    fit: BoxFit.cover,
-                    alignment: _resolveFocalAlignment(data),
-                    colorFilter: const ColorFilter.mode(
-                      Colors.black54,
-                      BlendMode.darken,
-                    ),
-                  )
-                : null,
-          ),
-          padding: hasFixedHeight ? fixedPadding : containerPadding,
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 800),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (title.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 24),
-                      child: Text(
-                        title.toUpperCase(),
-                        style: titleFormatting.applyTo(
-                          theme.textTheme.labelLarge?.copyWith(
-                                fontFamily: bodyFont,
-                                color: Colors.white60,
-                                letterSpacing: 3,
-                              ) ??
-                              const TextStyle(),
-                        ),
-                        textAlign: titleFormatting.textAlign == TextAlign.start
-                            ? TextAlign.center
-                            : titleFormatting.textAlign,
-                      ),
-                    ),
-                  ...items.map((item) => Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        child: Text(
-                          item.toUpperCase(),
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontFamily: headingFont,
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1.5,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      )),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
 
   // ============================================================================
   // BRAND LOGOS BLOCK

@@ -73,11 +73,14 @@ void main() {
       expect(
         fields.keys.toSet(),
         <String>{
+          'eyebrow',
           'title',
           'layout',
           'images',
           'images.imageUrl',
-          'images.caption'
+          'images.caption',
+          'showAddress',
+          'tone',
         },
         reason: 'el schema declara sólo lo que el editor expone',
       );
@@ -95,7 +98,7 @@ void main() {
       expect(layout.canResetResponsiveOverride, isTrue);
       expect(
         gallerySource,
-        contains("masonry: layout == 'masonry'"),
+        contains('websiteGalleryIsGrid(data)'),
         reason: 'sin este consumer, `layout` sería un control decorativo',
       );
 
@@ -126,7 +129,14 @@ void main() {
       );
 
       // Copy, identidad de la colección y alt siguen compartidos.
-      for (final path in const <String>['title', 'images', 'images.caption']) {
+      for (final path in const <String>[
+        'eyebrow',
+        'title',
+        'images',
+        'images.caption',
+        'showAddress',
+        'tone',
+      ]) {
         expect(
           fieldOf(WebsiteBlockType.gallery, path).responsivePolicy,
           WebsiteResponsivePropertyPolicy.sharedOnly,
@@ -155,7 +165,7 @@ void main() {
         matrix['images.altText'],
         WebsiteResponsivePropertyPolicy.sharedOnly,
       );
-      expect(gallerySource, contains('_resolveFocalAlignment(image)'));
+      expect(gallerySource, contains('websiteSectionFocal(item)'));
     });
 
     test('Testimonios: cero propiedades responsive, y por qué', () {
@@ -163,12 +173,16 @@ void main() {
       expect(
         fields.keys.toSet(),
         <String>{
+          'eyebrow',
           'title',
+          'subtitle',
+          'showGoogleRating',
           'testimonials',
           'testimonials.name',
           'testimonials.role',
           'testimonials.comment',
           'testimonials.rating',
+          'tone',
         },
       );
       for (final entry in fields.entries) {
@@ -178,9 +192,9 @@ void main() {
           reason: '${entry.key}: es contenido del cliente, no presentación',
         );
       }
-      // El renderer no lee ninguna propiedad de composición: el ancho de la
-      // tarjeta sale del ancho disponible.
-      expect(testimonialsSource, contains('final compact = availableWidth'));
+      // El renderer no lee ninguna propiedad de composición: dos columnas o
+      // una salen del ancho del bloque (`WebsiteSectionBand`).
+      expect(testimonialsSource, contains('if (scope.isDesktop)'));
       expect(
         testimonialsSource,
         isNot(contains("data['layout']")),
@@ -193,11 +207,14 @@ void main() {
       expect(
         fields.keys.toSet(),
         <String>{
+          'eyebrow',
           'title',
           'subtitle',
+          'showContact',
           'items',
           'items.question',
           'items.answer',
+          'tone',
         },
       );
       for (final entry in fields.entries) {
@@ -207,8 +224,9 @@ void main() {
           reason: '${entry.key}: pregunta y respuesta son contenido indexable',
         );
       }
-      // El único ajuste por ancho ya lo calcula el renderer.
-      expect(faqSource, contains('final titleSize = isCompact'));
+      // El único ajuste por ancho ya lo calcula el renderer: dos columnas o
+      // una, por el ancho del bloque.
+      expect(faqSource, contains('if (scope.isDesktop)'));
     });
 
     test('Equipo: la foto quedó compartida con razón verdadera', () {
@@ -216,8 +234,10 @@ void main() {
       expect(
         fields.keys.toSet(),
         <String>{
+          'eyebrow',
           'title',
           'description',
+          'tone',
           'members',
           'members.name',
           'members.role',
@@ -242,8 +262,8 @@ void main() {
       expect(avatar.resolvedMediaRole, WebsiteMediaRole.avatar);
       expect(avatar.hasFocalPointControl, isFalse);
       expect(avatar.canResetResponsiveOverride, isFalse);
-      expect(teamSource, contains('dimension: 96'));
-      expect(teamSource, contains('alignment: Alignment.center'));
+      expect(teamSource, contains('final size = phone ? 64.0 : 88.0;'));
+      expect(teamSource, contains('oval: true'));
       expect(
         teamSource,
         isNot(contains('focalPointX')),

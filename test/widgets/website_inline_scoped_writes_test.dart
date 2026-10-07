@@ -436,10 +436,12 @@ void main() {
 
     testWidgets('el texto de un item escribe en su item, no en la raíz',
         (tester) async {
+      // The captions sit on the photos from a tablet up (a phone shows none).
       final provider = await pumpBlock(
         tester,
         type: 'gallery',
         data: galleryData(),
+        width: 1440,
       );
 
       textWith(tester, 'Puesta a punto').onTextChanged!('Puesta a punto 2026');

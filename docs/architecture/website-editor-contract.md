@@ -931,6 +931,16 @@ presentation are one canonical value even when legacy block keys remain for
 compatibility. A stale hidden alias or `actions` entry must never override what
 the visible editor control shows.
 
+`actions` mirrors the block's (or item's) **primary** action only. A second
+button (`actionRole: secondary`, the call to action's «Segundo botón») is read
+and written through its own fields; neither the inspector
+(`schema_controls.dart`) nor the canvas (`WebsiteInlineActionSlot.actionsKey:
+null`) may merge it into `actions`, where it would replace the primary
+(2026-10-07). An empty destination that the renderer resolves to a fallback
+(the store's WhatsApp, the business map) is edited as empty: the editors
+receive the stored value and say under «Destino» where the empty one leads, so
+changing only the label never freezes the fallback URL into the block.
+
 A new CTA capability is implemented once in the shared action contract and
 then verified on every registered CTA consumer. Do not fix or enhance CTA
 behavior one banner type at a time.
@@ -961,7 +971,9 @@ background contrast may derive component roles but may not silently replace
 the owner's text color. `Tema > Colores > Color de texto` is its canonical
 visible control; a resolved theme key without a visible editor control violates
 the Owner → Control contract. `Tema > Espaciado` visibly owns both
-`theme_section_spacing` (the inherited gap for blocks without an override) and
+`theme_section_spacing` (the inherited gap for blocks without an override;
+two section bands in a row, or a band next to a full-bleed hero, carousel or
+video, meet without it — `websiteBlocksMeet`, 2026-10-07) and
 `theme_container_padding` (the page-content inset), using the canonical bounds
 already enforced by composition. Both stage through `WebsiteEditModeProvider`
 and global `Guardar`; there is no direct service writer that bypasses the draft.

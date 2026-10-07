@@ -775,6 +775,8 @@ void main() {
         await tester.pumpWidget(
           storefront(
             WebsiteGalleryBlockContent(
+              primaryColor: Colors.teal,
+              accentColor: Colors.tealAccent,
               data: projected(
                 WebsiteBlockType.gallery,
                 galleryDocument,
@@ -786,21 +788,23 @@ void main() {
         );
         await settle(tester);
 
-        final frame = tester.widget<AspectRatio>(
-          find.byKey(WebsiteGalleryBlockContent.mediaFrameKey(0)),
+        final frame = tester.getSize(
+          find.byKey(WebsiteGalleryBlockContent.tileKey(0)),
         );
         final image = tester.widget<Image>(
           find.byKey(WebsiteGalleryBlockContent.imageKey(0)),
         );
         final provider = image.image as _RecordingImageProvider;
-        final caption = tester.widget<Text>(
-          find.descendant(
-            of: find.byKey(WebsiteGalleryBlockContent.captionKey(0)),
-            matching: find.byType(Text),
-          ),
+        // The phone shows no captions on the photos (as the HTML store).
+        final captions = find.descendant(
+          of: find.byKey(WebsiteGalleryBlockContent.captionKey(0)),
+          matching: find.byType(Text),
         );
+        final caption = captions.evaluate().isEmpty
+            ? const Text('')
+            : tester.widget<Text>(captions);
         observed[viewport] = (
-          frame.aspectRatio,
+          frame.width / frame.height,
           provider.url,
           image.alignment as Alignment,
           caption.data ?? '',
@@ -808,11 +812,12 @@ void main() {
         expect(tester.takeException(), isNull, reason: '$viewport');
       }
 
-      // Escritorio y tablet dibujan la base: mosaico (1.2 en el primer tile).
-      expect(observed[WebsiteViewport.desktop]!.$1, 1.2);
-      expect(observed[WebsiteViewport.tablet]!.$1, 1.2);
-      // Móvil dibuja su override de layout: cuadrícula, tile cuadrado.
-      expect(observed[WebsiteViewport.mobile]!.$1, 1.0);
+      // Escritorio y tablet dibujan la base: el mosaico, que con dos fotos
+      // las pone de a dos columnas en una fila (562 × 230 y 380 × 170).
+      expect(observed[WebsiteViewport.desktop]!.$1, closeTo(562 / 230, 0.001));
+      expect(observed[WebsiteViewport.tablet]!.$1, closeTo(380 / 170, 0.001));
+      // Móvil dibuja su override de layout: la cuadrícula pareja, 4:3.
+      expect(observed[WebsiteViewport.mobile]!.$1, closeTo(4 / 3, 0.001));
 
       expect(observed[WebsiteViewport.desktop]!.$2, 'https://cdn/taller.webp');
       expect(
@@ -833,10 +838,10 @@ void main() {
         reason: 'focalPointX 0.8 -> alignment 0.6',
       );
 
-      // Y la leyenda es la misma en los tres.
-      for (final viewport in WebsiteViewport.values) {
-        expect(observed[viewport]!.$4, 'Puesta a punto', reason: '$viewport');
-      }
+      // Y la leyenda es la misma donde se muestra (no va en el teléfono).
+      expect(observed[WebsiteViewport.desktop]!.$4, 'PUESTA A PUNTO');
+      expect(observed[WebsiteViewport.tablet]!.$4, 'PUESTA A PUNTO');
+      expect(observed[WebsiteViewport.mobile]!.$4, '');
     });
 
     testWidgets(
@@ -851,6 +856,8 @@ void main() {
         await tester.pumpWidget(
           storefront(
             WebsiteGalleryBlockContent(
+              primaryColor: Colors.teal,
+              accentColor: Colors.tealAccent,
               data: projected(
                 WebsiteBlockType.gallery,
                 galleryDocument,
@@ -866,9 +873,12 @@ void main() {
             .getSize(find.byKey(WebsiteGalleryBlockContent.tileKey(1)))
             .width;
         if (viewport == WebsiteViewport.mobile) {
-          expect(tileWidth, greaterThan(300));
+          // La cuadrícula del teléfono: dos columnas de (350 − 8) / 2.
+          expect(tileWidth, closeTo(171, 0.01));
         } else {
-          expect(tileWidth, lessThan(400), reason: 'tres columnas');
+          // El mosaico con dos fotos: cada una toma dos de las cuatro
+          // columnas.
+          expect(tileWidth, closeTo(562, 0.01));
         }
         final sibling = tester.widget<Image>(
           find.byKey(WebsiteGalleryBlockContent.imageKey(1)),
@@ -976,12 +986,13 @@ void main() {
                 viewport,
               ),
               primaryColor: Colors.teal,
+              accentColor: Colors.tealAccent,
             ),
           ),
         );
         await settle(tester);
         expect(
-          find.text('Quedó impecable y a tiempo.'),
+          find.text('“Quedó impecable y a tiempo.”'),
           findsOneWidget,
           reason: '$viewport: el testimonio del cliente no cambia',
         );
@@ -992,6 +1003,7 @@ void main() {
             WebsiteFaqBlockContent(
               data: projected(WebsiteBlockType.faq, faq, viewport),
               primaryColor: Colors.teal,
+              accentColor: Colors.tealAccent,
             ),
           ),
         );
@@ -1007,7 +1019,8 @@ void main() {
           storefront(
             WebsiteTeamBlockContent(
               data: projected(WebsiteBlockType.team, team, viewport),
-              accentColor: Colors.teal,
+              primaryColor: Colors.teal,
+              accentColor: Colors.tealAccent,
               imageProviderBuilder: (url) => _RecordingImageProvider(url),
             ),
           ),

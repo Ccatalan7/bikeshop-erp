@@ -11,8 +11,7 @@
   "title": "Vista HTML en el editor del sitio",
   "summary": "En el editor del sitio, «Vista HTML» muestra la página en pantalla —inicio, páginas, catálogo, categorías y ficha de producto— tal como la arma la tienda en HTML, con lo que aún no guardas, y se actualiza con cada cambio.",
   "items": [
-    "Un clic en la vista HTML elige el bloque, el encabezado, el pie o la sección; el bloque trae su barra, se arrastra para moverlo y su alto se cambia ahí.",
-    "Los títulos y textos del bloque elegido se escriben ahí mismo, con negrita, cursiva, subrayado y tamaño; ⌘↵ o un clic afuera lo deja y Esc lo cancela.",
+    "Un clic en la vista HTML elige el bloque, el encabezado, el pie o la sección; el bloque se mueve, cambia de alto y sus textos se escriben ahí, con formato.",
     "Se ve al momento lo que no guardas del catálogo, la ficha y el pie; el carrusel sigue al panel, y mover una sección del pie ya no deja el pie sin dibujar."
   ],
   "evidence": [
@@ -58,7 +57,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/editor_page_view.dart",
-      "sha256": "711bbba34e84716dc1105c6d062869234af1e6a34218dae1dd7d1a865d056e48"
+      "sha256": "b77ba4d9b90845755dae5916527a06e29440e02552b645e2c7d6b97297723d24"
     },
     {
       "path": "services/storefront_html/lib/src/home_page_model.dart",
@@ -78,7 +77,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_blocks_view.dart",
-      "sha256": "3e0113a230e01acb1dafa189badf1355eac1e941c5a91b45122b48bd813c2801"
+      "sha256": "0933de803181909c08958928ad3b25fb1581e4098d72468be24a1e7a1b5ca76c"
     },
     {
       "path": "lib/modules/website/services/website_html_draft_picks.dart",
@@ -126,7 +125,7 @@
     },
     {
       "path": "lib/modules/website/widgets/editable_block_renderer.dart",
-      "sha256": "dbba10c04a918df2efc3fce569a9ba4423ee221e355c57dfb490b1b2459f028e"
+      "sha256": "3f6af99c516246180adad3e3111b26a13d008ce55a862f27f4fe624c10901fab"
     },
     {
       "path": "lib/modules/website/widgets/website_inline_field_binding.dart",
@@ -138,7 +137,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_content_blocks_view.dart",
-      "sha256": "ef6c97799c26bc53bd8637e4535d8eca21ccd6df4f7bb90775d17b10a5ca68ab"
+      "sha256": "d2f820cdcff7572689c29cb6e51f96034982712eb98486da55b3a565b6570356"
     },
     {
       "path": "lib/public_store/widgets/website_insertion_host.dart",
@@ -146,7 +145,7 @@
     },
     {
       "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_base_definitions.dart",
-      "sha256": "c5ba1cfd116bf710e359de0591366ea16b5efb2823b905b056879970be737527"
+      "sha256": "fc8dd13ee86e3f346d20329bc583a370c954429d4a06b942441c4a0237711e15"
     }
   ]
 }

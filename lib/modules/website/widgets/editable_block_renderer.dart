@@ -875,11 +875,14 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
           slot.variantKeys,
           mayLackSchema: true,
         );
-        final actionsProperty = fields.propertyFor(
-          slot.repeaterTarget,
-          <String>[slot.actionsKey],
-          mayLackSchema: true,
-        );
+        final actionsKey = slot.actionsKey;
+        final actionsProperty = actionsKey == null
+            ? null
+            : fields.propertyFor(
+                slot.repeaterTarget,
+                <String>[actionsKey],
+                mayLackSchema: true,
+              );
         final properties = <WebsiteInlineManipulationProperty>[
           if (labelProperty != null) labelProperty,
           if (hrefProperty != null) hrefProperty,
@@ -893,6 +896,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
               ? 'website-button-inline-label-${widget.blockId}'
               : 'website-inline-action-${widget.blockId}-${slot.id}'),
           action: slot.action,
+          destinationHelp: slot.destinationHelp,
           asyncBinding: asyncFieldBindingFor(
             target,
             kind: 'action',
@@ -907,7 +911,7 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
             if (current == null ||
                 labelProperty == null ||
                 hrefProperty == null ||
-                actionsProperty == null) {
+                (actionsKey != null && actionsProperty == null)) {
               return WebsiteInlineMutationResult.rejected;
             }
             final result = editProvider.commitInlineMutation(
@@ -917,10 +921,11 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
                 hrefProperty.canonicalKey: action.href,
                 if (variantProperty != null)
                   variantProperty.canonicalKey: action.variant.storageValue,
-                actionsProperty.canonicalKey: WebsiteActionValue.mergePrimary(
-                  actionOwner?[slot.actionsKey],
-                  action,
-                ),
+                if (actionsProperty != null)
+                  actionsProperty.canonicalKey: WebsiteActionValue.mergePrimary(
+                    actionOwner?[actionsKey],
+                    action,
+                  ),
               },
             );
             lease = result.accepted ? fields.captureLease(target) : null;

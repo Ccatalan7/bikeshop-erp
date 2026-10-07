@@ -38,6 +38,12 @@ bool storefrontFontDrawsRegularOnly(String family) {
   return faces.length == 1 && faces.single.weight.contains(' ');
 }
 
+/// The CSS weight [family] is drawn at for a design's [weight]: 400 for a
+/// family Flutter draws only at its regular instance (below 600, where it
+/// does not embolden either), the weight itself otherwise.
+String storefrontHeadingWeight(String family, int weight) =>
+    storefrontFontDrawsRegularOnly(family) && weight < 600 ? '400' : '$weight';
+
 /// Where Firebase Hosting serves a face's Latin subset.
 String storefrontLatinFontUrl(String file) => '/fonts/$file.latin.woff2';
 

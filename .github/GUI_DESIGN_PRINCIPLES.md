@@ -1438,6 +1438,21 @@ con el umbral puesto por el **contenido**, no por el breakpoint del módulo.
 Anti-patrón: `Row` con `Spacer` para una fila de acciones que en el diseño
 envuelve. Se ve bien en escritorio y desborda en teléfono.
 
+### Una `Row` por línea base no cabe en `IntrinsicHeight` (2026-10-07)
+
+Las cifras del sitio (un número grande con su sufijo chico al lado, alineados
+por la línea base) iban en columnas con una línea vertical entre ellas, y para
+que la línea llegara abajo la fila era `IntrinsicHeight` + `Row(stretch)`. En
+la tableta la columna desbordó 23 px: la altura intrínseca de una `Row` con
+`CrossAxisAlignment.baseline` no cuenta cuánto baja el texto chico para
+alinearse, así que mide menos de lo que dibuja.
+
+Para columnas del mismo alto con una línea entre ellas, una `Table` por fila
+(`TableBorder(verticalInside: …)`): la tabla mide cada fila con el hijo más
+alto y la línea cubre todo el alto, sin pedir medidas intrínsecas. Y cuando
+la misma pieza también la dibuja el HTML, ninguna regla de texto que Flutter
+no tenga (`text-wrap: balance` cortaba los títulos en otras líneas).
+
 ### Un control que se apaga cambia las pruebas que lo tocan (2026-08-17)
 
 El mismo prototipo apaga la acción primaria mientras el campo está vacío. Al

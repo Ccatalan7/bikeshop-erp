@@ -356,3 +356,17 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   selección (barra, «Agregar aquí», alto) y se escribe un título con ⌘↵, que
   se deshace. El worker viejo se fue solo; la primera carga aún corrió el
   programa viejo, y `index.html` lo retira ahora antes de arrancar.
+
+## 2026-10-07 — Las secciones del muestrario, en Flutter y en HTML
+
+- Construidas desde el lienzo aprobado: cifras, carta del taller, planes,
+  testimonios, galería, equipo, preguntas, franja de marcas y llamado, con
+  tonos de la marca y anchos por el bloque decididos en el núcleo. El HTML
+  ya cubre todos los tipos salvo `canvas` y `footer`.
+- `text-wrap: balance` en el HTML y una `Row` por línea base dentro de
+  `IntrinsicHeight` en Flutter rompían la paridad; el detalle está en la fase
+  5a del plan de migración.
+- Vistas en la app real antes de publicar: el bloque nuevo de cifras decía
+  «4,8 en Google» con la nota real en 4,4. Ahora la nota y las reseñas salen
+  de la sincronización, los precios de ejemplo son los del catálogo y nada
+  inicial afirma plazos ni certificaciones. Dos bandas seguidas se tocan.

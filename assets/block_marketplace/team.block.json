@@ -1,30 +1,29 @@
 {
   "type": "team",
   "title": "Equipo",
-  "description": "Presenta a los mecánicos y especialistas del taller con su rol.",
+  "description": "Presenta a los mecánicos del taller: foto, nombre, cargo y especialidad.",
   "usesCustomEditor": false,
   "category": "Social",
   "tags": ["equipo", "staff", "colaboradores"],
   "version": 1,
   "supportsResponsive": true,
   "defaultData": {
-    "title": "Nuestro Equipo",
-    "description": "Conoce a los especialistas que cuidan tu bicicleta.",
+    "eyebrow": "Equipo",
+    "title": "Quién arregla tu bici",
+    "description": "",
+    "tone": "light",
     "members": [
       {
-        "name": "Daniela Torres",
-        "role": "Jefa de taller",
-        "bio": "Especialista en bike fitting y suspensiones con 8 años de experiencia.",
-        "avatarUrl": "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&w=300&q=60",
-        "instagram": "https://instagram.com/daniela.ride",
-        "linkedin": "https://linkedin.com/in/daniela-torres"
+        "name": "Nombre",
+        "role": "Jefe de taller",
+        "bio": "Una línea sobre su especialidad.",
+        "avatarUrl": null
       },
       {
-        "name": "Pablo Fuentes",
-        "role": "Mecánico Senior",
-        "bio": "Experto en transmisión y sistemas hidráulicos. Apasionado por el gravel.",
-        "avatarUrl": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=300&q=60",
-        "instagram": "https://instagram.com/pablo.bike"
+        "name": "Nombre",
+        "role": "Mecánico",
+        "bio": "Una línea sobre su especialidad.",
+        "avatarUrl": null
       }
     ]
   },

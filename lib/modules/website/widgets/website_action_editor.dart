@@ -21,6 +21,7 @@ class WebsiteActionEditor extends StatefulWidget {
     this.showVariant = false,
     this.asyncBinding,
     this.keyPrefix,
+    this.destinationHelp,
   });
 
   final WebsiteActionValue value;
@@ -36,6 +37,10 @@ class WebsiteActionEditor extends StatefulWidget {
   /// Names the label field (`<prefix>-label`) where one surface holds more
   /// than one action, so a test or an agent finds each by identity.
   final String? keyPrefix;
+
+  /// Under the destination: what an empty one does (a call to action's
+  /// empty link opens the store's WhatsApp).
+  final String? destinationHelp;
 
   @override
   State<WebsiteActionEditor> createState() => _WebsiteActionEditorState();
@@ -229,6 +234,7 @@ class _WebsiteActionEditorState extends State<WebsiteActionEditor> {
         WebsiteLinkValueEditor(
           label: 'Destino',
           value: value.href,
+          helpText: widget.destinationHelp,
           dense: widget.dense,
           darkStyle: widget.darkStyle,
           asyncBinding: widget.asyncBinding,

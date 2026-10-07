@@ -18,11 +18,11 @@ import 'package:vinabike_erp/modules/website/widgets/deferred_editable_block_ren
 import 'package:vinabike_erp/modules/website/widgets/inline_editable_image.dart';
 import 'package:vinabike_erp/modules/website/widgets/inline_editable_text_v2.dart';
 import 'package:vinabike_erp/modules/website/widgets/text_formatting_toolbar.dart';
-import 'package:vinabike_erp/modules/website/widgets/website_action_button.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_block_renderer.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_block_surface.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_contact_block_content.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_cta_block_content.dart';
+import 'package:vinabike_erp/modules/website/widgets/website_section_frame.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_faq_block_content.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_features_block_content.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_gallery_block_content.dart';
@@ -562,8 +562,8 @@ void main() {
             expect(action, findsOneWidget);
             previewActionSize = tester.getSize(action);
             pricingGeometryDetail = '$pricingGeometryDetail; preview '
-                'name=${tester.getRect(find.text('Mantención'))} '
-                'price=${tester.getRect(find.text('CLP 29.990'))} '
+                'name=${tester.getRect(find.text('MANTENCIÓN'))} '
+                'price=${tester.getRect(find.text('29.990'))} '
                 'action=${tester.getRect(action)}';
           }
 
@@ -617,6 +617,8 @@ void main() {
             'buttonLink': '/original',
             'ctaLink': '/original',
             'actionVariant': 'filled',
+            'secondaryText': 'Cómo llegar',
+            'secondaryLink': '/como-llegar',
             'actions': <Map<String, dynamic>>[
               <String, dynamic>{
                 'type': 'navigate',
@@ -718,6 +720,17 @@ void main() {
             ),
           );
       await tester.pump();
+      // The second button writes its own fields, never the primary's
+      // `actions` mirror.
+      tester
+          .widget<WebsiteInlineActionEditor>(
+            find.byKey(
+              const ValueKey<String>('website-inline-action-cta-cta.secondary'),
+            ),
+          )
+          .onChanged
+          .call(const WebsiteActionValue(label: 'Ver mapa', href: '/mapa'));
+      await tester.pump();
 
       provider.selectBlock('contact');
       await tester.pump();
@@ -756,6 +769,9 @@ void main() {
       expect(savedAction['label'], 'Reservar');
       expect(savedAction['to'], '/reservar');
       expect(savedAction['variant'], 'outline');
+      expect((ctaData['actions'] as List), hasLength(1));
+      expect(ctaData['secondaryText'], 'Ver mapa');
+      expect(ctaData['secondaryLink'], '/mapa');
 
       expect(_dataFor(provider, 'contact')['title'], 'Contacto guardado');
 
@@ -830,15 +846,16 @@ void main() {
       expect(find.text('Historia guardada'), findsOneWidget);
       expect(find.text('Subtítulo guardado'), findsOneWidget);
       expect(find.text('Contacto guardado'), findsOneWidget);
-      final previewCtaButton = tester.widget<WebsiteActionButton>(
+      final previewCtaButton = tester.widget<WebsiteSectionButton>(
         find.descendant(
-          of: find.byKey(WebsiteCtaBlockContent.rootKey),
-          matching: find.byType(WebsiteActionButton),
+          of: find.byKey(WebsiteCtaBlockContent.actionKey),
+          matching: find.byType(WebsiteSectionButton),
         ),
       );
-      expect(previewCtaButton.action.label, 'Reservar');
-      expect(previewCtaButton.action.href, '/reservar');
-      expect(previewCtaButton.action.variant, WebsiteActionVariant.outline);
+      expect(previewCtaButton.label, 'Reservar');
+      expect(previewCtaButton.href, '/reservar');
+      // The outline the operator chose: the outlined look, not the accent.
+      expect(previewCtaButton.kind, WebsiteSectionButtonKind.ghost);
       final previewCtaRect =
           tester.getRect(find.byKey(WebsiteCtaBlockContent.rootKey));
 
@@ -1397,11 +1414,11 @@ void main() {
         'Diagnóstico guardado',
         'Servicio guardado',
         'Pregunta guardada',
-        'Testimonio guardado',
-        'Plan guardado',
+        '“Testimonio guardado”',
+        'PLAN GUARDADO',
         '1500',
-        'Andrea guardada',
-        'Taller guardado',
+        'ANDREA GUARDADA',
+        'TALLER GUARDADO',
       ]) {
         expect(find.text(savedText), findsOneWidget, reason: savedText);
       }
@@ -1409,14 +1426,14 @@ void main() {
         tester.widget<Text>(find.text('Diagnóstico guardado')).textAlign,
         TextAlign.right,
       );
-      final previewPricingAction = tester.widget<WebsiteActionButton>(
+      final previewPricingAction = tester.widget<WebsiteSectionButton>(
         find.descendant(
           of: find.byKey(WebsitePricingBlockContent.rootKey),
-          matching: find.byType(WebsiteActionButton),
+          matching: find.byType(WebsiteSectionButton),
         ),
       );
-      expect(previewPricingAction.action.label, 'Comprar');
-      expect(previewPricingAction.action.href, '/comprar');
+      expect(previewPricingAction.label, 'Comprar');
+      expect(previewPricingAction.href, '/comprar');
 
       final previewPricingRect =
           tester.getRect(find.byKey(WebsitePricingBlockContent.rootKey));
@@ -1448,8 +1465,8 @@ void main() {
         mode: WebsitePageCompositionMode.public,
       );
       expect(find.text('Diagnóstico guardado'), findsOneWidget);
-      expect(find.text('Taller guardado'), findsOneWidget);
-      expect(find.text('Comprar'), findsOneWidget);
+      expect(find.text('TALLER GUARDADO'), findsOneWidget);
+      expect(find.text('COMPRAR'), findsOneWidget);
       expect(
         tester.widget<Text>(find.text('Diagnóstico guardado')).textAlign,
         TextAlign.right,

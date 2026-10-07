@@ -458,6 +458,51 @@ void main() {
       );
     });
 
+    test('two section bands in a row meet unless the operator set a gap', () {
+      final composition = WebsitePageComposition.project(
+        blocks: <Map<String, dynamic>>[
+          _block(id: 'hero', blockType: 'hero', orderIndex: 0),
+          _block(id: 'stats', blockType: 'stats', orderIndex: 1),
+          _block(id: 'gallery', blockType: 'gallery', orderIndex: 2),
+          _block(
+            id: 'pricing',
+            blockType: 'pricing',
+            orderIndex: 3,
+            blockData: <String, dynamic>{'spacingAfter': 24},
+          ),
+          _block(id: 'cta', blockType: 'cta', orderIndex: 4),
+          _block(id: 'products', blockType: 'products', orderIndex: 5),
+          _block(id: 'text', orderIndex: 6),
+          _block(id: 'faq', blockType: 'faq', orderIndex: 7),
+        ],
+        mode: WebsitePageCompositionMode.public,
+        breakpoint: 'desktop',
+        sectionSpacing: 48,
+      );
+
+      expect(
+        <String, double>{
+          for (final block in composition.blocks)
+            block.id: block.geometry.spacingAfter,
+        },
+        <String, double>{
+          // A photo hero against a band: both paint to the edges.
+          'hero': 0,
+          'stats': 0,
+          'gallery': 0,
+          'pricing': 24,
+          // A band before a block that paints no surface keeps the gap.
+          'cta': 48,
+          'products': 48,
+          'text': 48,
+          'faq': 48,
+        },
+      );
+      expect(
+          websiteBlocksMeet(WebsiteBlockType.hero, WebsiteBlockType.carousel),
+          isFalse);
+    });
+
     test('resolves explicit fullBleed before registered/type defaults', () {
       final composition = WebsitePageComposition.project(
         blocks: <Map<String, dynamic>>[

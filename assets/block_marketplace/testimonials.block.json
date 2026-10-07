@@ -1,28 +1,19 @@
 {
   "type": "testimonials",
   "title": "Testimonios",
-  "description": "Destaca comentarios de clientes para generar confianza.",
+  "description": "Lo que dicen tus clientes, junto a la nota de la tienda en Google.",
   "usesCustomEditor": false,
   "category": "Social",
   "tags": ["testimonios", "opiniones", "reviews"],
   "version": 1,
   "supportsResponsive": true,
   "defaultData": {
-    "title": "Lo que dicen nuestros clientes",
-    "testimonials": [
-      {
-        "name": "Carolina M.",
-        "role": "Ciclista urbana",
-        "comment": "Me ayudaron a dejar mi bicicleta como nueva y fueron súper rápidos.",
-        "rating": 5
-      },
-      {
-        "name": "Luis P.",
-        "role": "Mountain biker",
-        "comment": "Excelente servicio y atención. Siempre tienen repuestos de calidad.",
-        "rating": 5
-      }
-    ]
+    "eyebrow": "Reseñas en Google",
+    "title": "",
+    "subtitle": "",
+    "showGoogleRating": true,
+    "tone": "light",
+    "testimonials": []
   },
   "fields": [
     {

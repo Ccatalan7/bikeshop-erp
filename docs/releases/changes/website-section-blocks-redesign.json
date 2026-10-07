@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-section-blocks-redesign",
+  "scope": "release",
+  "platforms": [
+    "web",
+    "macos",
+    "windows",
+    "android"
+  ],
+  "title": "Secciones nuevas para las páginas del sitio",
+  "summary": "Cifras, carta del taller, planes, reseñas, galería, equipo, preguntas, franja de marcas y llamado a la acción tienen un diseño nuevo, de borde a borde en un fondo claro, gris u oscuro de la tienda, igual en el editor y en la página.",
+  "items": [
+    "Secciones rediseñadas de borde a borde (cifras, planes, reseñas, galería, equipo, preguntas, llamado) que usan las reseñas de Google, la dirección y WhatsApp."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/website/widgets/website_block_renderer.dart",
+      "sha256": "d36a511fbbd46418b6d7f2473fb851a96e9aeb33ad1c925a89aecbd68409cf8d"
+    },
+    {
+      "path": "lib/modules/website/widgets/editable_block_renderer.dart",
+      "sha256": "3f6af99c516246180adad3e3111b26a13d008ce55a862f27f4fe624c10901fab"
+    },
+    {
+      "path": "lib/modules/website/widgets/editor_panel/schema_controls.dart",
+      "sha256": "2ebe2141789385b7c0181c1bf10972c6f4fe45f2439cce9cff17c18c59d146f8"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_action_editor.dart",
+      "sha256": "8daf15c530c61071741e593d8ecc70054b3bad7a8f9a1b10e0d2a69ef7d88af7"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_block_content_presenters.dart",
+      "sha256": "6fa0468c2dc46c4adcbb7246224905a0c68d2068e56c9e4104fb4e30ae6bff8a"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_cta_block_content.dart",
+      "sha256": "53d3366f81ada1802fe81a76a3206b76e1b83266c56b13434ab93fd99c651ffc"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_faq_block_content.dart",
+      "sha256": "659499df43389520723c0132afaff71fce33fe06c43fb7c6eb0db2b1de583d0c"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_gallery_block_content.dart",
+      "sha256": "25878735a764a5aa46a8ec3dcb2f13de12aedfdbe2d7911339fb13daf74edbb2"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_inline_action_editor.dart",
+      "sha256": "51576701dcbfd9a36cd49a13c8a5e0d11dcff87218cbe5686f14ff1020435dd3"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_partners_strip_content.dart",
+      "sha256": "47d426b852b5530645a931208a6db0cebcbfe35d9f71d417a624f244e3763e60"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_pricing_block_content.dart",
+      "sha256": "9be6d7b3c94422867b29beffae5b06ea7b9561f147f1363285769a1c4d6e8b7d"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_section_frame.dart",
+      "sha256": "712f7cc1bcf7a7ef82fdc06a1ee4f6811928d0c0683f7902c43a25032a51e327"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_services_block_content.dart",
+      "sha256": "bb12728de14b24b3c71f489b2615cae74db6ef2e025089e090e6b4438a6edf37"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_stats_block_content.dart",
+      "sha256": "1fdc323da86fb4603a740ba80f0f26c8e3b7b4dd3ca44da1fc1bc300d375816a"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_team_block_content.dart",
+      "sha256": "035591f75fbb24b5936ccdd258b9d842d1704651248d559fe3c57f6b28bb790d"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_testimonials_block_content.dart",
+      "sha256": "ba5876237910847e7ce2c3b38655390afff18ad1a7e922bc1e03e694c4e0d8a8"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_base_definitions.dart",
+      "sha256": "fc8dd13ee86e3f346d20329bc583a370c954429d4a06b942441c4a0237711e15"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_capabilities.dart",
+      "sha256": "8c2cd94deb9fca212530a0b1fb340192bf1e3a2852760a6d08b139ac414c1aa5"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_page_composition.dart",
+      "sha256": "d4fa772a77b09929a7e7f267696adaf0724ec8704ca52fd303b8b070eee12c1b"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_section_content.dart",
+      "sha256": "924768681289839a91a5c56d59379be16ce3c8a8bdba82fa51d1bbd82a21697f"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_section_tone.dart",
+      "sha256": "fc6887a0db3c9b906dfab1df151964b23f5905e2bc867a8cf255e4793b280855"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/theme/website_section_palette.dart",
+      "sha256": "601b18ddce8151673cbfc342e03af1fc34deab3278174cf1674f7561ac367bf1"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/public_policy_content.dart",
+      "sha256": "6753a362a97387614cd7f0478503c74ad38c26992fa15aecfca7cd2fa0cd2ffa"
+    },
+    {
+      "path": "services/storefront_html/lib/src/editor_page_view.dart",
+      "sha256": "b77ba4d9b90845755dae5916527a06e29440e02552b645e2c7d6b97297723d24"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_fonts.dart",
+      "sha256": "bc8f9980e198252c3e461925e2c77dc9bb2beaf0308be5cd094039fb684573cf"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_blocks_view.dart",
+      "sha256": "0933de803181909c08958928ad3b25fb1581e4098d72468be24a1e7a1b5ca76c"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_content_blocks_view.dart",
+      "sha256": "d2f820cdcff7572689c29cb6e51f96034982712eb98486da55b3a565b6570356"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_page_css.dart",
+      "sha256": "00f20a6290cfdaf4d17faa4031f320b616840f4a97667848f1828d196fdaeb0d"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_section_blocks_view.dart",
+      "sha256": "b056121de2f00fedcc2cf0fb3be9a8269072960467922f857e697c991290e74c"
+    }
+  ]
+}

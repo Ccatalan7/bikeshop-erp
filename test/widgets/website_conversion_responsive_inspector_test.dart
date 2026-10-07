@@ -342,9 +342,9 @@ void main() {
           await settle(tester);
 
           // El contenido de negocio es el mismo en los tres.
-          expect(find.text('Full Service'), findsOneWidget);
+          expect(find.text('FULL SERVICE'), findsOneWidget);
           expect(find.textContaining('59.990'), findsWidgets);
-          expect(find.text('Mantención Básica'), findsOneWidget);
+          expect(find.text('MANTENCIÓN BÁSICA'), findsOneWidget);
           expect(tester.takeException(), isNull, reason: '$viewport');
 
           if (brightness == Brightness.light) {
@@ -355,10 +355,11 @@ void main() {
         }
       }
 
-      // Auto-layout demostrado: una columna ancha en el teléfono, tarjetas
-      // acotadas en escritorio, sin ninguna propiedad guardada.
-      expect(widths[390]!, greaterThan(widths[1440]!));
-      expect(widths[1440], closeTo(320, 0.5));
+      // Auto-layout demostrado, sin ninguna propiedad guardada: lado a lado
+      // en escritorio (la mitad de la columna de 1136 dentro del borde de la
+      // tarjeta común), apiladas a todo el ancho útil en el teléfono.
+      expect(widths[1440], closeTo(567, 0.5));
+      expect(widths[390], closeTo(350, 0.5));
     });
 
     testWidgets('Contact: tres composiciones por ancho con los mismos datos',

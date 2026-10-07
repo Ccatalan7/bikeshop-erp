@@ -1,37 +1,58 @@
 {
   "type": "pricing",
   "title": "Planes y Precios",
-  "description": "Comparador de planes con precios, beneficios y llamado a la acción.",
+  "description": "Niveles de un servicio lado a lado: precio, qué incluye y el botón para agendarlo.",
   "usesCustomEditor": false,
   "category": "Conversión",
   "tags": ["precios", "planes", "tabla"],
   "version": 1,
   "supportsResponsive": true,
   "defaultData": {
-    "title": "Planes de Servicio",
-    "subtitle": "Elige el plan que mejor se ajuste a tus necesidades y presupuesto.",
+    "eyebrow": "Mantenciones",
+    "title": "Tu bici, de punta a punta",
+    "subtitle": "Tres niveles según lo que necesite tu bicicleta. Te confirmamos el precio al revisarla.",
+    "tone": "band",
     "plans": [
       {
-        "name": "Mantención Básica",
-        "price": "29.990",
+        "name": "Básica",
+        "tag": "Nivel 1",
+        "price": "$24.990",
         "features": [
-          "Revisión de frenos",
-          "Ajuste de cambios",
-          "Limpieza básica"
+          "Regulación de frenos y cambios",
+          "Lubricación de cadena",
+          "Revisión de presión y aprietes"
         ],
-        "ctaText": "Reservar",
-        "ctaLink": "/tienda/productos"
+        "ctaText": "Agendar",
+        "ctaLink": "/contacto"
       },
       {
-        "name": "Full Service",
-        "price": "59.990",
+        "name": "Semi",
+        "tag": "Nivel 2",
+        "price": "$40.000",
         "features": [
-          "Incluye plan básico",
-          "Lubricación completa",
-          "Ajuste integral"
+          "Limpieza profunda de transmisión",
+          "Piolas nuevas",
+          "Regulación de frenos y cambios",
+          "Limpieza general de marco y ruedas"
         ],
-        "ctaText": "Reservar",
-        "ctaLink": "/tienda/productos"
+        "ctaText": "Agendar",
+        "ctaLink": "/contacto"
+      },
+      {
+        "name": "Full",
+        "tag": "Nivel 3",
+        "badge": "Desarme completo",
+        "price": "$70.000",
+        "note": "",
+        "features": [
+          "Desarme completo de la bicicleta",
+          "Cables, piolas y fundas nuevas",
+          "Mantención de frenos y cambios",
+          "Apertura y limpieza de los ejes"
+        ],
+        "ctaText": "Agendar la Full",
+        "ctaLink": "/contacto",
+        "highlighted": true
       }
     ]
   },

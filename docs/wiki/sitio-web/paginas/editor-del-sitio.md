@@ -2,7 +2,7 @@
 titulo: El editor del sitio
 resumen: cómo funciona el editor de vinabike.cl dentro del ERP — sus dos planos de control, los espacios de administración, los bloques, el guardado y el teléfono
 fuentes: [repositorio]
-archivos: [docs/architecture/website-editor-contract.md, lib/public_store/widgets/store_layout/site_settings_index.dart, lib/modules/website/widgets/editor_panel/backups_dialog.dart, supabase/migrations/20261006200000_website_versions_keep_last_30.sql, lib/modules/website/models/website_catalog_canvas.dart, lib/modules/website/widgets/website_editor_selectable_surface.dart, lib/modules/website/widgets/editor_panel/catalog_section_controls.dart, services/storefront_html/lib/src/website_blocks_view.dart, packages/vinabike_public_core/lib/modules/website/models/website_block_surface_presence.dart, lib/modules/website/providers/website_edit_mode_provider.dart, lib/modules/website/services/website_save_coordinator.dart, lib/modules/website/models/website_block_type.dart, lib/modules/website/services/website_editor_draft_controller.dart, lib/shared/routes/public_store_shell_page.dart]
+archivos: [docs/architecture/website-editor-contract.md, lib/public_store/widgets/store_layout/site_settings_index.dart, lib/modules/website/widgets/editor_panel/backups_dialog.dart, supabase/migrations/20261006200000_website_versions_keep_last_30.sql, lib/modules/website/models/website_catalog_canvas.dart, lib/modules/website/widgets/website_editor_selectable_surface.dart, lib/modules/website/widgets/editor_panel/catalog_section_controls.dart, services/storefront_html/lib/src/website_blocks_view.dart, services/storefront_html/lib/src/website_section_blocks_view.dart, lib/modules/website/widgets/website_section_frame.dart, packages/vinabike_public_core/lib/modules/website/models/website_block_surface_presence.dart, lib/modules/website/providers/website_edit_mode_provider.dart, lib/modules/website/services/website_save_coordinator.dart, lib/modules/website/models/website_block_type.dart, lib/modules/website/services/website_editor_draft_controller.dart, lib/shared/routes/public_store_shell_page.dart]
 tablas: [website_pages, website_blocks, website_navigation, website_settings, featured_products, website_backups]
 revisado: 2026-10-06
 ---
@@ -160,15 +160,32 @@ misma regla para el inspector, Edit y público `[Repo]`.
 El sitio público lo dibuja el **servidor HTML**, que hoy cubre `hero`,
 `contact`, `carousel`, `products`, `categoryGrid`, `brandLogos`,
 `videoBanner`, `googleReviews`, `text`, `button`, `divider`, `faq`, `cta`,
-`features` y `about` (`pageCoveredBlockTypes`, 2026-10-06); las páginas de
-información leen `about`, `faq` y `features` como secciones de texto, como
-Flutter. Faltan `canvas`, `services`, `testimonials`, `gallery`, `pricing`,
-`team`, `stats`, `footer` y `partnersBanner`. Una página con
+`features`, `about` y, desde el 2026-10-07, `stats`, `services`, `pricing`,
+`testimonials`, `gallery`, `team` y `partnersBanner` (`pageCoveredBlockTypes`);
+las páginas de información leen `about`, `faq` y `features` como secciones de
+texto, como Flutter. Faltan `canvas` y `footer`. Una página con
 otro tipo, o con un bloque que tiene fondo, borde, sombra o relleno propio
 (`websiteBlockHasAuthoredSurface`: el HTML todavía no pinta superficies), la
 responde Flutter entera: el visitante nunca pierde lo que el editor guardó.
 El lienzo del editor sigue siendo Flutter; el plan para que sea el HTML real
 está en la fase 5 de `storefront-html-migration-plan.md` `[Repo]`.
+
+**Secciones del muestrario (desde el 2026-10-07).** Cifras, carta del
+taller, planes, testimonios, galería, equipo, preguntas, franja de marcas y
+llamado a la acción siguen el lienzo que el dueño aprobó («Muestrario de
+bloques»), dibujadas igual por Flutter y por el HTML: van de borde a borde en
+un fondo claro, gris u oscuro sacado de los colores de la marca («Fondo de la
+sección»), con antetítulo, título, nota y la columna de 1136; teléfono,
+tableta y escritorio se deciden por el ancho del bloque. Leen datos reales:
+testimonios sin citas propias muestra la nota de Google y hasta tres reseñas
+sincronizadas con palabras; la galería pone la dirección de la tienda en su
+mosaico; preguntas invita a escribir por WhatsApp o correo; el llamado vacío
+abre el WhatsApp de la tienda y su segundo botón el mapa; cifras muestra la
+nota y las reseñas de Google que trae la sincronización («Cifra»), y una
+cifra escrita la agrega el operador: ningún valor inicial afirma algo que la
+tienda no dijo. Dos bandas seguidas se tocan, sin el espacio del tema entre
+ellas. Ninguno de estos tipos estaba en uso salvo `faq` (las cuatro páginas
+de información) `[Repo 2026-10-07]` `[Prod 2026-10-07]`.
 
 **Vista HTML (desde el 2026-10-07).** El botón `<>` de la barra (desde 1540 px;
 siempre en «Más acciones › Vista») muestra la página que está en pantalla
@@ -291,6 +308,12 @@ geometría pasa la prueba real de iOS
   (`lib/modules/website/services/website_html_draft_picks_web.dart`): esa
   ventana sólo se guarda y se le escribe, porque leerla (un `!` de Dart lo
   hace) lanza `SecurityError` (2026-10-07) `[Repo]`.
+- Secciones del muestrario: los tonos y medidas en el núcleo
+  (`website_section_palette.dart`, `website_section_content.dart`), el HTML
+  en `services/storefront_html/lib/src/website_section_blocks_view.dart` y
+  Flutter sobre `lib/modules/website/widgets/website_section_frame.dart`
+  (`WebsiteSectionBand`, `WebsiteSectionHeader`, `WebsiteSectionButton`)
+  `[Repo]`.
 - Tablas: `website_pages`, `website_blocks`, `website_navigation`,
   `website_settings`, `featured_products`.
 - Superficies registradas: filas «Website …» de

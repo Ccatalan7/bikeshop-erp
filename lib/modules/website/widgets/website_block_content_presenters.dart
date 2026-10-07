@@ -154,6 +154,7 @@ class WebsiteInlineActionSlot {
     this.variantKeys = const <String>[],
     this.actionsKey = 'actions',
     this.repeaterTarget,
+    this.destinationHelp,
   })  : assert(labelKeys.length > 0),
         assert(hrefKeys.length > 0);
 
@@ -162,7 +163,13 @@ class WebsiteInlineActionSlot {
   final List<String> labelKeys;
   final List<String> hrefKeys;
   final List<String> variantKeys;
-  final String actionsKey;
+
+  /// Where the owner's primary action is mirrored (`actions`); `null` for a
+  /// second button, which never writes over the primary there.
+  final String? actionsKey;
+
+  /// Under the destination: what an empty one does.
+  final String? destinationHelp;
   final Widget child;
   final WebsiteInlineRepeaterTarget? repeaterTarget;
 }

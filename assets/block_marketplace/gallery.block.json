@@ -1,27 +1,34 @@
 {
   "type": "gallery",
   "title": "Galería",
-  "description": "Muestra fotografías del taller, eventos o productos destacados.",
+  "description": "Fotos del taller y de la ruta en un mosaico, con la dirección de la tienda.",
   "usesCustomEditor": false,
   "category": "Media",
   "tags": ["galería", "fotos", "imágenes"],
   "version": 1,
   "supportsResponsive": true,
   "defaultData": {
-    "title": "Galería",
-    "layout": "grid",
+    "eyebrow": "Galería",
+    "title": "Del taller a la ruta",
+    "layout": "masonry",
+    "showAddress": true,
+    "tone": "band",
     "images": [
       {
-        "imageUrl": "https://images.unsplash.com/photo-1525104698733-6dba3c1c0059?auto=format&fit=crop&w=900&q=60",
-        "caption": "Nuestros mecánicos en acción"
+        "imageUrl": "",
+        "caption": ""
       },
       {
-        "imageUrl": "https://images.unsplash.com/photo-1485962398705-ef6a13c41e8f?auto=format&fit=crop&w=900&q=60",
-        "caption": "Bicicletas listas para entregar"
+        "imageUrl": "",
+        "caption": ""
       },
       {
-        "imageUrl": "https://images.unsplash.com/photo-1509395176047-4a66953fd231?auto=format&fit=crop&w=900&q=60",
-        "caption": "Clientes felices después del servicio"
+        "imageUrl": "",
+        "caption": ""
+      },
+      {
+        "imageUrl": "",
+        "caption": ""
       }
     ]
   },

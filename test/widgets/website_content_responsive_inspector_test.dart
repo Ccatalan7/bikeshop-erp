@@ -519,7 +519,7 @@ void main() {
     for (final (type, data, visibleLabel)
         in <(String, Map<String, dynamic>, String)>[
       ('services', servicesData(), 'Servicios'),
-      ('stats', statsData(), 'Indicadores'),
+      ('stats', statsData(), 'Cifras'),
     ]) {
       testWidgets('$type a 390 en Móvil no ofrece ninguna personalización',
           (tester) async {
@@ -793,6 +793,7 @@ void main() {
                 viewport,
               ),
               primaryColor: Colors.teal,
+              accentColor: Colors.tealAccent,
             ),
           ),
         );

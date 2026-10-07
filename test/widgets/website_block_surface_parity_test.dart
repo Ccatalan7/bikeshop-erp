@@ -301,7 +301,7 @@ void main() {
             const Color(0xFF112233));
         final contentBackground = tester.widget<ColoredBox>(
           find
-              .ancestor(
+              .descendant(
                 of: find.byKey(family.rootKey),
                 matching: find.byType(ColoredBox),
               )
@@ -322,7 +322,7 @@ void main() {
       await tester.pump();
       final fallbackBackground = tester.widget<ColoredBox>(
         find
-            .ancestor(
+            .descendant(
               of: find.byKey(family.rootKey),
               matching: find.byType(ColoredBox),
             )

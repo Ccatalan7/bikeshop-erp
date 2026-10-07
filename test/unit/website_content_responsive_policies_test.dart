@@ -176,11 +176,17 @@ void main() {
       expect(
         fields.keys.toSet(),
         <String>{
+          'eyebrow',
           'title',
+          'subtitle',
           'services',
-          'services.icon',
           'services.title',
           'services.description',
+          'services.price',
+          'imageUrl',
+          'caption',
+          'captionDetail',
+          'tone',
         },
       );
       for (final entry in fields.entries) {
@@ -190,10 +196,13 @@ void main() {
           reason: entry.key,
         );
       }
-      // La composición sale del ancho, no de un dato guardado.
-      expect(servicesSource, contains('final isCompact = usefulWidth < 600'));
-      expect(servicesSource, contains('_ServicesMobileList('));
-      expect(servicesSource, contains('_ServicesDesktopRows('));
+      // La composición sale del ancho del bloque, no de un dato guardado: el
+      // número y la foto sólo desde los anchos que los muestran.
+      expect(
+        servicesSource,
+        contains('final showFigure = scope.isDesktop && image.isNotEmpty;'),
+      );
+      expect(servicesSource, contains('if (!phone) ...['));
       expect(
         servicesSource,
         isNot(contains("data['layout']")),
@@ -207,12 +216,15 @@ void main() {
       expect(
         fields.keys.toSet(),
         <String>{
+          'eyebrow',
           'title',
+          'subtitle',
           'metrics',
+          'metrics.source',
           'metrics.label',
           'metrics.value',
           'metrics.suffix',
-          'metrics.icon',
+          'tone',
         },
       );
       for (final entry in fields.entries) {
@@ -222,8 +234,10 @@ void main() {
           reason: '${entry.key}: un logro no cambia según el dispositivo',
         );
       }
-      expect(statsSource, contains('final compact = availableWidth < 600'));
-      expect(statsSource, contains('final itemWidth ='));
+      expect(
+        statsSource,
+        contains('websiteStatsColumns(metrics.length, desktop: desktop)'),
+      );
       expect(
         statsSource,
         isNot(contains("data['layout']")),
@@ -322,7 +336,11 @@ void main() {
         ]) {
           expect(fields.containsKey(invented), isFalse, reason: '$type');
         }
-        expect(source, contains('LayoutBuilder'));
+        // The section blocks measure their width in `WebsiteSectionBand`.
+        expect(
+          source,
+          anyOf(contains('LayoutBuilder'), contains('WebsiteSectionBand(')),
+        );
       }
     });
   });

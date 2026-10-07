@@ -1644,6 +1644,99 @@ Lo que la medición enseñó y sirve para cualquier paridad que quede:
 - **Un plan sin botón muestra «Seleccionar» a `/productos`**: lo agrega la
   normalización (`syncNestedActions`), no el widget.
 
+### 5a, tercera tanda: las secciones del lienzo aprobado (2026-10-07)
+
+El dueño aprobó el «Muestrario de bloques» del lienzo («ya estaban
+aprobados… sigue trabajando») y las nueve secciones quedaron construidas en
+los dos dueños a la vez: cifras (`stats`), carta del taller (`services`),
+planes (`pricing`), testimonios, galería, equipo, preguntas (`faq`), franja de
+marcas (`partnersBanner`) y llamado a la acción (`cta`). El HTML las dibuja
+en `website_section_blocks_view.dart` (`sectionBlocksCss`) y Flutter en sus
+`website_*_block_content.dart`, ambos sobre lo que decide el núcleo:
+
+- **Tonos de la marca, no colores fijos** (`WebsiteSectionPalette`): cada
+  sección va en el fondo claro del sitio, en una banda gris (el fondo con 5 %
+  del primario) o en la oscura (el primario 34 % hacia negro); el texto sobre
+  lo oscuro es blanco o la tinta de la tienda si el primario es muy claro, y
+  el antetítulo es el acento aclarado. «Fondo de la sección» (`tone`) lo
+  elige el operador; cada tipo trae el suyo del diseño
+  (`websiteSectionDefaultTone`). Van de borde a borde
+  (`websiteBlockDefaultFullBleed`) con su columna de 1136.
+- **Anchos por el bloque, no por la ventana** (`WebsiteSectionWidth`):
+  teléfono bajo 600, tableta hasta 1023, escritorio desde 1024; el HTML con
+  consultas de contenedor sobre el bloque y Flutter con el `LayoutBuilder` de
+  `WebsiteSectionBand`.
+- **Datos reales, nunca de muestra:** testimonios sin citas propias muestra
+  la nota y hasta tres reseñas con palabras de la sincronización con Google
+  (`WebsiteTestimonialsContent`); la galería pone la dirección de
+  Configuración → Contacto en un recuadro del mosaico; preguntas invita a
+  escribir con el WhatsApp y el correo de la tienda; el llamado vacío abre el
+  WhatsApp de la tienda y su segundo botón el mapa (`websiteCtaActions`).
+- **El mosaico nunca deja huecos** (`websiteMosaicSpans`): grupos de cinco
+  celdas que llenan tres filas de cuatro columnas (cuatro en dos columnas en
+  el teléfono) y un grupo final recortado que también llena las suyas.
+- **Compatibles con lo guardado:** el mosaico sigue guardándose `masonry`;
+  los íconos de cifras y servicios se conservan sin dibujarse; FAQ, la única
+  de estas que estaba publicada (cuatro páginas de información), se lee como
+  antes y esas páginas siguen dibujando sus secciones de texto.
+
+Lo que costó una vuelta y sirve para la próxima paridad:
+
+- **`text-wrap: balance` rompe la paridad:** el HTML equilibraba las líneas
+  de los títulos y Flutter corta donde llena; el título de cifras quedaba en
+  líneas distintas. Ninguna regla de texto que Flutter no tenga.
+- **Una `Row` alineada por línea base dentro de `IntrinsicHeight` desborda:**
+  la altura intrínseca no cuenta el corrimiento de la base (el sufijo chico
+  junto a la cifra grande) y la columna se pasó 23 px en la tableta. Las
+  filas de cifras son una `Table` por fila (`verticalInside` da la línea a
+  todo el alto sin medir intrínsecos).
+- **Edit y Preview miden igual:** mostrar sólo al editar el lugar de una foto
+  o un precio vacío cambiaba la altura del bloque entre los dos modos
+  (`website_renderer_convergence_test.dart` lo detectó). Lo único que se
+  muestra distinto es una foto de galería sin imagen: un recuadro en el
+  editor (lienzo, vista previa y la vista HTML del borrador) para ponérsela
+  ahí, y nada para el visitante.
+- **Comparar los dos dibujos:** la página de prueba del servidor
+  (`storefront_handler_test.dart`, con `SECTIONS_PREVIEW_OUT`) se captura en
+  Chrome sin ventana y los widgets se dibujan en una prueba de Flutter con
+  Oswald y Barlow cargados (`FontLoader`) y `matchesGoldenFile` a una ruta
+  fuera del repo; a 1440, 834 y 390 calzaron salvo la estrella del sufijo, que
+  el entorno de pruebas no tiene en ninguna fuente.
+
+Lo que se corrigió al verlas en la app real (2026-10-07), antes de publicar:
+
+- **Dos bandas seguidas se tocan.** El espacio entre bloques del tema
+  (`theme_section_spacing`) dibujaba una franja blanca entre dos secciones
+  grises: cada banda ya trae su aire adentro. `WebsitePageComposition` lo
+  quita entre dos bandas, o entre una banda y una portada, carrusel o video
+  (`websiteBlocksMeet`); un espacio que el operador puso se respeta. Lo leen
+  los dos dibujos, así que cambió en ambos a la vez.
+- **Ninguna cifra inventada.** El bloque nuevo de cifras decía «4,8 de nota
+  en Google» con la nota real en 4,4 justo debajo: un valor de ejemplo que
+  se publica sin tocar es información engañosa (Merchant ya suspendió la
+  cuenta por eso). Cada cifra elige de dónde sale («Cifra»: la que escribo,
+  la nota en Google, las reseñas en Google; `websiteStatsFigure`) y un bloque
+  nuevo trae sólo las dos de Google, que se actualizan solas. Por la misma
+  razón los precios de ejemplo de la carta son los del catálogo de hoy ($4.000,
+  no $5.000), la franja de marcas nombra marcas que la tienda vende y las
+  preguntas de ejemplo dicen lo que el sistema hace (presupuesto que se
+  aprueba, Mercado Pago y transferencia), no plazos ni certificaciones. Las
+  fichas de la biblioteca (`assets/block_marketplace/*.block.json`) traían
+  reseñas, mecánicos con fotos de stock y cifras inventadas que no se veían
+  porque manda el núcleo; ahora repiten los valores del núcleo.
+- **Una galería nueva trae cuatro lugares para fotos** (vacíos, nunca de
+  stock), así el mosaico se ve y cada foto se elige donde va; sin ninguna, la
+  dirección sola llena la fila en Flutter igual que en el HTML.
+- **El segundo botón del llamado no pisa al primero.** El inspector trataba
+  todo enlace con texto como la acción principal y lo copiaba en `actions`;
+  y editar sólo el texto de un botón vacío en el lienzo habría guardado fija
+  la dirección de WhatsApp. Regla en el contrato del editor, «CTA
+  universality».
+
+Pendiente de esta tanda: que el precio de un servicio o de un plan pueda
+venir del catálogo (un campo que elija el producto), para que la carta no se
+quede vieja cuando cambia un precio — ya pasó una vez con los de ejemplo.
+
 ### 5b y 5c: la vista HTML del borrador (2026-10-07)
 
 - **5b, el servidor dibuja el borrador.** `POST /_html/editor/borrador`

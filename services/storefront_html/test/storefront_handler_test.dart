@@ -2412,21 +2412,21 @@ void main() {
       final reads = _FakeReads(
         homeRow: home([
           ...blocks,
-          block('pricing', 'pricing', 6, {'title': 'Precios'}),
+          block('footer', 'footer', 6, {'companyName': 'Viñabike'}),
         ]),
         shell: shell,
       );
       final flutter = _FakeFlutterShell();
       final hidden = await _get(reads, '/_html/', flutterShell: flutter);
       expect(hidden.statusCode, 200);
-      expect(hidden.headers['x-storefront-uncovered'], 'pricing');
+      expect(hidden.headers['x-storefront-uncovered'], 'footer');
       expect(await hidden.readAsString(), contains('TALLER DE BICICLETAS'));
       expect(flutter.requested, isEmpty);
 
       final public = await _get(reads, '/', flutterShell: flutter);
       expect(public.statusCode, 200);
       expect(public.headers['x-storefront-fallback'], 'flutter');
-      expect(public.headers['x-storefront-uncovered'], 'pricing');
+      expect(public.headers['x-storefront-uncovered'], 'footer');
       expect(await public.readAsString(), contains('flutter_bootstrap.js'));
       expect(flutter.requested, ['https://vinabike.cl']);
     });
@@ -2580,7 +2580,7 @@ void main() {
         'own, leaves the page to Flutter', () async {
       final flutter = _FakeFlutterShell();
       for (final extra in [
-        block('pricing', 'pricing', 9, {'title': 'Precios'}),
+        block('footer', 'footer', 9, {'companyName': 'Viñabike'}),
         block('framed', 'text', 9, {
           'text': 'Con fondo',
           'style': {'backgroundColor': '#FFEEDD'},
@@ -2686,32 +2686,28 @@ void main() {
 
       expect(response.statusCode, 200);
       expect(response.headers['x-storefront-uncovered'], isNull);
-      // FAQ: each question opens to its answer, escaped.
-      expect(html, contains('<details class="faq-it">'));
+      // FAQ: a section on the gray band; each question opens to its answer,
+      // escaped, the first one open.
+      expect(html, contains('<section class="sec fq" data-tone="band">'));
+      expect(html, contains('<details class="fq-it" open>'));
       expect(html, contains('¿Hay casco?</span>'));
       expect(html, contains('Sí, &lt;incluido&gt;.</p>'));
-      // CTA: the title in capitals over the primary's diagonal gradient,
-      // whose angle the page script sets; the button outlined by default.
-      expect(html, contains('<section class="cta-blk" data-diag'));
-      expect(html, contains('>RESERVA</h2>'));
+      // CTA: the title in the heading font over the dark tone; the main
+      // button filled with the accent unless the block says another.
+      expect(html, contains('<section class="ct">'));
+      expect(html, contains('>Reserva</h2>'));
       expect(
         html,
-        contains(
-          '<a class="w-btn cta-btn outline" href="/contacto">RESERVAR</a>',
-        ),
+        contains('<a class="sec-btn acc" href="/contacto"><span>Reservar'),
       );
-      expect(html, contains('document.querySelectorAll("[data-diag]")'));
-      // An empty destination is Flutter's disabled button; a photo has its
-      // veil and no gradient.
+      // A main button without a destination opens the store's WhatsApp, or
+      // its contact page when it has none; a photo has its veil.
       expect(
         html,
-        contains(
-          '<button class="w-btn cta-btn outline off" type="button" '
-          'disabled>PRONTO</button>',
-        ),
+        contains('<a class="sec-btn acc" href="/contacto"><span>Pronto'),
       );
-      expect(html, contains('class="cta-blk fixed" style="height:360px"'));
-      expect(html, contains('background:rgb(0 0 0 / 0.4)'));
+      expect(html, contains('class="ct fixed" style="height:360px"'));
+      expect(html, contains('class="ct-ov" style="opacity:0.4"'));
       // Features: a card per item with its glyph; an unknown name is the
       // star, as in Flutter; a list with the icon in a circle.
       expect(html, contains('class="ft-card"'));
@@ -2735,6 +2731,377 @@ void main() {
       );
       expect(html, contains('<section class="ab-blk" data-media="left">'));
       expect(html, contains('src="https://example.invalid/a.webp"'));
+    });
+
+    test('draws the section blocks as bands on their tones, with the '
+        "store's contact, reviews and map", () async {
+      const photo =
+          'https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/'
+          'vinabike-assets/website-images/optimized/'
+          'website_1770066134089_mechanic-repairing-bicycle-rear-wheel.webp';
+      const trail =
+          'https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/'
+          'vinabike-assets/website-images/optimized/'
+          'website_1767125519057_20230117-SI202209100564.webp';
+      const tubes =
+          'https://xzdvtzdqjeyqxnkqprtf.supabase.co/storage/v1/object/public/'
+          'vinabike-assets/website/media/5443b130-cc28-45af-a420-cd500b288890/'
+          'camaras-trail-editorial-2026-07-src8407252c-cd1bfffe-910b-4bf0-8230-'
+          '6ef8177f4c73-web.webp';
+      final shell = _shell();
+      final reads = _FakeReads(
+        shell: {
+          ...shell,
+          'settings': {
+            ...(shell['settings'] as Map<String, dynamic>),
+            'theme_accent_color': '4294930176',
+            'theme_heading_font': 'Oswald',
+            'theme_body_font': 'Barlow',
+            'contact_address': 'Alvarez 32, Local 17, Viña del Mar, Chile',
+            'contact_email': 'contacto@vinabike.cl',
+            'contact_phone': '+56 9 9835 7797',
+            'whatsapp': '+56 9 9835 7797',
+            'business_google_maps_url':
+                'https://maps.google.com/?cid=16142974120618650757',
+            'google_reviews_rating': '4.4',
+            'google_reviews_total': '36',
+            'google_reviews_data': jsonEncode([
+              {
+                'author_name': 'Mª Loreto Ulloa',
+                'rating': 5,
+                'relative_time': 'hace 3 semanas',
+                'text':
+                    'Muchas gracias me ajustaron el manubrio en un '
+                    'emergencia. Estoy muy agradecida. Mil gracias. '
+                    'Recomendado',
+              },
+              {
+                'author_name': 'Sin texto',
+                'rating': 5,
+                'relative_time': 'hace 1 mes',
+                'text': '',
+              },
+              {
+                'author_name': 'Mia Ramírez',
+                'rating': 5,
+                'relative_time': 'hace 3 meses',
+                'text':
+                    'Atención excelente, y el arreglo impecable!! 100% '
+                    'recomendable',
+              },
+              {
+                'author_name': 'Francisca Ignacia',
+                'rating': 5,
+                'relative_time': 'hace 1 mes',
+                'text': 'Muy buena atención, y rápido!!',
+              },
+            ]),
+          },
+        },
+        editorPages: {
+          'taller': {
+            'id': 'p2',
+            'slug': 'taller',
+            'title': 'El taller',
+            'is_published': true,
+            'website_blocks': [
+              block('st', 'stats', 0, {
+                'eyebrow': 'El taller en números',
+                'title': 'Once años arreglando bicis en Viña del Mar',
+                'subtitle': 'Alvarez 32, Local 17 · Viña del Mar',
+                'metrics': [
+                  {
+                    'value': '543',
+                    'label':
+                        'trabajos de taller registrados desde noviembre de '
+                        '2025',
+                  },
+                  {
+                    'source': 'google_rating',
+                    'value': '',
+                    'suffix': '★',
+                    'label': 'en Google, con 36 reseñas',
+                  },
+                  {
+                    'value': '1.575',
+                    'label': 'productos en el catálogo de la tienda',
+                  },
+                  {
+                    'value': '2015',
+                    'label': 'el año en que abrimos en Viña del Mar',
+                  },
+                ],
+              }),
+              block('sv', 'services', 1, {
+                'eyebrow': 'Servicios',
+                'title': 'Carta del taller',
+                'subtitle':
+                    'Precios del catálogo, IVA incluido. Antes de empezar te '
+                    'mandamos el presupuesto para que lo apruebes.',
+                'imageUrl': photo,
+                'imageAltText': 'Mecánico trabajando en una rueda trasera',
+                'caption': 'En el taller de Alvarez 32',
+                'captionDetail': 'Viña del Mar',
+                'services': [
+                  for (final (name, detail, price) in const [
+                    ('Regulación de frenos', '', r'$4.000'),
+                    ('Regulación de cambios', '', r'$4.000'),
+                    ('Limpieza del sistema de transmisión', '', r'$5.000'),
+                    ('Cambio de piola y regulación', '', r'$6.000'),
+                    ('Mantención de cambio', '', r'$8.000'),
+                    ('Mantención de maza', '', r'$8.000'),
+                    ('Centrado de rueda', 'Por rueda.', r'$10.000'),
+                    (
+                      'Purgado de frenos hidráulicos',
+                      'Incluye el cambio de aceite.',
+                      r'$18.000',
+                    ),
+                    (
+                      'Enrayado y centrado',
+                      'Reemplazo de rayos y niples, y ajuste de tensión.',
+                      r'$22.000',
+                    ),
+                    (
+                      'Cambio de fundas y piolas',
+                      'De frenos y cambios.',
+                      r'$24.000',
+                    ),
+                  ])
+                    {'title': name, 'description': detail, 'price': price},
+                ],
+              }),
+              block('pr', 'pricing', 2, {
+                'eyebrow': 'Mantenciones',
+                'title': 'Tu bici, de punta a punta',
+                'subtitle':
+                    'Tres niveles según lo que necesite tu bicicleta. Lo que '
+                    'incluye cada uno sale de la ficha del servicio.',
+                'plans': [
+                  {
+                    'name': 'Básica',
+                    'tag': 'Nivel 1',
+                    'price': r'$24.990',
+                    'features': [
+                      'Regulación de frenos y cambios',
+                      'Lubricación de cadena',
+                    ],
+                    'ctaText': 'Agendar',
+                    'ctaLink': '/contacto',
+                  },
+                  {
+                    'name': 'Semi',
+                    'tag': 'Nivel 2',
+                    'price': r'$40.000',
+                    'features': [
+                      'Limpieza profunda de transmisión: cadena, cambios, '
+                          'piñón y volante, con lubricación',
+                      'Piolas nuevas',
+                      'Regulación de frenos y cambios',
+                      'Limpieza general de marco, ruedas y dirección',
+                      'Renovador de neumáticos',
+                    ],
+                    'ctaText': 'Agendar',
+                    'ctaLink': '/contacto',
+                  },
+                  {
+                    'name': 'Full',
+                    'tag': 'Nivel 3',
+                    'badge': 'Desarme completo',
+                    'price': r'$70.000',
+                    'note':
+                        r'Frenos mecánicos. Con frenos hidráulicos, $90.000 '
+                        'con purgado.',
+                    'features': [
+                      'Desarme completo de la bicicleta',
+                      'Transmisión a fondo, con lubricación',
+                      'Cables, piolas y fundas nuevas',
+                      'Mantención de frenos y cambios',
+                      'Los 4 ejes: apertura y limpieza interna',
+                    ],
+                    'ctaText': 'Agendar la Full',
+                    'ctaLink': '/contacto',
+                    'highlighted': true,
+                  },
+                ],
+              }),
+              block('ts', 'testimonials', 3, {
+                'eyebrow': 'Reseñas en Google',
+                'testimonials': <Object?>[],
+              }),
+              block('gl', 'gallery', 4, {
+                'eyebrow': 'Galería',
+                'title': 'Del taller a la ruta',
+                'images': [
+                  {'imageUrl': photo, 'caption': 'Taller', 'altText': 'Taller'},
+                  {
+                    'imageUrl': tubes,
+                    'caption': 'Cámaras',
+                    'altText': 'Cámaras',
+                  },
+                  {'imageUrl': trail, 'caption': 'Ruta', 'altText': 'Ruta'},
+                  {
+                    'imageUrl': trail,
+                    'caption': 'Sendero',
+                    'altText': 'Sendero',
+                    'focalPointY': 0.6,
+                  },
+                ],
+              }),
+              block('tm', 'team', 5, {
+                'eyebrow': 'Equipo',
+                'title': 'Quién arregla tu bici',
+                'members': [
+                  {
+                    'name': 'Claudio',
+                    'role': 'Jefe de taller',
+                    'bio': 'Suspensiones y frenos hidráulicos.',
+                  },
+                  {
+                    'name': 'Mecánico',
+                    'role': 'Mecánico',
+                    'bio': 'Transmisión y ruedas.',
+                    'instagram': 'https://instagram.com/vinabike',
+                  },
+                ],
+              }),
+              block('fq', 'faq', 6, {
+                'eyebrow': 'Preguntas frecuentes',
+                'title': 'Envíos y retiro',
+                'items': [
+                  {
+                    'question': '¿Cuánto demora el despacho?',
+                    'answer':
+                        'Entre 3 y 12 días hábiles a Chile continental, '
+                        'contados desde que confirmamos y preparamos tu '
+                        'pedido.',
+                  },
+                  {
+                    'question': '¿Puedo retirar en la tienda?',
+                    'answer':
+                        'Sí, sin costo, en Alvarez 32, Local 17, Viña del '
+                        'Mar.',
+                  },
+                ],
+              }),
+              block('pb', 'partnersBanner', 7, {
+                'title': 'Marcas que trabajamos',
+                'items': [
+                  for (final name in const [
+                    'Shimano',
+                    'Maxxis',
+                    'ZTTO',
+                    'MKR',
+                    'Radical Mountain',
+                  ])
+                    {'label': name},
+                ],
+              }),
+              block('ct', 'cta', 8, {
+                'title': 'Agenda tu mantención',
+                'subtitle':
+                    'Escríbenos por WhatsApp y coordinamos el día, o pasa por '
+                    'el taller.',
+                'buttonText': 'Escribir por WhatsApp',
+                'buttonLink': '',
+                'secondaryText': 'Cómo llegar',
+                'secondaryLink': '',
+                'backgroundImage': trail,
+              }),
+            ],
+          },
+        },
+      );
+      final response = await _get(reads, '/pagina/taller');
+      final html = await response.readAsString();
+      final preview = Platform.environment['SECTIONS_PREVIEW_OUT'];
+      if (preview != null) File(preview).writeAsStringSync(html);
+
+      expect(response.statusCode, 200);
+      expect(response.headers['x-storefront-uncovered'], isNull);
+      // Every section is a band on its tone: stats dark, the plans, the
+      // gallery and the questions on the light band, the rest on the site's
+      // own background.
+      for (final (kind, tone) in const [
+        ('st', 'dark'),
+        ('sv', 'light'),
+        ('pr', 'band'),
+        ('ts', 'light'),
+        ('gl', 'band'),
+        ('tm', 'light'),
+        ('fq', 'band'),
+      ]) {
+        expect(html, contains('<section class="sec $kind" data-tone="$tone"'));
+      }
+      // The dark tone is the primary taken 34 % toward black.
+      expect(html, contains('.sec[data-tone=dark],.sec .inv{--s-bg:rgb('));
+      // Stats: the suffix apart, in the accent; four figures in a row.
+      expect(html, contains('style="--cd:4;--cm:2"'));
+      expect(html, contains('>★</span>'));
+      // The Google figure is the synced score, not a written one.
+      expect(
+        html,
+        contains('<span class="ft st-num" style="font-weight:400">4,4</span>'),
+      );
+      // Services: numbered rows, the price to the right, the photo beside.
+      expect(html, contains('<span class="sv-n">01</span>'));
+      expect(html, contains('<span class="sv-n">10</span>'));
+      expect(html, contains(r'$24.000</span>'));
+      expect(html, contains('<span>En el taller de Alvarez 32</span>'));
+      // Plans: three side by side, the highlighted one on the dark tone with
+      // its badge and the accent button.
+      expect(html, contains('data-tone="band" data-n="3"'));
+      expect(html, contains('<div class="pr-plan inv">'));
+      expect(
+        html,
+        contains('<a class="sec-btn acc" href="/contacto">Agendar la Full</a>'),
+      );
+      // Testimonials: the store's score and the synced reviews with words
+      // (a rating without them is left out), the profile on Maps.
+      expect(html, contains('<span class="ts-num">4,4</span>'));
+      expect(html, contains('aria-label="4,4 de 5 estrellas"'));
+      expect(html, contains('36 reseñas en Google.'));
+      expect(html, contains('Mia Ramírez'));
+      expect(html, contains('Hace 3 meses · 5 estrellas'));
+      expect(html, isNot(contains('Sin texto')));
+      expect(
+        html,
+        contains(
+          'class="ts-link" href="https://maps.google.com/?cid=16142974120618650757"',
+        ),
+      );
+      // Gallery: the mosaic, the address in the fourth cell.
+      expect(html, contains('style="--dc:2;--dr:2;--mc:2;--mr:2"'));
+      expect(html, contains('<p class="gl-street">Alvarez 32, Local 17</p>'));
+      expect(html, contains('<p class="gl-city">Viña del Mar</p>'));
+      // Team: the person mark without a portrait, a member's Instagram.
+      expect(html, contains('<span class="tm-av">'));
+      expect(html, contains('href="https://instagram.com/vinabike"'));
+      // Questions: the first one open, the invitation to write.
+      expect(html, contains('<details class="fq-it" open>'));
+      expect(
+        html,
+        contains('<a href="https://wa.me/56998357797">+56 9 9835 7797</a>'),
+      );
+      expect(
+        html,
+        contains('<a href="mailto:contacto@vinabike.cl">contacto@vinabike.cl'),
+      );
+      // Brands: the label and the names.
+      expect(html, contains('<span class="pb-n">Radical Mountain</span>'));
+      // Call to action: an empty main button opens the store's WhatsApp,
+      // an empty second one its map; the contacts beside.
+      expect(
+        html,
+        contains('<a class="sec-btn acc" href="https://wa.me/56998357797">'),
+      );
+      expect(
+        html,
+        contains(
+          '<a class="sec-btn ghost" '
+          'href="https://maps.google.com/?cid=16142974120618650757">',
+        ),
+      );
+      expect(html, contains('<dt>WhatsApp</dt><dd>+56 9 9835 7797</dd>'));
     });
 
     test('a page that does not exist answers 404, an upper-case slug the '
@@ -3433,9 +3800,9 @@ void main() {
         'blocks': [
           hero('b-hero', 'Portada sin guardar'),
           {
-            'id': 'b-team',
-            'block_type': 'team',
-            'block_data': {'title': 'Nuestro equipo', 'members': []},
+            'id': 'b-footer',
+            'block_type': 'footer',
+            'block_data': {'companyName': 'Viñabike'},
             'is_visible': true,
             'order_index': 1,
           },
@@ -3448,7 +3815,7 @@ void main() {
       expect(html, contains('PORTADA SIN GUARDAR'));
       expect(html, contains('data-block-id="b-hero"'));
       // A block the HTML does not draw yet stays in its place, named.
-      expect(html, contains('data-block-id="b-team"'));
+      expect(html, contains('data-block-id="b-footer"'));
       expect(html, contains('class="draft-missing"'));
       expect(html, contains('La vista HTML todavía no dibuja este bloque'));
       // The unsaved store name, not the saved one.

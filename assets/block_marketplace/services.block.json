@@ -1,31 +1,35 @@
 {
   "type": "services",
   "title": "Servicios",
-  "description": "Describe servicios clave con iconos y llamadas a la acción.",
+  "description": "La carta del taller: cada servicio con su detalle y su precio.",
   "usesCustomEditor": false,
   "category": "Contenido",
   "tags": ["servicios", "beneficios"],
   "version": 1,
   "supportsResponsive": true,
   "defaultData": {
-    "title": "Nuestros Servicios",
+    "eyebrow": "Servicios",
+    "title": "Carta del taller",
+    "subtitle": "Precios con IVA incluido. Antes de empezar te mandamos el presupuesto para que lo apruebes.",
+    "tone": "light",
     "services": [
       {
-        "icon": "build",
-        "title": "Mantención completa",
-        "description": "Ajuste integral, limpieza y calibración profesional."
+        "title": "Regulación de frenos",
+        "description": "",
+        "price": "$4.000"
       },
       {
-        "icon": "support_agent",
-        "title": "Asesoría personalizada",
-        "description": "Te ayudamos a elegir la bicicleta ideal según tu objetivo."
+        "title": "Regulación de cambios",
+        "description": "",
+        "price": "$4.000"
       },
       {
-        "icon": "shopping_bag",
-        "title": "Venta de repuestos",
-        "description": "Stock permanente de componentes y accesorios de calidad."
+        "title": "Centrado de rueda",
+        "description": "Por rueda.",
+        "price": "$10.000"
       }
-    ]
+    ],
+    "imageUrl": null
   },
   "fields": [
     {

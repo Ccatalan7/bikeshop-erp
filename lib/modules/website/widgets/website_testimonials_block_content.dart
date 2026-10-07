@@ -1,366 +1,472 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
+import 'package:vinabike_public_core/modules/website/models/website_block_type.dart';
+import 'package:vinabike_public_core/modules/website/models/website_section_content.dart';
+import 'package:vinabike_public_core/modules/website/theme/website_section_palette.dart';
 
-import 'text_formatting_toolbar.dart';
 import 'website_block_content_presenters.dart';
+import 'website_section_frame.dart';
 
-/// Shared visitor content for the schema-defined Testimonials collection.
-///
-/// `comment` is canonical. `quote` and `text` remain legacy aliases described
-/// to the editor bridge by each nested slot.
+/// Shared visitor content for the Website Builder Testimonials block: the
+/// store's score in Google (from the reviews sync, never a number written by
+/// hand) with its stars and the link to its profile, beside the quotes — the
+/// block's own or, when it has none, up to three synced Google reviews with
+/// words (`WebsiteTestimonialsContent`). One column under 1024. The HTML
+/// storefront draws the same (`TestimonialsSectionView`).
 class WebsiteTestimonialsBlockContent extends StatelessWidget {
   const WebsiteTestimonialsBlockContent({
     super.key,
     required this.data,
     required this.primaryColor,
+    required this.accentColor,
+    this.setting,
+    this.mapsUrl = '',
     this.headingFont,
     this.bodyFont,
     this.presenters,
-    this.backgroundColor,
-    this.padding = const EdgeInsets.symmetric(
-      vertical: 64,
-      horizontal: 24,
-    ),
+    this.onNavigate,
+    this.isNavigationEligible,
+    this.padding,
+    this.paintSurface = true,
   });
 
   static const rootKey = ValueKey<String>('website-testimonials-content-root');
-  static const frameKey =
-      ValueKey<String>('website-testimonials-content-frame');
-  static const titleKey = ValueKey<String>('website-testimonials-title');
+  static const scoreKey = ValueKey<String>('website-testimonials-score');
+  static const ratingKey = ValueKey<String>('website-testimonials-rating');
   static const collectionKey =
       ValueKey<String>('website-testimonials-collection');
 
-  static ValueKey<String> testimonialKey(int index) =>
-      ValueKey<String>('website-testimonial-$index');
+  static ValueKey<String> testimonialKey(int position) =>
+      ValueKey<String>('website-testimonial-$position');
+
+  static const _collection = <String>['testimonials', 'items'];
 
   final Map<String, dynamic> data;
   final Color primaryColor;
+  final Color accentColor;
+
+  /// The store's settings (the synced Google reviews); `null` shows none.
+  final String Function(String key)? setting;
+
+  /// The business on Google Maps, for «Ver en Google Maps».
+  final String mapsUrl;
   final String? headingFont;
   final String? bodyFont;
   final WebsiteBlockContentPresenters? presenters;
-  final Color? backgroundColor;
-  final EdgeInsetsGeometry padding;
+  final void Function(String route)? onNavigate;
+  final bool Function(String href)? isNavigationEligible;
+
+  /// The padding the operator set; `null` keeps the design's.
+  final EdgeInsetsGeometry? padding;
+  final bool paintSurface;
 
   @override
   Widget build(BuildContext context) {
-    final testimonials = _firstMapList(
+    final content = WebsiteTestimonialsContent.resolve(
       data,
-      const <String>['testimonials', 'items'],
+      setting: setting ?? (_) => '',
+      mapsUrl: mapsUrl,
     );
-    if (testimonials.isEmpty) {
-      return const SizedBox.shrink(key: rootKey);
-    }
-
-    final theme = Theme.of(context);
-    final rawTitle = _firstString(data, const <String>['title']);
-    final title = rawTitle.trim().isEmpty ? 'Testimonios' : rawTitle.trim();
-    final titleFormatting = _formatting(data['titleFormatting']);
-    final titleSlot = WebsiteInlineTextSlot(
-      id: 'testimonials.title',
-      value: rawTitle,
-      valueKeys: const <String>['title'],
-      baseStyle: (theme.textTheme.displaySmall ?? const TextStyle()).copyWith(
-        fontFamily: headingFont,
-      ),
-      formatting: titleFormatting,
-      formattingKeys: const <String>['titleFormatting'],
-      textAlign: TextAlign.center,
-      placeholder: 'Testimonios',
-      displayTransform: (value) =>
-          value.trim().isEmpty ? 'Testimonios' : value.trim(),
-    );
-
-    return ColoredBox(
-      color: backgroundColor ??
-          theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.25),
-      child: Padding(
-        key: rootKey,
+    return KeyedSubtree(
+      key: rootKey,
+      child: WebsiteSectionBand(
+        tone: WebsiteSectionTone.of(WebsiteBlockType.testimonials, data),
+        primaryColor: primaryColor,
+        accentColor: accentColor,
+        headingFont: headingFont,
+        bodyFont: bodyFont,
         padding: padding,
-        child: Center(
-          child: ConstrainedBox(
-            key: frameKey,
-            constraints: const BoxConstraints(maxWidth: 1100),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final availableWidth =
-                    constraints.hasBoundedWidth ? constraints.maxWidth : 1100.0;
-                final compact = availableWidth < 600;
-                final cardWidth =
-                    compact ? availableWidth : math.min(320.0, availableWidth);
-
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: <Widget>[
-                    KeyedSubtree(
-                      key: titleKey,
-                      child: _presentText(
-                        context,
-                        titleSlot,
-                        fallbackText: title,
-                      ),
-                    ),
-                    const SizedBox(height: 40),
-                    Wrap(
-                      key: collectionKey,
-                      spacing: 24,
-                      runSpacing: 24,
-                      alignment: WrapAlignment.center,
-                      children: <Widget>[
-                        for (var index = 0;
-                            index < testimonials.length;
-                            index++)
-                          SizedBox(
-                            key: testimonialKey(index),
-                            width: cardWidth,
-                            child: _TestimonialCard(
-                              item: testimonials[index],
-                              index: index,
-                              primaryColor: primaryColor,
-                              bodyFont: bodyFont,
-                              presenters: presenters,
-                            ),
-                          ),
-                      ],
-                    ),
+        paintSurface: paintSurface,
+        builder: (context, scope) {
+          final score = _score(context, scope, content);
+          final quotes = content.quotes.isEmpty
+              ? null
+              : Column(
+                  key: collectionKey,
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final (position, quote) in content.quotes.indexed)
+                      _quote(context, scope, quote, position),
                   ],
                 );
-              },
+          if (scope.isDesktop) {
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(width: 340, child: score),
+                const SizedBox(width: 72),
+                Expanded(child: quotes ?? const SizedBox.shrink()),
+              ],
+            );
+          }
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              score,
+              if (quotes != null) ...[const SizedBox(height: 12), quotes],
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _score(
+    BuildContext context,
+    WebsiteSectionScope scope,
+    WebsiteTestimonialsContent content,
+  ) {
+    final desktop = scope.isDesktop;
+    final colors = scope.colors;
+    final eyebrow = websiteSectionText(data, const ['eyebrow']);
+    final title = websiteSectionText(data, const ['title']);
+    final ownNote = websiteSectionText(data, const ['subtitle']);
+    final note = content.note(ownNote);
+    final rating = content.rating;
+    final mapsHref = content.mapsUrl;
+    final showLink = rating != null &&
+        mapsHref.isNotEmpty &&
+        !scope.isPhone &&
+        (isNavigationEligible?.call(mapsHref) ?? true);
+    final noteWidget = note.isEmpty
+        ? null
+        : websiteSectionSlot(
+            context,
+            presenters,
+            WebsiteInlineTextSlot(
+              id: 'testimonials.subtitle',
+              value: ownNote.trim().isEmpty ? note : ownNote,
+              valueKeys: const <String>['subtitle'],
+              baseStyle: scope.body(
+                desktop ? 17 : 15,
+                color: colors.muted,
+              ),
+              formatting: websiteSectionFormatting(data['subtitleFormatting']),
+              formattingKeys: const <String>['subtitleFormatting'],
+              placeholder: 'Nota',
+              displayTransform: (value) => value.trim(),
+            ),
+          );
+    final number = rating == null
+        ? null
+        : Text(
+            websiteRatingLabel(rating),
+            key: ratingKey,
+            style: scope.heading(
+              desktop ? 148 : 96,
+              height: 0.9,
+              color: colors.mark,
+            ),
+          );
+    final stars = rating == null
+        ? null
+        : _Stars(
+            rating: rating,
+            size: desktop ? 26 : 20,
+            gap: desktop ? 4 : 3,
+            fill: colors.accent,
+            empty: colors.rule,
+          );
+    return Column(
+      key: scoreKey,
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (eyebrow.trim().isNotEmpty) ...[
+          WebsiteSectionEyebrow(
+            scope: scope,
+            text: eyebrow,
+            id: 'testimonials.eyebrow',
+            presenters: presenters,
+          ),
+          SizedBox(height: scope.isPhone ? 14 : 18),
+        ],
+        if (title.trim().isNotEmpty) ...[
+          websiteSectionSlot(
+            context,
+            presenters,
+            WebsiteInlineTextSlot(
+              id: 'testimonials.title',
+              value: title,
+              valueKeys: const <String>['title'],
+              baseStyle: scope.heading(scope.metrics.titleSize),
+              formatting: websiteSectionFormatting(data['titleFormatting']),
+              formattingKeys: const <String>['titleFormatting'],
+              placeholder: 'Título',
+              displayTransform: (value) => value.trim().toUpperCase(),
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _presentText(
-    BuildContext context,
-    WebsiteInlineTextSlot slot, {
-    required String fallbackText,
-  }) {
-    return presenters?.text?.call(context, slot) ??
-        Text(
-          fallbackText,
-          style: slot.formatting.applyTo(slot.baseStyle),
-          textAlign: slot.resolvedTextAlign,
-        );
-  }
-}
-
-class _TestimonialCard extends StatelessWidget {
-  const _TestimonialCard({
-    required this.item,
-    required this.index,
-    required this.primaryColor,
-    required this.bodyFont,
-    required this.presenters,
-  });
-
-  final Map<String, dynamic> item;
-  final int index;
-  final Color primaryColor;
-  final String? bodyFont;
-  final WebsiteBlockContentPresenters? presenters;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final rawComment = _firstString(
-      item,
-      const <String>['comment', 'quote', 'text'],
-    );
-    final rawName = _firstString(item, const <String>['name']);
-    final rawRole = _firstString(item, const <String>['role']);
-    final rating = _rating(item['rating']);
-    final target = _target(item, index);
-    final commentStyle =
-        (theme.textTheme.bodyLarge ?? const TextStyle()).copyWith(
-      fontFamily: bodyFont,
-      fontStyle: FontStyle.italic,
-    );
-    final nameStyle =
-        (theme.textTheme.titleMedium ?? const TextStyle()).copyWith(
-      fontFamily: bodyFont,
-      fontWeight: FontWeight.w700,
-    );
-    final roleStyle = (theme.textTheme.bodySmall ?? const TextStyle()).copyWith(
-      fontFamily: bodyFont,
-      color: theme.colorScheme.onSurfaceVariant,
-    );
-    final commentSlot = WebsiteInlineTextSlot(
-      id: 'testimonials.item.$index.comment',
-      value: rawComment,
-      valueKeys: const <String>['comment', 'quote', 'text'],
-      baseStyle: commentStyle,
-      formatting: _formatting(
-        item['commentFormatting'] ??
-            item['quoteFormatting'] ??
-            item['textFormatting'],
-      ),
-      formattingKeys: const <String>[
-        'commentFormatting',
-        'quoteFormatting',
-        'textFormatting',
-      ],
-      placeholder: 'Testimonio del cliente',
-      repeaterTarget: target,
-    );
-    final nameSlot = WebsiteInlineTextSlot(
-      id: 'testimonials.item.$index.name',
-      value: rawName,
-      valueKeys: const <String>['name'],
-      baseStyle: nameStyle,
-      formatting: _formatting(item['nameFormatting']),
-      formattingKeys: const <String>['nameFormatting'],
-      placeholder: 'Nombre',
-      repeaterTarget: target,
-    );
-    final roleSlot = WebsiteInlineTextSlot(
-      id: 'testimonials.item.$index.role',
-      value: rawRole,
-      valueKeys: const <String>['role'],
-      baseStyle: roleStyle,
-      formatting: _formatting(item['roleFormatting']),
-      formattingKeys: const <String>['roleFormatting'],
-      placeholder: 'Rol o título',
-      repeaterTarget: target,
-    );
-
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Icon(
-              Icons.format_quote,
-              color: primaryColor,
-              size: 32,
-            ),
-            if (rawComment.trim().isNotEmpty) ...<Widget>[
-              const SizedBox(height: 16),
-              _presentText(
-                context,
-                commentSlot,
-                fallbackText: rawComment.trim(),
-              ),
-            ],
-            if (rating != null) ...<Widget>[
-              const SizedBox(height: 24),
-              Semantics(
-                container: true,
-                label: 'Valoración: $rating de 5',
-                child: ExcludeSemantics(
-                  child: Row(
+          const SizedBox(height: 16),
+        ],
+        if (number != null && desktop) ...[
+          number,
+          const SizedBox(height: 22),
+          stars!,
+          if (noteWidget != null) ...[const SizedBox(height: 14), noteWidget],
+        ] else if (number != null)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              number,
+              const SizedBox(width: 16),
+              Flexible(
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Column(
                     mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      for (var star = 0; star < 5; star++)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 4),
-                          child: Icon(
-                            star < rating ? Icons.star : Icons.star_border,
-                            color: star < rating
-                                ? primaryColor
-                                : theme.colorScheme.onSurfaceVariant,
-                            size: 18,
-                          ),
-                        ),
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: stars!,
+                      ),
+                      if (noteWidget != null) ...[
+                        const SizedBox(height: 8),
+                        noteWidget,
+                      ],
                     ],
                   ),
                 ),
               ),
             ],
-            if (rawName.trim().isNotEmpty) ...<Widget>[
-              const SizedBox(height: 16),
-              _presentText(
-                context,
-                nameSlot,
-                fallbackText: rawName.trim(),
+          )
+        else if (noteWidget != null)
+          noteWidget,
+        if (showLink) ...[
+          const SizedBox(height: 18),
+          _MapsLink(
+            label: 'Ver en Google Maps',
+            style: scope.body(
+              15,
+              height: 1.2,
+              weight: FontWeight.w600,
+              color: colors.mark,
+              letterSpacing: 15 * 0.04,
+            ),
+            onPressed: presenters != null || onNavigate == null
+                ? null
+                : () => onNavigate!(mapsHref),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _quote(
+    BuildContext context,
+    WebsiteSectionScope scope,
+    WebsiteSectionQuote quote,
+    int position,
+  ) {
+    final desktop = scope.isDesktop;
+    final colors = scope.colors;
+    final own = quote.index != null;
+    final target = own
+        ? websiteSectionTarget(
+            const <String, dynamic>{},
+            index: quote.index!,
+            collectionKeys: _collection,
+          )
+        : null;
+    final textStyle = scope.body(
+      desktop ? 26 : 20,
+      height: 1.4,
+      weight: FontWeight.w500,
+      letterSpacing: desktop ? -0.13 : null,
+    );
+    final text = own
+        ? websiteSectionSlot(
+            context,
+            presenters,
+            WebsiteInlineTextSlot(
+              id: 'testimonials.item.${quote.index}.comment',
+              value: quote.text,
+              valueKeys: const <String>['comment', 'quote', 'text'],
+              baseStyle: textStyle,
+              placeholder: 'Lo que dijo el cliente',
+              displayTransform: (value) => '“${value.trim()}”',
+              repeaterTarget: target,
+            ),
+          )
+        : Text('“${quote.text.trim()}”', style: textStyle);
+    final name = own
+        ? websiteSectionSlot(
+            context,
+            presenters,
+            WebsiteInlineTextSlot(
+              id: 'testimonials.item.${quote.index}.name',
+              value: quote.name,
+              valueKeys: const <String>['name'],
+              baseStyle: scope.body(
+                desktop ? 16 : 15,
+                height: 1.4,
+                weight: FontWeight.w600,
+              ),
+              placeholder: 'Nombre',
+              repeaterTarget: target,
+            ),
+          )
+        : Text(
+            quote.name,
+            style: scope.body(
+              desktop ? 16 : 15,
+              height: 1.4,
+              weight: FontWeight.w600,
+            ),
+          );
+    final meta = quote.meta.isEmpty
+        ? null
+        : Text(
+            quote.meta,
+            style: scope.body(
+              desktop ? 15 : 14,
+              height: 1.4,
+              color: colors.muted,
+            ),
+          );
+    final circle = desktop ? 40.0 : 36.0;
+    return Container(
+      key: testimonialKey(position),
+      margin: EdgeInsets.only(top: desktop ? 0 : 28),
+      padding:
+          EdgeInsets.only(top: desktop ? 32 : 24, bottom: desktop ? 32 : 0),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: colors.rule)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          text,
+          SizedBox(height: desktop ? 20 : 16),
+          Row(
+            children: [
+              Container(
+                width: circle,
+                height: circle,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: colors.tint,
+                  shape: BoxShape.circle,
+                ),
+                child: ExcludeSemantics(
+                  child: Text(
+                    quote.initial,
+                    style: scope.heading(
+                      desktop ? 17 : 15,
+                      height: 1,
+                      color: colors.mark,
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(width: desktop ? 14 : 12),
+              Expanded(
+                child: desktop
+                    ? Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 14,
+                        runSpacing: 4,
+                        children: [name, if (meta != null) meta],
+                      )
+                    : Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [name, if (meta != null) meta],
+                      ),
               ),
             ],
-            if (rawRole.trim().isNotEmpty) ...<Widget>[
-              const SizedBox(height: 4),
-              _presentText(
-                context,
-                roleSlot,
-                fallbackText: rawRole.trim(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Five stars, the last one filled by the score's fraction.
+class _Stars extends StatelessWidget {
+  const _Stars({
+    required this.rating,
+    required this.size,
+    required this.gap,
+    required this.fill,
+    required this.empty,
+  });
+
+  final double rating;
+  final double size;
+  final double gap;
+  final Color fill;
+  final Color empty;
+
+  @override
+  Widget build(BuildContext context) {
+    final value = rating.clamp(0.0, 5.0);
+    return Semantics(
+      label: '${websiteRatingLabel(value)} de 5 estrellas',
+      excludeSemantics: true,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var index = 0; index < 5; index++) ...[
+            if (index > 0) SizedBox(width: gap),
+            SizedBox(
+              width: size,
+              height: size,
+              child: Stack(
+                children: [
+                  Icon(Icons.star, size: size, color: empty),
+                  ClipRect(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      widthFactor: (value - index).clamp(0.0, 1.0),
+                      child: Icon(Icons.star, size: size, color: fill),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _MapsLink extends StatelessWidget {
+  const _MapsLink({
+    required this.label,
+    required this.style,
+    required this.onPressed,
+  });
+
+  final String label;
+  final TextStyle style;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      link: true,
+      label: label,
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: onPressed,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12.5),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: style.color ?? Colors.black,
+                width: 1.5,
+              ),
+            ),
+          ),
+          child: Text(label.toUpperCase(), style: style),
         ),
       ),
     );
   }
-
-  Widget _presentText(
-    BuildContext context,
-    WebsiteInlineTextSlot slot, {
-    required String fallbackText,
-  }) {
-    return presenters?.text?.call(context, slot) ??
-        Text(
-          fallbackText,
-          style: slot.formatting.applyTo(slot.baseStyle),
-          textAlign: slot.resolvedTextAlign,
-        );
-  }
-
-  static int? _rating(Object? raw) {
-    final parsed = switch (raw) {
-      num number => number.round(),
-      String text => int.tryParse(text.trim()),
-      _ => null,
-    };
-    return parsed?.clamp(1, 5);
-  }
-
-  static WebsiteInlineRepeaterTarget _target(
-    Map<String, dynamic> item,
-    int index,
-  ) {
-    final persistedId = item['id'];
-    final hasPersistedId =
-        persistedId != null && persistedId.toString().trim().isNotEmpty;
-    return WebsiteInlineRepeaterTarget(
-      collectionKeys: const <String>['testimonials', 'items'],
-      itemIndex: index,
-      identityKey: hasPersistedId ? 'id' : null,
-      identityValue: hasPersistedId ? persistedId : null,
-    );
-  }
-}
-
-List<Map<String, dynamic>> _firstMapList(
-  Map<String, dynamic> data,
-  List<String> keys,
-) {
-  for (final key in keys) {
-    if (!data.containsKey(key)) continue;
-    final raw = data[key];
-    if (raw is! List) return <Map<String, dynamic>>[];
-    return raw
-        .whereType<Map>()
-        .map((item) => Map<String, dynamic>.from(item))
-        .toList(growable: false);
-  }
-  return <Map<String, dynamic>>[];
-}
-
-String _firstString(
-  Map<String, dynamic> data,
-  List<String> keys,
-) {
-  for (final key in keys) {
-    if (data.containsKey(key)) return data[key]?.toString() ?? '';
-  }
-  return '';
-}
-
-TextFormatting _formatting(Object? raw) {
-  if (raw is! Map) return const TextFormatting();
-  return TextFormatting.fromJson(Map<String, dynamic>.from(raw));
 }

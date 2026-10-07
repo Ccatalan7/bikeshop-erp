@@ -5,6 +5,7 @@ import 'website_block_base_definitions.dart';
 import 'website_block_type.dart';
 import 'website_responsive_authoring.dart';
 import 'website_responsive_projection.dart';
+import 'website_section_tone.dart';
 
 /// Explicit presentation mode for one website page composition.
 ///
@@ -95,6 +96,25 @@ class WebsitePageCompositionBlock {
 
   /// Deep, unmodifiable copy of the complete input row.
   final Map<String, dynamic> sourceBlock;
+
+  WebsitePageCompositionBlock _withSpacingAfter(double spacingAfter) =>
+      WebsitePageCompositionBlock(
+        sourceBlock: sourceBlock,
+        blockData: blockData,
+        id: id,
+        blockType: blockType,
+        type: type,
+        orderIndex: orderIndex,
+        sourceIndex: sourceIndex,
+        isGloballyVisible: isGloballyVisible,
+        responsiveVisibility: responsiveVisibility,
+        geometry: WebsitePageBlockGeometry(
+          spacingAfter: spacingAfter,
+          fullBleed: geometry.fullBleed,
+          heightBehavior: geometry.heightBehavior,
+          blockHeight: geometry.blockHeight,
+        ),
+      );
 
   /// Deep, unmodifiable copy of `block_data`.
   final Map<String, dynamic> blockData;
@@ -197,6 +217,8 @@ class WebsitePageComposition {
 
     final normalizedSectionSpacing = resolveSectionSpacing(sectionSpacing);
     final projected = <WebsitePageCompositionBlock>[];
+    // Blocks whose gap after them the operator set (`spacingAfter`).
+    final authoredGap = <WebsitePageCompositionBlock>{};
 
     var sourceIndex = 0;
     for (final inputBlock in blocks) {
@@ -237,30 +259,32 @@ class WebsitePageComposition {
             ? rawBlockHeight
             : null;
 
-        projected.add(
-          WebsitePageCompositionBlock(
-            sourceBlock: copiedBlock,
-            blockData: copiedData,
-            id: (copiedBlock['id'] ?? '').toString(),
-            blockType: rawType,
-            type: type,
-            orderIndex: _resolveOrderIndex(copiedBlock),
-            sourceIndex: sourceIndex,
-            isGloballyVisible: copiedBlock['is_visible'] != false,
-            responsiveVisibility: normalizeWebsiteBlockPublicVisibility(
-              copiedData['visibility'],
+        final composed = WebsitePageCompositionBlock(
+          sourceBlock: copiedBlock,
+          blockData: copiedData,
+          id: (copiedBlock['id'] ?? '').toString(),
+          blockType: rawType,
+          type: type,
+          orderIndex: _resolveOrderIndex(copiedBlock),
+          sourceIndex: sourceIndex,
+          isGloballyVisible: copiedBlock['is_visible'] != false,
+          responsiveVisibility: normalizeWebsiteBlockPublicVisibility(
+            copiedData['visibility'],
+          ),
+          geometry: WebsitePageBlockGeometry(
+            spacingAfter: resolveSpacingAfter(
+              layoutData['spacingAfter'],
+              sectionSpacing: normalizedSectionSpacing,
             ),
-            geometry: WebsitePageBlockGeometry(
-              spacingAfter: resolveSpacingAfter(
-                layoutData['spacingAfter'],
-                sectionSpacing: normalizedSectionSpacing,
-              ),
-              fullBleed: explicitFullBleed ?? profile.defaultFullBleed,
-              heightBehavior: profile.heightBehavior,
-              blockHeight: normalizedBlockHeight,
-            ),
+            fullBleed: explicitFullBleed ?? profile.defaultFullBleed,
+            heightBehavior: profile.heightBehavior,
+            blockHeight: normalizedBlockHeight,
           ),
         );
+        projected.add(composed);
+        if (_finiteDouble(layoutData['spacingAfter']) != null) {
+          authoredGap.add(composed);
+        }
       }
 
       sourceIndex += 1;
@@ -272,6 +296,19 @@ class WebsitePageComposition {
       return left.sourceIndex.compareTo(right.sourceIndex);
     });
 
+    // Two bands in a row meet: each section paints its own background to the
+    // edges with its padding inside, and the page's gap would show as a
+    // stripe of the site background between them. A gap the operator set
+    // stays.
+    for (var index = 0; index < projected.length - 1; index++) {
+      final block = projected[index];
+      if (authoredGap.contains(block) ||
+          !websiteBlocksMeet(block.type, projected[index + 1].type)) {
+        continue;
+      }
+      projected[index] = block._withSpacingAfter(0);
+    }
+
     return WebsitePageComposition._(
       mode: mode,
       breakpoint: normalizedBreakpoint,
@@ -279,6 +316,20 @@ class WebsitePageComposition {
       blocks: List<WebsitePageCompositionBlock>.unmodifiable(projected),
     );
   }
+}
+
+/// Whether a block of type [above] is drawn right against the next one,
+/// [below], without the page's gap: a section band against another, or
+/// against a full-bleed photo block (hero, carousel, video) that also paints
+/// its own surface to the edges.
+bool websiteBlocksMeet(WebsiteBlockType? above, WebsiteBlockType? below) {
+  bool band(WebsiteBlockType? type) => websiteSectionBandTypes.contains(type);
+  bool surface(WebsiteBlockType? type) =>
+      band(type) ||
+      type == WebsiteBlockType.hero ||
+      type == WebsiteBlockType.carousel ||
+      type == WebsiteBlockType.videoBanner;
+  return (band(above) && surface(below)) || (surface(above) && band(below));
 }
 
 WebsiteBlockType? _tryParseWebsiteBlockType(String raw) {

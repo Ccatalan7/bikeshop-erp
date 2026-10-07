@@ -496,13 +496,24 @@ class WebsiteBlockCapabilityRegistry {
 
 /// Whether a block of [type] spans the whole page width when its data does
 /// not say (`fullBleed`). The Flutter page composition and the HTML
-/// storefront read it here.
+/// storefront read it here. The section blocks (stats, services, plans,
+/// testimonials, gallery, team, questions, call to action) are bands of the
+/// page since the sections design (2026-10-07): their background runs to the
+/// edges and they keep their own content to a centered column.
 bool websiteBlockDefaultFullBleed(WebsiteBlockType? type) => switch (type) {
       WebsiteBlockType.hero ||
       WebsiteBlockType.carousel ||
       WebsiteBlockType.categoryGrid ||
       WebsiteBlockType.videoBanner ||
-      WebsiteBlockType.partnersBanner =>
+      WebsiteBlockType.partnersBanner ||
+      WebsiteBlockType.stats ||
+      WebsiteBlockType.services ||
+      WebsiteBlockType.pricing ||
+      WebsiteBlockType.testimonials ||
+      WebsiteBlockType.gallery ||
+      WebsiteBlockType.team ||
+      WebsiteBlockType.faq ||
+      WebsiteBlockType.cta =>
         true,
       _ => false,
     };

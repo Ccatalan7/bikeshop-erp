@@ -187,11 +187,27 @@ class PublicWebsiteContactFacts {
     this.phone = '',
     this.email = '',
     this.address = '',
+    this.whatsapp = '',
+    this.mapsUrl = '',
   });
 
   final String phone;
   final String email;
   final String address;
+
+  /// The store's WhatsApp number (`whatsapp`), as written.
+  final String whatsapp;
+
+  /// Where the business is on Google Maps (`business_google_maps_url`, or
+  /// `google_maps_url`).
+  final String mapsUrl;
+
+  /// [whatsapp]'s digits, as `wa.me` takes them.
+  String get whatsappDigits => whatsapp.replaceAll(RegExp(r'[^0-9]'), '');
+
+  /// The store's chat on WhatsApp, or '' when it has no number.
+  String get whatsappHref =>
+      whatsappDigits.isEmpty ? '' : 'https://wa.me/$whatsappDigits';
 
   bool get hasAny =>
       phone.trim().isNotEmpty ||

@@ -1,16 +1,21 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
+import 'package:vinabike_public_core/modules/website/models/website_block_type.dart';
+import 'package:vinabike_public_core/modules/website/models/website_section_content.dart';
+import 'package:vinabike_public_core/modules/website/theme/website_section_palette.dart';
 
 import '../models/website_action.dart';
-import 'text_formatting_toolbar.dart';
-import 'website_action_button.dart';
 import 'website_block_content_presenters.dart';
+import 'website_section_frame.dart';
 
-/// Shared visitor content for the schema-defined Pricing collection.
+/// Shared visitor content for the schema-defined Pricing collection: the
+/// header, then the plans side by side in one card (the highlighted one on
+/// the dark tone, with its badge and the accent button), or as stacked cards
+/// when each would have less than 260 (`websitePlansSideBySide`); stacked,
+/// only the highlighted plan keeps its button. The HTML storefront draws the
+/// same (`PricingSectionView`).
 ///
-/// Public, Preview and Edit use one card tree. Edit replaces only typed text
-/// and action leaves; structural collection operations remain inspector-owned.
+/// Public, Preview and Edit use one tree. Edit replaces only typed text and
+/// action leaves; structural collection operations remain inspector-owned.
 class WebsitePricingBlockContent extends StatelessWidget {
   const WebsitePricingBlockContent({
     super.key,
@@ -23,17 +28,11 @@ class WebsitePricingBlockContent extends StatelessWidget {
     this.onNavigate,
     this.isNavigationEligible,
     this.presenters,
-    this.backgroundColor,
-    this.padding = const EdgeInsets.symmetric(
-      vertical: 64,
-      horizontal: 24,
-    ),
+    this.padding,
+    this.paintSurface = true,
   });
 
   static const rootKey = ValueKey<String>('website-pricing-content-root');
-  static const frameKey = ValueKey<String>('website-pricing-content-frame');
-  static const titleKey = ValueKey<String>('website-pricing-title');
-  static const subtitleKey = ValueKey<String>('website-pricing-subtitle');
   static const collectionKey = ValueKey<String>('website-pricing-collection');
 
   static ValueKey<String> planKey(int index) =>
@@ -41,6 +40,11 @@ class WebsitePricingBlockContent extends StatelessWidget {
 
   static ValueKey<String> actionKey(int index) =>
       ValueKey<String>('website-pricing-action-$index');
+
+  static ValueKey<String> priceKey(int index) =>
+      ValueKey<String>('website-pricing-price-$index');
+
+  static const _collection = <String>['plans', 'items'];
 
   final Map<String, dynamic> data;
   final Color primaryColor;
@@ -51,472 +55,388 @@ class WebsitePricingBlockContent extends StatelessWidget {
   final void Function(String route)? onNavigate;
   final bool Function(String href)? isNavigationEligible;
   final WebsiteBlockContentPresenters? presenters;
-  final Color? backgroundColor;
-  final EdgeInsetsGeometry padding;
+
+  /// The padding the operator set; `null` keeps the design's.
+  final EdgeInsetsGeometry? padding;
+  final bool paintSurface;
 
   @override
   Widget build(BuildContext context) {
-    final plans = _firstMapList(
-      data,
-      const <String>['plans', 'items'],
-    );
-    if (plans.isEmpty) {
-      return const SizedBox.shrink(key: rootKey);
-    }
-
-    final theme = Theme.of(context);
-    final rawTitle = _firstString(data, const <String>['title']);
-    final rawSubtitle = _firstString(data, const <String>['subtitle']);
-    final title =
-        rawTitle.trim().isEmpty ? 'Planes y Precios' : rawTitle.trim();
-    final subtitle = rawSubtitle.trim();
-    final titleFormatting = _formatting(data['titleFormatting']);
-    final subtitleFormatting = _formatting(data['subtitleFormatting']);
-    final titleSlot = WebsiteInlineTextSlot(
-      id: 'pricing.title',
-      value: rawTitle,
-      valueKeys: const <String>['title'],
-      baseStyle: (theme.textTheme.displaySmall ?? const TextStyle()).copyWith(
-        fontFamily: headingFont,
-      ),
-      formatting: titleFormatting,
-      formattingKeys: const <String>['titleFormatting'],
-      textAlign: TextAlign.center,
-      placeholder: 'Planes y Precios',
-      displayTransform: (value) =>
-          value.trim().isEmpty ? 'Planes y Precios' : value.trim(),
-    );
-    final subtitleSlot = WebsiteInlineTextSlot(
-      id: 'pricing.subtitle',
-      value: rawSubtitle,
-      valueKeys: const <String>['subtitle'],
-      baseStyle: (theme.textTheme.bodyLarge ?? const TextStyle()).copyWith(
-        fontFamily: bodyFont,
-        color: theme.colorScheme.onSurfaceVariant,
-      ),
-      formatting: subtitleFormatting,
-      formattingKeys: const <String>['subtitleFormatting'],
-      textAlign: TextAlign.center,
-      placeholder: 'Subtítulo opcional',
-    );
-
-    return ColoredBox(
-      color: backgroundColor ??
-          theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.15),
-      child: Padding(
-        key: rootKey,
+    final plans = websiteSectionItems(data, 'plans', const ['items']);
+    return KeyedSubtree(
+      key: rootKey,
+      child: WebsiteSectionBand(
+        tone: WebsiteSectionTone.of(WebsiteBlockType.pricing, data),
+        primaryColor: primaryColor,
+        accentColor: accentColor,
+        headingFont: headingFont,
+        bodyFont: bodyFont,
         padding: padding,
-        child: Center(
-          child: ConstrainedBox(
-            key: frameKey,
-            constraints: const BoxConstraints(maxWidth: 1100),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final availableWidth =
-                    constraints.hasBoundedWidth ? constraints.maxWidth : 1100.0;
-                final compact = availableWidth < 600;
-                final cardWidth =
-                    compact ? availableWidth : math.min(320.0, availableWidth);
-
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: <Widget>[
-                    KeyedSubtree(
-                      key: titleKey,
-                      child: _presentText(
-                        context,
-                        titleSlot,
-                        fallbackText: title,
-                      ),
-                    ),
-                    if (subtitle.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      KeyedSubtree(
-                        key: subtitleKey,
-                        child: _presentText(
-                          context,
-                          subtitleSlot,
-                          fallbackText: subtitle,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 40),
-                    Wrap(
-                      key: collectionKey,
-                      spacing: 24,
-                      runSpacing: 24,
-                      alignment: WrapAlignment.center,
-                      children: <Widget>[
-                        for (var index = 0; index < plans.length; index++)
-                          SizedBox(
-                            key: planKey(index),
-                            width: cardWidth,
-                            child: _PricingPlanCard(
-                              plan: plans[index],
-                              index: index,
-                              primaryColor: primaryColor,
-                              accentColor: accentColor,
-                              bodyFont: bodyFont,
-                              previewMode: previewMode,
-                              onNavigate: onNavigate,
-                              isNavigationEligible: isNavigationEligible,
-                              presenters: presenters,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-        ),
+        paintSurface: paintSurface,
+        builder: (context, scope) {
+          final header = WebsiteSectionHeader(
+            scope: scope,
+            data: data,
+            idPrefix: 'pricing',
+            presenters: presenters,
+          );
+          final sideBySide = websitePlansSideBySide(
+            plans.length,
+            scope.contentWidth,
+          );
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (!header.isEmpty) header,
+              if (plans.isNotEmpty) ...[
+                if (!header.isEmpty) SizedBox(height: scope.isPhone ? 28 : 48),
+                sideBySide
+                    ? _sideBySide(context, scope, plans)
+                    : _stacked(context, scope, plans),
+              ],
+            ],
+          );
+        },
       ),
     );
   }
 
-  Widget _presentText(
+  Widget _sideBySide(
     BuildContext context,
-    WebsiteInlineTextSlot slot, {
-    required String fallbackText,
-  }) {
-    return presenters?.text?.call(context, slot) ??
-        Text(
-          fallbackText,
-          style: slot.formatting.applyTo(slot.baseStyle),
-          textAlign: slot.resolvedTextAlign,
-        );
-  }
-}
-
-class _PricingPlanCard extends StatelessWidget {
-  const _PricingPlanCard({
-    required this.plan,
-    required this.index,
-    required this.primaryColor,
-    required this.accentColor,
-    required this.bodyFont,
-    required this.previewMode,
-    required this.onNavigate,
-    required this.isNavigationEligible,
-    required this.presenters,
-  });
-
-  final Map<String, dynamic> plan;
-  final int index;
-  final Color primaryColor;
-  final Color accentColor;
-  final String? bodyFont;
-  final bool previewMode;
-  final void Function(String route)? onNavigate;
-  final bool Function(String href)? isNavigationEligible;
-  final WebsiteBlockContentPresenters? presenters;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final rawName = _firstString(plan, const <String>['name']);
-    final rawPrice = _firstString(plan, const <String>['price']);
-    final features = _stringList(plan['features']);
-    final highlighted = _firstBool(
-      plan,
-      const <String>['highlighted', 'isFeatured'],
-    );
-    final target = _target(plan, index);
-    final nameStyle =
-        (theme.textTheme.titleLarge ?? const TextStyle()).copyWith(
-      fontFamily: bodyFont,
-      fontWeight: FontWeight.w700,
-    );
-    final priceStyle =
-        (theme.textTheme.headlineMedium ?? const TextStyle()).copyWith(
-      fontFamily: bodyFont,
-      color: primaryColor,
-      fontWeight: FontWeight.bold,
-    );
-    final nameSlot = WebsiteInlineTextSlot(
-      id: 'pricing.plan.$index.name',
-      value: rawName,
-      valueKeys: const <String>['name'],
-      baseStyle: nameStyle,
-      formatting: _formatting(plan['nameFormatting']),
-      formattingKeys: const <String>['nameFormatting'],
-      placeholder: 'Nombre del plan',
-      repeaterTarget: target,
-    );
-    final priceSlot = WebsiteInlineTextSlot(
-      id: 'pricing.plan.$index.price',
-      value: rawPrice,
-      valueKeys: const <String>['price'],
-      baseStyle: priceStyle,
-      formatting: _formatting(plan['priceFormatting']),
-      formattingKeys: const <String>['priceFormatting'],
-      placeholder: '0',
-      displayTransform: _priceLabel,
-      repeaterTarget: target,
-    );
-    final resolvedAction = WebsiteActionValue.resolvePrimary(
-      plan,
-      labelKeys: const <String>['ctaText', 'buttonText'],
-      hrefKeys: const <String>['ctaLink', 'buttonLink'],
-      variantKeys: const <String>['actionVariant'],
-      defaultLabel: 'Seleccionar',
-    );
-    final displayAction = resolvedAction ??
-        WebsiteActionValue(
-          label: _firstNonEmptyString(
-                plan,
-                const <String>['ctaText', 'buttonText'],
-              ) ??
-              'Seleccionar',
-          href: '',
-          variant: WebsiteActionVariant.fromStorage(
-            plan['actionVariant']?.toString(),
-          ),
-        );
-    final destinationEligible = displayAction.href.trim().isEmpty ||
-        isNavigationEligible == null ||
-        isNavigationEligible!(displayAction.href);
-    final showAction = resolvedAction != null && destinationEligible;
-    final cardColor = highlighted
-        ? accentColor.withValues(alpha: 0.12)
-        : theme.colorScheme.surface;
-    final borderColor = highlighted ? accentColor : theme.dividerColor;
-
-    return Card(
-      color: cardColor,
-      elevation: highlighted ? 4 : 1,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: borderColor, width: 1.5),
+    WebsiteSectionScope scope,
+    List<(int, Map<String, dynamic>)> plans,
+  ) {
+    final colors = scope.colors;
+    return Container(
+      key: collectionKey,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: colors.card,
+        border: Border.all(color: colors.cardRule),
+        borderRadius: BorderRadius.circular(8),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
+      child: IntrinsicHeight(
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            if (highlighted) ...<Widget>[
-              Align(
-                alignment: Alignment.centerRight,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: accentColor,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    child: Text(
-                      'Más popular',
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
+          children: [
+            for (final (position, (index, plan)) in plans.indexed)
+              Expanded(
+                child: _Plan(
+                  key: planKey(index),
+                  owner: this,
+                  plan: plan,
+                  index: index,
+                  scope: scope,
+                  stacked: false,
+                  last: position == plans.length - 1,
                 ),
               ),
-              const SizedBox(height: 12),
-            ],
-            if (rawName.trim().isNotEmpty)
-              _presentText(
-                context,
-                nameSlot,
-                fallbackText: rawName.trim(),
-              ),
-            if (rawPrice.trim().isNotEmpty) ...<Widget>[
-              if (rawName.trim().isNotEmpty) const SizedBox(height: 8),
-              _presentText(
-                context,
-                priceSlot,
-                fallbackText: _priceLabel(rawPrice),
-              ),
-            ],
-            if (features.isNotEmpty) ...<Widget>[
-              const SizedBox(height: 24),
-              for (final feature in features)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Icon(
-                        Icons.check_circle,
-                        color: primaryColor,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          feature,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontFamily: bodyFont,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-            if (showAction) ...<Widget>[
-              const SizedBox(height: 24),
-              KeyedSubtree(
-                key: WebsitePricingBlockContent.actionKey(index),
-                child: _buildAction(
-                  context,
-                  action: displayAction,
-                  target: target,
-                  highlighted: highlighted,
-                ),
-              ),
-            ],
           ],
         ),
       ),
     );
   }
 
-  Widget _buildAction(
-    BuildContext context, {
-    required WebsiteActionValue action,
-    required WebsiteInlineRepeaterTarget target,
-    required bool highlighted,
-  }) {
-    final href = action.href.trim();
-    final button = WebsiteActionButton(
-      action: action,
-      // Visitor navigation works in Preview and Public; only Edit
-      // (presenters) is inert. Mirrors the standalone-button contract:
-      // editor chrome owns the pointer boundary, so a VALID plan CTA stays
-      // enabled-looking in Edit through a no-op — Material must never
-      // repaint the authored foreground as disabled. Empty hrefs stay
-      // truly disabled.
-      onPressed: href.isEmpty
-          ? null
-          : presenters != null
-              ? () {}
-              : onNavigate != null
-                  ? () => onNavigate!(href)
-                  : null,
-      backgroundColor: highlighted ? accentColor : primaryColor,
-      foregroundColor: Colors.white,
-      outlineColor: highlighted ? accentColor : primaryColor,
-      expand: true,
+  Widget _stacked(
+    BuildContext context,
+    WebsiteSectionScope scope,
+    List<(int, Map<String, dynamic>)> plans,
+  ) {
+    return Column(
+      key: collectionKey,
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final (position, (index, plan)) in plans.indexed) ...[
+          if (position > 0) const SizedBox(height: 12),
+          _Plan(
+            key: planKey(index),
+            owner: this,
+            plan: plan,
+            index: index,
+            scope: scope,
+            stacked: true,
+            last: position == plans.length - 1,
+          ),
+        ],
+      ],
     );
-    final actionPresenter = presenters?.action;
-    if (actionPresenter == null) return button;
-    return actionPresenter(
+  }
+}
+
+class _Plan extends StatelessWidget {
+  const _Plan({
+    super.key,
+    required this.owner,
+    required this.plan,
+    required this.index,
+    required this.scope,
+    required this.stacked,
+    required this.last,
+  });
+
+  final WebsitePricingBlockContent owner;
+  final Map<String, dynamic> plan;
+  final int index;
+  final WebsiteSectionScope scope;
+  final bool stacked;
+  final bool last;
+
+  WebsiteBlockContentPresenters? get presenters => owner.presenters;
+
+  @override
+  Widget build(BuildContext context) {
+    final featured = plan['highlighted'] == true || plan['isFeatured'] == true;
+    final colors = featured ? scope.inverse : scope.colors;
+    final featuredScope = WebsiteSectionScope(
+      metrics: scope.metrics,
+      colors: colors,
+      inverse: scope.inverse,
+      contentWidth: scope.contentWidth,
+      headingFont: scope.headingFont,
+      bodyFont: scope.bodyFont,
+    );
+    final s = featuredScope;
+    final target = websiteSectionTarget(
+      plan,
+      index: index,
+      collectionKeys: WebsitePricingBlockContent._collection,
+    );
+    final name = websiteSectionText(plan, const ['name']);
+    final tag = websiteSectionText(plan, const ['tag']).trim();
+    final badge = websiteSectionText(plan, const ['badge']).trim();
+    final price = websiteSectionText(plan, const ['price']);
+    final note = websiteSectionText(plan, const ['note']).trim();
+    final features = [
+      if (plan['features'] case final List raw)
+        for (final feature in raw)
+          if (feature.toString().trim().isNotEmpty) feature.toString().trim(),
+    ];
+    final action = WebsiteActionValue.resolvePrimary(
+      plan,
+      labelKeys: const <String>['ctaText', 'buttonText'],
+      hrefKeys: const <String>['ctaLink', 'buttonLink'],
+      variantKeys: const <String>['actionVariant'],
+      defaultLabel: '',
+    );
+    final href = action?.href.trim() ?? '';
+    final showAction = action != null &&
+        action.label.trim().isNotEmpty &&
+        href.isNotEmpty &&
+        (owner.isNavigationEligible?.call(href) ?? true) &&
+        (!stacked || featured);
+    final nameSlot = websiteSectionSlot(
       context,
-      WebsiteInlineActionSlot(
-        id: 'pricing.plan.$index.action',
-        action: action,
-        labelKeys: const <String>['ctaText', 'buttonText'],
-        hrefKeys: const <String>['ctaLink', 'buttonLink'],
-        variantKeys: const <String>['actionVariant'],
-        child: button,
+      presenters,
+      WebsiteInlineTextSlot(
+        id: 'pricing.plan.$index.name',
+        value: name,
+        valueKeys: const <String>['name'],
+        baseStyle: s.heading(stacked ? 24 : 30, height: 1.2),
+        formatting: websiteSectionFormatting(plan['nameFormatting']),
+        formattingKeys: const <String>['nameFormatting'],
+        placeholder: 'Nombre del plan',
+        displayTransform: (value) => value.toUpperCase(),
         repeaterTarget: target,
       ),
     );
-  }
-
-  Widget _presentText(
-    BuildContext context,
-    WebsiteInlineTextSlot slot, {
-    required String fallbackText,
-  }) {
-    return presenters?.text?.call(context, slot) ??
-        Text(
-          fallbackText,
-          style: slot.formatting.applyTo(slot.baseStyle),
-          textAlign: slot.resolvedTextAlign,
+    Widget priceSlot(double size, {double height = 1}) => websiteSectionSlot(
+          context,
+          presenters,
+          WebsiteInlineTextSlot(
+            id: 'pricing.plan.$index.price',
+            value: price,
+            valueKeys: const <String>['price'],
+            baseStyle: s.heading(size, height: height),
+            formatting: websiteSectionFormatting(plan['priceFormatting']),
+            formattingKeys: const <String>['priceFormatting'],
+            placeholder: r'$0',
+            displayTransform: (value) => value.trim(),
+            repeaterTarget: target,
+          ),
+          key: WebsitePricingBlockContent.priceKey(index),
         );
-  }
+    final badgeWidget = featured && badge.isNotEmpty
+        ? DecoratedBox(
+            decoration: BoxDecoration(
+              color: colors.accent,
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Padding(
+              padding: stacked
+                  ? const EdgeInsets.symmetric(horizontal: 9, vertical: 5)
+                  : const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              child: Text(
+                badge.toUpperCase(),
+                style: s.caps(
+                  stacked ? 11 : 12,
+                  tracking: 0.12,
+                  weight: FontWeight.w700,
+                  color: colors.onAccent,
+                ),
+              ),
+            ),
+          )
+        : null;
+    final featureList = features.isEmpty
+        ? null
+        : Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final (position, feature) in features.indexed) ...[
+                if (position > 0) SizedBox(height: stacked ? 10 : 12),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: EdgeInsets.only(top: stacked ? 2 : 1),
+                      child: Icon(
+                        Icons.check,
+                        size: stacked ? 18 : 20,
+                        color: colors.mark,
+                      ),
+                    ),
+                    SizedBox(width: stacked ? 10 : 12),
+                    Expanded(
+                      child: Text(
+                        feature,
+                        style: s.body(stacked ? 15 : 16, height: 1.45),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          );
+    final button = showAction
+        ? KeyedSubtree(
+            key: WebsitePricingBlockContent.actionKey(index),
+            child: websiteSectionAction(
+              context,
+              presenters: presenters,
+              id: 'pricing.plan.$index.action',
+              action: action,
+              labelKeys: const <String>['ctaText', 'buttonText'],
+              hrefKeys: const <String>['ctaLink', 'buttonLink'],
+              variantKeys: const <String>['actionVariant'],
+              kind: featured
+                  ? WebsiteSectionButtonKind.accent
+                  : WebsiteSectionButtonKind.line,
+              colors: colors,
+              onNavigate: owner.onNavigate,
+              repeaterTarget: target,
+              bodyFont: s.bodyFont,
+              expand: true,
+            ),
+          )
+        : null;
 
-  static WebsiteInlineRepeaterTarget _target(
-    Map<String, dynamic> plan,
-    int index,
-  ) {
-    final persistedId = plan['id'];
-    final hasPersistedId =
-        persistedId != null && persistedId.toString().trim().isNotEmpty;
-    return WebsiteInlineRepeaterTarget(
-      collectionKeys: const <String>['plans', 'items'],
-      itemIndex: index,
-      identityKey: hasPersistedId ? 'id' : null,
-      identityValue: hasPersistedId ? persistedId : null,
+    if (stacked) {
+      return Container(
+        padding: const EdgeInsets.fromLTRB(22, 26, 22, 26),
+        decoration: BoxDecoration(
+          color: featured ? colors.surface : colors.card,
+          border: featured ? null : Border.all(color: colors.cardRule),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (badgeWidget != null) ...[
+              Align(alignment: Alignment.centerLeft, child: badgeWidget),
+              const SizedBox(height: 14),
+            ],
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Expanded(child: nameSlot),
+                if (price.trim().isNotEmpty) ...[
+                  const SizedBox(width: 12),
+                  priceSlot(32, height: 1.2),
+                ],
+              ],
+            ),
+            if (note.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(note, style: s.body(14, height: 1.45, color: colors.muted)),
+            ],
+            if (featureList != null) ...[
+              const SizedBox(height: 16),
+              featureList,
+            ],
+            if (button != null) ...[
+              const SizedBox(height: 22),
+              button,
+            ],
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(36, 40, 36, 40),
+      decoration: BoxDecoration(
+        color: featured ? colors.surface : colors.card,
+        border: Border(
+          right: last ? BorderSide.none : BorderSide(color: colors.cardRule),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Expanded(child: nameSlot),
+              const SizedBox(width: 12),
+              if (badgeWidget != null)
+                badgeWidget
+              else if (tag.isNotEmpty)
+                Text(
+                  tag.toUpperCase(),
+                  style: s
+                      .caps(12, tracking: 0.14, color: colors.muted)
+                      .copyWith(height: 1.4),
+                ),
+            ],
+          ),
+          if (price.trim().isNotEmpty) ...[
+            const SizedBox(height: 28),
+            priceSlot(60),
+          ],
+          if (note.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(note, style: s.body(15, height: 1.45, color: colors.muted)),
+          ],
+          if (featureList != null) ...[
+            SizedBox(height: note.isNotEmpty ? 22 : 28),
+            Container(
+              padding: const EdgeInsets.only(top: 22),
+              decoration: BoxDecoration(
+                border: Border(top: BorderSide(color: colors.rule)),
+              ),
+              child: Text(
+                'INCLUYE',
+                style: s
+                    .caps(12, tracking: 0.14, color: colors.muted)
+                    .copyWith(height: 1.4),
+              ),
+            ),
+            const SizedBox(height: 14),
+            featureList,
+          ],
+          if (button != null) ...[
+            const Spacer(),
+            const SizedBox(height: 36),
+            button,
+          ],
+        ],
+      ),
     );
   }
-
-  static String _priceLabel(String raw) {
-    final price = raw.trim();
-    final hasCurrency = RegExp(r'[A-Za-z\$]').hasMatch(price);
-    if (price.isEmpty) return 'CLP 0';
-    return hasCurrency ? price : 'CLP $price';
-  }
-}
-
-List<Map<String, dynamic>> _firstMapList(
-  Map<String, dynamic> data,
-  List<String> keys,
-) {
-  for (final key in keys) {
-    if (!data.containsKey(key)) continue;
-    final raw = data[key];
-    if (raw is! List) return <Map<String, dynamic>>[];
-    return raw
-        .whereType<Map>()
-        .map((item) => Map<String, dynamic>.from(item))
-        .toList(growable: false);
-  }
-  return <Map<String, dynamic>>[];
-}
-
-String _firstString(
-  Map<String, dynamic> data,
-  List<String> keys,
-) {
-  for (final key in keys) {
-    if (data.containsKey(key)) return data[key]?.toString() ?? '';
-  }
-  return '';
-}
-
-String? _firstNonEmptyString(
-  Map<String, dynamic> data,
-  List<String> keys,
-) {
-  for (final key in keys) {
-    final value = data[key]?.toString().trim();
-    if (value != null && value.isNotEmpty) return value;
-  }
-  return null;
-}
-
-bool _firstBool(
-  Map<String, dynamic> data,
-  List<String> keys,
-) {
-  for (final key in keys) {
-    if (!data.containsKey(key)) continue;
-    final value = data[key];
-    if (value is bool) return value;
-    return value?.toString().trim().toLowerCase() == 'true';
-  }
-  return false;
-}
-
-List<String> _stringList(Object? raw) {
-  if (raw is! List) return <String>[];
-  return raw
-      .where((item) => item != null)
-      .map((item) => item.toString().trim())
-      .where((item) => item.isNotEmpty)
-      .toList(growable: false);
-}
-
-TextFormatting _formatting(Object? raw) {
-  if (raw is! Map) return const TextFormatting();
-  return TextFormatting.fromJson(Map<String, dynamic>.from(raw));
 }

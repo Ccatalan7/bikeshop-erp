@@ -1,28 +1,29 @@
 {
   "type": "stats",
   "title": "Indicadores",
-  "description": "Muestra logros del taller: bicis reparadas, clientes felices, etc.",
+  "description": "Cifras del taller en una banda: la nota y las reseñas en Google, y las que escribas.",
   "usesCustomEditor": false,
   "category": "Contenido",
   "tags": ["indicadores", "estadísticas", "logros"],
   "version": 1,
   "supportsResponsive": true,
   "defaultData": {
-    "title": "Resultados que nos respaldan",
+    "eyebrow": "El taller en números",
+    "title": "Lo que dicen los ciclistas",
+    "subtitle": "",
+    "tone": "dark",
     "metrics": [
       {
-        "label": "Bicis reparadas",
-        "value": "1200",
-        "suffix": "+"
+        "source": "google_rating",
+        "value": "",
+        "suffix": "★",
+        "label": "de nota en Google"
       },
       {
-        "label": "Clientes felices",
-        "value": "980",
-        "suffix": "+"
-      },
-      {
-        "label": "Años en el mercado",
-        "value": "10"
+        "source": "google_reviews",
+        "value": "",
+        "suffix": "",
+        "label": "reseñas en Google"
       }
     ]
   },

@@ -8,16 +8,19 @@
   "version": 1,
   "supportsResponsive": true,
   "defaultData": {
-    "title": "Preguntas Frecuentes",
-    "subtitle": "Respondemos lo que más nos consultan",
+    "eyebrow": "Preguntas frecuentes",
+    "title": "Lo que más nos preguntan",
+    "subtitle": "",
+    "showContact": true,
+    "tone": "band",
     "items": [
       {
-        "question": "¿Cuánto se demora una mantención?",
-        "answer": "Depende del nivel de servicio, pero normalmente entre 24 y 48 horas."
+        "question": "¿Me avisan el precio antes de arreglar mi bici?",
+        "answer": "Sí. La revisamos, te mandamos el presupuesto y empezamos cuando lo apruebas."
       },
       {
-        "question": "¿Trabajan con bicicletas eléctricas?",
-        "answer": "Sí, contamos con técnicos certificados en e-bikes."
+        "question": "¿Cómo puedo pagar una compra en la tienda?",
+        "answer": "Con Mercado Pago o por transferencia bancaria."
       }
     ]
   },

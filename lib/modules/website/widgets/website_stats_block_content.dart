@@ -1,11 +1,15 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
+import 'package:vinabike_public_core/modules/website/models/website_block_type.dart';
+import 'package:vinabike_public_core/modules/website/models/website_section_content.dart';
+import 'package:vinabike_public_core/modules/website/theme/website_section_palette.dart';
 
-import 'text_formatting_toolbar.dart';
 import 'website_block_content_presenters.dart';
+import 'website_section_frame.dart';
 
-/// Shared visitor content for the schema-defined Stats collection.
+/// Shared visitor content for the schema-defined Stats collection: a band
+/// (dark by default) with the section's header and the figures in a row
+/// under a rule, a line between them; two columns on a tablet or a phone.
+/// The HTML storefront draws the same (`StatsSectionView`).
 ///
 /// `metrics` is canonical. `stats` and `items` remain read/write aliases for
 /// persisted legacy blocks through [WebsiteInlineRepeaterTarget].
@@ -18,19 +22,22 @@ class WebsiteStatsBlockContent extends StatelessWidget {
     this.headingFont,
     this.bodyFont,
     this.presenters,
-    this.padding = const EdgeInsets.symmetric(
-      vertical: 64,
-      horizontal: 24,
-    ),
+    this.padding,
+    this.paintSurface = true,
+    this.setting,
   });
 
   static const rootKey = ValueKey<String>('website-stats-content-root');
-  static const frameKey = ValueKey<String>('website-stats-content-frame');
   static const titleKey = ValueKey<String>('website-stats-title');
   static const collectionKey = ValueKey<String>('website-stats-collection');
 
   static ValueKey<String> metricKey(int index) =>
       ValueKey<String>('website-stat-$index');
+
+  static ValueKey<String> liveValueKey(int index) =>
+      ValueKey<String>('website-stat-live-value-$index');
+
+  static const _collection = <String>['metrics', 'stats', 'items'];
 
   final Map<String, dynamic> data;
   final Color primaryColor;
@@ -38,315 +45,263 @@ class WebsiteStatsBlockContent extends StatelessWidget {
   final String? headingFont;
   final String? bodyFont;
   final WebsiteBlockContentPresenters? presenters;
-  final EdgeInsetsGeometry padding;
+
+  /// The padding the operator set; `null` keeps the design's.
+  final EdgeInsetsGeometry? padding;
+  final bool paintSurface;
+
+  /// The store's settings, where a Google figure reads the synced score and
+  /// review count.
+  final String Function(String key)? setting;
 
   @override
   Widget build(BuildContext context) {
-    final metrics = _firstMapList(
-      data,
-      const <String>['metrics', 'stats', 'items'],
-    );
-    if (metrics.isEmpty) {
+    final metrics = websiteSectionItems(data, 'metrics', const [
+      'stats',
+      'items',
+    ]);
+    final hasHeader = [
+      'eyebrow',
+      'title',
+      'subtitle',
+    ].any((key) => (data[key]?.toString() ?? '').trim().isNotEmpty);
+    if (metrics.isEmpty && !hasHeader) {
       return const SizedBox.shrink(key: rootKey);
     }
-
-    final theme = Theme.of(context);
-    final rawTitle = _firstString(data, const <String>['title']);
-    final title = rawTitle.trim().isEmpty ? 'Indicadores' : rawTitle.trim();
-    final titleFormatting = _formatting(data['titleFormatting']);
-    final titleSlot = WebsiteInlineTextSlot(
-      id: 'stats.title',
-      value: rawTitle,
-      valueKeys: const <String>['title'],
-      baseStyle: (theme.textTheme.displaySmall ?? const TextStyle()).copyWith(
-        fontFamily: headingFont,
-      ),
-      formatting: titleFormatting,
-      formattingKeys: const <String>['titleFormatting'],
-      textAlign: TextAlign.center,
-      placeholder: 'Indicadores',
-      displayTransform: (value) =>
-          value.trim().isEmpty ? 'Indicadores' : value.trim(),
-    );
-
-    return Padding(
+    return KeyedSubtree(
       key: rootKey,
-      padding: padding,
-      child: Center(
-        child: ConstrainedBox(
-          key: frameKey,
-          constraints: const BoxConstraints(maxWidth: 1000),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final availableWidth =
-                  constraints.hasBoundedWidth ? constraints.maxWidth : 1000.0;
-              final compact = availableWidth < 600;
-              final itemWidth =
-                  compact ? availableWidth : math.min(220.0, availableWidth);
-
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: <Widget>[
-                  KeyedSubtree(
-                    key: titleKey,
-                    child: _presentText(
-                      context,
-                      titleSlot,
-                      fallbackText: title,
-                    ),
-                  ),
-                  const SizedBox(height: 40),
-                  Wrap(
-                    key: collectionKey,
-                    spacing: 24,
-                    runSpacing: 24,
-                    alignment: WrapAlignment.center,
-                    children: <Widget>[
-                      for (var index = 0; index < metrics.length; index++)
-                        SizedBox(
-                          key: metricKey(index),
-                          width: itemWidth,
-                          child: _StatsMetricCard(
-                            metric: metrics[index],
-                            index: index,
-                            primaryColor: primaryColor,
-                            accentColor: accentColor,
-                            headingFont: headingFont,
-                            bodyFont: bodyFont,
-                            presenters: presenters,
-                          ),
-                        ),
-                    ],
-                  ),
-                ],
-              );
+      child: WebsiteSectionBand(
+        tone: WebsiteSectionTone.of(WebsiteBlockType.stats, data),
+        primaryColor: primaryColor,
+        accentColor: accentColor,
+        headingFont: headingFont,
+        bodyFont: bodyFont,
+        padding: padding,
+        paintSurface: paintSurface,
+        paddingFor: (metrics) => switch (metrics.width) {
+          WebsiteSectionWidth.desktop =>
+            const EdgeInsets.fromLTRB(32, 104, 32, 96),
+          WebsiteSectionWidth.tablet =>
+            const EdgeInsets.fromLTRB(32, 88, 32, 80),
+          WebsiteSectionWidth.phone =>
+            const EdgeInsets.fromLTRB(20, 64, 20, 56),
+        },
+        builder: (context, scope) {
+          final header = WebsiteSectionHeader(
+            key: titleKey,
+            scope: scope,
+            data: data,
+            idPrefix: 'stats',
+            presenters: presenters,
+            titleSize: switch (scope.metrics.width) {
+              WebsiteSectionWidth.desktop => 56,
+              WebsiteSectionWidth.tablet => 48,
+              WebsiteSectionWidth.phone => 38,
             },
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _presentText(
-    BuildContext context,
-    WebsiteInlineTextSlot slot, {
-    required String fallbackText,
-  }) {
-    return presenters?.text?.call(context, slot) ??
-        Text(
-          fallbackText,
-          style: slot.formatting.applyTo(slot.baseStyle),
-          textAlign: slot.resolvedTextAlign,
-        );
-  }
-}
-
-class _StatsMetricCard extends StatelessWidget {
-  const _StatsMetricCard({
-    required this.metric,
-    required this.index,
-    required this.primaryColor,
-    required this.accentColor,
-    required this.headingFont,
-    required this.bodyFont,
-    required this.presenters,
-  });
-
-  final Map<String, dynamic> metric;
-  final int index;
-  final Color primaryColor;
-  final Color accentColor;
-  final String? headingFont;
-  final String? bodyFont;
-  final WebsiteBlockContentPresenters? presenters;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final rawValue = _firstString(metric, const <String>['value']);
-    final rawSuffix = _firstString(metric, const <String>['suffix']);
-    final rawLabel = _firstString(metric, const <String>['label']);
-    final displayLabel =
-        rawLabel.trim().isEmpty ? 'Indicador' : rawLabel.trim();
-    final repeaterTarget = _target(
-      metric,
-      index: index,
-      collectionKeys: const <String>['metrics', 'stats', 'items'],
-    );
-    final valueStyle =
-        (theme.textTheme.displaySmall ?? const TextStyle()).copyWith(
-      fontFamily: headingFont,
-      color: primaryColor,
-      fontWeight: FontWeight.bold,
-    );
-    final suffixStyle = valueStyle.copyWith(
-      fontSize: (valueStyle.fontSize ?? 36) * 0.72,
-    );
-    final labelStyle =
-        (theme.textTheme.bodyLarge ?? const TextStyle()).copyWith(
-      fontFamily: bodyFont,
-      color: theme.colorScheme.onSurfaceVariant,
-    );
-    final valueSlot = WebsiteInlineTextSlot(
-      id: 'stats.metric.$index.value',
-      value: rawValue,
-      valueKeys: const <String>['value'],
-      baseStyle: valueStyle,
-      formatting: _formatting(metric['valueFormatting']),
-      formattingKeys: const <String>['valueFormatting'],
-      textAlign: TextAlign.center,
-      placeholder: '0',
-      repeaterTarget: repeaterTarget,
-    );
-    final suffixSlot = WebsiteInlineTextSlot(
-      id: 'stats.metric.$index.suffix',
-      value: rawSuffix,
-      valueKeys: const <String>['suffix'],
-      baseStyle: suffixStyle,
-      formatting: _formatting(metric['suffixFormatting']),
-      formattingKeys: const <String>['suffixFormatting'],
-      textAlign: TextAlign.center,
-      placeholder: '+',
-      repeaterTarget: repeaterTarget,
-    );
-    final labelSlot = WebsiteInlineTextSlot(
-      id: 'stats.metric.$index.label',
-      value: rawLabel,
-      valueKeys: const <String>['label'],
-      baseStyle: labelStyle,
-      formatting: _formatting(metric['labelFormatting']),
-      formattingKeys: const <String>['labelFormatting'],
-      textAlign: TextAlign.center,
-      placeholder: 'Indicador',
-      displayTransform: (value) =>
-          value.trim().isEmpty ? 'Indicador' : value.trim(),
-      repeaterTarget: repeaterTarget,
-    );
-    final icon = _metricIcon(metric['icon']);
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: accentColor.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: primaryColor.withValues(alpha: 0.2),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            if (icon != null) ...<Widget>[
-              Icon(
-                icon.$1,
-                size: 28,
-                color: primaryColor,
-                semanticLabel: icon.$2,
-              ),
-              const SizedBox(height: 12),
+            titleHeight: scope.isPhone ? 1.05 : 1.04,
+            titleMaxWidth: 680,
+            eyebrowGap: 18,
+          );
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (!header.isEmpty) header,
+              if (metrics.isNotEmpty) ...[
+                if (!header.isEmpty)
+                  SizedBox(
+                    height: switch (scope.metrics.width) {
+                      WebsiteSectionWidth.desktop => 64,
+                      WebsiteSectionWidth.tablet => 48,
+                      WebsiteSectionWidth.phone => 36,
+                    },
+                  ),
+                _grid(context, scope, metrics),
+              ],
             ],
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: <Widget>[
-                Flexible(
-                  child: _presentText(
-                    context,
-                    valueSlot,
-                    fallbackText: rawValue,
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _grid(
+    BuildContext context,
+    WebsiteSectionScope scope,
+    List<(int, Map<String, dynamic>)> metrics,
+  ) {
+    final desktop = scope.isDesktop;
+    final columns = websiteStatsColumns(metrics.length, desktop: desktop);
+    // A desktop row: a line between the figures and 28 after it (CSS's
+    // column gap); a tablet or phone row: no gap, a line under each row.
+    final gap = desktop ? 28.0 : 0.0;
+    final width = scope.contentWidth;
+    final columnWidth = (width - gap * (columns - 1)) / columns;
+    final rule = BorderSide(color: scope.colors.rule);
+    final rows = <Widget>[];
+    for (var start = 0; start < metrics.length; start += columns) {
+      final row = metrics.skip(start).take(columns).toList();
+      rows.add(
+        Align(
+          alignment: Alignment.centerLeft,
+          child: SizedBox(
+            width: row.length * columnWidth + (row.length - 1) * gap,
+            child: Table(
+              columnWidths: {
+                for (var column = 0; column < row.length; column++)
+                  column: FixedColumnWidth(
+                    column == 0 ? columnWidth : columnWidth + gap,
                   ),
+              },
+              border: desktop
+                  ? TableBorder(verticalInside: rule)
+                  : TableBorder(bottom: rule),
+              children: [
+                TableRow(
+                  children: [
+                    for (final (column, (index, metric)) in row.indexed)
+                      Padding(
+                        key: metricKey(index),
+                        padding: desktop
+                            ? EdgeInsets.fromLTRB(
+                                column == 0 ? 0 : gap,
+                                30,
+                                28,
+                                0,
+                              )
+                            : const EdgeInsets.fromLTRB(0, 22, 12, 20),
+                        child: _metric(context, scope, metric, index),
+                      ),
+                  ],
                 ),
-                if (rawSuffix.isNotEmpty)
-                  Flexible(
-                    child: _presentText(
-                      context,
-                      suffixSlot,
-                      fallbackText: rawSuffix,
-                    ),
-                  ),
               ],
             ),
-            const SizedBox(height: 12),
-            _presentText(
-              context,
-              labelSlot,
-              fallbackText: displayLabel,
-            ),
-          ],
+          ),
         ),
+      );
+    }
+    return Container(
+      key: collectionKey,
+      decoration: BoxDecoration(border: Border(top: rule)),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: rows,
       ),
     );
   }
 
-  Widget _presentText(
+  Widget _metric(
     BuildContext context,
-    WebsiteInlineTextSlot slot, {
-    required String fallbackText,
-  }) {
-    return presenters?.text?.call(context, slot) ??
-        Text(
-          fallbackText,
-          style: slot.formatting.applyTo(slot.baseStyle),
-          textAlign: slot.resolvedTextAlign,
-        );
-  }
-
-  static (IconData, String)? _metricIcon(Object? raw) {
-    return switch (raw?.toString().trim()) {
-      'military_tech' => (Icons.military_tech, 'Medalla'),
-      'emoji_events' => (Icons.emoji_events, 'Trofeo'),
-      'directions_bike' => (Icons.directions_bike, 'Bicicleta'),
-      'insights' => (Icons.insights, 'Indicadores'),
-      _ => null,
+    WebsiteSectionScope scope,
+    Map<String, dynamic> metric,
+    int index,
+  ) {
+    final target = websiteSectionTarget(
+      metric,
+      index: index,
+      collectionKeys: _collection,
+    );
+    final (valueSize, suffixSize) = switch (scope.metrics.width) {
+      WebsiteSectionWidth.desktop => (76.0, 26.0),
+      WebsiteSectionWidth.tablet => (60.0, 22.0),
+      WebsiteSectionWidth.phone => (48.0, 18.0),
     };
+    final figure = websiteStatsFigure(
+      metric,
+      setting: setting ?? (_) => '',
+    );
+    final suffix = figure.suffix;
+    final label = websiteSectionText(metric, const ['label']);
+    final valueStyle = scope.heading(valueSize, height: 1);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            Flexible(
+              // A Google figure is read from the sync, never written here.
+              child: figure.live
+                  ? Text(
+                      figure.value,
+                      key: liveValueKey(index),
+                      style: valueStyle,
+                    )
+                  : websiteSectionSlot(
+                      context,
+                      presenters,
+                      WebsiteInlineTextSlot(
+                        id: 'stats.metric.$index.value',
+                        value: figure.value,
+                        valueKeys: const <String>['value'],
+                        baseStyle: valueStyle,
+                        formatting: websiteSectionFormatting(
+                          metric['valueFormatting'],
+                        ),
+                        formattingKeys: const <String>['valueFormatting'],
+                        placeholder: '0',
+                        repeaterTarget: target,
+                      ),
+                    ),
+            ),
+            if (suffix.trim().isNotEmpty) ...[
+              SizedBox(width: scope.isPhone ? 6 : 8),
+              websiteSectionSlot(
+                context,
+                presenters,
+                WebsiteInlineTextSlot(
+                  id: 'stats.metric.$index.suffix',
+                  value: suffix,
+                  valueKeys: const <String>['suffix'],
+                  baseStyle: scope.heading(
+                    suffixSize,
+                    height: 1,
+                    color: scope.colors.eyebrow,
+                  ),
+                  formatting: websiteSectionFormatting(
+                    metric['suffixFormatting'],
+                  ),
+                  formattingKeys: const <String>['suffixFormatting'],
+                  placeholder: '+',
+                  displayTransform: (value) => value.trim(),
+                  repeaterTarget: target,
+                ),
+              ),
+            ],
+          ],
+        ),
+        if (label.trim().isNotEmpty) ...[
+          SizedBox(height: scope.isPhone ? 10 : 16),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 220),
+            child: websiteSectionSlot(
+              context,
+              presenters,
+              WebsiteInlineTextSlot(
+                id: 'stats.metric.$index.label',
+                value: label,
+                valueKeys: const <String>['label'],
+                baseStyle: scope.body(
+                  scope.isPhone ? 14 : 16,
+                  height: scope.isPhone ? 1.4 : 1.45,
+                  weight: FontWeight.w500,
+                  color: scope.colors.muted,
+                ),
+                formatting: websiteSectionFormatting(
+                  metric['labelFormatting'],
+                ),
+                formattingKeys: const <String>['labelFormatting'],
+                placeholder: 'Etiqueta',
+                displayTransform: (value) => value.trim(),
+                repeaterTarget: target,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
   }
-}
-
-WebsiteInlineRepeaterTarget _target(
-  Map<String, dynamic> item, {
-  required int index,
-  required List<String> collectionKeys,
-}) {
-  final persistedId = item['id'];
-  final hasPersistedId =
-      persistedId != null && persistedId.toString().trim().isNotEmpty;
-  return WebsiteInlineRepeaterTarget(
-    collectionKeys: collectionKeys,
-    itemIndex: index,
-    identityKey: hasPersistedId ? 'id' : null,
-    identityValue: hasPersistedId ? persistedId : null,
-  );
-}
-
-List<Map<String, dynamic>> _firstMapList(
-  Map<String, dynamic> data,
-  List<String> keys,
-) {
-  for (final key in keys) {
-    if (!data.containsKey(key)) continue;
-    final raw = data[key];
-    if (raw is! List) return <Map<String, dynamic>>[];
-    return raw
-        .whereType<Map>()
-        .map((item) => Map<String, dynamic>.from(item))
-        .toList(growable: false);
-  }
-  return <Map<String, dynamic>>[];
-}
-
-String _firstString(
-  Map<String, dynamic> data,
-  List<String> keys,
-) {
-  for (final key in keys) {
-    if (data.containsKey(key)) return data[key]?.toString() ?? '';
-  }
-  return '';
-}
-
-TextFormatting _formatting(Object? raw) {
-  if (raw is! Map) return const TextFormatting();
-  return TextFormatting.fromJson(Map<String, dynamic>.from(raw));
 }
