@@ -22,7 +22,11 @@ Component catalogPageDocument(CatalogPageModel page) => sitePage(
       _Hero(page),
       if (page.subcategories.isNotEmpty) _Subcategories(page),
     ],
-    div(classes: 'wrap catalog', [_Filters(page), _Results(page)]),
+    div(
+      classes: 'wrap catalog',
+      attributes: page.pickSection(WebsiteCatalogDraftSection.list),
+      [_Filters(page), _Results(page)],
+    ),
   ],
 );
 
@@ -76,6 +80,7 @@ class _Hero extends StatelessComponent {
         'style':
             '--hero:${height}px;--hero-phone:${phone}px;'
             '--shade:${look.heroOverlay.toStringAsFixed(2)}',
+        ...page.pickSection(WebsiteCatalogDraftSection.hero),
       },
       [
         if (page.heroImage.isNotEmpty)

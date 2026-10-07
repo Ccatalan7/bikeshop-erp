@@ -3493,6 +3493,137 @@ void main() {
       });
     });
 
+    test('any public page, drawn from the draft with the visit handler: '
+        'a category with its unsaved portada, its sections picked', () async {
+      final reads = _FakeReads(products: [_product()]);
+      final (status, answer, _) = await draft(reads, {
+        'path': '/productos/categoria/componentes',
+        'page': {'home': true},
+        'blocks': [hero('b-hero', 'Portada')],
+        'settings': {
+          websiteCatalogPresentationsSettingKey: jsonEncode({
+            'items': [
+              {
+                'category_id': _parent,
+                'slug': 'componentes',
+                'own_look': true,
+                'hero_title': 'Componentes sin guardar',
+              },
+            ],
+          }),
+        },
+      });
+      expect(status, 200);
+      expect(answer['status'], 200);
+      final html = answer['html'] as String;
+      expect(html, contains('Componentes sin guardar'));
+      expect(html, contains('data-block-id="catalog:$_parent:hero"'));
+      expect(html, contains('data-block-id="catalog:$_parent:list"'));
+      expect(html, contains('data-block-id="header"'));
+      expect(html, contains('data-block-id="footer"'));
+      // The home's draft blocks belong to the home, not to this page.
+      expect(html, isNot(contains('data-block-id="b-hero"')));
+      expect(html, contains('<meta name="robots" content="noindex,follow"'));
+      // The editor's script, once, at the end of the page.
+      const script = 'window.vbDraftPicked = function';
+      expect(script.allMatches(html), hasLength(1));
+      expect(html.indexOf(script), greaterThan(html.indexOf('<footer')));
+    });
+
+    test('the product page with the unsaved template, its sections '
+        'picked', () async {
+      final reads = _FakeReads(page: _page());
+      final (status, answer, _) = await draft(reads, {
+        'path': _canonical(),
+        'page': {'home': true},
+        'blocks': [],
+        'settings': {
+          websiteProductPageTemplateSettingKey:
+              const WebsiteProductPageTemplate(
+                addToCartLabel: 'Lo quiero',
+              ).encode(),
+        },
+      });
+      expect(status, 200);
+      final html = answer['html'] as String;
+      expect(html, contains('>Lo quiero</span>'));
+      expect(html, contains('data-block-id="product-page:buy"'));
+      expect(html, contains('data-block-id="product-page:sheet"'));
+      expect(html, contains('data-block-id="product-page:related"'));
+    });
+
+    test('an information page with the blocks the editor has open, even '
+        'before it is published, and with the site unpublished', () async {
+      final shell = _shell();
+      shell['settings'] = {
+        ...shell['settings'] as Map,
+        'site_published': 'false',
+      };
+      final (status, answer, _) = await draft(_FakeReads(shell: shell), {
+        'path': '/envios',
+        'page': {'slug': 'envios', 'title': 'Envíos'},
+        'blocks': [
+          {
+            'id': 'b-text',
+            'block_type': 'text',
+            'block_data': {
+              'title': 'Despacho a regiones',
+              'content': 'Salimos los martes.',
+            },
+            'is_visible': true,
+            'order_index': 0,
+          },
+          {
+            'id': 'b-logos',
+            'block_type': 'brandLogos',
+            'block_data': {'logos': []},
+            'is_visible': true,
+            'order_index': 1,
+          },
+        ],
+      });
+      expect(status, 200);
+      final html = answer['html'] as String;
+      expect(html, isNot(contains('no está publicado')));
+      expect(html, contains('Despacho a regiones'));
+      expect(html, contains('data-block-id="b-text"'));
+      // Not drawn in an information page yet: named in its place.
+      expect(html, contains('data-block-id="b-logos"'));
+      expect(html, contains('class="draft-missing"'));
+    });
+
+    test('a moved path is drawn where it lands; a path that is not a page '
+        'is not drawn', () async {
+      final reads = _FakeReads();
+      final (status, answer, _) = await draft(reads, {
+        'path': '/pagina/Nosotros',
+        'page': {'slug': 'nosotros', 'title': 'Nosotros'},
+        'blocks': [hero('b1', 'Quiénes somos')],
+      });
+      expect(status, 200);
+      expect(answer['html'], contains('QUIÉNES SOMOS'));
+      for (final path in [
+        '/carrito',
+        '/checkout',
+        '/cuenta',
+        '/cuenta/perfil',
+        '/editor/borrador',
+        '/pedido/x',
+        '/healthz',
+        'https://example.com/',
+        '//example.com/productos',
+        '/productos/a/b/c',
+      ]) {
+        final (code, refused, _) = await draft(_FakeReads(), {
+          'path': path,
+          'page': {'home': true},
+          'blocks': [],
+        });
+        expect(code, 400, reason: path);
+        expect(refused, {'state': 'invalid'}, reason: path);
+      }
+    });
+
     test('the ERP on the web may ask; another site may not', () async {
       Future<Response> preflight(String origin) => _get(
         _FakeReads(),

@@ -1,10 +1,13 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:vinabike_public_core/public_store/models/public_policy_content.dart';
+import 'package:vinabike_public_core/public_store/seo/storefront_seo_route.dart';
 
-/// The page the editor has open, as the store's HTML server draws it from
+/// The page on the editor's screen, as the store's HTML server draws it from
 /// the unsaved draft (`POST /_html/editor/borrador`, phase 5b of the move to
-/// HTML): the «Vista HTML» shows the real site while the page is edited.
+/// HTML): the «Vista HTML» shows the real site while it is edited, from the
+/// home to the catalog, a category or a product page.
 ///
 /// The request carries the editor's own session; the server only answers
 /// someone who may save the site (`can_edit_tenant_settings`).
@@ -90,23 +93,41 @@ class WebsiteHtmlDraftAnswer {
       };
 }
 
-/// Whether the HTML view can draw the open document: the home
-/// ([pageId] null) or a page the editor creates. The catalog's and the
-/// product's templates come in a later stage.
-bool websiteHtmlDraftSupports({
-  required String? pageId,
-  required String? pageSlug,
-  required bool catalogCanvas,
-}) {
-  if (catalogCanvas) return false;
-  if (pageId == null) return true;
-  final slug = pageSlug?.trim() ?? '';
-  return slug.isNotEmpty && !slug.startsWith('@');
+/// The public path the HTML view draws for the editor's [location] (the
+/// store as the ERP mounts it: `/tienda/productos` is `/productos`), with
+/// its query, or null when the server draws no page there: the cart, the
+/// checkout, an order or the customer's account stay on the canvas.
+String? websiteHtmlDraftPath(Uri location) {
+  final path = normalizeStorefrontSeoPath(location.path);
+  final segments = path.split('/').where((s) => s.isNotEmpty).toList();
+  final page = segments.isEmpty ||
+      (segments.length <= 3 &&
+          const {'productos', 'servicios', 'producto', 'pagina'}
+              .contains(segments.first)) ||
+      (segments.length == 1 &&
+          (segments.first == 'contacto' ||
+              publicPolicySlugs.contains(segments.first)));
+  if (!page) return null;
+  return Uri(
+    path: path,
+    query: location.query.isEmpty ? null : location.query,
+  ).toString();
 }
 
-/// The request body: the open page, its draft blocks in their order (as
-/// `replace_page_blocks` would save them) and the unsaved site settings.
+/// The open document as the server names it: the home, a page by its slug,
+/// or none (a slug the server would refuse).
+Map<String, Object?>? _document(String? pageId, String? pageSlug) {
+  if (pageId == null) return {'home': true};
+  final slug = (pageSlug ?? '').trim().toLowerCase();
+  if (!RegExp(r'^[a-z0-9][a-z0-9-]{0,199}$').hasMatch(slug)) return null;
+  return {'slug': slug};
+}
+
+/// The request body: the public [path] on screen, the open page with its
+/// draft blocks in their order (as `replace_page_blocks` would save them)
+/// and the unsaved site settings.
 String websiteHtmlDraftBody({
+  required String path,
   required String? pageId,
   required String? pageSlug,
   required List<Map<String, dynamic>> blocks,
@@ -114,9 +135,8 @@ String websiteHtmlDraftBody({
 }) {
   return jsonEncode(
     {
-      'page': pageId == null
-          ? {'home': true}
-          : {'slug': (pageSlug ?? '').trim().toLowerCase()},
+      'path': path,
+      'page': _document(pageId, pageSlug),
       'blocks': [
         for (final (index, block) in blocks.indexed)
           {

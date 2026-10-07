@@ -3,6 +3,7 @@ import 'package:jaspr/server.dart';
 import 'package:vinabike_public_core/public_store/models/public_policy_content.dart';
 
 import 'block_composition.dart';
+import 'editor_page_view.dart' show draftMissingBlock;
 import 'material_icons.dart';
 import 'policy_page_model.dart';
 import 'site_layout.dart';
@@ -51,7 +52,8 @@ Component policyPageDocument(PolicyPageModel model) {
               if (model.navigation.isNotEmpty) _PolicyNav(model),
             ]),
             div(classes: 'pol-main blocks', [
-              for (final composed in model.blocks) ?_block(composed, render),
+              for (final composed in model.blocks)
+                ?_block(composed, render, draft: model.page.draft),
             ]),
           ]),
         ]),
@@ -59,13 +61,18 @@ Component policyPageDocument(PolicyPageModel model) {
   );
 }
 
-Component? _block(ComposedBlock composed, BlockRenderContext render) {
+Component? _block(
+  ComposedBlock composed,
+  BlockRenderContext render, {
+  bool draft = false,
+}) {
   // `contentAdapter`: the block's own row, not its projection, as Flutter.
   final sections = extractPublicPolicySections([composed.block.sourceBlock]);
   if (sections.isNotEmpty) {
     return composedBlock(
       composed,
       fill: false,
+      draft: draft,
       child: Component.fragment([for (final s in sections) _section(s)]),
     );
   }
@@ -74,9 +81,9 @@ Component? _block(ComposedBlock composed, BlockRenderContext render) {
       : null;
   if (shared == null) {
     render.uncovered.add(composed.block.blockType);
-    return null;
+    return draft ? draftMissingBlock(composed) : null;
   }
-  return composedBlock(composed, fill: true, child: shared);
+  return composedBlock(composed, fill: true, draft: draft, child: shared);
 }
 
 Component _section(PublicPolicySection section) {

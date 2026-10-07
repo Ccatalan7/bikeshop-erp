@@ -72,6 +72,7 @@ class PageContext {
     this.query = '',
     this.supabaseUrl = '',
     this.publishableKey = '',
+    this.draft = false,
   });
 
   final StorefrontShell shell;
@@ -97,6 +98,16 @@ class PageContext {
   /// Flutter store does: the customer's session (header, checkout, order).
   final String supabaseUrl;
   final String publishableKey;
+
+  /// The editor's draft (`POST /editor/borrador`): what a click picks is
+  /// named on the page ([pick]).
+  final bool draft;
+
+  /// In the editor's draft, the attribute that makes an element the part
+  /// [selectionId] names (a block's id, `header`, `footer`, a catalog or
+  /// product page section): a click on it selects that part in the panel.
+  Map<String, String> pick(String selectionId) =>
+      draft ? {'data-block-id': selectionId} : const {};
 }
 
 /// The whole document around a page's content.
@@ -282,122 +293,130 @@ class SiteHeader extends StatelessComponent {
       mobile: false,
       storeUrl: page.storeUrl,
     );
-    return header(classes: overlay ? 'top over' : 'top', [
-      if (banner.isNotEmpty) p(classes: 'banner', [.text(banner)]),
-      // Without JavaScript a checkbox opens the phone menu (a sheet from the
-      // bottom, as Flutter's); it comes before the sheet for `~`.
-      Component.element(
-        tag: 'input',
-        id: 'menu-toggle',
-        classes: 'menu-toggle',
-        attributes: {'type': 'checkbox', 'aria-label': 'Abrir el menú'},
-      ),
-      div(classes: 'wrap bar', [
-        a(classes: 'logo', href: '/', [
-          // No logo of its own: the store writes its name, as in Flutter.
-          if (logo.isEmpty)
-            span(classes: 'logo-name', [.text(s.storeName)])
-          else
-            img(
-              src: logo.startsWith('http') ? logo : '/$logo',
-              alt: s.storeName,
-              width: 150,
-              height: 40,
-            ),
-        ]),
-        // The full menu, from 1.080 px (`PublicStoreHeaderGeometry`).
-        nav(
-          classes: 'menu',
-          attributes: {'aria-label': 'Principal'},
-          [
-            ul([for (final item in items) ?_menuItem(item)]),
-          ],
+    return header(
+      classes: overlay ? 'top over' : 'top',
+      attributes: page.pick('header'),
+      [
+        if (banner.isNotEmpty) p(classes: 'banner', [.text(banner)]),
+        // Without JavaScript a checkbox opens the phone menu (a sheet from the
+        // bottom, as Flutter's); it comes before the sheet for `~`.
+        Component.element(
+          tag: 'input',
+          id: 'menu-toggle',
+          classes: 'menu-toggle',
+          attributes: {'type': 'checkbox', 'aria-label': 'Abrir el menú'},
         ),
-        div(classes: 'tools', [
-          a(
-            href: '/productos#buscar',
-            attributes: {'aria-label': 'Buscar productos'},
-            [RawText(materialIcon(mdSearch))],
-          ),
-          a(
-            classes: 'cart-link',
-            href: '/carrito',
-            attributes: {'aria-label': 'Carrito'},
-            [
-              RawText(materialIcon(mdCartOutlined)),
-              span(
-                classes: 'cart-count',
-                attributes: {'data-cart-count': '', 'hidden': ''},
-                [.text('0')],
+        div(classes: 'wrap bar', [
+          a(classes: 'logo', href: '/', [
+            // No logo of its own: the store writes its name, as in Flutter.
+            if (logo.isEmpty)
+              span(classes: 'logo-name', [.text(s.storeName)])
+            else
+              img(
+                src: logo.startsWith('http') ? logo : '/$logo',
+                alt: s.storeName,
+                width: 150,
+                height: 40,
               ),
+          ]),
+          // The full menu, from 1.080 px (`PublicStoreHeaderGeometry`).
+          nav(
+            classes: 'menu',
+            attributes: {'aria-label': 'Principal'},
+            [
+              ul([for (final item in items) ?_menuItem(item)]),
             ],
           ),
-          a(classes: 'login', href: '/cuenta/login', [
-            RawText(materialIcon(mdPersonOutline)),
-            .text('Iniciar sesión'),
+          div(classes: 'tools', [
+            a(
+              href: '/productos#buscar',
+              attributes: {'aria-label': 'Buscar productos'},
+              [RawText(materialIcon(mdSearch))],
+            ),
+            a(
+              classes: 'cart-link',
+              href: '/carrito',
+              attributes: {'aria-label': 'Carrito'},
+              [
+                RawText(materialIcon(mdCartOutlined)),
+                span(
+                  classes: 'cart-count',
+                  attributes: {'data-cart-count': '', 'hidden': ''},
+                  [.text('0')],
+                ),
+              ],
+            ),
+            a(classes: 'login', href: '/cuenta/login', [
+              RawText(materialIcon(mdPersonOutline)),
+              .text('Iniciar sesión'),
+            ]),
+            _accountMenu(),
+            Component.element(
+              tag: 'label',
+              classes: 'menu-button',
+              attributes: {'for': 'menu-toggle', 'title': 'Menú'},
+              children: [RawText(materialIcon(mdMenu))],
+            ),
           ]),
-          _accountMenu(),
-          Component.element(
-            tag: 'label',
-            classes: 'menu-button',
-            attributes: {'for': 'menu-toggle', 'title': 'Menú'},
-            children: [RawText(materialIcon(mdMenu))],
+        ]),
+        Component.element(
+          tag: 'label',
+          classes: 'sheet-scrim',
+          attributes: {'for': 'menu-toggle', 'aria-hidden': 'true'},
+        ),
+        div(classes: 'menu-sheet', [
+          span(classes: 'sheet-handle', []),
+          a(classes: 'sheet-item sheet-login', href: '/cuenta/login', [
+            RawText(materialIcon(mdLoginRounded)),
+            span([.text('Iniciar Sesión')]),
+            RawText(materialIcon(mdChevronRight, size: 20, classes: 'go')),
+          ]),
+          a(
+            classes: 'sheet-item sheet-account',
+            href: '/cuenta',
+            attributes: {'hidden': ''},
+            [
+              RawText(materialIcon(mdPersonRounded)),
+              span([.text('Mi Cuenta')]),
+              RawText(materialIcon(mdChevronRight, size: 20, classes: 'go')),
+            ],
+          ),
+          hr(),
+          nav(
+            attributes: {'aria-label': 'Menú del teléfono'},
+            [
+              for (final item in s.menuFor(
+                MenuLocation.header,
+                mobile: true,
+                storeUrl: page.storeUrl,
+              ))
+                ?_sheetItem(item, depth: 0),
+            ],
+          ),
+          hr(classes: 'sheet-account', attributes: {'hidden': ''}),
+          button(
+            classes: 'sheet-item sheet-out sheet-account',
+            attributes: {
+              'type': 'button',
+              'data-act': 'sign-out',
+              'hidden': '',
+            },
+            [
+              RawText(materialIcon(mdLogoutRounded)),
+              span([.text('Cerrar Sesión')]),
+              RawText(materialIcon(mdChevronRight, size: 20, classes: 'go')),
+            ],
           ),
         ]),
-      ]),
-      Component.element(
-        tag: 'label',
-        classes: 'sheet-scrim',
-        attributes: {'for': 'menu-toggle', 'aria-hidden': 'true'},
-      ),
-      div(classes: 'menu-sheet', [
-        span(classes: 'sheet-handle', []),
-        a(classes: 'sheet-item sheet-login', href: '/cuenta/login', [
-          RawText(materialIcon(mdLoginRounded)),
-          span([.text('Iniciar Sesión')]),
-          RawText(materialIcon(mdChevronRight, size: 20, classes: 'go')),
-        ]),
-        a(
-          classes: 'sheet-item sheet-account',
-          href: '/cuenta',
-          attributes: {'hidden': ''},
-          [
-            RawText(materialIcon(mdPersonRounded)),
-            span([.text('Mi Cuenta')]),
-            RawText(materialIcon(mdChevronRight, size: 20, classes: 'go')),
-          ],
-        ),
-        hr(),
-        nav(
-          attributes: {'aria-label': 'Menú del teléfono'},
-          [
-            for (final item in s.menuFor(
-              MenuLocation.header,
-              mobile: true,
-              storeUrl: page.storeUrl,
-            ))
-              ?_sheetItem(item, depth: 0),
-          ],
-        ),
-        hr(classes: 'sheet-account', attributes: {'hidden': ''}),
-        button(
-          classes: 'sheet-item sheet-out sheet-account',
-          attributes: {'type': 'button', 'data-act': 'sign-out', 'hidden': ''},
-          [
-            RawText(materialIcon(mdLogoutRounded)),
-            span([.text('Cerrar Sesión')]),
-            RawText(materialIcon(mdChevronRight, size: 20, classes: 'go')),
-          ],
-        ),
-      ]),
-      // Run while the page is parsed, before anything under the header is
-      // painted: clear at the top, solid after 50 px of scroll. Without
-      // scripts the header stays solid, which is always readable.
-      if (overlay) script(content: _overlayHeaderScript),
-      // A customer seen on an earlier page shows as signed in from the first
-      // paint; the page script confirms it (or reverts) with the base.
-      script(content: _accountFirstPaintScript(page)),
-    ]);
+        // Run while the page is parsed, before anything under the header is
+        // painted: clear at the top, solid after 50 px of scroll. Without
+        // scripts the header stays solid, which is always readable.
+        if (overlay) script(content: _overlayHeaderScript),
+        // A customer seen on an earlier page shows as signed in from the first
+        // paint; the page script confirms it (or reverts) with the base.
+        script(content: _accountFirstPaintScript(page)),
+      ],
+    );
   }
 
   /// `CustomerAccountMenu` signed in: the initial, the first name over «Mi
@@ -679,7 +698,7 @@ class SiteFooter extends StatelessComponent {
 
     // Flutter draws one footer from 800 px up and another below; so does
     // this page, with the same breakpoint.
-    return footer(classes: 'foot', [
+    return footer(classes: 'foot', attributes: page.pick('footer'), [
       div(classes: 'foot-wide', [
         div(classes: 'foot-grid', [
           div(classes: 'foot-brand', [

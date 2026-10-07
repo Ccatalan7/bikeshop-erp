@@ -1,13 +1,9 @@
-import 'package:jaspr/dom.dart';
-import 'package:jaspr/server.dart';
-
-/// The draft's own look and behaviour: the editor's outlines (the only
-/// visual difference the editor contract allows), links that do not leave
-/// the page, and a click that tells the editor which block it picked.
-List<Component> draftExtras() => [
-  Component.element(tag: 'style', children: [RawText(_draftCss)]),
-  script(content: _draftScript),
-];
+/// The draft's own look and behaviour, added before `</body>`: the
+/// editor's outlines (the only visual difference the editor contract
+/// allows), links that do not leave the page, and a click that tells the
+/// editor which part it picked.
+const draftExtrasHtml =
+    '<style>$_draftCss</style><script>$_draftScript</script>';
 
 const _draftCss = '''
 [data-block-id]{position:relative}

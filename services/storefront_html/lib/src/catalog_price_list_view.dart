@@ -108,6 +108,7 @@ Component _hero(CatalogPageModel page) {
     attributes: {
       if (page.heroImage.isNotEmpty)
         'style': '--shade:${look.heroOverlay.toStringAsFixed(2)}',
+      ...page.pickSection(WebsiteCatalogDraftSection.hero),
     },
     [
       if (page.heroImage.isNotEmpty)
@@ -173,46 +174,50 @@ Component _plans(CatalogPageModel page) {
   final title = shell.categoryName(id);
   final intro = (shell.categories[id]?['description'] ?? '').toString().trim();
   final fullest = list.fullestPlan;
-  return section(classes: 'pl-plans', [
-    div(classes: 'pl-in', [
-      div(classes: 'pl-head', [
-        h2([.text(title.isEmpty ? 'Planes' : title)]),
-        if (intro.isNotEmpty) p([.text(intro)]),
-      ]),
-      div(classes: 'pl-plan-row', [
-        for (final plan in list.plans)
-          article(
-            classes: identical(plan, fullest) ? 'pl-plan hi' : 'pl-plan',
-            [
-              div(classes: 'pl-plan-top', [
-                h3([
-                  a(href: page.pathById[plan.item.id] ?? page.rootPath, [
-                    .text(plan.item.name),
-                  ]),
-                ]),
-                if (identical(plan, fullest))
-                  span(classes: 'pl-pill', [.text('La más completa')]),
-              ]),
-              p(classes: 'pl-plan-price', [.text(plan.item.priceLabel)]),
-              if (plan.includes.isNotEmpty)
-                ul(classes: 'pl-inc', [
-                  for (final include in plan.includes)
-                    li([
-                      RawText(_check),
-                      span([
-                        .text(include.title),
-                        if (include.detail.isNotEmpty)
-                          span(classes: 'pl-inc-d', [.text(include.detail)]),
-                      ]),
+  return section(
+    classes: 'pl-plans',
+    attributes: page.pickSection(WebsiteCatalogDraftSection.plans),
+    [
+      div(classes: 'pl-in', [
+        div(classes: 'pl-head', [
+          h2([.text(title.isEmpty ? 'Planes' : title)]),
+          if (intro.isNotEmpty) p([.text(intro)]),
+        ]),
+        div(classes: 'pl-plan-row', [
+          for (final plan in list.plans)
+            article(
+              classes: identical(plan, fullest) ? 'pl-plan hi' : 'pl-plan',
+              [
+                div(classes: 'pl-plan-top', [
+                  h3([
+                    a(href: page.pathById[plan.item.id] ?? page.rootPath, [
+                      .text(plan.item.name),
                     ]),
+                  ]),
+                  if (identical(plan, fullest))
+                    span(classes: 'pl-pill', [.text('La más completa')]),
                 ]),
-              if (page.presentation.heroAction case final action?)
-                ?_action(page, action, 'pl-btn pl-plan-btn'),
-            ],
-          ),
+                p(classes: 'pl-plan-price', [.text(plan.item.priceLabel)]),
+                if (plan.includes.isNotEmpty)
+                  ul(classes: 'pl-inc', [
+                    for (final include in plan.includes)
+                      li([
+                        RawText(_check),
+                        span([
+                          .text(include.title),
+                          if (include.detail.isNotEmpty)
+                            span(classes: 'pl-inc-d', [.text(include.detail)]),
+                        ]),
+                      ]),
+                  ]),
+                if (page.presentation.heroAction case final action?)
+                  ?_action(page, action, 'pl-btn pl-plan-btn'),
+              ],
+            ),
+        ]),
       ]),
-    ]),
-  ]);
+    ],
+  );
 }
 
 Component _list(CatalogPageModel page) {
@@ -227,119 +232,127 @@ Component _list(CatalogPageModel page) {
   final anyShown = shown.values.any((count) => count > 0);
   String count(int value) =>
       '$value ${value == 1 ? page.singularNoun : page.noun}';
-  return section(classes: 'pl-list', [
-    div(classes: 'pl-in', [
-      div(classes: 'pl-head line', [
-        h2([.text('Todos los ${page.noun}')]),
-        form(
-          classes: 'pl-search',
-          action: page.rootPath,
-          method: FormMethod.get,
-          attributes: {'role': 'search'},
-          [
-            RawText(_search),
-            input(
-              type: InputType.search,
-              name: 'q',
-              value: query,
-              attributes: {
-                'placeholder': 'Buscar un ${page.singularNoun}',
-                'aria-label': 'Buscar un ${page.singularNoun}',
-                'autocomplete': 'off',
-                'data-pl-search': '',
-              },
-            ),
-          ],
-        ),
-      ]),
-      if (list.groups.length > 1)
-        nav(
-          classes: 'pl-chips',
-          attributes: {'aria-label': 'Grupos'},
-          [
-            for (final group in list.groups)
-              a(
-                href: '#g-${_slug(group.label)}',
-                attributes: {
-                  'data-pl-chip': _slug(group.label),
-                  if (shown[group.categoryId] == 0) 'hidden': '',
-                },
-                [
-                  .text(group.label),
-                  span(
-                    attributes: {'data-pl-chip-count': ''},
-                    [.text('${shown[group.categoryId]}')],
-                  ),
-                ],
-              ),
-          ],
-        ),
-      if (list.groups.isEmpty)
-        p(classes: 'pl-empty', [
-          .text('Todavía no hay ${page.noun} publicados.'),
-        ])
-      else ...[
-        for (final group in list.groups)
-          details(
-            classes: 'pl-group',
-            attributes: {
-              'id': 'g-${_slug(group.label)}',
-              'open': '',
-              if (shown[group.categoryId] == 0) 'hidden': '',
-            },
+  return section(
+    classes: 'pl-list',
+    attributes: page.pickSection(WebsiteCatalogDraftSection.list),
+    [
+      div(classes: 'pl-in', [
+        div(classes: 'pl-head line', [
+          h2([.text('Todos los ${page.noun}')]),
+          form(
+            classes: 'pl-search',
+            action: page.rootPath,
+            method: FormMethod.get,
+            attributes: {'role': 'search'},
             [
-              summary([
-                h3([.text(group.label)]),
-                span(
-                  classes: 'pl-count',
-                  attributes: {
-                    'data-pl-count': '',
-                    'data-one': page.singularNoun,
-                    'data-many': page.noun,
-                  },
-                  [.text(count(shown[group.categoryId]!))],
-                ),
-                RawText(_chevron),
-              ]),
-              ul(classes: 'pl-rows', [
-                for (final item in group.items)
-                  li(
-                    attributes: {
-                      'data-pl-name': item.name,
-                      if (!item.matches(query)) 'hidden': '',
-                    },
-                    [
-                      a(href: page.pathById[item.id] ?? page.rootPath, [
-                        span(classes: 'pl-name', [.text(item.name)]),
-                        span(classes: 'pl-price', [.text(item.priceLabel)]),
-                      ]),
-                    ],
-                  ),
-              ]),
+              RawText(_search),
+              input(
+                type: InputType.search,
+                name: 'q',
+                value: query,
+                attributes: {
+                  'placeholder': 'Buscar un ${page.singularNoun}',
+                  'aria-label': 'Buscar un ${page.singularNoun}',
+                  'autocomplete': 'off',
+                  'data-pl-search': '',
+                },
+              ),
             ],
           ),
-        p(
-          classes: 'pl-empty',
-          attributes: {if (anyShown) 'hidden': '', 'data-pl-none': ''},
-          [.text('No hay ${page.noun} con ese nombre.')],
-        ),
-      ],
-    ]),
-  ]);
+        ]),
+        if (list.groups.length > 1)
+          nav(
+            classes: 'pl-chips',
+            attributes: {'aria-label': 'Grupos'},
+            [
+              for (final group in list.groups)
+                a(
+                  href: '#g-${_slug(group.label)}',
+                  attributes: {
+                    'data-pl-chip': _slug(group.label),
+                    if (shown[group.categoryId] == 0) 'hidden': '',
+                  },
+                  [
+                    .text(group.label),
+                    span(
+                      attributes: {'data-pl-chip-count': ''},
+                      [.text('${shown[group.categoryId]}')],
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        if (list.groups.isEmpty)
+          p(classes: 'pl-empty', [
+            .text('Todavía no hay ${page.noun} publicados.'),
+          ])
+        else ...[
+          for (final group in list.groups)
+            details(
+              classes: 'pl-group',
+              attributes: {
+                'id': 'g-${_slug(group.label)}',
+                'open': '',
+                if (shown[group.categoryId] == 0) 'hidden': '',
+              },
+              [
+                summary([
+                  h3([.text(group.label)]),
+                  span(
+                    classes: 'pl-count',
+                    attributes: {
+                      'data-pl-count': '',
+                      'data-one': page.singularNoun,
+                      'data-many': page.noun,
+                    },
+                    [.text(count(shown[group.categoryId]!))],
+                  ),
+                  RawText(_chevron),
+                ]),
+                ul(classes: 'pl-rows', [
+                  for (final item in group.items)
+                    li(
+                      attributes: {
+                        'data-pl-name': item.name,
+                        if (!item.matches(query)) 'hidden': '',
+                      },
+                      [
+                        a(href: page.pathById[item.id] ?? page.rootPath, [
+                          span(classes: 'pl-name', [.text(item.name)]),
+                          span(classes: 'pl-price', [.text(item.priceLabel)]),
+                        ]),
+                      ],
+                    ),
+                ]),
+              ],
+            ),
+          p(
+            classes: 'pl-empty',
+            attributes: {if (anyShown) 'hidden': '', 'data-pl-none': ''},
+            [.text('No hay ${page.noun} con ese nombre.')],
+          ),
+        ],
+      ]),
+    ],
+  );
 }
 
 Component _closing(CatalogPageModel page) {
   final look = page.presentation;
-  return section(classes: 'pl-closing', [
-    div(classes: 'pl-in pl-closing-in', [
-      div([
-        if (look.closingTitle.isNotEmpty) h2([.text(look.closingTitle)]),
-        if (look.closingText.isNotEmpty) p([.text(look.closingText)]),
+  return section(
+    classes: 'pl-closing',
+    attributes: page.pickSection(WebsiteCatalogDraftSection.closing),
+    [
+      div(classes: 'pl-in pl-closing-in', [
+        div([
+          if (look.closingTitle.isNotEmpty) h2([.text(look.closingTitle)]),
+          if (look.closingText.isNotEmpty) p([.text(look.closingText)]),
+        ]),
+        if (look.closingAction case final action?)
+          ?_action(page, action, 'pl-btn', whatsappIcon: true),
       ]),
-      if (look.closingAction case final action?)
-        ?_action(page, action, 'pl-btn', whatsappIcon: true),
-    ]),
-  ]);
+    ],
+  );
 }
 
 /// Filters the rows as the visitor types (accents and case aside), counts

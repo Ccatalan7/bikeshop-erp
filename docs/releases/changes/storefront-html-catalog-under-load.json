@@ -21,11 +21,11 @@
     },
     {
       "path": "services/storefront_html/lib/src/catalog_page_model.dart",
-      "sha256": "ea82c2ea618888c680a0d3ac3768f3222e66c18652afc73cc75ca61d23b9ac35"
+      "sha256": "05a709b9b7c0fffdaa0799ae7b560d43628680168452e13f9ff5ec88cf918873"
     },
     {
       "path": "services/storefront_html/lib/src/catalog_page_view.dart",
-      "sha256": "0e0af2e54044a69165de8a25f7dd798426283d5bdd7a5ea859883931abf2dd1a"
+      "sha256": "405c9b87df6a318ca2cd27e8e21c05982f965cf11e941219b920f028254cc1c3"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_css.dart",

@@ -4,20 +4,27 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:vinabike_public_core/modules/website/models/website_catalog_presentation.dart';
 
+import '../models/website_catalog_canvas.dart';
+import '../models/website_product_canvas.dart';
 import '../models/website_responsive_authoring.dart';
 import '../providers/website_edit_mode_provider.dart';
 import '../services/website_html_draft_client.dart';
+import '../services/website_html_draft_picks.dart';
 import '../services/website_service.dart';
 import '../../../shared/services/window_zoom_service.dart';
 import 'website_editor_chrome_geometry.dart';
 
-/// The «Vista HTML» of the editor (phase 5c of the move to HTML): the open
-/// page as the store's HTML server draws it from the unsaved draft, redrawn
-/// a moment after each change of the panel. A click on a block selects it
-/// in the panel, as on the Flutter canvas; links and forms do nothing.
+/// The «Vista HTML» of the editor (phase 5c of the move to HTML): the page
+/// on screen (the home, a page, the catalog, a category, a product page) as
+/// the store's HTML server draws it from the unsaved draft, redrawn a moment
+/// after each change of the panel or of the route. A click on a block, the
+/// header, the footer or a catalog or product page section selects it in
+/// the panel, as on the Flutter canvas; links and forms do nothing.
 ///
 /// It sits over the Flutter canvas, which stays mounted underneath, so the
 /// panel, the history and the selection keep their one owner
@@ -36,6 +43,7 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
   late final WebsiteHtmlDraftClient _client =
       widget.client ?? WebsiteHtmlDraftClient();
   WebsiteEditModeProvider? _provider;
+  GoRouterDelegate? _router;
   InAppWebViewController? _web;
   Timer? _debounce;
 
@@ -47,16 +55,34 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
   bool _loading = false;
   String? _message;
   String? _html;
+
+  /// The route on screen has a page the server draws.
   bool _supported = true;
 
   /// How long the view waits after a change before asking again: typing in
   /// a field sends one request when the operator pauses, not one per key.
   static const _settle = Duration(milliseconds: 350);
 
+  /// On the ERP on the web, the page's clicks arrive as messages.
+  StreamSubscription<String?>? _webPicks;
+
+  @override
+  void initState() {
+    super.initState();
+    if (kIsWeb) {
+      _webPicks = websiteHtmlDraftPicks().listen((id) => _picked([id]));
+    }
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final provider = context.read<WebsiteEditModeProvider>();
+    final router = GoRouter.maybeOf(context)?.routerDelegate;
+    if (!identical(router, _router)) {
+      _router?.removeListener(_changed);
+      _router = router?..addListener(_changed);
+    }
     if (!identical(provider, _provider)) {
       _provider?.removeListener(_changed);
       _provider = provider..addListener(_changed);
@@ -66,8 +92,10 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
 
   @override
   void dispose() {
+    _webPicks?.cancel();
     _debounce?.cancel();
     _provider?.removeListener(_changed);
+    _router?.removeListener(_changed);
     if (widget.client == null) _client.close();
     super.dispose();
   }
@@ -76,27 +104,20 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
     final provider = _provider;
     if (provider == null || !mounted) return;
     final document = provider.document;
-    final supported = websiteHtmlDraftSupports(
-      pageId: document.pageId,
-      pageSlug: document.pageSlug,
-      catalogCanvas: provider.catalogCanvas != null,
-    );
+    final path = _path(document.pageId, document.pageSlug);
+    final supported = path != null;
     if (supported != _supported) setState(() => _supported = supported);
     if (provider.selectedBlockId != _selected) {
       _selected = provider.selectedBlockId;
       _markSelection();
     }
-    if (!supported) return;
+    if (path == null) return;
     final body = websiteHtmlDraftBody(
+      path: path,
       pageId: document.pageId,
       pageSlug: document.pageSlug,
       blocks: document.blocks,
-      settings: {
-        ...provider.pendingSiteSettings,
-        ...provider.pendingHeaderSettings,
-        ...provider.pendingThemeSettings,
-        ...provider.pendingFooterSettings,
-      },
+      settings: _draftSettings(provider),
     );
     if (body == _shownBody || body == _pendingBody) return;
     _pendingBody = body;
@@ -106,6 +127,40 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
     } else {
       _debounce = Timer(_settle, () => _draw(body));
     }
+  }
+
+  /// The public path on screen; without a router (a test), the open
+  /// document's own.
+  String? _path(String? pageId, String? pageSlug) {
+    final router = _router;
+    if (router != null) {
+      return websiteHtmlDraftPath(router.currentConfiguration.uri);
+    }
+    if (pageId == null) return '/';
+    final slug = (pageSlug ?? '').trim().toLowerCase();
+    return slug.isEmpty ? null : '/pagina/$slug';
+  }
+
+  /// Every unsaved setting the site's pages read: the site's (the product
+  /// page template among them), the header's, the theme's and the footer's,
+  /// and the catalog presentations as the registry will hold them once the
+  /// draft is saved.
+  Map<String, String> _draftSettings(WebsiteEditModeProvider provider) {
+    final presentations = provider.pendingCatalogPresentations;
+    var registry = presentations.isEmpty
+        ? null
+        : context.read<WebsiteService>().catalogPresentationRegistry;
+    for (final presentation in presentations.values) {
+      registry = registry!.put(registry.prepareForSave(presentation));
+    }
+    return {
+      ...provider.pendingSiteSettings,
+      ...provider.pendingHeaderSettings,
+      ...provider.pendingThemeSettings,
+      ...provider.pendingFooterSettings,
+      if (registry != null)
+        websiteCatalogPresentationsSettingKey: registry.encode(),
+    };
   }
 
   Future<void> _draw(String body) async {
@@ -160,7 +215,10 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
     final y = await web.getScrollY() ?? 0;
     _restoreScroll = y;
     await web.loadData(
-      data: html,
+      // In a frame (the ERP on the web) the base URL does not reach the
+      // page: its fonts, logo and photos are found through `<base>`, which
+      // the server leaves out because a public page's anchors need it out.
+      data: kIsWeb ? _withBase(html, origin) : html,
       mimeType: 'text/html',
       encoding: 'utf-8',
       // Relative photos, fonts and icons come from the store itself.
@@ -196,9 +254,15 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
     final id = arguments.isEmpty ? null : arguments.first?.toString();
     if (id == null || id.isEmpty) {
       provider.selectBlock(null);
-    } else if (provider.getBlock(id) != null) {
-      provider.selectBlock(id);
+      return;
     }
+    final catalog = WebsiteCatalogSectionTarget.parse(id);
+    final selectable = provider.getBlock(id) != null ||
+        WebsiteEditorChromeTarget.forSelection(id) != null ||
+        (catalog != null && provider.isCatalogSectionAvailable(catalog)) ||
+        (WebsiteProductSectionTarget.parse(id) != null &&
+            provider.productCanvas != null);
+    if (selectable) provider.selectBlock(id);
   }
 
   @override
@@ -232,9 +296,8 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
                     child: Padding(
                       padding: const EdgeInsets.all(24),
                       child: Text(
-                        'La vista HTML todavía no dibuja las páginas del '
-                        'catálogo ni la ficha de producto. Usa el lienzo para '
-                        'esta página.',
+                        'El carrito, el pago, los pedidos y la cuenta del '
+                        'cliente no tienen vista HTML: se ven en el lienzo.',
                         textAlign: TextAlign.center,
                         style: TextStyle(color: scheme.onSurfaceVariant),
                       ),
@@ -389,4 +452,12 @@ class _ZoomedNativeView extends StatelessWidget {
       ),
     );
   }
+}
+
+/// [html] with a `<base>` at the store's [origin], first in its `<head>`.
+String _withBase(String html, Uri origin) {
+  final base = '<base href="${origin.replace(path: '/')}">';
+  final head = RegExp('<head[^>]*>', caseSensitive: false).firstMatch(html);
+  if (head == null) return '$base$html';
+  return html.replaceRange(head.end, head.end, base);
 }

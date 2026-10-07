@@ -73,6 +73,10 @@ Handler storefrontHandler({
   required PublicReads reads,
   FlutterShell? flutterShell,
   OrderSummaryFonts? orderSummaryFonts,
+
+  /// The editor's draft ([editorDraftResponse]): pages are drawn even with
+  /// the site unpublished, and each block names its id.
+  bool draft = false,
 }) {
   final fonts = orderSummaryFonts ?? OrderSummaryFonts.forConfig(config);
   return (Request request) async {
@@ -91,7 +95,12 @@ Handler storefrontHandler({
       return orderSummaryPdf(request, reads: reads, fonts: fonts);
     }
     if (path == editorDraftPath) {
-      return editorDraftResponse(request, reads: reads, config: config);
+      return editorDraftResponse(
+        request,
+        reads: reads,
+        config: config,
+        fonts: fonts,
+      );
     }
     if (path == portalViewPath ||
         path == portalFilePath ||
@@ -141,6 +150,7 @@ Handler storefrontHandler({
       path: path,
       hidden: hidden,
       flutterShell: flutterShell,
+      draft: draft,
     );
     try {
       return switch (segments) {
@@ -198,6 +208,7 @@ class _Route {
     required this.path,
     required this.hidden,
     required this.flutterShell,
+    this.draft = false,
   });
 
   final StorefrontConfig config;
@@ -206,6 +217,11 @@ class _Route {
   final String path;
   final bool hidden;
   final FlutterShell? flutterShell;
+  final bool draft;
+
+  /// The site is unpublished: the visitor gets the notice, the editor's
+  /// draft the page it is editing.
+  bool _closed(PageContext context) => !draft && !context.shell.sitePublished;
   final _watch = Stopwatch()..start();
 
   Uri get _uri => request.requestedUri;
@@ -222,6 +238,7 @@ class _Route {
     hidden: hidden,
     supabaseUrl: config.supabaseUrl,
     publishableKey: config.publishableKey,
+    draft: draft,
   );
 
   /// `/productos` or a category, with the visitor's search and filters.
@@ -249,7 +266,7 @@ class _Route {
                   .forCatalogRoot(WebsiteCatalogRoot.services)
                   ?.isPriceList ==
               true;
-      if (!context.shell.sitePublished) return _unpublished(context);
+      if (_closed(context)) return _unpublished(context);
       return _catalogPage(
         context,
         null,
@@ -282,7 +299,7 @@ class _Route {
         ),
       ]);
       final context = _context(results[0] as ShellReads);
-      if (!context.shell.sitePublished) return _unpublished(context);
+      if (_closed(context)) return _unpublished(context);
       return _catalogPage(
         context,
         null,
@@ -294,7 +311,7 @@ class _Route {
     }
 
     final context = _context(await reads.shell());
-    if (!context.shell.sitePublished) return _unpublished(context);
+    if (_closed(context)) return _unpublished(context);
     final shell = context.shell;
     final resolved = shell.resolveCategorySlug(slug);
     if (resolved == null) {
@@ -402,7 +419,7 @@ class _Route {
 
   Future<Response> _productPage(ProductPageReads data) async {
     final context = _context((shell: data.shell, payments: data.payments));
-    if (!context.shell.sitePublished) return _unpublished(context);
+    if (_closed(context)) return _unpublished(context);
     final read = data.page;
     if (read == null || read['product'] is! Map) {
       final target = await _aliasTarget(path);
@@ -436,7 +453,7 @@ class _Route {
       return _redirect(target, query: _uri.query);
     }
     final context = _context(await reads.shell());
-    if (!context.shell.sitePublished) return _unpublished(context);
+    if (_closed(context)) return _unpublished(context);
     return _productNotFound(context);
   }
 
@@ -446,7 +463,7 @@ class _Route {
   Future<Response> policy(String slug) async {
     final data = await reads.policyPages();
     final context = _context((shell: data.shell, payments: data.payments));
-    if (!context.shell.sitePublished) return _unpublished(context);
+    if (_closed(context)) return _unpublished(context);
     final model = PolicyPageModel.build(page: context, slug: slug, reads: data);
     if (model.available) {
       if (await _flutterFallback(
@@ -476,7 +493,7 @@ class _Route {
   Future<Response> contact() async {
     final data = await reads.contactPage();
     final context = _context((shell: data.shell, payments: data.payments));
-    if (!context.shell.sitePublished) return _unpublished(context);
+    if (_closed(context)) return _unpublished(context);
     final model = ContactPageModel.build(page: context, reads: data);
     return _render(
       contactPageDocument(model),
@@ -489,7 +506,7 @@ class _Route {
   /// `/carrito`: the frame of the cart; its lines come from [cartLines].
   Future<Response> cart() async {
     final context = _context(await reads.shell());
-    if (!context.shell.sitePublished) return _unpublished(context);
+    if (_closed(context)) return _unpublished(context);
     return _render(cartPageDocument(context));
   }
 
@@ -504,7 +521,7 @@ class _Route {
   Future<Response> checkout() async {
     final read = await reads.shell();
     final context = _context(read);
-    if (!context.shell.sitePublished) return _unpublished(context);
+    if (_closed(context)) return _unpublished(context);
     final methods = CheckoutPageData.methodsOf(read.payments);
     return _render(
       checkoutPageDocument(
@@ -523,7 +540,7 @@ class _Route {
   /// access this tab keeps, so the script reads it.
   Future<Response> order(String id) async {
     final context = _context(await reads.shell());
-    if (!context.shell.sitePublished) return _unpublished(context);
+    if (_closed(context)) return _unpublished(context);
     return _render(
       orderPageDocument(
         OrderPageData(
@@ -540,7 +557,7 @@ class _Route {
   /// [portalViewResponse] with the session this browser keeps.
   Future<Response> portal(PortalPage which) async {
     final context = _context(await reads.shell());
-    if (!context.shell.sitePublished) return _unpublished(context);
+    if (_closed(context)) return _unpublished(context);
     return _render(portalPageDocument(context, which));
   }
 
@@ -550,7 +567,7 @@ class _Route {
   /// asked to try again rather than shown a page that would drop the link.
   Future<Response> login() async {
     final context = _context(await reads.shell());
-    if (!context.shell.sitePublished) return _unpublished(context);
+    if (_closed(context)) return _unpublished(context);
     final document = loginPageDocument(context);
     if (hidden || !loginIsAuthReturn(_uri.queryParameters.keys)) {
       return _render(document);
@@ -613,9 +630,9 @@ class _Route {
   Future<Response> home() async {
     final data = await reads.homePage(homeProductIds);
     final context = _context((shell: data.shell, payments: data.payments));
-    if (!context.shell.sitePublished) return _unpublished(context);
+    if (_closed(context)) return _unpublished(context);
     if (data.page == null) return notFound();
-    final model = HomePageModel.build(page: context, reads: data);
+    final model = HomePageModel.build(page: context, reads: data, draft: draft);
     if (await _flutterFallback(
           context,
           model.uncoveredTypes,
@@ -649,9 +666,14 @@ class _Route {
     }
     final data = await reads.websitePage(slug, homeProductIds);
     final context = _context((shell: data.shell, payments: data.payments));
-    if (!context.shell.sitePublished) return _unpublished(context);
+    if (_closed(context)) return _unpublished(context);
     if (data.page == null) return notFound();
-    final model = EditorPageModel.build(page: context, slug: slug, reads: data);
+    final model = EditorPageModel.build(
+      page: context,
+      slug: slug,
+      reads: data,
+      draft: draft,
+    );
     if (await _flutterFallback(
           context,
           model.uncoveredTypes,
@@ -721,7 +743,7 @@ class _Route {
     bool services = false,
   }) async {
     final context = _context(await reads.shell());
-    if (!context.shell.sitePublished) return _unpublished(context);
+    if (_closed(context)) return _unpublished(context);
     final id = context.shell.resolveCategorySlug(value)?.id;
     if (id != null) {
       return _redirect(

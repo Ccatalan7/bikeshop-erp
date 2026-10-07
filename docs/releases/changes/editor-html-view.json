@@ -8,19 +8,20 @@
     "macos"
   ],
   "title": "Vista HTML en el editor del sitio",
-  "summary": "En el editor del sitio, «Vista HTML» muestra la página tal como la arma la tienda en HTML, con lo que aún no guardas, y se actualiza con cada cambio.",
+  "summary": "En el editor del sitio, «Vista HTML» muestra la página en pantalla —inicio, páginas, catálogo, categorías y ficha de producto— tal como la arma la tienda en HTML, con lo que aún no guardas, y se actualiza con cada cambio.",
   "items": [
-    "Un clic en una sección de la vista HTML la elige en el panel, igual que en el lienzo.",
+    "Un clic en la vista HTML elige en el panel lo que tocas: un bloque, el encabezado, el pie, una sección del catálogo o de la ficha.",
+    "Los cambios sin guardar del catálogo (portadas, plantilla de categoría) y de la plantilla de ficha se ven al momento.",
     "Sirve en Escritorio, Tablet y Móvil; una sección que el HTML aún no dibuja aparece señalada en su lugar."
   ],
   "evidence": [
     {
       "path": "lib/modules/website/services/website_html_draft_client.dart",
-      "sha256": "a215e9094b3f351e5394660aecfa738a07a8f252b32e0983bc4165580607eacd"
+      "sha256": "025254e35d0e5baaec3e2cb2d0f26010458d66f3d6eea1629d60318131cfb725"
     },
     {
       "path": "lib/modules/website/widgets/website_html_draft_view.dart",
-      "sha256": "dffc6662b6f9174e258ed94cfc51d421b1cce768ad985e7beb68f892b37496a6"
+      "sha256": "89b0938829c10fd8fb08822fb5ce5628936aac0b5dbeb82312abd119d7119dab"
     },
     {
       "path": "lib/modules/website/providers/website_edit_mode_provider.dart",
@@ -44,11 +45,11 @@
     },
     {
       "path": "services/storefront_html/lib/src/editor_draft_route.dart",
-      "sha256": "355b3e8e5ddffc5a6792f58b98df58596b5dafc3d0d161a796765622cf2d7747"
+      "sha256": "8819d205b372ad2850a5c56b2e643d5d39dc42f0d71f4104d52cfa9f76b3ee2f"
     },
     {
       "path": "services/storefront_html/lib/src/editor_draft_view.dart",
-      "sha256": "fd77bda80a4416f0a3fe518b04a786fb397bb03098cf4873d77648cbeddc4814"
+      "sha256": "05e4f0f84a4d00e706c90f4fc73109726bf26a1f4744a8f8e0453e9cdc3c003b"
     },
     {
       "path": "services/storefront_html/lib/src/editor_page_model.dart",
@@ -56,7 +57,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/editor_page_view.dart",
-      "sha256": "6054c6e57aa9a68055a98faf956e9214838c1371a8dd9d00e5a1af4898b950a1"
+      "sha256": "7196fef75286d9d0106c3993060bce39dcc44f87e8c6b34ada99ebb358e339a1"
     },
     {
       "path": "services/storefront_html/lib/src/home_page_model.dart",
@@ -64,7 +65,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/home_page_view.dart",
-      "sha256": "0a727fe39963882285e211439b73c4e0402b06738fd2eda7225224bb69357e22"
+      "sha256": "07ff910717b9f89248d3008fc616dd177589ccb02aa58e372d5714c0a0dccff2"
     },
     {
       "path": "services/storefront_html/lib/src/public_reads.dart",
@@ -72,11 +73,51 @@
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
-      "sha256": "f06cce517166f89d782064b3a862eeb307e3a6cc61273f197d5a71b07b62bd09"
+      "sha256": "5cc84c75f27501872fee61355d23b781cf3bcde976db2ac02e0e629a65c1d64b"
     },
     {
       "path": "services/storefront_html/lib/src/website_blocks_view.dart",
       "sha256": "f3baf7697ddc570f3a53b1fd31a6904a4e343fe177fb4f35fcaa7442ad6eb59c"
+    },
+    {
+      "path": "lib/modules/website/services/website_html_draft_picks.dart",
+      "sha256": "6f308e91719e384eb5a20e896d32136757d88c4435e535db98667dc7f50a1bd1"
+    },
+    {
+      "path": "lib/modules/website/services/website_html_draft_picks_stub.dart",
+      "sha256": "caf14c944a0c6bed612d69a7db96e5458f63047df58bdab9aad90e452bb29c3f"
+    },
+    {
+      "path": "lib/modules/website/services/website_html_draft_picks_web.dart",
+      "sha256": "c72c9ab84ec14ed922472daa5afa36647e2efd4d4a8a5cd86500bb552032e616"
+    },
+    {
+      "path": "services/storefront_html/lib/src/editor_draft_reads.dart",
+      "sha256": "67fdcb293b7ffbd5c6be63b7d7297d9e379f3899726d32aa0ed8bd4a8c6d4768"
+    },
+    {
+      "path": "services/storefront_html/lib/src/site_layout.dart",
+      "sha256": "56c2f5a6af7e4bb6c8aff4acf9f1a6799a65f1a8f22201f580eeb1964b482d5f"
+    },
+    {
+      "path": "services/storefront_html/lib/src/catalog_page_model.dart",
+      "sha256": "05a709b9b7c0fffdaa0799ae7b560d43628680168452e13f9ff5ec88cf918873"
+    },
+    {
+      "path": "services/storefront_html/lib/src/catalog_page_view.dart",
+      "sha256": "405c9b87df6a318ca2cd27e8e21c05982f965cf11e941219b920f028254cc1c3"
+    },
+    {
+      "path": "services/storefront_html/lib/src/catalog_price_list_view.dart",
+      "sha256": "eec1d9f191ba74779e71709287200ca6fffee9d3f5ca0f70bec23af85694245c"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_page_view.dart",
+      "sha256": "3f353948b9c26506672f32a0f10894e79b1112f4bf8459bb77047f4a19dace03"
+    },
+    {
+      "path": "services/storefront_html/lib/src/policy_page_view.dart",
+      "sha256": "855218e121e39efc475882a03f84af710ea9eaf9ce2599d27fc1ad538912b5b1"
     }
   ]
 }

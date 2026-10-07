@@ -86,6 +86,7 @@ class _ProductSection extends StatelessComponent {
         'data-item-name': c.title,
         'data-price': c.price.toStringAsFixed(0),
         'data-max': '${page.cartLimit}',
+        ...page.page.pick('product-page:buy'),
       },
       [
         div(classes: 'gallery', [
@@ -204,15 +205,15 @@ class _ProductSection extends StatelessComponent {
                 attributes: {'type': 'submit'},
                 [
                   RawText(
-                      materialIcon(mdCartOutlined, size: 17, classes: 'idle'),
+                    materialIcon(mdCartOutlined, size: 17, classes: 'idle'),
+                  ),
+                  RawText(
+                    materialIcon(
+                      mdCheckCircleOutline,
+                      size: 17,
+                      classes: 'done',
                     ),
-                    RawText(
-                      materialIcon(
-                        mdCheckCircleOutline,
-                        size: 17,
-                        classes: 'done',
-                      ),
-                    ),
+                  ),
                   span(
                     attributes: {'data-add-label': ''},
                     [.text(template.resolvedAddToCartLabel)],
@@ -358,46 +359,51 @@ class _SpecSheet extends StatelessComponent {
         : hasContent
         ? 'sheet-row'
         : 'sheet-row only-help';
-    return section(classes: 'details', id: 'ficha', [
-      div(classes: 'details-in', [
-        h2(classes: 'section-title accent', [
-          .text(template.resolvedSheetTitle(technical: technical)),
-        ]),
-        div(classes: rowClass, [
-          if (hasContent)
-            div(classes: 'sheet', [
-              if (paragraphs.isNotEmpty) ...[
-                h3([.text('Descripción')]),
-                div(classes: 'description', [
-                  for (final paragraph in paragraphs) p([.text(paragraph)]),
-                ]),
-              ],
-              for (final group in groups)
-                section(classes: 'group', [
-                  h3([.text(group.title)]),
-                  dl([
-                    for (final item in group.items)
-                      div([
-                        dt([.text(item.label)]),
-                        dd([
-                          span(classes: 'value', _lines(item.value)),
-                          if (item.detail case final detail?)
-                            span(classes: 'detail', [.text(detail)]),
-                        ]),
-                        if (item.hint case final hint?)
-                          p(classes: 'hint', [.text(hint)]),
-                      ]),
+    return section(
+      classes: 'details',
+      id: 'ficha',
+      attributes: page.page.pick('product-page:sheet'),
+      [
+        div(classes: 'details-in', [
+          h2(classes: 'section-title accent', [
+            .text(template.resolvedSheetTitle(technical: technical)),
+          ]),
+          div(classes: rowClass, [
+            if (hasContent)
+              div(classes: 'sheet', [
+                if (paragraphs.isNotEmpty) ...[
+                  h3([.text('Descripción')]),
+                  div(classes: 'description', [
+                    for (final paragraph in paragraphs) p([.text(paragraph)]),
                   ]),
-                ]),
-              if (technical && template.showOriginNote)
-                p(classes: 'origin', [
-                  .text(WebsiteProductPageTemplate.originNote),
-                ]),
-            ]),
-          if (template.showHelp) help,
+                ],
+                for (final group in groups)
+                  section(classes: 'group', [
+                    h3([.text(group.title)]),
+                    dl([
+                      for (final item in group.items)
+                        div([
+                          dt([.text(item.label)]),
+                          dd([
+                            span(classes: 'value', _lines(item.value)),
+                            if (item.detail case final detail?)
+                              span(classes: 'detail', [.text(detail)]),
+                          ]),
+                          if (item.hint case final hint?)
+                            p(classes: 'hint', [.text(hint)]),
+                        ]),
+                    ]),
+                  ]),
+                if (technical && template.showOriginNote)
+                  p(classes: 'origin', [
+                    .text(WebsiteProductPageTemplate.originNote),
+                  ]),
+              ]),
+            if (template.showHelp) help,
+          ]),
         ]),
-      ]),
-    ]);
+      ],
+    );
   }
 
   static List<Component> _lines(String value) {
@@ -422,14 +428,18 @@ class _Related extends StatelessComponent {
     if (page.related.isEmpty || !template.showRelated) {
       return const Component.empty();
     }
-    return section(classes: 'related', [
-      h2(classes: 'section-title', [.text(template.resolvedRelatedTitle)]),
-      div(classes: 'related-box', [
-        ul(classes: 'related-cards', [
-          for (final item in page.related)
-            ProductCard(commerce: item.commerce, path: item.path),
+    return section(
+      classes: 'related',
+      attributes: page.page.pick('product-page:related'),
+      [
+        h2(classes: 'section-title', [.text(template.resolvedRelatedTitle)]),
+        div(classes: 'related-box', [
+          ul(classes: 'related-cards', [
+            for (final item in page.related)
+              ProductCard(commerce: item.commerce, path: item.path),
+          ]),
         ]),
-      ]),
-    ]);
+      ],
+    );
   }
 }

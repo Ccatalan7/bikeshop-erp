@@ -26,6 +26,10 @@ typedef CatalogProduct = ({
 
 typedef CatalogLink = ({String id, String label, String path, int count});
 
+/// The parts of a catalog page the editor selects as it selects a block
+/// (`WebsiteCatalogSection` in the ERP), named `catalog:<owner>:<section>`.
+enum WebsiteCatalogDraftSection { hero, plans, list, closing }
+
 /// `/productos`, `/servicios`, a category page, or a search: the listing,
 /// its filters and how the page presents itself, from the public reads and
 /// the shared core.
@@ -183,6 +187,18 @@ class CatalogPageModel {
 
   /// `null` on `/productos` and `/servicios`.
   final String? categoryId;
+
+  /// The presentation this page's sections edit, as the editor's canvas
+  /// names it: the root's (`@catalog/products`, `@catalog/services`) or the
+  /// category's.
+  String get presentationOwnerId =>
+      categoryId ??
+      (services ? WebsiteCatalogRoot.services : WebsiteCatalogRoot.products)
+          .presentationId;
+
+  /// In the editor's draft, [section] of this page picked by a click.
+  Map<String, String> pickSection(WebsiteCatalogDraftSection section) =>
+      page.pick('catalog:$presentationOwnerId:${section.name}');
   final WebsiteCatalogPresentation presentation;
   final String displayTitle;
   final String intro;

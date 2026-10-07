@@ -2,7 +2,6 @@ import 'package:jaspr/dom.dart';
 import 'package:jaspr/server.dart';
 import 'package:vinabike_public_core/public_store/models/public_image_thumbnail.dart';
 
-import 'editor_draft_view.dart';
 import 'editor_page_view.dart';
 import 'home_page_model.dart';
 import 'site_layout.dart';
@@ -23,6 +22,6 @@ Component homePageDocument(HomePageModel model) {
     context: model.page,
     meta: model.meta,
     content: [div(classes: 'home-page blocks', drawn.blocks)],
-    afterFooter: [...drawn.scripts, if (model.draft) ...draftExtras()],
+    afterFooter: drawn.scripts,
   );
 }

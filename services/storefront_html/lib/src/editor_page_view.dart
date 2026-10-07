@@ -5,7 +5,6 @@ import 'package:vinabike_public_core/modules/website/models/website_block_type.d
 import 'package:vinabike_public_core/public_store/models/public_image_thumbnail.dart';
 
 import 'block_composition.dart';
-import 'editor_draft_view.dart';
 import 'editor_page_model.dart';
 import 'material_icons.dart';
 import 'site_layout.dart';
@@ -40,7 +39,7 @@ Component editorPageDocument(EditorPageModel model) {
       else
         div(classes: 'home-page blocks', drawn.blocks),
     ],
-    afterFooter: [...drawn.scripts, if (model.draft) ...draftExtras()],
+    afterFooter: drawn.scripts,
   );
 }
 

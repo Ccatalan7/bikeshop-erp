@@ -4,33 +4,39 @@ import 'dart:io';
 
 import 'package:jaspr/server.dart';
 
-import 'editor_page_model.dart';
-import 'editor_page_view.dart';
-import 'home_page_model.dart';
-import 'home_page_view.dart';
-import 'public_reads.dart';
-import 'site_layout.dart';
-import 'storefront_config.dart';
-import 'storefront_shell.dart';
+import 'package:vinabike_public_core/public_store/models/public_policy_content.dart';
 
-/// `POST /editor/borrador` (phase 5b of the move to HTML): the page the
-/// editor has open, drawn by the same components as the public page but
-/// from the editor's draft, unsaved blocks and settings included, so the
-/// ERP can show the real HTML site while the page is edited.
+import 'editor_draft_reads.dart';
+import 'editor_draft_view.dart';
+import 'order_summary_pdf_route.dart';
+import 'public_reads.dart';
+import 'storefront_config.dart';
+import 'storefront_handler.dart';
+
+/// `POST /editor/borrador` (phase 5b of the move to HTML): a public page as
+/// it will be once the editor's draft is saved, unsaved blocks and settings
+/// included, so the ERP can show the real HTML site while it is edited.
+/// It is drawn by the handler that serves visits ([storefrontHandler] with
+/// `draft`), through reads that carry the draft ([EditorDraftReads]): the
+/// home, an editor page, an information page, the catalog, a category or a
+/// product page, each exactly as a visitor will get it.
 ///
-/// The body is `{page, blocks, settings}`: `page` is `{"home": true}` or
-/// `{"slug", "title"}` (a page the editor creates); `blocks` the draft's
+/// The body is `{path, page, blocks, settings}`: `path` is the public path
+/// (and query) on screen, `/` when absent; `page` the page the editor has
+/// open, `{"home": true}` or `{"slug", "title"}` (`null` while it has
+/// none, as on a catalog page opened directly); `blocks` that page's draft
 /// block rows (`id`, `block_type`, `block_data`, `is_visible`,
 /// `order_index`), as `website_blocks` keeps them; `settings` the unsaved
 /// `website_settings` values by key. The editor's session goes as
 /// `authorization: Bearer <token>`, and only someone who may save the site
 /// gets a page: the server asks `can_edit_tenant_settings` as that person.
 ///
-/// Answers `{html}`, or `{state}`: `expired` (Supabase refused the token),
-/// `forbidden` (the session may not edit the site), `unavailable` (the
-/// reads failed; try again) or `invalid`. Never cached nor indexed, never
-/// measured (the page is [PageContext.hidden]); the token is only sent to
-/// Supabase, never kept nor logged.
+/// Answers `{html, status}` (the page and the status a visitor would get),
+/// or `{state}`: `expired` (Supabase refused the token), `forbidden` (the
+/// session may not edit the site), `unavailable` (the reads failed; try
+/// again) or `invalid` (including a path that is not a page). Never cached
+/// nor indexed, never measured (the page is drawn hidden); the token is
+/// only sent to Supabase, never kept nor logged.
 const editorDraftPath = '/editor/borrador';
 
 /// Where the ERP runs on the web: the only pages that may ask for a draft
@@ -54,6 +60,7 @@ Future<Response> editorDraftResponse(
   Request request, {
   required PublicReads reads,
   required StorefrontConfig config,
+  required OrderSummaryFonts fonts,
 }) async {
   final cors = _cors(request);
   if (request.method == 'OPTIONS') {
@@ -80,103 +87,144 @@ Future<Response> editorDraftResponse(
   if (token == null || draft == null) {
     return _json(request, cors, 400, {'state': 'invalid'});
   }
-  final HomePageReads data;
   try {
     if (!await reads.canEditSite(token)) {
       return _json(request, cors, 403, {'state': 'forbidden'});
     }
-    data = await reads.draftPage(draft.pageRow, homeProductIds);
   } on CustomerSessionRefused {
     return _json(request, cors, 401, {'state': 'expired'});
   } on Object catch (error) {
     stderr.writeln(
-      'editor draft read failed: '
+      'editor draft check failed: '
       '${error is PublicReadException ? error.message : error.runtimeType}',
     );
     return _json(request, cors, 503, {'state': 'unavailable'});
   }
-  final dataMs = watch.elapsedMilliseconds;
-  final shell = <String, dynamic>{
-    ...data.shell,
-    'settings': {
-      if (data.shell['settings'] case final Map<Object?, Object?> saved)
-        for (final entry in saved.entries) entry.key.toString(): entry.value,
-      ...draft.settings,
-    },
-  };
-  final context = PageContext(
-    shell: StorefrontShell.fromJson(shell, checkoutCapabilities: data.payments),
-    tenantId: config.tenantId,
-    fallbackOrigin: config.storeOrigin,
-    path: draft.path,
-    // Never indexed, never measured: the editor is not a visit.
-    hidden: true,
-    supabaseUrl: config.supabaseUrl,
-    publishableKey: config.publishableKey,
+  final handler = storefrontHandler(
+    config: config,
+    reads: EditorDraftReads(
+      reads,
+      home: draft.home,
+      document: draft.slug,
+      title: draft.title,
+      blocks: draft.blocks,
+      settings: draft.settings,
+    ),
+    orderSummaryFonts: fonts,
+    draft: true,
   );
-  final HomePageReads merged = (
-    shell: shell,
-    payments: data.payments,
-    page: draft.pageRow,
-    products: data.products,
-    brandRows: data.brandRows,
-    thumbnails: data.thumbnails,
-  );
-  final document = draft.slug == null
-      ? homePageDocument(
-          HomePageModel.build(page: context, reads: merged, draft: true),
-        )
-      : editorPageDocument(
-          EditorPageModel.build(
-            page: context,
-            slug: draft.slug!,
-            reads: merged,
-            draft: true,
+  final origin = Uri.parse(config.storeOrigin);
+  var target = draft.path;
+  // A path the store moves (a renamed category, an old product link) is
+  // drawn where it lands, as the visitor's browser would follow it.
+  for (var hop = 0; ; hop++) {
+    final Response page;
+    try {
+      page = await handler(
+        Request(
+          'GET',
+          origin.replace(
+            path: '$hiddenRoutePrefix${target.path}',
+            query: target.query.isEmpty ? null : target.query,
           ),
-        );
-  final rendered = await renderComponent(document, request: request);
-  return _json(
-    request,
-    cors,
-    200,
-    {'html': utf8.decode(rendered.body)},
-    timing:
-        'data;dur=$dataMs, '
-        'render;dur=${watch.elapsedMilliseconds - dataMs}',
-  );
+        ),
+      );
+    } on Object catch (error) {
+      stderr.writeln('editor draft render failed: ${error.runtimeType}');
+      return _json(request, cors, 503, {'state': 'unavailable'});
+    }
+    final location = page.headers['location'];
+    if (page.statusCode >= 300 && page.statusCode < 400 && location != null) {
+      final next = EditorDraft.publicPath(
+        location.startsWith(hiddenRoutePrefix)
+            ? location.substring(hiddenRoutePrefix.length)
+            : location,
+      );
+      if (hop >= 3 || next == null) {
+        return _json(request, cors, 400, {'state': 'invalid'});
+      }
+      target = next;
+      continue;
+    }
+    final html = await page.readAsString();
+    if (page.statusCode >= 500 || !html.contains('</body>')) {
+      return _json(request, cors, 503, {'state': 'unavailable'});
+    }
+    final end = html.lastIndexOf('</body>');
+    return _json(request, cors, 200, {
+      'html': html.replaceRange(end, end, draftExtrasHtml),
+      'status': page.statusCode,
+    }, timing: 'total;dur=${watch.elapsedMilliseconds}');
+  }
 }
 
 /// The editor's draft as the request carries it, checked.
 class EditorDraft {
   EditorDraft._({
+    required this.home,
     required this.slug,
     required this.title,
+    required this.path,
     required this.blocks,
     required this.settings,
   });
 
-  /// `null` for the home; otherwise the editor page's slug.
+  /// The page the editor has open: the home, a page by its [slug], or none.
+  final bool home;
   final String? slug;
   final String title;
+
+  /// The public path (and query) to draw.
+  final Uri path;
   final List<Map<String, dynamic>> blocks;
   final Map<String, String> settings;
 
   static final _slug = RegExp(r'^[a-z0-9][a-z0-9-]{0,199}$');
 
+  /// The first segments of the paths a draft draws: pages, never a cart, a
+  /// checkout, an order or an account.
+  static const _pages = {'productos', 'servicios', 'producto', 'pagina'};
+
+  /// [raw] as a public page's path and query, or null when it is not one.
+  static Uri? publicPath(String raw) {
+    final text = raw.trim();
+    if (text.isEmpty || text.length > 1000) return null;
+    if (!text.startsWith('/') || text.startsWith('//')) return null;
+    final uri = Uri.tryParse(text);
+    if (uri == null || uri.hasScheme || uri.hasAuthority) return null;
+    final segments = uri.pathSegments.where((s) => s.isNotEmpty).toList();
+    final page =
+        segments.isEmpty ||
+        (segments.length <= 3 && _pages.contains(segments.first)) ||
+        (segments.length == 1 &&
+            (segments.first == 'contacto' ||
+                publicPolicySlugs.contains(segments.first)));
+    if (!page) return null;
+    return Uri(
+      path: '/${segments.join('/')}',
+      query: uri.query.isEmpty ? null : uri.query,
+    );
+  }
+
   static EditorDraft? tryParse(Map<String, Object?> body) {
     final page = body['page'];
     final blocks = body['blocks'];
     final settings = body['settings'] ?? const <String, Object?>{};
-    if (page is! Map || blocks is! List || settings is! Map) return null;
+    if (page is! Map? || blocks is! List || settings is! Map) return null;
     if (blocks.length > 300 || settings.length > 2000) return null;
     final String? slug;
-    if (page['home'] == true) {
+    if (page == null || page['home'] == true) {
       slug = null;
     } else {
       final raw = page['slug']?.toString().trim().toLowerCase() ?? '';
       if (!_slug.hasMatch(raw)) return null;
       slug = raw;
     }
+    final path = switch (body['path']) {
+      null => Uri(path: slug == null ? '/' : '/pagina/$slug'),
+      final raw => publicPath(raw.toString()),
+    };
+    if (path == null) return null;
     final rows = <Map<String, dynamic>>[];
     for (final (index, block) in blocks.indexed) {
       if (block is! Map) return null;
@@ -197,8 +245,10 @@ class EditorDraft {
       });
     }
     return EditorDraft._(
+      home: page?['home'] == true,
       slug: slug,
-      title: page['title']?.toString() ?? '',
+      title: page?['title']?.toString() ?? '',
+      path: path,
       blocks: rows,
       settings: {
         for (final entry in settings.entries)
@@ -209,18 +259,6 @@ class EditorDraft {
       },
     );
   }
-
-  /// The public path the draft will have once published.
-  String get path => slug == null ? '/' : '/pagina/$slug';
-
-  /// The page as `website_pages` and its `website_blocks` give it.
-  Map<String, dynamic> get pageRow => {
-    'id': 'draft',
-    'slug': slug ?? '',
-    'title': title,
-    'is_published': true,
-    'website_blocks': blocks,
-  };
 }
 
 Map<String, String> _cors(Request request) {
