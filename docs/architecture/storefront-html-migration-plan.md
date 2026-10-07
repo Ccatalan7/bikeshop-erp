@@ -1707,5 +1707,18 @@ Lo que la medición enseñó y sirve para cualquier paridad que quede:
   `vbDraftNonce`); el servidor leía hasta 2 MB de cuerpo antes de revisar la
   sesión. Sin hallazgos en autorización, aislamiento por tienda, rutas ni XSS
   de las marcas.
-- **Lo que falta del 5c:** medir el zoom en Windows; probar el ERP web con
-  una sesión real.
+- **5d, primera parte: la barra del bloque sobre el HTML (`afa15a3d`,
+  `3f6eba7b`).** El bloque elegido en la vista HTML trae la misma barra que
+  el lienzo (subir, bajar, ocultar, duplicar, copiar para otra página,
+  eliminar con confirmación), dibujada en la capa de marcas y a la vista bajo
+  el encabezado fijo. El editor le pasa a la página qué botones aplican y
+  sus colores de selección (`vbDraftPicked(id, info)`) y recibe el botón
+  (`vbDraftAction`); copiar y eliminar viven en `block_action_bar.dart` y los
+  usan los dos. Dos defectos que salieron al probarla en la app: los clics
+  bajo el zoom de ventana (ver el runbook de control de la app) y el inicio,
+  que el editor nombra por su fila (`{slug: "inicio"}`) y el borrador sólo
+  reconocía como `{home: true}`: en el inicio la vista HTML mostraba lo
+  guardado.
+- **Lo que falta del 5c/5d:** medir el zoom en Windows; probar el ERP web con
+  una sesión real; editar textos sobre el HTML; arrastrar para reordenar y
+  la manilla de alto.
