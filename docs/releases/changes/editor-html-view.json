@@ -10,7 +10,7 @@
   "title": "Vista HTML en el editor del sitio",
   "summary": "En el editor del sitio, «Vista HTML» muestra la página en pantalla —inicio, páginas, catálogo, categorías y ficha de producto— tal como la arma la tienda en HTML, con lo que aún no guardas, y se actualiza con cada cambio.",
   "items": [
-    "Un clic en la vista HTML elige el bloque, el encabezado, el pie o la sección; el bloque trae su barra, «Agregar aquí» en sus bordes y su alto para arrastrar.",
+    "Un clic en la vista HTML elige el bloque, el encabezado, el pie o la sección; el bloque trae su barra, se arrastra para moverlo y su alto se cambia ahí.",
     "Los títulos y textos del bloque elegido se escriben ahí mismo, con negrita, cursiva, subrayado y tamaño; ⌘↵ o un clic afuera lo deja y Esc lo cancela.",
     "Se ve al momento lo que no guardas del catálogo, la ficha y el pie; el carrusel sigue al panel, y mover una sección del pie ya no deja el pie sin dibujar."
   ],
@@ -21,7 +21,7 @@
     },
     {
       "path": "lib/modules/website/widgets/website_html_draft_view.dart",
-      "sha256": "370f7a1ded2dfa984163bbff545cd0c4af5051acec9db7ef5be71cce01472bf3"
+      "sha256": "64c70b46c4846a43747a5fdf782da9a0d94df5cd19b9213604ea16203505a1e5"
     },
     {
       "path": "lib/modules/website/providers/website_edit_mode_provider.dart",
@@ -49,7 +49,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/editor_draft_view.dart",
-      "sha256": "90f2f15e728fc5c368528d9175fa270a11c07289a819781607a5e8a0340d4a4b"
+      "sha256": "a26916a6aeb12dd2627d39f1a6d3e2c26eb520f95ad6f3efe2a81f2a24f97c75"
     },
     {
       "path": "services/storefront_html/lib/src/editor_page_model.dart",
@@ -81,7 +81,7 @@
     },
     {
       "path": "lib/modules/website/services/website_html_draft_picks.dart",
-      "sha256": "75ed7794f287abeb9c167dd4b0316a27a7dea88c108fb81c29bdebf1b78e2d53"
+      "sha256": "92aa3358badcf666070077ae62b10ec93fdab24a6c2ddf0c0df9b0338eafa19d"
     },
     {
       "path": "lib/modules/website/services/website_html_draft_picks_stub.dart",

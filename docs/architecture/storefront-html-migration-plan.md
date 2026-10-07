@@ -1799,8 +1799,23 @@ Lo que la medición enseñó y sirve para cualquier paridad que quede:
   panel, deshecho en un paso. Alineación y color siguen en el panel (la
   alineación «izquierda» de un texto centrado por el bloque no se puede
   guardar: `start` es «sin elegir»).
+- **Arrastrar para mover (servidor `715a6f0e`).** El nombre del bloque
+  elegido, en su barra, se arrastra: una línea marca el borde de destino
+  entre los bloques de la página como se ven, la página se desplaza cerca
+  de sus bordes y al soltar el editor hace la misma operación que el
+  lienzo (`websiteReorderSeamMove` con `ExistingWebsiteBlockDragPayload` y
+  `websiteBlockInsertionIntent`, revalidada contra el documento; un borde
+  junto al mismo bloque no mueve nada) y la vista lleva el bloque a la
+  vista donde quedó. El clic que termina un arrastre (mover o el alto) no
+  elige lo que queda bajo el puntero: antes deseleccionaba.
+- **Segunda pasada de Codex (2026-10-07).** Confirmó corregidos los cuatro
+  hallazgos y dejó dos P2, corregidos: la ficha de edición era opcional en
+  el lector de mensajes (un mensaje sin ficha no se distinguía de otro;
+  ahora es obligatoria), y la barra de formato no se podía usar con
+  teclado (Tab sacaba el foco del texto y terminaba la edición; ahora texto
+  y barra son una sesión y Tab los recorre).
 - **Lo que falta del 5c/5d:** medir el zoom en Windows; probar el ERP web con
-  una sesión real; arrastrar para reordenar.
+  una sesión real.
 - **El carrusel sigue al panel (servidor `f3d97f23`, Cloud Run `00049`).** El
   carrusel acepta un giro (`car:go`) y avisa cuál muestra (`car:shown`); en
   el borrador el editor le dice la diapositiva elegida en el panel

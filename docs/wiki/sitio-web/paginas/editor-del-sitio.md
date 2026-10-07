@@ -183,7 +183,7 @@ con su nombre lo que va a elegir; un bloque elegido trae la misma barra que en
 el lienzo (subir, bajar, ocultar, duplicar, copiar, eliminar) y «Agregar
 aquí» en sus bordes de arriba y de abajo, que abre el catálogo de secciones,
 y, si su alto se elige, «↕ alto» en la esquina para arrastrarlo (doble clic:
-automático);
+automático); el bloque se mueve arrastrando su nombre en la barra;
 un bloque elegido en el panel o recién agregado baja hasta quedar a la vista;
 los enlaces no navegan. Con el bloque elegido, otro clic en uno de sus títulos o textos lo
 escribe ahí mismo, con una barra de negrita, cursiva, subrayado y tamaño

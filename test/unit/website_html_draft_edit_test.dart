@@ -95,13 +95,21 @@ void main() {
       );
       final commit = WebsiteHtmlDraftMessage.fromHandler(
         'vbDraftEdit',
-        ['b1', 'question@items#0', 'commit', '¿Arman bicis?'],
+        ['b1', 'question@items#0', 'commit', '¿Arman bicis?', 't.1'],
       )! as WebsiteHtmlDraftEdit;
       expect(commit.step, WebsiteHtmlDraftEditStep.commit);
       expect(commit.field.collectionKeys, ['items']);
       expect(commit.text, '¿Arman bicis?');
-      expect(commit.token, isNull);
-      // Each edit carries the page's token; a malformed one is no message.
+      expect(commit.token, 't.1');
+      // Each edit carries the page's token; a missing or malformed one is
+      // no message (an answer for another edit could not be told apart).
+      expect(
+        WebsiteHtmlDraftMessage.fromHandler(
+          'vbDraftEdit',
+          ['b1', 'title', 'begin', null],
+        ),
+        isNull,
+      );
       expect(
         (WebsiteHtmlDraftMessage.fromHandler(
           'vbDraftEdit',
@@ -121,7 +129,7 @@ void main() {
       expect(
         (WebsiteHtmlDraftMessage.fromHandler(
           'vbDraftEdit',
-          ['b1', 'title', 'commit', ''],
+          ['b1', 'title', 'commit', '', 't.2'],
         )! as WebsiteHtmlDraftEdit)
             .text,
         '',
@@ -129,18 +137,35 @@ void main() {
       expect(
         WebsiteHtmlDraftMessage.fromHandler(
           'vbDraftEdit',
-          ['b1', 'title', 'commit', null],
+          ['b1', 'title', 'commit', null, 't.3'],
         ),
         isNull,
       );
       expect(
         WebsiteHtmlDraftMessage.fromHandler(
           'vbDraftEdit',
-          ['b1', 'title', 'erase', null],
+          ['b1', 'title', 'erase', null, 't.4'],
         ),
         isNull,
       );
       expect(WebsiteHtmlDraftMessage.fromHandler('other', ['b1']), isNull);
+      // The picked block dropped on a seam.
+      expect(
+        WebsiteHtmlDraftMessage.fromHandler(
+          'vbDraftMove',
+          ['b1', 'b2', 'before'],
+        ),
+        isA<WebsiteHtmlDraftMove>()
+            .having((m) => m.anchor, 'anchor', 'b2')
+            .having((m) => m.side, 'side', WebsiteHtmlDraftSide.before),
+      );
+      for (final side in ['inside', null]) {
+        expect(
+          WebsiteHtmlDraftMessage.fromHandler(
+              'vbDraftMove', ['b1', 'b2', side]),
+          isNull,
+        );
+      }
       // A carousel turned in the page: its slide, a whole number.
       expect(
         WebsiteHtmlDraftMessage.fromHandler('vbDraftSlide', ['b1', 2]),
@@ -165,6 +190,7 @@ void main() {
         'id': 'b1',
         'field': 'title',
         'phase': 'begin',
+        'token': 'm.1',
       })! as WebsiteHtmlDraftEdit;
       expect(begin.step, WebsiteHtmlDraftEditStep.begin);
       expect(begin.text, isNull);

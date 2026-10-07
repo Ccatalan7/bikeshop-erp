@@ -18,7 +18,10 @@ import '../services/website_html_draft_client.dart';
 import '../services/website_html_draft_picks.dart';
 import '../services/website_service.dart';
 import '../../../shared/themes/vinabike_theme_roles.dart';
+import '../../../public_store/widgets/page_composition.dart'
+    show websiteReorderSeamMove;
 import '../../../public_store/widgets/website_insertion_host.dart';
+import '../models/website_editor_drag_payload.dart';
 import '../models/website_block_catalog.dart';
 import '../models/website_block_geometry.dart';
 import 'block_action_bar.dart';
@@ -439,6 +442,8 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
         _edit(edit);
       case final WebsiteHtmlDraftHeight height:
         _height(height);
+      case WebsiteHtmlDraftMove(:final id, :final anchor, :final side):
+        _move(id, anchor, side);
       case WebsiteHtmlDraftSlide(:final id, :final index):
         final provider = _provider;
         final count = _slideCount(provider?.getBlock(id));
@@ -484,6 +489,36 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
       case 'insert-before' || 'insert-after':
         unawaited(_insert(provider, id, action));
     }
+  }
+
+  /// The picked block dropped on a seam in the page: the canvas's own move
+  /// (`websiteReorderSeamMove`), re-checked against the page as it is now;
+  /// the next drawing brings the block into sight where it landed.
+  void _move(String id, String anchor, WebsiteHtmlDraftSide side) {
+    final provider = _provider;
+    if (provider == null ||
+        provider.selectedBlockId != id ||
+        provider.getBlock(anchor) == null) {
+      return;
+    }
+    final document = provider.document;
+    final moved = websiteReorderSeamMove(
+      context,
+      ExistingWebsiteBlockDragPayload(
+        blockId: id,
+        sessionRevision: document.sessionRevision,
+        pageId: document.pageId,
+        pageSlug: document.pageSlug,
+      ),
+      websiteBlockInsertionIntent(
+        provider,
+        anchor,
+        side == WebsiteHtmlDraftSide.before
+            ? WebsiteBlockInsertSide.before
+            : WebsiteBlockInsertSide.after,
+      ),
+    );
+    if (moved) _bring = true;
   }
 
   /// One catalog at a time, as the canvas's insertion host.
@@ -796,6 +831,7 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
                                 'vbDraftEdit',
                                 'vbDraftSlide',
                                 'vbDraftHeight',
+                                'vbDraftMove',
                               ]) {
                                 controller.addJavaScriptHandler(
                                   handlerName: name,

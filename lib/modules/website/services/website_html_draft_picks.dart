@@ -32,6 +32,12 @@ sealed class WebsiteHtmlDraftMessage {
           'formatting': at(5),
         },
       'vbDraftSlide' => {'type': 'vb-draft-slide', 'id': at(0), 'index': at(1)},
+      'vbDraftMove' => {
+          'type': 'vb-draft-move',
+          'id': at(0),
+          'anchor': at(1),
+          'side': at(2),
+        },
       'vbDraftHeight' => {
           'type': 'vb-draft-height',
           'id': at(0),
@@ -72,10 +78,12 @@ sealed class WebsiteHtmlDraftMessage {
         if (step == WebsiteHtmlDraftEditStep.commit && written == null) {
           return null;
         }
+        // Every edit carries the page's token: without one, an answer for
+        // another edit could not be told from this one's.
         final token = text('token');
-        if (token != null &&
-            (token.length > 64 ||
-                !RegExp(r'^[A-Za-z0-9._-]+$').hasMatch(token))) {
+        if (token == null ||
+            token.length > 64 ||
+            !RegExp(r'^[A-Za-z0-9._-]+$').hasMatch(token)) {
           return null;
         }
         // What the page's toolbar changed: a few keys, each a value or
@@ -97,8 +105,8 @@ sealed class WebsiteHtmlDraftMessage {
           id,
           parsed,
           step,
-          written,
           token,
+          written,
           formatting,
         );
       case 'vb-draft-slide':
@@ -109,6 +117,15 @@ sealed class WebsiteHtmlDraftMessage {
         };
         if (id == null || slide == null) return null;
         return WebsiteHtmlDraftSlide(id, slide);
+      case 'vb-draft-move':
+        final anchor = text('anchor');
+        final side = switch (data['side']) {
+          'before' => WebsiteHtmlDraftSide.before,
+          'after' => WebsiteHtmlDraftSide.after,
+          _ => null,
+        };
+        if (id == null || anchor == null || side == null) return null;
+        return WebsiteHtmlDraftMove(id, anchor, side);
       case 'vb-draft-height':
         final step = switch (data['phase']) {
           'begin' => WebsiteHtmlDraftHeightStep.begin,
@@ -158,6 +175,17 @@ enum WebsiteHtmlDraftEditStep { begin, commit, cancel }
 
 enum WebsiteHtmlDraftHeightStep { begin, commit, cancel, reset }
 
+enum WebsiteHtmlDraftSide { before, after }
+
+/// The picked block dragged in the page to the [side] of block [anchor].
+final class WebsiteHtmlDraftMove extends WebsiteHtmlDraftMessage {
+  const WebsiteHtmlDraftMove(this.id, this.anchor, this.side);
+
+  final String id;
+  final String anchor;
+  final WebsiteHtmlDraftSide side;
+}
+
 /// The operator dragging the picked block's height handle: starting, done
 /// at [value] CSS px (the canvas's logical px), leaving it, or asking for
 /// the content's own height back.
@@ -175,9 +203,9 @@ final class WebsiteHtmlDraftEdit extends WebsiteHtmlDraftMessage {
   const WebsiteHtmlDraftEdit(
     this.id,
     this.field,
-    this.step, [
+    this.step,
+    this.token, [
     this.text,
-    this.token,
     this.formatting,
   ]);
 
@@ -188,7 +216,7 @@ final class WebsiteHtmlDraftEdit extends WebsiteHtmlDraftMessage {
 
   /// The page's name for this one edit: the answers carry it back, and a
   /// commit or cancel for another edit is not this one's.
-  final String? token;
+  final String token;
 
   /// What the page's toolbar changed in the text's formatting, with a
   /// commit (`{bold: true, fontSize: 32}`); `null` when nothing.
