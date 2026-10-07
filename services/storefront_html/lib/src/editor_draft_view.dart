@@ -720,5 +720,24 @@ const _draftScript = r'''
     refresh();
     return !!pick.target;
   };
+  // In the ERP on the web the page is a frame of another origin, which the
+  // editor cannot script: it says it is ready, and the editor calls these
+  // functions as messages signed with the view's nonce, only from the page
+  // that holds the frame. What `vbDraftPicked` found goes back the same way.
+  if (window.parent && window.parent !== window &&
+      !(window.flutter_inappwebview && window.flutter_inappwebview.callHandler)) {
+    var CALLS = ['vbDraftPicked', 'vbDraftEditing', 'vbDraftEdited', 'vbDraftSized', 'vbDraftSlides'];
+    addEventListener('message', function (event) {
+      var data = event.data;
+      if (event.source !== window.parent || !data || data.type !== 'vb-host' ||
+          data.nonce !== window.vbDraftNonce || CALLS.indexOf(data.call) < 0) return;
+      var result = window[data.call].apply(null, data.args || []);
+      if (data.call === 'vbDraftPicked') {
+        window.parent.postMessage({ type: 'vb-draft-result', call: data.call, result: !!result,
+          nonce: window.vbDraftNonce || null }, '*');
+      }
+    });
+    window.parent.postMessage({ type: 'vb-draft-ready', nonce: window.vbDraftNonce || null }, '*');
+  }
 })();
 ''';
