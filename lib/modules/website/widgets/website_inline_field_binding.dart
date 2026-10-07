@@ -141,6 +141,27 @@ class WebsiteInlineFieldBinding {
     List<String> keys,
     WebsiteViewport viewport,
   ) {
+    final node = _node(target, viewport);
+    if (node == null) return null;
+    for (final key in keys) {
+      if (node.containsKey(key)) return node[key]?.toString() ?? '';
+    }
+    return '';
+  }
+
+  /// What [key] holds as the block is drawn in [viewport].
+  Object? _value(
+    WebsiteInlineRepeaterTarget? target,
+    String key,
+    WebsiteViewport viewport,
+  ) =>
+      _node(target, viewport)?[key];
+
+  /// The block's data (or [target]'s item) as it is drawn in [viewport].
+  Map<dynamic, dynamic>? _node(
+    WebsiteInlineRepeaterTarget? target,
+    WebsiteViewport viewport,
+  ) {
     final type = registeredType;
     final block = provider.getBlock(blockId);
     final raw = block?['block_data'];
@@ -177,11 +198,7 @@ class WebsiteInlineFieldBinding {
       final item = at < projected.length ? projected[at] : null;
       node = item is Map ? item : null;
     }
-    if (node == null) return null;
-    for (final key in keys) {
-      if (node.containsKey(key)) return node[key]?.toString() ?? '';
-    }
-    return '';
+    return node;
   }
 
   /// How the block's height is authored: exactly, as a minimum, or not at
@@ -255,18 +272,52 @@ class WebsiteInlineFieldBinding {
     }
     final property = propertyFor(item, keys);
     final text = textValue(item, keys, viewport);
-    final target = property == null ? null : targetFor(item, [property]);
+    // The text's formatting travels in the same transaction, under the
+    // text's policy, as the canvas's toolbar writes it.
+    final formattingKey =
+        schema.supportsFormatting ? schema.resolvedFormattingKey : null;
+    final formattingProperty = formattingKey == null
+        ? null
+        : propertyFor(item, [formattingKey], policyKeys: keys);
+    final target = property == null
+        ? null
+        : targetFor(item, [
+            property,
+            if (formattingProperty != null) formattingProperty,
+          ]);
     final lease =
         target == null ? null : provider.beginInlineManipulation(target);
     if (property == null || text == null || lease == null) return null;
+    final formatting = formattingProperty == null
+        ? null
+        : switch (_value(item, formattingProperty.canonicalKey, viewport)) {
+            final Map<dynamic, dynamic> stored => <String, Object?>{
+                for (final MapEntry(:key, :value) in stored.entries)
+                  key.toString(): value,
+              },
+            _ => <String, Object?>{},
+          };
     return WebsiteInlineTextWrite._(
-        provider, property.canonicalKey, lease, text);
+      provider,
+      property.canonicalKey,
+      lease,
+      text,
+      formattingKey: formattingProperty?.canonicalKey,
+      formatting: formatting,
+    );
   }
 }
 
 /// A text being written where it is drawn ([WebsiteInlineFieldBinding.beginText]).
 class WebsiteInlineTextWrite {
-  WebsiteInlineTextWrite._(this._provider, this.key, this._lease, this.text);
+  WebsiteInlineTextWrite._(
+    this._provider,
+    this.key,
+    this._lease,
+    this.text, {
+    this.formattingKey,
+    this.formatting,
+  });
 
   final WebsiteEditModeProvider _provider;
 
@@ -277,10 +328,63 @@ class WebsiteInlineTextWrite {
   /// The text it holds as drawn, when the writing began.
   final String text;
 
-  /// Writes [value]; `false` when the draft changed under it (nothing is
-  /// written then) or [value] is what it held.
-  bool commit(String value) {
-    final written = _provider.commitInlineManipulation(_lease, {key: value});
+  /// Where its formatting is kept, for a text that has one.
+  final String? formattingKey;
+
+  /// Its formatting as drawn when the writing began (`TextFormatting`'s
+  /// JSON); `null` for a text without one.
+  final Map<String, Object?>? formatting;
+
+  /// The formatting a toolbar may change: bold, italic, underline and the
+  /// size, each a value or `null` for none. Anything else keeps what
+  /// [formatting] has.
+  static const formattingChanges = {'bold', 'italic', 'underline', 'fontSize'};
+
+  /// Whether [changes] are ones a toolbar may make: [formattingChanges]
+  /// only, of their kinds, a size between 6 and 200.
+  static bool acceptsFormattingChanges(Map<String, Object?> changes) =>
+      changes.entries.every(
+        (entry) => switch ((entry.key, entry.value)) {
+          ('bold' || 'italic' || 'underline', bool() || null) => true,
+          ('fontSize', null) => true,
+          ('fontSize', final num size) =>
+            size.isFinite && size >= 6 && size <= 200,
+          _ => false,
+        },
+      );
+
+  /// [formatting] with [changes] applied (see [acceptsFormattingChanges]),
+  /// or `null` when they change nothing.
+  Map<String, Object?>? formattingWith(Map<String, Object?> changes) {
+    final current = formatting;
+    if (current == null ||
+        changes.isEmpty ||
+        !acceptsFormattingChanges(changes)) {
+      return null;
+    }
+    final next = Map<String, Object?>.of(current);
+    for (final MapEntry(:key, :value) in changes.entries) {
+      if (value == null || value == false) {
+        next.remove(key);
+      } else {
+        next[key] = value is num ? value.toDouble() : value;
+      }
+    }
+    final same = next.length == current.length &&
+        next.entries.every((entry) => current[entry.key] == entry.value);
+    return same ? null : next;
+  }
+
+  /// Writes [value], and [formatting] if given, as one step; `false` when
+  /// the draft changed under it (nothing is written then) or nothing would
+  /// change.
+  bool commit(String value, {Map<String, Object?>? formatting}) {
+    final formattingKey = this.formattingKey;
+    final written = _provider.commitInlineManipulation(_lease, {
+      key: value,
+      if (formatting != null && formattingKey != null)
+        formattingKey: formatting,
+    });
     if (!written) cancel();
     return written;
   }

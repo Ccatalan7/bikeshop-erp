@@ -1784,9 +1784,23 @@ Lo que la medición enseñó y sirve para cualquier paridad que quede:
   entradas inválidas (2026-10-07: 3 diapositivas, 22 preguntas, 12
   características, todas objetos); el lienzo Flutter numera esas listas
   comprimidas y queda con el mismo defecto latente (pendiente).
+- **Formato al escribir (2026-10-07, Cloud Run `00054`).** Un texto con
+  formato (el campo del esquema con `supportsFormatting`; su clave,
+  `resolvedFormattingKey`) trae al escribirlo negrita, cursiva, subrayado y
+  tamaño (también ⌘B/⌘I/⌘U), vistos al momento en el texto. La página
+  manda sólo los cambios; el editor acepta esos cuatro de sus tipos
+  (`WebsiteInlineTextWrite.acceptsFormattingChanges`), los aplica sobre el
+  formato que el texto tiene (el color y lo demás se quedan) y los escribe
+  en la misma transacción que el texto, con la política del texto, como la
+  barra del lienzo. El esquema de Preguntas frecuentes no declaraba el
+  formato de su título y subtítulo, que los dos renderizadores aplicaban:
+  corregido en el esquema (el panel también lo muestra ahora). Probado en
+  macOS: título del carrusel a negrita y 38 desde el HTML, visto en el
+  panel, deshecho en un paso. Alineación y color siguen en el panel (la
+  alineación «izquierda» de un texto centrado por el bloque no se puede
+  guardar: `start` es «sin elegir»).
 - **Lo que falta del 5c/5d:** medir el zoom en Windows; probar el ERP web con
-  una sesión real; arrastrar para reordenar; el formato del texto (negrita,
-  tamaño, color) sigue en el panel.
+  una sesión real; arrastrar para reordenar.
 - **El carrusel sigue al panel (servidor `f3d97f23`, Cloud Run `00049`).** El
   carrusel acepta un giro (`car:go`) y avisa cuál muestra (`car:shown`); en
   el borrador el editor le dice la diapositiva elegida en el panel

@@ -554,6 +554,8 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
           writing?.write.text,
           writing == null ? null : edit.field.spec,
           edit.token,
+          // The toolbar starts from the formatting the text has.
+          writing?.write.formatting,
         ]));
       case WebsiteHtmlDraftEditStep.commit:
         final writing = _writing;
@@ -562,8 +564,15 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
             writing.blockId == edit.id &&
             writing.field == edit.field.spec &&
             writing.token == edit.token;
-        final written = matches && writing.write.commit(edit.text!);
-        if (!matches) writing?.write.cancel();
+        final changes = edit.formatting ?? const <String, Object?>{};
+        final written = matches &&
+            WebsiteInlineTextWrite.acceptsFormattingChanges(changes) &&
+            writing.write.commit(
+              edit.text!,
+              formatting: writing.write.formattingWith(changes),
+            );
+        // Whatever was not written lets its lease go (a no-op once used).
+        if (!written) writing?.write.cancel();
         unawaited(_tell('vbDraftEdited', [written, edit.token]));
         _changed();
       case WebsiteHtmlDraftEditStep.cancel:

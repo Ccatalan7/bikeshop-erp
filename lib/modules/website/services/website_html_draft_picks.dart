@@ -29,6 +29,7 @@ sealed class WebsiteHtmlDraftMessage {
           'phase': at(2),
           'text': at(3),
           'token': at(4),
+          'formatting': at(5),
         },
       'vbDraftSlide' => {'type': 'vb-draft-slide', 'id': at(0), 'index': at(1)},
       'vbDraftHeight' => {
@@ -77,7 +78,29 @@ sealed class WebsiteHtmlDraftMessage {
                 !RegExp(r'^[A-Za-z0-9._-]+$').hasMatch(token))) {
           return null;
         }
-        return WebsiteHtmlDraftEdit(id, parsed, step, written, token);
+        // What the page's toolbar changed: a few keys, each a value or
+        // null; the editor applies them to the formatting it keeps.
+        final rawFormatting = data['formatting'];
+        final formatting = rawFormatting is Map
+            ? <String, Object?>{
+                for (final MapEntry(:key, :value) in rawFormatting.entries)
+                  if (key is String &&
+                      (value == null || value is bool || value is num))
+                    key: value,
+              }
+            : null;
+        if (rawFormatting is Map &&
+            formatting!.length != rawFormatting.length) {
+          return null;
+        }
+        return WebsiteHtmlDraftEdit(
+          id,
+          parsed,
+          step,
+          written,
+          token,
+          formatting,
+        );
       case 'vb-draft-slide':
         final slide = switch (data['index']) {
           final num value when value >= 0 && value == value.roundToDouble() =>
@@ -155,6 +178,7 @@ final class WebsiteHtmlDraftEdit extends WebsiteHtmlDraftMessage {
     this.step, [
     this.text,
     this.token,
+    this.formatting,
   ]);
 
   final String id;
@@ -165,6 +189,10 @@ final class WebsiteHtmlDraftEdit extends WebsiteHtmlDraftMessage {
   /// The page's name for this one edit: the answers carry it back, and a
   /// commit or cancel for another edit is not this one's.
   final String? token;
+
+  /// What the page's toolbar changed in the text's formatting, with a
+  /// commit (`{bold: true, fontSize: 32}`); `null` when nothing.
+  final Map<String, Object?>? formatting;
 }
 
 /// One text of a block as the store's HTML server marks it for the editor

@@ -245,6 +245,60 @@ void main() {
       );
     });
 
+    test(
+        'the toolbar\'s changes travel with the text, in the same step, '
+        'over the formatting the text has', () {
+      final provider = _provider('faq', {
+        'title': 'Preguntas',
+        'titleFormatting': {'italic': true, 'textColor': 0xFF112233},
+        'items': <Object?>[],
+      });
+      addTearDown(provider.dispose);
+      final write = _fields(provider, 'faq').beginText(null, ['title'])!;
+      expect(write.formattingKey, 'titleFormatting');
+      expect(write.formatting, {'italic': true, 'textColor': 0xFF112233});
+      expect(write.formattingWith({'italic': true}), isNull);
+      final next = write.formattingWith({
+        'bold': true,
+        'italic': false,
+        'fontSize': 32,
+      })!;
+      expect(next, {'textColor': 0xFF112233, 'bold': true, 'fontSize': 32.0});
+      expect(write.commit('Preguntas frecuentes', formatting: next), isTrue);
+      final data = _data(provider);
+      expect(data['title'], 'Preguntas frecuentes');
+      expect(data['titleFormatting'], next);
+      provider.undo();
+      expect(_data(provider)['titleFormatting'], {
+        'italic': true,
+        'textColor': 0xFF112233,
+      });
+    });
+
+    test('a toolbar may change only bold, italic, underline and the size', () {
+      expect(
+        WebsiteInlineTextWrite.acceptsFormattingChanges({
+          'bold': true,
+          'underline': null,
+          'fontSize': 18,
+        }),
+        isTrue,
+      );
+      for (final changes in <Map<String, Object?>>[
+        {'textColor': 0xFF000000},
+        {'bold': 'yes'},
+        {'fontSize': 2},
+        {'fontSize': double.infinity},
+        {'linkUrl': 'javascript:alert(1)'},
+      ]) {
+        expect(
+          WebsiteInlineTextWrite.acceptsFormattingChanges(changes),
+          isFalse,
+          reason: '$changes',
+        );
+      }
+    });
+
     test('only a text field the block declares', () {
       final provider = _provider('hero', {
         'title': 'Portada',
