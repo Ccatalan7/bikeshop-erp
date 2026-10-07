@@ -29,6 +29,7 @@ sealed class WebsiteHtmlDraftMessage {
       text: arguments.length > 3 && arguments[3] is String
           ? arguments[3] as String
           : null,
+      index: arguments.length > 1 ? arguments[1] : null,
     );
   }
 
@@ -44,6 +45,7 @@ sealed class WebsiteHtmlDraftMessage {
         'vb-draft-pick' => 'vbDraftPick',
         'vb-draft-action' => 'vbDraftAction',
         'vb-draft-edit' => 'vbDraftEdit',
+        'vb-draft-slide' => 'vbDraftSlide',
         _ => '',
       },
       id: text('id'),
@@ -51,6 +53,7 @@ sealed class WebsiteHtmlDraftMessage {
       field: text('field'),
       phase: text('phase'),
       text: data['text'] is String ? data['text'] as String : null,
+      index: data['index'],
     );
   }
 
@@ -61,6 +64,7 @@ sealed class WebsiteHtmlDraftMessage {
     required String? field,
     required String? phase,
     required String? text,
+    required Object? index,
   }) {
     switch (kind) {
       case 'vbDraftPick':
@@ -82,6 +86,14 @@ sealed class WebsiteHtmlDraftMessage {
           return null;
         }
         return WebsiteHtmlDraftEdit(id, parsed, step, text);
+      case 'vbDraftSlide':
+        final slide = switch (index) {
+          final num value when value >= 0 && value == value.roundToDouble() =>
+            value.toInt(),
+          _ => null,
+        };
+        if (id == null || slide == null) return null;
+        return WebsiteHtmlDraftSlide(id, slide);
     }
     return null;
   }
@@ -100,6 +112,14 @@ final class WebsiteHtmlDraftAction extends WebsiteHtmlDraftMessage {
 
   final String id;
   final String action;
+}
+
+/// A carousel of the page turned to slide [index] with its arrows or dots.
+final class WebsiteHtmlDraftSlide extends WebsiteHtmlDraftMessage {
+  const WebsiteHtmlDraftSlide(this.id, this.index);
+
+  final String id;
+  final int index;
 }
 
 enum WebsiteHtmlDraftEditStep { begin, commit, cancel }

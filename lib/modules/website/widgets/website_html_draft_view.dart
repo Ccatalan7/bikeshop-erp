@@ -126,6 +126,7 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
       _selected = provider.selectedBlockId;
       _markSelection();
     }
+    _showSlides();
     if (path == null) return;
     if (_writing case final writing?) {
       // The operator is writing in the page: a redraw would take the text
@@ -274,6 +275,41 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
       await web.scrollTo(x: 0, y: _restoreScroll);
     }
     await _markSelection();
+    _shownSlides = null;
+    _showSlides(instant: true);
+  }
+
+  /// The slide picked in the panel for each carousel of the open page, as
+  /// last told to the page.
+  String? _shownSlides;
+
+  /// Turns the page's carousels to the slides picked in the panel, as the
+  /// canvas shows them (`carouselSlideSelection`); at once when the page
+  /// has just been drawn.
+  void _showSlides({bool instant = false}) {
+    final provider = _provider;
+    if (provider == null) return;
+    final slides = <String, int>{
+      for (final block in provider.blocks)
+        if ((block['block_type'] ?? block['type']) == 'carousel' &&
+            block['id'] is String)
+          block['id'] as String: provider.carouselSlideSelection(
+            block['id'] as String,
+            _slideCount(block),
+          ),
+    };
+    final encoded = jsonEncode(slides);
+    if (encoded == _shownSlides) return;
+    _shownSlides = encoded;
+    unawaited(_tell('vbDraftSlides', [slides, instant]));
+  }
+
+  /// How many slides a carousel block has, counted as the canvas counts
+  /// them.
+  static int _slideCount(Map<String, dynamic>? block) {
+    final data = block?['block_data'];
+    final slides = data is Map ? data['slides'] : null;
+    return slides is List ? slides.whereType<Map>().length : 0;
   }
 
   Future<void> _markSelection() async {
@@ -368,6 +404,12 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
         _acted(id, action);
       case final WebsiteHtmlDraftEdit edit:
         _edit(edit);
+      case WebsiteHtmlDraftSlide(:final id, :final index):
+        final provider = _provider;
+        final count = _slideCount(provider?.getBlock(id));
+        if (provider != null && count > 0) {
+          provider.selectCarouselSlide(id, index, count);
+        }
     }
   }
 
@@ -597,6 +639,7 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
                                 'vbDraftPick',
                                 'vbDraftAction',
                                 'vbDraftEdit',
+                                'vbDraftSlide',
                               ]) {
                                 controller.addJavaScriptHandler(
                                   handlerName: name,

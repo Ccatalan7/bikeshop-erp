@@ -1747,5 +1747,12 @@ Lo que la medición enseñó y sirve para cualquier paridad que quede:
   ve.
 - **Lo que falta del 5c/5d:** medir el zoom en Windows; probar el ERP web con
   una sesión real; arrastrar para reordenar y la manilla de alto; el formato
-  del texto (negrita, tamaño, color) sigue en el panel; el carrusel del HTML
-  no sigue a la diapositiva elegida en el panel.
+  del texto (negrita, tamaño, color) sigue en el panel.
+- **El carrusel sigue al panel (servidor `f3d97f23`, Cloud Run `00049`).** El
+  carrusel acepta un giro (`car:go`) y avisa cuál muestra (`car:shown`); en
+  el borrador el editor le dice la diapositiva elegida en el panel
+  (`vbDraftSlides`, sin animación al redibujar, `carouselSlideSelection`) y
+  un giro con sus flechas o puntos la elige en el panel (`vbDraftSlide` →
+  `selectCarouselSlide`), como en el lienzo. Probado en macOS: diapositiva 2
+  elegida en el panel → el HTML la muestra; flecha en el HTML → el panel
+  pasa a la 3.

@@ -61,7 +61,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 
 | Desde | Qué | Página |
 |---|---|---|
-| 2026-10-07 | Vista HTML del editor: medir el zoom de ventana en Windows; probar el ERP web con una sesión real; seguir el 5d (arrastrar para reordenar, manilla de alto, formato del texto sobre el HTML, carrusel que siga a la diapositiva elegida en el panel) | [editor](editor-del-sitio.md) |
+| 2026-10-07 | Vista HTML del editor: medir el zoom de ventana en Windows; probar el ERP web con una sesión real; seguir el 5d (arrastrar para reordenar, manilla de alto, formato del texto sobre el HTML) | [editor](editor-del-sitio.md) |
 | 2026-10-07 | **El lienzo Flutter del ERP no aplica la regla de stock**: en Editar y en «Ver como cliente» lista 1.615 productos en `/productos` (Componentes 1.166) y la tienda pública 538 (Componentes 426) con `product_visibility_stock_policy = available_only`. La vista HTML muestra lo del cliente; falta encontrar qué lectura usa el lienzo y corregirla en su dueño | [editor](editor-del-sitio.md) |
 | 2026-10-04 | **Contenido real y visible en el HTML** de fichas, categorías y portada (hoy en `<noscript>`, ~100–150 palabras contra 700–2.500 de los referentes). Si el dueño aprueba la migración a HTML, la fase 1 lo resuelve y no se completa la página instantánea | [seo-de-referentes](seo-de-referentes.md) |
 | 2026-10-04 | **Descripciones de producto**: 29 de 1.541 publicados tienen texto; el JSON-LD y la página no tienen qué mostrar en el resto (contenido, no marcado) | [datos-estructurados](datos-estructurados.md) |

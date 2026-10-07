@@ -124,6 +124,22 @@ void main() {
         isNull,
       );
       expect(WebsiteHtmlDraftMessage.fromHandler('other', ['b1']), isNull);
+      // A carousel turned in the page: its slide, a whole number.
+      expect(
+        WebsiteHtmlDraftMessage.fromHandler('vbDraftSlide', ['b1', 2]),
+        isA<WebsiteHtmlDraftSlide>().having((m) => m.index, 'index', 2),
+      );
+      expect(
+        WebsiteHtmlDraftMessage.fromHandler('vbDraftSlide', ['b1', 1.0]),
+        isA<WebsiteHtmlDraftSlide>().having((m) => m.index, 'index', 1),
+      );
+      for (final index in [-1, 1.5, '2', null]) {
+        expect(
+          WebsiteHtmlDraftMessage.fromHandler('vbDraftSlide', ['b1', index]),
+          isNull,
+          reason: '$index',
+        );
+      }
     });
 
     test('as a frame message, the same', () {
@@ -142,6 +158,12 @@ void main() {
       expect(
         WebsiteHtmlDraftMessage.fromPost({'type': 'vb-draft-action'}),
         isNull,
+      );
+      expect(
+        WebsiteHtmlDraftMessage.fromPost(
+          {'type': 'vb-draft-slide', 'id': 'b1', 'index': 0},
+        ),
+        isA<WebsiteHtmlDraftSlide>().having((m) => m.id, 'id', 'b1'),
       );
     });
   });

@@ -184,7 +184,8 @@ el lienzo (subir, bajar, ocultar, duplicar, copiar, eliminar); los enlaces no
 navegan. Con el bloque elegido, otro clic en uno de sus títulos o textos lo
 escribe ahí mismo: ⌘↵ o un clic afuera lo deja (un paso del historial,
 como en el lienzo), Esc lo cancela; el formato sigue en el panel. En el
-borrador el carrusel no avanza solo y sus flechas lo mueven
+borrador el carrusel no avanza solo, muestra la diapositiva elegida en el
+panel y, si se gira con sus flechas, la elige en el panel
 `[Repo 2026-10-07]` `[Prod 2026-10-07]`. Una sección que el
 HTML aún no dibuja aparece señalada en su lugar. Carrito, pago, pedidos y
 cuenta siguen en el lienzo. Sólo la ve quien puede guardar el sitio, y no

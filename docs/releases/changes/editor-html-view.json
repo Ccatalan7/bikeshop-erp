@@ -10,7 +10,7 @@
   "title": "Vista HTML en el editor del sitio",
   "summary": "En el editor del sitio, «Vista HTML» muestra la página en pantalla —inicio, páginas, catálogo, categorías y ficha de producto— tal como la arma la tienda en HTML, con lo que aún no guardas, y se actualiza con cada cambio.",
   "items": [
-    "Un clic en la vista HTML elige el bloque, el encabezado, el pie o la sección, con su barra para moverlo, ocultarlo o eliminarlo.",
+    "Un clic en la vista HTML elige el bloque, el encabezado, el pie o la sección, con su barra; el carrusel muestra la diapositiva elegida en el panel.",
     "Los títulos y textos del bloque elegido se escriben ahí mismo con otro clic: ⌘↵ o un clic afuera lo deja, Esc lo cancela y se deshace en un paso.",
     "Lo que no guardas del catálogo, de la ficha y del pie se ve al momento, y mover una sección del pie ya no deja el pie sin dibujar."
   ],
@@ -21,7 +21,7 @@
     },
     {
       "path": "lib/modules/website/widgets/website_html_draft_view.dart",
-      "sha256": "53f4619123e5d4756f2d728fc4f2a35e18d1a403f2eb8e8a41ce707e179b4c84"
+      "sha256": "62f896e33d07c30ba5812f9f81de779c29437c2e835e9e26f0f79dd795a40e6f"
     },
     {
       "path": "lib/modules/website/providers/website_edit_mode_provider.dart",
@@ -49,7 +49,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/editor_draft_view.dart",
-      "sha256": "7cc6ce549ca189a1e0e716c225d22eaa6fa333d94c223dfffcc694241ea6de24"
+      "sha256": "09e5a59667e7e99f917104147864148deb9416bf20ff0dd44e3203e3fdca814c"
     },
     {
       "path": "services/storefront_html/lib/src/editor_page_model.dart",
@@ -81,7 +81,7 @@
     },
     {
       "path": "lib/modules/website/services/website_html_draft_picks.dart",
-      "sha256": "3a5b163c4077b3bf1e5dfbbe4fdeea846a57833bbbfa0a08bae5e4f68e051ed2"
+      "sha256": "23fe8b18dd7714be632546e0a03b828dd4411669946ac2369ae186c0eecefabf"
     },
     {
       "path": "lib/modules/website/services/website_html_draft_picks_stub.dart",
@@ -133,7 +133,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_carousel_view.dart",
-      "sha256": "521e75d762b723c6739683e9711fa4f76753665f347997bea947315f55804ec4"
+      "sha256": "191ced322430f4be5b50745d7ba13d6917a27400ed505b09e33d3ccaacb7f993"
     },
     {
       "path": "services/storefront_html/lib/src/website_content_blocks_view.dart",
