@@ -76,11 +76,16 @@ class CanvasLayersView extends StatelessComponent {
     this.document,
     this.context, {
     this.deferImages = false,
+    this.slide,
     super.key,
   });
 
   final Map<String, dynamic> document;
   final BlockRenderContext context;
+
+  /// For the editor's draft, the carousel slide these layers are of (its
+  /// stored position), or `null` for a canvas block's own.
+  final int? slide;
 
   /// Images name their file in `data-src`, for a script to load when they
   /// are about to show (a carousel's later slides).
@@ -119,20 +124,26 @@ class CanvasLayersView extends StatelessComponent {
         drawn.add(WebsiteViewport.tablet.wireName);
       }
     }
-    return div(classes: 'cnv', [
-      for (final MapEntry(:key, :value) in sets.entries)
-        div(
-          classes: 'cnv-set',
-          attributes: {
-            'data-vp': names[key]!.join(' '),
-            'style': '--dw:${cssNum(value.width)}',
-          },
-          [
-            for (final layer in value.layers)
-              if (canvasLayerIsCovered(layer)) ?_layer(layer),
-          ],
-        ),
-    ]);
+    return div(
+      classes: 'cnv',
+      attributes: context.draft
+          ? {'data-canvas-slide': slide == null ? 'root' : '$slide'}
+          : const {},
+      [
+        for (final MapEntry(:key, :value) in sets.entries)
+          div(
+            classes: 'cnv-set',
+            attributes: {
+              'data-vp': names[key]!.join(' '),
+              'style': '--dw:${cssNum(value.width)}',
+            },
+            [
+              for (final layer in value.layers)
+                if (canvasLayerIsCovered(layer)) ?_layer(layer),
+            ],
+          ),
+      ],
+    );
   }
 
   Component? _layer(Map<String, dynamic> layer) {
@@ -159,15 +170,16 @@ class CanvasLayersView extends StatelessComponent {
       'cl',
       if (anim == 'fade' || anim == 'fadeUp') 'cl-a-$anim',
     ];
+    final mark = context.editLayer(layer['id']);
     switch (kind) {
       case WebsiteCanvasLayerKind.text:
-        return _text(layer, classes, box);
+        return _text(layer, classes, box, mark);
       case WebsiteCanvasLayerKind.shape:
-        return _shape(layer, classes, box);
+        return _shape(layer, classes, box, mark);
       case WebsiteCanvasLayerKind.image:
-        return _image(layer, classes, box);
+        return _image(layer, classes, box, mark);
       case WebsiteCanvasLayerKind.button:
-        return _button(layer, classes, box);
+        return _button(layer, classes, box, mark);
       default:
         return null;
     }
@@ -177,6 +189,7 @@ class CanvasLayersView extends StatelessComponent {
     Map<String, dynamic> layer,
     List<String> classes,
     List<String> box,
+    Map<String, String> mark,
   ) {
     final source = (layer['text'] ?? 'Texto').toString();
     final text = layer['uppercase'] == true ? source.toUpperCase() : source;
@@ -216,7 +229,7 @@ class CanvasLayersView extends StatelessComponent {
     final lines = text.split('\n');
     return div(
       classes: [...classes, 'cl-text', 'al-$align'].join(' '),
-      attributes: {'style': box.join(';')},
+      attributes: {...mark, 'style': box.join(';')},
       [
         p(
           attributes: {'style': style.join(';')},
@@ -235,6 +248,7 @@ class CanvasLayersView extends StatelessComponent {
     Map<String, dynamic> layer,
     List<String> classes,
     List<String> box,
+    Map<String, String> mark,
   ) {
     final fill = hexColor(layer['fillColor'], WebsiteRgba.fromArgb(0xFF1F2937));
     final border = hexColor(layer['borderColor'], fill);
@@ -244,6 +258,7 @@ class CanvasLayersView extends StatelessComponent {
     return div(
       classes: [...classes, 'cl-shape'].join(' '),
       attributes: {
+        ...mark,
         'style': [
           ...box,
           'background:${fill.css}',
@@ -263,6 +278,7 @@ class CanvasLayersView extends StatelessComponent {
     Map<String, dynamic> layer,
     List<String> classes,
     List<String> box,
+    Map<String, String> mark,
   ) {
     final url = (layer['imageUrl'] ?? '').toString().trim();
     final fit = layer['fit'] == 'contain' ? 'contain' : 'cover';
@@ -276,7 +292,7 @@ class CanvasLayersView extends StatelessComponent {
     if (url.isEmpty) {
       return div(
         classes: [...classes, 'cl-img', 'empty'].join(' '),
-        attributes: {'style': style.join(';')},
+        attributes: {...mark, 'style': style.join(';')},
         const [],
       );
     }
@@ -284,6 +300,7 @@ class CanvasLayersView extends StatelessComponent {
       tag: 'img',
       classes: [...classes, 'cl-img'].join(' '),
       attributes: {
+        ...mark,
         if (deferImages) 'data-src': url else 'src': url,
         'alt': (layer['altText'] ?? '').toString(),
         'loading': 'lazy',
@@ -301,6 +318,7 @@ class CanvasLayersView extends StatelessComponent {
     Map<String, dynamic> layer,
     List<String> classes,
     List<String> box,
+    Map<String, String> mark,
   ) {
     final action =
         WebsiteActionValue.resolvePrimary(
@@ -325,7 +343,7 @@ class CanvasLayersView extends StatelessComponent {
       return a(
         classes: [...classes, 'cl-tbtn', 'w-btn', style].join(' '),
         href: href,
-        attributes: {'style': box.join(';')},
+        attributes: {...mark, 'style': box.join(';')},
         [.text(action.label)],
       );
     }
@@ -344,6 +362,7 @@ class CanvasLayersView extends StatelessComponent {
       classes: [...classes, 'cl-btn', style].join(' '),
       href: href,
       attributes: {
+        ...mark,
         'style': [
           ...box,
           'font-size:calc(${cssNum(size)} * var(--s))',
@@ -440,8 +459,8 @@ class CanvasBlockView extends StatelessComponent {
     final designWidth = declared != null && declared > 0
         ? declared
         : canvasReferenceWidth;
-    final viewportHeight = (data['heightMode'] ?? 'fixed').toString() ==
-        'viewport';
+    final viewportHeight =
+        (data['heightMode'] ?? 'fixed').toString() == 'viewport';
     final share = (numberValue(data['vhPct']) ?? 0.7).clamp(0.2, 1.0);
     final height =
         numberValue(data['blockHeight']) ?? numberValue(data['height']) ?? 420;
@@ -479,27 +498,31 @@ class CanvasBlockView extends StatelessComponent {
     final alt = (document['backgroundImageAltText'] ?? '').toString();
     return (
       [style, image, contain, fx, fy, veil, veilColor.css, alt],
-      div(classes: 'cv-bg', attributes: {'style': style.join(';')}, [
-        if (image.isNotEmpty)
-          Component.element(
-            tag: 'img',
-            attributes: {
-              'src': image,
-              'alt': alt,
-              'loading': 'lazy',
-              'decoding': 'async',
-              'style':
-                  'object-fit:${contain ? 'contain' : 'cover'};'
-                  'object-position:${cssNum(fx * 100)}% ${cssNum(fy * 100)}%',
-            },
-          ),
-        if (veil)
-          div(
-            classes: 'cv-veil',
-            attributes: {'style': 'background:${veilColor.css}'},
-            const [],
-          ),
-      ]),
+      div(
+        classes: 'cv-bg',
+        attributes: {'style': style.join(';')},
+        [
+          if (image.isNotEmpty)
+            Component.element(
+              tag: 'img',
+              attributes: {
+                'src': image,
+                'alt': alt,
+                'loading': 'lazy',
+                'decoding': 'async',
+                'style':
+                    'object-fit:${contain ? 'contain' : 'cover'};'
+                    'object-position:${cssNum(fx * 100)}% ${cssNum(fy * 100)}%',
+              },
+            ),
+          if (veil)
+            div(
+              classes: 'cv-veil',
+              attributes: {'style': 'background:${veilColor.css}'},
+              const [],
+            ),
+        ],
+      ),
     );
   }
 }

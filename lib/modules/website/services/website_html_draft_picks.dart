@@ -34,6 +34,12 @@ sealed class WebsiteHtmlDraftMessage {
           'formatting': at(5),
         },
       'vbDraftSlide' => {'type': 'vb-draft-slide', 'id': at(0), 'index': at(1)},
+      'vbDraftLayer' => {
+          'type': 'vb-draft-layer',
+          'id': at(0),
+          'slide': at(1),
+          'layer': at(2),
+        },
       'vbDraftButton' => {
           'type': 'vb-draft-button',
           'id': at(0),
@@ -122,6 +128,22 @@ sealed class WebsiteHtmlDraftMessage {
           written,
           formatting,
         );
+      case 'vb-draft-layer':
+        final layer = text('layer');
+        // A slide's stored position, or -1 for a canvas block's own layers.
+        final slide = switch (data['slide']) {
+          final num value when value >= -1 && value == value.roundToDouble() =>
+            value.toInt(),
+          _ => null,
+        };
+        if (id == null ||
+            slide == null ||
+            layer == null ||
+            layer.length > 120 ||
+            !RegExp(r'^[A-Za-z0-9_.:-]+$').hasMatch(layer)) {
+          return null;
+        }
+        return WebsiteHtmlDraftLayer(id, slide < 0 ? null : slide, layer);
       case 'vb-draft-button':
         final spec = text('button');
         final button = spec == null || spec.length > 40
@@ -216,6 +238,48 @@ final class WebsiteHtmlDraftAction extends WebsiteHtmlDraftMessage {
 
   final String id;
   final String action;
+}
+
+/// A click on a canvas layer of the picked block: layer [layer] of carousel
+/// slide [slide] (its stored position), or of a canvas block's own canvas
+/// (`null`).
+final class WebsiteHtmlDraftLayer extends WebsiteHtmlDraftMessage {
+  const WebsiteHtmlDraftLayer(this.id, this.slide, this.layer);
+
+  final String id;
+  final int? slide;
+  final String layer;
+}
+
+/// Where [press] picks a layer of [block] (an editor block row): the
+/// carousel slide and how many slides there are, or `slide: null` for a
+/// canvas block's own canvas; `null` for a layer the block does not hold.
+({int? slide, int count})? websiteHtmlDraftLayerPlace(
+  Map<String, dynamic> block,
+  WebsiteHtmlDraftLayer press,
+) {
+  final data = block['block_data'];
+  if (data is! Map) return null;
+  bool holds(Object? elements) =>
+      elements is List &&
+      elements.any((element) => element is Map && element['id'] == press.layer);
+  switch ((block['block_type'] ?? block['type'] ?? '').toString()) {
+    case 'carousel':
+      final slides = data['slides'] is List
+          ? (data['slides'] as List).whereType<Map>().toList()
+          : const <Map>[];
+      final slide = press.slide;
+      if (slide == null ||
+          slide >= slides.length ||
+          !holds(slides[slide]['elements'])) {
+        return null;
+      }
+      return (slide: slide, count: slides.length);
+    case 'canvas':
+      if (press.slide != null || !holds(data['elements'])) return null;
+      return (slide: null, count: 0);
+  }
+  return null;
 }
 
 /// A press on one of the picked block's buttons: its label, destination and

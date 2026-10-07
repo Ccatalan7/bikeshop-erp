@@ -625,4 +625,93 @@ void main() {
       expect(fields.beginButton(WebsiteButtonFields.hero, 0), isNull);
     });
   });
+
+  group('a canvas layer clicked in the HTML view', () {
+    final carousel = <String, dynamic>{
+      'id': 'b1',
+      'block_type': 'carousel',
+      'block_data': {
+        'slides': [
+          {'title': 'Primera'},
+          {
+            'title': 'Cámaras',
+            'elements': [
+              {'id': 'camaras_desk_title', 'type': 'text'},
+            ],
+          },
+        ],
+      },
+    };
+
+    test('the page names the slide and the layer', () {
+      final press = WebsiteHtmlDraftMessage.fromHandler(
+        'vbDraftLayer',
+        ['b1', 1, 'camaras_desk_title'],
+      )! as WebsiteHtmlDraftLayer;
+      expect(press.slide, 1);
+      expect(press.layer, 'camaras_desk_title');
+      final own = WebsiteHtmlDraftMessage.fromPost({
+        'type': 'vb-draft-layer',
+        'id': 'b1',
+        'slide': -1,
+        'layer': 'l1',
+      })! as WebsiteHtmlDraftLayer;
+      expect(own.slide, isNull);
+      for (final args in [
+        ['b1', -2, 'l1'],
+        ['b1', 1.5, 'l1'],
+        ['b1', 1, ''],
+        ['b1', 1, 'a b'],
+        ['b1', 1, '<x>'],
+        ['b1', 1, 'x' * 121],
+      ]) {
+        expect(
+          WebsiteHtmlDraftMessage.fromHandler('vbDraftLayer', args),
+          isNull,
+          reason: '$args',
+        );
+      }
+    });
+
+    test('only a layer the slide or the canvas holds is picked', () {
+      expect(
+        websiteHtmlDraftLayerPlace(
+          carousel,
+          const WebsiteHtmlDraftLayer('b1', 1, 'camaras_desk_title'),
+        ),
+        (slide: 1, count: 2),
+      );
+      for (final press in const [
+        WebsiteHtmlDraftLayer('b1', 0, 'camaras_desk_title'),
+        WebsiteHtmlDraftLayer('b1', 2, 'camaras_desk_title'),
+        WebsiteHtmlDraftLayer('b1', null, 'camaras_desk_title'),
+        WebsiteHtmlDraftLayer('b1', 1, 'otra'),
+      ]) {
+        expect(websiteHtmlDraftLayerPlace(carousel, press), isNull);
+      }
+      final canvas = <String, dynamic>{
+        'id': 'c1',
+        'block_type': 'canvas',
+        'block_data': {
+          'elements': [
+            {'id': 'l1', 'type': 'shape'},
+          ],
+        },
+      };
+      expect(
+        websiteHtmlDraftLayerPlace(
+          canvas,
+          const WebsiteHtmlDraftLayer('c1', null, 'l1'),
+        ),
+        (slide: null, count: 0),
+      );
+      expect(
+        websiteHtmlDraftLayerPlace(
+          canvas,
+          const WebsiteHtmlDraftLayer('c1', 0, 'l1'),
+        ),
+        isNull,
+      );
+    });
+  });
 }

@@ -4176,6 +4176,75 @@ void main() {
       expect(visit, isNot(contains('vbDraftButton')));
     });
 
+    test(
+      'its canvas layers name the slide and the layer they draw, so a '
+      'click picks them in the panel; a visitor never sees the names',
+      () async {
+        final blocks = [
+          {
+            'id': 'b-car',
+            'block_type': 'carousel',
+            'block_data': {
+              'slides': [
+                {'title': 'Primera', 'subtitle': 'Uno'},
+                {
+                  'title': 'Cámaras',
+                  'elements': [
+                    {
+                      'id': 'cam_title',
+                      'type': 'text',
+                      'text': 'CÁMARAS',
+                      'x': 80,
+                      'y': 120,
+                      'w': 600,
+                      'h': 90,
+                    },
+                    {
+                      'id': 'cam_rule',
+                      'type': 'shape',
+                      'x': 80,
+                      'y': 230,
+                      'w': 120,
+                      'h': 4,
+                    },
+                  ],
+                },
+              ],
+            },
+            'is_visible': true,
+            'order_index': 0,
+          },
+        ];
+        final (status, answer, _) = await draft(_FakeReads(), {
+          'page': {'home': true},
+          'blocks': blocks,
+        });
+        expect(status, 200);
+        final html = answer['html'] as String;
+        expect(html, contains('data-canvas-slide="1"'));
+        expect(html, contains('data-layer="cam_title"'));
+        expect(html, contains('data-layer="cam_rule"'));
+        expect(html, contains("send('vbDraftLayer'"));
+
+        final public = await _get(
+          _FakeReads(
+            homeRow: {
+              'id': 'home-row',
+              'slug': 'inicio',
+              'title': 'Inicio',
+              'is_published': true,
+              'website_blocks': blocks,
+            },
+          ),
+          '/_html/',
+        );
+        final visit = await public.readAsString();
+        expect(visit, contains('CÁMARAS'));
+        expect(visit, isNot(contains('data-layer')));
+        expect(visit, isNot(contains('data-canvas-slide')));
+      },
+    );
+
     test('the home named by its row, as the editor names it', () async {
       final reads = _FakeReads(
         homeRow: {

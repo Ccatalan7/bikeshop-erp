@@ -209,7 +209,10 @@ escribe ahí mismo, con una barra de negrita, cursiva, subrayado y tamaño
 lienzo), Esc lo cancela; alineación y color siguen en el panel. Un clic en
 uno de sus botones abre bajo él una tarjeta con su texto, destino y estilo,
 los mismos campos y la misma escritura del lienzo (`WebsiteButtonFields`,
-`WebsiteInlineFieldBinding.beginButton`) `[Repo 2026-10-07]`. En el
+`WebsiteInlineFieldBinding.beginButton`) `[Repo 2026-10-07]`. En una
+campaña de capas (la diapositiva de cámaras), un clic en una capa la elige
+en el panel y la página la marca; moverla o cambiarle el tamaño sigue en el
+lienzo `[Repo 2026-10-07]`. En el
 borrador el carrusel no avanza solo, muestra la diapositiva elegida en el
 panel y, si se gira con sus flechas, la elige en el panel
 `[Repo 2026-10-07]` `[Prod 2026-10-07]`. Una sección que el

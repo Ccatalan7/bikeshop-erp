@@ -23,6 +23,8 @@ const _draftCss = '''
 .vb-mark.vb-writing .vb-bar{display:none}
 .vb-text-hot{outline:1px dashed rgb(26 115 232 / .7);outline-offset:3px;cursor:text}
 .vb-button-hot{outline:1px dashed rgb(26 115 232 / .7);outline-offset:3px;cursor:pointer}
+.vb-mark.vb-layer{border:2px solid #1a73e8;border-radius:0}
+.vb-mark.vb-layer span{display:none}
 .vb-editing{outline:2px solid #1a73e8;outline-offset:3px;cursor:text;text-transform:none!important;
   -webkit-user-select:text;user-select:text;caret-color:currentColor}
 .vb-editing:focus{outline:2px solid #1a73e8}
@@ -178,6 +180,26 @@ const _draftScript = r'''
     return { el: el, target: null };
   }
   var hover = mark(false), pick = mark(true), pickedId = null;
+  // The canvas layer picked in the panel (`info.layer` of vbDraftPicked:
+  // its slide, or -1 for a canvas block's own, and its id), marked where it
+  // shows.
+  var layerPick = mark(true), layerSel = null;
+  layerPick.el.classList.add('vb-layer');
+  function shownLayer() {
+    if (!layerSel || !pick.target) return null;
+    var slide = layerSel.slide < 0 ? 'root' : String(layerSel.slide);
+    var found = null;
+    [].some.call(pick.target.querySelectorAll('[data-canvas-slide]'), function (c) {
+      if (c.getAttribute('data-canvas-slide') !== slide) return false;
+      [].some.call(c.querySelectorAll('[data-layer]'), function (el) {
+        if (el.getAttribute('data-layer') !== layerSel.id || !el.getClientRects().length) return false;
+        found = el;
+        return true;
+      });
+      return !!found;
+    });
+    return found;
+  }
   function place(m) {
     var t = m.target;
     if (!t || !t.isConnected) { m.el.classList.remove('vb-on'); return; }
@@ -251,6 +273,8 @@ const _draftScript = r'''
       if (other !== pick.target) { pick.target = other; drawBar(); }
     }
     place(pick);
+    layerPick.target = edit ? null : shownLayer();
+    place(layerPick);
     if (hover.target && hover.target === pick.target) hover.el.classList.remove('vb-on');
     else place(hover);
   }
@@ -293,6 +317,8 @@ const _draftScript = r'''
     if (pressed) { askButton(pressed); return; }
     var text = editable(event.target);
     if (text && !edit) { begin(text); return; }
+    var layer = edit ? null : layerOf(event.target);
+    if (layer) { askLayer(layer); return; }
     var found = part(event.target);
     // A question of the picked block opens and closes, as on the store.
     var question = event.target.closest && event.target.closest('summary');
@@ -343,12 +369,28 @@ const _draftScript = r'''
     var b = node && node.closest ? node.closest('[data-edit-button]') : null;
     return b && pick.target && part(b) === pick.target ? b : null;
   }
+  // A layer of the picked block's canvas (a composed slide, a canvas
+  // block): a click picks it in the panel, as on the Flutter canvas
+  // (`vbDraftLayer(id, slide, layer)`, slide -1 for a canvas block's own).
+  function layerOf(node) {
+    var l = node && node.closest ? node.closest('[data-layer]') : null;
+    return l && pick.target && part(l) === pick.target ? l : null;
+  }
+  function askLayer(l) {
+    var id = pick.target.getAttribute('data-block-id');
+    var holder = l.closest('[data-canvas-slide]');
+    var raw = holder ? holder.getAttribute('data-canvas-slide') : 'root';
+    var slide = raw === 'root' ? -1 : +raw;
+    var layer = l.getAttribute('data-layer');
+    send('vbDraftLayer', [id, slide, layer],
+      { type: 'vb-draft-layer', id: id, slide: slide, layer: layer });
+  }
   function heat(node) {
-    var target = edit ? null : (pressable(node) || editable(node));
+    var target = edit ? null : (pressable(node) || editable(node) || layerOf(node));
     if (target === hot) return;
     if (hot) hot.classList.remove('vb-text-hot', 'vb-button-hot');
     hot = target;
-    if (hot) hot.classList.add(hot.hasAttribute('data-edit-button') ? 'vb-button-hot' : 'vb-text-hot');
+    if (hot) hot.classList.add(hot.hasAttribute('data-edit-text') ? 'vb-text-hot' : 'vb-button-hot');
   }
   function askButton(b) {
     var id = pick.target.getAttribute('data-block-id');
@@ -733,6 +775,7 @@ const _draftScript = r'''
   window.vbDraftPicked = function (id, info, show) {
     pickedId = id || null;
     meta = info || null;
+    layerSel = meta && meta.layer && typeof meta.layer.id === 'string' ? meta.layer : null;
     pick.target = pickedId ? shown(pickedId) : null;
     drawBar();
     if (show && pick.target) bring(pick.target);

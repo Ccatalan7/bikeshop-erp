@@ -222,7 +222,12 @@ class CarouselBlockView extends StatelessComponent {
         if (carouselSlideUsesComposition(slide)) ...[
           if (overlay != null)
             div(classes: 'car-ov', attributes: {'style': overlay}, const []),
-          CanvasLayersView(_slideDocument(slide), context, deferImages: !first),
+          CanvasLayersView(
+            _slideDocument(slide),
+            context,
+            deferImages: !first,
+            slide: stored,
+          ),
         ] else
           div(
             classes: 'car-in',

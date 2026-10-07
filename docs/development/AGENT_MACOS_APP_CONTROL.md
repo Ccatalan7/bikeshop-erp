@@ -1258,6 +1258,17 @@ Dos trampas más de una vista nativa (la «Vista HTML» del editor del sitio, un
 - **El teclado sí llega** (2026-10-07): con la app al frente, lo que se
   escribe con la herramienta de control del computador entra al texto
   editable de la página, ⌘↵ y Esc incluidos.
+- **Un diálogo de Flutter sobre la vista web sí recibe los clics reales**
+  (2026-10-07, la tarjeta de un botón de la vista HTML): no se los lleva la
+  vista nativa de abajo. Ese mismo día un `app_click` en segundo plano sobre
+  un botón de la página sí lo procesó WebKit (`raw input on AXWebArea`), a
+  diferencia de la nota de arriba; confirmar siempre con una captura.
+- **Los campos de ese diálogo no los ven `app_control.sh find` ni
+  `enter-text`** («sin coincidencias»), aunque `read` los lista. Para
+  escribir en ellos: teclado real con la app al frente (`computer_batch`:
+  ⌘A y escribir). `app_type` en segundo plano no llega a un campo de
+  Flutter: lo dejó en otro `AXTextArea` de la ventana y el campo siguió
+  igual. Costó dos intentos.
 - **Para ver qué pasa dentro de la página**, `evaluateJavascript` no avisa de
   sus errores y la consola de WebKit no llega al log de Flutter. Lo que sirvió
   (media hora menos la próxima vez): un `onConsoleMessage` temporal que haga

@@ -87,6 +87,15 @@ class BlockRenderContext {
     return {'data-edit-button': fields.spec(index)};
   }
 
+  /// For the editor's draft, which canvas layer an element draws (its
+  /// `id`), so a click picks that layer in the panel as on the Flutter
+  /// canvas. Nothing for a visitor, or for a layer without an id.
+  Map<String, String> editLayer(Object? id) {
+    final value = id?.toString().trim() ?? '';
+    if (!draft || value.isEmpty) return const {};
+    return {'data-layer': value};
+  }
+
   /// A link a visitor may follow, as the public path; `null` hides the
   /// control (`PublicStoreLayout.isHrefPubliclyEligible`).
   String? publicHref(String href) {

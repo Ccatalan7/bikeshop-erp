@@ -130,9 +130,16 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
     final path = _path(document.pageId, document.pageSlug);
     final supported = path != null;
     if (supported != _supported) setState(() => _supported = supported);
+    final layer = _layerOf(provider, provider.selectedBlockId);
+    final layerKey = layer == null ? null : '${layer.slide}/${layer.id}';
     if (provider.selectedBlockId != _selected) {
       _selected = provider.selectedBlockId;
+      _markedLayer = layerKey;
       _bring = true;
+      _markSelection();
+    } else if (layerKey != _markedLayer) {
+      // A layer picked in the panel (or in the page) is marked where it is.
+      _markedLayer = layerKey;
       _markSelection();
     }
     _showSlides();
@@ -390,6 +397,53 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
     _hoverSending = false;
   }
 
+  /// The canvas layer marked in the page: `slide/id`, or none.
+  String? _markedLayer;
+
+  /// The canvas layer picked for block [id]: the shown slide's (or -1 for a
+  /// canvas block's own canvas) and its id; `null` without one.
+  ({int slide, String id})? _layerOf(
+    WebsiteEditModeProvider provider,
+    String? id,
+  ) {
+    final block = id == null ? null : provider.getBlock(id);
+    if (id == null || block == null) return null;
+    switch ((block['block_type'] ?? block['type'] ?? '').toString()) {
+      case 'carousel':
+        final count = _slideCount(block);
+        if (count <= 0) return null;
+        final slide = provider.carouselSlideSelection(id, count);
+        final layer = provider.canvasElementSelection(id, slideIndex: slide);
+        return layer == null ? null : (slide: slide, id: layer);
+      case 'canvas':
+        final layer = provider.canvasElementSelection(id);
+        return layer == null ? null : (slide: -1, id: layer);
+    }
+    return null;
+  }
+
+  /// A click on a canvas layer of the picked block in the page: the layer
+  /// picked in the panel, as a click on it on the Flutter canvas
+  /// (`selectCanvasElement`); a layer the slide or the canvas does not have
+  /// is not one.
+  void _pickLayer(WebsiteHtmlDraftLayer press) {
+    final provider = _provider;
+    final block = provider?.getBlock(press.id);
+    if (provider == null ||
+        block == null ||
+        provider.selectedBlockId != press.id) {
+      return;
+    }
+    final place = websiteHtmlDraftLayerPlace(block, press);
+    if (place == null) return;
+    provider.selectCanvasElement(
+      press.id,
+      press.layer,
+      slideIndex: place.slide,
+      slideCount: place.slide == null ? null : place.count,
+    );
+  }
+
   /// What the page needs to draw the picked part's marks: for a block of
   /// the open page, its bar (`BlockActionBar`: which moves apply, whether it
   /// is shown) in the ERP's selection colours; nothing for any other part.
@@ -423,6 +477,9 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
           'max': fields.heightRange.max,
           'exact': behavior == WebsitePageBlockHeightBehavior.exact,
         },
+      // The canvas layer picked in the panel, marked in the page.
+      if (_layerOf(provider, id) case final layer?)
+        'layer': {'slide': layer.slide, 'id': layer.id},
       'bar': {
         'first': index == 0,
         'last': index == blocks.length - 1,
@@ -463,6 +520,8 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
         _move(id, anchor, side);
       case final WebsiteHtmlDraftButton press:
         unawaited(_button(press));
+      case final WebsiteHtmlDraftLayer press:
+        _pickLayer(press);
       case WebsiteHtmlDraftSlide(:final id, :final index):
         final provider = _provider;
         final count = _slideCount(provider?.getBlock(id));
@@ -934,6 +993,7 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
                                       'vbDraftHeight',
                                       'vbDraftMove',
                                       'vbDraftButton',
+                                      'vbDraftLayer',
                                     ]) {
                                 controller.addJavaScriptHandler(
                                   handlerName: name,

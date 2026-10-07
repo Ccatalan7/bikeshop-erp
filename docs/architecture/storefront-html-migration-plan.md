@@ -1936,6 +1936,15 @@ de 15 px de alto Flutter lo esconde y el HTML lo muestra.
   tarjeta, como en el lienzo. Antes de construirlo se comprobó con clics
   reales en macOS que un diálogo de Flutter abierto sobre la vista web
   recibe los clics (no se los lleva la vista nativa de abajo).
+- **Las capas de una campaña se eligen en la página (2026-10-07).** La
+  diapositiva 3 del inicio (cámaras) tiene 33 capas libres y en la vista
+  HTML un clic sólo elegía el carrusel. Ahora, con el bloque elegido, un
+  clic en una capa la elige en el panel como en el lienzo
+  (`selectCanvasElement`, con su diapositiva), y la capa elegida —también
+  desde el panel— se marca en la página. La página nombra la diapositiva
+  (`data-canvas-slide`) y la capa (`data-layer`); el editor sólo acepta una
+  capa que la diapositiva o el canvas tienen (`websiteHtmlDraftLayerPlace`).
+  Mover y cambiar de tamaño una capa sigue en el lienzo.
 - **Arrastrar para mover (servidor `715a6f0e`).** El nombre del bloque
   elegido, en su barra, se arrastra: una línea marca el borde de destino
   entre los bloques de la página como se ven, la página se desplaza cerca

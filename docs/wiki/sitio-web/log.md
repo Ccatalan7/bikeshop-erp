@@ -401,3 +401,5 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   núcleo (`WebsiteButtonFields`) y la página los pide por nombre.
 - Comprobado antes con clics reales: un diálogo de Flutter sobre la vista web
   de macOS recibe los clics.
+- Las capas de una campaña (diapositiva de cámaras, 33 capas) se eligen con
+  un clic en la vista HTML; antes sólo se elegía el carrusel.
