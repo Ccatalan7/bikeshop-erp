@@ -75,9 +75,25 @@ enum WebsiteInsertionAbort {
 WebsiteInsertionIntent websitePageEndInsertionIntent(
   WebsiteEditModeProvider provider,
 ) {
-  final document = provider.document;
   final blocks = provider.blocks;
-  if (blocks.isEmpty) {
+  return websiteBlockInsertionIntent(
+    provider,
+    blocks.isEmpty ? null : blocks.last['id']?.toString(),
+    WebsiteBlockInsertSide.after,
+  );
+}
+
+/// The insertion intent on [side] of block [blockId] of the live document,
+/// named as the canvas's markers name it; on an empty page (or without a
+/// block), the page's first place.
+WebsiteInsertionIntent websiteBlockInsertionIntent(
+  WebsiteEditModeProvider provider,
+  String? blockId,
+  WebsiteBlockInsertSide side,
+) {
+  final document = provider.document;
+  final anchor = blockId == null ? null : provider.getBlock(blockId);
+  if (anchor == null) {
     return WebsiteInsertionIntent(
       blockId: null,
       side: WebsiteBlockInsertSide.before,
@@ -87,7 +103,6 @@ WebsiteInsertionIntent websitePageEndInsertionIntent(
       pageSlug: document.pageSlug,
     );
   }
-  final anchor = blocks.last;
   final type = (anchor['block_type'] ?? anchor['type'] ?? '').toString();
   final title = WebsiteBlockCatalog.entries()
           .where((entry) => entry.type.name == type)
@@ -95,8 +110,8 @@ WebsiteInsertionIntent websitePageEndInsertionIntent(
           .firstOrNull ??
       type;
   return WebsiteInsertionIntent(
-    blockId: anchor['id']?.toString(),
-    side: WebsiteBlockInsertSide.after,
+    blockId: blockId,
+    side: side,
     anchorTitle: title,
     sessionRevision: document.sessionRevision,
     pageId: document.pageId,

@@ -10,9 +10,9 @@
   "title": "Vista HTML en el editor del sitio",
   "summary": "En el editor del sitio, «Vista HTML» muestra la página en pantalla —inicio, páginas, catálogo, categorías y ficha de producto— tal como la arma la tienda en HTML, con lo que aún no guardas, y se actualiza con cada cambio.",
   "items": [
-    "Un clic en la vista HTML elige el bloque, el encabezado, el pie o la sección, con su barra; el carrusel muestra la diapositiva elegida en el panel.",
+    "Un clic en la vista HTML elige el bloque, el encabezado, el pie o la sección; el bloque trae su barra y «Agregar aquí» arriba y abajo.",
     "Los títulos y textos del bloque elegido se escriben ahí mismo con otro clic: ⌘↵ o un clic afuera lo deja, Esc lo cancela y se deshace en un paso.",
-    "Lo que no guardas del catálogo, de la ficha y del pie se ve al momento, y mover una sección del pie ya no deja el pie sin dibujar."
+    "Se ve al momento lo que no guardas del catálogo, la ficha y el pie; el carrusel sigue al panel, y mover una sección del pie ya no deja el pie sin dibujar."
   ],
   "evidence": [
     {
@@ -21,7 +21,7 @@
     },
     {
       "path": "lib/modules/website/widgets/website_html_draft_view.dart",
-      "sha256": "62f896e33d07c30ba5812f9f81de779c29437c2e835e9e26f0f79dd795a40e6f"
+      "sha256": "3667b698b4b7cba8da3bfc720d178da422ba4fbec8d54f6eee0a8c4cb25b9207"
     },
     {
       "path": "lib/modules/website/providers/website_edit_mode_provider.dart",
@@ -49,7 +49,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/editor_draft_view.dart",
-      "sha256": "09e5a59667e7e99f917104147864148deb9416bf20ff0dd44e3203e3fdca814c"
+      "sha256": "9109c7409550b34827e6de6d90edf6c7ead50a73cadeb6f708a215c899b6e3f5"
     },
     {
       "path": "services/storefront_html/lib/src/editor_page_model.dart",
@@ -138,6 +138,10 @@
     {
       "path": "services/storefront_html/lib/src/website_content_blocks_view.dart",
       "sha256": "8b29ef2abebbea68f1e60817f5ed589469193d5824353d323ef988e30fd66b85"
+    },
+    {
+      "path": "lib/public_store/widgets/website_insertion_host.dart",
+      "sha256": "3da2f3e22b58a8e6269b77358e49b25d0a1788de65cfd2cad59a24197f671e88"
     }
   ]
 }

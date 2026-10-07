@@ -1745,6 +1745,16 @@ Lo que la medición enseñó y sirve para cualquier paridad que quede:
   marcaba en su primera copia aunque estuviera oculta; el carrusel del
   inicio quedaba elegido sin marco ni barra. Ahora se marca la copia que se
   ve.
+- **«Agregar aquí» y la selección a la vista (servidor `55668890`, `a3ea744c`, Cloud Run
+  `00050`→`00051`).** El bloque elegido trae «Agregar aquí» en sus dos
+  bordes, como las bandas del lienzo (bajo el encabezado fijo cuando lo
+  tapa); un clic abre el catálogo por la misma operación del lienzo
+  (`commitWebsiteInsertion` con `websiteBlockInsertionIntent`, que ahora
+  también arma la intención del final de la página). Un bloque elegido
+  fuera de la página (en el panel, o recién agregado, que sólo el dibujo
+  siguiente tiene) baja hasta quedar a la vista
+  (`vbDraftPicked(id, info, show)`); un redibujo normal deja al operador
+  donde estaba.
 - **Lo que falta del 5c/5d:** medir el zoom en Windows; probar el ERP web con
   una sesión real; arrastrar para reordenar y la manilla de alto; el formato
   del texto (negrita, tamaño, color) sigue en el panel.

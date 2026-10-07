@@ -18,6 +18,8 @@ import '../services/website_html_draft_client.dart';
 import '../services/website_html_draft_picks.dart';
 import '../services/website_service.dart';
 import '../../../shared/themes/vinabike_theme_roles.dart';
+import '../../../public_store/widgets/website_insertion_host.dart';
+import '../models/website_block_catalog.dart';
 import 'block_action_bar.dart';
 import 'website_block_content_presenters.dart';
 import 'website_inline_field_binding.dart';
@@ -124,6 +126,7 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
     if (supported != _supported) setState(() => _supported = supported);
     if (provider.selectedBlockId != _selected) {
       _selected = provider.selectedBlockId;
+      _bring = true;
       _markSelection();
     }
     _showSlides();
@@ -312,15 +315,22 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
     return slides is List ? slides.whereType<Map>().length : 0;
   }
 
+  /// A selection the page has not shown yet: the page brings it into sight
+  /// once it has it (a block picked in the panel, or one just added, which
+  /// only the next drawing has). A click in the page is in sight already;
+  /// a redraw keeps the operator's place.
+  bool _bring = false;
+
   Future<void> _markSelection() async {
     final web = _web;
     if (web == null || !mounted) return;
     try {
-      await web.evaluateJavascript(
+      final found = await web.evaluateJavascript(
         source: 'window.vbDraftPicked && '
             'window.vbDraftPicked(${jsonEncode(_selected)}, '
-            '${jsonEncode(_selectionInfo())});',
+            '${jsonEncode(_selectionInfo())}, $_bring);',
       );
+      if (found == true) _bring = false;
     } on Object {
       // The page is between loads; the next load marks it.
     }
@@ -393,6 +403,9 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
         roles?.onSelectionContainer ?? theme.colorScheme.onPrimaryContainer,
       ),
       'danger': css(roles?.danger.accent ?? theme.colorScheme.error),
+      // «Agregar aquí» as the canvas paints it (`WebsiteInsertBlockAffordance`).
+      'accent': css(roles?.info.accent ?? theme.colorScheme.primary),
+      'onAccent': css(roles?.info.onAccent ?? theme.colorScheme.onPrimary),
     };
   }
 
@@ -442,6 +455,38 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
         );
       case 'delete':
         unawaited(confirmWebsiteBlockDelete(context, id));
+      case 'insert-before' || 'insert-after':
+        unawaited(_insert(provider, id, action));
+    }
+  }
+
+  /// One catalog at a time, as the canvas's insertion host.
+  bool _inserting = false;
+
+  /// «Agregar aquí» on a seam of the picked block: the canvas's insertion
+  /// (`commitWebsiteInsertion`), the catalog opened at that seam and the
+  /// place re-checked against the page when it closes.
+  Future<void> _insert(
+    WebsiteEditModeProvider provider,
+    String id,
+    String action,
+  ) async {
+    if (_inserting || !provider.hasBlockCanvas) return;
+    _inserting = true;
+    try {
+      await commitWebsiteInsertion(
+        context: context,
+        intent: websiteBlockInsertionIntent(
+          provider,
+          id,
+          action == 'insert-before'
+              ? WebsiteBlockInsertSide.before
+              : WebsiteBlockInsertSide.after,
+        ),
+        onAddBlock: provider.addBlock,
+      );
+    } finally {
+      _inserting = false;
     }
   }
 
