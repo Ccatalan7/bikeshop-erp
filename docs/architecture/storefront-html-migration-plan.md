@@ -1689,6 +1689,23 @@ Lo que la medición enseñó y sirve para cualquier paridad que quede:
   `position: relative` que pedía le quitaba al encabezado su lugar fijo. En
   macOS la vista nativa no recibe los movimientos del puntero; el editor se
   los pasa como fracciones de la ventana (`vbDraftHover`).
-- **Lo que falta del 5c:** medir el zoom en Windows; el pie en borrador
-  (enlaces del pie sin guardar no pasan todavía: viven en `website_navigation`,
-  no en ajustes); probar el ERP web con una sesión real.
+- **El pie sin guardar (`b3f4a4e7`).** Sus enlaces viven en
+  `website_navigation`, no en ajustes: el cliente manda el pie según el
+  borrador como filas (`footer_navigation`) y `EditorDraftReads` las pone en
+  lugar de las guardadas. El dueño de ese pie es
+  `WebsiteEditModeProvider.draftedFooterNavigation` (también lo usa el pie de
+  Flutter). De paso apareció un defecto publicado: el pie ordenaba la
+  proyección de páginas, inmodificable desde `8e01c879`, así que mover una
+  sección del pie lanzaba `UnsupportedError` y el pie dejaba de dibujarse.
+- **Revisión de Codex (sólo lectura, 2026-10-07), corregida en `24bfb58d`:**
+  el borrador se pedía a la dirección de «Ajustes del sitio» (`store_url`),
+  que puede cambiar cualquiera con permiso de ajustes, y la petición lleva la
+  sesión del editor: ahora va sólo al servidor que fija la compilación
+  (`STOREFRONT_HTML_ORIGIN`, https, `websiteHtmlDraftServer`); con A en
+  pantalla, B programado y vuelta a A, B igual llegaba (`WebsiteHtmlDraftQueue`);
+  en el ERP web cualquier ventana podía mandar un clic (firma por vista,
+  `vbDraftNonce`); el servidor leía hasta 2 MB de cuerpo antes de revisar la
+  sesión. Sin hallazgos en autorización, aislamiento por tienda, rutas ni XSS
+  de las marcas.
+- **Lo que falta del 5c:** medir el zoom en Windows; probar el ERP web con
+  una sesión real.
