@@ -1,3 +1,4 @@
+import 'block_product_picks.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -628,7 +629,7 @@ class _Route {
 
   /// `/`: the editor's home page and its blocks.
   Future<Response> home() async {
-    final data = await reads.homePage(homeProductIds);
+    final data = await reads.homePage(pagePicks);
     final context = _context((shell: data.shell, payments: data.payments));
     if (_closed(context)) return _unpublished(context);
     if (data.page == null) return notFound();
@@ -664,7 +665,7 @@ class _Route {
         query: _uri.query,
       );
     }
-    final data = await reads.websitePage(slug, homeProductIds);
+    final data = await reads.websitePage(slug, pagePicks);
     final context = _context((shell: data.shell, payments: data.payments));
     if (_closed(context)) return _unpublished(context);
     if (data.page == null) return notFound();

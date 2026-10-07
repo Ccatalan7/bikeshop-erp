@@ -411,6 +411,12 @@ final productsBlockCss =
 .pcard-name{font:500 12px/16px var(--body);letter-spacing:.3px;color:rgb(0 0 0 / .87);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .pcard-sku{margin-top:4px;font:500 10px/15px var(--body);letter-spacing:.25px;color:rgb(0 0 0 / .54)}
 .pcard-price{margin-top:6px;font:700 14px/21px var(--body);letter-spacing:.25px;color:#000}
+.prod-row{display:flex;height:480px;margin:32px 0 0;padding:0 0 20px;list-style:none;overflow-x:auto;scrollbar-width:thin}
+.prod-row>li{flex:0 0 var(--card);margin-right:20px}
+.prod-row .pcard{aspect-ratio:auto;height:100%}
+.prod-dots{display:none;justify-content:center;gap:8px;margin-top:16px}
+.prod-dots span{width:8px;height:8px;border-radius:4px;background:#e0e0e0;transition:width .3s,background-color .3s}
+.prod-dots span.on{width:24px;background:#000}
 .prod-all{margin-top:40px;text-align:center}
 .w-btn.ink{border-color:#000;color:#000;letter-spacing:1px}
 .w-btn.ink:hover{background:rgb(0 0 0 / .08)}
@@ -423,8 +429,8 @@ final productsBlockCss =
 .prod-none{margin:12px 0 0;font:400 16px/24px var(--body);letter-spacing:.25px;color:#757575}
 @media (max-width:1023.98px){.prod-blk.lg .prod-grid{--cols:2!important}}
 @media (max-width:899.98px){.prod-blk.cn .prod-grid{--cols:2!important}}
-@media (max-width:639.98px){.prod-blk.lg{${surfacePaddingInline(16)}}.prod-blk.lg .prod-grid{--cols:1!important}}
-@media (max-width:599.98px){.prod-blk.cn{${surfacePaddingInline(16)}}.prod-blk.cn .prod-grid{--cols:1!important}}
+@media (max-width:639.98px){.prod-blk.lg{${surfacePaddingInline(16)}}.prod-blk.lg .prod-grid{--cols:1!important}.prod-blk.lg .prod-row{height:520px;padding:0;scroll-snap-type:x mandatory;scrollbar-width:none}.prod-blk.lg .prod-row>li{flex-basis:100%;margin:0;padding:0 8px;box-sizing:border-box;scroll-snap-align:start}.prod-blk.lg .prod-dots{display:flex}}
+@media (max-width:599.98px){.prod-blk.cn{${surfacePaddingInline(16)}}.prod-blk.cn .prod-grid{--cols:1!important}.prod-blk.cn .prod-row{height:520px;padding:0;scroll-snap-type:x mandatory;scrollbar-width:none}.prod-blk.cn .prod-row>li{flex-basis:100%;margin:0;padding:0 8px;box-sizing:border-box;scroll-snap-align:start}.prod-blk.cn .prod-dots{display:flex}}
 ''';
 
 /// Category grid (`_AutoCategoryGrid`, `_CategoryGridLayout` and

@@ -15,6 +15,7 @@ Component homePageDocument(HomePageModel model) {
     theme: model.theme,
     storeUrl: model.page.storeUrl,
     products: model.products,
+    productLists: model.productLists,
     thumbnails: PublicImageThumbnail.byUrl(model.thumbnails),
     draft: model.draft,
   );

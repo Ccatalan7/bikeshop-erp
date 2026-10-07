@@ -1,5 +1,6 @@
 import 'package:vinabike_public_core/public_store/models/public_policy_content.dart';
 
+import 'block_product_picks.dart';
 import 'public_reads.dart';
 
 /// The public reads as the editor's draft sees them: every shell carries the
@@ -77,19 +78,16 @@ class EditorDraftReads implements PublicReads {
   /// has open. The open page that is not published yet ([mustBeOpen]) is
   /// drawn from the draft alone.
   Future<HomePageReads> _open(
-    Future<HomePageReads> Function(
-      List<String> Function(Map<String, dynamic> page) productIds,
-    )
-    read,
-    List<String> Function(Map<String, dynamic> page) productIds, {
+    Future<HomePageReads> Function(PagePicker picks) read,
+    PagePicker picks, {
     required bool Function(Map<String, dynamic>? saved) isOpen,
     required bool mustBeOpen,
   }) async {
     final data = await read(
-      (saved) => productIds(isOpen(saved) ? _page(saved) : saved),
+      (saved) => picks(isOpen(saved) ? _page(saved) : saved),
     );
     if (data.page == null && mustBeOpen) {
-      final drawn = await _saved.draftPage(_page(null), productIds);
+      final drawn = await _saved.draftPage(_page(null), picks);
       return (
         shell: _shell(drawn.shell),
         payments: drawn.payments,
@@ -97,6 +95,7 @@ class EditorDraftReads implements PublicReads {
         products: drawn.products,
         brandRows: drawn.brandRows,
         thumbnails: drawn.thumbnails,
+        lists: drawn.lists,
       );
     }
     return (
@@ -108,6 +107,7 @@ class EditorDraftReads implements PublicReads {
       products: data.products,
       brandRows: data.brandRows,
       thumbnails: data.thumbnails,
+      lists: data.lists,
     );
   }
 
@@ -118,6 +118,7 @@ class EditorDraftReads implements PublicReads {
     products: data.products,
     brandRows: data.brandRows,
     thumbnails: data.thumbnails,
+    lists: data.lists,
   );
 
   @override
@@ -127,11 +128,9 @@ class EditorDraftReads implements PublicReads {
   }
 
   @override
-  Future<HomePageReads> homePage(
-    List<String> Function(Map<String, dynamic> page) productIds,
-  ) => _open(
+  Future<HomePageReads> homePage(PagePicker picks) => _open(
     _saved.homePage,
-    productIds,
+    picks,
     // The editor names the home by its row as well (`{slug: "inicio"}`,
     // measured 2026-10-07): the published home with that slug is the open
     // page too.
@@ -140,12 +139,9 @@ class EditorDraftReads implements PublicReads {
   );
 
   @override
-  Future<HomePageReads> websitePage(
-    String slug,
-    List<String> Function(Map<String, dynamic> page) productIds,
-  ) => _open(
-    (ids) => _saved.websitePage(slug, ids),
-    productIds,
+  Future<HomePageReads> websitePage(String slug, PagePicker picks) => _open(
+    (inner) => _saved.websitePage(slug, inner),
+    picks,
     isOpen: (_) => !home && slug == document,
     mustBeOpen: !home && slug == document,
   );
@@ -208,8 +204,8 @@ class EditorDraftReads implements PublicReads {
   @override
   Future<HomePageReads> draftPage(
     Map<String, dynamic> page,
-    List<String> Function(Map<String, dynamic> page) productIds,
-  ) async => _withShell(await _saved.draftPage(page, productIds));
+    PagePicker picks,
+  ) async => _withShell(await _saved.draftPage(page, picks));
 
   @override
   Future<bool> canEditSite(String accessToken) =>

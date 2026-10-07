@@ -7,6 +7,7 @@ import 'package:vinabike_public_core/public_store/models/public_commerce_product
 import 'package:vinabike_public_core/public_store/models/public_policy_content.dart';
 import 'package:vinabike_public_core/public_store/models/public_product_identity_columns.dart';
 
+import 'block_product_picks.dart';
 import 'database_gate.dart';
 import 'storefront_config.dart';
 
@@ -104,6 +105,10 @@ typedef HomePageReads = ({
   List<Object?> products,
   List<Object?> brandRows,
   List<Object?> thumbnails,
+
+  /// The ids of each list the page's blocks ask for, in its order, by
+  /// [BlockProductList.key]; their rows are among [products].
+  Map<String, List<String>> lists,
 });
 
 /// The saved cart's products by id, in stock or not (Flutter's
@@ -185,18 +190,14 @@ abstract interface class PublicReads {
 
   Future<ContactPageReads> contactPage();
 
-  /// [productIds] reads the products the page's blocks pick (a function of
-  /// the page, so it runs after it).
-  Future<HomePageReads> homePage(
-    List<String> Function(Map<String, dynamic> page) productIds,
-  );
+  /// [picks] says what of the catalog the page's blocks show (a function of
+  /// the page, so it runs after it): the products they pick and the lists
+  /// they ask for.
+  Future<HomePageReads> homePage(PagePicker picks);
 
   /// A published editor page by its slug (`/pagina/<slug>`, Flutter's
   /// `DynamicWebsitePage`), read as [homePage] reads the home.
-  Future<HomePageReads> websitePage(
-    String slug,
-    List<String> Function(Map<String, dynamic> page) productIds,
-  );
+  Future<HomePageReads> websitePage(String slug, PagePicker picks);
 
   /// An order through its access token
   /// (`get_public_online_order_by_access_token`, the read Flutter's order
@@ -210,12 +211,9 @@ abstract interface class PublicReads {
   Future<bool> canEditSite(String accessToken);
 
   /// What a draft of the editor needs besides its own blocks and settings:
-  /// the shell, the payment methods and the products [page]'s blocks pick
-  /// by hand, read as [homePage] reads them.
-  Future<HomePageReads> draftPage(
-    Map<String, dynamic> page,
-    List<String> Function(Map<String, dynamic> page) productIds,
-  );
+  /// the shell, the payment methods and what [page]'s blocks show of the
+  /// catalog, read as [homePage] reads them.
+  Future<HomePageReads> draftPage(Map<String, dynamic> page, PagePicker picks);
 
   /// The portal's reads with the customer's [accessToken]; throws
   /// [CustomerSessionRefused] when Supabase does not accept it. The token is
@@ -463,21 +461,18 @@ class SupabasePublicReads implements PublicReads {
       });
 
   @override
-  Future<HomePageReads> homePage(
-    List<String> Function(Map<String, dynamic> page) productIds,
-  ) => _editorPage({'is_home': 'eq.true'}, productIds);
+  Future<HomePageReads> homePage(PagePicker picks) =>
+      _editorPage({'is_home': 'eq.true'}, picks);
 
   @override
-  Future<HomePageReads> websitePage(
-    String slug,
-    List<String> Function(Map<String, dynamic> page) productIds,
-  ) => _editorPage({'slug': 'eq.$slug'}, productIds);
+  Future<HomePageReads> websitePage(String slug, PagePicker picks) =>
+      _editorPage({'slug': 'eq.$slug'}, picks);
 
-  /// One published editor page ([which] picks it) with its blocks, and the
-  /// products its blocks pick by hand.
+  /// One published editor page ([which] picks it) with its blocks, and what
+  /// its blocks show of the catalog.
   Future<HomePageReads> _editorPage(
     Map<String, String> which,
-    List<String> Function(Map<String, dynamic> page) productIds,
+    PagePicker picks,
   ) async {
     final results = await Future.wait([
       _shell(),
@@ -498,8 +493,8 @@ class SupabasePublicReads implements PublicReads {
     final page = pages.isNotEmpty && pages.first is Map
         ? Map<String, dynamic>.from(pages.first as Map)
         : null;
-    final listing = await _pickedProducts(
-      page == null ? const <String>[] : productIds(page),
+    final listing = await _pageProducts(
+      page == null ? const PagePicks() : picks(page),
     );
     return (
       shell: results[0] as Map<String, dynamic>,
@@ -508,29 +503,86 @@ class SupabasePublicReads implements PublicReads {
       products: listing.rows,
       brandRows: listing.brands,
       thumbnails: listing.thumbnails,
+      lists: listing.lists,
     );
   }
 
-  /// The products a page's blocks pick by hand, in stock and public,
-  /// completed like a listing.
-  Future<({List<Object?> rows, List<Object?> brands, List<Object?> thumbnails})>
-  _pickedProducts(List<String> ids) async {
-    if (ids.isEmpty) {
+  /// What a page's blocks show of the catalog, in stock and public and
+  /// completed like a listing: the products they pick by hand
+  /// (`get_public_products` by id) and each list they ask for
+  /// ([BlockProductList]), read together.
+  Future<
+    ({
+      List<Object?> rows,
+      List<Object?> brands,
+      List<Object?> thumbnails,
+      Map<String, List<String>> lists,
+    })
+  >
+  _pageProducts(PagePicks picks) async {
+    if (picks.isEmpty) {
       return (
         rows: const <Object?>[],
         brands: const <Object?>[],
         thumbnails: const <Object?>[],
+        lists: const <String, List<String>>{},
       );
     }
-    final rows = await _rpc('get_public_products', {
-      'p_tenant_id': config.tenantId,
-      'p_product_ids': ids,
-      'p_only_in_stock': true,
-      'p_sort_by': 'name',
-      'p_limit': ids.length,
-      'p_offset': 0,
-    });
-    return _completeRows(rows is List ? rows : const []);
+    final reads = await Future.wait([
+      if (picks.ids.isEmpty)
+        Future<Object?>.value(const <Object?>[])
+      else
+        _rpc('get_public_products', {
+          'p_tenant_id': config.tenantId,
+          'p_product_ids': picks.ids,
+          'p_only_in_stock': true,
+          'p_sort_by': 'name',
+          'p_limit': picks.ids.length,
+          'p_offset': 0,
+        }),
+      for (final list in picks.lists)
+        list.source == 'featured'
+            ? _rpc('get_public_featured_products', {
+                'p_tenant_id': config.tenantId,
+                'p_limit': list.limit,
+              })
+            : _rpc('get_public_products', {
+                'p_tenant_id': config.tenantId,
+                if (list.categoryId case final id?) 'p_category_ids': [id],
+                'p_only_in_stock': true,
+                'p_sort_by': list.source == 'newest' ? 'newest' : 'name',
+                'p_limit': list.limit,
+                'p_offset': 0,
+              }),
+    ]);
+    List<Object?> rowsOf(Object? read) =>
+        read is List ? read.cast<Object?>() : const <Object?>[];
+    final byId = <String, Object?>{};
+    void keep(List<Object?> rows) {
+      for (final row in rows) {
+        if (row is Map && row['id'] != null) {
+          byId.putIfAbsent(row['id'].toString(), () => row);
+        }
+      }
+    }
+
+    keep(rowsOf(reads.first));
+    final lists = <String, List<String>>{};
+    for (final (index, list) in picks.lists.indexed) {
+      final rows = rowsOf(reads[index + 1]);
+      keep(rows);
+      lists[list.key] = [
+        for (final row in rows)
+          if (row is Map && row['id'] != null) row['id'].toString(),
+      ];
+    }
+    final listing = await _completeRows(byId.values.toList(growable: false));
+    return (
+      rows: listing.rows,
+      brands: listing.brands,
+      thumbnails: listing.thumbnails,
+      lists: lists,
+    );
   }
 
   @override
@@ -547,12 +599,12 @@ class SupabasePublicReads implements PublicReads {
   @override
   Future<HomePageReads> draftPage(
     Map<String, dynamic> page,
-    List<String> Function(Map<String, dynamic> page) productIds,
+    PagePicker picks,
   ) async {
     final results = await Future.wait([
       _shell(),
       _payments(),
-      _pickedProducts(productIds(page)),
+      _pageProducts(picks(page)),
     ]);
     final listing =
         results[2]
@@ -560,6 +612,7 @@ class SupabasePublicReads implements PublicReads {
               List<Object?> rows,
               List<Object?> brands,
               List<Object?> thumbnails,
+              Map<String, List<String>> lists,
             });
     return (
       shell: results[0] as Map<String, dynamic>,
@@ -568,6 +621,7 @@ class SupabasePublicReads implements PublicReads {
       products: listing.rows,
       brandRows: listing.brands,
       thumbnails: listing.thumbnails,
+      lists: listing.lists,
     );
   }
 

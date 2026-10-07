@@ -1,10 +1,10 @@
-import 'package:vinabike_public_core/modules/website/models/website_block_base_definitions.dart';
 import 'package:vinabike_public_core/modules/website/models/website_block_normalization.dart';
 import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
 import 'package:vinabike_public_core/shared/models/product.dart';
 import 'package:vinabike_public_core/shared/models/public_product_visibility_policy.dart';
 
 import 'block_composition.dart';
+import 'block_product_picks.dart';
 import 'public_reads.dart';
 import 'site_layout.dart';
 import 'website_blocks_view.dart';
@@ -36,21 +36,6 @@ const homeBands = <WidthBand>[
     sample: 1440,
     canvasWidth: 1440,
   ),
-];
-
-/// The block ids of the products a home block picks by hand, read before the
-/// page is drawn (`PublicHomePage` and its products block).
-List<String> homeProductIds(Map<String, dynamic> page) => [
-  for (final block in _rows(page))
-    if (block['block_type'] == 'products')
-      ...() {
-        final contract = WebsiteProductsBlockContract.fromData(
-          Map<String, dynamic>.from(block['block_data'] as Map? ?? const {}),
-        );
-        return contract.productSource == 'manual'
-            ? contract.productIds
-            : const <String>[];
-      }(),
 ];
 
 List<Map<String, dynamic>> _rows(Map<String, dynamic>? page) =>
@@ -92,6 +77,7 @@ class HomePageModel {
     required this.blocks,
     required this.theme,
     required this.products,
+    required this.productLists,
     required this.brandRows,
     required this.thumbnails,
   });
@@ -149,6 +135,7 @@ class HomePageModel {
       ),
       theme: theme,
       products: products,
+      productLists: blockProductLists(reads.lists, products),
       brandRows: reads.brandRows,
       thumbnails: reads.thumbnails,
     );
@@ -165,6 +152,9 @@ class HomePageModel {
 
   /// The hand-picked products that are in stock and public, by id.
   final Map<String, Product> products;
+
+  /// Each list a block asks for, by [BlockProductList.key].
+  final Map<String, List<Product>> productLists;
   final List<Object?> brandRows;
   final List<Object?> thumbnails;
 

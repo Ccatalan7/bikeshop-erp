@@ -52,31 +52,31 @@
     },
     {
       "path": "services/storefront_html/lib/src/editor_page_model.dart",
-      "sha256": "ffa60379fbb12a0d3f4b85848c18cf7ade0c58c8645adbcea0269f604862582b"
+      "sha256": "cc00482da8e18356bfc02e9288ccdcd811fe390e3db96a618769217c4b1bab69"
     },
     {
       "path": "services/storefront_html/lib/src/editor_page_view.dart",
-      "sha256": "b77ba4d9b90845755dae5916527a06e29440e02552b645e2c7d6b97297723d24"
+      "sha256": "d4b96652bf739ee4a77429e03e071b128bedb8a8af9f519d22e7534fc20c5767"
     },
     {
       "path": "services/storefront_html/lib/src/home_page_model.dart",
-      "sha256": "c558cf52c7f3b6a8cb689f920c1e2f400199326643368713b259a157a9ac6394"
+      "sha256": "775757210dfa8a985f936b18dcf814d51839bb43ad05d5d3822419f66bc12cfb"
     },
     {
       "path": "services/storefront_html/lib/src/home_page_view.dart",
-      "sha256": "c27b163fafcd3d13882b3e3c575cdeb28078e4bb8133a92f0bb8c6c6abf8876a"
+      "sha256": "009ce618ff5c75ca45a0eab5e57e9387b87e4d053247a21896b71d20a70af30b"
     },
     {
       "path": "services/storefront_html/lib/src/public_reads.dart",
-      "sha256": "59ee6e917d624dfb41170dd74d6c53c5ed9dfc34926f9fd1a89f5cc63f81f18c"
+      "sha256": "06c1af70bd27a5d274f7dc3221981ed5e15364d8f458cfb2652a283f8011693a"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
-      "sha256": "5cc84c75f27501872fee61355d23b781cf3bcde976db2ac02e0e629a65c1d64b"
+      "sha256": "7e9326de4cf01e7a3986d60c56a966bd9edd9e70a0914c8cdb3ef64fe0c6f4ab"
     },
     {
       "path": "services/storefront_html/lib/src/website_blocks_view.dart",
-      "sha256": "23e9944ec8be18b026ce161622496bb157c42da228ce03c55c656de24158aa72"
+      "sha256": "3041d892dbce185b0250af30aeab15874eb2b16454e0fbe0418534d311b1599b"
     },
     {
       "path": "lib/modules/website/services/website_html_draft_picks.dart",
@@ -92,7 +92,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/editor_draft_reads.dart",
-      "sha256": "62c825cc36a237b49b2740c2877a59d62d9481628f124167e1625a84d1d23449"
+      "sha256": "274b13a60fd504786ee859eefe96502dd7d62c7b48ab8d9ea12068bfe660dfc0"
     },
     {
       "path": "services/storefront_html/lib/src/site_layout.dart",

@@ -38,6 +38,7 @@ class BlockRenderContext {
     required this.theme,
     required this.storeUrl,
     this.products = const {},
+    this.productLists = const {},
     this.thumbnails = const {},
     this.draft = false,
   });
@@ -48,6 +49,10 @@ class BlockRenderContext {
 
   /// The public, in-stock products the page's blocks pick, by id.
   final Map<String, Product> products;
+
+  /// The lists the page's blocks ask for (the featured, the newest, a
+  /// category's), by `BlockProductList.key`.
+  final Map<String, List<Product>> productLists;
 
   /// Smaller copies of product photos, by the photo's URL.
   final Map<String, PublicImageThumbnail> thumbnails;
@@ -255,7 +260,6 @@ bool sharedBlockCovers(ComposedBlock composed, Set<WebsiteBlockType> types) {
   }
   return switch (type) {
     WebsiteBlockType.carousel => carouselIsCovered(composed.data),
-    WebsiteBlockType.products => productsBlockIsCovered(composed.data),
     WebsiteBlockType.categoryGrid => categoryGridIsCovered(composed.data),
     // A canvas reads its whole document: it resolves its own viewports.
     WebsiteBlockType.canvas => canvasBlockIsCovered(composed.block.blockData),

@@ -10,6 +10,7 @@ import 'site_layout.dart';
 import 'website_blocks_view.dart';
 import 'website_brand_logos_view.dart';
 import 'website_carousel_view.dart';
+import 'website_products_view.dart';
 
 /// A page the editor creates, as `DynamicWebsitePage` composes it; a page
 /// without blocks says it is under construction (`_buildEmptyState`).
@@ -19,6 +20,7 @@ Component editorPageDocument(EditorPageModel model) {
     theme: model.theme,
     storeUrl: model.page.storeUrl,
     products: model.products,
+    productLists: model.productLists,
     thumbnails: PublicImageThumbnail.byUrl(model.thumbnails),
     draft: model.draft,
   );
@@ -72,6 +74,13 @@ Component editorPageDocument(EditorPageModel model) {
     scripts: [
       if (draws(WebsiteBlockType.carousel)) script(content: carouselScript),
       if (draws(WebsiteBlockType.brandLogos)) script(content: brandLogosScript),
+      if (blocks.any(
+        (composed) =>
+            composed.block.type == WebsiteBlockType.products &&
+            productsBlockIsCarousel(composed.data) &&
+            sharedBlockCovers(composed, pageCoveredBlockTypes),
+      ))
+        script(content: productsCarouselScript),
     ],
   );
 }

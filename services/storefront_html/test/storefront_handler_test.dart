@@ -181,6 +181,7 @@ class _FakeReads implements PublicReads {
     this.policyRows = const [],
     this.homeRow,
     this.editorPages = const {},
+    this.lists = const {},
     this.contactRow,
     this.payments,
     this.orders = const {},
@@ -226,6 +227,10 @@ class _FakeReads implements PublicReads {
 
   /// The editor's published pages by slug.
   final Map<String, Map<String, dynamic>> editorPages;
+
+  /// The ids each product list of a block reads, by its source
+  /// (`featured`, `newest`, `category`).
+  final Map<String, List<String>> lists;
   final Map<String, dynamic>? contactRow;
 
   /// `get_public_checkout_capabilities`, as the shell read returns it.
@@ -334,23 +339,33 @@ class _FakeReads implements PublicReads {
     );
   }
 
-  @override
-  Future<HomePageReads> homePage(
-    List<String> Function(Map<String, dynamic> page) productIds,
-  ) async {
-    if (fail) throw PublicReadException('down');
-    final ids = homeRow == null ? const <String>[] : productIds(homeRow!);
+  /// What [picks] of [page] reads: the hand-picked rows and, for each list
+  /// a block asks for, the ids [lists] gives its source, in that order.
+  HomePageReads _pageReads(Map<String, dynamic>? page, PagePicker picks) {
+    final wanted = page == null ? const PagePicks() : picks(page);
+    final read = {
+      for (final list in wanted.lists)
+        list.key: [...?lists[list.source]].take(list.limit).toList(),
+    };
+    final ids = {...wanted.ids, for (final ids in read.values) ...ids};
     return (
       shell: shellJson ?? _shell(),
       payments: null,
-      page: homeRow,
+      page: page,
       products: [
         for (final row in products)
           if (row is Map && ids.contains(row['id'])) row,
       ],
       brandRows: brandRows,
       thumbnails: thumbnails,
+      lists: read,
     );
+  }
+
+  @override
+  Future<HomePageReads> homePage(PagePicker picks) async {
+    if (fail) throw PublicReadException('down');
+    return _pageReads(homeRow, picks);
   }
 
   @override
@@ -362,44 +377,18 @@ class _FakeReads implements PublicReads {
   @override
   Future<HomePageReads> draftPage(
     Map<String, dynamic> page,
-    List<String> Function(Map<String, dynamic> page) productIds,
+    PagePicker picks,
   ) async {
     requested.add('draft');
     if (fail) throw PublicReadException('down');
-    final ids = productIds(page);
-    return (
-      shell: shellJson ?? _shell(),
-      payments: null,
-      page: page,
-      products: [
-        for (final row in products)
-          if (row is Map && ids.contains(row['id'])) row,
-      ],
-      brandRows: brandRows,
-      thumbnails: thumbnails,
-    );
+    return _pageReads(page, picks);
   }
 
   @override
-  Future<HomePageReads> websitePage(
-    String slug,
-    List<String> Function(Map<String, dynamic> page) productIds,
-  ) async {
+  Future<HomePageReads> websitePage(String slug, PagePicker picks) async {
     requested.add('pagina:$slug');
     if (fail) throw PublicReadException('down');
-    final row = editorPages[slug];
-    final ids = row == null ? const <String>[] : productIds(row);
-    return (
-      shell: shellJson ?? _shell(),
-      payments: null,
-      page: row,
-      products: [
-        for (final product in products)
-          if (product is Map && ids.contains(product['id'])) product,
-      ],
-      brandRows: brandRows,
-      thumbnails: thumbnails,
-    );
+    return _pageReads(editorPages[slug], picks);
   }
 
   @override
@@ -3324,6 +3313,118 @@ void main() {
       },
     );
 
+    test('a products block shows the featured, the newest or a category\'s '
+        'products as the store reads them; a category it does not name, '
+        'none', () async {
+      Map<String, dynamic> row(String id, String name) => {
+        ..._product(name: name, sku: id.toUpperCase()),
+        'id': id,
+      };
+      final response = await _get(
+        _FakeReads(
+          products: [
+            row('p1', 'Cadena KMC'),
+            row('p2', 'Cassette SLX'),
+            row('p3', 'Neumático Rekon'),
+            row('p4', 'Pedal Shimano'),
+            row('p5', 'Tija Kalloy'),
+          ],
+          lists: {
+            'featured': ['p1'],
+            'newest': ['p2', 'p3', 'p1', 'p4', 'p5'],
+            'category': ['p3'],
+          },
+          editorPages: {
+            'arriendo': page([
+              // The editor's new products block: the featured.
+              block('f', 'products', 0, {'title': 'Destacados'}),
+              block('n', 'products', 1, {
+                'title': 'Lo nuevo',
+                'productSource': 'newest',
+                // The least the block shows (`_boundedInt`, 4 to 16).
+                'maxProducts': 4,
+              }),
+              block('c', 'products', 2, {
+                'title': 'Ruedas',
+                'productSource': 'category',
+                'categoryId': 'cat-ruedas',
+              }),
+              block('none', 'products', 3, {
+                'title': 'Sin categoría',
+                'productSource': 'category',
+              }),
+            ]),
+          },
+        ),
+        '/pagina/arriendo',
+      );
+      expect(response.headers['x-storefront-uncovered'], isNull);
+      final html = await response.readAsString();
+      List<String> namesIn(String title) {
+        final start = html.indexOf('>${title.toUpperCase()}<');
+        final end = html.indexOf('</section>', start);
+        return RegExp(
+              r'Cadena KMC|Cassette SLX|Neumático Rekon|Pedal Shimano|'
+              r'Tija Kalloy',
+            )
+            .allMatches(html.substring(start, end))
+            .map((match) => match[0]!)
+            .toSet()
+            .toList();
+      }
+
+      expect(namesIn('Destacados'), ['Cadena KMC']);
+      expect(namesIn('Lo nuevo'), [
+        'Cassette SLX',
+        'Neumático Rekon',
+        'Cadena KMC',
+        'Pedal Shimano',
+      ]);
+      expect(namesIn('Ruedas'), ['Neumático Rekon']);
+      expect(namesIn('Sin categoría'), isEmpty);
+    });
+
+    test('a products carousel is a row of cards as wide as the author\'s '
+        'count, with dots and the script that turns it on a phone', () async {
+      Map<String, dynamic> row(String id, String name) => {
+        ..._product(name: name, sku: id.toUpperCase()),
+        'id': id,
+      };
+      final response = await _get(
+        _FakeReads(
+          products: [row('p1', 'Cadena KMC'), row('p2', 'Cassette SLX')],
+          editorPages: {
+            'arriendo': page([
+              block('car', 'products', 0, {
+                'title': 'Destacados',
+                'productSource': 'manual',
+                'productIds': ['p1', 'p2'],
+                'layout': 'carousel',
+                'itemsPerRow': 3,
+              }),
+            ]),
+          },
+        ),
+        '/pagina/arriendo',
+      );
+      expect(response.headers['x-storefront-uncovered'], isNull);
+      final html = await response.readAsString();
+      expect(
+        html,
+        contains('<div class="prod-car" data-pcar style="--card:300px">'),
+      );
+      expect(html, contains('<ul class="prod-row">'));
+      expect(
+        html,
+        contains(
+          '<div class="prod-dots" aria-hidden="true">'
+          '<span class="on"></span><span></span></div>',
+        ),
+      );
+      expect(html, contains('document.querySelectorAll("[data-pcar]")'));
+      expect(html, isNot(contains('class="prod-grid"')));
+    });
+
     test('products, a category grid and the brand strip with a surface of '
         'their own stay in HTML and wear it', () async {
       const surface = {
@@ -3425,10 +3526,7 @@ void main() {
       expect('car-media'.allMatches(html).length, greaterThanOrEqualTo(2));
       expect(html, isNot(contains('vimeo.com')));
       // Nothing plays before the page has loaded: no source is set yet.
-      expect(
-        html,
-        isNot(contains(' src="https://example.invalid/ruta.mp4"')),
-      );
+      expect(html, isNot(contains(' src="https://example.invalid/ruta.mp4"')));
     });
 
     test('the reviews heading reads on what is behind it, and a video '

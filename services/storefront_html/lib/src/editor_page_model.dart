@@ -6,6 +6,7 @@ import 'package:vinabike_public_core/shared/models/product.dart';
 import 'package:vinabike_public_core/shared/models/public_product_visibility_policy.dart';
 
 import 'block_composition.dart';
+import 'block_product_picks.dart';
 import 'home_page_model.dart';
 import 'public_reads.dart';
 import 'site_layout.dart';
@@ -23,6 +24,7 @@ class EditorPageModel {
     required this.blocks,
     required this.theme,
     required this.products,
+    required this.productLists,
     required this.brandRows,
     required this.thumbnails,
   });
@@ -137,6 +139,7 @@ class EditorPageModel {
       ),
       theme: theme,
       products: products,
+      productLists: blockProductLists(reads.lists, products),
       brandRows: reads.brandRows,
       thumbnails: reads.thumbnails,
     );
@@ -151,6 +154,9 @@ class EditorPageModel {
   final List<ComposedBlock> blocks;
   final WebsiteThemeRoles theme;
   final Map<String, Product> products;
+
+  /// Each list a block asks for, by [BlockProductList.key].
+  final Map<String, List<Product>> productLists;
   final List<Object?> brandRows;
   final List<Object?> thumbnails;
 

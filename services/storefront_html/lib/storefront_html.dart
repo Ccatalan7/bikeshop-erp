@@ -2,6 +2,8 @@
 /// request handler.
 library;
 
+export 'src/block_product_picks.dart'
+    show BlockProductList, PagePicker, PagePicks;
 export 'src/cart_page_model.dart';
 export 'src/cart_page_view.dart'
     show cartPageDocument, cartLinesJson, cartLinesPath;

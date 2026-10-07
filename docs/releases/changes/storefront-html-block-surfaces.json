@@ -40,7 +40,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_blocks_view.dart",
-      "sha256": "23e9944ec8be18b026ce161622496bb157c42da228ce03c55c656de24158aa72"
+      "sha256": "3041d892dbce185b0250af30aeab15874eb2b16454e0fbe0418534d311b1599b"
     },
     {
       "path": "services/storefront_html/lib/src/website_carousel_view.dart",
@@ -48,7 +48,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_page_css.dart",
-      "sha256": "0156b1f0b6287d5bef74c4a6936392bdc47fd2af2015bbc2bda6d1995d9256f4"
+      "sha256": "84ae147949d38610d9b6407ae09555aec926ffdf334fca80ad5f84325264f16b"
     },
     {
       "path": "services/storefront_html/lib/src/website_reviews_view.dart",
@@ -64,7 +64,7 @@
     },
     {
       "path": "services/storefront_html/test/storefront_handler_test.dart",
-      "sha256": "efc8368afaf8952e0f4c442d531233a094a36d990b3e5dfba5728d3bf07c34c2"
+      "sha256": "02021fe9af1d1c1a07045e2ec550f9e6673f89dedba39e457600e2dcd0c7e8c0"
     },
     {
       "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_surface_presence.dart",
@@ -88,7 +88,43 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_products_view.dart",
-      "sha256": "945ad1dadd40a1e38d3eac3d9bb1f3294713a1dc2b527b6f13952afd75d7a6e5"
+      "sha256": "f381502671718568b93695f5112000894f86af04772a9f7754de82845362de57"
+    },
+    {
+      "path": "services/storefront_html/lib/src/block_product_picks.dart",
+      "sha256": "44f2568eac8c0cdf23a76f82b97e4e2b6eab6b0294c3a914b77c7a27e4567b35"
+    },
+    {
+      "path": "services/storefront_html/lib/src/public_reads.dart",
+      "sha256": "06c1af70bd27a5d274f7dc3221981ed5e15364d8f458cfb2652a283f8011693a"
+    },
+    {
+      "path": "services/storefront_html/lib/src/editor_draft_reads.dart",
+      "sha256": "274b13a60fd504786ee859eefe96502dd7d62c7b48ab8d9ea12068bfe660dfc0"
+    },
+    {
+      "path": "services/storefront_html/lib/src/home_page_model.dart",
+      "sha256": "775757210dfa8a985f936b18dcf814d51839bb43ad05d5d3822419f66bc12cfb"
+    },
+    {
+      "path": "services/storefront_html/lib/src/editor_page_model.dart",
+      "sha256": "cc00482da8e18356bfc02e9288ccdcd811fe390e3db96a618769217c4b1bab69"
+    },
+    {
+      "path": "services/storefront_html/lib/src/home_page_view.dart",
+      "sha256": "009ce618ff5c75ca45a0eab5e57e9387b87e4d053247a21896b71d20a70af30b"
+    },
+    {
+      "path": "services/storefront_html/lib/src/editor_page_view.dart",
+      "sha256": "d4b96652bf739ee4a77429e03e071b128bedb8a8af9f519d22e7534fc20c5767"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_handler.dart",
+      "sha256": "7e9326de4cf01e7a3986d60c56a966bd9edd9e70a0914c8cdb3ef64fe0c6f4ab"
+    },
+    {
+      "path": "services/storefront_html/lib/storefront_html.dart",
+      "sha256": "3e2ec1010ccecd65f6dcc12cd5307855c54a328daa210e881bfbf6999f74ebb3"
     }
   ]
 }

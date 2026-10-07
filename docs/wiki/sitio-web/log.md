@@ -428,3 +428,6 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   no ofrece «Restaurar» el borrador propio.
 - Una diapositiva de carrusel con video se dibuja en HTML (archivo o
   YouTube, sólo la que se ve reproduce); antes mandaba la página a Flutter.
+- Todo bloque de productos se dibuja en HTML: destacados, lo nuevo y una
+  categoría (antes sólo los elegidos a mano) y el diseño carrusel. La tienda
+  no tiene productos destacados hoy: un bloque nuevo sale vacío.

@@ -9,27 +9,30 @@ import 'package:vinabike_public_core/shared/models/product.dart';
 import 'package:vinabike_public_core/shared/utils/chilean_utils.dart';
 
 import 'block_composition.dart';
+import 'block_product_picks.dart';
 import 'material_icons.dart';
 import 'website_blocks_view.dart';
 
-/// What the HTML products block draws: a grid of hand-picked products. A
-/// carousel layout or another source (the featured, newest or a category's
-/// products, which the page does not read yet) are not drawn yet.
-bool productsBlockIsCovered(Map<String, dynamic> data) {
-  final contract = WebsiteProductsBlockContract.fromData(data);
-  return contract.layout == 'grid' && contract.productSource == 'manual';
-}
+/// Whether the block lays its products in a carousel ([productsCarouselScript]
+/// plays it).
+bool productsBlockIsCarousel(Map<String, dynamic> data) =>
+    WebsiteProductsBlockContract.fromData(data).layout == 'carousel';
 
-/// The products the block shows: the picked ones that are public and in
-/// stock, in the author's order, at most `maxProducts`.
+/// The products the block shows, at most `maxProducts`, public and in stock:
+/// the picked ones in the author's order, or its list as the store reads it
+/// ([BlockProductList]; none for a category it does not name, as Flutter).
 List<Product> productsBlockItems(
   Map<String, dynamic> data,
-  Map<String, Product> products,
+  BlockRenderContext context,
 ) {
   final contract = WebsiteProductsBlockContract.fromData(data);
-  return [
-    for (final id in contract.productIds) ?products[id],
-  ].take(contract.maxProducts).toList(growable: false);
+  final items = contract.productSource == 'manual'
+      ? [for (final id in contract.productIds) ?context.products[id]]
+      : switch (BlockProductList.of(contract)) {
+          final list? => context.productLists[list.key] ?? const <Product>[],
+          null => const <Product>[],
+        };
+  return items.take(contract.maxProducts).toList(growable: false);
 }
 
 /// `_ProductsBlockWidget`: the title after a black bar, the subtitle, the
@@ -48,7 +51,7 @@ class ProductsBlockView extends StatelessComponent {
     final rawTitle = contract.title.trim();
     final title = rawTitle.isEmpty ? 'DESTACADOS' : rawTitle.toUpperCase();
     final subtitle = contract.subtitle.trim();
-    final items = productsBlockItems(data, context.products);
+    final items = productsBlockItems(data, context);
     final viewAll = WebsiteActionValue.resolvePrimary(
       data,
       labelKeys: const ['viewAllText'],
@@ -83,14 +86,17 @@ class ProductsBlockView extends StatelessComponent {
           h2([.text(title)]),
         ]),
         if (subtitle.isNotEmpty) p(classes: 'prod-sub', [.text(subtitle)]),
-        ul(
-          classes: 'prod-grid',
-          attributes: {'style': '--cols:${contract.itemsPerRow.clamp(2, 4)}'},
-          [
-            for (final product in items)
-              li([_card(product, contract, canonical: canonical)]),
-          ],
-        ),
+        if (contract.layout == 'carousel')
+          _carousel(items, contract, canonical: canonical)
+        else
+          ul(
+            classes: 'prod-grid',
+            attributes: {'style': '--cols:${contract.itemsPerRow.clamp(2, 4)}'},
+            [
+              for (final product in items)
+                li([_card(product, contract, canonical: canonical)]),
+            ],
+          ),
         if (viewAll != null && viewAllHref != null)
           div(classes: 'prod-all', [
             a(classes: 'w-btn ink outline', href: viewAllHref, [
@@ -101,10 +107,58 @@ class ProductsBlockView extends StatelessComponent {
     ]);
   }
 
+  /// The carousel layout: on a phone one card a page, 520 tall, turning
+  /// every 3 s with its dots (`_MobileProductAutoCarousel`); wider, a row 480
+  /// tall that scrolls sideways, its cards 350, 300 or 260 wide by the
+  /// author's count a row.
+  Component _carousel(
+    List<Product> items,
+    WebsiteProductsBlockContract contract, {
+    required bool canonical,
+  }) {
+    final width = switch (contract.itemsPerRow) {
+      <= 2 => 350,
+      3 => 300,
+      _ => 260,
+    };
+    final phone = canonical ? 599 : 639;
+    return div(
+      classes: 'prod-car',
+      attributes: {'data-pcar': '', 'style': '--card:${width}px'},
+      [
+        ul(classes: 'prod-row', [
+          for (final product in items)
+            li([
+              _card(
+                product,
+                contract,
+                canonical: canonical,
+                // The photo is its card less 16 px each side: a phone's page
+                // (the window less 16 + 8 a side), or the row's card.
+                sizes:
+                    '(max-width: ${phone}px) calc(100vw - 80px), '
+                    '${width - 32}px',
+              ),
+            ]),
+        ]),
+        if (items.length > 1)
+          div(
+            classes: 'prod-dots',
+            attributes: {'aria-hidden': 'true'},
+            [
+              for (var index = 0; index < items.length; index++)
+                span(classes: index == 0 ? 'on' : null, const []),
+            ],
+          ),
+      ],
+    );
+  }
+
   Component _card(
     Product product,
     WebsiteProductsBlockContract contract, {
     required bool canonical,
+    String? sizes,
   }) {
     final image = publicProductPrimaryImageUrl(product) ?? '';
     final copies = image.isEmpty ? null : context.thumbnails[image];
@@ -136,9 +190,10 @@ class ProductsBlockView extends StatelessComponent {
                   // single column, a tablet's two, a desktop's four of at
                   // most 1.200 px.
                   'sizes':
+                      sizes ??
                       '(max-width: ${phone}px) calc(100vw - 112px), '
-                      '(max-width: ${tablet}px) calc(50vw - 90px), '
-                      '(max-width: 1295px) calc(25vw - 71px), 253px',
+                          '(max-width: ${tablet}px) calc(50vw - 90px), '
+                          '(max-width: 1295px) calc(25vw - 71px), 253px',
                 },
                 'decoding': 'async',
               },
@@ -166,3 +221,21 @@ class ProductsBlockView extends StatelessComponent {
     );
   }
 }
+
+/// Plays the products carousels on a phone as `_MobileProductAutoCarousel`:
+/// the next page every 3 s (back to the first after the last; none for a
+/// visitor who asks for less motion), the dots following the page shown,
+/// also when the visitor swipes. Wider, the row only scrolls.
+const productsCarouselScript = r'''
+document.querySelectorAll("[data-pcar]").forEach(function(c){
+var row=c.querySelector(".prod-row"),dots=[].slice.call(c.querySelectorAll(".prod-dots span")),n=row.children.length,timer=0;
+var still=matchMedia("(prefers-reduced-motion: reduce)").matches;
+function paged(){return getComputedStyle(row).scrollSnapType.indexOf("x")>=0}
+function at(){return row.clientWidth?Math.round(row.scrollLeft/row.clientWidth):0}
+function mark(){var i=at();dots.forEach(function(d,k){d.className=k===i?"on":""})}
+function restart(){clearInterval(timer);if(!still&&n>1)timer=setInterval(function(){if(!paged())return;var i=at()+1;row.scrollTo({left:(i>=n?0:i)*row.clientWidth,behavior:"smooth"})},3000)}
+var wait=0;row.addEventListener("scroll",function(){clearTimeout(wait);wait=setTimeout(mark,60)},{passive:true});
+row.addEventListener("touchstart",restart,{passive:true});
+restart();
+});
+''';

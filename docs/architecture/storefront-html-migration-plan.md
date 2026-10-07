@@ -2148,3 +2148,17 @@ de 15 px de alto Flutter lo esconde y el HTML lo muestra.
   es sólo la superficie, que el HTML ya pinta), y la cinta también por el
   formato de su título. Se quitaron esas condiciones y la cinta dibuja su
   formato; una prueba arma las tres con superficie propia.
+- **Todo bloque de productos en HTML (2026-10-07).** Un bloque nuevo del
+  editor nace «destacados» y el HTML sólo dibujaba los elegidos a mano en
+  grilla: cada bloque de productos que el dueño agregara mandaba su página a
+  Flutter. Ahora la página lee, junto con los elegidos, cada lista que sus
+  bloques piden (`PagePicks` y `BlockProductList` en
+  `block_product_picks.dart`): destacados (`get_public_featured_products`),
+  lo nuevo y una categoría (`get_public_products` en stock, por fecha o por
+  nombre), con el máximo del bloque, como `_loadPublicProductsFromPolicy`;
+  una categoría sin nombrar no muestra nada, como Flutter. El diseño
+  carrusel también: en teléfono una tarjeta por página de 520 con puntos que
+  avanza cada 3 s (nada con movimiento reducido), más ancho una fila de 480
+  que se desplaza con tarjetas de 350/300/260 según el conteo por fila.
+  Probado en Chrome a 1440 y 390. En producción (2026-10-07) no hay ningún
+  producto marcado como destacado: un bloque nuevo sale vacío en los dos.
