@@ -5,9 +5,7 @@ import '../pages/android_app_download_page.dart';
 import '../pages/customer_addresses_page.dart';
 import '../pages/customer_auth_page.dart';
 import '../pages/customer_bikes_page.dart';
-import '../pages/customer_chat_detail_page.dart';
 import '../pages/customer_chat_hub_page.dart';
-import '../pages/customer_chat_list_page.dart';
 import '../pages/customer_dashboard_page.dart';
 import '../pages/customer_orders_page.dart';
 import '../pages/customer_profile_page.dart';
@@ -30,8 +28,6 @@ Widget buildCustomerRoutePage({
     'orders' => const CustomerOrdersPage(),
     'bikes' => const CustomerBikesPage(),
     'serviceHistory' => CustomerServiceHistoryPage(bikeId: argument),
-    'messages' => const CustomerChatListPage(),
-    'messageDetail' => CustomerChatDetailPage(conversationId: argument ?? ''),
     'chats' => const CustomerChatHubPage(),
     'chatDetail' => CustomerChatHubPage(initialConversationId: argument),
     _ => const SizedBox.shrink(),

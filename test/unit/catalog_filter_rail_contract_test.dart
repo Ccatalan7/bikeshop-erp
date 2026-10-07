@@ -157,7 +157,7 @@ void main() {
     test('navigation options stay published, non-empty and touch-sized', () {
       expect(source, contains('List<_CategoryNode> _navigableChildren('));
       expect(source, contains('child.isPublished &&'));
-      expect(source, contains('_countProductsInCategoryTree(child, null) > 0'));
+      expect(source, contains('_countProductsInCategoryTree(child) > 0'));
       // Compact hosts render this same rail inside the filter sheet.
       expect(source, contains('minHeight: 48'));
     });

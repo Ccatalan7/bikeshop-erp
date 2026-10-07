@@ -11,7 +11,8 @@ void main() {
     final policy = File(
       'lib/public_store/pages/static_policy_page.dart',
     ).readAsStringSync();
-    final layout = readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
+    final layout =
+        readLibrarySource('lib/public_store/widgets/public_store_layout.dart');
     final snapshots = File(
       'scripts/generate_product_seo_snapshots.dart',
     ).readAsStringSync();
@@ -39,10 +40,7 @@ void main() {
     );
   });
 
-  test('return policy fallback uses the statutory ten-day period', () {
-    final editorDefaults = File(
-      'lib/modules/website/pages/content_management_page.dart',
-    ).readAsStringSync();
+  test('return policy pages do not hardcode a return period', () {
     final publicPolicy = File(
       'lib/public_store/pages/static_policy_page.dart',
     ).readAsStringSync();
@@ -50,8 +48,6 @@ void main() {
       'scripts/generate_product_seo_snapshots.dart',
     ).readAsStringSync();
 
-    expect(editorDefaults, contains('Tienes 10 días corridos'));
-    expect(editorDefaults, isNot(contains('Tienes 30 días')));
     expect(publicPolicy, isNot(contains('dentro de 10 días')));
     expect(snapshots, isNot(contains('dentro de 10 días')));
   });

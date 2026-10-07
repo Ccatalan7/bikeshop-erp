@@ -689,28 +689,15 @@ class PublicStoreRouter {
           },
         ),
 
-        // Chat / Support
+        // Enlaces viejos del chat: van al centro de chats.
         GoRoute(
           path: '/cuenta/mensajes',
-          pageBuilder: (context, state) => _buildPageNoScroll(
-            context,
-            state,
-            const DeferredCustomerRoutePage(routeKey: 'messages'),
-          ),
+          redirect: (context, state) => '/cuenta/chats',
         ),
         GoRoute(
           path: '/cuenta/mensajes/:id',
-          pageBuilder: (context, state) {
-            final conversationId = state.pathParameters['id']!;
-            return _buildPageNoScroll(
-              context,
-              state,
-              DeferredCustomerRoutePage(
-                routeKey: 'messageDetail',
-                argument: conversationId,
-              ),
-            );
-          },
+          redirect: (context, state) =>
+              '/cuenta/chats/${state.pathParameters['id']}',
         ),
         GoRoute(
           path: '/cuenta/chats',
@@ -864,12 +851,12 @@ class PublicStoreRouter {
         ),
         GoRoute(
           path: '/tienda/cuenta/mensajes',
-          redirect: (context, state) => '/cuenta/mensajes',
+          redirect: (context, state) => '/cuenta/chats',
         ),
         GoRoute(
           path: '/tienda/cuenta/mensajes/:id',
           redirect: (context, state) =>
-              '/cuenta/mensajes/${state.pathParameters['id']}',
+              '/cuenta/chats/${state.pathParameters['id']}',
         ),
         GoRoute(
           path: '/tienda/cuenta/chats',

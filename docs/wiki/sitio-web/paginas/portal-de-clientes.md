@@ -25,11 +25,11 @@ el soporte por chat. No es otra base: lee los mismos `online_orders`,
 | `/cuenta/pedidos` | `customer_orders_page.dart` | pedidos web |
 | `/cuenta/servicios` | `customer_service_history_page.dart` | trabajos del taller; `?bike_id=` filtra por bici |
 | `/cuenta/bicicletas` | `customer_bikes_page.dart` | sus bicis (dibujadas por tipo: 0 de 472 bicis tienen foto) |
-| `/cuenta/chats`, `/cuenta/chats/:id` | `customer_chat_hub_page.dart`, `customer_chat_detail_page.dart` | soporte |
+| `/cuenta/chats`, `/cuenta/chats/:id` | `customer_chat_hub_page.dart` (con la conversación abierta en `:id`) | soporte |
 | `/cuenta/perfil`, `/cuenta/direcciones` | `customer_profile_page.dart`, `customer_addresses_page.dart` | datos y direcciones |
 | `/cuenta/login` | `customer_auth_page.dart` | entrar o crear cuenta |
 | `/cuenta/descargas/android` | `android_app_download_page.dart` | la app Android |
-| `/cuenta/mensajes`, `/cuenta/mensajes/:id` | `customer_chat_list_page.dart` (legado) | rutas viejas del chat |
+| `/cuenta/mensajes`, `/cuenta/mensajes/:id` | redirigen a `/cuenta/chats` y `/cuenta/chats/:id` (2026-10-07) | enlaces viejos del chat |
 
 Todas llevan `noindex` por cabecera ([rutas](rutas-y-navegacion.md)).
 
@@ -105,8 +105,6 @@ Las fotos del portal salen del editor (`theme_customer_portal_image`,
 ## Pendiente
 
 - El login `/cuenta/login` no pasó por «Sendero» (en Flutter y en HTML se ve igual).
-- Código muerto: `customer_account_page.dart`, `premium_dashboard_widgets.dart` y
-  la ruta legado `/cuenta/mensajes` (`customer_chat_list_page.dart`).
 - Para mirar el portal sin sesión (un agente no ingresa contraseñas):
   `test/widgets/customer_portal_pages_test.dart`.
 

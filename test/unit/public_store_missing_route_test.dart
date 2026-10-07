@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:vinabike_erp/public_store/routes/public_store_router.dart';
@@ -33,6 +34,27 @@ void main() {
         '/tienda/:resto(.*)');
     expect(matchedPath('/tienda/productos/cadena-kmc/10266'),
         '/tienda/:resto(.*)');
+  });
+
+  // `/cuenta/mensajes` dibujaba una lista de chats vieja, distinta del
+  // centro de chats; ahora sus enlaces llegan al centro (2026-10-07).
+  testWidgets('los enlaces viejos del chat llegan al centro de chats',
+      (tester) async {
+    await tester.pumpWidget(const SizedBox());
+    final context = tester.element(find.byType(SizedBox));
+    for (final (from, to) in [
+      ('/cuenta/mensajes', '/cuenta/chats'),
+      ('/cuenta/mensajes/c-1', '/cuenta/chats/c-1'),
+      ('/tienda/cuenta/mensajes', '/cuenta/chats'),
+      ('/tienda/cuenta/mensajes/c-1', '/cuenta/chats/c-1'),
+    ]) {
+      final redirected = await router.configuration.redirect(
+        context,
+        router.configuration.findMatch(Uri.parse(from)),
+        redirectHistory: [],
+      );
+      expect(redirected.uri.toString(), to, reason: from);
+    }
   });
 
   test('las rutas de la tienda no caen en el comodín', () {

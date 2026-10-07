@@ -90,16 +90,7 @@ void main() {
     final hub = File(
       'lib/public_store/pages/customer_chat_hub_page.dart',
     ).readAsStringSync();
-    final detail = File(
-      'lib/public_store/pages/customer_chat_detail_page.dart',
-    ).readAsStringSync();
 
     expect(hub, contains('CustomerChatContextSupport.supports(contextType)'));
-    expect(
-      detail,
-      contains('CustomerChatContextSupport.supports(contextType)'),
-    );
-    expect(detail, isNot(contains("case 'order':")));
-    expect(detail, isNot(contains("case 'bike':")));
   });
 }

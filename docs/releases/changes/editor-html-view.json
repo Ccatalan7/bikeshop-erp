@@ -11,8 +11,7 @@
   "title": "Vista HTML en el editor del sitio",
   "summary": "En el editor del sitio, «Vista HTML» muestra la página en pantalla —inicio, páginas, catálogo, categorías y ficha de producto— tal como la arma la tienda en HTML, con lo que aún no guardas, y se actualiza con cada cambio.",
   "items": [
-    "Un clic en la vista HTML elige el bloque, el encabezado, el pie o la sección; el bloque se mueve, cambia de alto y sus textos se escriben ahí, con formato.",
-    "Se ve al momento lo que no guardas del catálogo, la ficha y el pie; el carrusel sigue al panel, y mover una sección del pie ya no deja el pie sin dibujar."
+    "Un clic elige el bloque o la sección y sus textos se escriben ahí, con formato; se ve al momento lo que no guardas del catálogo, la ficha y el pie."
   ],
   "evidence": [
     {

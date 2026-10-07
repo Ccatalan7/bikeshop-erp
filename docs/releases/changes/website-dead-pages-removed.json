@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "id": "website-dead-pages-removed",
+  "source": "ai",
+  "scope": "internal",
+  "platforms": [
+    "web",
+    "macos",
+    "windows",
+    "android"
+  ],
+  "module": "website",
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "lib/public_store/routes/public_store_router.dart",
+      "sha256": "9ec452844862299fd50b4c2a147adf6a258544f39ff5b27415e8a30732020553"
+    },
+    {
+      "path": "lib/public_store/routes/deferred_customer_routes.dart",
+      "sha256": "79ca8cf591a6ad9f8ff3574b16791b1c55dac6152d1b66eb5d880eeb4191ef3a"
+    },
+    {
+      "path": "lib/shared/routes/app_router.dart",
+      "sha256": "f6854d17c79339e958a3fb65a9501c21ed564e77d9b890cb1694a317e450f57b"
+    },
+    {
+      "path": "lib/shared/routes/erp_routes_barrel.dart",
+      "sha256": "69a8ca49a078210a1df948a34d53c72381083ee650b3e43fd9c1a7fa5da7d70f"
+    },
+    {
+      "path": "test/unit/public_store_missing_route_test.dart",
+      "sha256": "24f32caa091a6b74c2e0f4002cc7c9fab74e4f20e121ed597da2de3f4223d150"
+    },
+    {
+      "path": "lib/modules/website/pages/banners_management_page.dart",
+      "sha256": "fef60d7668d31a5b6121a0bbe595501ea0aec9ddeca7dbc21f1225a81d1a3923"
+    },
+    {
+      "path": "lib/modules/website/pages/content_management_page.dart",
+      "sha256": "e39d07e18215794c6d48fff5d31dace077f68186db0f185b3918c051053d8ae0"
+    },
+    {
+      "path": "lib/public_store/pages/customer_account_page.dart",
+      "sha256": "cf282daadde4ed3b7f9375b7325391a1de8d5a0da81abf274a334fa3bac5c654"
+    },
+    {
+      "path": "lib/public_store/pages/customer_chat_detail_page.dart",
+      "sha256": "c7c78f5c2b6c223101ac82fa060e5a5cdee1a7c7ee7624600437a6167de33239"
+    },
+    {
+      "path": "lib/public_store/pages/customer_chat_list_page.dart",
+      "sha256": "4d0dadf8c83e8b9563fd76cdd838461be69d958b477db308e6b2e37e806160ef"
+    },
+    {
+      "path": "lib/public_store/widgets/premium_dashboard_widgets.dart",
+      "sha256": "7cc8a9b138dd47c3eae1ae1528dd03f4b34c6e181e1e64c7186e22f4f2400fe8"
+    }
+  ]
+}

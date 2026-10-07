@@ -167,9 +167,7 @@ import '../../public_store/pages/customer_service_history_page.dart';
 import '../../public_store/pages/android_app_download_page.dart';
 import '../../public_store/pages/dynamic_website_page.dart';
 import '../../public_store/pages/static_policy_page.dart';
-import '../../public_store/pages/customer_chat_list_page.dart';
 import '../../public_store/pages/customer_chat_hub_page.dart';
-import '../../public_store/pages/customer_chat_detail_page.dart';
 import '../../public_store/pages/customer_dashboard_page.dart';
 import '../../public_store/widgets/erp_mounted_storefront_scope_boundary.dart';
 import '../../public_store/widgets/public_store_layout.dart';
@@ -303,8 +301,7 @@ class _PublicStoreShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final disablePageViewScrolling =
-        currentPath.startsWith('/tienda/cuenta/mensajes/') ||
-            currentPath.startsWith('/tienda/cuenta/chats/');
+        currentPath.startsWith('/tienda/cuenta/chats/');
 
     return ErpMountedStorefrontScopeBoundary(
       authService: authService,
@@ -1069,25 +1066,15 @@ class AppRouter {
                         },
                       ),
 
-                      // Messaging (legacy account paths)
+                      // Enlaces viejos del chat: van al centro de chats.
                       GoRoute(
                         path: 'mensajes',
-                        pageBuilder: (context, state) => _buildShellPage(
-                          'public_store_shell_tienda_cuenta_mensajes',
-                          const CustomerChatListPage(),
-                        ),
+                        redirect: (context, state) => '/tienda/cuenta/chats',
                       ),
                       GoRoute(
                         path: 'mensajes/:id',
-                        pageBuilder: (context, state) {
-                          final conversationId = state.pathParameters['id']!;
-                          return _buildShellPage(
-                            'public_store_shell_tienda_cuenta_mensajes_detail',
-                            CustomerChatDetailPage(
-                              conversationId: conversationId,
-                            ),
-                          );
-                        },
+                        redirect: (context, state) =>
+                            '/tienda/cuenta/chats/${state.pathParameters['id']}',
                       ),
 
                       // New unified chat hub
@@ -1331,28 +1318,15 @@ class AppRouter {
           },
         ),
 
-        // Chat / Support
+        // Enlaces viejos del chat: van al centro de chats.
         GoRoute(
           path: '/cuenta/mensajes',
-          pageBuilder: (context, state) => _buildPageWithNoTransition(
-            context,
-            state,
-            const PublicStoreWrapper(child: CustomerChatListPage()),
-          ),
+          redirect: (context, state) => '/cuenta/chats',
         ),
         GoRoute(
           path: '/cuenta/mensajes/:id',
-          pageBuilder: (context, state) {
-            final conversationId = state.pathParameters['id']!;
-            return _buildPageWithNoTransition(
-              context,
-              state,
-              PublicStoreWrapper(
-                enablePageViewScrolling: false,
-                child: CustomerChatDetailPage(conversationId: conversationId),
-              ),
-            );
-          },
+          redirect: (context, state) =>
+              '/cuenta/chats/${state.pathParameters['id']}',
         ),
 
         // Chat / Support (New) - Unified Hub

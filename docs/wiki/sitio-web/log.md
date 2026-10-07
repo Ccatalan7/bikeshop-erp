@@ -378,3 +378,18 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 - Al compararlo apareció que el lienzo Flutter cortaba el texto de una capa
   que no cabe y el HTML no: el carrusel en vivo ya tenía ese caso en la
   tableta. Ahora Flutter tampoco corta.
+
+## 2026-10-07 — Código muerto del sitio fuera
+
+- Borradas las páginas sin ruta del editor viejo (banners, contenido) y del
+  portal viejo (cuenta, tablero «premium»), más la lista y el detalle viejos
+  del chat. `/cuenta/mensajes` redirige al centro de chats en vez de dibujar
+  una lista distinta. La clave `header_nav_links` se queda: nadie la lee y
+  borrarla es una escritura que borra.
+
+## 2026-10-07 — El catálogo del lienzo es el del cliente
+
+- Causa de los 1.615 productos del lienzo: Editar no usaba la lectura de la
+  tienda, cargaba todo lo editable (no publicado y agotado) y filtraba y
+  paginaba en la app. «Ver como cliente» lo heredaba porque cambiar de modo
+  no vuelve a cargar. Se quitó ese camino: los tres modos piden al servidor.

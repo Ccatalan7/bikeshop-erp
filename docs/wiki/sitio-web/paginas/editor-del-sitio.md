@@ -59,7 +59,6 @@ abre las mismas páginas de administración con rutas propias:
 | `/website/settings` | `website_settings_page.dart` |
 | `/website/integrations` | `integrations_page.dart` |
 | `/website/seo` | `seo_settings_page.dart` |
-| (sin ruta, código muerto) | `banners_management_page.dart`, `content_management_page.dart` |
 
 `[Repo: app_router.dart, 2026-10-03]`
 
@@ -215,11 +214,16 @@ HTML aún no dibuja aparece señalada en su lugar. Carrito, pago, pedidos y
 cuenta siguen en el lienzo. Sólo la ve quien puede guardar el sitio, y no
 cuenta como visita en Analytics `[Repo 2026-10-07]` `[Prod 2026-10-07]`.
 
-Medido al probarla (2026-10-07): el lienzo Flutter del ERP (Editar y «Ver como
-cliente») lista 1.615 productos en `/productos` y la tienda pública 538, con
-`product_visibility_stock_policy = available_only`. La vista HTML muestra los
-538 del cliente; la diferencia del lienzo está en
-[estado y pendientes](estado-y-pendientes.md) `[Prod 2026-10-07]`.
+**El catálogo del lienzo es el del cliente (2026-10-07).** Editar cargaba su
+propio catálogo —también lo no publicado y lo agotado— y lo filtraba y
+paginaba en la app: `/productos` listaba 1.615 productos donde la tienda tenía
+538 (`product_visibility_stock_policy = available_only`), y «Ver como cliente»
+heredaba esa lista al entrar desde Editar. Ahora Editar, «Ver como cliente» y
+la tienda piden lo mismo al servidor (`get_public_products`, que aplica la
+regla); qué productos muestra el sitio se cambia en «Catálogo». Comprobado en
+macOS contra producción: 537 en `/productos` y 425 en Componentes en Editar,
+igual que vinabike.cl, y la página 2 también viene del servidor
+`[Repo 2026-10-07]` `[Prod 2026-10-07]`.
 
 Lo que arma un agente (campañas, banners, diapositivas, secciones) son
 operaciones reales del editor: mismos valores por defecto, validaciones, esquema

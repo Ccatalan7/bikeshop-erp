@@ -175,35 +175,27 @@ void main() {
     expect(layout, contains("'Borrador de página preservado'"));
   });
 
-  test('editor catalog route performs its initial product load', () {
+  // Edit cargaba su propio catálogo —también lo no publicado y lo agotado—
+  // y lo filtraba y paginaba en el cliente: el lienzo listaba 1.615 productos
+  // en `/productos` y la tienda 538 (2026-10-07). Ahora Edit, «Ver como
+  // cliente» y la tienda piden lo mismo al servidor.
+  test('the editor catalog asks the server what a customer can browse', () {
     final catalog = File('lib/public_store/pages/product_catalog_page.dart')
         .readAsStringSync();
-    final branchStart = catalog.indexOf('if (editProvider.isEditMode) {');
-    final branchEnd = catalog.indexOf('_searchDebounce?.cancel()', branchStart);
-    final editorBranch = branchStart < 0 || branchEnd < 0
-        ? null
-        : catalog.substring(branchStart, branchEnd);
-
-    expect(editorBranch, isNotNull);
-    expect(editorBranch, contains('!_hasLoadedInitialProducts'));
-    expect(editorBranch, contains('_loadProducts(resetPage: resetPage)'));
-    expect(editorBranch, contains('_applyLocalFilters(resetPage: resetPage)'));
-    expect(
-      catalog,
-      contains(
-        'final isServerPaged = '
-        '!context.read<WebsiteEditModeProvider>().isEditMode;',
-      ),
-    );
     final normalizedCatalog = catalog.replaceAll(RegExp(r'\s+'), ' ');
+
+    expect(catalog, isNot(contains('includeUnpublished: true')));
+    expect(catalog, isNot(contains('getProductsForTenant(')));
+    expect(catalog, isNot(contains('_applyLocalFilters')));
+    expect(catalog, isNot(contains('isServerPaged')));
     expect(
       normalizedCatalog,
       contains(
         'final canStartPageBeforeCategories = _catalogQueryError == null && '
-        '!editProvider.isEditMode &&',
+        '_pendingRouteCategoryValue == null &&',
       ),
-      reason: 'Server paging may only start ahead of category resolution '
-          'outside Edit mode and without a pending catalog transport error.',
+      reason: 'Server paging may start ahead of category resolution in every '
+          'mode unless a catalog transport error is pending.',
     );
   });
 
@@ -492,10 +484,6 @@ void main() {
     expect(
       catalog,
       contains('unawaited(_loadProducts(resetPage: false));'),
-    );
-    expect(
-      catalog,
-      contains('void _applyLocalFilters({bool resetPage = true})'),
     );
   });
 

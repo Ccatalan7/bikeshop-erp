@@ -4,19 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('every public account prompt uses the canonical storefront login', () {
-    final chatSource = File(
-      'lib/public_store/pages/customer_chat_list_page.dart',
-    ).readAsStringSync();
-    final accountSource = File(
-      'lib/public_store/pages/customer_account_page.dart',
-    ).readAsStringSync();
-
-    final canonicalLoginNavigation = RegExp(
-      r'''PublicStoreLayout\.navigateToHref\(\s*context,\s*['"]/cuenta/login['"]\s*\)''',
-    );
-    expect(chatSource, matches(canonicalLoginNavigation));
-    expect(accountSource, matches(canonicalLoginNavigation));
-
     final legacyLoginNavigation = RegExp(
       r'''context\.(?:go|push|replace)\(\s*['"]/login['"]''',
     );

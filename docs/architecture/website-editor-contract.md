@@ -92,6 +92,12 @@ nominal constant.
 - Edit -> Preview -> Edit retains the selected block and scroll context. On
   return to Edit, a selection that no longer belongs to the active document is
   cleared rather than redirected to another block.
+- Edit, Preview and public read the same catalog. A catalog page asks the
+  server, which applies publication and `product_visibility_stock_policy`, in
+  every mode; Edit never loads a wider set of its own (unpublished or out of
+  stock) or filters and pages it on the client. Before 2026-10-07 it did, and
+  the canvas listed 1,615 products in `/productos` where a customer saw 538.
+  Which products the site shows is changed in «Catálogo», not on the canvas.
 - Reorder and undo/redo emit a typed block-reveal request. `PageComposition`
   is the single scroll consumer and reveals that exact block above the measured
   dock; selection itself never causes unsolicited scrolling or history.

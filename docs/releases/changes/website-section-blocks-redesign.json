@@ -10,10 +10,11 @@
     "windows",
     "android"
   ],
-  "title": "Secciones nuevas para las páginas del sitio",
-  "summary": "Cifras, carta del taller, planes, reseñas, galería, equipo, preguntas, franja de marcas y llamado a la acción tienen un diseño nuevo, de borde a borde en un fondo claro, gris u oscuro de la tienda, igual en el editor y en la página.",
+  "title": "Secciones nuevas y el catálogo del cliente en el editor del sitio",
+  "summary": "Cifras, carta del taller, planes, reseñas, galería, equipo, preguntas, franja de marcas y llamado tienen un diseño nuevo de borde a borde, igual en el editor y en la página. El catálogo del editor muestra los mismos productos que ve el cliente.",
   "items": [
-    "Secciones nuevas de borde a borde (cifras, planes, reseñas, galería, llamado) con datos reales de la tienda; un texto que no cabe en el lienzo ya no se corta."
+    "Secciones nuevas de borde a borde (cifras, planes, reseñas, galería, llamado) con datos reales de la tienda; un texto que no cabe en el lienzo ya no se corta.",
+    "En Editar, el catálogo muestra los mismos productos, cantidades y páginas que ve el cliente; antes sumaba los no publicados y los agotados."
   ],
   "evidence": [
     {
@@ -147,6 +148,10 @@
     {
       "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_normalization.dart",
       "sha256": "48a1ab1ba633eecc298cfc78e56669d5521d20287804776a7c2f42f174479845"
+    },
+    {
+      "path": "lib/public_store/pages/product_catalog_page.dart",
+      "sha256": "2789815f0a81ac69a5b882a6a174215be2ac080dafa8eb4c11228a0f82814c71"
     }
   ]
 }
