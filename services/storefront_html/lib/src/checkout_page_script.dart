@@ -225,7 +225,7 @@ const checkoutPageScript = r'''
       .catch(function () { if (mine === linesSeq) show('failed'); });
   }
 
-  var begun = false;
+  var begun = false, measured = null, steps = {};
   function measureBegin(data) {
     if (begun || !data.valid || data.gross == null) return;
     begun = true;
@@ -235,6 +235,10 @@ const checkoutPageScript = r'''
       return { id: text(it.product_sku) || text(it.product_id), name: it.product_name, price: it.unit_price, quantity: it.quantity };
     }).filter(function (it) { return it.id; });
     if (!items.length) return;
+    measured = {
+      value: data.gross,
+      items: items.map(function (it) { return { item_id: it.id, item_name: it.name, price: it.price, quantity: it.quantity }; })
+    };
     m.pixel('InitiateCheckout', {
       content_ids: items.map(function (it) { return it.id; }), content_type: 'product',
       contents: items.map(function (it) { return { id: it.id, quantity: it.quantity, item_price: it.price }; }),
@@ -244,6 +248,19 @@ const checkoutPageScript = r'''
       currency: 'CLP', value: data.gross,
       items: items.map(function (it) { return { item_id: it.id, item_name: it.name, price: it.price, quantity: it.quantity }; })
     });
+  }
+
+  // `add_shipping_info` once the customer says where it goes (picks pickup
+  // or an address) and `add_payment_info` once they pick how to pay; each
+  // once, and at «Confirmar» for the one left as it came.
+  function measureStep(step) {
+    var m = window.vinabikeMeasure;
+    if (!m || !measured || steps[step]) return;
+    steps[step] = true;
+    var params = { currency: 'CLP', value: measured.value, items: measured.items };
+    if (step === 'shipping') params.shipping_tier = delivery() === 'pickup' ? 'retiro' : 'despacho';
+    else params.payment_type = payment();
+    m.track(step === 'shipping' ? 'add_shipping_info' : 'add_payment_info', params);
   }
 
   // ---- shipping quote (quote_public_online_shipping) ---------------------
@@ -341,6 +358,7 @@ const checkoutPageScript = r'''
     if (!value('phone')) setValue('phone', addr.phone || '');
     field('saved').value = addr.id;
     paintDelivery();
+    measureStep('shipping');
   }
   // _shippingAddressForOrder
   function orderAddress() {
@@ -408,6 +426,7 @@ const checkoutPageScript = r'''
         fillAddress(resolved);
         state.placesToken = uuid();
         paintDelivery();
+        measureStep('shipping');
       }, function () {});
   }
 
@@ -577,6 +596,8 @@ const checkoutPageScript = r'''
     if (!l || !l.items.length) { toast('El carrito está vacío'); return; }
     if (l.outOfStock) { toast('Uno de los productos ya no está disponible. Vuelve al carrito para actualizarlo.'); return; }
     if (!l.valid) { toast(l.block || 'No podemos validar los impuestos de este carrito.', 8); return; }
+    measureStep('shipping');
+    measureStep('payment');
     var method = payment();
     state.processing = true; state.outcomeMessage = null; state.recoveryMessage = null;
     paintSummary();
@@ -793,8 +814,10 @@ const checkoutPageScript = r'''
       paintDelivery();
       if (validated) ['street', 'comuna', 'region'].forEach(function (n) { setError(n, validators[n](value(n))); });
       quote(false);
+      if (t.value === 'pickup') measureStep('shipping');
     } else if (t.name === 'payment') {
       paintButton();
+      measureStep('payment');
     } else if (t.name === 'create_account') {
       $('[data-co-password]').hidden = !t.checked;
       if (!t.checked) { setError('password', null); setError('password_confirm', null); }

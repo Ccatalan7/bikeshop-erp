@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "storefront-ga4-funnel-events",
+  "scope": "internal",
+  "platforms": [
+    "web"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "services/storefront_html/lib/src/storefront_script.dart",
+      "sha256": "bca3c7f2e087926b7bf6baa49e12723329113de88a6e70994fa3c7cde0f9747a"
+    },
+    {
+      "path": "services/storefront_html/lib/src/cart_page_view.dart",
+      "sha256": "fb6072e97380139361006b8cf7a475a7694590f6ad37af6466cf7da9a260707f"
+    },
+    {
+      "path": "services/storefront_html/lib/src/checkout_page_script.dart",
+      "sha256": "453393be6dc891c2f3289312c0de5dc1af3733651fa884a43b79baab040d91fd"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_card.dart",
+      "sha256": "07dbe28921008bb97f09c341b193a326e08d21a3d0da038de28d76f60813a590"
+    },
+    {
+      "path": "services/storefront_html/lib/src/catalog_page_view.dart",
+      "sha256": "75ccb79ec950392dead0daebc299331b933846dd2f5f7f59e3fd2456bbbfe3e7"
+    },
+    {
+      "path": "services/storefront_html/lib/src/product_page_view.dart",
+      "sha256": "0fabc8b9d0baf2a714031cce1762201ccc68941b9d31a8b240df211b8eac8844"
+    },
+    {
+      "path": "services/storefront_html/test/storefront_handler_test.dart",
+      "sha256": "57a01628f983d42d3f442825024b69ccdc1b1787ee40fec311a89401edc97881"
+    }
+  ]
+}

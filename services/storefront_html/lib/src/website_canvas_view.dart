@@ -12,6 +12,7 @@ import 'package:vinabike_public_core/shared/models/product.dart';
 import 'block_composition.dart';
 import 'block_product_picks.dart';
 import 'css_values.dart';
+import 'product_card.dart';
 import 'website_blocks_view.dart';
 import 'website_products_view.dart';
 
@@ -219,7 +220,11 @@ class CanvasLayersView extends StatelessComponent {
     };
     return div(
       classes: [...classes, 'cl-prod', if (product == null) 'empty'].join(' '),
-      attributes: {...mark, 'style': box.join(';')},
+      attributes: {
+        ...mark,
+        'style': box.join(';'),
+        if (product != null) ...measuredList('lienzo-${layer['id']}', 'Lienzo'),
+      },
       [
         if (product != null)
           productCard(
@@ -262,7 +267,11 @@ class CanvasLayersView extends StatelessComponent {
     final sizes = '${cssNum((card - 32).clamp(1, double.infinity))}px';
     return div(
       classes: [...classes, 'cl-gal'].join(' '),
-      attributes: {...mark, 'style': box.join(';')},
+      attributes: {
+        ...mark,
+        'style': box.join(';'),
+        ...measuredList('lienzo-${gallery.id}', 'Lienzo'),
+      },
       [
         ul(
           classes: gallery.carousel

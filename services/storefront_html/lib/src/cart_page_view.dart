@@ -245,7 +245,8 @@ String _lineHtml(CartLine line, {required bool first}) {
   final available = line.product.availableStockQuantity;
   return '<li class="cl${first ? ' first' : ''}" data-id="${_e(line.product.id)}" '
       'data-q="${line.quantity}" data-price="${commerce.price.round()}" '
-      'data-limit="${line.limit ?? ''}" data-title="${_e(commerce.title)}">'
+      'data-limit="${line.limit ?? ''}" data-title="${_e(commerce.title)}" '
+      'data-item-id="${_e(commerce.sku.isNotEmpty ? commerce.sku : line.product.id)}">'
       '<div class="cl-shot">$image</div>'
       '<div class="cl-info"><div class="cl-top"><div class="cl-id">'
       '${pills.isEmpty ? '' : '<div class="cl-pills">${pills.map((pill) => '<span>${_e(pill.toUpperCase())}</span>').join()}</div>'}'
@@ -313,6 +314,19 @@ const cartPageScript = r'''
 
   function money(n) { return '$ ' + Math.round(n).toLocaleString('es-CL'); }
 
+  // Google Analytics: `view_cart` once the lines show, `add_to_cart` and
+  // `remove_from_cart` for a unit more or less and a line taken out, each
+  // line as `view_item` names its product.
+  var viewed = false;
+  function lineItem(line, q) {
+    return { item_id: line.dataset.itemId || line.dataset.id, item_name: line.dataset.title, price: Number(line.dataset.price || 0), quantity: q };
+  }
+  function measure(name, items) {
+    var m = window.vinabikeMeasure;
+    if (!m || !items.length) return;
+    m.track(name, { currency: 'CLP', value: items.reduce(function (sum, it) { return sum + it.price * it.quantity; }, 0), items: items });
+  }
+
   // Flutter's «Ajustamos N producto(s)…»: it adds up until «Entendido».
   function paintNotice() {
     notice.hidden = adjusted === 0;
@@ -350,6 +364,10 @@ const cartPageScript = r'''
         summary.innerHTML = data.summary;
         units.textContent = data.unitsText;
         show('full');
+        if (!viewed) {
+          viewed = true;
+          measure('view_cart', [].map.call(list.querySelectorAll('[data-id]'), function (line) { return lineItem(line, Number(line.dataset.q)); }));
+        }
       })
       .catch(function () { if (mine === seq) show('failed'); });
   }
@@ -372,7 +390,10 @@ const cartPageScript = r'''
         if (limit !== null && q > limit) q = limit;
         return { id: l.id, q: q };
       });
-    }).then(function () { cart.badge(); refresh(); }, function () { show('failed'); });
+    }).then(function () {
+      measure(delta > 0 ? 'add_to_cart' : 'remove_from_cart', [lineItem(line, Math.abs(delta))]);
+      cart.badge(); refresh();
+    }, function () { show('failed'); });
   }
 
   var removing = null;
@@ -388,6 +409,7 @@ const cartPageScript = r'''
     var id = line.dataset.id;
     cart.update(function (current) { return current.filter(function (l) { return l.id !== id; }); })
       .then(function () {
+        measure('remove_from_cart', [lineItem(line, Number(line.dataset.q))]);
         cart.badge();
         toast.hidden = false;
         clearTimeout(toastTimer);

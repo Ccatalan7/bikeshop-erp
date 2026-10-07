@@ -104,7 +104,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/catalog_page_view.dart",
-      "sha256": "405c9b87df6a318ca2cd27e8e21c05982f965cf11e941219b920f028254cc1c3"
+      "sha256": "75ccb79ec950392dead0daebc299331b933846dd2f5f7f59e3fd2456bbbfe3e7"
     },
     {
       "path": "services/storefront_html/lib/src/catalog_price_list_view.dart",
@@ -112,7 +112,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/product_page_view.dart",
-      "sha256": "1f74367c84281e36f6a238f5b0202b02da51808ef26b8187aeaa1c1f3404570f"
+      "sha256": "0fabc8b9d0baf2a714031cce1762201ccc68941b9d31a8b240df211b8eac8844"
     },
     {
       "path": "services/storefront_html/lib/src/policy_page_view.dart",
@@ -188,7 +188,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_canvas_view.dart",
-      "sha256": "3568d3b011acca0168c752e9bc86f514331bb5fcd257b7e1820a4ac454ead5f9"
+      "sha256": "f1e6421bd6d32a35d797d9eeb3a57803fb6ce450afa75979884dc9e8c801699b"
     },
     {
       "path": "packages/vinabike_public_core/lib/modules/website/models/website_image_fields.dart",

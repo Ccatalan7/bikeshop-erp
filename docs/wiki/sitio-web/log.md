@@ -442,3 +442,6 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   portada Flutter cortaba un bloque de destacados a 8, una lista caída
   tumbaba la página entera, el video del lienzo cargaba lejos de la pantalla
   y el botón de color no decía su valor; todo corregido.
+- El embudo de GA4 está completo: la tienda manda también qué listas se ven
+  y cuál tarjeta se abre, el carrito (ver, sumar, restar, quitar) y los pasos
+  de envío y pago del checkout. Probado en la tienda local de prueba.

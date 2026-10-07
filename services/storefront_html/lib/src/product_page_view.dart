@@ -434,10 +434,17 @@ class _Related extends StatelessComponent {
       [
         h2(classes: 'section-title', [.text(template.resolvedRelatedTitle)]),
         div(classes: 'related-box', [
-          ul(classes: 'related-cards', [
-            for (final item in page.related)
-              ProductCard(commerce: item.commerce, path: item.path),
-          ]),
+          ul(
+            classes: 'related-cards',
+            attributes: measuredList(
+              'relacionados',
+              template.resolvedRelatedTitle,
+            ),
+            [
+              for (final item in page.related)
+                ProductCard(commerce: item.commerce, path: item.path),
+            ],
+          ),
         ]),
       ],
     );

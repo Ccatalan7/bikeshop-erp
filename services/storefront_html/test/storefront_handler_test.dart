@@ -1177,6 +1177,22 @@ void main() {
       },
     );
 
+    // GA4's lists (2026-10-07): the store script sends `view_item_list` for
+    // each `[data-list-id]` shown and `select_item` for a card opened.
+    test('each card carries what Google Analytics counts of it, in its '
+        'list', () async {
+      final html = await (await _get(reads(), '/productos')).readAsString();
+      final preview = Platform.environment['GA_PREVIEW_OUT'];
+      if (preview != null) File(preview).writeAsStringSync(html);
+      expect(html, contains('data-list-id="productos"'));
+      expect(html, contains('data-list-name="Productos"'));
+      expect(html, contains('data-item-id="H912"'));
+      expect(html, contains('data-item-name="Horquilla vecina"'));
+      expect(html, contains('data-price="550000"'));
+      expect(html, contains("track('view_item_list'"));
+      expect(html, contains("track('select_item'"));
+    });
+
     test('/productos lists the catalog with its filters, indexable', () async {
       final fake = reads();
       final response = await _get(fake, '/productos');
@@ -3436,8 +3452,9 @@ void main() {
       );
       final html = await response.readAsString();
       final preview = Platform.environment['CANVAS_PREVIEW_OUT'];
-      if (preview != null)
+      if (preview != null) {
         File('$preview.products.html').writeAsStringSync(html);
+      }
       expect(response.headers['x-storefront-uncovered'], isNull);
       // A card, two newest in the grid and two picks in the row.
       expect('class="pcard"'.allMatches(html), hasLength(5));
@@ -3618,7 +3635,7 @@ void main() {
         html,
         contains('<div class="prod-car" data-pcar style="--card:300px">'),
       );
-      expect(html, contains('<ul class="prod-row">'));
+      expect(html, contains('<ul class="prod-row" data-list-id="bloque-'));
       expect(
         html,
         contains(

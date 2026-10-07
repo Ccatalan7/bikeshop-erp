@@ -9,7 +9,8 @@
 ///   and discarded after seven days, like Flutter. Only ids and quantities are
 ///   stored; Flutter re-reads price and stock when it restores the cart.
 /// - **Measurement.** `view_item`, `add_to_cart`, `contact` and `store_ready`
-///   with the parameters `ga4_commerce_events.dart` sends, and the Meta Pixel's
+///   with the parameters `ga4_commerce_events.dart` sends, `view_item_list`
+///   and `select_item` for the lists of cards, and the Meta Pixel's
 ///   `ViewContent`/`AddToCart`, only where the head allowed measuring.
 /// - **Photos and filters.** The thumbnails switch the main photo; a filter or
 ///   an order applies itself when it changes (the forms also submit without
@@ -227,6 +228,33 @@ const storefrontScript = r'''
   // For the checkout's `begin_checkout` and `InitiateCheckout` and the
   // order page's `purchase`.
   window.vinabikeMeasure = { track: track, pixel: pixel };
+
+  // Lists of products (`[data-list-id]`: a catalog, a products block, the
+  // related ones): `view_item_list` for each one shown, `select_item` when
+  // a card is opened, its cards as `view_item` names a product plus their
+  // place in the list. A copy a band hides is not shown.
+  function listCards(list) { return [].slice.call(list.querySelectorAll('a[data-item-id]')); }
+  function listItem(list, a, index) {
+    return {
+      item_id: a.dataset.itemId,
+      item_name: a.dataset.itemName,
+      price: Number(a.dataset.price || 0),
+      index: index,
+      item_list_id: list.dataset.listId,
+      item_list_name: list.dataset.listName
+    };
+  }
+  [].forEach.call(document.querySelectorAll('[data-list-id]'), function (list) {
+    if (!list.getClientRects().length) return;
+    var items = listCards(list).map(function (a, i) { return listItem(list, a, i); });
+    if (items.length) track('view_item_list', { item_list_id: list.dataset.listId, item_list_name: list.dataset.listName, items: items.slice(0, 200) });
+  });
+  document.addEventListener('click', function (event) {
+    var a = event.target.closest && event.target.closest('a[data-item-id]');
+    var list = a && a.closest('[data-list-id]');
+    if (!list) return;
+    track('select_item', { item_list_id: list.dataset.listId, item_list_name: list.dataset.listName, items: [listItem(list, a, listCards(list).indexOf(a))] });
+  });
 
   function itemOf(el) {
     return {

@@ -11,6 +11,7 @@ import 'package:vinabike_public_core/shared/utils/chilean_utils.dart';
 import 'block_composition.dart';
 import 'block_product_picks.dart';
 import 'material_icons.dart';
+import 'product_card.dart';
 import 'website_blocks_view.dart';
 
 /// Whether the block lays its products in a carousel ([productsCarouselScript]
@@ -87,11 +88,14 @@ class ProductsBlockView extends StatelessComponent {
         ]),
         if (subtitle.isNotEmpty) p(classes: 'prod-sub', [.text(subtitle)]),
         if (contract.layout == 'carousel')
-          _carousel(items, contract, canonical: canonical)
+          _carousel(items, contract, canonical: canonical, title: title)
         else
           ul(
             classes: 'prod-grid',
-            attributes: {'style': '--cols:${contract.itemsPerRow.clamp(2, 4)}'},
+            attributes: {
+              'style': '--cols:${contract.itemsPerRow.clamp(2, 4)}',
+              ...measuredList('bloque-${composed.block.id}', title),
+            },
             [
               for (final product in items)
                 li([_card(product, contract, canonical: canonical)]),
@@ -115,6 +119,7 @@ class ProductsBlockView extends StatelessComponent {
     List<Product> items,
     WebsiteProductsBlockContract contract, {
     required bool canonical,
+    required String title,
   }) {
     final width = switch (contract.itemsPerRow) {
       <= 2 => 350,
@@ -126,21 +131,25 @@ class ProductsBlockView extends StatelessComponent {
       classes: 'prod-car',
       attributes: {'data-pcar': '', 'style': '--card:${width}px'},
       [
-        ul(classes: 'prod-row', [
-          for (final product in items)
-            li([
-              _card(
-                product,
-                contract,
-                canonical: canonical,
-                // The photo is its card less 16 px each side: a phone's page
-                // (the window less 16 + 8 a side), or the row's card.
-                sizes:
-                    '(max-width: ${phone}px) calc(100vw - 80px), '
-                    '${width - 32}px',
-              ),
-            ]),
-        ]),
+        ul(
+          classes: 'prod-row',
+          attributes: measuredList('bloque-${composed.block.id}', title),
+          [
+            for (final product in items)
+              li([
+                _card(
+                  product,
+                  contract,
+                  canonical: canonical,
+                  // The photo is its card less 16 px each side: a phone's page
+                  // (the window less 16 + 8 a side), or the row's card.
+                  sizes:
+                      '(max-width: ${phone}px) calc(100vw - 80px), '
+                      '${width - 32}px',
+                ),
+              ]),
+          ],
+        ),
         if (items.length > 1)
           div(
             classes: 'prod-dots',
@@ -203,7 +212,13 @@ Component productCard(
   return a(
     classes: 'pcard',
     href: publicProductPath(product),
-    attributes: {'aria-label': label},
+    attributes: {
+      'aria-label': label,
+      // For Google Analytics, as `measuredItem` names a catalog card.
+      'data-item-id': sku.isNotEmpty ? sku : product.id,
+      'data-item-name': product.name,
+      'data-price': '${product.price.round()}',
+    },
     [
       span(classes: 'pcard-shot', [
         if (image.isNotEmpty)

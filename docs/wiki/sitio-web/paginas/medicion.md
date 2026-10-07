@@ -2,9 +2,9 @@
 titulo: Medición (GA4, píxel de Meta y consolas)
 resumen: qué eventos manda la tienda a Google Analytics, con qué datos, qué falta del embudo recomendado y cómo leer las consolas
 fuentes: [ga4, consolas-google, repositorio, web-dev]
-archivos: [scripts/sync_seo_index.sh, services/storefront_html/tool/measure.mjs, services/storefront_html/lib/src/storefront_script.dart, lib/public_store/services/ga4_commerce_events.dart, lib/public_store/services/ga4_bridge_web.dart, lib/public_store/services/meta_pixel_service.dart, lib/public_store/widgets/public_store_bootstrap.dart]
+archivos: [scripts/sync_seo_index.sh, services/storefront_html/tool/measure.mjs, services/storefront_html/lib/src/storefront_script.dart, services/storefront_html/lib/src/cart_page_view.dart, services/storefront_html/lib/src/checkout_page_script.dart, services/storefront_html/lib/src/product_card.dart, lib/public_store/services/ga4_commerce_events.dart, lib/public_store/services/ga4_bridge_web.dart, lib/public_store/services/meta_pixel_service.dart, lib/public_store/widgets/public_store_bootstrap.dart]
 tablas: [website_settings]
-revisado: 2026-10-05
+revisado: 2026-10-07
 ---
 
 # Medición (GA4, píxel de Meta y consolas)
@@ -71,8 +71,9 @@ su script (el mismo de `index.html`) revisa la marca antes de cargar nada. La
 fase 0 la leía también en el servidor; ese camino nunca funcionaba detrás de
 Hosting y se quitó `[Repo]` `[firebase.google.com/docs/hosting/manage-cache]`.
 La tienda HTML manda los mismos eventos que Flutter (`view_item`,
-`add_to_cart`, `contact`, `store_ready`) y nunca mide en la ruta oculta
-`/_html`.
+`add_to_cart`, `contact`, `store_ready`), y desde el 2026-10-07 también el
+resto del embudo recomendado (abajo); nunca mide en la ruta oculta `/_html`
+ni en la vista HTML del editor.
 
 Las herramientas que abren el sitio real con un navegador bloquean Google
 Analytics y el píxel de Meta (`services/storefront_html/tool/measure.mjs`): cada
@@ -86,7 +87,13 @@ un agente que abra vinabike.cl hace lo mismo con
 |---|---|---|
 | `view_item` | se abre una ficha | `currency` CLP, `value`, `items` |
 | `add_to_cart` | se agrega al carrito | `currency`, `value` (precio × cantidad), `items` |
+| `view_item_list` | se muestra una lista de tarjetas: el catálogo y sus categorías (`productos`, `servicios` o el id de la categoría), un bloque de productos (`bloque-<id>`), los relacionados (`relacionados`), una capa de producto del lienzo (`lienzo-<id>`); una copia que una banda esconde no cuenta | `item_list_id`, `item_list_name` (el título que ve el cliente), `items` con su `index` |
+| `select_item` | se abre una tarjeta de esas listas | lo mismo, con la tarjeta abierta |
+| `view_cart` | `/carrito` muestra sus líneas (una vez por visita) | `currency`, `value`, `items` |
+| `add_to_cart` / `remove_from_cart` | en `/carrito`, una unidad más o menos, o una línea eliminada | `currency`, `value`, `items` con la cantidad que cambió |
 | `begin_checkout` | se entra al checkout | `currency`, `value`, `items` |
+| `add_shipping_info` | el cliente dice dónde se entrega: elige retiro o una dirección (sugerida o guardada), o al confirmar si la dejó como venía | `shipping_tier` `despacho` o `retiro`, `currency`, `value`, `items` |
+| `add_payment_info` | el cliente elige cómo pagar, o al confirmar si dejó el medio que venía marcado | `payment_type` `mercadopago` o `transfer`, `currency`, `value`, `items` |
 | `purchase` | se confirma un pedido | `transaction_id` (id del pedido: GA4 descarta una segunda compra con el mismo id), `currency`, `value`, `items` |
 | `contact` | clic que saca al cliente para hablar con el local | `method`: `whatsapp`, `phone`, `email` o `directions` (mapa) |
 | `store_ready` | la tienda Flutter dibujó su primer cuadro armada | `value` (segundos), `load_ms`, `load_bucket`: `bueno_hasta_2_5s`, `mejorable_hasta_4s`, `lento_hasta_8s`, `muy_lento_mas_de_8s` (umbrales de LCP) |
@@ -98,12 +105,21 @@ es candidato y el LCP que reporta es el logo ([rendimiento](rendimiento.md)).
 `load_bucket` está registrado como dimensión personalizada «Tramo de carga» (24-sep)
 `[Consola]`.
 
-## Lo que falta del embudo recomendado
+## El embudo recomendado, completo (2026-10-07)
 
 GA4 recomienda `view_item_list`, `select_item`, `remove_from_cart`, `view_cart`,
-`add_shipping_info` y `add_payment_info` además de los que mandamos `[GA]`. Sin
-ellos no se ve qué listado vende ni dónde se abandona el checkout (envío o pago).
-Agregarlos va en el mismo dueño.
+`add_shipping_info` y `add_payment_info` además de los que ya mandábamos `[GA]`.
+Faltaban, y sin ellos no se veía qué listado vende ni dónde se abandona el
+checkout (envío o pago). Desde el 2026-10-07 los manda la tienda HTML, que es
+donde están hoy el catálogo, el carrito y el checkout: el script de la tienda
+(`storefront_script.dart`, las listas por `data-list-id` y las tarjetas por
+`data-item-id`), el del carrito (`cart_page_view.dart`) y el del checkout
+(`checkout_page_script.dart`). El `item_id` es el SKU (el id sin SKU), igual
+que `view_item`, para que GA4 junte el producto de punta a punta. Probado en
+la tienda local de prueba con un `gtag` falso: el recorrido completo, de la
+lista al medio de pago. `ga4_commerce_events.dart` (Flutter) no los manda: la
+app ya no dibuja esas páginas a un cliente `[Repo]`. Al ver los informes, un
+evento nuevo tarda ~24 h en aparecer.
 
 ## Eventos clave
 

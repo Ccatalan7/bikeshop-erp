@@ -134,7 +134,8 @@ String? canvasLayerProductId(Map<String, dynamic> layer) {
 /// grid of [columns] cards of 3:4 or a row of cards [cardWidth] wide.
 class CanvasProductGallery {
   CanvasProductGallery.of(Map<String, dynamic> layer)
-    : maxProducts = switch (layer['maxProducts']) {
+    : id = (layer['id'] ?? '').toString(),
+      maxProducts = switch (layer['maxProducts']) {
         final num value => value.toInt(),
         _ => 6,
       },
@@ -153,6 +154,9 @@ class CanvasProductGallery {
         final num value => value.toDouble(),
         _ => 300.0,
       }.clamp(220.0, 380.0);
+
+  /// The layer's id.
+  final String id;
 
   /// How many it shows.
   final int maxProducts;

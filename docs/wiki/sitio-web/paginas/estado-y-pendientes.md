@@ -74,7 +74,6 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 | 2026-10-04 | Artículos/guías en el editor (capacidad nueva) y páginas de aterrizaje de filtros | [seo-de-referentes](seo-de-referentes.md) |
 | 2026-10-04 | Ver en vivo los correos de pago, preparación, retiro, envío y entrega: ningún pedido real los ha disparado (la última venta web pagada es del 3-may) | [checkout](checkout-y-pedidos.md) |
 | 2026-10-04 | Avisar al taller por correo o WhatsApp cuando entra un pedido web (hoy sólo el aviso dentro del ERP) | [checkout](checkout-y-pedidos.md) |
-| 2026-10-03 | Eventos GA4 que faltan: `view_item_list`, `select_item`, `remove_from_cart`, `view_cart`, `add_shipping_info`, `add_payment_info` | [medicion](medicion.md) |
 | 2026-10-03 | Comparar Search Console contra la línea base del 23-sep (filtrada al sitemap) y mirar `/servicios` | [seo-tecnico](seo-tecnico.md) |
 | 2026-09-24 | La tienda llama `get_public_store_data` directo además de usar la precarga (sin investigar) | [rendimiento](rendimiento.md) |
 | 2026-09-24 | Imágenes pesadas: campaña de cámaras en PNG de 2 MB, WebP de 312 KB en la grilla de categorías | [rendimiento](rendimiento.md) |
@@ -91,6 +90,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 
 | Fecha | Qué | Página |
 |---|---|---|
+| 2026-10-07 | **Embudo de GA4 completo**: listas (`view_item_list`, `select_item`), carrito (`view_cart`, `add_to_cart`/`remove_from_cart` con + y −) y checkout (`add_shipping_info`, `add_payment_info`) desde la tienda HTML; probado de la lista al medio de pago en la tienda local de prueba | [medicion](medicion.md) |
 | 2026-10-07 | **Formato, fondo y video iguales en el lienzo y la tienda**: el HTML dibuja el formato del hero, la nota de testimonios, el cargo del equipo y el título de reseñas, y el color propio de las reseñas; el banner de video dibuja su formato en los dos (antes en ninguno); «Formato» se quitó donde nadie lo usaba; el título de reseñas lee el fondo real (era blanco sobre blanco en el lienzo); las diapositivas con video y el video de fondo del lienzo se dibujan en HTML. Reseñas, banner, carrusel con video, productos (destacados, lo nuevo, una categoría, carrusel), categorías, marcas con superficie, lienzo con video o con capas de producto y llamado de alto fijo con relleno ya no mandan la página a Flutter (el lienzo Flutter lee ahora el catálogo como la tienda: en stock, enlaces por SKU). Una prueba de contrato exige que todo «Formato» del esquema se dibuje | [editor](editor-del-sitio.md) |
 | 2026-10-07 | **Contenido real y visible en el HTML** (brecha 1 de SEO, del 2026-10-04): con la tienda en HTML, la ficha medida trae 390 palabras y 90 enlaces sin JavaScript (antes 13 y 3), la categoría Componentes 575 y 133, sin `<noscript>` | [seo-de-referentes](seo-de-referentes.md) |
 | 2026-10-07 | **El lienzo muestra el catálogo del cliente**: Editar cargaba también lo no publicado y lo agotado (1.615 en `/productos` contra 538) y lo filtraba en la app; ahora pide al servidor como la tienda. 537 y 425 en Componentes, igual que vinabike.cl | [editor](editor-del-sitio.md) |

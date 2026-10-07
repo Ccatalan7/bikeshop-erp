@@ -48,7 +48,7 @@ class ProductCard extends StatelessComponent {
     // and price; the brand sits on the photo and, on hover, a bar with the
     // brand and the stock rises from its bottom edge.
     return li(classes: hasBrand ? 'card has-brand' : 'card', [
-      a(href: path, [
+      a(href: path, attributes: measuredItem(commerce), [
         div(classes: 'shot', [
           if (image != null)
             img(
@@ -129,3 +129,19 @@ String publicHeroPrice(double value) =>
     publicPrice(value).replaceFirst(r'$ ', r'$');
 
 /// `Icons.pedal_bike_outlined`, the card's placeholder without a photo.
+
+/// What a card tells the store script for Google Analytics (`select_item`,
+/// `view_item_list` in its `[data-list-id]`): the item as `view_item` names
+/// it, its SKU (its id without one), name and price.
+Map<String, String> measuredItem(PublicCommerceProductProjection commerce) => {
+  'data-item-id': commerce.sku.isNotEmpty ? commerce.sku : commerce.id,
+  'data-item-name': commerce.title,
+  'data-price': '${commerce.price.round()}',
+};
+
+/// The list a container of cards is for Google Analytics: [id] and the
+/// [name] its reports show.
+Map<String, String> measuredList(String id, String name) => {
+  'data-list-id': id,
+  'data-list-name': name,
+};

@@ -739,6 +739,10 @@ class _Results extends StatelessComponent {
                 WebsiteCatalogGridDensity.editorial => 'cards editorial',
                 WebsiteCatalogGridDensity.balanced => 'cards',
               },
+              attributes: measuredList(
+                page.categoryId ?? (page.services ? 'servicios' : 'productos'),
+                page.displayTitle,
+              ),
               [
                 for (final (i, product) in page.products.indexed)
                   ProductCard(
