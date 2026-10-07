@@ -45,7 +45,16 @@ class GoogleReviewsCarousel extends StatelessWidget {
   final String? bodyFont;
   final bool previewMode;
   final EdgeInsets? padding;
+
+  /// The block's own fill when its surface takes the background over
+  /// (transparent): the surface paints it, and [surfacePaint] is what it
+  /// paints behind the words.
   final Color? backgroundColorOverride;
+
+  /// What the surface that took the background over puts behind the words
+  /// (`WebsiteBlockSurfaceStyle.paintedColor`); `null` when it paints none
+  /// and the page shows through.
+  final Color? surfacePaint;
 
   const GoogleReviewsCarousel({
     super.key,
@@ -57,6 +66,7 @@ class GoogleReviewsCarousel extends StatelessWidget {
     this.previewMode = false,
     this.padding,
     this.backgroundColorOverride,
+    this.surfacePaint,
   });
 
   @override
@@ -69,7 +79,17 @@ class GoogleReviewsCarousel extends StatelessWidget {
     final scheme = theme.colorScheme;
     final authoredBackgroundColor = _parseColor(data['backgroundColor']);
     final backgroundColor = backgroundColorOverride ?? authoredBackgroundColor;
-    final ink = _inkFor(theme, backgroundColor);
+    // The ink reads on what is really behind the words: the surface's paint
+    // when it took the background over (the override is only the block's
+    // own fill made transparent), else the block's own color; over the
+    // page when either is translucent.
+    final behind = backgroundColorOverride == null
+        ? authoredBackgroundColor
+        : surfacePaint;
+    final ink = _inkFor(
+      theme,
+      behind == null ? null : Color.alphaBlend(behind, scheme.surface),
+    );
     final textColor = ink.ink;
     final subTextColor = ink.mutedInk;
 
@@ -212,7 +232,6 @@ class GoogleReviewsCarousel extends StatelessWidget {
       return null;
     }
   }
-
 }
 
 class _ReviewCard extends StatelessWidget {

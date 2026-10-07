@@ -441,6 +441,10 @@ class WebsiteBlockSurfaceStyle {
 
   Color? get backgroundColor => _color(_spec.backgroundColor);
 
+  /// What the background puts behind the block's words, for their ink
+  /// ([WebsiteBlockSurfaceSpec.paintedColor]); `null` when the page shows.
+  Color? get paintedColor => _color(_spec.paintedColor);
+
   Color? get gradientColor1 => _color(_spec.gradientColor1);
 
   Color? get gradientColor2 => _color(_spec.gradientColor2);

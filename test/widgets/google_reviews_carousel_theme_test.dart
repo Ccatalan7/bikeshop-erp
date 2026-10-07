@@ -54,6 +54,8 @@ void main() {
     required double width,
     bool previewMode = false,
     String? backgroundColor,
+    Color? backgroundColorOverride,
+    Color? surfacePaint,
   }) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = Size(width, 900);
@@ -70,6 +72,8 @@ void main() {
               primaryColor: resolved.primaryColor,
               accentColor: resolved.accentColor,
               previewMode: previewMode,
+              backgroundColorOverride: backgroundColorOverride,
+              surfacePaint: surfacePaint,
             ),
           ),
         ),
@@ -246,6 +250,41 @@ void main() {
       expect(rootContainer(tester).color, publicSurface);
       expect(reviewCardDecoration(tester).color, publicCard);
       expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('a surface that takes the background over', () {
+    testWidgets('painting no color leaves the theme ink, not white on the page',
+        (tester) async {
+      addTearDown(tester.view.reset);
+      final (:theme, resolved: _) = await pumpCarousel(
+        tester,
+        brightness: Brightness.light,
+        width: 1200,
+        // The block's own dark color is not painted: the surface owns it.
+        backgroundColor: '#111111',
+        backgroundColorOverride: Colors.transparent,
+      );
+      expect(
+        tester.widget<Text>(find.text('RESEÑAS')).style?.color,
+        theme.colorScheme.onSurface,
+      );
+    });
+
+    testWidgets('a dark paint on a light theme takes the inverse ink',
+        (tester) async {
+      addTearDown(tester.view.reset);
+      final (:theme, resolved: _) = await pumpCarousel(
+        tester,
+        brightness: Brightness.light,
+        width: 1200,
+        backgroundColorOverride: Colors.transparent,
+        surfacePaint: const Color(0xFF111111),
+      );
+      expect(
+        tester.widget<Text>(find.text('RESEÑAS')).style?.color,
+        theme.colorScheme.onInverseSurface,
+      );
     });
   });
 }

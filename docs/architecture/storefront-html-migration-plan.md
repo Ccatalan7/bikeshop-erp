@@ -2101,3 +2101,31 @@ de 15 px de alto Flutter lo esconde y el HTML lo muestra.
   `selectCarouselSlide`), como en el lienzo. Probado en macOS: diapositiva 2
   elegida en el panel → el HTML la muestra; flecha en el HTML → el panel
   pasa a la 3.
+- **Formato y fondo iguales en las dos vistas (2026-10-07).** Comparando un
+  bloque con estilo en la vista HTML y en el lienzo aparecieron tres
+  diferencias, y una auditoría de los 47 textos con «Formato» del esquema
+  (prueba de contrato en `storefront_handler_test`) encontró diez más: el
+  HTML no dibujaba el formato del título y subtítulo del hero, de la nota de
+  testimonios ni del cargo del equipo (Flutter sí), y el del banner de video,
+  el de cada testimonio y el de la leyenda de la galería no lo dibujaba
+  nadie. Los primeros se dibujan ahora en el HTML; el banner los dibuja en
+  los dos; a los otros cuatro se les quitó «Formato» (su diseño no lo usa).
+  El título de reseñas se medía contra el relleno transparente que deja la
+  superficie y salía blanco sobre blanco en Flutter; ahora los dos leen lo que
+  pinta la superficie (`paintedColor`), y el HTML dibuja el color propio del
+  bloque y el formato de su título, así que reseñas y banner con estilo ya no
+  vuelven a Flutter. La sombra es la única diferencia que queda a propósito:
+  Flutter la pinta bajo toda la caja y se ve a través de un fondo
+  transparente; CSS la pinta sólo afuera, como las herramientas de diseño.
+  Cambiar de vista ofrecía «Restaurar» el borrador propio: el lugar de la
+  vista en el `Stack` del editor no tenía llave y el anfitrión del respaldo
+  se reconstruía (llaves `website-html-draft-slot`/`website-draft-recovery-slot`).
+- **Diapositivas con video en HTML (2026-10-07).** Un carrusel con una
+  diapositiva de video mandaba la página entera a Flutter. Ahora el HTML la
+  dibuja como `_buildSlide`: el archivo subido o, si no hay, el YouTube del
+  enlace (un enlace a otra cosa es una diapositiva normal, como en Flutter),
+  sobre #1a1a1a, mudo, en bucle e inerte al puntero. Dos mejoras que no
+  rompen la paridad: la foto queda debajo y es el `poster` del archivo (el
+  lienzo de macOS, sin video, muestra esa foto), y el video espera en
+  `data-vsrc` hasta que la página cargó y su diapositiva está en pantalla;
+  sólo la que se ve reproduce y nadie reproduce con movimiento reducido.

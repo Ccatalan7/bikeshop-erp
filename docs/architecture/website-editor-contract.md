@@ -363,6 +363,21 @@ Required rules:
   sitemap freshness. Edit may keep it available for repair.
 - A parity fix belongs in the shared renderer or shared value resolver, not in
   one campaign's stored data.
+- Every text field the schema offers «Formato» for (`supportsFormatting`) is
+  drawn with that formatting by the Flutter renderer and by the HTML
+  storefront, or the HTML leaves the block to Flutter. A control neither one
+  draws is removed from the schema, never left saving values nobody shows.
+  The HTML half is enforced by `storefront_handler_test` («every text the
+  editor offers «Formato» for…»), which builds every such field from
+  `websiteBaseBlockDefinitions` (2026-10-07: the video banner's title and
+  subtitle formatting was saved and drawn nowhere; the hero's, the
+  testimonials note's and a team member's role were drawn by Flutter only).
+- Words over a block take their ink from what is really behind them: the
+  surface's paint when it took the background over
+  (`WebsiteBlockSurfaceSpec.paintedColor`, `null` when it paints no color and
+  the page shows through), else the block's own color. Measuring against the
+  transparent fill a surface leaves the family drew the reviews title white
+  on a white page (2026-10-07).
 
 For every visual option, verify at least Edit, Preview, and published rendering.
 Do not infer parity because one of the three looks correct.
@@ -1086,6 +1101,9 @@ persist through the editor-wide `Guardar` action.
 | `/productos` shows header/footer but no catalog in the editor | The routed system page mounted without its required initial data load in edit mode | Exercise the real route and preserve the public page's initialization/filter lifecycle |
 | A CTA works visually but is absent from destination/configuration tools | A raw href or duplicate page/menu owner bypassed the typed destination system | Use `WebsiteLinkValueEditor`, canonical entity routes, and destination audit |
 | Theme controls change only some blocks | Renderers hardcoded fonts/colors/button geometry instead of inheriting saved theme values | Theme values are global consumers; overrides require explicit editor-visible opt-out |
+| The video banner's «Formato» saves but nothing changes | Neither renderer read `titleFormatting`/`subtitleFormatting` | Every formatting control is drawn by both renderers; the HTML contract test builds every one |
+| «Hay un borrador local sin guardar» appears right after switching to «Vista HTML» or back | The view's slot in the shell's `Stack` was conditional and unkeyed, so the recovery host after it was rebuilt; its disposal flushed the open draft and the new one offered it back | A conditional sibling of a stateful one keeps its place by key (`website-html-draft-slot`, `website-draft-recovery-slot`) |
+| A banner button reads dark on dark in Edit only | Material paints a button without `onPressed` in its disabled grey, over the colors the block gave it | `WebsiteActionButton` keeps the block's colors when inert; an ineligible destination hides the button instead |
 | Logo or header icons disappear over a bright hero layer | Overlay mode recolored only some header descendants and trusted the hero to provide contrast | Resolve one global header foreground, tint the logo and controls together, and use the shared automatic overlay protection in Edit, Preview, and public rendering |
 
 ## Known implementation debt

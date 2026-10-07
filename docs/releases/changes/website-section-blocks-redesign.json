@@ -11,7 +11,7 @@
     "android"
   ],
   "title": "Secciones nuevas y el catálogo del cliente en el editor del sitio",
-  "summary": "Cifras, carta del taller, planes, reseñas, galería, equipo, preguntas, franja de marcas y llamado tienen un diseño nuevo de borde a borde, igual en el editor y en la página. El catálogo del editor muestra los mismos productos que ve el cliente.",
+  "summary": "Cifras, carta del taller, planes, reseñas, galería, equipo, preguntas, franja de marcas y llamado tienen un diseño nuevo de borde a borde, igual en el editor y en la página, con su formato y su fondo. El catálogo del editor muestra los mismos productos que ve el cliente.",
   "items": [
     "Secciones nuevas de borde a borde (cifras, planes, reseñas, galería, llamado) con datos reales de la tienda; un texto que no cabe en el lienzo ya no se corta.",
     "En Editar, el catálogo muestra los mismos productos, cantidades y páginas que ve el cliente; antes sumaba los no publicados y los agotados."
@@ -19,7 +19,7 @@
   "evidence": [
     {
       "path": "lib/modules/website/widgets/website_block_renderer.dart",
-      "sha256": "7a251e08a247219b5135ef8ed09f8d293f5fecd31d249899ff89be2307de73a2"
+      "sha256": "3cd1f5ab2660bbc0059f8e6b9ddbdde95fc14f2fbfc10314b41f1d01ca855c1a"
     },
     {
       "path": "lib/modules/website/widgets/editable_block_renderer.dart",
@@ -83,7 +83,7 @@
     },
     {
       "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_base_definitions.dart",
-      "sha256": "fc8dd13ee86e3f346d20329bc583a370c954429d4a06b942441c4a0237711e15"
+      "sha256": "88312a6bd7ada9809dad03ddcfea92e58a356dbd54d3555da93fe156b265aa9f"
     },
     {
       "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_capabilities.dart",
@@ -119,7 +119,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_blocks_view.dart",
-      "sha256": "0b6ef244316c33bd5e9d1ff12d090f826bd890af3db9bd266201afff094ed11c"
+      "sha256": "56f5d8258d0ee5f0170542193e42b6fcdb38f74d47d065acebfe5504040b2fbd"
     },
     {
       "path": "services/storefront_html/lib/src/website_content_blocks_view.dart",
@@ -127,11 +127,11 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_page_css.dart",
-      "sha256": "c40f362e740ecb45c7a3bcac835f4c671f9b7ac72d32b500c409c53eae7d3c19"
+      "sha256": "0156b1f0b6287d5bef74c4a6936392bdc47fd2af2015bbc2bda6d1995d9256f4"
     },
     {
       "path": "services/storefront_html/lib/src/website_section_blocks_view.dart",
-      "sha256": "7799de64fa8e101cfc5a159d8742a63c253eea2a4e4181e696f800a7b4466a40"
+      "sha256": "7ecabb89936ed8cba67f8a098720fc98d7acf3ab76692eb0d3a677bae88454aa"
     },
     {
       "path": "lib/modules/website/widgets/canvas_block.dart",
@@ -152,6 +152,34 @@
     {
       "path": "lib/public_store/pages/product_catalog_page.dart",
       "sha256": "2789815f0a81ac69a5b882a6a174215be2ac080dafa8eb4c11228a0f82814c71"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_video_banner_view.dart",
+      "sha256": "f7a493ef9cf1f47c3b3d75bb154fc1cca541a081861a69788516a2a93120eb24"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_reviews_view.dart",
+      "sha256": "96a42db663dd65771237fd35a5f1c99db512ebf2e6cb3c91428e11f95ce35c02"
+    },
+    {
+      "path": "lib/modules/website/widgets/google_reviews_carousel.dart",
+      "sha256": "4e3a46cf39e3dddc3fae1d9d5bc7a602656301e1d0ccdf72cec57539093775ff"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_action_button.dart",
+      "sha256": "0b480f5b0959b8cd80c664adf9c56cd3855aea5474eac2e01085bca1bdb2b4ad"
+    },
+    {
+      "path": "lib/modules/website/models/website_block_surface_style.dart",
+      "sha256": "7d00d475fc2b063abfdfc1fbebeb16545efeb1217609501a7ff713a5d4261b20"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/theme/website_theme_roles.dart",
+      "sha256": "ad7aaab7b2860712031325e6a4130dfb35eec2f585a50a93fe4f9cc7f1209fc4"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_surface_spec.dart",
+      "sha256": "58162b7840bf38805f1e34678326ff2be20f7570217c79026419f904dc925563"
     }
   ]
 }

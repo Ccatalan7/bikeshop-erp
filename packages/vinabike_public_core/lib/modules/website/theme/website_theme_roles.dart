@@ -81,6 +81,13 @@ class WebsiteRgba {
         : ink;
   }
 
+  /// `ThemeData.estimateBrightnessForColor`: whether this color reads as
+  /// dark, alpha ignored.
+  bool get isDark {
+    final value = luminance + 0.05;
+    return value * value <= 0.15;
+  }
+
   /// `Color.computeLuminance`: relative luminance, alpha ignored.
   double get luminance {
     double linear(double c) => c <= 0.03928
@@ -223,6 +230,12 @@ class WebsiteThemeRoles {
   final WebsiteRgba accent;
   final WebsiteRgba onAccent;
   final WebsiteRgba background;
+
+  /// The theme's brightness as `WebsiteThemeBuilder` sets it: dark when
+  /// white reads better than the store's ink on [background].
+  bool get isDark =>
+      identical(_readableForeground(background), WebsiteRgba.white);
+
   final WebsiteRgba onSurface;
   final WebsiteRgba onSurfaceVariant;
   final WebsiteRgba surfaceContainerLow;

@@ -307,6 +307,19 @@ geometría pasa la prueba real de iOS
   categorías: leerlo y escribirlo entero deja que dos sesiones se pisen. Se
   escribe como «comparar y reemplazar» sobre su `updated_at`, releyendo ante un
   conflicto (`_updateCatalogPresentationRegistry`) `[Repo 2026-10-06]`.
+- Un hermano condicional **sin llave** en un `Stack` corre de lugar a los que
+  vienen después, y Flutter reconstruye el siguiente con estado. Así, abrir o
+  cerrar la vista HTML reconstruía el anfitrión del respaldo local: al
+  desecharse guardaba el borrador abierto y el nuevo lo ofrecía como «Hay un
+  borrador local sin guardar». Cada lugar condicional del editor lleva llave
+  `[Repo 2026-10-07]`.
+- Material pinta un botón sin `onPressed` con su gris de deshabilitado, encima
+  de los colores que le da el bloque: en Editar el botón blanco del banner se
+  leía oscuro sobre oscuro. `WebsiteActionButton` conserva los colores del
+  bloque cuando está inerte `[Repo 2026-10-07]`.
+- Un control de «Formato» que guarda y nadie dibuja se ve como un editor roto.
+  La prueba de contrato del servidor arma cada texto con «Formato» del esquema
+  y exige que el HTML lo dibuje o deje el bloque a Flutter `[Repo 2026-10-07]`.
 
 - Una página CMS duplicada para que un botón funcione (la categoría ya tiene su
   destino).

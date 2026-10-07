@@ -328,6 +328,24 @@ class WebsiteBlockSurfaceSpec {
   bool get paintsGradient =>
       backgroundType == 'gradient' && hasAuthoredBackground;
 
+  /// The color the block's background puts behind its words, for the ink
+  /// they take: the solid color, the middle of the gradient; `null` when it
+  /// paints none (transparent, or solid with no color chosen) and the page
+  /// shows through.
+  WebsiteRgba? get paintedColor {
+    if (!hasAuthoredBackground) return null;
+    if (paintsGradient) {
+      return WebsiteRgba.lerp(
+        gradientColor1 ?? WebsiteRgba.white,
+        gradientColor2 ?? WebsiteRgba.fromArgb(0xFFF5F5F5),
+        0.5,
+      );
+    }
+    if (backgroundType == 'transparent') return null;
+    final color = backgroundColor;
+    return color == null || color.a == 0 ? null : color;
+  }
+
   String? _string(String key) {
     final raw = base[key];
     if (raw == null) return null;

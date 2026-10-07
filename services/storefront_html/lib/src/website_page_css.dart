@@ -304,6 +304,9 @@ String carouselCss(WebsiteThemeRoles theme) {
 [data-anim=slide]>.car-slide:not(.on){translate:15% 0}
 [data-anim=zoom]>.car-slide:not(.on){scale:.95}
 .car-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.car-media{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+.car-media iframe{position:absolute;top:50%;left:50%;width:100%;height:100%;min-width:177.78vh;min-height:56.25vw;border:0;translate:-50% -50%}
+.car-media video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .car-ov{position:absolute;inset:0;pointer-events:none}
 .car-in{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:0 32px}
 .car-col{display:flex;flex-direction:column;align-items:center;max-width:min(900px,100%);text-align:center}
@@ -387,7 +390,8 @@ String carouselCss(WebsiteThemeRoles theme) {
 /// Products (`_ProductsBlockWidget` and `PremiumProductCard`). The phone and
 /// tablet bands are the window's: 640 and 1024 for a legacy document (`lg`),
 /// 600 and 900 for a canonical one (`cn`).
-final productsBlockCss = '''
+final productsBlockCss =
+    '''
 .prod-blk{background:#fff;${surfacePadding(48, 24, 48, 24)}}
 .prod-in{max-width:1200px;margin:0 auto}
 .prod-head{display:flex;align-items:center}

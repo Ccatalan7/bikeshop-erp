@@ -512,6 +512,7 @@ class WebsiteBlockRenderer {
             ),
             backgroundColorOverride:
                 surfaceStyle.hasAuthoredBackground ? Colors.transparent : null,
+            surfacePaint: surfaceStyle.paintedColor,
             primaryColor: primaryColor,
             accentColor: accentColor,
             headingFont: headingFont,
@@ -988,6 +989,8 @@ class WebsiteBlockRenderer {
       surfaceStyle: surfaceStyle,
       title: title,
       subtitle: subtitle,
+      titleFormatting: _resolveTextFormatting(data, 'titleFormatting'),
+      subtitleFormatting: _resolveTextFormatting(data, 'subtitleFormatting'),
       imageUrl: hasImage ? imageUrl : null,
       youtubeVideoId: youtubeVideoId,
       videoFileUrl: hasVideoFile ? videoFileUrl : null,
@@ -3741,6 +3744,11 @@ class _VideoBannerWidget extends StatefulWidget {
   final WebsiteBlockSurfaceStyle surfaceStyle;
   final String title;
   final String subtitle;
+
+  /// What the inspector's «Formato» set on the title and the subtitle, over
+  /// the banner's own white, centered type (as the hero applies its own).
+  final TextFormatting titleFormatting;
+  final TextFormatting subtitleFormatting;
   final String? imageUrl;
   final String? youtubeVideoId;
   final String? videoFileUrl;
@@ -3762,6 +3770,8 @@ class _VideoBannerWidget extends StatefulWidget {
     required this.surfaceStyle,
     required this.title,
     required this.subtitle,
+    this.titleFormatting = const TextFormatting(),
+    this.subtitleFormatting = const TextFormatting(),
     this.imageUrl,
     this.youtubeVideoId,
     this.videoFileUrl,
@@ -3785,6 +3795,12 @@ class _VideoBannerWidget extends StatefulWidget {
 }
 
 class _VideoBannerWidgetState extends State<_VideoBannerWidget> {
+  /// Centered unless the formatting sets an alignment (`start` is unset).
+  static TextAlign _alignOf(TextFormatting formatting) =>
+      formatting.textAlign == TextAlign.start
+          ? TextAlign.center
+          : formatting.textAlign;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -3874,25 +3890,33 @@ class _VideoBannerWidgetState extends State<_VideoBannerWidget> {
                         if (widget.title.isNotEmpty)
                           Text(
                             widget.title,
-                            style: theme.textTheme.displayMedium?.copyWith(
-                              fontFamily: widget.headingFont,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              letterSpacing: 2,
+                            style: widget.titleFormatting.applyTo(
+                              (theme.textTheme.displayMedium ??
+                                      const TextStyle())
+                                  .copyWith(
+                                fontFamily: widget.headingFont,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                                letterSpacing: 2,
+                              ),
                             ),
-                            textAlign: TextAlign.center,
+                            textAlign: _alignOf(widget.titleFormatting),
                           ),
                         if (widget.subtitle.isNotEmpty)
                           Padding(
                             padding: const EdgeInsets.only(top: 16),
                             child: Text(
                               widget.subtitle,
-                              style: theme.textTheme.titleLarge?.copyWith(
-                                fontFamily: widget.bodyFont,
-                                color: Colors.white70,
-                                fontStyle: FontStyle.italic,
+                              style: widget.subtitleFormatting.applyTo(
+                                (theme.textTheme.titleLarge ??
+                                        const TextStyle())
+                                    .copyWith(
+                                  fontFamily: widget.bodyFont,
+                                  color: Colors.white70,
+                                  fontStyle: FontStyle.italic,
+                                ),
                               ),
-                              textAlign: TextAlign.center,
+                              textAlign: _alignOf(widget.subtitleFormatting),
                             ),
                           ),
                         if (widget.showCta && widget.ctaText.isNotEmpty) ...[

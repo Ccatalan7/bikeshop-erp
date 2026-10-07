@@ -1,6 +1,8 @@
 import 'package:jaspr/dom.dart';
 import 'package:jaspr/server.dart';
+import 'package:vinabike_public_core/modules/website/models/website_block_surface_spec.dart';
 import 'package:vinabike_public_core/modules/website/models/website_google_reviews.dart';
+import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
 
 import 'block_composition.dart';
 import 'css_values.dart';
@@ -14,17 +16,6 @@ const _mdStarBorder =
     'M22 9.24l-7.19-.62L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 '
     '21l-1.63-7.03L22 9.24zM12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38-.38L12 '
     '6.1l1.71 4.04 4.38.38-3.32 2.88 1 4.28L12 15.4z';
-
-/// What the HTML reviews block draws: the store's reviews on the theme's
-/// own surface.
-bool googleReviewsIsCovered(Map<String, dynamic> data) {
-  final style = data['style'];
-  final background = data['backgroundColor'];
-  final formatting = data['titleFormatting'];
-  return (style is! Map || style.isEmpty) &&
-      (background == null || background.toString().isEmpty) &&
-      (formatting is! Map || formatting.isEmpty);
-}
 
 /// `GoogleReviewsCarousel`: the title, the score with its stars and the
 /// count, then the review cards in a row that scrolls sideways.
@@ -46,36 +37,76 @@ class GoogleReviewsView extends StatelessComponent {
     final rating = content.rating;
     final total = content.totalReviews;
     final now = DateTime.now();
-    return section(classes: 'rv', [
-      h2(classes: 'rv-t', [.text(title.toUpperCase())]),
-      if (rating != null)
-        div(classes: 'rv-score', [
-          span(classes: 'rv-num', [.text(rating.toStringAsFixed(1))]),
-          span(
-            classes: 'rv-stars',
-            attributes: {
-              'role': 'img',
-              'aria-label': '${rating.toStringAsFixed(1)} de 5 estrellas',
-            },
-            [
-              for (var index = 0; index < 5; index++)
-                RawText(
-                  materialIcon(
-                    index < rating.round() ? _mdStar : _mdStarBorder,
-                    size: 20,
+    final theme = context.theme;
+    final surface = WebsiteBlockSurfaceSpec.resolve(
+      data: composed.data,
+      viewport: composed.viewport,
+    );
+    // The block's own color, unless its surface took the background over.
+    final own = surface.hasAuthoredBackground
+        ? null
+        : websiteSurfaceColor(data['backgroundColor']);
+    // Its words read on what is behind them (`_inkFor`): the inverse ink when
+    // that is of the other brightness than the theme.
+    final behind = surface.hasAuthoredBackground ? surface.paintedColor : own;
+    final inverse =
+        behind != null &&
+        WebsiteRgba.alphaBlend(behind, theme.background).isDark != theme.isDark;
+    final style = [
+      if (own != null) 'background:${own.css}',
+      if (inverse) ...[
+        '--rv-ink:${theme.background.css}',
+        '--rv-mut:${theme.background.css}',
+      ],
+    ];
+    return section(
+      classes: 'rv',
+      attributes: style.isEmpty ? null : {'style': style.join(';')},
+      [
+        h2(
+          classes: 'rv-t',
+          attributes: {
+            ...context.editText(const ['title']),
+            ...formattedStyle(
+              data['titleFormatting'],
+              family: theme.headingFont,
+              weight: 900,
+              fallback: 'var(--head)',
+              fontSize: 28,
+              lineHeight: 1.2,
+            ),
+          },
+          [.text(title.toUpperCase())],
+        ),
+        if (rating != null)
+          div(classes: 'rv-score', [
+            span(classes: 'rv-num', [.text(rating.toStringAsFixed(1))]),
+            span(
+              classes: 'rv-stars',
+              attributes: {
+                'role': 'img',
+                'aria-label': '${rating.toStringAsFixed(1)} de 5 estrellas',
+              },
+              [
+                for (var index = 0; index < 5; index++)
+                  RawText(
+                    materialIcon(
+                      index < rating.round() ? _mdStar : _mdStarBorder,
+                      size: 20,
+                    ),
                   ),
-                ),
-            ],
-          ),
-          span(classes: 'rv-count', [
-            .text(total == null ? 'en Google' : 'en Google ($total reseñas)'),
+              ],
+            ),
+            span(classes: 'rv-count', [
+              .text(total == null ? 'en Google' : 'en Google ($total reseñas)'),
+            ]),
           ]),
-        ]),
-      if (content.reviews.isNotEmpty)
-        ul(classes: 'rv-list', [
-          for (final review in content.reviews) _card(review, now),
-        ]),
-    ]);
+        if (content.reviews.isNotEmpty)
+          ul(classes: 'rv-list', [
+            for (final review in content.reviews) _card(review, now),
+          ]),
+      ],
+    );
   }
 
   Component _card(WebsiteGoogleReview review, DateTime now) {
@@ -131,15 +162,17 @@ class GoogleReviewsView extends StatelessComponent {
 }
 
 /// The block's stylesheet: its padding (64 and 24), the theme's surface and
-/// ink, Google's own gold and blue.
-final googleReviewsCss = '''
+/// ink (the heading's and the count's inverted on a background of the other
+/// brightness), Google's own gold and blue.
+final googleReviewsCss =
+    '''
 .rv{display:flex;flex-direction:column;align-items:center;${surfacePadding(64, 24, 64, 24)};background:var(--w-bg)}
-.rv-t{margin:0;font:400 28px/34px var(--head);letter-spacing:1.5px;color:var(--w-on);-webkit-text-stroke:.032em currentColor;text-align:center}
+.rv-t{margin:0;font:400 28px/34px var(--head);letter-spacing:1.5px;color:var(--rv-ink,var(--w-on));-webkit-text-stroke:.032em currentColor;text-align:center}
 .rv-score{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:8px;margin-top:12px}
 .rv-num{font:700 18px/27px var(--body);letter-spacing:.25px;color:var(--w-prim)}
 .rv-stars{display:flex;color:#fbbc04}
 .rv-stars svg{width:20px;height:20px}
-.rv-count{font:400 16px/24px var(--body);letter-spacing:.25px;color:var(--w-onv)}
+.rv-count{font:400 16px/24px var(--body);letter-spacing:.25px;color:var(--rv-mut,var(--w-onv))}
 .rv-list{display:flex;gap:24px;align-self:stretch;height:280px;margin:48px 0 0;padding:0;list-style:none;overflow-x:auto;scrollbar-width:thin}
 .rv-card{flex:none;display:flex;flex-direction:column;width:320px;padding:24px;border:1px solid var(--w-ovar);border-radius:16px;background:var(--w-cont);box-shadow:0 4px 12px rgb(0 0 0 / .05)}
 .rv-head{display:flex;align-items:center}

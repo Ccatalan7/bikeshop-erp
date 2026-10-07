@@ -490,6 +490,21 @@ class TestimonialsSectionView extends StatelessComponent {
     final mapsHref = content.mapsUrl.isEmpty
         ? null
         : context.publicHref(content.mapsUrl);
+    final noteText = p(
+      classes: 'ts-note',
+      attributes: {
+        ...context.editText(const ['subtitle']),
+        ...formattedStyle(
+          data['subtitleFormatting'],
+          family: theme.bodyFont,
+          weight: 400,
+          fallback: 'var(--body)',
+          fontSize: 17,
+          lineHeight: 1.5,
+        ),
+      },
+      [.text(note)],
+    );
     return _section('ts', tone, [
       div(classes: 'ts-cols', [
         div(classes: 'ts-score', [
@@ -517,20 +532,11 @@ class TestimonialsSectionView extends StatelessComponent {
               span(classes: 'ts-num', [.text(websiteRatingLabel(rating))]),
               div(classes: 'ts-rate-s', [
                 _stars(rating),
-                if (note.isNotEmpty)
-                  p(
-                    classes: 'ts-note',
-                    attributes: context.editText(const ['subtitle']),
-                    [.text(note)],
-                  ),
+                if (note.isNotEmpty) noteText,
               ]),
             ])
           else if (note.isNotEmpty)
-            p(
-              classes: 'ts-note',
-              attributes: context.editText(const ['subtitle']),
-              [.text(note)],
-            ),
+            noteText,
           if (rating != null && mapsHref != null)
             a(classes: 'ts-link', href: mapsHref, [
               .text('Ver en Google Maps'),
@@ -779,11 +785,21 @@ class TeamSectionView extends StatelessComponent {
                   ]).trim().isNotEmpty)
                     p(
                       classes: 'tm-role',
-                      attributes: context.editText(
-                        const ['role'],
-                        collection: collection,
-                        index: index,
-                      ),
+                      attributes: {
+                        ...context.editText(
+                          const ['role'],
+                          collection: collection,
+                          index: index,
+                        ),
+                        ...formattedStyle(
+                          member['roleFormatting'],
+                          family: theme.bodyFont,
+                          weight: 600,
+                          fallback: 'var(--body)',
+                          fontSize: 13,
+                          lineHeight: 1.4,
+                        ),
+                      },
                       [
                         .text(
                           websiteSectionText(member, const ['role']).trim(),

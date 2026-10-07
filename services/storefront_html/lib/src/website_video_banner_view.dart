@@ -8,16 +8,10 @@ import 'block_composition.dart';
 import 'css_values.dart';
 import 'website_blocks_view.dart';
 
-/// What the HTML video banner draws: a YouTube or uploaded video (or the
-/// photo) behind the words, on the block's own dark color.
-bool videoBannerIsCovered(Map<String, dynamic> data) {
-  final style = data['style'];
-  return style is! Map || style.isEmpty;
-}
-
 /// `_VideoBannerWidget`: the video muted and looping behind a darkening
 /// veil (the photo when there is no video), the title, the subtitle in
-/// italics and the button, centered at most 800 px wide. 500 px tall unless
+/// italics (each with the inspector's «Formato») and the button, centered at
+/// most 800 px wide. 500 px tall unless
 /// the page gives it a height.
 class VideoBannerView extends StatelessComponent {
   const VideoBannerView(this.composed, this.context, {super.key});
@@ -114,8 +108,38 @@ class VideoBannerView extends StatelessComponent {
           const [],
         ),
         div(classes: 'vb-in', [
-          if (title.isNotEmpty) h2(classes: 'vb-t', [.text(title)]),
-          if (subtitle.isNotEmpty) p(classes: 'vb-s', [.text(subtitle)]),
+          if (title.isNotEmpty)
+            h2(
+              classes: 'vb-t',
+              attributes: {
+                ...context.editText(const ['title']),
+                ...formattedStyle(
+                  data['titleFormatting'],
+                  family: context.theme.headingFont,
+                  weight: 700,
+                  fallback: 'var(--head)',
+                  fontSize: 40,
+                  lineHeight: 46 / 40,
+                ),
+              },
+              [.text(title)],
+            ),
+          if (subtitle.isNotEmpty)
+            p(
+              classes: 'vb-s',
+              attributes: {
+                ...context.editText(const ['subtitle']),
+                ...formattedStyle(
+                  data['subtitleFormatting'],
+                  family: context.theme.bodyFont,
+                  weight: 600,
+                  fallback: 'var(--body)',
+                  fontSize: 18,
+                  lineHeight: 23 / 18,
+                ),
+              },
+              [.text(subtitle)],
+            ),
           if (action != null && href != null)
             a(
               classes: 'w-btn on-dark ${action.variant.storageValue}',
@@ -130,7 +154,8 @@ class VideoBannerView extends StatelessComponent {
 
 /// The banner's stylesheet. The YouTube frame covers the block the way
 /// Flutter's does: at least 16:9 of the window, centered, and inert.
-final videoBannerCss = '''
+final videoBannerCss =
+    '''
 .vb{position:relative;height:500px;overflow:hidden;background:#1a1a1a}
 .vb.fixed{height:100%}
 .vb-media{position:absolute;inset:0;overflow:hidden;pointer-events:none}

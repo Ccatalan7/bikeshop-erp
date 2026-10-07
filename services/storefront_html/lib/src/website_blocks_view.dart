@@ -243,9 +243,8 @@ const pageCoveredBlockTypes = {
 };
 
 /// Whether a page that draws [types] draws this block: its type, and what
-/// the block holds (a carousel with a video slide is not drawn yet). A block
-/// with a surface of its own (background, frame, padding) is not drawn yet:
-/// the HTML would show it without what the editor saved.
+/// the block holds (a carousel with a video slide is not drawn yet): a block
+/// whose saved look the HTML would leave out is not drawn.
 bool sharedBlockCovers(ComposedBlock composed, Set<WebsiteBlockType> types) {
   final type = composed.block.type;
   if (type == null || !types.contains(type)) return false;
@@ -259,8 +258,6 @@ bool sharedBlockCovers(ComposedBlock composed, Set<WebsiteBlockType> types) {
     WebsiteBlockType.products => productsBlockIsCovered(composed.data),
     WebsiteBlockType.categoryGrid => categoryGridIsCovered(composed.data),
     WebsiteBlockType.brandLogos => brandLogosIsCovered(composed.data),
-    WebsiteBlockType.videoBanner => videoBannerIsCovered(composed.data),
-    WebsiteBlockType.googleReviews => googleReviewsIsCovered(composed.data),
     // A canvas reads its whole document: it resolves its own viewports.
     WebsiteBlockType.canvas => canvasBlockIsCovered(composed.block.blockData),
     _ => true,
@@ -387,6 +384,30 @@ Component flutterText(
   final content = _content.convert(lines).replaceAll('\n', '&#10;');
   final last = lines.endsWith('\n') ? ' data-break' : '';
   return RawText('<$tag class="ft $classes"$css$extra$last>$content</$tag>');
+}
+
+/// [textFormattingCss] as an element's `style`, only when the editor set
+/// something: an unformatted text keeps its class's own rules.
+Map<String, String> formattedStyle(
+  Object? raw, {
+  required String family,
+  required int weight,
+  required String fallback,
+  required double fontSize,
+  required double lineHeight,
+  bool responsiveSize = false,
+}) {
+  if (raw is! Map || raw.isEmpty) return const {};
+  final rules = textFormattingCss(
+    Map<String, dynamic>.from(raw),
+    family: family,
+    weight: weight,
+    fallback: fallback,
+    fontSize: fontSize,
+    lineHeight: lineHeight,
+    responsiveSize: responsiveSize,
+  );
+  return rules.isEmpty ? const {} : {'style': rules.join(';')};
 }
 
 /// [TextFormatting.applyTo] as declarations over a preset's own style
@@ -537,6 +558,7 @@ class _HeroBlock extends StatelessComponent {
   @override
   Component build(BuildContext _) {
     final data = composed.data;
+    final theme = context.theme;
     final rawTitle = (data['title'] ?? 'Bienvenido').toString();
     final title = rawTitle.trim().isEmpty ? 'Título' : rawTitle.trim();
     final subtitle = (data['subtitle'] ?? '').toString().trim();
@@ -610,13 +632,34 @@ class _HeroBlock extends StatelessComponent {
           [
             h2(
               classes: 'hero-t',
-              attributes: context.editText(const ['title']),
+              attributes: {
+                ...context.editText(const ['title']),
+                ...formattedStyle(
+                  data['titleFormatting'],
+                  family: theme.headingFont,
+                  weight: 900,
+                  fallback: 'var(--head)',
+                  fontSize: theme.headingSize,
+                  lineHeight: 1.12,
+                  responsiveSize: true,
+                ),
+              },
               [.text(title.toUpperCase())],
             ),
             if (subtitle.isNotEmpty)
               p(
                 classes: 'hero-s',
-                attributes: context.editText(const ['subtitle']),
+                attributes: {
+                  ...context.editText(const ['subtitle']),
+                  ...formattedStyle(
+                    data['subtitleFormatting'],
+                    family: theme.bodyFont,
+                    weight: 600,
+                    fallback: 'var(--body)',
+                    fontSize: theme.bodySize,
+                    lineHeight: 1.33,
+                  ),
+                },
                 [.text(subtitle)],
               ),
             if (action != null && href != null)

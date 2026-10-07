@@ -33,15 +33,23 @@ bool carouselSlideUsesComposition(Map<String, dynamic> slide) =>
     slide['useComposition'] == true ||
     (slide['elements'] is List && (slide['elements'] as List).isNotEmpty);
 
-/// What the HTML carousel draws: photo and color slides, with or without
-/// layers it covers. A video slide plays a YouTube or uploaded video the
-/// storefront does not embed yet.
+/// The video a slide plays behind its content, as `_buildSlide` picks it:
+/// its uploaded file, else the YouTube video its link names; `null` for a
+/// link that names none (Flutter then draws the slide without video).
+({String? file, String? youtube})? carouselSlideVideo(
+  Map<String, dynamic> slide,
+) {
+  final file = (slide['videoFileUrl'] ?? '').toString().trim();
+  if (file.isNotEmpty) return (file: file, youtube: null);
+  final link = (slide['videoUrl'] ?? '').toString().trim();
+  final youtube = link.isEmpty ? null : websiteYouTubeVideoId(link);
+  return youtube == null ? null : (file: null, youtube: youtube);
+}
+
+/// What the HTML carousel draws: photo, color and video slides, with or
+/// without layers it covers.
 bool carouselIsCovered(Map<String, dynamic> data) {
   for (final slide in carouselSlides(data)) {
-    if ((slide['videoUrl'] ?? '').toString().trim().isNotEmpty ||
-        (slide['videoFileUrl'] ?? '').toString().trim().isNotEmpty) {
-      return false;
-    }
     if (carouselSlideUsesComposition(slide) &&
         !canvasDocumentIsCovered(_slideDocument(slide))) {
       return false;
@@ -185,14 +193,17 @@ class CarouselBlockView extends StatelessComponent {
               '${const WebsiteRgba(1, 0, 0, 0).withAlpha(opacity * 0.4).css},'
               '${const WebsiteRgba(1, 0, 0, 0).withAlpha(opacity * 0.7).css})'
         : null;
-    final background = authored ?? '#1a1a1a';
+    final video = carouselSlideVideo(slide);
+    // A video slide is the dark #1a1a1a with the video over it, whatever
+    // color the slide has (`_buildSlide`).
+    final background = video != null ? '#1a1a1a' : authored ?? '#1a1a1a';
     return div(
       classes: [
         'car-slide',
         if (first) 'on',
         // No color of its own: under a block's own background it lets
         // that one through (`letsBlockBackgroundThrough`).
-        if (authored == null) 'dflt',
+        if (authored == null && video == null) 'dflt',
       ].join(' '),
       attributes: {
         'data-slide': '$index',
@@ -200,7 +211,7 @@ class CarouselBlockView extends StatelessComponent {
         'aria-roledescription': 'diapositiva',
         'aria-label': '${index + 1} de $count',
         if (!first) 'inert': '',
-        'style': image.isEmpty && authored == null
+        'style': image.isEmpty && authored == null && video == null
             // No photo and no color of its own: the old dark gradient.
             ? 'background:linear-gradient(to bottom right,#1a1a1a,'
                   '${WebsiteRgba.lerp(WebsiteRgba.fromArgb(0xFF1A1A1A), const WebsiteRgba(1, 0, 0, 0), 0.2).css})'
@@ -225,6 +236,7 @@ class CarouselBlockView extends StatelessComponent {
               'decoding': first ? 'sync' : 'async',
             },
           ),
+        if (video != null) _media(video, image: image, title: title),
         if (carouselSlideUsesComposition(slide)) ...[
           if (overlay != null)
             div(classes: 'car-ov', attributes: {'style': overlay}, const []),
@@ -293,6 +305,51 @@ class CarouselBlockView extends StatelessComponent {
     );
   }
 
+  /// The slide's video, muted and looping behind its content and inert to
+  /// the pointer. Its source waits in `data-vsrc` until the slide shows and
+  /// the page has loaded (the script plays only the slide on screen, and
+  /// none for a visitor who asks for less motion); the photo stays under it
+  /// and is the file's poster, so the slide is never an empty dark box.
+  Component _media(
+    ({String? file, String? youtube}) video, {
+    required String image,
+    required String title,
+  }) {
+    final youtube = video.youtube;
+    return div(
+      classes: 'car-media',
+      attributes: {'aria-hidden': 'true'},
+      [
+        if (youtube != null)
+          Component.element(
+            tag: 'iframe',
+            attributes: {
+              'data-vsrc':
+                  'https://www.youtube.com/embed/$youtube?autoplay=1&mute=1'
+                  '&loop=1&playlist=$youtube&controls=0&rel=0'
+                  '&modestbranding=1&playsinline=1&enablejsapi=1'
+                  '&origin=${Uri.encodeQueryComponent(context.storeUrl)}',
+              'title': title.isEmpty ? 'Video' : title,
+              'allow': 'autoplay; encrypted-media',
+              'tabindex': '-1',
+            },
+          )
+        else
+          Component.element(
+            tag: 'video',
+            attributes: {
+              'data-vsrc': video.file!,
+              'muted': '',
+              'loop': '',
+              'playsinline': '',
+              'preload': 'none',
+              if (image.isNotEmpty) 'poster': image,
+            },
+          ),
+      ],
+    );
+  }
+
   /// The slide's own solid color (`WebsiteBlockSurfaceStyle` with
   /// `backgroundType: solid`), if it has one.
   static String? _authoredBackground(Map<String, dynamic> slide) {
@@ -336,7 +393,8 @@ class CarouselBlockView extends StatelessComponent {
 
 /// Plays every carousel on the page as `_WebsiteCarouselBlockContentState`:
 /// the next slide every interval (none when the visitor asks for less
-/// motion), arrows, dots and a swipe. A slide is shown once its images are
+/// motion), arrows, dots and a swipe. Only the slide on screen plays its
+/// video, from the page's load on, and none plays for less motion. A slide is shown once its images are
 /// ready, and the one after it is fetched while it shows; the second one
 /// only once the page has loaded, so it never competes with the first. The
 /// editor's draft turns it to a slide (`car:go`) and hears where it is
@@ -344,18 +402,19 @@ class CarouselBlockView extends StatelessComponent {
 const carouselScript = r'''
 document.querySelectorAll("[data-car]").forEach(function(c){
 var slides=[].slice.call(c.querySelectorAll(":scope>.car-slide")),dots=[].slice.call(c.querySelectorAll(".car-dot"));
-var n=slides.length,cur=0,want=-1,timer=0,ms=+c.dataset.interval||0;
+var n=slides.length,cur=0,want=-1,timer=0,ms=+c.dataset.interval||0,loaded=false;
 var still=matchMedia("(prefers-reduced-motion: reduce)").matches;
+function media(i,on){[].forEach.call(slides[i].querySelectorAll(".car-media video,.car-media iframe"),function(v){if(on){if(still||!loaded)return;if(v.dataset.vsrc){v.src=v.dataset.vsrc;v.removeAttribute("data-vsrc")}if(v.play)v.play().catch(function(){});else v.contentWindow&&v.contentWindow.postMessage('{"event":"command","func":"playVideo","args":[]}',"*")}else if(!v.dataset.vsrc){if(v.pause)v.pause();else v.contentWindow&&v.contentWindow.postMessage('{"event":"command","func":"pauseVideo","args":[]}',"*")}})}
 function ready(i){return Promise.all([].map.call(slides[i].querySelectorAll("img"),function(m){if(m.dataset.src){m.src=m.dataset.src;m.removeAttribute("data-src")}m.loading="eager";return m.decode?m.decode().catch(function(){}):0}))}
 function restart(){clearInterval(timer);if(ms&&!still&&n>1)timer=setInterval(function(){go(cur+1)},ms)}
-function show(i){var old=slides[cur];old.classList.remove("on");old.inert=true;slides[i].classList.add("on");slides[i].inert=false;dots.forEach(function(d,k){d.setAttribute("aria-pressed",k===i?"true":"false")});cur=i;ready((i+1)%n);restart();c.dispatchEvent(new CustomEvent("car:shown",{detail:i,bubbles:true}))}
+function show(i){var old=slides[cur];media(cur,false);media(i,true);old.classList.remove("on");old.inert=true;slides[i].classList.add("on");slides[i].inert=false;dots.forEach(function(d,k){d.setAttribute("aria-pressed",k===i?"true":"false")});cur=i;ready((i+1)%n);restart();c.dispatchEvent(new CustomEvent("car:shown",{detail:i,bubbles:true}))}
 function go(i){i=(i%n+n)%n;if(i===cur){want=-1;restart();return}clearInterval(timer);want=i;ready(i).then(function(){if(want===i){want=-1;show(i)}})}
 c.addEventListener("car:go",function(e){var i=+e.detail;if(isFinite(i))go(Math.floor(i))});
 c.addEventListener("click",function(e){var b=e.target.closest("button");if(!b||!c.contains(b))return;if(b.hasAttribute("data-car-prev"))go(cur-1);else if(b.hasAttribute("data-car-next"))go(cur+1);else if(b.dataset.carGo)go(+b.dataset.carGo)});
 var x0=null,y0=0,t0=0;
 c.addEventListener("touchstart",function(e){if(e.touches.length!==1){x0=null;return}x0=e.touches[0].clientX;y0=e.touches[0].clientY;t0=Date.now()},{passive:true});
 c.addEventListener("touchend",function(e){if(x0===null||n<2)return;var t=e.changedTouches[0],dx=t.clientX-x0,dy=t.clientY-y0,dt=Math.max(1,Date.now()-t0);x0=null;if(Math.abs(dx)<18||Math.abs(dx)<Math.abs(dy))return;if(Math.abs(dx)>=c.clientWidth/4||Math.abs(dx)/dt*1000>=50)go(dx<0?cur+1:cur-1)},{passive:true});
-function warm(){if(n>1)ready(1)}
+function warm(){loaded=true;media(cur,true);if(n>1)ready(1)}
 if(document.readyState==="complete")warm();else addEventListener("load",warm);
 restart();
 });

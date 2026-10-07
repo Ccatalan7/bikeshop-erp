@@ -3727,11 +3727,6 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     // fingerprint from the single capability truth, and a lease revocation
     // (logout, tenant/user/role change) also demotes programmatic sessions.
     _stampDocumentOwnerFromLease();
-    // The editor opens on this device's «Vista HTML» choice, unless the
-    // operator chose otherwise in this run.
-    if (!_htmlCanvasChosen) {
-      _showsHtmlCanvas = WebsiteHtmlCanvasPreference.initial;
-    }
     final changed = _activatePageSnapshot(
       blocks,
       settings,
@@ -3887,20 +3882,23 @@ class WebsiteEditModeProvider extends ChangeNotifier {
 
   bool _showsHtmlCanvas = false;
 
-  /// Whether the operator turned the «Vista HTML» on or off in this run; the
-  /// editor opens on this device's choice until they do
-  /// ([WebsiteHtmlCanvasPreference]).
+  /// Whether the operator turned the «Vista HTML» on or off in this run;
+  /// until they do, the editor shows this device's choice
+  /// ([WebsiteHtmlCanvasPreference], read before the app starts).
   bool _htmlCanvasChosen = false;
 
   /// The «Vista HTML» (phase 5 of the move to HTML): the canvas shows the
   /// page as the store's HTML server draws it from this draft. The Flutter
   /// canvas stays mounted underneath, so turning it off loses nothing.
-  bool get showsHtmlCanvas => _showsHtmlCanvas;
+  bool get showsHtmlCanvas => _htmlCanvasChosen
+      ? _showsHtmlCanvas
+      : WebsiteHtmlCanvasPreference.initial;
 
   void setShowsHtmlCanvas(bool value) {
+    final shown = showsHtmlCanvas;
     _htmlCanvasChosen = true;
-    if (_showsHtmlCanvas == value) return;
     _showsHtmlCanvas = value;
+    if (shown == value) return;
     unawaited(WebsiteHtmlCanvasPreference.remember(value));
     notifyListeners();
   }

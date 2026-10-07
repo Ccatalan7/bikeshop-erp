@@ -421,3 +421,10 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   Flutter: antes una página con un bloque con estilo volvía entera a Flutter.
 - La vista HTML es el lienzo con que abre el editor en macOS y el ERP web;
   cada equipo recuerda si se apaga.
+- Formato y fondo iguales en el lienzo y la tienda: el HTML dibuja el formato
+  del hero, la nota de testimonios, el cargo del equipo y el título de
+  reseñas; el banner de video lo dibuja en los dos; se quitó «Formato» donde
+  nadie lo usaba. El título de reseñas lee el fondo real. Cambiar de vista ya
+  no ofrece «Restaurar» el borrador propio.
+- Una diapositiva de carrusel con video se dibuja en HTML (archivo o
+  YouTube, sólo la que se ve reproduce); antes mandaba la página a Flutter.

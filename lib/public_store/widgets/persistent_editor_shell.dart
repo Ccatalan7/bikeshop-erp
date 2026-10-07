@@ -358,11 +358,18 @@ class _PersistentEditorShellState extends State<PersistentEditorShell> {
                             ),
                           // The «Vista HTML»: over the canvas, which stays
                           // mounted underneath with its state; the pane, the
-                          // rail and the dock keep their places.
+                          // rail and the dock keep their places. It and the
+                          // recovery host below come and go with conditions
+                          // of their own, so each keeps its place by key: an
+                          // unkeyed slot shifted when the view was switched,
+                          // and the recovery host, rebuilt, flushed the
+                          // operator's draft and offered it back as one to
+                          // «Restaurar» (2026-10-07).
                           if (editProvider.isInEditorContext &&
                               editProvider.isPageEditorWorkspace &&
                               editProvider.showsHtmlCanvas)
                             Positioned(
+                              key: const ValueKey('website-html-draft-slot'),
                               top: editorTopBand,
                               left: mountsRail ? railWidth : 0,
                               right: mountsPane ? paneWidth : 0,
@@ -371,6 +378,8 @@ class _PersistentEditorShellState extends State<PersistentEditorShell> {
                             ),
                           if (editProvider.isInEditorContext)
                             Positioned(
+                              key:
+                                  const ValueKey('website-draft-recovery-slot'),
                               top: editorTopBand + 8,
                               left: mountsRail ? railWidth + 12 : 12,
                               right: mountsPane ? paneWidth + 12 : 12,

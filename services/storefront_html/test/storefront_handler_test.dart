@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'package:jaspr/server.dart';
 import 'package:test/test.dart';
+import 'package:vinabike_public_core/modules/website/models/website_block_base_definitions.dart';
 import 'package:vinabike_public_core/modules/website/models/website_catalog_presentation.dart';
 import 'package:vinabike_public_core/modules/website/models/website_product_page_template.dart';
 import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
@@ -3322,6 +3323,165 @@ void main() {
         expect(html, contains('content="noindex,follow"'));
       },
     );
+
+    test('a carousel slide plays its video behind its content: the file '
+        'first, else the YouTube it links; a link to anything else is a '
+        'plain slide', () async {
+      final response = await _get(
+        _FakeReads(
+          editorPages: {
+            'arriendo': page([
+              block('car', 'carousel', 0, {
+                'slides': [
+                  {
+                    'title': 'Archivo',
+                    'imageUrl': 'https://example.invalid/poster.jpg',
+                    'videoFileUrl': 'https://example.invalid/ruta.mp4',
+                    'videoUrl': 'https://youtu.be/BnJCsaH5Ybs',
+                  },
+                  {
+                    'title': 'YouTube',
+                    'videoUrl': 'https://youtu.be/BnJCsaH5Ybs?si=x',
+                  },
+                  {'title': 'Vimeo', 'videoUrl': 'https://vimeo.com/1'},
+                ],
+              }),
+            ]),
+          },
+        ),
+        '/pagina/arriendo',
+      );
+      expect(response.headers['x-storefront-uncovered'], isNull);
+      final html = await response.readAsString();
+      // The file wins over the link; its photo stays under it as its poster.
+      expect(
+        html,
+        contains(
+          '<video data-vsrc="https://example.invalid/ruta.mp4" muted loop '
+          'playsinline preload="none" '
+          'poster="https://example.invalid/poster.jpg">',
+        ),
+      );
+      expect(
+        html,
+        contains(
+          'data-vsrc="https://www.youtube.com/embed/BnJCsaH5Ybs?autoplay=1'
+          '&amp;mute=1&amp;loop=1&amp;playlist=BnJCsaH5Ybs',
+        ),
+      );
+      expect('car-media'.allMatches(html).length, greaterThanOrEqualTo(2));
+      expect(html, isNot(contains('vimeo.com')));
+      // Nothing plays before the page has loaded: no source is set yet.
+      expect(
+        html,
+        isNot(contains(' src="https://example.invalid/ruta.mp4"')),
+      );
+    });
+
+    test('the reviews heading reads on what is behind it, and a video '
+        'banner with a surface of its own stays in HTML', () async {
+      Future<(Response, String)> draw(Map<String, dynamic> data) async {
+        final response = await _get(
+          _FakeReads(
+            editorPages: {
+              'arriendo': page([block('r', data['type'] as String, 0, data)]),
+            },
+          ),
+          '/pagina/arriendo',
+        );
+        return (response, await response.readAsString());
+      }
+
+      // The block's own dark color: painted, and the heading and the count
+      // take the theme's background as their ink (`_inkFor`).
+      final (_, dark) = await draw({
+        'type': 'googleReviews',
+        'title': 'Reseñas',
+        'backgroundColor': '#111111',
+        'titleFormatting': {'fontSize': 40},
+      });
+      expect(
+        dark,
+        contains(
+          '<section class="rv" style="background:rgb(17 17 17);'
+          '--rv-ink:rgb(255 255 255);--rv-mut:rgb(255 255 255)">',
+        ),
+      );
+      expect(dark, contains('font-size:40px'));
+
+      // A surface that takes the background over but paints no color: the
+      // page shows through and the ink stays the theme's — not white on
+      // white, as the Flutter canvas drew it before 2026-10-07.
+      final (_, clear) = await draw({
+        'type': 'googleReviews',
+        'title': 'Reseñas',
+        'backgroundColor': '#111111',
+        'surfaceStyle': {'backgroundType': 'solid', 'borderRadius': 14},
+      });
+      expect(clear, contains('<section class="rv">'));
+      expect(clear, isNot(contains('--rv-ink:')));
+
+      final (banner, framed) = await draw({
+        'type': 'videoBanner',
+        'title': 'Vive la Aventura',
+        'style': {'borderRadius': 10, 'paddingTop': 40},
+      });
+      expect(banner.headers['x-storefront-uncovered'], isNull);
+      expect(framed, contains('border-radius:10px'));
+    });
+
+    test('every text the editor offers «Formato» for is drawn with it, or '
+        'its block is left to Flutter', () async {
+      const ink = 0xFFAB1234;
+      final drawnInk = WebsiteRgba.fromArgb(ink).css;
+      final silent = <String>[];
+      for (final definition in websiteBaseBlockDefinitions.values) {
+        for (final field in definition.fields) {
+          final targets = [
+            if (field.supportsFormatting) (field, null),
+            for (final item in field.itemFields)
+              if (item.supportsFormatting) (item, field),
+          ];
+          for (final (text, list) in targets) {
+            final data =
+                jsonDecode(jsonEncode(definition.defaultData))
+                    as Map<String, dynamic>;
+            final formatted = {
+              text.key: 'Texto ${text.key}',
+              text.resolvedFormattingKey: {'textColor': ink},
+            };
+            if (list == null) {
+              data.addAll(formatted);
+            } else {
+              final items = data[list.key] is List && data[list.key].isNotEmpty
+                  ? List<Object?>.from(data[list.key] as List)
+                  : <Object?>[<String, dynamic>{}];
+              items[0] = {...?(items[0] as Map?)?.cast(), ...formatted};
+              data[list.key] = items;
+            }
+            final response = await _get(
+              _FakeReads(
+                editorPages: {
+                  'arriendo': page([block('x', definition.type.name, 0, data)]),
+                },
+              ),
+              '/pagina/arriendo',
+            );
+            final html = await response.readAsString();
+            final left =
+                response.headers['x-storefront-uncovered'] != null ||
+                response.headers['x-storefront-fallback'] != null;
+            if (!left && !html.contains(drawnInk)) {
+              silent.add(
+                '${definition.type.name}.'
+                '${list == null ? '' : '${list.key}[0].'}${text.key}',
+              );
+            }
+          }
+        }
+      }
+      expect(silent, isEmpty);
+    });
   });
 
   test('every stylesheet closes what it opens', () {

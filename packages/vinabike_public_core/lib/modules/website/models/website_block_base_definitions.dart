@@ -1049,7 +1049,6 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
             type: WebsiteBlockFieldType.textarea,
             defaultValue: 'Lo que dijo el cliente',
             textRole: WebsiteTextRole.quote,
-            supportsFormatting: true,
             migrationAliases: ['quote', 'text'],
           ),
           WebsiteBlockFieldSchema(
@@ -1058,7 +1057,6 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
             type: WebsiteBlockFieldType.text,
             defaultValue: 'Nombre',
             textRole: WebsiteTextRole.heading,
-            supportsFormatting: true,
           ),
           WebsiteBlockFieldSchema(
             key: 'role',
@@ -1067,7 +1065,6 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
             defaultValue: 'Cliente del taller',
             helpText: 'Junto al nombre: cuándo o por qué vino.',
             textRole: WebsiteTextRole.caption,
-            supportsFormatting: true,
           ),
           WebsiteBlockFieldSchema(
             key: 'rating',
@@ -1422,7 +1419,6 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
             label: 'Leyenda',
             type: WebsiteBlockFieldType.text,
             textRole: WebsiteTextRole.caption,
-            supportsFormatting: true,
           ),
         ],
       ),

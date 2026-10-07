@@ -49,11 +49,17 @@ class WebsiteActionButton extends StatelessWidget {
           textStyle,
         ) ??
         Text(label, style: textStyle);
+    // A site button without [onPressed] is the editor's inert copy (an
+    // ineligible destination hides the button instead): it keeps the colors
+    // its block gives it, so the canvas shows the button the visitor gets
+    // rather than Material's grey disabled one (white on a dark banner had
+    // read as dark on dark until 2026-10-07).
     final button = switch (action.variant) {
       WebsiteActionVariant.outline => OutlinedButton(
           onPressed: onPressed,
           style: OutlinedButton.styleFrom(
             foregroundColor: foregroundColor,
+            disabledForegroundColor: foregroundColor,
             side:
                 outlineColor == null ? null : BorderSide(color: outlineColor!),
           ).merge(style),
@@ -61,8 +67,10 @@ class WebsiteActionButton extends StatelessWidget {
         ),
       WebsiteActionVariant.text => TextButton(
           onPressed: onPressed,
-          style: TextButton.styleFrom(foregroundColor: foregroundColor)
-              .merge(style),
+          style: TextButton.styleFrom(
+            foregroundColor: foregroundColor,
+            disabledForegroundColor: foregroundColor,
+          ).merge(style),
           child: child,
         ),
       WebsiteActionVariant.filled => ElevatedButton(
@@ -70,6 +78,8 @@ class WebsiteActionButton extends StatelessWidget {
           style: ElevatedButton.styleFrom(
             backgroundColor: backgroundColor,
             foregroundColor: foregroundColor,
+            disabledBackgroundColor: backgroundColor,
+            disabledForegroundColor: foregroundColor,
           ).merge(style),
           child: child,
         ),
