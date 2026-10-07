@@ -59,7 +59,15 @@ Dos lecturas importantes:
 Todas se resuelven **como consumidores de los dueños que ya existen** o agregando
 primero la capacidad al editor (regla 1, [principios](principios.md)).
 
-1. **Contenido real y visible en el HTML de cada página**, no en `<noscript>`.
+1. ~~**Contenido real y visible en el HTML de cada página**~~ — resuelto por
+   la migración a HTML. Medido en vivo el 2026-10-07, sin JavaScript y sin
+   contar `<noscript>` (ya no hay ninguno): la ficha
+   `/productos/104bcd-cubierta-protectora…/60951` tiene **390 palabras y 90
+   enlaces** (antes 13 y 3), la categoría Componentes **575 y 133** (antes 1),
+   la portada 594 y 100, `/servicios` 859 y 159 `[Prod 2026-10-07]`. Lo que
+   sigue faltando es contenido, no marcado (brecha 2: descripciones).
+   El texto de abajo es el diagnóstico del 2026-10-04.
+   **Contenido real y visible en el HTML de cada página**, no en `<noscript>`.
    El snapshot de la ficha debe traer, visibles, la descripción, la ficha
    técnica, las migas como enlaces, productos relacionados y la categoría; el de
    la categoría, su texto de presentación y **todos** sus productos con enlaces y

@@ -26,6 +26,7 @@ import '../models/website_block_catalog.dart';
 import '../models/website_block_geometry.dart';
 import 'block_action_bar.dart';
 import 'website_inline_action_editor.dart';
+import 'website_media_picker.dart';
 import 'website_block_content_presenters.dart';
 import 'website_inline_field_binding.dart';
 import 'website_editor_host_theme.dart';
@@ -522,6 +523,8 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
         unawaited(_button(press));
       case final WebsiteHtmlDraftLayer press:
         _pickLayer(press);
+      case final WebsiteHtmlDraftImage press:
+        unawaited(_photo(press));
       case WebsiteHtmlDraftSlide(:final id, :final index):
         final provider = _provider;
         final count = _slideCount(provider?.getBlock(id));
@@ -607,6 +610,66 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
       );
       if (!mounted || edited == null) return;
       if (write.commit(edited)) _changed();
+    } finally {
+      _buttonOpen = false;
+    }
+  }
+
+  /// A click on one of the picked block's photos in the page: the image
+  /// picker, as the canvas's media slot opens it, and the chosen photo
+  /// written as one step of the history ([WebsiteInlineFieldBinding.beginImage]).
+  /// The picker's upload and the write are guarded as the canvas guards
+  /// them: an editor that changed meanwhile takes neither.
+  Future<void> _photo(WebsiteHtmlDraftImage press) async {
+    final provider = _provider;
+    final block = provider?.getBlock(press.id);
+    if (_buttonOpen ||
+        provider == null ||
+        block == null ||
+        provider.selectedBlockId != press.id) {
+      return;
+    }
+    final write = WebsiteInlineFieldBinding(
+      provider: provider,
+      blockId: press.id,
+      blockType: (block['block_type'] ?? block['type'] ?? '').toString(),
+    ).beginImage(press.fields, press.index);
+    if (write == null) return;
+    final guard = WebsiteAsyncFieldBinding.pageBlock(
+      provider: provider,
+      target: WebsiteAsyncFieldTarget.block(
+        blockId: press.id,
+        scopeKey: jsonEncode(<String, Object?>{
+          'surface': 'html',
+          'kind': 'media',
+          'slot': press.fields.spec(press.index),
+          'viewport': write.target.viewport.name,
+        }),
+      ),
+    );
+    final arm = guard.capture();
+    final remoteArm = guard.capture();
+    if (arm == null || remoteArm == null) return;
+    _buttonOpen = true;
+    try {
+      final chosen = await showWebsiteMediaPicker(
+        context: context,
+        currentUrl: write.url.isEmpty ? null : write.url,
+        remoteWriteAuthority: websiteRemoteAuthorityResolver(
+          openingBinding: guard,
+          remoteArm: remoteArm,
+          liveBinding: () => mounted ? guard : null,
+          isMounted: () => mounted,
+          operation: 'subir una imagen del sitio web',
+        ),
+      );
+      final written = guard.commit(
+        arm,
+        () => chosen == null
+            ? WebsiteInlineMutationResult.unchanged
+            : write.commit(chosen.publicUrl),
+      );
+      if (mounted && written.changed) _changed();
     } finally {
       _buttonOpen = false;
     }
@@ -994,6 +1057,7 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
                                       'vbDraftMove',
                                       'vbDraftButton',
                                       'vbDraftLayer',
+                                      'vbDraftImage',
                                     ]) {
                                 controller.addJavaScriptHandler(
                                   handlerName: name,

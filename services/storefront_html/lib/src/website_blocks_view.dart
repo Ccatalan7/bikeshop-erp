@@ -4,6 +4,7 @@ import 'package:jaspr/dom.dart';
 import 'package:jaspr/server.dart';
 import 'package:vinabike_public_core/modules/website/models/website_action.dart';
 import 'package:vinabike_public_core/modules/website/models/website_block_base_definitions.dart';
+import 'package:vinabike_public_core/modules/website/models/website_image_fields.dart';
 import 'package:vinabike_public_core/modules/website/models/website_block_surface_presence.dart';
 import 'package:vinabike_public_core/modules/website/models/website_block_type.dart';
 import 'package:vinabike_public_core/modules/website/models/website_hero_content.dart';
@@ -85,6 +86,15 @@ class BlockRenderContext {
   Map<String, String> editButton(WebsiteButtonFields fields, {int index = 0}) {
     if (!draft) return const {};
     return {'data-edit-button': fields.spec(index)};
+  }
+
+  /// For the editor's draft, which of the block's photos an element draws
+  /// ([WebsiteImageFields.spec]: `about`, `gallery#2` for the photo stored
+  /// at [index]), so the operator replaces it where it is, as the Flutter
+  /// canvas's `WebsiteInlineMediaSlot`. Nothing for a visitor.
+  Map<String, String> editImage(WebsiteImageFields fields, {int index = 0}) {
+    if (!draft) return const {};
+    return {'data-edit-image': fields.spec(index)};
   }
 
   /// For the editor's draft, which canvas layer an element draws (its

@@ -1,4 +1,5 @@
 import 'package:vinabike_public_core/modules/website/models/website_action.dart';
+import 'package:vinabike_public_core/modules/website/models/website_image_fields.dart';
 
 import 'website_html_draft_picks_stub.dart'
     if (dart.library.js_interop) 'website_html_draft_picks_web.dart';
@@ -34,6 +35,11 @@ sealed class WebsiteHtmlDraftMessage {
           'formatting': at(5),
         },
       'vbDraftSlide' => {'type': 'vb-draft-slide', 'id': at(0), 'index': at(1)},
+      'vbDraftImage' => {
+          'type': 'vb-draft-image',
+          'id': at(0),
+          'image': at(1),
+        },
       'vbDraftLayer' => {
           'type': 'vb-draft-layer',
           'id': at(0),
@@ -128,6 +134,13 @@ sealed class WebsiteHtmlDraftMessage {
           written,
           formatting,
         );
+      case 'vb-draft-image':
+        final spec = text('image');
+        final image = spec == null || spec.length > 40
+            ? null
+            : WebsiteImageFields.parse(spec);
+        if (id == null || image == null) return null;
+        return WebsiteHtmlDraftImage(id, image.fields, image.index);
       case 'vb-draft-layer':
         final layer = text('layer');
         // A slide's stored position, or -1 for a canvas block's own layers.
@@ -238,6 +251,16 @@ final class WebsiteHtmlDraftAction extends WebsiteHtmlDraftMessage {
 
   final String id;
   final String action;
+}
+
+/// A click on one of the picked block's photos: its address to replace
+/// ([fields], of the item stored at [index] for a photo of a list).
+final class WebsiteHtmlDraftImage extends WebsiteHtmlDraftMessage {
+  const WebsiteHtmlDraftImage(this.id, this.fields, this.index);
+
+  final String id;
+  final WebsiteImageFields fields;
+  final int index;
 }
 
 /// A click on a canvas layer of the picked block: layer [layer] of carousel

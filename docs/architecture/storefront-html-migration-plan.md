@@ -1936,6 +1936,16 @@ de 15 px de alto Flutter lo esconde y el HTML lo muestra.
   tarjeta, como en el lienzo. Antes de construirlo se comprobó con clics
   reales en macOS que un diálogo de Flutter abierto sobre la vista web
   recibe los clics (no se los lleva la vista nativa de abajo).
+- **Las fotos, en su lugar (2026-10-07).** Con el bloque elegido, un clic
+  en la foto de «Sobre nosotros», de servicios, de la galería o del equipo
+  abre el selector de imágenes del lienzo (`showWebsiteMediaPicker`, con su
+  subida guardada como en el lienzo) y la foto elegida se escribe en un paso
+  del historial (`WebsiteInlineFieldBinding.beginImage`). Las fotos las
+  nombra el núcleo (`WebsiteImageFields`); la página las pide por nombre
+  (`data-edit-image="gallery#2"`). El fondo de la portada y del carrusel no
+  están, a propósito: bajo sus botones y flechas se cambian en el panel,
+  como en el lienzo. Tampoco el del llamado (todo su fondo lleva texto y
+  botones encima) ni los logos de la franja (su esquema no declara la foto).
 - **Las capas de una campaña se eligen en la página (2026-10-07).** La
   diapositiva 3 del inicio (cámaras) tiene 33 capas libres y en la vista
   HTML un clic sólo elegía el carrusel. Ahora, con el bloque elegido, un

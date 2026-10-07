@@ -1,6 +1,7 @@
 import 'package:jaspr/dom.dart';
 import 'package:jaspr/server.dart';
 import 'package:vinabike_public_core/modules/website/models/website_action.dart';
+import 'package:vinabike_public_core/modules/website/models/website_image_fields.dart';
 import 'package:vinabike_public_core/modules/website/models/website_block_type.dart';
 import 'package:vinabike_public_core/modules/website/models/website_section_content.dart';
 import 'package:vinabike_public_core/modules/website/theme/website_section_palette.dart';
@@ -319,25 +320,29 @@ class ServicesSectionView extends StatelessComponent {
             ]),
         ]),
         if (image.isNotEmpty)
-          figure(classes: 'sv-fig', [
-            img(
-              src: image,
-              alt: websiteSectionText(data, const ['imageAltText']).trim(),
-              attributes: {
-                'style': 'object-position:${_focal(data)}',
-                'loading': 'lazy',
-              },
-            ),
-            if (caption.isNotEmpty || captionDetail.isNotEmpty)
-              figcaption([
-                span(attributes: context.editText(const ['caption']), [
-                  .text(caption),
+          figure(
+            classes: 'sv-fig',
+            attributes: context.editImage(WebsiteImageFields.services),
+            [
+              img(
+                src: image,
+                alt: websiteSectionText(data, const ['imageAltText']).trim(),
+                attributes: {
+                  'style': 'object-position:${_focal(data)}',
+                  'loading': 'lazy',
+                },
+              ),
+              if (caption.isNotEmpty || captionDetail.isNotEmpty)
+                figcaption([
+                  span(attributes: context.editText(const ['caption']), [
+                    .text(caption),
+                  ]),
+                  span(attributes: context.editText(const ['captionDetail']), [
+                    .text(captionDetail),
+                  ]),
                 ]),
-                span(attributes: context.editText(const ['captionDetail']), [
-                  .text(captionDetail),
-                ]),
-              ]),
-          ]),
+            ],
+          ),
       ]),
     ]);
   }
@@ -672,6 +677,7 @@ class GallerySectionView extends StatelessComponent {
         figure(
           classes: 'gl-cell',
           attributes: {
+            ...context.editImage(WebsiteImageFields.gallery, index: index),
             if (span != null && mobile != null)
               'style':
                   '--dc:${span.columns};--dr:${span.rows};'
@@ -749,7 +755,7 @@ class TeamSectionView extends StatelessComponent {
           [
             for (final (index, member) in members)
               div(classes: 'tm-m', [
-                _portrait(member),
+                _portrait(member, index),
                 div(classes: 'tm-tx', [
                   _text(
                     'h3',
@@ -810,21 +816,25 @@ class TeamSectionView extends StatelessComponent {
     ]);
   }
 
-  Component _portrait(Map<String, dynamic> member) {
-    final photo = websiteSectionText(member, const [
-      'avatarUrl',
-      'image',
-    ]).trim();
-    return span(classes: 'tm-av', [
-      if (photo.isNotEmpty)
-        img(
-          src: photo,
-          alt: websiteSectionText(member, const ['avatarAltText']).trim(),
-          attributes: {'loading': 'lazy'},
-        )
-      else
-        RawText(materialIcon(mdPersonOutline, size: 36)),
-    ]);
+  Component _portrait(Map<String, dynamic> member, int index) {
+    final photo = websiteSectionText(
+      member,
+      WebsiteImageFields.team.keys,
+    ).trim();
+    return span(
+      classes: 'tm-av',
+      attributes: context.editImage(WebsiteImageFields.team, index: index),
+      [
+        if (photo.isNotEmpty)
+          img(
+            src: photo,
+            alt: websiteSectionText(member, const ['avatarAltText']).trim(),
+            attributes: {'loading': 'lazy'},
+          )
+        else
+          RawText(materialIcon(mdPersonOutline, size: 36)),
+      ],
+    );
   }
 
   Component? _links(Map<String, dynamic> member) {

@@ -65,7 +65,6 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 | Desde | Qué | Página |
 |---|---|---|
 | 2026-10-07 | Vista HTML del editor: medir el zoom de ventana en Windows (en el ERP web quedó verificada con 2450c55e: barra, «Agregar aquí», alto y escritura) | [editor](editor-del-sitio.md) |
-| 2026-10-04 | **Contenido real y visible en el HTML** de fichas, categorías y portada (hoy en `<noscript>`, ~100–150 palabras contra 700–2.500 de los referentes). Si el dueño aprueba la migración a HTML, la fase 1 lo resuelve y no se completa la página instantánea | [seo-de-referentes](seo-de-referentes.md) |
 | 2026-10-04 | **Descripciones de producto**: 29 de 1.541 publicados tienen texto; el JSON-LD y la página no tienen qué mostrar en el resto (contenido, no marcado) | [datos-estructurados](datos-estructurados.md) |
 | 2026-10-04 | Términos de devolución (días, quién paga, reembolso) como campos del editor, para declararlos además del link (regla 1: primero el control) | [datos-estructurados](datos-estructurados.md) |
 | 2026-10-04 | Los tramos de envío no tienen control en el editor y la página `/envios` los repite como texto: un cambio de tarifa hay que hacerlo en dos lados. Llevarlos al editor y que la página los lea de `get_public_online_shipping_tiers` | [checkout](checkout-y-pedidos.md) |
@@ -91,6 +90,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 
 | Fecha | Qué | Página |
 |---|---|---|
+| 2026-10-07 | **Contenido real y visible en el HTML** (brecha 1 de SEO, del 2026-10-04): con la tienda en HTML, la ficha medida trae 390 palabras y 90 enlaces sin JavaScript (antes 13 y 3), la categoría Componentes 575 y 133, sin `<noscript>` | [seo-de-referentes](seo-de-referentes.md) |
 | 2026-10-07 | **El lienzo muestra el catálogo del cliente**: Editar cargaba también lo no publicado y lo agotado (1.615 en `/productos` contra 538) y lo filtraba en la app; ahora pide al servidor como la tienda. 537 y 425 en Componentes, igual que vinabike.cl | [editor](editor-del-sitio.md) |
 | 2026-10-07 | **Código muerto fuera**: `banners_management_page.dart`, `content_management_page.dart`, `customer_account_page.dart`, `premium_dashboard_widgets.dart` y las páginas viejas del chat (`customer_chat_list_page.dart`, `customer_chat_detail_page.dart`); `/cuenta/mensajes` y `/cuenta/mensajes/:id` redirigen ahora al centro de chats (`/cuenta/chats`) | [portal](portal-de-clientes.md) |
 | 2026-10-07 | **Carrusel en teléfono: las flechas ya no tapan el texto** (pendiente del 2026-09-24): en la portada HTML van abajo, a los lados de los puntos; comprobado en vivo a 390 px | `storefront-instant-page.md` |

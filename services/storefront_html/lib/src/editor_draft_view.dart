@@ -319,6 +319,8 @@ const _draftScript = r'''
     if (text && !edit) { begin(text); return; }
     var layer = edit ? null : layerOf(event.target);
     if (layer) { askLayer(layer); return; }
+    var photo = edit ? null : photoOf(event.target);
+    if (photo) { askPhoto(photo); return; }
     var found = part(event.target);
     // A question of the picked block opens and closes, as on the store.
     var question = event.target.closest && event.target.closest('summary');
@@ -385,8 +387,20 @@ const _draftScript = r'''
     send('vbDraftLayer', [id, slide, layer],
       { type: 'vb-draft-layer', id: id, slide: slide, layer: layer });
   }
+  // A photo of the picked block (`data-edit-image`): a click opens the
+  // editor's image picker for it (`vbDraftImage(id, spec)`), as the Flutter
+  // canvas's media slot.
+  function photoOf(node) {
+    var f = node && node.closest ? node.closest('[data-edit-image]') : null;
+    return f && pick.target && part(f) === pick.target ? f : null;
+  }
+  function askPhoto(f) {
+    var id = pick.target.getAttribute('data-block-id');
+    var spec = f.getAttribute('data-edit-image');
+    send('vbDraftImage', [id, spec], { type: 'vb-draft-image', id: id, image: spec });
+  }
   function heat(node) {
-    var target = edit ? null : (pressable(node) || editable(node) || layerOf(node));
+    var target = edit ? null : (pressable(node) || editable(node) || layerOf(node) || photoOf(node));
     if (target === hot) return;
     if (hot) hot.classList.remove('vb-text-hot', 'vb-button-hot');
     hot = target;

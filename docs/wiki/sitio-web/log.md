@@ -403,3 +403,5 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   de macOS recibe los clics.
 - Las capas de una campaña (diapositiva de cámaras, 33 capas) se eligen con
   un clic en la vista HTML; antes sólo se elegía el carrusel.
+- Las fotos de sobre nosotros, servicios, galería y equipo se cambian con
+  un clic en la vista HTML (selector de imágenes del lienzo).

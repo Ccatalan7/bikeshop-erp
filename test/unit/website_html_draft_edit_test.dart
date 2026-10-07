@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/modules/website/models/website_action.dart';
+import 'package:vinabike_public_core/modules/website/models/website_image_fields.dart';
 import 'package:vinabike_erp/modules/website/models/website_responsive_authoring.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
 import 'package:vinabike_erp/modules/website/services/website_html_draft_picks.dart';
@@ -712,6 +713,72 @@ void main() {
         ),
         isNull,
       );
+    });
+  });
+
+  group('a photo replaced in the HTML view', () {
+    test('the page names it by its fields', () {
+      final press = WebsiteHtmlDraftMessage.fromHandler(
+        'vbDraftImage',
+        ['b1', 'gallery#3'],
+      )! as WebsiteHtmlDraftImage;
+      expect(press.fields, WebsiteImageFields.gallery);
+      expect(press.index, 3);
+      for (final spec in ['hero', 'imageUrl', 'gallery', 'about#1', null]) {
+        expect(
+          WebsiteHtmlDraftMessage.fromHandler('vbDraftImage', ['b1', spec]),
+          isNull,
+          reason: '$spec',
+        );
+      }
+    });
+
+    test('one step of the history, in the item stored where the page says', () {
+      final provider = _provider('gallery', {
+        'title': 'Galería',
+        'images': [
+          {'imageUrl': 'https://x/a.jpg', 'caption': 'A'},
+          {'imageUrl': '', 'caption': 'B'},
+        ],
+      });
+      addTearDown(provider.dispose);
+      final write = _fields(provider, 'gallery').beginImage(
+        WebsiteImageFields.gallery,
+        1,
+      )!;
+      expect(write.url, '');
+      expect(write.commit('https://x/b.jpg'),
+          WebsiteInlineMutationResult.committed);
+      final images = _data(provider)['images'] as List;
+      expect(images[1], containsPair('imageUrl', 'https://x/b.jpg'));
+      expect(images[0], containsPair('imageUrl', 'https://x/a.jpg'));
+      provider.undo();
+      expect(
+          (_data(provider)['images'] as List)[1], containsPair('imageUrl', ''));
+    });
+
+    test(
+        'the same photo writes nothing; a draft changed meanwhile is not '
+        'overwritten; a block not picked has no photo to replace', () {
+      final provider = _provider('about', {
+        'title': 'Nosotros',
+        'imageUrl': 'https://x/a.jpg',
+      });
+      addTearDown(provider.dispose);
+      final fields = _fields(provider, 'about');
+      final same = fields.beginImage(WebsiteImageFields.about, 0)!;
+      expect(same.commit('https://x/a.jpg'),
+          WebsiteInlineMutationResult.unchanged);
+      expect(provider.canUndo, isFalse);
+
+      final stale = fields.beginImage(WebsiteImageFields.about, 0)!;
+      provider.updateBlockData('b1', 'title', 'Desde el panel');
+      expect(stale.commit('https://x/b.jpg'),
+          WebsiteInlineMutationResult.rejected);
+      expect(_data(provider)['imageUrl'], 'https://x/a.jpg');
+
+      provider.selectBlock(null);
+      expect(fields.beginImage(WebsiteImageFields.about, 0), isNull);
     });
   });
 }

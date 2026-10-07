@@ -1,3 +1,5 @@
+import 'package:vinabike_public_core/modules/website/models/website_image_fields.dart';
+
 import '../models/website_action.dart';
 import '../models/website_block_capabilities.dart';
 import '../models/website_block_definition.dart';
@@ -16,7 +18,7 @@ import 'website_block_content_presenters.dart';
 ///
 /// One owner for every surface that edits a block where it is drawn: the
 /// Flutter canvas's text, image and action slots and the texts and buttons
-/// of the editor's «Vista HTML».
+/// and photos of the editor's «Vista HTML».
 class WebsiteInlineFieldBinding {
   const WebsiteInlineFieldBinding({
     required this.provider,
@@ -159,6 +161,38 @@ class WebsiteInlineFieldBinding {
       // rule, as its schema says it.
       destinationHelp: schemaFieldFor(item, spec.href)?.helpText,
       owner: () => _storedOwner(item),
+    );
+  }
+
+  /// Starts replacing one of the block's photos where the page draws it
+  /// (the editor's «Vista HTML»): [spec]'s, of the item stored at [index]
+  /// for a photo of a list, guarded from now as the canvas's media slot
+  /// guards its picker. `null` for a block not drawn yet or not picked, an
+  /// item that is not there, or a photo the block's schema does not have.
+  WebsiteInlineImageWrite? beginImage(WebsiteImageFields spec, int index) {
+    final item = spec.collection.isEmpty
+        ? null
+        : WebsiteInlineRepeaterTarget(
+            collectionKeys: spec.collection,
+            itemIndex: index,
+          );
+    final viewport = provider.renderedBlockViewportFor(blockId);
+    if (schemaFieldFor(item, spec.keys) == null || viewport == null) {
+      return null;
+    }
+    final property = propertyFor(item, spec.keys);
+    final url = textValue(item, spec.keys, viewport);
+    final target = property == null ? null : targetFor(item, [property]);
+    final lease = captureLease(target);
+    if (property == null || url == null || target == null || lease == null) {
+      return null;
+    }
+    return WebsiteInlineImageWrite._(
+      provider,
+      property.canonicalKey,
+      target,
+      lease,
+      url.trim(),
     );
   }
 
@@ -460,6 +494,36 @@ class WebsiteInlineActionFields {
           action,
         ),
     };
+  }
+}
+
+/// A photo being replaced where the page draws it
+/// ([WebsiteInlineFieldBinding.beginImage]).
+class WebsiteInlineImageWrite {
+  WebsiteInlineImageWrite._(
+    this._provider,
+    this._key,
+    this.target,
+    this._lease,
+    this.url,
+  );
+
+  final WebsiteEditModeProvider _provider;
+  final String _key;
+  final WebsiteInlineManipulationLease _lease;
+
+  /// What the write leases: the picker's asynchronous guard is built on it.
+  final WebsiteInlineManipulationTarget target;
+
+  /// The photo's address as the draft held it when the replacing began.
+  final String url;
+
+  /// Writes [next] as one step of the history: changed, unchanged (the same
+  /// photo) or refused (the draft changed since the replacing began; nothing
+  /// is written then).
+  WebsiteInlineMutationResult commit(String next) {
+    if (next.trim() == url) return WebsiteInlineMutationResult.unchanged;
+    return _provider.commitInlineMutation(_lease, {_key: next.trim()});
   }
 }
 

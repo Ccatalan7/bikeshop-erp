@@ -119,11 +119,11 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_blocks_view.dart",
-      "sha256": "38638e512e708c2400f5f7198a5f15202f728a7e0388b32bb3a4cf7e9e64ea0e"
+      "sha256": "02271733d6fef367452e2b1c04d36a15a460816f0669550f47ebd5775189c313"
     },
     {
       "path": "services/storefront_html/lib/src/website_content_blocks_view.dart",
-      "sha256": "d2f820cdcff7572689c29cb6e51f96034982712eb98486da55b3a565b6570356"
+      "sha256": "90a5df13455134542f3f15b7bc15fc7fced839d2afd514907df939f234162f7a"
     },
     {
       "path": "services/storefront_html/lib/src/website_page_css.dart",
@@ -131,7 +131,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_section_blocks_view.dart",
-      "sha256": "f2ad8655fc54aefd05635fe608031581f93607f2eb471015c62a5d7c5efe5765"
+      "sha256": "8c40f7f454aed9f44f1389b3abd62f400e613f7f5ebf5a922ff65cec6a0b02e0"
     },
     {
       "path": "lib/modules/website/widgets/canvas_block.dart",

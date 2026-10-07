@@ -4245,6 +4245,66 @@ void main() {
       },
     );
 
+    test(
+      'its photos name the block photo they draw, so the operator '
+      'replaces them where they are; a visitor never sees the names',
+      () async {
+        final blocks = [
+          {
+            'id': 'b-gal',
+            'block_type': 'gallery',
+            'block_data': {
+              'title': 'Galería',
+              'images': [
+                {'imageUrl': 'https://img.test/a.jpg', 'caption': 'Taller'},
+                {'imageUrl': 'https://img.test/b.jpg'},
+              ],
+            },
+            'is_visible': true,
+            'order_index': 0,
+          },
+          {
+            'id': 'b-team',
+            'block_type': 'team',
+            'block_data': {
+              'title': 'Equipo',
+              'members': [
+                {'name': 'Ana', 'role': 'Mecánica'},
+              ],
+            },
+            'is_visible': true,
+            'order_index': 1,
+          },
+        ];
+        final (status, answer, _) = await draft(_FakeReads(), {
+          'page': {'home': true},
+          'blocks': blocks,
+        });
+        expect(status, 200);
+        final html = answer['html'] as String;
+        for (final spec in ['gallery#0', 'gallery#1', 'team#0']) {
+          expect(html, contains('data-edit-image="$spec"'), reason: spec);
+        }
+        expect(html, contains("send('vbDraftImage'"));
+
+        final public = await _get(
+          _FakeReads(
+            homeRow: {
+              'id': 'home-row',
+              'slug': 'inicio',
+              'title': 'Inicio',
+              'is_published': true,
+              'website_blocks': blocks,
+            },
+          ),
+          '/_html/',
+        );
+        final visit = await public.readAsString();
+        expect(visit, contains('https://img.test/a.jpg'));
+        expect(visit, isNot(contains('data-edit-image')));
+      },
+    );
+
     test('the home named by its row, as the editor names it', () async {
       final reads = _FakeReads(
         homeRow: {

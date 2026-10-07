@@ -1,5 +1,6 @@
 import 'package:jaspr/dom.dart';
 import 'package:jaspr/server.dart';
+import 'package:vinabike_public_core/modules/website/models/website_image_fields.dart';
 import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
 
 import 'block_composition.dart';
@@ -285,16 +286,20 @@ class AboutBlockView extends StatelessComponent {
       [
         div(classes: 'ab-in', [
           if (image.isNotEmpty)
-            div(classes: 'ab-media', [
-              img(
-                src: image,
-                alt: alt,
-                attributes: {
-                  'style': 'object-position:${_focal(data)}',
-                  'loading': 'lazy',
-                },
-              ),
-            ]),
+            div(
+              classes: 'ab-media',
+              attributes: context.editImage(WebsiteImageFields.about),
+              [
+                img(
+                  src: image,
+                  alt: alt,
+                  attributes: {
+                    'style': 'object-position:${_focal(data)}',
+                    'loading': 'lazy',
+                  },
+                ),
+              ],
+            ),
           text,
         ]),
       ],
