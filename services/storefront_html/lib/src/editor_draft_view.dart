@@ -34,6 +34,13 @@ const _draftCss = '''
 .vb-bar button{all:unset;display:grid;place-items:center;width:30px;height:30px;border-radius:8px;cursor:pointer}
 .vb-bar button:hover,.vb-bar button:focus-visible{background:rgb(0 0 0 / .1)}
 .vb-bar svg{width:18px;height:18px;fill:currentColor}
+.vb-add{all:unset;position:absolute;left:50%;top:0;transform:translate(-50%,-50%);display:flex;align-items:center;gap:6px;
+  height:26px;padding:0 12px 0 4px;border-radius:999px;box-shadow:0 1px 4px rgb(0 0 0 / .3);pointer-events:auto;cursor:pointer;
+  font:600 11px/1 system-ui,-apple-system,sans-serif;white-space:nowrap}
+.vb-add.vb-after{top:100%}
+.vb-add i{display:grid;place-items:center;width:18px;height:18px;border-radius:50%;font:700 14px/1 system-ui,sans-serif;font-style:normal}
+.vb-add:hover,.vb-add:focus-visible{filter:brightness(1.08);outline:2px solid rgb(255 255 255 / .6)}
+.vb-mark.vb-writing .vb-add{display:none}
 .draft-missing{display:grid;place-items:center;gap:4px;min-height:160px;margin:0;padding:24px;
   border:1px dashed #9aa0a6;border-radius:8px;background:repeating-linear-gradient(135deg,#f8f9fa 0 12px,#f1f3f4 12px 24px);
   color:#5f6368;font:400 14px/1.4 var(--body,system-ui);text-align:center}
@@ -62,8 +69,7 @@ const _draftScript = r'''
   // The bar of the picked block, as the canvas draws it (`BlockActionBar`):
   // the editor says which buttons apply and in which colours.
   function drawBar() {
-    var old = pick.el.querySelector('.vb-bar');
-    if (old) old.remove();
+    [].forEach.call(pick.el.querySelectorAll('.vb-bar,.vb-add'), function (old) { old.remove(); });
     pick.el.classList.remove('vb-has-bar');
     var b = meta && meta.bar;
     if (!b || !pick.target) return;
@@ -93,6 +99,23 @@ const _draftScript = r'''
     button('delete', 'Eliminar', 'remove', true);
     pick.el.appendChild(bar);
     pick.el.classList.add('vb-has-bar');
+    // «Agregar aquí» on the block's two seams, as the canvas's markers.
+    ['before', 'after'].forEach(function (side) {
+      var add = document.createElement('button');
+      add.type = 'button';
+      add.className = 'vb-add vb-' + side;
+      add.setAttribute('data-action', 'insert-' + side);
+      add.setAttribute('aria-label', side === 'before' ? 'Agregar una sección arriba' : 'Agregar una sección abajo');
+      add.style.background = meta.accent || '#0b57d0';
+      add.style.color = meta.onAccent || '#fff';
+      var plus = document.createElement('i');
+      plus.textContent = '+';
+      plus.style.background = meta.onAccent || '#fff';
+      plus.style.color = meta.accent || '#0b57d0';
+      add.appendChild(plus);
+      add.appendChild(document.createTextNode('Agregar aquí'));
+      pick.el.appendChild(add);
+    });
   }
   var meta = null;
   function tell(id) {
@@ -122,13 +145,17 @@ const _draftScript = r'''
     var bar = m.el.querySelector('.vb-bar');
     if (bar) {
       // In sight while the block is: below the header that stays on top
-      // (sticky, or fixed over the home's first block), inside the block.
+      // (sticky, or fixed over the home's first block), inside the block,
+      // and under the «Agregar aquí» of its upper seam.
       var header = document.querySelector('header.top');
       var position = header ? getComputedStyle(header).position : '';
       var cover = position === 'sticky' || position === 'fixed'
         ? Math.max(0, header.getBoundingClientRect().bottom) : 0;
-      var top = Math.max(8, cover - r.top + 8);
-      bar.style.top = Math.min(top, Math.max(8, r.height - 42)) + 'px';
+      var hidden = Math.max(0, cover - r.top);
+      var add = m.el.querySelector('.vb-add.vb-before');
+      if (add) add.style.top = (hidden ? hidden + 18 : 0) + 'px';
+      var top = hidden ? hidden + 40 : 22;
+      bar.style.top = Math.min(top, Math.max(8, r.height - 52)) + 'px';
     }
   }
   function part(node) {
@@ -173,7 +200,7 @@ const _draftScript = r'''
     // a click): the caret moves, nothing is picked.
     if (edit && (edit.el.contains(event.target) ||
         (event.target.tagName === 'SUMMARY' && event.target.contains(edit.el)))) return;
-    var act = event.target.closest && event.target.closest('.vb-bar [data-action]');
+    var act = event.target.closest && event.target.closest('.vb-bar [data-action],.vb-add');
     if (act) {
       var id = pick.target && pick.target.getAttribute('data-block-id');
       var action = act.getAttribute('data-action');
