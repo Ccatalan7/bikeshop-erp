@@ -146,6 +146,10 @@ const _draftScript = r'''
     requestAnimationFrame(function () { queued = false; refresh(); });
   }
   document.addEventListener('click', function (event) {
+    // The picked carousel's arrows and dots move it, as on the store.
+    var turn = event.target.closest &&
+      event.target.closest('[data-car-prev],[data-car-next],[data-car-go]');
+    if (turn && pick.target && part(turn) === pick.target && !edit) return;
     event.preventDefault();
     event.stopPropagation();
     // Inside the text being written (or the key press a summary turns into

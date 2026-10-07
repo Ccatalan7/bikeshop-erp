@@ -3539,6 +3539,8 @@ void main() {
         expect(html, contains('data-edit-text="$field"'), reason: field);
       }
       expect(html, contains('window.vbDraftEditing = function'));
+      // The carousel stays on its slide while the operator edits it.
+      expect(html, isNot(contains('data-interval')));
 
       final public = await _get(
         _FakeReads(
@@ -3556,6 +3558,7 @@ void main() {
       expect(visit, contains('Despachan'));
       expect(visit, isNot(contains('data-edit-text')));
       expect(visit, isNot(contains('vbDraftEditing')));
+      expect(visit, contains('data-interval="5000"'));
     });
 
     test('the home named by its row, as the editor names it', () async {

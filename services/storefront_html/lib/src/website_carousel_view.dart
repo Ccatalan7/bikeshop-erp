@@ -96,7 +96,11 @@ class CarouselBlockView extends StatelessComponent {
       attributes: {
         'data-car': '',
         'data-anim': animation,
-        if (autoPlay && many) 'data-interval': '${interval * 1000}',
+        // In the editor's draft it stays on its slide, as on the canvas
+        // (`_autoPlay` is off while editing): a text being written does not
+        // slide away.
+        if (autoPlay && many && !context.draft)
+          'data-interval': '${interval * 1000}',
         'style': '--car-dur:${duration}ms',
         'aria-roledescription': 'carrusel',
         'aria-label': 'Destacados',
