@@ -1814,8 +1814,21 @@ Lo que la medición enseñó y sirve para cualquier paridad que quede:
   ahora es obligatoria), y la barra de formato no se podía usar con
   teclado (Tab sacaba el foco del texto y terminaba la edición; ahora texto
   y barra son una sesión y Tab los recorre).
-- **Lo que falta del 5c/5d:** medir el zoom en Windows; probar el ERP web con
-  una sesión real.
+- **El ERP web, probado con la sesión del dueño (2026-10-07, Chrome,
+  `project-vinabike.web.app` en `00914c24`).** La vista HTML dibujaba la
+  página y un clic elegía el bloque en el panel, pero la página no dibujaba
+  el marco ni la barra ni dejaba escribir: en la web `InAppWebView` carga
+  `loadData` como un `iframe` con `data:` URL, que es de **otro origen**, así
+  que `evaluateJavascript` no llega a la página (y `addJavaScriptHandler` ni
+  existe: lanzaba al crear el visor). Corrección: la página avisa que está
+  lista (`vb-draft-ready`, con la ficha de la vista); el editor guarda esa
+  ventana (`event.source`) y le habla por `postMessage` (`vb-host`, una lista
+  cerrada de funciones, aceptado sólo desde la ventana que la contiene y con
+  la ficha); lo que encontró `vbDraftPicked` vuelve igual
+  (`vb-draft-result`). En la web no se recuerda el desplazamiento entre
+  redibujos (no se puede leer el de otro origen).
+- **Lo que falta del 5c/5d:** medir el zoom en Windows; verificar en el ERP
+  web publicado la escritura y la barra tras esta corrección.
 - **El carrusel sigue al panel (servidor `f3d97f23`, Cloud Run `00049`).** El
   carrusel acepta un giro (`car:go`) y avisa cuál muestra (`car:shown`); en
   el borrador el editor le dice la diapositiva elegida en el panel

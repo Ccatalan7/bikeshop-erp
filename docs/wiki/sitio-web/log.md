@@ -336,3 +336,10 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   primero. Se marca el que se ve.
 - El carrusel no avanza solo en el borrador (como el lienzo), y sus flechas
   lo mueven.
+
+## 2026-10-07 — La vista HTML en el ERP web
+
+- Probada con la sesión del dueño en Chrome: el visor de la web carga la
+  página como `data:` URL, de otro origen; el editor no podía ejecutar nada
+  en ella (ni marco, ni barra, ni escritura). Ahora se hablan por mensajes en
+  los dos sentidos, firmados con la ficha de la vista.

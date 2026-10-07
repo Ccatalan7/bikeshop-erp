@@ -266,8 +266,8 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
     final web = _web;
     if (web == null) return; // Shown by `onWebViewCreated`.
     // The operator keeps their place on the page across redraws.
-    final y = await web.getScrollY() ?? 0;
-    _restoreScroll = y;
+    // (A frame of another origin, on the web, keeps no place to read.)
+    _restoreScroll = kIsWeb ? 0 : await web.getScrollY() ?? 0;
     await web.loadData(
       // In a frame (the ERP on the web) the base URL does not reach the
       // page: its fonts, logo and photos are found through `<base>`, which
@@ -333,6 +333,15 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
   Future<void> _markSelection() async {
     final web = _web;
     if (web == null || !mounted) return;
+    if (kIsWeb) {
+      // The page answers what it found as a message (`WebsiteHtmlDraftShown`).
+      websiteHtmlDraftTell(
+        _nonce,
+        'vbDraftPicked',
+        [_selected, _selectionInfo(), _bring],
+      );
+      return;
+    }
     try {
       final found = await web.evaluateJavascript(
         source: 'window.vbDraftPicked && '
@@ -434,6 +443,13 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
 
   void _received(WebsiteHtmlDraftMessage message) {
     switch (message) {
+      case WebsiteHtmlDraftReady():
+        // The page on the web is drawn and can be told things now.
+        _shownSlides = null;
+        unawaited(_markSelection());
+        _showSlides(instant: true);
+      case WebsiteHtmlDraftShown(:final found):
+        if (found) _bring = false;
       case WebsiteHtmlDraftPick(:final id):
         _picked(id);
       case WebsiteHtmlDraftAction(:final id, :final action):
@@ -732,6 +748,12 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
   Future<void> _tell(String function, List<Object?> arguments) async {
     final web = _web;
     if (web == null || !mounted) return;
+    // On the web the page is a frame of another origin: it is told by
+    // message, once it said it is ready.
+    if (kIsWeb) {
+      websiteHtmlDraftTell(_nonce, function, arguments);
+      return;
+    }
     try {
       await web.evaluateJavascript(
         source: 'window.$function && window.$function('
@@ -825,14 +847,19 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
                             ),
                             onWebViewCreated: (controller) {
                               _web = controller;
-                              for (final name in const [
-                                'vbDraftPick',
-                                'vbDraftAction',
-                                'vbDraftEdit',
-                                'vbDraftSlide',
-                                'vbDraftHeight',
-                                'vbDraftMove',
-                              ]) {
+                              // On the web the page speaks by message
+                              // (`websiteHtmlDraftPicks`); a frame has no
+                              // handlers.
+                              for (final name in kIsWeb
+                                  ? const <String>[]
+                                  : const [
+                                      'vbDraftPick',
+                                      'vbDraftAction',
+                                      'vbDraftEdit',
+                                      'vbDraftSlide',
+                                      'vbDraftHeight',
+                                      'vbDraftMove',
+                                    ]) {
                                 controller.addJavaScriptHandler(
                                   handlerName: name,
                                   callback: _handler(name),

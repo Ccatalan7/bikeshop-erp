@@ -5,7 +5,8 @@
   "id": "editor-html-view",
   "scope": "release",
   "platforms": [
-    "macos"
+    "macos",
+    "web"
   ],
   "title": "Vista HTML en el editor del sitio",
   "summary": "En el editor del sitio, «Vista HTML» muestra la página en pantalla —inicio, páginas, catálogo, categorías y ficha de producto— tal como la arma la tienda en HTML, con lo que aún no guardas, y se actualiza con cada cambio.",
@@ -21,7 +22,7 @@
     },
     {
       "path": "lib/modules/website/widgets/website_html_draft_view.dart",
-      "sha256": "64c70b46c4846a43747a5fdf782da9a0d94df5cd19b9213604ea16203505a1e5"
+      "sha256": "e25841897d7568772f898c0862520598564f1f9f7dfcd8b74b3485476690d4fe"
     },
     {
       "path": "lib/modules/website/providers/website_edit_mode_provider.dart",
@@ -49,7 +50,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/editor_draft_view.dart",
-      "sha256": "a26916a6aeb12dd2627d39f1a6d3e2c26eb520f95ad6f3efe2a81f2a24f97c75"
+      "sha256": "b1ced8f29b8e29a295ba7912d2e2d0297e79d95b1d71cbfb50d93dc2b13bf269"
     },
     {
       "path": "services/storefront_html/lib/src/editor_page_model.dart",
@@ -81,15 +82,15 @@
     },
     {
       "path": "lib/modules/website/services/website_html_draft_picks.dart",
-      "sha256": "92aa3358badcf666070077ae62b10ec93fdab24a6c2ddf0c0df9b0338eafa19d"
+      "sha256": "96083e10fc16307fb958ecf82871cbe62fa2aa926cfbaa3a02806d403e96d7c8"
     },
     {
       "path": "lib/modules/website/services/website_html_draft_picks_stub.dart",
-      "sha256": "d69a7f6de990eca0d3ab4578359979c9fbfdbfc06e99c8a2dedd6eeafac84d88"
+      "sha256": "6d48aa56251f98df757cc38b135e97c5fed9b26b45fe74c10c19fa300b94cc74"
     },
     {
       "path": "lib/modules/website/services/website_html_draft_picks_web.dart",
-      "sha256": "cb85119f3558c10ea8ce4f5a638e9870b43727af515226304c7fb9c62fbf2a73"
+      "sha256": "7bb16562b1f80350af4aee6cdb032ed8c74de9278a2e352606e8d80383727c15"
     },
     {
       "path": "services/storefront_html/lib/src/editor_draft_reads.dart",

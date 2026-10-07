@@ -202,6 +202,24 @@ void main() {
         WebsiteHtmlDraftMessage.fromPost({'type': 'vb-draft-action'}),
         isNull,
       );
+      // On the ERP on the web: the page says it is ready, and what
+      // vbDraftPicked found comes back as a message.
+      expect(
+        WebsiteHtmlDraftMessage.fromPost({'type': 'vb-draft-ready'}),
+        isA<WebsiteHtmlDraftReady>(),
+      );
+      expect(
+        WebsiteHtmlDraftMessage.fromPost(
+          {'type': 'vb-draft-result', 'call': 'vbDraftPicked', 'result': true},
+        ),
+        isA<WebsiteHtmlDraftShown>().having((m) => m.found, 'found', true),
+      );
+      expect(
+        WebsiteHtmlDraftMessage.fromPost(
+          {'type': 'vb-draft-result', 'call': 'other', 'result': true},
+        ),
+        isNull,
+      );
       expect(
         WebsiteHtmlDraftMessage.fromPost(
           {'type': 'vb-draft-slide', 'id': 'b1', 'index': 0},

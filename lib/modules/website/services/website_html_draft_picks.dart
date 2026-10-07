@@ -57,6 +57,11 @@ sealed class WebsiteHtmlDraftMessage {
         };
     final id = text('id');
     switch (data['type']) {
+      case 'vb-draft-ready':
+        return const WebsiteHtmlDraftReady();
+      case 'vb-draft-result':
+        if (data['call'] != 'vbDraftPicked') return null;
+        return WebsiteHtmlDraftShown(data['result'] == true);
       case 'vb-draft-pick':
         return WebsiteHtmlDraftPick(id);
       case 'vb-draft-action':
@@ -146,6 +151,20 @@ sealed class WebsiteHtmlDraftMessage {
     }
     return null;
   }
+}
+
+/// The page, in a frame on the ERP on the web, is ready to be told things
+/// ([websiteHtmlDraftTell]).
+final class WebsiteHtmlDraftReady extends WebsiteHtmlDraftMessage {
+  const WebsiteHtmlDraftReady();
+}
+
+/// Whether the page found the part `vbDraftPicked` named, told as a message
+/// on the web.
+final class WebsiteHtmlDraftShown extends WebsiteHtmlDraftMessage {
+  const WebsiteHtmlDraftShown(this.found);
+
+  final bool found;
 }
 
 /// A click on a part of the page ([id]), or on none (`null`).
@@ -280,3 +299,9 @@ class WebsiteHtmlDraftTextField {
 /// platforms.
 Stream<WebsiteHtmlDraftMessage> websiteHtmlDraftPicks(String nonce) =>
     websiteHtmlDraftPicksImpl(nonce);
+
+/// Calls the page's [call] with [arguments] in the ERP on the web, where the
+/// page is a frame of another origin: a message signed with [nonce] to the
+/// page that said it is ready. `false` before then, and on other platforms.
+bool websiteHtmlDraftTell(String nonce, String call, List<Object?> arguments) =>
+    websiteHtmlDraftTellImpl(nonce, call, arguments);
