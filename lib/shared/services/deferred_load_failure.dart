@@ -5,10 +5,12 @@
 /// fixed names (`main.dart.js_N.part.js`), which the page fetches the first
 /// time it needs them. After a deploy the server holds the next build's
 /// parts, so a page opened before cannot load the ones it has not used yet:
-/// dart2js tells it by the part's hash ([newBuild]). A download that failed,
-/// or code that ran without its part, tells less ([unavailable]). Either
-/// way nothing is wrong with the data or the operator's work: the page needs
-/// a reload to go on (`DeferredLoadNotice` says so).
+/// the part arrives, but registers another build's hash, and dart2js says
+/// the part «not loaded» although its download succeeded ([newBuild]).
+/// A download that failed, or code that ran without its part, tells less
+/// ([unavailable]). Either way nothing is wrong with the data or the
+/// operator's work: the page needs a reload to go on (`DeferredLoadNotice`
+/// says so).
 enum DeferredLoadFailure {
   /// The server holds another build: this page is older than the deploy.
   newBuild,
@@ -23,11 +25,18 @@ enum DeferredLoadFailure {
     if (error == null) return null;
     final message = error.toString();
     if (message.startsWith('DeferredLoadException')) {
-      return message.contains('the code with hash') ? newBuild : unavailable;
+      return _otherBuild.hasMatch(message) ? newBuild : unavailable;
     }
     if (_notLoaded.hasMatch(message)) return unavailable;
     return null;
   }
+
+  /// A part that downloaded and did not register the hash this page expects
+  /// (seen in the published ERP on 2026-10-07, after three retries), or a
+  /// hunk missing when the parts are initialized.
+  static final _otherBuild = RegExp(
+    r'Success callback invoked but parts? .* not loaded|the code with hash',
+  );
 
   static final _notLoaded = RegExp(r'^Deferred library \S+ was not loaded\.');
 }

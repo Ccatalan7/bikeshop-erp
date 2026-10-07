@@ -1843,8 +1843,20 @@ Lo que la medición enseñó y sirve para cualquier paridad que quede:
   retira el viejo; una pestaña abierta antes de un deploy dice «Hay una
   versión nueva del ERP» con «Recargar» (`.github/copilot-instructions.md`,
   «El ERP web no tiene service worker»).
-- **Lo que falta del 5c/5d:** medir el zoom en Windows; verificar en el ERP
-  web publicado la escritura y la barra tras estas dos correcciones.
+- **Verificado en el ERP web publicado (2450c55e, sesión del dueño en
+  Chrome).** El worker viejo se retiró solo (sin registro ni cachés `flutter-*`
+  a los 10 s) y el ERP arrancó; elegir el carrusel dibuja barra, «Agregar
+  aquí» arriba y abajo y «↕ 750 px»; un segundo clic abre la escritura con
+  su barra de formato; « (prueba)» con ⌘↵ quedó en el panel y se deshizo
+  (Guardar volvió a apagarse); consola sin errores. Encender la vista tarda
+  unos 4,5 s (3,3 s hasta pedir la página mientras Flutter rearma la
+  pantalla, 1,2 s del servidor). Con una pestaña vieja simulada el editor
+  mostró el aviso en el panel y en una línea por bloque; esa prueba mostró
+  que el error real de una parte de otro build es «Success callback invoked
+  but part … not loaded» (clasificado desde entonces como versión nueva), y
+  que la primera carga tras el deploy aún corría el `main.dart.js` viejo del
+  worker (lo retira `web/index.html` antes de arrancar).
+- **Lo que falta del 5c/5d:** medir el zoom en Windows.
 - **El carrusel sigue al panel (servidor `f3d97f23`, Cloud Run `00049`).** El
   carrusel acepta un giro (`car:go`) y avisa cuál muestra (`car:shown`); en
   el borrador el editor le dice la diapositiva elegida en el panel

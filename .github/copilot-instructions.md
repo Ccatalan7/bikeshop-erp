@@ -5733,10 +5733,17 @@ caché a mano. Costó media ronda de verificación creer que era el código nuev
   copia `scripts/erp_web/flutter_service_worker.js` encima del archivo vacío
   que deja Flutter: el navegador que todavía tiene el worker viejo se lo
   cambia por ése, que borra las cachés `flutter-*` y se desregistra sin
-  recargar la página. La prueba es
+  recargar la página. Medido en el Chrome del dueño con 2450c55e: retirado
+  antes de 10 s, pero esa primera carga corrió el `main.dart.js` viejo, que
+  el worker alcanzó a servir de su caché. Por eso `web/index.html` (cuya
+  plantilla es `scripts/sync_seo_index.sh`) retira además el worker de
+  Flutter que controle la página y recarga una vez por pestaña, antes de que
+  arranque la app. La prueba es
   `test/unit/erp_web_service_worker_retirement_test.dart`.
 - Sin worker, una pestaña abierta antes de un deploy no puede cargar las
-  partes que no había usado (dart2js compara el hash de cada parte). Eso no se
+  partes que no había usado: la parte baja, registra el hash del build nuevo
+  y dart2js, tras tres reintentos, dice «Success callback invoked but part …
+  not loaded» (no «the code with hash», que es otro caso). Eso no se
   esconde ni se recarga solo —puede haber trabajo sin guardar en otra pestaña
   del ERP—: `DeferredLoadFailure` lo reconoce y `DeferredLoadNotice` dice
   «Hay una versión nueva del ERP» con «Recargar», en la pantalla de error
@@ -5747,6 +5754,10 @@ caché a mano. Costó media ronda de verificación creer que era el código nuev
   (`a["<hash>"]=a.current` al final del archivo) contra `deferredPartHashes`
   de `main.dart.js`. Un `fetch` desde la página pasa por el worker aunque diga
   `cache: 'no-store'`: comparar con `curl`, no desde la página.
+- Para ver el aviso en el ERP publicado sin esperar otro deploy: antes de
+  abrir el módulo, `self.dartDeferredLibraryLoader = (uri, ok) => ok()` en la
+  consola de la pestaña; cada parte nueva «baja» sin registrar su hash, que
+  es el mismo error que deja un deploy.
 
 ### HTML-first storefront evolution is allowed
 

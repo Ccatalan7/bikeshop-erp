@@ -87,4 +87,21 @@ void main() {
     expect(worker, isNot(contains('.navigate(')));
     expect(worker, isNot(contains('location.reload')));
   });
+
+  test('a page the old worker served retires it before the app starts', () {
+    final index = File('web/index.html').readAsStringSync();
+    final start =
+        index.indexOf("var flutterWorker = '/flutter_service_worker.js'");
+    expect(start, greaterThan(0), reason: 'web/index.html lost the retirement');
+    // Before Flutter's bootstrap, and only for Flutter's worker: the
+    // Firebase Messaging worker lives at its own scope and stays.
+    expect(start, lessThan(index.indexOf('{{flutter_bootstrap_js}}')));
+    final script = index.substring(start, index.indexOf('</script>', start));
+    expect(script, contains('controller.scriptURL.indexOf(flutterWorker) < 0'));
+    expect(script, contains('worker.scriptURL.indexOf(flutterWorker) >= 0'));
+    expect(script, contains("name.indexOf('flutter-') === 0"));
+    // Once per tab, so a worker that will not leave cannot loop the page.
+    expect(script,
+        contains("sessionStorage.getItem('vb-flutter-worker-retired')"));
+  });
 }

@@ -16,7 +16,7 @@
   "evidence": [
     {
       "path": "lib/shared/services/deferred_load_failure.dart",
-      "sha256": "6b552f7b61d343dd558694fdf4a59e74180a7fd85b7023703d8da93bcf66248f"
+      "sha256": "e4a4fd8ce6ca71063924d49fa9e6a21e3813135a66204b6961add5e275cc5eab"
     },
     {
       "path": "lib/shared/widgets/deferred_load_notice.dart",
@@ -65,6 +65,14 @@
     {
       "path": "scripts/deploy.sh",
       "sha256": "42f17bf508852a5a2e9fd401e09d8e865d977f0dfdd56938a1da58d728b60c51"
+    },
+    {
+      "path": "web/index.html",
+      "sha256": "2ad589b8a58ac15fa98e5f6ca40517214870a866528a3f520f7a6c779ef3ff32"
+    },
+    {
+      "path": "scripts/sync_seo_index.sh",
+      "sha256": "e5db8422bd69b56db40fc4c5058679604749d80ec51b6b8b2c2fbfc2798d460c"
     }
   ]
 }

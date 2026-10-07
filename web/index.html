@@ -31,6 +31,41 @@
 
   
 
+  <!-- Retires Flutter's offline service worker (2026-10-07). A page the old
+       worker served may get files of another build from its cache, so it
+       drops the worker and its caches and loads again from the network,
+       before the app starts (nothing to lose yet), once per tab.
+       scripts/erp_web/flutter_service_worker.js says why. -->
+  <script>
+    (function () {
+      try {
+        var workers = navigator.serviceWorker;
+        var controller = workers && workers.controller;
+        var flutterWorker = '/flutter_service_worker.js';
+        if (!controller || controller.scriptURL.indexOf(flutterWorker) < 0) return;
+        if (sessionStorage.getItem('vb-flutter-worker-retired')) return;
+        sessionStorage.setItem('vb-flutter-worker-retired', '1');
+        var again = function () { window.location.reload(); };
+        Promise.all([
+          workers.getRegistrations().then(function (registrations) {
+            return Promise.all(registrations.filter(function (registration) {
+              var worker = registration.active || registration.waiting ||
+                registration.installing;
+              return worker && worker.scriptURL.indexOf(flutterWorker) >= 0;
+            }).map(function (registration) { return registration.unregister(); }));
+          }),
+          caches.keys().then(function (names) {
+            return Promise.all(names.filter(function (name) {
+              return name.indexOf('flutter-') === 0;
+            }).map(function (name) { return caches.delete(name); }));
+          })
+        ]).then(again, again);
+      } catch (e) {
+        // Storage blocked: the worker that replaces the old one cleans up.
+      }
+    })();
+  </script>
+
   <!-- ERP shared-link handoff: WhatsApp opens HTTPS, this opens the desktop app. -->
   <script>
     (function () {

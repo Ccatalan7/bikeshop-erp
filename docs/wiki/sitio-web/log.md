@@ -352,3 +352,7 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 - El ERP web no arrancaba después del deploy: el service worker de Flutter
   mezclaba partes de dos builds. El ERP web va sin service worker y retira el
   viejo; una pestaña de antes de un deploy avisa «Hay una versión nueva».
+- Verificado en el ERP web publicado (2450c55e): la página recibe la
+  selección (barra, «Agregar aquí», alto) y se escribe un título con ⌘↵, que
+  se deshace. El worker viejo se fue solo; la primera carga aún corrió el
+  programa viejo, y `index.html` lo retira ahora antes de arrancar.
