@@ -45,6 +45,15 @@ const _draftCss = '''
   border-radius:8px;box-shadow:0 1px 4px rgb(0 0 0 / .3);pointer-events:auto;cursor:ns-resize;user-select:none;
   font:700 11px/1 system-ui,-apple-system,sans-serif;white-space:nowrap;font-variant-numeric:tabular-nums}
 .vb-mark.vb-writing .vb-size{display:none}
+.vb-fmt{position:absolute;display:none;align-items:center;gap:2px;padding:2px 4px;border-radius:10px;
+  box-shadow:0 2px 6px rgb(0 0 0 / .3);pointer-events:auto;font:700 13px/1 system-ui,-apple-system,sans-serif;white-space:nowrap}
+.vb-mark.vb-writing .vb-fmt{display:flex}
+.vb-fmt button{all:unset;display:grid;place-items:center;min-width:30px;height:30px;padding:0 4px;box-sizing:border-box;
+  border-radius:8px;cursor:pointer;font:inherit}
+.vb-fmt button:hover,.vb-fmt button:focus-visible{background:rgb(0 0 0 / .1)}
+.vb-fmt button[aria-pressed="true"]{background:rgb(0 0 0 / .16)}
+.vb-fmt output{min-width:28px;text-align:center;font-weight:600;font-variant-numeric:tabular-nums}
+.vb-fmt i{width:1px;height:18px;margin:0 4px;background:currentColor;opacity:.3}
 .vb-sizing,.vb-sizing *{cursor:ns-resize!important;user-select:none!important}
 .draft-missing{display:grid;place-items:center;gap:4px;min-height:160px;margin:0;padding:24px;
   border:1px dashed #9aa0a6;border-radius:8px;background:repeating-linear-gradient(135deg,#f8f9fa 0 12px,#f1f3f4 12px 24px);
@@ -167,6 +176,17 @@ const _draftScript = r'''
     m.el.firstChild.style.display = m.el.firstChild.textContent ? '' : 'none';
     m.el.classList.toggle('vb-inside', r.top < 24);
     m.el.classList.add('vb-on');
+    var tools = m.el.querySelector('.vb-fmt');
+    if (tools && edit && edit.on) {
+      // Above the text being written, or below it when the header (or the
+      // block's top) leaves no room.
+      var t = edit.el.getBoundingClientRect();
+      var room = Math.max(0, cover() - r.top) + 4;
+      var y = t.top - r.top - 40;
+      if (y < room) y = t.bottom - r.top + 8;
+      tools.style.top = y + 'px';
+      tools.style.left = Math.max(4, Math.min(t.left - r.left, r.width - tools.offsetWidth - 4)) + 'px';
+    }
     var bar = m.el.querySelector('.vb-bar');
     if (bar) {
       // In sight while the block is: below the header that stays on top
@@ -236,6 +256,8 @@ const _draftScript = r'''
     // a click): the caret moves, nothing is picked.
     if (edit && (edit.el.contains(event.target) ||
         (event.target.tagName === 'SUMMARY' && event.target.contains(edit.el)))) return;
+    var format = event.target.closest && event.target.closest('.vb-fmt [data-fmt]');
+    if (format) { applyFormatting(format.getAttribute('data-fmt')); return; }
     var act = event.target.closest && event.target.closest('.vb-bar [data-action],.vb-add');
     if (act) {
       var id = pick.target && pick.target.getAttribute('data-block-id');
@@ -298,9 +320,82 @@ const _draftScript = r'''
   // Each edit carries its own token, and an answer for another one (late,
   // or for the page before a redraw) is ignored.
   var editSeq = 0;
-  function editMessage(e, phase, text) {
-    send('vbDraftEdit', [e.id, e.field, phase, text === undefined ? null : text, e.token],
-      { type: 'vb-draft-edit', id: e.id, field: e.field, phase: phase, text: text, token: e.token });
+  function editMessage(e, phase, text, formatting) {
+    send('vbDraftEdit', [e.id, e.field, phase, text === undefined ? null : text, e.token, formatting || null],
+      { type: 'vb-draft-edit', id: e.id, field: e.field, phase: phase, text: text, token: e.token,
+        formatting: formatting || null });
+  }
+  // The text as it was drawn, its look included.
+  function putBack(e) {
+    e.el.innerHTML = e.html;
+    if (e.style === null || e.style === undefined) e.el.removeAttribute('style');
+    else e.el.setAttribute('style', e.style);
+  }
+  // The text's toolbar while it is written, for a text with a formatting
+  // (`vbDraftEditing`'s fourth argument): bold, italic, underline and the
+  // size, seen at once on the text and sent with it as changes.
+  function fmtValue(key) {
+    return key in edit.changes ? edit.changes[key] : edit.fmt[key];
+  }
+  function fmtSize() {
+    return fmtValue('fontSize') || Math.round(parseFloat(getComputedStyle(edit.el).fontSize)) || 16;
+  }
+  function drawFormatting() {
+    var old = pick.el.querySelector('.vb-fmt');
+    if (old) old.remove();
+    if (!edit || !edit.fmt) return;
+    var bar = document.createElement('div');
+    bar.className = 'vb-fmt';
+    bar.setAttribute('role', 'toolbar');
+    bar.setAttribute('aria-label', 'Formato del texto');
+    bar.style.background = (meta && meta.fill) || '#d3e3fd';
+    bar.style.color = (meta && meta.onFill) || '#041e49';
+    function button(name, label, title, css) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('data-fmt', name);
+      b.title = title;
+      b.setAttribute('aria-label', title);
+      b.textContent = label;
+      if (css) b.style.cssText = css;
+      bar.appendChild(b);
+      return b;
+    }
+    button('bold', 'B', 'Negrita (⌘B)', 'font-weight:800');
+    button('italic', 'I', 'Cursiva (⌘I)', 'font-style:italic;font-family:Georgia,serif');
+    button('underline', 'U', 'Subrayado (⌘U)', 'text-decoration:underline');
+    bar.appendChild(document.createElement('i'));
+    button('smaller', 'A−', 'Más chico');
+    bar.appendChild(document.createElement('output'));
+    button('larger', 'A+', 'Más grande');
+    pick.el.appendChild(bar);
+    showFormatting();
+  }
+  function showFormatting() {
+    var bar = pick.el.querySelector('.vb-fmt');
+    if (!bar || !edit) return;
+    ['bold', 'italic', 'underline'].forEach(function (key) {
+      bar.querySelector('[data-fmt="' + key + '"]').setAttribute('aria-pressed', fmtValue(key) === true ? 'true' : 'false');
+    });
+    bar.querySelector('output').textContent = fmtSize();
+  }
+  function applyFormatting(name) {
+    if (!edit || !edit.on || !edit.fmt) return;
+    var st = edit.el.style;
+    if (name === 'bold' || name === 'italic' || name === 'underline') {
+      var on = fmtValue(name) !== true;
+      edit.changes[name] = on;
+      if (name === 'bold') st.fontWeight = on ? '700' : '400';
+      if (name === 'italic') st.fontStyle = on ? 'italic' : 'normal';
+      if (name === 'underline') st.textDecoration = on ? 'underline' : 'none';
+    } else {
+      var size = Math.max(8, Math.min(120, fmtSize() + (name === 'larger' ? 2 : -2)));
+      edit.changes.fontSize = size;
+      st.fontSize = size + 'px';
+      st.lineHeight = '1.2';
+    }
+    showFormatting();
+    soon();
   }
   function begin(el) {
     heat(null);
@@ -312,12 +407,16 @@ const _draftScript = r'''
     };
     editMessage(edit, 'begin');
   }
-  window.vbDraftEditing = function (raw, field, token) {
+  window.vbDraftEditing = function (raw, field, token, formatting) {
     if (!edit || edit.on || token !== edit.token) return;
     if (raw === null || raw === undefined || field !== edit.field) { edit = null; return; }
     var el = edit.el;
     edit.on = true;
     edit.raw = raw;
+    edit.style = el.getAttribute('style');
+    edit.fmt = formatting || null;
+    edit.changes = {};
+    drawFormatting();
     el.classList.add('vb-editing');
     el.textContent = raw;
     el.setAttribute('contenteditable', 'plaintext-only');
@@ -345,26 +444,34 @@ const _draftScript = r'''
     e.el.removeAttribute('spellcheck');
     e.el.classList.remove('vb-editing');
     pick.el.classList.remove('vb-writing');
-    if (keep && text !== e.raw) {
-      editMessage(e, 'commit', text);
+    var formatted = Object.keys(e.changes || {}).length > 0;
+    if (keep && (text !== e.raw || formatted)) {
+      editMessage(e, 'commit', text, formatted ? e.changes : null);
       written = e;
     } else {
       editMessage(e, 'cancel');
-      e.el.innerHTML = e.html;
+      putBack(e);
     }
     soon();
   }
   window.vbDraftEdited = function (ok, token) {
     if (!written || written.token !== token) return;
-    if (!ok) written.el.innerHTML = written.html;
+    if (!ok) putBack(written);
     written = null;
   };
+  // A press on the toolbar keeps the text being written in focus.
+  document.addEventListener('mousedown', function (event) {
+    if (event.target.closest && event.target.closest('.vb-fmt')) event.preventDefault();
+  }, true);
   document.addEventListener('focusout', function (event) {
     if (edit && edit.on && event.target === edit.el) done(true);
   }, true);
   document.addEventListener('keydown', function (event) {
     if (!edit || !edit.on || !edit.el.contains(event.target)) return;
     event.stopPropagation();
+    var shortcut = (event.metaKey || event.ctrlKey) &&
+      { b: 'bold', i: 'italic', u: 'underline' }[event.key.toLowerCase()];
+    if (shortcut) { event.preventDefault(); applyFormatting(shortcut); return; }
     if (event.key === 'Escape') { event.preventDefault(); done(false); }
     else if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); done(true); }
   }, true);

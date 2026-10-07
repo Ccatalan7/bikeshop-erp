@@ -1288,15 +1288,21 @@ websiteBaseBlockDefinitions = Map.unmodifiable(<
       ],
     },
     fields: [
+      // Both renderers draw them with their formatting (`titleFormatting`,
+      // `subtitleFormatting`), as the questions and answers.
       WebsiteBlockFieldSchema(
         key: 'title',
         label: 'Título principal',
         type: WebsiteBlockFieldType.text,
+        textRole: WebsiteTextRole.heading,
+        supportsFormatting: true,
       ),
       WebsiteBlockFieldSchema(
         key: 'subtitle',
         label: 'Subtítulo',
         type: WebsiteBlockFieldType.text,
+        textRole: WebsiteTextRole.paragraph,
+        supportsFormatting: true,
       ),
       WebsiteBlockFieldSchema(
         key: 'items',
