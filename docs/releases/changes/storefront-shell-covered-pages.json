@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "storefront-shell-covered-pages",
+  "scope": "debug",
+  "platforms": [
+    "macos",
+    "windows",
+    "android",
+    "web",
+    "ios"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "lib/shared/routes/public_store_shell_page.dart",
+      "sha256": "e2327febbef3777d963fa99c716e64866149af97c9ed9276d0aa6a4515816a0d"
+    },
+    {
+      "path": "lib/shared/routes/app_router.dart",
+      "sha256": "8c5963bf3deb30198a1d86fb31c421ca03c37409add7fd6b73696033e74a3535"
+    }
+  ]
+}

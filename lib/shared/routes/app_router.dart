@@ -14,7 +14,7 @@ import '../../modules/storage/pages/storage_page.dart' as storage;
 import '../../modules/hr/payroll/payment_workspace/payroll_payment_workspace_models.dart';
 import '../../modules/purchases/models/purchase_invoice_draft_seed.dart';
 import '../../public_store/widgets/persistent_editor_shell.dart';
-import '../../public_store/widgets/storefront_navigation_guard_scope.dart';
+import 'public_store_shell_page.dart';
 import '../services/auth_service.dart';
 // ERP / Admin Modules (Deferred to reduce initial bundle size)
 import 'workspace_page_key.dart';
@@ -258,17 +258,11 @@ Page<dynamic> _buildPageWithNoTransition(
   );
 }
 
-/// Shell pages must stay alive across navigation and query param changes
-/// (e.g. `?edit=true`, `?preview=true`).
 Page<dynamic> _buildShellPage(
   String key,
   Widget child,
-) {
-  return NoTransitionPage<void>(
-    key: ValueKey<String>(key),
-    child: StorefrontNavigationGuardScope.pageSwitch(child: child),
-  );
-}
+) =>
+    buildPublicStoreShellPage(key, child);
 
 class _PublicStoreShell extends StatelessWidget {
   final StatefulNavigationShell navigationShell;

@@ -271,6 +271,19 @@ Traps this encodes, each of which cost a full round when hit:
     empezar; para empezar de cero, reemplaza la sesión (`stop && start`), que
     reescribe la línea del VM service.
 
+12. **Una app de debug colgada se cierra en cuanto el error queda capturado**
+    (2026-10-06). Una aserción de Flutter lanzada en plena medición (layout)
+    deja el frame a medias, el `run.log` se corta en medio de la pila y el
+    proceso empieza a comer memoria: llegó a **35 GB en ~12 minutos**, un
+    minuto después de un arranque limpio, mientras el agente leía el código de
+    Flutter con la app colgada abierta. macOS agotó la memoria, pausó todas
+    las apps (Claude incluido) y la ronda se perdió. No era «llevar mucho rato
+    sin relanzar»: era el cuelgue. Regla: copia la pila (`errors`, `log`), haz
+    `stop` **antes** de investigar y reproduce el error en una prueba de
+    widgets, que tarda segundos y no deja proceso vivo; vuelve a la app sólo
+    para verificar el arreglo y ciérrala al terminar. Mira el RSS
+    (`ps -o rss= -p <pid>`) cuando una pantalla deje de responder.
+
 ### Debug y la app instalada no comparten identidad (2026-08-27)
 
 La copia instalada y el build Debug llegaron a ejecutarse simultáneamente con

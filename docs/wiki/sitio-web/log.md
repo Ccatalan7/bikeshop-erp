@@ -4,6 +4,11 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-06 — corrección — [estado](paginas/estado-y-pendientes.md) y
+  [editor](paginas/editor-del-sitio.md): la causa real del cuelgue de debug
+  entre catálogo, categoría y ficha (una página tapada en el `Navigator` de la
+  tienda, dentro del scroll, que el `Overlay` no vuelve a medir); el
+  diagnóstico anterior era falso. Arreglado sin mantener páginas tapadas.
 - 2026-10-06 — corrección — [catálogo](paginas/catalogo-y-fichas.md),
   [editor](paginas/editor-del-sitio.md) y [estado](paginas/estado-y-pendientes.md):
   etapa 3d, la ficha de producto como plantilla en el lienzo; despacho y retiro

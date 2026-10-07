@@ -2,7 +2,7 @@
 titulo: El editor del sitio
 resumen: cómo funciona el editor de vinabike.cl dentro del ERP — sus dos planos de control, los espacios de administración, los bloques, el guardado y el teléfono
 fuentes: [repositorio]
-archivos: [docs/architecture/website-editor-contract.md, lib/public_store/widgets/store_layout/site_settings_index.dart, lib/modules/website/widgets/editor_panel/backups_dialog.dart, supabase/migrations/20261006200000_website_versions_keep_last_30.sql, lib/modules/website/models/website_catalog_canvas.dart, lib/modules/website/widgets/website_editor_selectable_surface.dart, lib/modules/website/widgets/editor_panel/catalog_section_controls.dart, services/storefront_html/lib/src/website_blocks_view.dart, packages/vinabike_public_core/lib/modules/website/models/website_block_surface_presence.dart, lib/modules/website/providers/website_edit_mode_provider.dart, lib/modules/website/services/website_save_coordinator.dart, lib/modules/website/models/website_block_type.dart, lib/modules/website/services/website_editor_draft_controller.dart]
+archivos: [docs/architecture/website-editor-contract.md, lib/public_store/widgets/store_layout/site_settings_index.dart, lib/modules/website/widgets/editor_panel/backups_dialog.dart, supabase/migrations/20261006200000_website_versions_keep_last_30.sql, lib/modules/website/models/website_catalog_canvas.dart, lib/modules/website/widgets/website_editor_selectable_surface.dart, lib/modules/website/widgets/editor_panel/catalog_section_controls.dart, services/storefront_html/lib/src/website_blocks_view.dart, packages/vinabike_public_core/lib/modules/website/models/website_block_surface_presence.dart, lib/modules/website/providers/website_edit_mode_provider.dart, lib/modules/website/services/website_save_coordinator.dart, lib/modules/website/models/website_block_type.dart, lib/modules/website/services/website_editor_draft_controller.dart, lib/shared/routes/public_store_shell_page.dart]
 tablas: [website_pages, website_blocks, website_navigation, website_settings, featured_products, website_backups]
 revisado: 2026-10-06
 ---
@@ -253,3 +253,10 @@ geometría pasa la prueba real de iOS
   `website_settings`, `featured_products`.
 - Superficies registradas: filas «Website …» de
   `docs/architecture/canonical-ui-surfaces.md`.
+- La tienda dentro del ERP es un `StatefulShellRoute` de `/tienda/*`
+  (`lib/shared/routes/app_router.dart`) cuyo `Navigator` vive dentro del único
+  scroll de `PublicStoreLayout`. Sus páginas las arma
+  `buildPublicStoreShellPage` (`lib/shared/routes/public_store_shell_page.dart`):
+  una página tapada por otra de la misma rama no se mantiene, porque ese
+  `Overlay` no mide páginas tapadas y una que cambiaba dos veces colgaba el
+  debug (2026-10-06, [estado](estado-y-pendientes.md)).

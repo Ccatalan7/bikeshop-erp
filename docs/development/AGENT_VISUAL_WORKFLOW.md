@@ -65,6 +65,14 @@ scripts/dev/native_session.sh stop
 Ese último es el que engañó el 31/07: un attach del dueño se leyó como la causa
 y se perdió una ronda. Un attach nunca impide recargar.
 
+### Cuando la app se cuelga con un error
+
+Copia la pila (`errors`, `log`) y haz `stop` **antes** de investigar: una app
+de debug colgada en una aserción de layout llegó a 35 GB en ~12 minutos y agotó
+la memoria del Mac (2026-10-06). Reproduce el error en una prueba de widgets y
+vuelve a la app sólo para verificar el arreglo
+(`AGENT_MACOS_APP_CONTROL.md` §1.12).
+
 ### Cuando `start` se niega
 
 `hay una app debug viva sin sesión screen` significa que quedó un proceso
