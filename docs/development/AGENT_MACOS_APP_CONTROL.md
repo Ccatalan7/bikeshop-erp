@@ -1255,6 +1255,17 @@ Dos trampas más de una vista nativa (la «Vista HTML» del editor del sitio, un
   Flutter sí los recibe sobre la vista (`MouseRegion.onHover`), así que el
   editor se los pasa a la página como fracciones de su ventana
   (`vbDraftHover(fx, fy)` + `elementFromPoint`), una llamada a la vez.
+- **El teclado sí llega** (2026-10-07): con la app al frente, lo que se
+  escribe con la herramienta de control del computador entra al texto
+  editable de la página, ⌘↵ y Esc incluidos.
+- **Para ver qué pasa dentro de la página**, `evaluateJavascript` no avisa de
+  sus errores y la consola de WebKit no llega al log de Flutter. Lo que sirvió
+  (media hora menos la próxima vez): un `onConsoleMessage` temporal que haga
+  `debugPrint`, y desde el editor evaluar una sonda que devuelva
+  `JSON.stringify({...})` del estado (clases, `getBoundingClientRect`,
+  `getComputedStyle(...).display`). Así salió que el carrusel del inicio
+  tenía dos elementos con el mismo `data-block-id` (copias por banda) y la
+  página marcaba el oculto. Se quita antes del commit.
 
 ### La captura de una ventana en segundo plano es vieja (2026-10-07)
 
