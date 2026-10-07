@@ -1527,6 +1527,23 @@ pasos, con el lienzo Flutter como predeterminado hasta que el HTML lo iguale:
   (núcleo, con prueba de que sus claves son las de
   `WebsiteBlockSurfaceFields`) hace que esa página la responda Flutter
   entera. En producción ningún bloque tiene superficie (2026-10-06).
+  **Superado el 2026-10-07:** el HTML pinta la superficie como Flutter. Un
+  solo decodificador en el núcleo (`WebsiteBlockSurfaceSpec`: colores,
+  degradado, borde, radio, sombra y relleno por pantalla), del que leen el
+  `WebsiteBlockSurfaceStyle` de Flutter y el `BlockSurface` del servidor.
+  La decoración va en un envoltorio (`.srf`) alrededor de la familia, que
+  deja su propio fondo al del bloque (`.own-bg`: bandas de sección, héroe
+  sin foto, diapositivas sin color, productos, reseñas, video, marcas); el
+  relleno llega a cada familia por `--sp-t/r/b/l`, que su CSS lee con su
+  diseño de respaldo (sólo los lados fijados; las bandas de sección, los
+  cuatro con los valores por defecto de la superficie, como
+  `WebsiteSectionBand`), y las versiones del bloque por banda se separan
+  cuando el relleno cambia por pantalla. Siguen en Flutter, a propósito,
+  sólo tres casos raros: relleno en una grilla de categorías o en la cinta
+  de marcas (mueven su encabezado o su fila según el lado), y en un llamado
+  a la acción de alto fijo. Los degradados diagonales usan las «esquinas
+  mágicas» de CSS (`to bottom right`): en un bloque no cuadrado el ángulo
+  difiere del de Flutter, que va de esquina a esquina en píxeles.
 
 Lo que costó, y vale para lo que sigue:
 

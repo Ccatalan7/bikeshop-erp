@@ -5,7 +5,6 @@ import 'package:jaspr/server.dart';
 import 'package:vinabike_public_core/modules/website/models/website_action.dart';
 import 'package:vinabike_public_core/modules/website/models/website_block_base_definitions.dart';
 import 'package:vinabike_public_core/modules/website/models/website_image_fields.dart';
-import 'package:vinabike_public_core/modules/website/models/website_block_surface_presence.dart';
 import 'package:vinabike_public_core/modules/website/models/website_block_type.dart';
 import 'package:vinabike_public_core/modules/website/models/website_hero_content.dart';
 import 'package:vinabike_public_core/modules/website/models/website_destination.dart';
@@ -16,6 +15,7 @@ import 'package:vinabike_public_core/public_store/models/public_policy_content.d
 import 'package:vinabike_public_core/shared/models/product.dart';
 
 import 'block_composition.dart';
+import 'block_surface.dart';
 import 'material_icons.dart';
 import 'storefront_fonts.dart';
 import 'storefront_shell.dart';
@@ -156,12 +156,24 @@ Component composedBlock(
   // A minimum height lets the block grow and gives it no height of its own:
   // its content lays out as with none, inside at least this much.
   final minimum = exact == null ? geometry.minimumHeight : null;
+  final surface = BlockSurface(
+    composed.block.type,
+    composed.data,
+    composed.viewport,
+  );
+  final style = [
+    if (composed.gapAfter > 0) '--gap:${_px(composed.gapAfter)}',
+    if (exact != null) 'height:${_px(exact)}',
+    if (minimum != null) 'min-height:${_px(minimum)}',
+    ...surface.paddingVars,
+  ];
   return div(
     classes: [
       'blk',
       if (fill) 'fill',
       if (geometry.fullBleed) 'bleed',
       if (minimum != null) 'minh',
+      if (surface.ownsBackground) 'own-bg',
     ].join(' '),
     attributes: {
       'data-block': composed.block.blockType,
@@ -169,14 +181,22 @@ Component composedBlock(
       if (draft) 'data-block-id': composed.block.id,
       if (draft) 'data-block-label': draftBlockName(composed),
       if (composed.bands case final bands?) 'data-bands': bands.join(' '),
-      if (composed.gapAfter > 0 || exact != null || minimum != null)
-        'style': [
-          if (composed.gapAfter > 0) '--gap:${_px(composed.gapAfter)}',
-          if (exact != null) 'height:${_px(exact)}',
-          if (minimum != null) 'min-height:${_px(minimum)}',
-        ].join(';'),
+      if (style.isNotEmpty) 'style': style.join(';'),
     },
-    [child],
+    [
+      // The block's own surface (`WebsiteBlockSurface`), painted once
+      // around its family.
+      if (surface.wraps)
+        div(
+          classes: 'srf',
+          attributes: {
+            if (surface.wrapperStyle.isNotEmpty) 'style': surface.wrapperStyle,
+          },
+          [child],
+        )
+      else
+        child,
+    ],
   );
 }
 
@@ -229,7 +249,11 @@ const pageCoveredBlockTypes = {
 bool sharedBlockCovers(ComposedBlock composed, Set<WebsiteBlockType> types) {
   final type = composed.block.type;
   if (type == null || !types.contains(type)) return false;
-  if (websiteBlockHasAuthoredSurface(composed.block.blockData)) return false;
+  // A surface the HTML cannot draw as Flutter does yet is not drawn
+  // without it ([BlockSurface.isDrawn]).
+  if (!BlockSurface(type, composed.data, composed.viewport).isDrawn) {
+    return false;
+  }
   return switch (type) {
     WebsiteBlockType.carousel => carouselIsCovered(composed.data),
     WebsiteBlockType.products => productsBlockIsCovered(composed.data),

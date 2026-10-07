@@ -130,7 +130,7 @@ class VideoBannerView extends StatelessComponent {
 
 /// The banner's stylesheet. The YouTube frame covers the block the way
 /// Flutter's does: at least 16:9 of the window, centered, and inert.
-const videoBannerCss = '''
+final videoBannerCss = '''
 .vb{position:relative;height:500px;overflow:hidden;background:#1a1a1a}
 .vb.fixed{height:100%}
 .vb-media{position:absolute;inset:0;overflow:hidden;pointer-events:none}
@@ -138,7 +138,7 @@ const videoBannerCss = '''
 .vb-media video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .vb-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .vb-ov{position:absolute;inset:0;pointer-events:none}
-.vb-in{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;max-width:800px;height:100%;margin:0 auto;padding:24px;text-align:center}
+.vb-in{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;max-width:800px;height:100%;margin:0 auto;${surfacePadding(24, 24, 24, 24)};text-align:center}
 .vb-t{margin:0;font:400 40px/46px var(--head);letter-spacing:2px;color:#fff;-webkit-text-stroke:.032em currentColor}
 .vb-s{margin:16px 0 0;font:italic 600 18px/23px var(--body);color:rgb(255 255 255 / .702)}
 /* No text style of its own: the theme button's spacing (Material's .1). */

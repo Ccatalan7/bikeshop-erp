@@ -21,6 +21,18 @@ String cssPx(double value) => '${cssNum(value)}px';
 String lineHeightPx(double fontSize, double height) =>
     '${(fontSize * height).round()}px';
 
+/// A block family's padding, each side the operator set in its place
+/// (`--sp-t`, `--sp-r`, `--sp-b`, `--sp-l` from `BlockSurface`).
+String surfacePadding(double top, double right, double bottom, double left) =>
+    'padding:var(--sp-t,${cssPx(top)}) var(--sp-r,${cssPx(right)}) '
+    'var(--sp-b,${cssPx(bottom)}) var(--sp-l,${cssPx(left)})';
+
+/// A family's side padding by the block's width, a side the operator set
+/// in its place.
+String surfacePaddingInline(double side) =>
+    'padding-right:var(--sp-r,${cssPx(side)});'
+    'padding-left:var(--sp-l,${cssPx(side)})';
+
 /// An editor color written as `#RRGGBB` or `#AARRGGBB` (alpha first, as
 /// Flutter's `Color`), or [fallback] when it cannot be read.
 WebsiteRgba hexColor(Object? raw, WebsiteRgba fallback) {

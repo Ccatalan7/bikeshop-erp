@@ -5,6 +5,8 @@ import 'package:vinabike_public_core/modules/website/models/website_page_composi
 import 'package:vinabike_public_core/modules/website/models/website_responsive_authoring.dart';
 import 'package:vinabike_public_core/modules/website/models/website_responsive_projection.dart';
 
+import 'block_surface.dart';
+
 /// A range of window widths in which Flutter makes the same decisions about
 /// an editor page: which blocks it shows (by the window's width) and at which
 /// viewport it reads their data (by the width of the canvas they are drawn
@@ -107,6 +109,9 @@ List<ComposedBlock> composeBlocks({
         gap,
         block.geometry.fullBleed,
         block.geometry.blockHeight,
+        // A surface padding set for one viewport, or a family's default
+        // side by viewport, draws the block differently there.
+        BlockSurface(block.type, data, viewport).versionKey,
       ]);
       if (!versions.containsKey(block.id)) order.add(block.id);
       final byKey = versions.putIfAbsent(block.id, () => {});

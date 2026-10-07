@@ -2576,19 +2576,17 @@ void main() {
       );
     });
 
-    test('a block the HTML does not draw yet, or one with a surface of its '
-        'own, leaves the page to Flutter', () async {
+    test('a block the HTML does not draw yet, or one with a surface it does '
+        'not draw as Flutter yet, leaves the page to Flutter', () async {
       final flutter = _FakeFlutterShell();
       for (final extra in [
         block('footer', 'footer', 9, {'companyName': 'Viñabike'}),
-        block('framed', 'text', 9, {
-          'text': 'Con fondo',
-          'style': {'backgroundColor': '#FFEEDD'},
-        }),
-        block('phone', 'divider', 9, {
-          'responsive': {
-            'mobile': {'surfacePaddingTop': 16},
-          },
+        // A call to action of a fixed height with a padding set: its unset
+        // sides take the band's whole design there.
+        block('tall', 'cta', 9, {
+          'title': 'Reserva',
+          'blockHeight': 420,
+          'style': {'paddingTop': 32},
         }),
       ]) {
         final reads = _FakeReads(
@@ -2622,6 +2620,72 @@ void main() {
         flutterShell: flutter,
       );
       expect(button.headers['x-storefront-fallback'], isNull);
+    });
+
+    test('a block with a surface of its own is drawn with it, as '
+        'WebsiteBlockSurface and its family paint it', () async {
+      final response = await _get(
+        _FakeReads(
+          editorPages: {
+            'arriendo': page([
+              ...blocks,
+              block('framed', 'text', 9, {
+                'text': 'Con fondo',
+                'style': {
+                  'backgroundColor': '#FFEEDD',
+                  'borderWidth': 1,
+                  'borderColor': '#112233',
+                  'borderRadius': 14,
+                  'shadowEnabled': true,
+                  'shadowOffsetY': 6,
+                  'shadowBlur': 22,
+                  'shadowColor': 'rgba(12,37,55,0.13)',
+                  'paddingTop': 32,
+                },
+              }),
+              block('phone', 'faq', 10, {
+                'title': 'Preguntas',
+                'items': [
+                  {'question': '¿Hay casco?', 'answer': 'Sí.'},
+                ],
+                'style': {
+                  'backgroundType': 'gradient',
+                  'gradientColor1': '#000000',
+                  'gradientColor2': '#FFFFFF',
+                  'gradientDirection': 'to-right',
+                },
+                'responsive': {
+                  'mobile': {'surfacePaddingTop': 16},
+                },
+              }),
+            ]),
+          },
+        ),
+        '/pagina/arriendo',
+      );
+      expect(response.headers['x-storefront-fallback'], isNull);
+      final html = await response.readAsString();
+      // Painted once around the text, which takes the padding set.
+      expect(
+        html,
+        contains(
+          'class="srf" style="background:rgb(255 238 221);'
+          'border:1px solid rgb(17 34 51);border-radius:14px;overflow:hidden;'
+          'box-shadow:0px 6px 26.4px 0px rgb(12 37 55 / 0.13);'
+          'padding-top:32px"',
+        ),
+      );
+      // The questions band leaves its tone to the block's gradient and, on a
+      // phone, takes the side set and the surface's defaults for the rest.
+      expect(
+        html,
+        contains(
+          'background:linear-gradient(to right,rgb(0 0 0),rgb(255 255 255))',
+        ),
+      );
+      expect(html, contains('blk fill own-bg'));
+      expect(html, contains('--sp-t:16px;--sp-r:16px;--sp-b:64px;--sp-l:16px'));
+      expect(html, contains('var(--sp-t,112px)'));
     });
 
     test('draws the FAQ, call to action, features and about blocks as '

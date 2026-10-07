@@ -119,7 +119,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_blocks_view.dart",
-      "sha256": "02271733d6fef367452e2b1c04d36a15a460816f0669550f47ebd5775189c313"
+      "sha256": "0b6ef244316c33bd5e9d1ff12d090f826bd890af3db9bd266201afff094ed11c"
     },
     {
       "path": "services/storefront_html/lib/src/website_content_blocks_view.dart",
@@ -127,11 +127,11 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_page_css.dart",
-      "sha256": "d36e40efdcb263932b94a9dc81ff371fe433d162ba09c7c0ae99729f0dff62dc"
+      "sha256": "4839a0db4cbcd8184a5eb894ff28c62d24158b71c440569db16e1af308cc3176"
     },
     {
       "path": "services/storefront_html/lib/src/website_section_blocks_view.dart",
-      "sha256": "8c40f7f454aed9f44f1389b3abd62f400e613f7f5ebf5a922ff65cec6a0b02e0"
+      "sha256": "7799de64fa8e101cfc5a159d8742a63c253eea2a4e4181e696f800a7b4466a40"
     },
     {
       "path": "lib/modules/website/widgets/canvas_block.dart",

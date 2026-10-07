@@ -187,7 +187,13 @@ class CarouselBlockView extends StatelessComponent {
         : null;
     final background = authored ?? '#1a1a1a';
     return div(
-      classes: first ? 'car-slide on' : 'car-slide',
+      classes: [
+        'car-slide',
+        if (first) 'on',
+        // No color of its own: under a block's own background it lets
+        // that one through (`letsBlockBackgroundThrough`).
+        if (authored == null) 'dflt',
+      ].join(' '),
       attributes: {
         'data-slide': '$index',
         'role': 'group',

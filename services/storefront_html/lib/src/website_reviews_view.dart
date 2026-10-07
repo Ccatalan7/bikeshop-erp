@@ -3,6 +3,7 @@ import 'package:jaspr/server.dart';
 import 'package:vinabike_public_core/modules/website/models/website_google_reviews.dart';
 
 import 'block_composition.dart';
+import 'css_values.dart';
 import 'material_icons.dart';
 import 'website_blocks_view.dart';
 
@@ -131,8 +132,8 @@ class GoogleReviewsView extends StatelessComponent {
 
 /// The block's stylesheet: its padding (64 and 24), the theme's surface and
 /// ink, Google's own gold and blue.
-const googleReviewsCss = '''
-.rv{display:flex;flex-direction:column;align-items:center;padding:64px 24px;background:var(--w-bg)}
+final googleReviewsCss = '''
+.rv{display:flex;flex-direction:column;align-items:center;${surfacePadding(64, 24, 64, 24)};background:var(--w-bg)}
 .rv-t{margin:0;font:400 28px/34px var(--head);letter-spacing:1.5px;color:var(--w-on);-webkit-text-stroke:.032em currentColor;text-align:center}
 .rv-score{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:8px;margin-top:12px}
 .rv-num{font:700 18px/27px var(--body);letter-spacing:.25px;color:var(--w-prim)}

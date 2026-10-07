@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:vinabike_public_core/modules/website/models/website_block_surface_spec.dart';
+import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart'
+    show WebsiteRgba;
 
 import 'website_block_definition.dart';
 import 'website_block_type.dart';
@@ -308,15 +311,10 @@ abstract final class WebsiteBlockSurfaceFields {
   }
 
   static String baseMapKey(Map<String, dynamic> data) =>
-      data[legacyMapKey] is Map ? legacyMapKey : scalarSafeMapKey;
+      WebsiteBlockSurfaceSpec.baseMapKeyOf(data);
 
-  static Map<String, dynamic> baseMap(Map<String, dynamic> data) {
-    final raw = data[baseMapKey(data)];
-    if (raw is! Map) return <String, dynamic>{};
-    return raw.map(
-      (key, value) => MapEntry(key.toString(), _deepCopy(value)),
-    );
-  }
+  static Map<String, dynamic> baseMap(Map<String, dynamic> data) =>
+      WebsiteBlockSurfaceSpec.baseMap(data);
 
   /// Produces the complete compatible shared map for one atomic provider
   /// operation. Unknown keys are deep-copied and preserved, and [data] is
@@ -354,58 +352,22 @@ abstract final class WebsiteBlockSurfaceDefaults {
     required WebsiteBlockType blockType,
     required WebsiteViewport viewport,
     required Map<String, dynamic> data,
-  }) {
-    final isMobile = viewport == WebsiteViewport.mobile;
-    final standardHorizontal = isMobile ? 16.0 : 24.0;
-    return switch (blockType) {
-      WebsiteBlockType.hero => const EdgeInsets.symmetric(horizontal: 24),
-      WebsiteBlockType.carousel ||
-      WebsiteBlockType.canvas ||
-      WebsiteBlockType.text ||
-      WebsiteBlockType.button ||
-      WebsiteBlockType.divider ||
-      WebsiteBlockType.footer =>
-        EdgeInsets.zero,
-      WebsiteBlockType.products => EdgeInsets.symmetric(
-          vertical: 48,
-          horizontal: standardHorizontal,
+  }) =>
+      _edgeInsets(
+        websiteBlockSurfaceDefaultPadding(
+          blockType: blockType,
+          viewport: viewport,
+          data: data,
         ),
-      WebsiteBlockType.services => EdgeInsets.symmetric(
-          vertical: 56,
-          horizontal: standardHorizontal,
-        ),
-      WebsiteBlockType.about ||
-      WebsiteBlockType.testimonials ||
-      WebsiteBlockType.features ||
-      WebsiteBlockType.gallery ||
-      WebsiteBlockType.contact ||
-      WebsiteBlockType.faq ||
-      WebsiteBlockType.pricing ||
-      WebsiteBlockType.team ||
-      WebsiteBlockType.stats =>
-        EdgeInsets.symmetric(vertical: 64, horizontal: standardHorizontal),
-      WebsiteBlockType.cta => EdgeInsets.symmetric(
-          vertical: _positiveFinite(data['blockHeight']) == null ? 56 : 0,
-          horizontal: standardHorizontal,
-        ),
-      WebsiteBlockType.categoryGrid => const EdgeInsets.symmetric(vertical: 48),
-      WebsiteBlockType.videoBanner => const EdgeInsets.all(24),
-      WebsiteBlockType.partnersBanner => EdgeInsets.symmetric(
-          vertical: 64,
-          horizontal: standardHorizontal,
-        ),
-      WebsiteBlockType.brandLogos =>
-        const EdgeInsets.symmetric(vertical: 48, horizontal: 16),
-      WebsiteBlockType.googleReviews =>
-        const EdgeInsets.symmetric(vertical: 64, horizontal: 24),
-    };
-  }
-
-  static double? _positiveFinite(Object? raw) {
-    final value = _decodeDouble(raw);
-    return value != null && value > 0 ? value : null;
-  }
+      );
 }
+
+EdgeInsets _edgeInsets(WebsiteSurfaceInsets insets) => EdgeInsets.only(
+      top: insets.top,
+      right: insets.right,
+      bottom: insets.bottom,
+      left: insets.left,
+    );
 
 /// The effective surface projected for one rendered storefront viewport.
 ///
@@ -414,53 +376,17 @@ abstract final class WebsiteBlockSurfaceDefaults {
 /// not inspect serialized keys.
 @immutable
 class WebsiteBlockSurfaceStyle {
-  const WebsiteBlockSurfaceStyle._({
-    required this.viewport,
-    required this.baseMapKey,
-    required this.base,
-    required this.paddingTop,
-    required this.paddingRight,
-    required this.paddingBottom,
-    required this.paddingLeft,
-  });
+  const WebsiteBlockSurfaceStyle._(this._spec);
 
+  /// Decoded by the core's [WebsiteBlockSurfaceSpec], the one reader of the
+  /// stored values, which the HTML storefront writes its CSS with too.
   factory WebsiteBlockSurfaceStyle.resolve({
     required Map<String, dynamic> data,
     required WebsiteViewport viewport,
-  }) {
-    final baseMapKey = WebsiteBlockSurfaceFields.baseMapKey(data);
-    final base = WebsiteBlockSurfaceFields.baseMap(data);
-
-    WebsiteResolvedResponsiveValue<double> padding(
-      WebsiteBlockFieldSchema field,
-    ) {
-      final legacyKey = WebsiteBlockSurfaceFields.legacyKey(field);
-      final source = Map<String, dynamic>.from(data);
-      if (base.containsKey(legacyKey)) {
-        // Synthetic read source only. It is never returned and never saved:
-        // shared storage remains the compatible nested map.
-        source[field.key] = base[legacyKey];
-      } else {
-        source.remove(field.key);
-      }
-      return WebsiteResponsiveDataCodec.resolve<double>(
-        data: source,
-        propertyKey: field.key,
-        viewport: viewport,
-        decode: _decodeDouble,
+  }) =>
+      WebsiteBlockSurfaceStyle._(
+        WebsiteBlockSurfaceSpec.resolve(data: data, viewport: viewport),
       );
-    }
-
-    return WebsiteBlockSurfaceStyle._(
-      viewport: viewport,
-      baseMapKey: baseMapKey,
-      base: Map<String, dynamic>.unmodifiable(base),
-      paddingTop: padding(WebsiteBlockSurfaceFields.paddingTop),
-      paddingRight: padding(WebsiteBlockSurfaceFields.paddingRight),
-      paddingBottom: padding(WebsiteBlockSurfaceFields.paddingBottom),
-      paddingLeft: padding(WebsiteBlockSurfaceFields.paddingLeft),
-    );
-  }
 
   factory WebsiteBlockSurfaceStyle.forLogicalWidth({
     required Map<String, dynamic> data,
@@ -475,16 +401,18 @@ class WebsiteBlockSurfaceStyle {
     );
   }
 
-  final WebsiteViewport viewport;
-  final String baseMapKey;
-  final Map<String, dynamic> base;
-  final WebsiteResolvedResponsiveValue<double> paddingTop;
-  final WebsiteResolvedResponsiveValue<double> paddingRight;
-  final WebsiteResolvedResponsiveValue<double> paddingBottom;
-  final WebsiteResolvedResponsiveValue<double> paddingLeft;
+  final WebsiteBlockSurfaceSpec _spec;
 
-  bool get hasAuthoredPadding =>
-      WebsiteBlockSurfaceFields.paddingFields.any(isPaddingAuthored);
+  WebsiteViewport get viewport => _spec.viewport;
+  String get baseMapKey => _spec.baseMapKey;
+  Map<String, dynamic> get base => _spec.base;
+  WebsiteResolvedResponsiveValue<double> get paddingTop => _spec.paddingTop;
+  WebsiteResolvedResponsiveValue<double> get paddingRight => _spec.paddingRight;
+  WebsiteResolvedResponsiveValue<double> get paddingBottom =>
+      _spec.paddingBottom;
+  WebsiteResolvedResponsiveValue<double> get paddingLeft => _spec.paddingLeft;
+
+  bool get hasAuthoredPadding => _spec.hasAuthoredPadding;
 
   /// Whether one side has a real persisted base or viewport override.
   ///
@@ -492,16 +420,14 @@ class WebsiteBlockSurfaceStyle {
   /// side now owned by surface padding. A top-only edit must not accidentally
   /// erase an unrelated horizontal content inset.
   bool isPaddingAuthored(WebsiteBlockFieldSchema field) {
-    final resolved = switch (field.key) {
-      'surfacePaddingTop' => paddingTop,
-      'surfacePaddingRight' => paddingRight,
-      'surfacePaddingBottom' => paddingBottom,
-      'surfacePaddingLeft' => paddingLeft,
+    final side = switch (field.key) {
+      'surfacePaddingTop' => WebsiteSurfaceSide.top,
+      'surfacePaddingRight' => WebsiteSurfaceSide.right,
+      'surfacePaddingBottom' => WebsiteSurfaceSide.bottom,
+      'surfacePaddingLeft' => WebsiteSurfaceSide.left,
       _ => null,
     };
-    if (resolved == null) return false;
-    if (resolved.isOverride) return resolved.value != null;
-    return _hasBase(field) && resolved.shared != null;
+    return side != null && _spec.isPaddingAuthored(side);
   }
 
   EdgeInsets paddingWithFallback(EdgeInsets fallback) => EdgeInsets.only(
@@ -511,62 +437,40 @@ class WebsiteBlockSurfaceStyle {
         left: paddingLeft.value ?? fallback.left,
       );
 
-  String get backgroundType => switch (
-          _string(WebsiteBlockSurfaceFields.backgroundType)?.toLowerCase()) {
-        'gradient' => 'gradient',
-        'transparent' => 'transparent',
-        _ => 'solid',
-      };
+  String get backgroundType => _spec.backgroundType;
 
-  Color? get backgroundColor =>
-      parseColor(_raw(WebsiteBlockSurfaceFields.backgroundColor));
+  Color? get backgroundColor => _color(_spec.backgroundColor);
 
-  Color? get gradientColor1 =>
-      parseColor(_raw(WebsiteBlockSurfaceFields.gradientColor1));
+  Color? get gradientColor1 => _color(_spec.gradientColor1);
 
-  Color? get gradientColor2 =>
-      parseColor(_raw(WebsiteBlockSurfaceFields.gradientColor2));
+  Color? get gradientColor2 => _color(_spec.gradientColor2);
 
-  String get gradientDirection =>
-      _string(WebsiteBlockSurfaceFields.gradientDirection) ?? 'to-bottom';
+  String get gradientDirection => _spec.gradientDirection;
 
-  double get borderWidth =>
-      (_number(WebsiteBlockSurfaceFields.borderWidth) ?? 0).clamp(0, 20);
+  double get borderWidth => _spec.borderWidth;
 
-  Color? get borderColor =>
-      parseColor(_raw(WebsiteBlockSurfaceFields.borderColor));
+  Color? get borderColor => _color(_spec.borderColor);
 
-  double get borderRadius =>
-      (_number(WebsiteBlockSurfaceFields.borderRadius) ?? 0).clamp(0, 50);
+  double get borderRadius => _spec.borderRadius;
 
   /// Flutter's `Border` cannot paint dashed/dotted strokes. Historical values
   /// therefore render honestly as solid instead of disappearing. The source
   /// map is untouched until the operator explicitly changes the border.
-  String get borderStyle =>
-      _string(WebsiteBlockSurfaceFields.borderStyle)?.toLowerCase() == 'none'
-          ? 'none'
-          : 'solid';
+  String get borderStyle => _spec.borderStyle;
 
-  bool get paintsBorder => borderWidth > 0 && borderStyle == 'solid';
+  bool get paintsBorder => _spec.paintsBorder;
 
-  bool get shadowEnabled =>
-      _raw(WebsiteBlockSurfaceFields.shadowEnabled) == true;
+  bool get shadowEnabled => _spec.shadowEnabled;
 
-  double get shadowOffsetX =>
-      _number(WebsiteBlockSurfaceFields.shadowOffsetX) ?? 0;
+  double get shadowOffsetX => _spec.shadowOffsetX;
 
-  double get shadowOffsetY =>
-      _number(WebsiteBlockSurfaceFields.shadowOffsetY) ?? 4;
+  double get shadowOffsetY => _spec.shadowOffsetY;
 
-  double get shadowBlur =>
-      (_number(WebsiteBlockSurfaceFields.shadowBlur) ?? 12).clamp(0, 50);
+  double get shadowBlur => _spec.shadowBlur;
 
-  double get shadowSpread =>
-      (_number(WebsiteBlockSurfaceFields.shadowSpread) ?? 0).clamp(-20, 20);
+  double get shadowSpread => _spec.shadowSpread;
 
-  Color get shadowColor =>
-      parseColor(_raw(WebsiteBlockSurfaceFields.shadowColor)) ??
-      const Color.fromRGBO(12, 37, 55, 0.13);
+  Color get shadowColor => _color(_spec.shadowColor)!;
 
   /// Published F-05 depth name, or null for a historical custom shadow.
   String? get depthPreset {
@@ -584,17 +488,11 @@ class WebsiteBlockSurfaceStyle {
     return null;
   }
 
-  bool get hasAuthoredBackground =>
-      _hasBase(WebsiteBlockSurfaceFields.backgroundType) ||
-      _hasBase(WebsiteBlockSurfaceFields.backgroundColor) ||
-      _hasBase(WebsiteBlockSurfaceFields.gradientColor1) ||
-      _hasBase(WebsiteBlockSurfaceFields.gradientColor2) ||
-      _hasBase(WebsiteBlockSurfaceFields.gradientDirection);
+  bool get hasAuthoredBackground => _spec.hasAuthoredBackground;
 
-  bool get hasAuthoredFrame =>
-      borderWidth > 0 || borderRadius > 0 || shadowEnabled;
+  bool get hasAuthoredFrame => _spec.hasAuthoredFrame;
 
-  bool get hasAuthoredDecoration => hasAuthoredBackground || hasAuthoredFrame;
+  bool get hasAuthoredDecoration => _spec.hasAuthoredDecoration;
 
   /// Decoration painted once by [WebsiteBlockSurface].
   ///
@@ -752,50 +650,7 @@ class WebsiteBlockSurfaceStyle {
     );
   }
 
-  Object? _raw(WebsiteBlockFieldSchema field) =>
-      base[WebsiteBlockSurfaceFields.legacyKey(field)];
-
-  bool _hasBase(WebsiteBlockFieldSchema field) =>
-      base.containsKey(WebsiteBlockSurfaceFields.legacyKey(field));
-
-  String? _string(WebsiteBlockFieldSchema field) {
-    final raw = _raw(field);
-    if (raw == null) return null;
-    final value = raw.toString().trim();
-    return value.isEmpty ? null : value;
-  }
-
-  double? _number(WebsiteBlockFieldSchema field) => _decodeDouble(_raw(field));
-
-  static Color? parseColor(Object? raw) {
-    if (raw == null) return null;
-    final value = raw.toString().trim();
-    if (value.isEmpty) return null;
-    final rgba = RegExp(
-      r'^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([\d.]+))?\s*\)$',
-    ).firstMatch(value);
-    if (rgba != null) {
-      final red = int.tryParse(rgba.group(1)!);
-      final green = int.tryParse(rgba.group(2)!);
-      final blue = int.tryParse(rgba.group(3)!);
-      final alpha = double.tryParse(rgba.group(4) ?? '1');
-      if (red == null || green == null || blue == null || alpha == null) {
-        return null;
-      }
-      return Color.fromRGBO(
-        red.clamp(0, 255),
-        green.clamp(0, 255),
-        blue.clamp(0, 255),
-        alpha.clamp(0, 1),
-      );
-    }
-
-    var hex = value.replaceFirst('#', '');
-    if (hex.length == 6) hex = 'FF$hex';
-    if (hex.length != 8) return null;
-    final parsed = int.tryParse(hex, radix: 16);
-    return parsed == null ? null : Color(parsed);
-  }
+  static Color? parseColor(Object? raw) => _color(websiteSurfaceColor(raw));
 
   static Alignment gradientBegin(String direction) => switch (direction) {
         'to-top' => Alignment.bottomCenter,
@@ -847,3 +702,8 @@ Object? _deepCopy(Object? value) {
   if (value is Set) return value.map(_deepCopy).toSet();
   return value;
 }
+
+/// A core surface color as Flutter paints it.
+Color? _color(WebsiteRgba? rgba) => rgba == null
+    ? null
+    : Color.from(alpha: rgba.a, red: rgba.r, green: rgba.g, blue: rgba.b);

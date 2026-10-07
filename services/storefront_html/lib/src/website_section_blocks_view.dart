@@ -8,6 +8,7 @@ import 'package:vinabike_public_core/modules/website/theme/website_section_palet
 import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
 
 import 'block_composition.dart';
+import 'css_values.dart';
 import 'material_icons.dart';
 import 'storefront_fonts.dart';
 import 'website_blocks_view.dart';
@@ -1257,7 +1258,7 @@ String sectionBlocksCss(WebsiteThemeRoles theme) {
 /* Sections: a band of the page on its tone, the content in a centered
    column. Phone under 600, tablet to 1023, desktop from 1024, measured on
    the block (WebsiteSectionWidth). */
-.sec{${vars(light)};background:var(--s-bg);color:var(--s-ink);padding:112px 32px;font-family:var(--body)}
+.sec{${vars(light)};background:var(--s-bg);color:var(--s-ink);${surfacePadding(112, 32, 112, 32)};font-family:var(--body)}
 .sec[data-tone=band]{${vars(band)}}
 .sec[data-tone=dark],.sec .inv{${vars(dark)};color-scheme:dark}
 .sec[data-tone=dark] .inv{--s-bg:${dark.card.css}}
@@ -1279,11 +1280,11 @@ String sectionBlocksCss(WebsiteThemeRoles theme) {
 .sec-btn.ghost:hover{background:rgb(255 255 255 / .1)}
 .sec a:not(.sec-btn){color:var(--s-mark)}
 @container (min-width:600px) and (max-width:1023.98px){
-.sec{padding:88px 32px}
+.sec{${surfacePadding(88, 32, 88, 32)}}
 .sec-t{font-size:42px;line-height:${_lh(42, 1.05)}}
 }
 @container (max-width:599.98px){
-.sec{padding:64px 20px}
+.sec{${surfacePadding(64, 20, 64, 20)}}
 .sec-hd{display:block}
 .sec-hd.ruled{padding-bottom:22px}
 .sec-eye{margin-bottom:12px;font-size:12px}
@@ -1292,7 +1293,7 @@ String sectionBlocksCss(WebsiteThemeRoles theme) {
 }
 
 /* Stats: the dark band, the figures under a rule, a line between them. */
-.sec.st{padding:104px 32px 96px}
+.sec.st{${surfacePadding(104, 32, 96, 32)}}
 .st-t{font-size:56px;line-height:${_lh(56, 1.04)};max-width:680px}
 .sec.st .sec-hd-t{max-width:680px}
 .sec.st .sec-eye{margin-bottom:18px}
@@ -1304,7 +1305,7 @@ String sectionBlocksCss(WebsiteThemeRoles theme) {
 .st-suf{font:$head 26px/26px var(--head);color:var(--s-eye)}
 .st-l{max-width:220px;margin-top:16px;font:500 16px/${_lh(16, 1.45)} var(--body);color:var(--s-mut)}
 @container (min-width:600px) and (max-width:1023.98px){
-.sec.st{padding:88px 32px 80px}
+.sec.st{${surfacePadding(88, 32, 80, 32)}}
 .st-t{font-size:48px;line-height:${_lh(48, 1.04)}}
 .st-grid{grid-template-columns:repeat(var(--cm),minmax(0,1fr));margin-top:48px}
 .st-num{font-size:60px;line-height:60px}
@@ -1315,7 +1316,7 @@ String sectionBlocksCss(WebsiteThemeRoles theme) {
 .st-m,.st-m:nth-child(4n),.st-m:last-child{padding:22px 12px 20px 0;border-right:0;border-bottom:1px solid var(--s-rule)}
 }
 @container (max-width:599.98px){
-.sec.st{padding:64px 20px 56px}
+.sec.st{${surfacePadding(64, 20, 56, 20)}}
 .st-t{font-size:38px;line-height:${_lh(38, 1.05)}}
 .st-grid{margin-top:36px}
 .st-v{gap:6px}
@@ -1490,13 +1491,13 @@ ${_plansStackRules(head)}
 @media (prefers-reduced-motion:reduce){.fq-plus,.fq-it::details-content{transition:none}}
 
 /* Brands strip: the deepest tone, the names in a row. */
-.pb{position:relative;overflow:hidden;padding:44px 32px;background:${tones.deeper.css};color:${onDeeper.css}}
+.pb{position:relative;overflow:hidden;${surfacePadding(44, 32, 44, 32)};background:${tones.deeper.css};color:${onDeeper.css}}
 .pb-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.24}
 .pb-in{position:relative;max-width:1136px;margin:0 auto;display:flex;flex-wrap:wrap;align-items:center;gap:20px 48px}
 .pb-l{margin:0;font:600 12px/1.5 var(--body);letter-spacing:.18em;text-transform:uppercase;color:${onDeeper.withAlpha(0.6).css}}
 .pb-n{font:$head 24px/1.3 var(--head);letter-spacing:.06em;text-transform:uppercase;color:${onDeeper.withAlpha(0.86).css}}
 @container (max-width:599.98px){
-.pb{padding:32px 20px}
+.pb{${surfacePadding(32, 20, 32, 20)}}
 .pb-in{gap:10px 24px}
 .pb-l{flex:0 0 100%;margin-bottom:6px;font-size:11px}
 .pb-n{font-size:19px}
@@ -1507,7 +1508,7 @@ ${_plansStackRules(head)}
 .ct.fixed{display:flex;flex-direction:column;justify-content:safe center}
 .ct-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .ct-ov{position:absolute;inset:0;background:${tones.deeper.css};opacity:.8;pointer-events:none}
-.ct-in{position:relative;box-sizing:border-box;width:100%;max-width:1200px;margin:0 auto;padding:120px 32px;display:flex;justify-content:space-between;align-items:flex-end;gap:48px}
+.ct-in{position:relative;box-sizing:border-box;width:100%;max-width:calc(1136px + var(--sp-l,32px) + var(--sp-r,32px));margin:0 auto;${surfacePadding(120, 32, 120, 32)};display:flex;justify-content:space-between;align-items:flex-end;gap:48px}
 .ct.fixed .ct-in{padding-block:0}
 .ct-main{flex:1 1 0;min-width:0}
 .ct-t{margin:0;font:$head 72px/72px var(--head);text-transform:uppercase;color:#fff;overflow-wrap:break-word}
@@ -1522,12 +1523,12 @@ ${_plansStackRules(head)}
 .ct-line{display:none;margin:28px 0 0;padding-top:20px;border-top:1px solid rgb(255 255 255 / .24);font:400 15px/${_lh(15, 1.6)} var(--body);color:rgb(255 255 255 / .8)}
 .ct-line span{display:block}
 @container (min-width:600px) and (max-width:1023.98px){
-.ct-in{display:block;padding:96px 32px}
+.ct-in{display:block;${surfacePadding(96, 32, 96, 32)}}
 .ct-t{font-size:56px;line-height:56px}
 .ct-dl{margin-top:40px;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px}
 }
 @container (max-width:599.98px){
-.ct-in{display:block;padding:72px 20px 64px}
+.ct-in{display:block;${surfacePadding(72, 20, 64, 20)}}
 .ct-t{font-size:46px;line-height:46px}
 .ct-s{margin-top:18px;font-size:17px;line-height:${_lh(17, 1.5)}}
 .ct-btns{flex-direction:column;gap:12px;margin-top:28px}

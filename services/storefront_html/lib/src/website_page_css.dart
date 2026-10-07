@@ -1,6 +1,8 @@
 import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
 
 import 'block_composition.dart';
+import 'block_surface.dart';
+import 'css_values.dart';
 import 'home_page_model.dart';
 import 'website_brand_logos_view.dart';
 import 'website_reviews_view.dart';
@@ -48,7 +50,7 @@ String websiteBlocksCss(WebsiteThemeRoles theme) {
 .blk.fill{width:100%;container-type:inline-size}
 .blk.bleed{padding-inline:0}
 .blk.minh{display:flex;flex-direction:column}.blk.minh>*{flex:1 0 auto}
-
+$blockSurfaceCss
 /* Hero (website_hero_block_content.dart). Oswald bold is the 400 outline
    emboldened, as Flutter draws it. */
 .hero-blk{position:relative;overflow:hidden;height:100%;background:#1a1a1a}
@@ -56,7 +58,7 @@ String websiteBlocksCss(WebsiteThemeRoles theme) {
 .hero-fallback{position:absolute;inset:0;background:linear-gradient(to bottom right,#1a1a1a,${WebsiteRgba.lerp(WebsiteRgba.fromArgb(0xFF1A1A1A), const WebsiteRgba(1, 0, 0, 0), 0.2).css})}
 .hero-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .hero-ov{position:absolute;inset:0;pointer-events:none}
-.hero-in{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 24px;text-align:center}
+.hero-in{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;${surfacePadding(0, 24, 0, 24)};text-align:center}
 .hero-in[data-align=start]{align-items:flex-start;text-align:left}
 .hero-in[data-align=end]{align-items:flex-end;text-align:right}
 .hero-t{margin:0;max-width:100%;font:400 ${_n(heroSize)}px/${_lh(heroSize, 1.12)} var(--head);letter-spacing:3px;color:#fff;-webkit-text-stroke:.032em currentColor;overflow-wrap:anywhere}
@@ -111,9 +113,9 @@ String websiteBlocksCss(WebsiteThemeRoles theme) {
 
 /* Contact (website_contact_block_content.dart): laid out by the width the
    block has, as its LayoutBuilder (1088 and 552). */
-.contact-blk{padding:64px 24px}
+.contact-blk{${surfacePadding(64, 24, 64, 24)}}
 /* 16 on a phone: a canvas under 640, which is the block less its padding. */
-@container (max-width:${_n(640 - 2 * theme.containerPadding - 0.02)}px){.contact-blk{padding-inline:16px}}
+@container (max-width:${_n(640 - 2 * theme.containerPadding - 0.02)}px){.contact-blk{${surfacePaddingInline(16)}}}
 .contact-in{max-width:1100px;margin:0 auto;container-type:inline-size}
 .contact-t{margin:0;text-align:center;font:400 26px/${_lh(26, 1.12)} var(--head);color:var(--w-on);-webkit-text-stroke:.032em currentColor}
 .contact-s{margin:12px 0 0;text-align:center;font:400 17px/${_lh(17, 1.45)} var(--body);letter-spacing:.5px;color:var(--w-onv)}
@@ -221,8 +223,8 @@ String contentBlocksCss(WebsiteThemeRoles theme) {
 /* A Material 3 card at elevation 1 with the theme's 14 % shadow, as
    measured against Flutter's. */
 :root{--card-shadow:0 2px 3.5px -1px rgb(0 0 0 / .05),0 0 1px rgb(0 0 0 / .01)}
-.ft-blk,.ab-blk{padding:64px 24px}
-@container (max-width:${phone}px){.ft-blk,.ab-blk{padding-inline:16px}}
+.ft-blk,.ab-blk{${surfacePadding(64, 24, 64, 24)}}
+@container (max-width:${phone}px){.ft-blk,.ab-blk{${surfacePaddingInline(16)}}}
 @supports (interpolate-size:allow-keywords){:root{interpolate-size:allow-keywords}}
 .ft-t{margin:0;text-align:center;font:400 26px/${_lh(26, 1.15)} var(--head);letter-spacing:.25px;color:var(--w-on)}
 
@@ -385,8 +387,8 @@ String carouselCss(WebsiteThemeRoles theme) {
 /// Products (`_ProductsBlockWidget` and `PremiumProductCard`). The phone and
 /// tablet bands are the window's: 640 and 1024 for a legacy document (`lg`),
 /// 600 and 900 for a canonical one (`cn`).
-const productsBlockCss = '''
-.prod-blk{background:#fff;padding:48px 24px}
+final productsBlockCss = '''
+.prod-blk{background:#fff;${surfacePadding(48, 24, 48, 24)}}
 .prod-in{max-width:1200px;margin:0 auto}
 .prod-head{display:flex;align-items:center}
 .prod-bar{flex:none;width:4px;height:28px;margin-right:12px;background:#000}
@@ -408,7 +410,7 @@ const productsBlockCss = '''
 .prod-all{margin-top:40px;text-align:center}
 .w-btn.ink{border-color:#000;color:#000;letter-spacing:1px}
 .w-btn.ink:hover{background:rgb(0 0 0 / .08)}
-.prod-blk.empty{display:flex;flex-direction:column;align-items:center;padding:24px;color:#bdbdbd}
+.prod-blk.empty{display:flex;flex-direction:column;align-items:center;${surfacePadding(24, 24, 24, 24)};color:#bdbdbd}
 .prod-blk.empty .prod-head{justify-content:center}
 .prod-blk.empty .prod-bar{height:24px}
 .prod-blk.empty h2{flex:none;font-size:20px;line-height:30px}
@@ -417,8 +419,8 @@ const productsBlockCss = '''
 .prod-none{margin:12px 0 0;font:400 16px/24px var(--body);letter-spacing:.25px;color:#757575}
 @media (max-width:1023.98px){.prod-blk.lg .prod-grid{--cols:2!important}}
 @media (max-width:899.98px){.prod-blk.cn .prod-grid{--cols:2!important}}
-@media (max-width:639.98px){.prod-blk.lg{padding-inline:16px}.prod-blk.lg .prod-grid{--cols:1!important}}
-@media (max-width:599.98px){.prod-blk.cn{padding-inline:16px}.prod-blk.cn .prod-grid{--cols:1!important}}
+@media (max-width:639.98px){.prod-blk.lg{${surfacePaddingInline(16)}}.prod-blk.lg .prod-grid{--cols:1!important}}
+@media (max-width:599.98px){.prod-blk.cn{${surfacePaddingInline(16)}}.prod-blk.cn .prod-grid{--cols:1!important}}
 ''';
 
 /// Category grid (`_AutoCategoryGrid`, `_CategoryGridLayout` and

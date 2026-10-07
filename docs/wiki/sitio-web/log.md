@@ -417,3 +417,5 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   borran y duplican la capa como en el lienzo.
 - La capa elegida se gira en la vista HTML con su manilla; su marco se
   dibuja girado y una capa girada cambia de tamaño en sus propios ejes.
+- El HTML pinta la superficie propia de un bloque (pestaña Estilo) como
+  Flutter: antes una página con un bloque con estilo volvía entera a Flutter.
