@@ -39,7 +39,7 @@ String websiteBlocksCss(WebsiteThemeRoles theme) {
     _ => '8px',
   };
   return '''
-:root{--w-bg:${theme.background.css};--w-on:${theme.onSurface.css};--w-onv:${theme.onSurfaceVariant.css};--w-low:${theme.surfaceContainerLow.css};--w-cont:${theme.surfaceContainer.css};--w-onacc:${theme.onAccent.css};--w-ovar:${theme.outlineVariant.css};--w-prim:${theme.primary.css};--w-prim10:${theme.primary.withAlpha(0.1).css};--w-accent:${theme.accent.css};--w-cp:${_n(theme.containerPadding)}px;--w-btn-h:${buttonHeight}px;--w-btn-px:${buttonPadding}px;--w-btn-r:$buttonRadius}
+:root{--w-bg:${theme.background.css};--w-on:${theme.onSurface.css};--w-onv:${theme.onSurfaceVariant.css};--w-low:${theme.surfaceContainerLow.css};--w-cont:${theme.surfaceContainer.css};--w-onacc:${theme.onAccent.css};--w-ovar:${theme.outlineVariant.css};--w-prim:${theme.primary.css};--w-out:${theme.outline.css};--w-prim10:${theme.primary.withAlpha(0.1).css};--w-accent:${theme.accent.css};--w-cp:${_n(theme.containerPadding)}px;--w-btn-h:${buttonHeight}px;--w-btn-px:${buttonPadding}px;--w-btn-r:$buttonRadius}
 /* PageComposition: one column, each block centered and as wide as its
    content (a widget that expands takes the whole width), the theme's side
    padding unless full-bleed, and the space after it. */
@@ -356,8 +356,28 @@ String carouselCss(WebsiteThemeRoles theme) {
 .cl-btn:hover{box-shadow:inset 0 0 0 999px rgb(255 255 255 / .08)}
 @keyframes cl-fade{from{opacity:0}}
 @keyframes cl-fadeup{from{opacity:0;translate:0 8%}}
-.car-slide.on .cl-a-fade{animation:cl-fade var(--ad) $ease both}
-.car-slide.on .cl-a-fadeUp{animation:cl-fadeup var(--ad) $ease both}
+.car-slide.on .cl-a-fade,.cv .cl-a-fade{animation:cl-fade var(--ad) $ease both}
+.car-slide.on .cl-a-fadeUp,.cv .cl-a-fadeUp{animation:cl-fadeup var(--ad) $ease both}
+/* A layer button in the theme's look: Material's button with the site
+   theme's colors (surfaceContainerLow and primary, elevation 1 then 3) and
+   labelLarge, filling its box. */
+.cl.cl-tbtn{min-width:0;min-height:0;padding:0 8px;font:600 14px/20px var(--body);letter-spacing:.1px;color:var(--w-prim);overflow:hidden;transition:background-color .2s,box-shadow .2s}
+.cl.cl-tbtn.filled{background:var(--w-low);box-shadow:0 .7px 1px rgb(0 0 0 / .18),0 0 1px rgb(0 0 0 / .04)}
+.cl.cl-tbtn.filled:hover{background:color-mix(in srgb,var(--w-prim) 8%,var(--w-low));box-shadow:0 2px 3px rgb(0 0 0 / .18),0 1px 5px rgb(0 0 0 / .08)}
+.cl.cl-tbtn.outline{border-color:var(--w-out)}
+.cl.cl-tbtn.outline:hover,.cl.cl-tbtn.text:hover{background:color-mix(in srgb,var(--w-prim) 8%,transparent)}
+
+/* The canvas block (CanvasBlock): one stage per viewport it draws
+   differently, by the block's own width, under the layers. */
+.cv{position:relative;container:cv/inline-size}
+.cv.exact{height:100%}
+.cv-st{display:none}
+.cv.exact .cv-st{height:100%}
+@container cv (max-width:599.98px){.cv-st[data-vp~=mobile]{display:block}}
+@container cv (min-width:600px) and (max-width:899.98px){.cv-st[data-vp~=tablet]{display:block}}
+@container cv (min-width:900px){.cv-st[data-vp~=desktop]{display:block}}
+.cv-bg{position:relative;height:100%;overflow:hidden}
+.cv-bg img,.cv-veil{position:absolute;inset:0;width:100%;height:100%}
 @media (prefers-reduced-motion:reduce){.car-slide,.car-slide.on{transition:none}.cl{animation:none!important}}
 ''';
 }

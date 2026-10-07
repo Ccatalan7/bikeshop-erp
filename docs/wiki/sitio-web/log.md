@@ -370,3 +370,11 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   «4,8 en Google» con la nota real en 4,4. Ahora la nota y las reseñas salen
   de la sincronización, los precios de ejemplo son los del catálogo y nada
   inicial afirma plazos ni certificaciones. Dos bandas seguidas se tocan.
+
+## 2026-10-07 — El bloque canvas en HTML
+
+- `canvas` lo dibuja el HTML (escenario + capas del carrusel); siguen en
+  Flutter los que tienen una capa de producto o un video de fondo.
+- Al compararlo apareció que el lienzo Flutter cortaba el texto de una capa
+  que no cabe y el HTML no: el carrusel en vivo ya tenía ese caso en la
+  tableta. Ahora Flutter tampoco corta.

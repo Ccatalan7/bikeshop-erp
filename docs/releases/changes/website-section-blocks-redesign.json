@@ -13,7 +13,7 @@
   "title": "Secciones nuevas para las páginas del sitio",
   "summary": "Cifras, carta del taller, planes, reseñas, galería, equipo, preguntas, franja de marcas y llamado a la acción tienen un diseño nuevo, de borde a borde en un fondo claro, gris u oscuro de la tienda, igual en el editor y en la página.",
   "items": [
-    "Secciones rediseñadas de borde a borde (cifras, planes, reseñas, galería, equipo, preguntas, llamado) que usan las reseñas de Google, la dirección y WhatsApp."
+    "Secciones nuevas de borde a borde (cifras, planes, reseñas, galería, llamado) con datos reales de la tienda; un texto que no cabe en el lienzo ya no se corta."
   ],
   "evidence": [
     {
@@ -118,7 +118,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_blocks_view.dart",
-      "sha256": "0933de803181909c08958928ad3b25fb1581e4098d72468be24a1e7a1b5ca76c"
+      "sha256": "80e76b1c2a3c2b7cfd734298c122fb64b11d209b401f672d0ab980ef2ed72329"
     },
     {
       "path": "services/storefront_html/lib/src/website_content_blocks_view.dart",
@@ -126,11 +126,19 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_page_css.dart",
-      "sha256": "00f20a6290cfdaf4d17faa4031f320b616840f4a97667848f1828d196fdaeb0d"
+      "sha256": "d36e40efdcb263932b94a9dc81ff371fe433d162ba09c7c0ae99729f0dff62dc"
     },
     {
       "path": "services/storefront_html/lib/src/website_section_blocks_view.dart",
       "sha256": "b056121de2f00fedcc2cf0fb3be9a8269072960467922f857e697c991290e74c"
+    },
+    {
+      "path": "lib/modules/website/widgets/canvas_block.dart",
+      "sha256": "804e7289d19a0bfa0f80719af0b443e60542da73794064a4a76e02a69c97ecd3"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_canvas_view.dart",
+      "sha256": "b06ad2a7fa5f457bcae3b3f274ef7366a30a1b9feb2c0a634459427492b3ceb1"
     }
   ]
 }

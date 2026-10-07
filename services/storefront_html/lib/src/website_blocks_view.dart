@@ -19,6 +19,7 @@ import 'material_icons.dart';
 import 'storefront_fonts.dart';
 import 'storefront_shell.dart';
 import 'website_brand_logos_view.dart';
+import 'website_canvas_view.dart';
 import 'website_carousel_view.dart';
 import 'website_category_grid_view.dart';
 import 'website_content_blocks_view.dart';
@@ -189,6 +190,7 @@ const pageCoveredBlockTypes = {
   WebsiteBlockType.gallery,
   WebsiteBlockType.team,
   WebsiteBlockType.partnersBanner,
+  WebsiteBlockType.canvas,
 };
 
 /// Whether a page that draws [types] draws this block: its type, and what
@@ -206,6 +208,8 @@ bool sharedBlockCovers(ComposedBlock composed, Set<WebsiteBlockType> types) {
     WebsiteBlockType.brandLogos => brandLogosIsCovered(composed.data),
     WebsiteBlockType.videoBanner => videoBannerIsCovered(composed.data),
     WebsiteBlockType.googleReviews => googleReviewsIsCovered(composed.data),
+    // A canvas reads its whole document: it resolves its own viewports.
+    WebsiteBlockType.canvas => canvasBlockIsCovered(composed.block.blockData),
     _ => true,
   };
 }
@@ -237,6 +241,7 @@ Component? sharedBlock(ComposedBlock composed, BlockRenderContext context) {
     WebsiteBlockType.gallery => GallerySectionView(composed, context),
     WebsiteBlockType.team => TeamSectionView(composed, context),
     WebsiteBlockType.partnersBanner => PartnersStripView(composed, context),
+    WebsiteBlockType.canvas => CanvasBlockView(composed, context),
     _ => null,
   };
 }

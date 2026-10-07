@@ -1737,6 +1737,35 @@ Pendiente de esta tanda: que el precio de un servicio o de un plan pueda
 venir del catálogo (un campo que elija el producto), para que la carta no se
 quede vieja cuando cambia un precio — ya pasó una vez con los de ejemplo.
 
+### 5a, cuarta tanda: el bloque `canvas` (2026-10-07)
+
+`canvas` (las campañas con capas libres) lo dibuja el HTML con lo que ya
+dibujaba las diapositivas del carrusel en vivo (`CanvasLayersView`) más su
+escenario (`CanvasBlockView`): el alto que la página le da (`blockHeight`,
+exacto, como `PageComposition` en la vista previa y la tienda de Flutter; un
+documento sin él toma el alto que escala con el ancho, de la mitad al doble,
+o una parte de la ventana), el color, la foto con su punto focal y su ajuste,
+y el velo con la opacidad en lugar del alfa del color (`withValues`), un
+escenario por vista que el documento dibuja distinto. Un botón de capa que
+hereda el tema es el botón Material del tema del sitio (fondo
+`surfaceContainerLow`, texto primario, `labelLarge`, elevación 1), no el
+acento del bloque Botón: el tema del sitio no le da colores propios. Sigue
+cayendo a Flutter un canvas con una capa de producto (tarjeta, galería o
+foto del producto) o con un video de fondo.
+
+Comparado contra Flutter a 1392, 786 y 342 (prueba de render con Oswald y
+Barlow y el tema real, `WebsiteThemeBuilder`): el escenario y las capas
+calzan; apareció una diferencia de verdad. **Flutter cortaba el texto de una
+capa que no cabe en su caja** (el párrafo se medía con el alto de la caja) y
+el HTML lo dejaba seguir hacia abajo; en vivo, el carrusel de la portada ya
+tenía en la tableta textos más altos que su caja («CÁMARAS», 89 px en 64)
+que el visitante ve enteros y el editor mostraba cortados. Se corrigió en
+Flutter (`CanvasTextLayerLayout`): centrado si cabe, desde arriba y sin
+cortar si no, como `align-items: safe center`. Quedan dos diferencias de
+casos rotos de por sí (un diseño de escritorio sin versión de teléfono): una
+palabra más ancha que su caja se corta en otra letra, y el texto de un botón
+de 15 px de alto Flutter lo esconde y el HTML lo muestra.
+
 ### 5b y 5c: la vista HTML del borrador (2026-10-07)
 
 - **5b, el servidor dibuja el borrador.** `POST /_html/editor/borrador`

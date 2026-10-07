@@ -163,7 +163,9 @@ El sitio público lo dibuja el **servidor HTML**, que hoy cubre `hero`,
 `features`, `about` y, desde el 2026-10-07, `stats`, `services`, `pricing`,
 `testimonials`, `gallery`, `team` y `partnersBanner` (`pageCoveredBlockTypes`);
 las páginas de información leen `about`, `faq` y `features` como secciones de
-texto, como Flutter. Faltan `canvas` y `footer`. Una página con
+texto, como Flutter. También `canvas` (las campañas de capas libres), desde
+el 2026-10-07, salvo que tenga una capa de producto o un video de fondo; el
+`footer` no es un bloque que se agregue (el pie es del sitio). Una página con
 otro tipo, o con un bloque que tiene fondo, borde, sombra o relleno propio
 (`websiteBlockHasAuthoredSurface`: el HTML todavía no pinta superficies), la
 responde Flutter entera: el visitante nunca pierde lo que el editor guardó.

@@ -3699,12 +3699,17 @@ class _CanvasBlockState extends State<CanvasBlock> {
             ),
           );
         } else {
-          content = Align(
-            alignment: switch (align) {
-              'center' => Alignment.center,
-              'right' => Alignment.centerRight,
-              _ => Alignment.centerLeft,
-            },
+          // Centered in the layer when the words fit, from its top and past
+          // its bottom when they do not: never cut, as the store draws them
+          // (`.cl-text`, `align-items: safe center`).
+          content = CustomSingleChildLayout(
+            delegate: CanvasTextLayerLayout(
+              horizontal: switch (align) {
+                'center' => 0,
+                'right' => 1,
+                _ => -1,
+              },
+            ),
             child: Text(
               text,
               textAlign: textAlign,
@@ -4103,6 +4108,32 @@ class _CanvasBlockState extends State<CanvasBlock> {
     _inlineEditDocumentEpoch = null;
     _inlineEditUsesExactIntent = false;
   }
+}
+
+/// Places a text layer's paragraph in the layer's box: as wide as its words
+/// up to the box, aligned by [horizontal] (-1 left, 0 center, 1 right),
+/// vertically centered when it fits and from the top when it is taller —
+/// laid out at its full height, so a text that does not fit runs past the
+/// box instead of being cut, as in the HTML storefront.
+@visibleForTesting
+class CanvasTextLayerLayout extends SingleChildLayoutDelegate {
+  const CanvasTextLayerLayout({required this.horizontal});
+
+  final int horizontal;
+
+  @override
+  BoxConstraints getConstraintsForChild(BoxConstraints constraints) =>
+      BoxConstraints(maxWidth: constraints.maxWidth);
+
+  @override
+  Offset getPositionForChild(Size size, Size childSize) => Offset(
+        (size.width - childSize.width) * (horizontal + 1) / 2,
+        math.max(0.0, (size.height - childSize.height) / 2),
+      );
+
+  @override
+  bool shouldRelayout(CanvasTextLayerLayout oldDelegate) =>
+      oldDelegate.horizontal != horizontal;
 }
 
 class _CanvasBackgroundPainter extends CustomPainter {

@@ -8,6 +8,7 @@ import 'package:vinabike_erp/modules/website/models/canvas_element_factory.dart'
 import 'package:vinabike_erp/modules/website/models/website_page_composition.dart';
 import 'package:vinabike_erp/modules/website/models/website_responsive_authoring.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
+import 'package:vinabike_erp/modules/website/widgets/canvas_block.dart';
 import 'package:vinabike_erp/modules/website/widgets/deferred_canvas_block.dart';
 import 'package:vinabike_erp/modules/website/widgets/deferred_editable_block_renderer.dart';
 import 'package:vinabike_erp/public_store/widgets/page_composition.dart';
@@ -662,6 +663,47 @@ void main() {
         beforeStandalone,
         reason: 'standalone projection must be pure',
       );
+    },
+  );
+
+  testWidgets(
+    'a text layer is centered when it fits and runs past its box from the '
+    'top when it does not, never cut (as the HTML storefront draws it)',
+    (tester) async {
+      Future<Rect> place(Size box, String text, int horizontal) async {
+        await tester.pumpWidget(
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: Center(
+              child: SizedBox.fromSize(
+                size: box,
+                child: CustomSingleChildLayout(
+                  key: const ValueKey('layer'),
+                  delegate: CanvasTextLayerLayout(horizontal: horizontal),
+                  child: Text(
+                    text,
+                    key: const ValueKey('words'),
+                    style: const TextStyle(fontSize: 20, height: 1),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        final layer = tester.getTopLeft(find.byKey(const ValueKey('layer')));
+        return tester
+            .getRect(find.byKey(const ValueKey('words')))
+            .shift(-layer);
+      }
+
+      final fits = await place(const Size(200, 100), 'Hola', 0);
+      expect(fits.top, 40);
+      expect(fits.center.dx, 100);
+      final tall = await place(const Size(60, 20), 'Uno dos tres', -1);
+      expect(tall.top, 0);
+      expect(tall.left, 0);
+      expect(tall.height, greaterThan(20));
+      expect(tester.takeException(), isNull);
     },
   );
 }

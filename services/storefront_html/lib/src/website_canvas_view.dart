@@ -7,6 +7,7 @@ import 'package:vinabike_public_core/modules/website/models/website_canvas_respo
 import 'package:vinabike_public_core/modules/website/models/website_responsive_authoring.dart';
 import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
 
+import 'block_composition.dart';
 import 'css_values.dart';
 import 'website_blocks_view.dart';
 
@@ -19,10 +20,9 @@ const canvasReferenceWidth = 1200.0;
 bool canvasLayerIsCovered(Map<String, dynamic> layer) {
   final kind = WebsiteCanvasLayerKind.fromRaw(layer['type']);
   return switch (kind) {
-    WebsiteCanvasLayerKind.text || WebsiteCanvasLayerKind.shape => true,
-    // A button that takes the theme's look is drawn by the theme's button,
-    // which a canvas does not style yet.
-    WebsiteCanvasLayerKind.button => layer['inheritTheme'] == false,
+    WebsiteCanvasLayerKind.text ||
+    WebsiteCanvasLayerKind.shape ||
+    WebsiteCanvasLayerKind.button => true,
     WebsiteCanvasLayerKind.image => !_usesProductImage(layer),
     _ => false,
   };
@@ -318,6 +318,17 @@ class CanvasLayersView extends StatelessComponent {
     final href = context.publicHref(action.href);
     if (href == null) return null;
     final style = action.variant.storageValue;
+    // A button that takes the theme's look is `WebsiteActionButton` with no
+    // colors of its own filling the layer: the site theme's Material button
+    // (elevated, outlined or text), not the accent of the button block.
+    if (layer['inheritTheme'] != false) {
+      return a(
+        classes: [...classes, 'cl-tbtn', 'w-btn', style].join(' '),
+        href: href,
+        attributes: {'style': box.join(';')},
+        [.text(action.label)],
+      );
+    }
     final size = numberValue(layer['fontSize']) ?? 14;
     final radius = numberValue(layer['radius']) ?? 10;
     final background = hexColor(layer['bgColor'], context.theme.accent);
@@ -349,6 +360,146 @@ class CanvasLayersView extends StatelessComponent {
         ].join(';'),
       },
       [.text(label)],
+    );
+  }
+}
+
+/// Whether the HTML storefront draws a canvas block: every layer it holds in
+/// every viewport, and no video behind them.
+bool canvasBlockIsCovered(Map<String, dynamic> data) {
+  for (final viewport in _viewportsOf(data)) {
+    final projected = WebsiteCanvasResponsiveDocument.project(
+      data: data,
+      viewport: viewport,
+    );
+    if ((projected['backgroundVideoUrl'] ?? '').toString().trim().isNotEmpty ||
+        (projected['backgroundYoutubeId'] ?? '').toString().trim().isNotEmpty) {
+      return false;
+    }
+  }
+  return canvasDocumentIsCovered(data);
+}
+
+/// The `canvas` block (`CanvasBlock`) as a visitor sees it: its stage — the
+/// background color, the photo with its focal point and fit, the veil —
+/// under the layers ([CanvasLayersView]). One stage per viewport the
+/// document draws differently, shown by the width of the block.
+///
+/// The page gives it the saved height (`blockHeight`, exact, as
+/// `PageComposition` does in Flutter's Preview and store). A document
+/// without one takes Flutter's own: the height scaled with the width (half
+/// to double), or a share of the window.
+class CanvasBlockView extends StatelessComponent {
+  const CanvasBlockView(this.composed, this.context, {super.key});
+
+  final ComposedBlock composed;
+  final BlockRenderContext context;
+
+  @override
+  Component build(BuildContext _) {
+    // The whole document: the canvas resolves its own viewports.
+    final document = composed.block.blockData;
+    final exact = composed.block.geometry.exactHeight != null;
+    final canonical = WebsiteCanvasResponsiveDocument.isCanonical(document);
+    final stages = <String, List<String>>{};
+    final drawn = <String, Component>{};
+    for (final viewport in _viewportsOf(document)) {
+      final data = WebsiteCanvasResponsiveDocument.project(
+        data: document,
+        viewport: viewport,
+      );
+      final stage = _stage(data, document, exact: exact);
+      final key = jsonEncode(stage.$1);
+      drawn.putIfAbsent(key, () => stage.$2);
+      final names = stages.putIfAbsent(key, () => []);
+      names.add(viewport.wireName);
+      if (!canonical && viewport == WebsiteViewport.desktop) {
+        names.add(WebsiteViewport.tablet.wireName);
+      }
+    }
+    return div(classes: ['cv', if (exact) 'exact'].join(' '), [
+      for (final MapEntry(:key, :value) in drawn.entries)
+        Component.element(
+          tag: 'div',
+          classes: 'cv-st',
+          attributes: {'data-vp': stages[key]!.join(' ')},
+          children: [value],
+        ),
+      CanvasLayersView(document, context),
+    ]);
+  }
+
+  /// One viewport's stage: what makes it different (for merging equal
+  /// stages) and what it draws.
+  (List<Object?>, Component) _stage(
+    Map<String, dynamic> data,
+    Map<String, dynamic> document, {
+    required bool exact,
+  }) {
+    final declared = numberValue(data['designWidth']);
+    final designWidth = declared != null && declared > 0
+        ? declared
+        : canvasReferenceWidth;
+    final viewportHeight = (data['heightMode'] ?? 'fixed').toString() ==
+        'viewport';
+    final share = (numberValue(data['vhPct']) ?? 0.7).clamp(0.2, 1.0);
+    final height =
+        numberValue(data['blockHeight']) ?? numberValue(data['height']) ?? 420;
+    final background = hexColor(
+      data['backgroundColor'],
+      const WebsiteRgba(1, 1, 1, 1),
+    );
+    final image = (data['backgroundImageUrl'] ?? '').toString().trim();
+    final contain =
+        (data['backgroundFit'] ?? 'cover').toString().toLowerCase() ==
+        'contain';
+    final fx = (numberValue(data['focalPointX']) ?? 0.5).clamp(0.0, 1.0);
+    final fy = (numberValue(data['focalPointY']) ?? 0.5).clamp(0.0, 1.0);
+    final veil = data['overlayEnabled'] == true;
+    // `withValues(alpha:)`: the opacity replaces the color's own alpha.
+    final veilBase = hexColor(
+      data['overlayColor'] ?? '#000000',
+      const WebsiteRgba(1, 0, 0, 0),
+    );
+    final veilColor = WebsiteRgba(
+      (numberValue(data['overlayOpacity']) ?? 0.35).clamp(0.0, 0.9),
+      veilBase.r,
+      veilBase.g,
+      veilBase.b,
+    );
+    final style = [
+      'background:${background.css}',
+      if (!exact)
+        viewportHeight
+            ? 'height:calc(${cssNum(share * 100)}vh)'
+            : 'height:clamp(${cssPx(height / 2)},'
+                  'calc(${cssNum(height)} * 100cqw / ${cssNum(designWidth)}),'
+                  '${cssPx(height * 2)})',
+    ];
+    final alt = (document['backgroundImageAltText'] ?? '').toString();
+    return (
+      [style, image, contain, fx, fy, veil, veilColor.css, alt],
+      div(classes: 'cv-bg', attributes: {'style': style.join(';')}, [
+        if (image.isNotEmpty)
+          Component.element(
+            tag: 'img',
+            attributes: {
+              'src': image,
+              'alt': alt,
+              'loading': 'lazy',
+              'decoding': 'async',
+              'style':
+                  'object-fit:${contain ? 'contain' : 'cover'};'
+                  'object-position:${cssNum(fx * 100)}% ${cssNum(fy * 100)}%',
+            },
+          ),
+        if (veil)
+          div(
+            classes: 'cv-veil',
+            attributes: {'style': 'background:${veilColor.css}'},
+            const [],
+          ),
+      ]),
     );
   }
 }
