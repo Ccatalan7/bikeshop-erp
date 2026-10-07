@@ -115,6 +115,13 @@ abstract final class WebsiteEditorChromeGeometry {
   /// at every width the mark on «Guardar» and its announcement say so.
   static const double denseBarUnsavedLabelMinWidth = 1500;
 
+  /// From this width the «Vista HTML» switch sits in the dense bar; below it,
+  /// in the actions sheet («Vista»). Measured, not chosen: a sweep of the bar
+  /// with unsaved changes every 10 px from 1240 (2026-10-07) fits the switch
+  /// (48 + 8) everywhere from 1540 on; below, the bar's own steps (the
+  /// sections rail at 1360, the unsaved words at 1500) leave it short.
+  static const double denseBarHtmlToggleMinWidth = 1540;
+
   static bool usesInlineBarExtras({
     required double editorWidth,
     required bool showsCanvasAuthorities,

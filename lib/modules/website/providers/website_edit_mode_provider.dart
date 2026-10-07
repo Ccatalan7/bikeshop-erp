@@ -3833,6 +3833,19 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   }
 
   /// Set device preview mode (desktop, tablet, mobile)
+  bool _showsHtmlCanvas = false;
+
+  /// The «Vista HTML» (phase 5c of the move to HTML): the canvas shows the
+  /// page as the store's HTML server draws it from this draft. The Flutter
+  /// canvas stays mounted underneath, so turning it off loses nothing.
+  bool get showsHtmlCanvas => _showsHtmlCanvas;
+
+  void setShowsHtmlCanvas(bool value) {
+    if (_showsHtmlCanvas == value) return;
+    _showsHtmlCanvas = value;
+    notifyListeners();
+  }
+
   void setDevicePreviewMode(DevicePreviewMode mode) {
     final scopeChanged = mode == DevicePreviewMode.desktop &&
         _writeScope != WebsiteWriteScope.shared;

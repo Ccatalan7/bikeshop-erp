@@ -2786,6 +2786,16 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                   const SizedBox(width: 12),
                 ],
                 if (editProvider.isPageEditorWorkspace) ...[
+                  // In the bar where it fits; in the actions sheet («Vista»)
+                  // everywhere, which this bar always has with the canvas.
+                  if (editorWidth >=
+                      WebsiteEditorChromeGeometry.denseBarHtmlToggleMinWidth) ...[
+                    _HtmlCanvasToggle(
+                      on: editProvider.showsHtmlCanvas,
+                      onChanged: editProvider.setShowsHtmlCanvas,
+                    ),
+                    const SizedBox(width: 8),
+                  ],
                   // Edit → the customer's view: in words where they fit, its
                   // eye (named by tooltip and semantics) where they do not.
                   if (editorWidth >=
@@ -3321,6 +3331,16 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                                   editProvider.setDevicePreviewMode(option.$1);
                                 },
                               ),
+                            _CompactSheetRow(
+                              label: 'Vista HTML',
+                              selected: editProvider.showsHtmlCanvas,
+                              onTap: () {
+                                Navigator.of(sheetContext).pop();
+                                editProvider.setShowsHtmlCanvas(
+                                  !editProvider.showsHtmlCanvas,
+                                );
+                              },
+                            ),
                             _CompactSheetRow(
                               label: editProvider.isEditMode
                                   ? 'Vista previa'

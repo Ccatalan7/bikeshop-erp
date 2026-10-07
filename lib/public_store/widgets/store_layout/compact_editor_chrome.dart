@@ -60,6 +60,50 @@ class _CompactBarIconButton extends StatelessWidget {
   }
 }
 
+/// The «Vista HTML» switch of the editor bar: the canvas shows the page as
+/// the store's HTML server draws it from the draft, or the Flutter canvas.
+/// A toggle, so its state is drawn (a filled tile when on) and announced.
+class _HtmlCanvasToggle extends StatelessWidget {
+  const _HtmlCanvasToggle({required this.on, required this.onChanged});
+
+  final bool on;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = on ? 'Volver al lienzo' : 'Vista HTML';
+    return Tooltip(
+      message: on
+          ? 'Volver al lienzo de edición'
+          : 'Vista HTML: la página como la arma el servidor, con lo que no '
+              'has guardado',
+      child: Semantics(
+        toggled: on,
+        label: 'Vista HTML',
+        child: IconButton(
+          key: const ValueKey('editor-html-toggle'),
+          onPressed: () => onChanged(!on),
+          isSelected: on,
+          icon: Icon(Icons.code,
+              size: _CompactBarIconButton.glyph, semanticLabel: label),
+          color: Colors.white70,
+          selectedIcon: Icon(Icons.code,
+              size: _CompactBarIconButton.glyph, semanticLabel: label),
+          style: IconButton.styleFrom(
+            fixedSize: const Size.square(_CompactBarIconButton.target),
+            foregroundColor: Colors.white70,
+            backgroundColor:
+                on ? Colors.white.withValues(alpha: 0.16) : Colors.transparent,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(6),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// `O-05` · the sheet handle, 34×4.
 class _CompactSheetHandle extends StatelessWidget {
   const _CompactSheetHandle();

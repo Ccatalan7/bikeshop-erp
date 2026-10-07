@@ -26,6 +26,7 @@ import 'flutter_shell.dart';
 import 'home_page_model.dart';
 import 'contact_page_model.dart';
 import 'contact_page_view.dart';
+import 'editor_draft_route.dart';
 import 'editor_page_model.dart';
 import 'editor_page_view.dart';
 import 'home_page_view.dart';
@@ -88,6 +89,9 @@ Handler storefrontHandler({
         return Response(405, headers: {'allow': 'POST'});
       }
       return orderSummaryPdf(request, reads: reads, fonts: fonts);
+    }
+    if (path == editorDraftPath) {
+      return editorDraftResponse(request, reads: reads, config: config);
     }
     if (path == portalViewPath ||
         path == portalFilePath ||

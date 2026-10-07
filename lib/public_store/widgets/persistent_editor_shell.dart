@@ -16,6 +16,7 @@ import '../../modules/website/widgets/website_editor_contextual_dock.dart';
 import '../../modules/website/widgets/website_editor_contextual_operation_scope.dart';
 import '../../modules/website/widgets/website_editor_draft_recovery_host.dart';
 import '../../modules/website/widgets/website_editor_command_scope.dart';
+import '../../modules/website/widgets/website_html_draft_view.dart';
 import 'website_insertion_host.dart';
 
 /// A persistent shell that keeps the editor panel mounted across route changes.
@@ -354,6 +355,19 @@ class _PersistentEditorShellState extends State<PersistentEditorShell> {
                                   ),
                                 ),
                               ),
+                            ),
+                          // The «Vista HTML»: over the canvas, which stays
+                          // mounted underneath with its state; the pane, the
+                          // rail and the dock keep their places.
+                          if (editProvider.isInEditorContext &&
+                              editProvider.isPageEditorWorkspace &&
+                              editProvider.showsHtmlCanvas)
+                            Positioned(
+                              top: editorTopBand,
+                              left: mountsRail ? railWidth : 0,
+                              right: mountsPane ? paneWidth : 0,
+                              bottom: mountsDock ? _contextualDockHeight : 0,
+                              child: const WebsiteHtmlDraftView(),
                             ),
                           if (editProvider.isInEditorContext)
                             Positioned(

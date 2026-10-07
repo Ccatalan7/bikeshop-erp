@@ -203,6 +203,20 @@ abstract interface class PublicReads {
   /// page makes), for its summary PDF; null when the token opens nothing.
   Future<Object?> publicOrder(String accessToken);
 
+  /// Whether the session [accessToken] may edit this store's site: the rule
+  /// saving the site follows (`can_edit_tenant_settings`), asked as that
+  /// person. Throws [CustomerSessionRefused] when Supabase does not accept
+  /// the token. The token is only sent to Supabase.
+  Future<bool> canEditSite(String accessToken);
+
+  /// What a draft of the editor needs besides its own blocks and settings:
+  /// the shell, the payment methods and the products [page]'s blocks pick
+  /// by hand, read as [homePage] reads them.
+  Future<HomePageReads> draftPage(
+    Map<String, dynamic> page,
+    List<String> Function(Map<String, dynamic> page) productIds,
+  );
+
   /// The portal's reads with the customer's [accessToken]; throws
   /// [CustomerSessionRefused] when Supabase does not accept it. The token is
   /// only sent to Supabase: never kept nor written to a log. [files] resolves
@@ -484,23 +498,69 @@ class SupabasePublicReads implements PublicReads {
     final page = pages.isNotEmpty && pages.first is Map
         ? Map<String, dynamic>.from(pages.first as Map)
         : null;
-    final ids = page == null ? const <String>[] : productIds(page);
-    var listing = (
-      rows: const <Object?>[],
-      brands: const <Object?>[],
-      thumbnails: const <Object?>[],
+    final listing = await _pickedProducts(
+      page == null ? const <String>[] : productIds(page),
     );
-    if (ids.isNotEmpty) {
-      final rows = await _rpc('get_public_products', {
-        'p_tenant_id': config.tenantId,
-        'p_product_ids': ids,
-        'p_only_in_stock': true,
-        'p_sort_by': 'name',
-        'p_limit': ids.length,
-        'p_offset': 0,
-      });
-      listing = await _completeRows(rows is List ? rows : const []);
+    return (
+      shell: results[0] as Map<String, dynamic>,
+      payments: results[1],
+      page: page,
+      products: listing.rows,
+      brandRows: listing.brands,
+      thumbnails: listing.thumbnails,
+    );
+  }
+
+  /// The products a page's blocks pick by hand, in stock and public,
+  /// completed like a listing.
+  Future<({List<Object?> rows, List<Object?> brands, List<Object?> thumbnails})>
+  _pickedProducts(List<String> ids) async {
+    if (ids.isEmpty) {
+      return (
+        rows: const <Object?>[],
+        brands: const <Object?>[],
+        thumbnails: const <Object?>[],
+      );
     }
+    final rows = await _rpc('get_public_products', {
+      'p_tenant_id': config.tenantId,
+      'p_product_ids': ids,
+      'p_only_in_stock': true,
+      'p_sort_by': 'name',
+      'p_limit': ids.length,
+      'p_offset': 0,
+    });
+    return _completeRows(rows is List ? rows : const []);
+  }
+
+  @override
+  Future<bool> canEditSite(String accessToken) async {
+    if (_sessionUser(accessToken) == null) {
+      throw const CustomerSessionRefused();
+    }
+    final answer = await _customerRpc(accessToken, 'can_edit_tenant_settings', {
+      'p_tenant_id': config.tenantId,
+    });
+    return answer == true;
+  }
+
+  @override
+  Future<HomePageReads> draftPage(
+    Map<String, dynamic> page,
+    List<String> Function(Map<String, dynamic> page) productIds,
+  ) async {
+    final results = await Future.wait([
+      _shell(),
+      _payments(),
+      _pickedProducts(productIds(page)),
+    ]);
+    final listing =
+        results[2]
+            as ({
+              List<Object?> rows,
+              List<Object?> brands,
+              List<Object?> thumbnails,
+            });
     return (
       shell: results[0] as Map<String, dynamic>,
       payments: results[1],

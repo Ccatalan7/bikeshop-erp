@@ -18,6 +18,7 @@ import 'website_page_css.dart';
 class EditorPageModel {
   EditorPageModel._({
     required this.page,
+    required this.draft,
     required this.meta,
     required this.blocks,
     required this.theme,
@@ -30,6 +31,7 @@ class EditorPageModel {
     required PageContext page,
     required String slug,
     required HomePageReads reads,
+    bool draft = false,
   }) {
     final row = reads.page!;
     final shell = page.shell;
@@ -116,6 +118,7 @@ class EditorPageModel {
     );
 
     return EditorPageModel._(
+      draft: draft,
       page: page,
       meta: PageMeta(
         title: title,
@@ -140,6 +143,10 @@ class EditorPageModel {
   }
 
   final PageContext page;
+
+  /// The editor's draft ([editorDraftResponse]): each block names its id and
+  /// a block the HTML does not draw yet says so in its place.
+  final bool draft;
   final PageMeta meta;
   final List<ComposedBlock> blocks;
   final WebsiteThemeRoles theme;

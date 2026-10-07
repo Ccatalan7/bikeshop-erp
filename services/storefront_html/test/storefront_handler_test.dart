@@ -168,6 +168,7 @@ class _FakeReads implements PublicReads {
     this.page,
     this.fail = false,
     this.busy = false,
+    this.canEdit = true,
     Map<String, dynamic>? shell,
     this.products = const [],
     this.brandRows = const [],
@@ -205,6 +206,10 @@ class _FakeReads implements PublicReads {
 
   /// The database had no turn in time ([DatabaseGate]).
   final bool busy;
+
+  /// What `can_edit_tenant_settings` answers for the editor's session;
+  /// null when Supabase refuses the session.
+  final bool? canEdit;
   final Map<String, dynamic>? shellJson;
   final List<Object?> products;
   final List<Object?> brandRows;
@@ -337,6 +342,33 @@ class _FakeReads implements PublicReads {
       shell: shellJson ?? _shell(),
       payments: null,
       page: homeRow,
+      products: [
+        for (final row in products)
+          if (row is Map && ids.contains(row['id'])) row,
+      ],
+      brandRows: brandRows,
+      thumbnails: thumbnails,
+    );
+  }
+
+  @override
+  Future<bool> canEditSite(String accessToken) async {
+    requested.add('can edit');
+    return canEdit ?? (throw const CustomerSessionRefused());
+  }
+
+  @override
+  Future<HomePageReads> draftPage(
+    Map<String, dynamic> page,
+    List<String> Function(Map<String, dynamic> page) productIds,
+  ) async {
+    requested.add('draft');
+    if (fail) throw PublicReadException('down');
+    final ids = productIds(page);
+    return (
+      shell: shellJson ?? _shell(),
+      payments: null,
+      page: page,
       products: [
         for (final row in products)
           if (row is Map && ids.contains(row['id'])) row,
@@ -3338,6 +3370,158 @@ void main() {
         'sb-abcd1234-auth-token',
       );
       expect(html, contains('"sb-example-auth-token"'));
+    });
+  });
+
+  group('editor draft', () {
+    String token() {
+      String b64(Map<String, Object?> v) =>
+          base64Url.encode(utf8.encode(jsonEncode(v))).replaceAll('=', '');
+      return '${b64({'alg': 'HS256'})}.'
+          '${b64({'sub': '7e570000-0000-4000-8000-0000000000ee'})}.'
+          '${'x' * 43}';
+    }
+
+    Map<String, Object?> hero(String id, String title, {int order = 0}) => {
+      'id': id,
+      'block_type': 'hero',
+      'block_data': {'title': title, 'subtitle': ''},
+      'is_visible': true,
+      'order_index': order,
+    };
+
+    Future<(int, Map<String, Object?>, Response)> draft(
+      _FakeReads reads,
+      Map<String, Object?> body, {
+      String? auth,
+      Map<String, String> headers = const {},
+    }) async {
+      final response = await _get(
+        reads,
+        '/_html/editor/borrador',
+        method: 'POST',
+        headers: {
+          if (auth != '') 'authorization': auth ?? 'Bearer ${token()}',
+          'content-type': 'application/json',
+          ...headers,
+        },
+        body: jsonEncode(body),
+      );
+      expect(response.headers['cache-control'], 'no-store');
+      expect(response.headers['x-robots-tag'], 'noindex');
+      return (
+        response.statusCode,
+        jsonDecode(await response.readAsString()) as Map<String, Object?>,
+        response,
+      );
+    }
+
+    test('the home as the editor has it, unsaved blocks and settings '
+        'included, never indexed nor measured', () async {
+      final reads = _FakeReads(
+        shell: {
+          ..._shell(),
+          'settings': {
+            ...(_shell()['settings'] as Map<String, dynamic>),
+            'google_analytics_id': 'G-TEST123',
+          },
+        },
+      );
+      final (status, answer, _) = await draft(reads, {
+        'page': {'home': true},
+        'blocks': [
+          hero('b-hero', 'Portada sin guardar'),
+          {
+            'id': 'b-team',
+            'block_type': 'team',
+            'block_data': {'title': 'Nuestro equipo', 'members': []},
+            'is_visible': true,
+            'order_index': 1,
+          },
+        ],
+        'settings': {'store_name': 'Viñabike borrador'},
+      });
+      expect(status, 200);
+      final html = answer['html'] as String;
+      // The hero writes its title in capitals, as on the site.
+      expect(html, contains('PORTADA SIN GUARDAR'));
+      expect(html, contains('data-block-id="b-hero"'));
+      // A block the HTML does not draw yet stays in its place, named.
+      expect(html, contains('data-block-id="b-team"'));
+      expect(html, contains('class="draft-missing"'));
+      expect(html, contains('La vista HTML todavía no dibuja este bloque'));
+      // The unsaved store name, not the saved one.
+      expect(html, contains('Viñabike borrador'));
+      expect(html, contains('<meta name="robots" content="noindex,follow"'));
+      expect(html, isNot(contains('G-TEST123')));
+      expect(html, contains('vbDraftPick'));
+      expect(reads.requested, ['can edit', 'draft']);
+    });
+
+    test('a page the editor creates, by its slug', () async {
+      final (status, answer, _) = await draft(_FakeReads(), {
+        'page': {'slug': 'Nosotros', 'title': 'Nosotros'},
+        'blocks': [hero('b1', 'Quiénes somos')],
+      });
+      expect(status, 200);
+      expect(answer['html'], contains('QUIÉNES SOMOS'));
+      expect(answer['html'], contains('data-block-id="b1"'));
+    });
+
+    test('only someone who may save the site gets a draft', () async {
+      final body = {
+        'page': {'home': true},
+        'blocks': [hero('b1', 'x')],
+      };
+      var reads = _FakeReads(canEdit: false);
+      expect((await draft(reads, body)).$2, {'state': 'forbidden'});
+      expect(reads.requested, ['can edit']);
+      reads = _FakeReads(canEdit: null);
+      expect((await draft(reads, body)).$2, {'state': 'expired'});
+      reads = _FakeReads();
+      expect((await draft(reads, body, auth: '')).$2, {'state': 'invalid'});
+      expect(reads.requested, isEmpty);
+      expect(
+        (await draft(reads, {
+          'page': {'slug': '../etc'},
+          'blocks': [],
+        })).$2,
+        {'state': 'invalid'},
+      );
+      expect((await draft(_FakeReads(fail: true), body)).$2, {
+        'state': 'unavailable',
+      });
+    });
+
+    test('the ERP on the web may ask; another site may not', () async {
+      Future<Response> preflight(String origin) => _get(
+        _FakeReads(),
+        '/_html/editor/borrador',
+        method: 'OPTIONS',
+        headers: {'origin': origin},
+      );
+      final erp = await preflight('https://project-vinabike.web.app');
+      expect(erp.statusCode, 204);
+      expect(
+        erp.headers['access-control-allow-origin'],
+        'https://project-vinabike.web.app',
+      );
+      expect(
+        erp.headers['access-control-allow-headers'],
+        contains('authorization'),
+      );
+      final other = await preflight('https://example.com');
+      expect(other.statusCode, 403);
+      expect(other.headers['access-control-allow-origin'], isNull);
+      final (_, _, response) = await draft(
+        _FakeReads(),
+        {
+          'page': {'home': true},
+          'blocks': [hero('b1', 'x')],
+        },
+        headers: {'origin': 'https://example.com'},
+      );
+      expect(response.headers['access-control-allow-origin'], isNull);
     });
   });
 

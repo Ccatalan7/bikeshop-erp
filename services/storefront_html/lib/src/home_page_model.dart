@@ -87,6 +87,7 @@ String? _firstSlideImage(List<Map<String, dynamic>> rows) {
 class HomePageModel {
   HomePageModel._({
     required this.page,
+    required this.draft,
     required this.meta,
     required this.blocks,
     required this.theme,
@@ -98,6 +99,7 @@ class HomePageModel {
   factory HomePageModel.build({
     required PageContext page,
     required HomePageReads reads,
+    bool draft = false,
   }) {
     final shell = page.shell;
     final theme = WebsiteThemeRoles.resolve(shell.setting);
@@ -125,6 +127,7 @@ class HomePageModel {
       shell.setting('meta_description', shell.storeDescription),
     );
     return HomePageModel._(
+      draft: draft,
       page: page,
       meta: PageMeta(
         title: title,
@@ -152,6 +155,10 @@ class HomePageModel {
   }
 
   final PageContext page;
+
+  /// The editor's draft ([editorDraftResponse]): each block names its id and
+  /// a block the HTML does not draw yet says so in its place.
+  final bool draft;
   final PageMeta meta;
   final List<ComposedBlock> blocks;
   final WebsiteThemeRoles theme;

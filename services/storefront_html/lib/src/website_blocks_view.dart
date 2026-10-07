@@ -86,6 +86,7 @@ Component composedBlock(
   ComposedBlock composed, {
   required Component child,
   required bool fill,
+  bool draft = false,
 }) {
   final geometry = composed.block.geometry;
   final exact = geometry.exactHeight;
@@ -101,6 +102,8 @@ Component composedBlock(
     ].join(' '),
     attributes: {
       'data-block': composed.block.blockType,
+      // The editor's draft: which block a click picks.
+      if (draft) 'data-block-id': composed.block.id,
       if (composed.bands case final bands?) 'data-bands': bands.join(' '),
       if (composed.gapAfter > 0 || exact != null || minimum != null)
         'style': [
