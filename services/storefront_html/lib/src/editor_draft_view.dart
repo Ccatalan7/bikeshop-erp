@@ -295,21 +295,25 @@ const _draftScript = r'''
     hot = text;
     if (hot) hot.classList.add('vb-text-hot');
   }
+  // Each edit carries its own token, and an answer for another one (late,
+  // or for the page before a redraw) is ignored.
+  var editSeq = 0;
   function editMessage(e, phase, text) {
-    send('vbDraftEdit', [e.id, e.field, phase, text === undefined ? null : text],
-      { type: 'vb-draft-edit', id: e.id, field: e.field, phase: phase, text: text });
+    send('vbDraftEdit', [e.id, e.field, phase, text === undefined ? null : text, e.token],
+      { type: 'vb-draft-edit', id: e.id, field: e.field, phase: phase, text: text, token: e.token });
   }
   function begin(el) {
     heat(null);
     written = null;
     edit = {
       el: el, id: pick.target.getAttribute('data-block-id'),
-      field: el.getAttribute('data-edit-text'), html: el.innerHTML, on: false
+      field: el.getAttribute('data-edit-text'), html: el.innerHTML, on: false,
+      token: Date.now().toString(36) + '.' + (++editSeq)
     };
     editMessage(edit, 'begin');
   }
-  window.vbDraftEditing = function (raw, field) {
-    if (!edit || edit.on) return;
+  window.vbDraftEditing = function (raw, field, token) {
+    if (!edit || edit.on || token !== edit.token) return;
     if (raw === null || raw === undefined || field !== edit.field) { edit = null; return; }
     var el = edit.el;
     edit.on = true;
@@ -350,8 +354,9 @@ const _draftScript = r'''
     }
     soon();
   }
-  window.vbDraftEdited = function (ok) {
-    if (!ok && written) written.el.innerHTML = written.html;
+  window.vbDraftEdited = function (ok, token) {
+    if (!written || written.token !== token) return;
+    if (!ok) written.el.innerHTML = written.html;
     written = null;
   };
   document.addEventListener('focusout', function (event) {
@@ -447,7 +452,7 @@ const _draftScript = r'''
     if (label) label.textContent = '↕ ' + h + ' px';
     soon();
   }, true);
-  document.addEventListener('mouseup', function () {
+  function endSizing() {
     if (!sizing) return;
     var s = sizing;
     sizing = null;
@@ -456,7 +461,10 @@ const _draftScript = r'''
     if (s.to === Math.round(s.from)) { heightMessage(s.id, 'cancel'); restoreSize(s); return; }
     sized = s;
     heightMessage(s.id, 'commit', s.to);
-  }, true);
+  }
+  document.addEventListener('mouseup', endSizing, true);
+  // A release the page never sees (outside its frame) ends the drag too.
+  addEventListener('blur', endSizing);
   window.vbDraftSized = function (ok) {
     if (ok) { sized = null; return; }
     // Refused at the start (the block cannot be sized now) or at the end.

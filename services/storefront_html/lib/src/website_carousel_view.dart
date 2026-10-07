@@ -15,9 +15,16 @@ import 'website_canvas_view.dart';
 
 /// The slides of a carousel block.
 List<Map<String, dynamic>> carouselSlides(Map<String, dynamic> data) => [
+  for (final (_, slide) in _storedSlides(data)) slide,
+];
+
+/// The slides with their places in the stored list, which is how the editor
+/// addresses one ([BlockRenderContext.editText]); an entry that is not a
+/// slide is skipped.
+List<(int, Map<String, dynamic>)> _storedSlides(Map<String, dynamic> data) => [
   if (data['slides'] case final List<Object?> slides)
-    for (final slide in slides)
-      if (slide is Map) Map<String, dynamic>.from(slide),
+    for (final (index, slide) in slides.indexed)
+      if (slide is Map) (index, Map<String, dynamic>.from(slide)),
 ];
 
 /// A slide drawn as layers (`websiteCarouselSlideUsesComposition`).
@@ -62,6 +69,7 @@ class CarouselBlockView extends StatelessComponent {
   Component build(BuildContext _) {
     final data = composed.data;
     final slides = carouselSlides(data);
+    final stored = [for (final (index, _) in _storedSlides(data)) index];
     if (slides.isEmpty) return div(const []);
     final autoPlay = (data['autoPlay'] ?? true) == true;
     final showIndicators = (data['showIndicators'] ?? true) == true;
@@ -107,7 +115,7 @@ class CarouselBlockView extends StatelessComponent {
       },
       [
         for (var index = 0; index < slides.length; index++)
-          _slide(slides[index], index, slides.length),
+          _slide(slides[index], index, slides.length, stored[index]),
         if (many && (showArrows || showIndicators))
           div(classes: 'car-nav', [
             if (showArrows)
@@ -150,7 +158,12 @@ class CarouselBlockView extends StatelessComponent {
     );
   }
 
-  Component _slide(Map<String, dynamic> slide, int index, int count) {
+  Component _slide(
+    Map<String, dynamic> slide,
+    int index,
+    int count,
+    int stored,
+  ) {
     final first = index == 0;
     final title = (slide['title'] ?? '').toString().trim();
     final subtitle = (slide['subtitle'] ?? '').toString().trim();
@@ -224,7 +237,7 @@ class CarouselBlockView extends StatelessComponent {
                       ...context.editText(
                         const ['title'],
                         collection: const ['slides'],
-                        index: index,
+                        index: stored,
                       ),
                       'style': _textStyle(
                         slide['titleFormatting'],
@@ -241,7 +254,7 @@ class CarouselBlockView extends StatelessComponent {
                       ...context.editText(
                         const ['subtitle'],
                         collection: const ['slides'],
-                        index: index,
+                        index: stored,
                       ),
                       'style': _textStyle(
                         slide['subtitleFormatting'],
@@ -321,7 +334,7 @@ function ready(i){return Promise.all([].map.call(slides[i].querySelectorAll("img
 function restart(){clearInterval(timer);if(ms&&!still&&n>1)timer=setInterval(function(){go(cur+1)},ms)}
 function show(i){var old=slides[cur];old.classList.remove("on");old.inert=true;slides[i].classList.add("on");slides[i].inert=false;dots.forEach(function(d,k){d.setAttribute("aria-pressed",k===i?"true":"false")});cur=i;ready((i+1)%n);restart();c.dispatchEvent(new CustomEvent("car:shown",{detail:i,bubbles:true}))}
 function go(i){i=(i%n+n)%n;if(i===cur){want=-1;restart();return}clearInterval(timer);want=i;ready(i).then(function(){if(want===i){want=-1;show(i)}})}
-c.addEventListener("car:go",function(e){go(+e.detail)});
+c.addEventListener("car:go",function(e){var i=+e.detail;if(isFinite(i))go(Math.floor(i))});
 c.addEventListener("click",function(e){var b=e.target.closest("button");if(!b||!c.contains(b))return;if(b.hasAttribute("data-car-prev"))go(cur-1);else if(b.hasAttribute("data-car-next"))go(cur+1);else if(b.dataset.carGo)go(+b.dataset.carGo)});
 var x0=null,y0=0,t0=0;
 c.addEventListener("touchstart",function(e){if(e.touches.length!==1){x0=null;return}x0=e.touches[0].clientX;y0=e.touches[0].clientY;t0=Date.now()},{passive:true});

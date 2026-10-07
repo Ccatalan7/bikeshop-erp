@@ -16,7 +16,10 @@ import 'website_blocks_view.dart';
 Map<String, dynamic> _map(Object? raw) =>
     raw is Map ? Map<String, dynamic>.from(raw) : const <String, dynamic>{};
 
-List<Map<String, dynamic>> _items(
+/// The items of a block's list (its [key], or the first alias it has),
+/// each with its place in the stored list: an entry that is not an item is
+/// skipped, and the editor addresses an item by where it is stored.
+List<(int, Map<String, dynamic>)> _items(
   Map<String, dynamic> data,
   String key, [
   List<String> aliases = const [],
@@ -34,8 +37,8 @@ List<Map<String, dynamic>> _items(
   }
   return [
     if (raw is List)
-      for (final item in raw)
-        if (item is Map) Map<String, dynamic>.from(item),
+      for (final (index, item) in raw.indexed)
+        if (item is Map) (index, Map<String, dynamic>.from(item)),
   ];
 }
 
@@ -143,7 +146,7 @@ class FaqBlockView extends StatelessComponent {
           ),
         if (items.isNotEmpty)
           div(classes: 'faq-list', [
-            for (final (index, item) in items.indexed)
+            for (final (index, item) in items)
               details(classes: 'faq-it', [
                 summary(classes: 'faq-q', [
                   _slot(
@@ -354,7 +357,7 @@ class FeaturesBlockView extends StatelessComponent {
         ),
         if (features.isNotEmpty)
           div(classes: list ? 'ft-list' : 'ft-grid', [
-            for (final (index, item) in features.indexed)
+            for (final (index, item) in features)
               list ? _listItem(item, index, theme) : _card(item, index, theme),
           ]),
       ]),

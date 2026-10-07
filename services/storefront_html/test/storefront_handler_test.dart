@@ -3471,8 +3471,11 @@ void main() {
           'block_type': 'faq',
           'block_data': {
             'title': 'Preguntas',
+            // An entry that is not an item is skipped, and the editor
+            // addresses the others by where they are stored.
             'items': [
               {'question': '¿Arman?', 'answer': 'Sí'},
+              'no es una pregunta',
               {'question': '¿Despachan?', 'answer': 'A todo Chile'},
             ],
           },
@@ -3509,8 +3512,11 @@ void main() {
           'id': 'b-car',
           'block_type': 'carousel',
           'block_data': {
+            // Loading drops what is not a slide, in the editor's document
+            // as here (`normalizeWebsiteBlockData`): the positions agree.
             'slides': [
               {'title': 'Primera', 'subtitle': 'Uno'},
+              7,
               {'title': 'Segunda', 'subtitle': 'Dos'},
             ],
           },
@@ -3524,11 +3530,12 @@ void main() {
       });
       expect(status, 200);
       final html = answer['html'] as String;
+
       for (final field in [
         'title',
         'subtitle',
         'question@items#0',
-        'answer@items#1',
+        'answer@items#2',
         'title@features,items#0',
         'description@features,items#0',
         'subtitle,description',
@@ -3538,6 +3545,8 @@ void main() {
       ]) {
         expect(html, contains('data-edit-text="$field"'), reason: field);
       }
+      expect(html, isNot(contains('data-edit-text="answer@items#1"')));
+      expect(html, isNot(contains('data-edit-text="title@slides#2"')));
       expect(html, contains('window.vbDraftEditing = function'));
       // The carousel stays on its slide while the operator edits it.
       expect(html, isNot(contains('data-interval')));
