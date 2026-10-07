@@ -125,7 +125,7 @@ void main() {
 
     for (var pass = 0; pass < 2; pass++) {
       for (final title in const [
-        'Overlay',
+        'Capa oscura',
         'Imagen y encuadre',
         'Layout',
         'Estilo',

@@ -158,8 +158,13 @@ class _CatalogSectionControls extends StatelessWidget {
           ? _list(context, canvas)
           : _gridList(context, value, canvas, stage),
       WebsiteCatalogSection.closing => _closing(context, value, stage),
-      WebsiteCatalogSection.page =>
-        _page(context, value, stage, offersPriceList: offersPriceList),
+      WebsiteCatalogSection.page => _page(
+          context,
+          value,
+          stage,
+          offersPriceList: offersPriceList,
+          canvas: canvas,
+        ),
     };
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -529,17 +534,49 @@ class _CatalogSectionControls extends StatelessWidget {
         title: 'Filtros',
         icon: Icons.filter_list_rounded,
         children: [
-          for (final facet in WebsiteCatalogFacet.values)
-            _EditorToggle(
-              key: ValueKey('catalog-facet-${facet.name}'),
-              label: facet.label,
-              value: value.facets.contains(facet),
-              onChanged: (on) => toggleFacet(facet, on),
+          // The ones shown, in their order (with arrows to change it), then
+          // the ones that are off.
+          for (var index = 0; index < value.facets.length; index++)
+            Row(
+              children: [
+                Expanded(
+                  child: _EditorToggle(
+                    key: ValueKey('catalog-facet-${value.facets[index].name}'),
+                    label: '${index + 1}. ${value.facets[index].label}',
+                    value: true,
+                    onChanged: (on) => toggleFacet(value.facets[index], on),
+                  ),
+                ),
+                IconButton(
+                  key: ValueKey('catalog-facet-up-${value.facets[index].name}'),
+                  tooltip: 'Subir ${value.facets[index].label}',
+                  onPressed: index == 0
+                      ? null
+                      : () => stage(
+                            value.copyWith(
+                              facets: [
+                                ...value.facets.sublist(0, index - 1),
+                                value.facets[index],
+                                value.facets[index - 1],
+                                ...value.facets.sublist(index + 1),
+                              ],
+                            ),
+                          ),
+                  icon: const Icon(Icons.arrow_upward_rounded, size: 18),
+                ),
+              ],
             ),
+          for (final facet in WebsiteCatalogFacet.values)
+            if (!value.facets.contains(facet))
+              _EditorToggle(
+                key: ValueKey('catalog-facet-${facet.name}'),
+                label: facet.label,
+                value: false,
+                onChanged: (on) => toggleFacet(facet, on),
+              ),
           const _CatalogHelp(
-            'Salen en la columna de la izquierda, en el orden en que se '
-            'encienden. El buscador y los filtros de la ficha técnica salen '
-            'siempre.',
+            'Salen en la columna de la izquierda, en este orden. El buscador '
+            'y los filtros de la ficha técnica salen siempre.',
           ),
         ],
       ),
@@ -693,7 +730,9 @@ class _CatalogSectionControls extends StatelessWidget {
     WebsiteCatalogPresentation value,
     ValueChanged<WebsiteCatalogPresentation> stage, {
     required bool offersPriceList,
+    WebsiteCatalogCanvasContext? canvas,
   }) {
+    final collection = canvas?.collection == true;
     final saved = _savedCatalogPresentation(context, provider, target.ownerId);
     final losesSections = saved.isPriceList && !value.isPriceList;
     return [
@@ -758,9 +797,293 @@ class _CatalogSectionControls extends StatelessWidget {
             value: value.allowIndexing,
             onChanged: (allow) => stage(value.copyWith(allowIndexing: allow)),
           ),
+          const SizedBox(height: 12),
+          Text(
+            'Imagen al compartir',
+            style: Theme.of(context).textTheme.labelMedium,
+          ),
+          const SizedBox(height: 6),
+          _ImagePicker(
+            currentUrl:
+                value.socialImageUrl.isEmpty ? null : value.socialImageUrl,
+            onChanged: (url) =>
+                stage(value.copyWith(socialImageUrl: url.trim())),
+          ),
+          if (value.socialImageUrl.isNotEmpty)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => stage(value.copyWith(socialImageUrl: '')),
+                icon: const Icon(Icons.close_rounded, size: 16),
+                label: const Text('Quitar la imagen'),
+              ),
+            )
+          else
+            const _CatalogHelp(
+              'Sin imagen propia, al compartir el enlace se usa la de la '
+              'portada o la del sitio.',
+            ),
         ],
       ),
+      if (collection) ...[
+        _CollapsibleSection(
+          title: 'Dirección',
+          icon: Icons.link_rounded,
+          initiallyExpanded: false,
+          children: [
+            _CatalogAddressField(
+              value: value,
+              rootPath:
+                  canvas!.noun == 'servicios' ? '/servicios' : '/productos',
+              onChanged: stage,
+            ),
+          ],
+        ),
+        _CollapsibleSection(
+          title: 'En el menú',
+          icon: Icons.menu_open_rounded,
+          initiallyExpanded: false,
+          children: [
+            const _CatalogHelp(
+              'La foto del menú desplegable del encabezado, cuando la '
+              'categoría tiene subcategorías.',
+            ),
+            _ImagePicker(
+              currentUrl: value.megaMenuImageUrl.isEmpty
+                  ? null
+                  : value.megaMenuImageUrl,
+              onChanged: (url) =>
+                  stage(value.copyWith(megaMenuImageUrl: url.trim())),
+            ),
+            if (value.megaMenuImageUrl.isNotEmpty) ...[
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => stage(value.copyWith(megaMenuImageUrl: '')),
+                  icon: const Icon(Icons.close_rounded, size: 16),
+                  label: const Text('Quitar la foto'),
+                ),
+              ),
+              _CatalogSlider(
+                label: 'Oscurecer la foto',
+                value: value.megaMenuOverlay,
+                max: 0.85,
+                divisions: 17,
+                percent: true,
+                onChanged: (overlay) =>
+                    stage(value.copyWith(megaMenuOverlay: overlay)),
+              ),
+              _CatalogSlider(
+                label: 'Oscurecer la tarjeta',
+                value: value.megaMenuCardOverlay,
+                max: 0.65,
+                divisions: 13,
+                percent: true,
+                onChanged: (overlay) =>
+                    stage(value.copyWith(megaMenuCardOverlay: overlay)),
+              ),
+              _CatalogSlider(
+                label: 'Ancho de la foto',
+                value: value.megaMenuOverviewWidth,
+                min: 300,
+                max: 440,
+                divisions: 14,
+                onChanged: (width) =>
+                    stage(value.copyWith(megaMenuOverviewWidth: width)),
+              ),
+              VbSegmented<WebsiteMegaMenuContentAlignment>(
+                groupLabel: 'Dónde va el texto',
+                value: value.megaMenuContentAlignment,
+                options: [
+                  for (final alignment
+                      in WebsiteMegaMenuContentAlignment.values)
+                    VbSegmentedOption(value: alignment, label: alignment.label),
+                ],
+                onChanged: (alignment) => stage(
+                  value.copyWith(megaMenuContentAlignment: alignment),
+                ),
+              ),
+            ],
+          ],
+        ),
+        _CollapsibleSection(
+          title: 'Restablecer',
+          icon: Icons.restart_alt_rounded,
+          initiallyExpanded: false,
+          children: [
+            const _CatalogHelp(
+              'Quita los textos, las fotos y los ajustes propios de esta '
+              'página; la dirección se mantiene. Se puede descartar antes de '
+              'guardar.',
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                key: const ValueKey('catalog-reset-presentation'),
+                onPressed: () => stage(
+                  WebsiteCatalogPresentation.fallback(
+                    categoryId: value.ownerId,
+                    categoryName: canvas.rootLabel,
+                  ).copyWith(
+                    slug: value.slug,
+                    slugAliases: value.slugAliases,
+                  ),
+                ),
+                icon: const Icon(Icons.restart_alt_rounded, size: 18),
+                label: const Text('Volver a lo de por defecto'),
+              ),
+            ),
+          ],
+        ),
+      ],
     ];
+  }
+}
+
+/// The category's address: its current slug and the old ones that still lead
+/// here. A slug another category claims is said before «Guardar» refuses it.
+class _CatalogAddressField extends StatefulWidget {
+  const _CatalogAddressField({
+    required this.value,
+    required this.rootPath,
+    required this.onChanged,
+  });
+
+  final WebsiteCatalogPresentation value;
+  final String rootPath;
+  final ValueChanged<WebsiteCatalogPresentation> onChanged;
+
+  @override
+  State<_CatalogAddressField> createState() => _CatalogAddressFieldState();
+}
+
+class _CatalogAddressFieldState extends State<_CatalogAddressField> {
+  final TextEditingController _alias = TextEditingController();
+
+  @override
+  void dispose() {
+    _alias.dispose();
+    super.dispose();
+  }
+
+  /// The first of this page's addresses another category already answers
+  /// to, if any.
+  String? _claimedElsewhere(BuildContext context) {
+    final value = widget.value;
+    final claims = <String>{
+      for (final raw in [value.slug, ...value.slugAliases])
+        if (websiteCategorySlug(raw).isNotEmpty) websiteCategorySlug(raw),
+    };
+    if (claims.isEmpty) return null;
+    try {
+      final registry =
+          context.read<WebsiteService>().catalogPresentationRegistry;
+      for (final other in registry.byCategoryId.values) {
+        if (!other.isCategoryPresentation || other.ownerId == value.ownerId) {
+          continue;
+        }
+        final taken = claims.intersection({other.slug, ...other.slugAliases});
+        if (taken.isNotEmpty) return taken.first;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final value = widget.value;
+    final theme = Theme.of(context);
+    final taken = _claimedElsewhere(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _EditorTextField(
+          key: const ValueKey('catalog-slug'),
+          label: 'Dirección',
+          value: value.slug,
+          hint: 'frenos',
+          onChanged: (text) => widget.onChanged(value.copyWith(slug: text)),
+        ),
+        const SizedBox(height: 6),
+        SelectableText(
+          '${widget.rootPath}/categoria/${websiteCategorySlug(value.slug)}',
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        if (taken != null)
+          _CatalogHelp(
+            '«$taken» ya es la dirección de otra categoría: así no se puede '
+            'guardar.',
+            warning: true,
+          )
+        else
+          const _CatalogHelp(
+            'Al guardar una dirección nueva, la anterior sigue llevando a esta '
+            'página.',
+          ),
+        if (value.slugAliases.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            'Direcciones anteriores',
+            style: theme.textTheme.labelMedium,
+          ),
+          const SizedBox(height: 4),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final alias in value.slugAliases)
+                InputChip(
+                  label: Text(alias),
+                  onDeleted: () => widget.onChanged(
+                    value.copyWith(
+                      slugAliases: [
+                        for (final other in value.slugAliases)
+                          if (other != alias) other,
+                      ],
+                    ),
+                  ),
+                  deleteButtonTooltipMessage: 'Dejar de usar $alias',
+                ),
+            ],
+          ),
+        ],
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                key: const ValueKey('catalog-alias-new'),
+                controller: _alias,
+                decoration: const InputDecoration(
+                  isDense: true,
+                  hintText: 'Otra dirección que lleve aquí',
+                  border: OutlineInputBorder(),
+                ),
+                onSubmitted: (_) => _addAlias(),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton.filledTonal(
+              tooltip: 'Agregar la dirección',
+              onPressed: _addAlias,
+              icon: const Icon(Icons.add_rounded, size: 18),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  void _addAlias() {
+    final raw = _alias.text.trim();
+    if (raw.isEmpty) return;
+    final value = widget.value;
+    widget.onChanged(
+      value.copyWith(slugAliases: [...value.slugAliases, raw]),
+    );
+    _alias.clear();
   }
 }
 
@@ -807,6 +1130,65 @@ class _CatalogActionField extends StatelessWidget {
               label: const Text('Quitar el botón'),
             ),
           ),
+      ],
+    );
+  }
+}
+
+/// A value dragged on a slider and staged once, when the drag ends.
+class _CatalogSlider extends StatefulWidget {
+  const _CatalogSlider({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+    this.min = 0,
+    required this.max,
+    required this.divisions,
+    this.percent = false,
+  });
+
+  final String label;
+  final double value;
+  final double min;
+  final double max;
+  final int divisions;
+
+  /// Shown as a percentage of 1 (an overlay), else as pixels.
+  final bool percent;
+  final ValueChanged<double> onChanged;
+
+  @override
+  State<_CatalogSlider> createState() => _CatalogSliderState();
+}
+
+class _CatalogSliderState extends State<_CatalogSlider> {
+  double? _dragging;
+
+  String _format(double value) =>
+      widget.percent ? '${(value * 100).round()} %' : '${value.round()} px';
+
+  @override
+  Widget build(BuildContext context) {
+    final shown = (_dragging ?? widget.value).clamp(widget.min, widget.max);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '${widget.label} · ${_format(shown)}',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        Slider(
+          value: shown,
+          min: widget.min,
+          max: widget.max,
+          divisions: widget.divisions,
+          label: _format(shown),
+          onChanged: (next) => setState(() => _dragging = next),
+          onChangeEnd: (next) {
+            setState(() => _dragging = null);
+            widget.onChanged(next);
+          },
+        ),
       ],
     );
   }

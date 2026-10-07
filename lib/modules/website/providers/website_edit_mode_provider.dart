@@ -3218,6 +3218,22 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   /// The draft is kept even then, with what it was compared against: a value
   /// written back while a save of the previous one is in flight must survive
   /// that save's acknowledgement, which moves the comparison to what it wrote.
+  String? _requestedInspectorTab;
+
+  /// Asks the pane to show one of its tabs, from outside it: the «Ajustes del
+  /// sitio» index opens «Tema» for the brand. Read once by the pane.
+  void requestInspectorTab(String tab) {
+    _requestedInspectorTab = tab;
+    notifyListeners();
+  }
+
+  /// The pending tab request, cleared as it is read (no notification).
+  String? takeRequestedInspectorTab() {
+    final tab = _requestedInspectorTab;
+    _requestedInspectorTab = null;
+    return tab;
+  }
+
   void stageCatalogPresentation(
     WebsiteCatalogPresentation next, {
     required WebsiteCatalogPresentation saved,
@@ -3979,6 +3995,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
   /// fingerprint. Never notifies by itself.
   void _clearEditorSessionState() {
     _sitewideAsyncSessionEpoch++;
+    _clearSectionClipboard();
     _mode = WebsiteEditorMode.public;
     _workspaceMode = WebsiteWorkspaceMode.pageEditor;
     _selectedBlockId = null;
@@ -6554,6 +6571,77 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     notifyListeners();
     debugPrint(
         '📋 [EditProvider] Duplicated block at index $index with new ID: ${duplicate['id']}');
+  }
+
+  Map<String, dynamic>? _sectionClipboard;
+  String? _sectionClipboardLabel;
+
+  /// Whose editor session the copy belongs to: it is pasted only in that same
+  /// session (same lease), never under another identity or tenant.
+  String? _sectionClipboardLease;
+
+  /// A section copied to paste on this page or another one, for the editor
+  /// session (approved editor proposal, 2026-10-06). Only its content: the
+  /// pasted copy gets its own id and belongs to the page it lands on.
+  bool get hasSectionClipboard =>
+      _sectionClipboard != null &&
+      _sectionClipboardLease != null &&
+      _sectionClipboardLease == sessionOwnerLeaseFingerprint;
+
+  /// What the copied section is called in the list («Portada», «Video»).
+  String? get sectionClipboardLabel => _sectionClipboardLabel;
+
+  void copyBlockToClipboard(String blockId, {String? label}) {
+    final index = _pageDraft.blocks.indexWhere((b) => b['id'] == blockId);
+    if (index == -1) return;
+    final copy = _deepCopyMap(_pageDraft.blocks[index]);
+    for (final key in const [
+      'id',
+      'page_id',
+      'tenant_id',
+      'created_at',
+      'updated_at',
+    ]) {
+      copy.remove(key);
+    }
+    final lease = sessionOwnerLeaseFingerprint;
+    if (lease == null) return;
+    _sectionClipboard = copy;
+    _sectionClipboardLabel = label;
+    _sectionClipboardLease = lease;
+    notifyListeners();
+  }
+
+  void _clearSectionClipboard() {
+    _sectionClipboard = null;
+    _sectionClipboardLabel = null;
+    _sectionClipboardLease = null;
+  }
+
+  /// Pastes the copied section after [afterBlockId], or at the end of the
+  /// page; it is selected and brought into view. Returns its id.
+  String? pasteSectionFromClipboard({String? afterBlockId}) {
+    final copied = _sectionClipboard;
+    if (copied == null || !hasSectionClipboard) return null;
+    final block = _deepCopyMap(copied);
+    final id = _uuid.v4();
+    block['id'] = id;
+    final after = afterBlockId == null
+        ? -1
+        : _pageDraft.blocks.indexWhere((b) => b['id'] == afterBlockId);
+    if (after == -1) {
+      _pageDraft.blocks.add(block);
+    } else {
+      _pageDraft.blocks.insert(after + 1, block);
+    }
+    _updateSortOrders();
+    _selectedBlockId = id;
+    _selectionVersion++;
+    _pageDraft.hasUnsavedChanges = true;
+    _saveToHistory();
+    _requestBlockReveal(id);
+    notifyListeners();
+    return id;
   }
 
   /// Toggle block visibility

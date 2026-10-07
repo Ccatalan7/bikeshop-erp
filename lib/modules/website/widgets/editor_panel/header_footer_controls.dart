@@ -29,7 +29,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
 
   final _headerStyles = {
     'solid': 'Sólido',
-    'transparent': 'Transparente (sobre hero)',
+    'transparent': 'Transparente (sobre la portada)',
     'sticky': 'Fijo al hacer scroll'
   };
   final _headerColorModes = {
@@ -185,7 +185,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Header',
+                      'Encabezado',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 16,
@@ -193,7 +193,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
                       ),
                     ),
                     Text(
-                      'Encabezado del sitio',
+                      'Arriba en todas las páginas',
                       style: TextStyle(color: Colors.white54, fontSize: 12),
                     ),
                   ],
@@ -231,7 +231,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
 
           // Top banner text
           _EditorTextField(
-            label: 'Texto del banner superior',
+            label: 'Texto de la franja superior',
             value: _topBannerController.text,
             controller: _topBannerController,
             onChanged: (_) {},
@@ -241,7 +241,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
           const SizedBox(height: 24),
 
           // ========== HEADER STYLE SECTION ==========
-          const _SectionHeader('Estilo del header'),
+          const _SectionHeader('Cómo se ve el encabezado'),
           const SizedBox(height: 12),
 
           // Header style dropdown
@@ -302,7 +302,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
           ),
           const SizedBox(height: 12),
           _ColorField(
-            label: 'Header y panel principal',
+            label: 'Encabezado y panel principal',
             controller: _headerMenuSurfaceColorController,
             allowAlpha: false,
             asyncBinding: _headerAsyncBinding('header_menu_surface_color'),
@@ -318,7 +318,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
 
           // Toggles
           _buildSwitch(
-            label: 'Mostrar banner superior',
+            label: 'Mostrar la franja superior',
             value: _showTopBanner,
             onChanged: (v) {
               debugPrint(
@@ -383,7 +383,7 @@ class _HeaderBlockControlsState extends State<_HeaderBlockControls> {
                     SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'El header y el footer usan el menú central del sitio.',
+                        'El encabezado y el pie usan el menú del sitio.',
                         style: TextStyle(color: Colors.white70, fontSize: 12),
                       ),
                     ),
@@ -2205,7 +2205,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Footer',
+                      'Pie de página',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 16,
@@ -2213,7 +2213,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                       ),
                     ),
                     Text(
-                      'Pie de página del sitio',
+                      'Abajo en todas las páginas',
                       style: TextStyle(color: Colors.white54, fontSize: 12),
                     ),
                   ],
@@ -2335,13 +2335,13 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
           const SizedBox(height: 12),
 
           _buildCollapsibleSection(
-            title: 'Enlaces del footer',
+            title: 'Enlaces del pie de página',
             initiallyExpanded: true,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Secciones = títulos (columnas) dentro del footer. Se guarda en Navegación (menu_location=footer) y se refleja de inmediato en el preview.',
+                  'Cada sección es una columna del pie con su título. Se guarda con los menús del sitio y se ve al momento en la página.',
                   style: TextStyle(color: Colors.white54, fontSize: 11),
                 ),
                 const SizedBox(height: 12),
@@ -2373,7 +2373,7 @@ class _FooterBlockControlsState extends State<_FooterBlockControls> {
                       border: Border.all(color: Colors.white10),
                     ),
                     child: const Text(
-                      'Todavía no hay navegación del footer guardada. Abajo del sitio se ven enlaces “por defecto”.\n\nAgrega una sección/enlace para empezar y quedará guardado acá.',
+                      'El pie todavía no tiene enlaces propios: muestra los de por defecto.\n\nAgrega una sección o un enlace para empezar.',
                       style: TextStyle(color: Colors.white70, fontSize: 12),
                     ),
                   )

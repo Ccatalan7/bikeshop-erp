@@ -1,8 +1,8 @@
 part of '../public_store_layout.dart';
 
-enum _EditorCatalogTab { products, categories, featured }
+enum _EditorCatalogTab { products, services, categories, featured }
 
-enum _EditorCategoryTab { publication, structure, presentation }
+enum _EditorCategoryTab { publication, structure }
 
 enum _EditorConfigHubTab {
   // Site
@@ -30,29 +30,29 @@ extension on _EditorConfigHubTab {
   String get title {
     switch (this) {
       case _EditorConfigHubTab.siteHub:
-        return 'Sitio web';
+        return 'Resumen del sitio';
       case _EditorConfigHubTab.sitePages:
         return 'Páginas';
       case _EditorConfigHubTab.siteNavigation:
-        return 'Navegación';
+        return 'Menús';
       case _EditorConfigHubTab.siteDestinations:
-        return 'Destinos y enlaces';
+        return 'Enlaces';
       case _EditorConfigHubTab.siteSettings:
-        return 'Ajustes del sitio';
+        return 'Tienda y contacto';
       case _EditorConfigHubTab.ecomCatalog:
-        return 'Catálogo web';
+        return 'Catálogo';
       case _EditorConfigHubTab.ecomOrders:
-        return 'Pedidos online';
+        return 'Pedidos';
       case _EditorConfigHubTab.reportsAnalytics:
-        return 'Analytics (Google)';
+        return 'Visitas (Google Analytics)';
       case _EditorConfigHubTab.domain:
-        return 'Dominio y URL';
+        return 'Dominio';
       case _EditorConfigHubTab.seo:
-        return 'Ajustes del sitio (SEO / contacto)';
+        return 'Buscadores';
       case _EditorConfigHubTab.integrations:
-        return 'Integraciones (Google Merchant)';
+        return 'Integraciones';
       case _EditorConfigHubTab.paymentMethods:
-        return 'Métodos de pago';
+        return 'Pagos';
     }
   }
 }

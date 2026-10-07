@@ -2,8 +2,8 @@
 titulo: El editor del sitio
 resumen: cómo funciona el editor de vinabike.cl dentro del ERP — sus dos planos de control, los espacios de administración, los bloques, el guardado y el teléfono
 fuentes: [repositorio]
-archivos: [docs/architecture/website-editor-contract.md, lib/modules/website/models/website_catalog_canvas.dart, lib/modules/website/widgets/website_editor_selectable_surface.dart, lib/modules/website/widgets/editor_panel/catalog_section_controls.dart, services/storefront_html/lib/src/website_blocks_view.dart, packages/vinabike_public_core/lib/modules/website/models/website_block_surface_presence.dart, lib/modules/website/providers/website_edit_mode_provider.dart, lib/modules/website/services/website_save_coordinator.dart, lib/modules/website/models/website_block_type.dart, lib/modules/website/services/website_editor_draft_controller.dart]
-tablas: [website_pages, website_blocks, website_navigation, website_settings, featured_products]
+archivos: [docs/architecture/website-editor-contract.md, lib/public_store/widgets/store_layout/site_settings_index.dart, lib/modules/website/widgets/editor_panel/backups_dialog.dart, supabase/migrations/20261006200000_website_versions_keep_last_30.sql, lib/modules/website/models/website_catalog_canvas.dart, lib/modules/website/widgets/website_editor_selectable_surface.dart, lib/modules/website/widgets/editor_panel/catalog_section_controls.dart, services/storefront_html/lib/src/website_blocks_view.dart, packages/vinabike_public_core/lib/modules/website/models/website_block_surface_presence.dart, lib/modules/website/providers/website_edit_mode_provider.dart, lib/modules/website/services/website_save_coordinator.dart, lib/modules/website/models/website_block_type.dart, lib/modules/website/services/website_editor_draft_controller.dart]
+tablas: [website_pages, website_blocks, website_navigation, website_settings, featured_products, website_backups]
 revisado: 2026-10-06
 ---
 
@@ -33,7 +33,7 @@ con `WebsiteLinkValueEditor` y se audita en `Estructura > Destinos y enlaces`
 
 | Espacio | Dueño de |
 |---|---|
-| `Catálogo web` (Productos, Categorías, Portada) | qué productos y categorías salen en la web; la colección destacada; la presentación de cada categoría (slug, portada, migas, facetas) y el diseño de `/servicios`: grilla o lista de precios con portada, botón, calificación, planes y cierre (2026-10-06, [catálogo](catalogo-y-fichas.md)) |
+| `Catálogo` (Productos, Servicios, Categorías, Destacados) | qué productos, servicios y categorías salen en la web, en tablas — cada fila que no sale dice por qué («Sin stock», «Sin foto», «Categoría oculta»…) —, y la colección destacada. **No** el diseño: la portada, filtros, dirección y Google de cada categoría, de `/productos` y de `/servicios` se editan sobre su página en el lienzo; «Su página» la abre desde la lista de categorías (2026-10-06, [catálogo](catalogo-y-fichas.md)) |
 | `Estructura > Páginas` | registros de `website_pages` |
 | `Estructura > Navegación y menús` | `website_navigation` (encabezado y pie) |
 | `Estructura > Destinos y enlaces` | auditoría de a dónde lleva cada botón y menú |
@@ -111,9 +111,31 @@ categoría se editan sobre su página igual que Servicios — portada escrita en
 página, tarjetas, filtros y Google al costado; detalle en
 [catálogo y fichas](catalogo-y-fichas.md) `[Repo]`.
 
-Pendiente ([estado-y-pendientes](estado-y-pendientes.md)): una plantilla que
-cambie las 11 categorías a la vez, la ficha de producto en el lienzo, copiar
-secciones entre páginas y el historial de versiones (etapa 3b).
+**Lo que queda de la propuesta (etapa 3b, 2026-10-06):**
+
+- **Catálogo en tablas:** Productos · Servicios · Categorías · Destacados; la
+  fila que no sale dice por qué en su propia etiqueta; «Presentación» ya no
+  existe: cada categoría publicada tiene «Su página», que la abre en el lienzo.
+- **La página de una categoría tiene todo:** además de portada, tarjetas,
+  filtros (ahora en orden, con «Subir») y Google, su sección de página trae
+  «Dirección» (la dirección, las anteriores que siguen llevando ahí y un aviso
+  si otra categoría ya la usa), «En el menú» (la foto del menú desplegable),
+  «Imagen al compartir» y «Restablecer».
+- **Ajustes del sitio en una página** con su índice al costado: Marca (colores,
+  letras y botones vuelven al lienzo en «Tema»; tienda y contacto), Navegación,
+  Dominio y Google, Ventas e Historial. «Más ▾» desapareció.
+- **Versiones guardadas automáticas:** cada «Guardar» deja una («Al guardar ·
+  /servicios», con lo que cambió); quedan las últimas 30, las guardadas con
+  nombre no se borran; «Volver a esta» guarda antes cómo estaba.
+- **Copiar y pegar secciones entre páginas:** «Copiar para otra página» en el
+  «…» de la sección o en la barra sobre el bloque; «Pegar «…»» bajo «Agregar
+  sección» de la otra página (no en las que arma la tienda, como Contacto).
+- **Palabras simples** en el inspector («capa oscura», «cuadrícula»,
+  «encabezado», «pie de página», «franja superior») y la barra sobre el bloque
+  lo nombra como la lista («Características», no «FEATURES») `[Repo]`.
+
+Sigue pendiente ([estado-y-pendientes](estado-y-pendientes.md)): una plantilla
+que cambie las 11 categorías a la vez y la ficha de producto en el lienzo.
 
 ## Bloques
 
@@ -150,6 +172,12 @@ sin agentes. Si falta un control, primero se agrega al editor. Es la regla 1 de
 - Un solo **«Guardar»** global (`WebsiteSaveCoordinator`) persiste todo; ningún
   panel tiene un segundo botón de guardar. Los bloques de una página se
   reemplazan de forma atómica (`replace_page_blocks`) `[Repo]`.
+- Cada «Guardar» que escribió algo deja una **versión automática** en
+  `website_backups` (bloques, ajustes, páginas y menús de todo el sitio); la
+  base conserva las últimas 30 automáticas (migraciones `20261006200000` y
+  `20261006210000`). Volver a una versión devuelve también los menús; una
+  versión de antes del 2026-10-06 no los trae y los deja como están. Si la
+  versión falla, el guardado igual quedó `[Repo, Prod 2026-10-06]`.
 - Borrador local durable: `WebsiteEditorDraftController` y `WebsiteEditorDraftStore`
   recuperan lo no guardado si se cierra la pestaña.
 - `Configuración` guarda con **una** llamada (`saveSettings`); un bucle de una

@@ -634,7 +634,8 @@ class _CanvasBlockControls extends StatelessWidget {
                 active == null, // Only expanded when no element selected
             children: [
               _mount<bool>(
-                surface.boolean('fullBleed', label: 'Full-bleed (sin padding)'),
+                surface.boolean('fullBleed',
+                    label: 'De borde a borde (sin márgenes)'),
                 (binding) => _EditorToggle(
                   label: '',
                   value: binding.value ?? false,
@@ -713,7 +714,7 @@ class _CanvasBlockControls extends StatelessWidget {
 
           // ========== BACKGROUND & OVERLAY ==========
           _CollapsibleSection(
-            title: 'Background & Overlay',
+            title: 'Fondo y capa oscura',
             icon: Icons.image_rounded,
             initiallyExpanded: false, // Always collapsed unless manually opened
             children: [
@@ -830,7 +831,7 @@ class _CanvasBlockControls extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               _mount<bool>(
-                surface.boolean('overlayEnabled', label: 'Overlay'),
+                surface.boolean('overlayEnabled', label: 'Capa oscura'),
                 (binding) => _EditorToggle(
                   label: '',
                   value: binding.value ?? false,
@@ -840,7 +841,7 @@ class _CanvasBlockControls extends StatelessWidget {
               if (overlayEnabled) ...[
                 const SizedBox(height: 12),
                 _mount<String>(
-                  surface.color('overlayColor', label: 'Color del overlay'),
+                  surface.color('overlayColor', label: 'Color de la capa'),
                   (binding) => WebsiteColorPickerField(
                     label: '',
                     value: binding.value ?? '#000000',
@@ -851,7 +852,8 @@ class _CanvasBlockControls extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 _mount<num>(
-                  surface.number('overlayOpacity', label: 'Opacidad overlay'),
+                  surface.number('overlayOpacity',
+                      label: 'Intensidad de la capa'),
                   (binding) {
                     final value =
                         (binding.value?.toDouble() ?? 0.35).clamp(0.0, 0.9);
@@ -874,12 +876,12 @@ class _CanvasBlockControls extends StatelessWidget {
 
           // ========== GRID & SNAPPING ==========
           _CollapsibleSection(
-            title: 'Grid & Snapping',
+            title: 'Cuadrícula',
             icon: Icons.grid_on_rounded,
             initiallyExpanded: false, // Always collapsed unless manually opened
             children: [
               _mount<bool>(
-                surface.boolean('showGrid', label: 'Mostrar grid'),
+                surface.boolean('showGrid', label: 'Mostrar la cuadrícula'),
                 (binding) => _EditorToggle(
                   label: '',
                   value: binding.value ?? true,
@@ -888,7 +890,7 @@ class _CanvasBlockControls extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               _mount<bool>(
-                surface.boolean('snap', label: 'Snapping'),
+                surface.boolean('snap', label: 'Ajustar a la cuadrícula'),
                 (binding) => _EditorToggle(
                   label: '',
                   value: binding.value ?? true,
@@ -897,7 +899,7 @@ class _CanvasBlockControls extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               _mount<num>(
-                surface.number('gridSize', label: 'Tamaño grid'),
+                surface.number('gridSize', label: 'Tamaño de la cuadrícula'),
                 (binding) {
                   final value = (binding.value?.toDouble() ?? 8.0).clamp(4, 24);
                   return _EditorSlider(
@@ -1623,7 +1625,7 @@ class _CanvasBlockControls extends StatelessWidget {
           const SizedBox(height: 12),
           _mount<num>(
             surface.number('letterSpacing',
-                label: 'Letter spacing', layerId: id),
+                label: 'Espacio entre letras', layerId: id),
             (binding) {
               final value = (binding.value?.toDouble() ?? 0.0).clamp(0, 6);
               return _EditorSlider(

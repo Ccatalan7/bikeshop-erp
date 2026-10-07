@@ -208,14 +208,22 @@ of those entities.
 Second stage of the approved editor proposal. The top bar is organized as the
 proposal drew it, not as a row of entry points:
 
-- **Three places** in one `Sitio web` menu (`_editorPlacesMenu`, `O-01`
-  seven items): `Páginas` (this canvas, for every page), `Catálogo`, and the
-  site's own settings (`Marca, tema y contacto`, `Menús`, `Destinos y
-  enlaces`, `Lista de páginas`, `Centro del Sitio Web`). When the canvas
-  authorities are not mounted and the width allows it, the inline strip shows
-  `Páginas · Catálogo · Ajustes del sitio ▾ · Más ▾` with the same actions.
-  The actions sheet (`…`) groups them under `Lugares`, `Ajustes del sitio` and
-  `Más`.
+- **Three places** in one `Sitio web` menu (`_editorPlacesMenu`): `Páginas`
+  (this canvas, for every page), `Catálogo` and `Ajustes del sitio`. When the
+  canvas authorities are not mounted and the width allows it, the inline strip
+  shows the same three as buttons. The actions sheet (`…`, phone) still lists
+  every settings page flat under `Lugares`, `Ajustes del sitio` and `Más`.
+- **`Ajustes del sitio` is one page with its index at the side** (stage 3b,
+  2026-10-06; `store_layout/site_settings_index.dart`): `Marca` (colores,
+  letras y botones → back to the canvas on «Tema» through
+  `WebsiteEditModeProvider.requestInspectorTab`; tienda y contacto),
+  `Navegación` (menús, páginas, enlaces), `Dominio y Google` (dominio,
+  buscadores, integraciones, visitas), `Ventas` (pagos, pedidos) and
+  `Historial` (versiones guardadas, resumen). Under 900 px the index is a
+  strip of chips on top. Without the inspector pane (compact hosts) the brand
+  entry is left out: there is no «Tema» to open. The button opens the last page used
+  (`_lastSiteSettingsTab`). The old `Más ▾` menu is gone: its pages are in the
+  index and the feed lives in Integraciones.
 - **The page in sight:** `Página: <nombre> ▾` (`editor-dense-page-picker`) is
   always on the bar in the page workspace and opens the page navigator; a
   page is named, not shown as its path.
@@ -703,9 +711,24 @@ catalog page is edited this way now: `/servicios` (price list or grid),
   category, the trail; for the page, Google (and the price-list choice only on
   `/servicios`).
 
-`Catálogo web > Categorías > Presentación` still edits the same registry, as
-a second place for what the canvas now does; the mega-menu photo and the
-slug/aliases are only there.
+**Everything of a category page is on its page (stage 3b, 2026-10-06).** The
+category's page section adds `Dirección` (its slug, the public path, the
+old addresses that still lead there and a warning when another category
+already answers to one: `prepareForSave` refuses it at «Guardar»), `En el
+menú` (the mega-menu photo, its two darkenings, width and text position),
+`Imagen al compartir` (inside `En Google`) and `Restablecer`
+(`WebsiteCatalogPresentation.fallback` keeping slug and aliases, a draft like
+any other). The filters list the ones shown in their order, each with
+`Subir`, then the ones off. `Catálogo web > Categorías > Presentación` was
+removed: the catalog publishes, the page is designed on the canvas.
+
+**A link to a category follows the route's rule.** `PublicCategoryPublication`
+allows a category href with `resolvePublishedCategoryRouteValue`, the rule
+that opens it: a name several categories share («Frenos» is Componentes,
+Fundas y piolas and Servicio) names the published one. Judged against every
+category, `/productos/categoria/frenos` was refused by the editor's
+navigation guard (and dropped from the HTML grid cards) while the page itself
+opened (2026-10-06).
 
 ## Management workspaces and canonical ownership
 
@@ -714,15 +737,21 @@ inspector. Catalog publication, structure, settings, and operations use
 full-width management workspaces while preserving the current page draft and
 return context.
 
-- `Catálogo web` owns product/category publication and the featured collection.
-- `Catálogo web > Categorías > Presentación` owns the optional presentation
-  attached to a real category: stable public slug, inherited/overridden hero,
-  breadcrumbs, subcategory navigation, supported facets, and grid density.
-  Removing it restores the polished shared default; it never removes or
-  unpublishes the category. The technical-spec filters (valve, wheel size,
-  speeds…) are not a stored facet: the catalog page offers them next to the
-  brand facet whenever the spec describes at least 30 % of the collection
-  (2026-09-16, `get_public_product_facets_v2`).
+- `Catálogo` owns what is published, as tables in tabs: `Productos`,
+  `Servicios` (each its own table, `WebsiteCatalogItemKind`; no `Tipo` column,
+  and no `Stock` for services), `Categorías` (`En el sitio`, with «Su página»
+  on each published one, which opens it on the canvas; and `Jerarquía`) and
+  `Destacados`. A row that does not show says why in its own badge («Sin
+  stock», «Sin foto», «Sin categoría», «Categoría oculta»), column `En la
+  tienda`. Site rules stay in one panel (`Reglas públicas`).
+- A category's optional presentation (slug and aliases, portada, trail,
+  subcategories, facets, density, mega-menu photo, Google) is edited on its
+  page on the canvas (see «Catalog pages on the canvas»). Restablecer goes
+  back to the shared default; it never removes or unpublishes the category.
+  The technical-spec filters (valve, wheel size, speeds…) are not a stored
+  facet: the catalog page offers them next to the brand facet whenever the
+  spec describes at least 30 % of the collection (2026-09-16,
+  `get_public_product_facets_v2`).
 - `Estructura > Páginas` owns CMS page records.
 - `Estructura > Navegación y menús` and `website_navigation` own header/footer
   placement and hierarchy.
@@ -894,6 +923,44 @@ logo, links, account controls, and icons as a single foreground system. Explicit
 light/dark modes are global intentional overrides, not per-slide repairs. Moving
 or resizing a Canvas layer behind the header must never require recoloring each
 header child independently.
+
+## Saved versions, and sections between pages (2026-10-06)
+
+- **Every «Guardar» leaves a version.** After a save that wrote something,
+  `WebsiteSaveCoordinator` asks a `WebsiteSavedVersionRecorder` gateway for an
+  automatic version (`record_website_version`, open to whoever may save the
+  site; `is_auto_backup`), named «Al guardar · /<página>» and described by what
+  was saved. Saving one by name and restoring stay admin-only. The save already
+  succeeded: a version that fails is logged, never a failed save. A version
+  holds the blocks, the settings, the pages and the menus
+  (`navigation_snapshot`, `20261006210000`); restoring one replaces the menus
+  too (rows first, then each parent), puts back each page's title, Google
+  title and description, published state and template, and leaves out the
+  blocks of a page deleted since (`20261006220000`). An older version without
+  menus leaves them as they are. Settings keys added after a version are kept
+  on purpose: integration keys live in the same table. The database keeps the tenant's last 30 automatic
+  versions under a per-tenant lock; those saved with a name are never pruned
+  (`20261006200000`). Restoring first saves the current site as «Antes de
+  volver a «…»». `Versiones guardadas` lists them by day (pane header and the
+  `Ajustes del sitio` index, `showDeferredWebsiteVersionsDialog`); pgTAP
+  `website_versions_keep_menus.sql`.
+- **Copy a section, paste it on another page.** `copyBlockToClipboard` keeps
+  the block's content (no id, page or tenant) for the editor session, stamped
+  with the session's lease: another identity or tenant never sees or pastes
+  it, and `_clearEditorSessionState` drops it;
+  `pasteSectionFromClipboard` inserts it with its own id after a block or at
+  the end, selects it and reveals it. Offered from the section's menu in
+  «Secciones» (`Copiar para otra página`, `Pegar «…» debajo`), under
+  `Agregar sección` (`website-sections-paste`) and in the floating bar over
+  the selected block. A page the store builds (no blocks) offers no paste.
+- **The floating bar** over a selected block (`BlockActionBar`) names it in
+  the list's words (`blockActionBarLabel`, the registry title) and wears the
+  ERP selection pair, like the selection ring.
+- **The storefront theme is a value.** `WebsiteResolvedTheme` and
+  `WebsiteCommerceTheme` implement `==`/`hashCode`: the shell builds a new
+  instance per rebuild, and without equality the `ThemeData` looked changed
+  every time, telling every `Theme` dependent to rebuild in the middle of a
+  layout pass.
 
 ## Draft, save, and round-trip semantics
 

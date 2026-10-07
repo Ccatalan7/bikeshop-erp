@@ -519,6 +519,21 @@ class _EditableBlockWrapperState extends State<_EditableBlockWrapper> {
                 onMoveUp: () => editProvider.moveBlockUp(widget.blockId),
                 onMoveDown: () => editProvider.moveBlockDown(widget.blockId),
                 onDuplicate: () => editProvider.duplicateBlock(widget.blockId),
+                onCopy: () {
+                  final label = blockActionBarLabel(widget.blockType);
+                  editProvider.copyBlockToClipboard(
+                    widget.blockId,
+                    label: label,
+                  );
+                  ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        '«$label» copiada: pégala desde «Secciones» aquí o '
+                        'en otra página.',
+                      ),
+                    ),
+                  );
+                },
                 onDelete: () {
                   _confirmDelete(context, editProvider);
                 },

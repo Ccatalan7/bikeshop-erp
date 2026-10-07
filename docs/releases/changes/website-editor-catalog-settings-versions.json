@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-editor-catalog-settings-versions",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android"
+  ],
+  "title": "Catálogo en tablas, ajustes en una página y versiones al guardar",
+  "summary": "El editor del sitio termina de ordenarse: el Catálogo dice qué sale y por qué no, cada categoría se diseña sobre su página, los ajustes del sitio están en una página con su índice y cada «Guardar» deja una versión a la que se puede volver.",
+  "items": [
+    "Catálogo: Productos y Servicios en tablas propias; la fila que no sale dice por qué («Sin stock», «Sin foto») y cada categoría publicada tiene «Su página».",
+    "La página de una categoría trae su dirección, la foto del menú, la imagen al compartir y «Restablecer»; los filtros se ordenan con «Subir».",
+    "Cada «Guardar» deja una versión, con los menús, a la que se puede volver; una sección se copia de una página y se pega en otra."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/website/pages/product_website_visibility_page.dart",
+      "sha256": "bc595878700f9dda9cd0280fdaaf58e63200273f62c0ac488f9dc1822ff1413e"
+    },
+    {
+      "path": "lib/modules/website/providers/website_edit_mode_provider.dart",
+      "sha256": "26aa9d41f597c49cea0f06a5b8e3a0706de034e375268bfb50a1aaf1ab18daf8"
+    },
+    {
+      "path": "lib/modules/website/services/website_save_coordinator.dart",
+      "sha256": "0f1e93bbefa9ecede8d68e0da3b6411d72211b50954e27bef44f229ade4d701e"
+    },
+    {
+      "path": "lib/modules/website/services/website_service.dart",
+      "sha256": "b105ed92d457dcbc432aadbbd5ed9f90fb991c30e0c64cf1288efd85d82747a4"
+    },
+    {
+      "path": "lib/modules/website/theme/website_commerce_theme.dart",
+      "sha256": "18f8c250d6337558490a30ea56f8f2c6fafad0d3fe1334286f66e5f7fc80c0dc"
+    },
+    {
+      "path": "lib/modules/website/theme/website_resolved_theme.dart",
+      "sha256": "c8e6585aa954b8b53d56ff7e1192f88d69713f2a407bccbc7f0689bcb421f240"
+    },
+    {
+      "path": "lib/modules/website/widgets/block_action_bar.dart",
+      "sha256": "d35fd0a8236edbcbfdd2e34243572965de01815e63aa0f39e942837fc66682d6"
+    },
+    {
+      "path": "lib/modules/website/widgets/deferred_website_editor_panel.dart",
+      "sha256": "7df97bd2ef206b864dfc47021b9f9a062b3665da719815afdb576b53f9f528ce"
+    },
+    {
+      "path": "lib/modules/website/widgets/editable_block_renderer.dart",
+      "sha256": "17c72ec3aafbf83ab0baa593446357f844384d80977a8ec36cefd6154064448c"
+    },
+    {
+      "path": "lib/modules/website/widgets/editor_panel/backups_dialog.dart",
+      "sha256": "9f1408321f32402b8b1e11782045566109635600aa0f51a1b8f0ed85c2324483"
+    },
+    {
+      "path": "lib/modules/website/widgets/editor_panel/canvas_controls.dart",
+      "sha256": "c6b25803d4354e95f905036a59d04a684b09811f5099125001d431b80d6eb78b"
+    },
+    {
+      "path": "lib/modules/website/widgets/editor_panel/carousel_controls.dart",
+      "sha256": "983735fe13b56799ed43f34b1322d3fd375bd2ad212f346a41d39d921d6f5bd6"
+    },
+    {
+      "path": "lib/modules/website/widgets/editor_panel/catalog_section_controls.dart",
+      "sha256": "5c4035dd2ee8013da77aaade9c301fb27e8e6d51bfda905dcdb9e79b72c30746"
+    },
+    {
+      "path": "lib/modules/website/widgets/editor_panel/header_footer_controls.dart",
+      "sha256": "857fb96689f62c7d7ebd011384ffd12d6df37a3e57c0a55ff34020b282f9f430"
+    },
+    {
+      "path": "lib/modules/website/widgets/editor_panel/sections_outline.dart",
+      "sha256": "e8e2b0f52e1e16bef00d52d2c27a70158744c810bf7f93d441ae451123f3233e"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_editor_panel.dart",
+      "sha256": "e139845c5109822a4f9d8b22230974a27f29933f06ef5fa4a2d69ac7cbd78fae"
+    },
+    {
+      "path": "lib/public_store/widgets/public_store_layout.dart",
+      "sha256": "2c5465298af2d0df6589a5ca3d3a6fff92190a3f52f4f31ae81fb23d1e60eb3b"
+    },
+    {
+      "path": "lib/public_store/widgets/store_layout/editor_workspace_tabs.dart",
+      "sha256": "a2d32f085dae0d363a7d271dbb63b7e9c05c544035f4961786282d2d6e1a0974"
+    },
+    {
+      "path": "lib/public_store/widgets/store_layout/page_navigator.dart",
+      "sha256": "a98e1313612f357e6079a320419bd9dc4fe46b23edae95cb9c4133d20e879545"
+    },
+    {
+      "path": "lib/public_store/widgets/store_layout/site_settings_index.dart",
+      "sha256": "b007fec33420545c7ea57d46eacb61ca85f33c604f60c4c071f926863b97f74b"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/services/public_category_publication.dart",
+      "sha256": "7be71f23aa50be80eb3fbe80695d46e257108dafc58c5ee5810ddaebac15be49"
+    },
+    {
+      "path": "supabase/migrations/20261006220000_website_versions_for_editors.sql",
+      "sha256": "5962ef46afcf57dd34f0b5a0c178de3a91e7013d373fed4c64a53072a513a51d"
+    }
+  ]
+}

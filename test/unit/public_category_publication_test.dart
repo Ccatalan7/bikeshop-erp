@@ -68,6 +68,60 @@ const _cassetteId = '77777777-7777-4777-8777-777777777777';
 
 void main() {
   group('PublicCategoryPublication', () {
+    test(
+        'a name three categories share names the published one, as its route '
+        'does (Frenos, production 2026-10-06)', () {
+      PublicCategoryPublication publication({
+        required bool componentes,
+        bool servicio = false,
+      }) =>
+          PublicCategoryPublication.resolve(
+            categories: [
+              _category(
+                '5ef32804-4d13-44d6-955d-70d6ff27a85e',
+                'Frenos',
+                fullPath: 'Componentes / Frenos',
+                showOnWebsite: componentes,
+              ),
+              _category(
+                '956f36cb-cae2-445c-854a-9c70179070b1',
+                'Frenos',
+                fullPath: 'Componentes / Fundas y piolas / Frenos',
+              ),
+              _category(
+                '54fa72fe-51d6-4dc4-af6f-f00a2f49415a',
+                'Frenos',
+                fullPath: 'Servicio / Frenos',
+                showOnWebsite: servicio,
+              ),
+            ],
+            navigation: const [],
+          );
+
+      expect(
+        publication(componentes: true)
+            .allowsHref('/productos/categoria/frenos'),
+        isTrue,
+      );
+      // None published, or two: still nothing to name.
+      expect(
+        publication(componentes: false)
+            .allowsHref('/productos/categoria/frenos'),
+        isFalse,
+      );
+      expect(
+        publication(componentes: true, servicio: true)
+            .allowsHref('/productos/categoria/frenos'),
+        isFalse,
+      );
+      // Its full path stays unique either way.
+      expect(
+        publication(componentes: true, servicio: true)
+            .allowsHref('/productos/categoria/componentes-frenos'),
+        isTrue,
+      );
+    });
+
     test('publication is exactly the flagged set', () {
       final publication = PublicCategoryPublication.resolve(
         categories: [

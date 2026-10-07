@@ -56,6 +56,8 @@ import '../../modules/website/widgets/website_editor_chrome_geometry.dart';
 import '../../modules/website/widgets/website_editor_host_theme.dart';
 import '../../modules/website/widgets/website_editor_selectable_surface.dart';
 import 'website_header_overlay_boundary.dart';
+import '../../modules/website/widgets/deferred_website_editor_panel.dart'
+    show showDeferredWebsiteVersionsDialog;
 import '../../modules/website/widgets/website_editor_command_scope.dart';
 import '../../modules/website/widgets/website_editor_navigation_guard.dart';
 import '../../modules/website/widgets/website_workspace_scope.dart';
@@ -80,6 +82,7 @@ import '../../shared/routes/erp_routes_barrel.dart' deferred as erp
         PageManagementPage,
         PaymentMethodsSettingsPage,
         ProductWebsiteVisibilityPage,
+        WebsiteCatalogItemKind,
         WebsiteCatalogSection,
         SeoSettingsPage,
         WebsiteDestinationManagementPage,
@@ -108,6 +111,7 @@ part 'store_layout/layout_helpers.dart';
 part 'store_layout/page_navigator.dart';
 part 'store_layout/scroll_and_chrome.dart';
 part 'store_layout/compact_editor_chrome.dart';
+part 'store_layout/site_settings_index.dart';
 
 /// Tenant-safe storefront logo resolution — the ONE owner of the logo
 /// precedence consumed by the header, the desktop footer and the mobile
@@ -648,9 +652,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   static const String _actionPageEditorWorkspace = 'workspace_page_editor';
 
   /// The editor's three places (approved proposal, 2026-10-06): the pages,
-  /// edited on this canvas; the catalog; and what belongs to the whole site.
-  /// `O-01` caps a menu at seven; the rest of «Ajustes del sitio» lives in the
-  /// actions sheet and in the inline strip when it fits.
+  /// edited on this canvas; the catalog; and what belongs to the whole site,
+  /// whose own index lists the rest (the phone's actions sheet lists it too).
   static const List<_PreviewNavAction> _editorPlacesMenu = [
     _PreviewNavAction(
       id: _actionPageEditorWorkspace,
@@ -662,31 +665,10 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       label: 'Catálogo',
       icon: Icons.storefront_outlined,
     ),
-    _PreviewNavAction.divider(),
     _PreviewNavAction(
-      id: _actionSiteSettings,
-      label: 'Marca, tema y contacto',
-      icon: Icons.palette_outlined,
-    ),
-    _PreviewNavAction(
-      id: _actionSiteNavigation,
-      label: 'Menús',
-      icon: Icons.menu,
-    ),
-    _PreviewNavAction(
-      id: _actionSiteDestinations,
-      label: 'Destinos y enlaces',
-      icon: Icons.account_tree_outlined,
-    ),
-    _PreviewNavAction(
-      id: _actionSitePages,
-      label: 'Lista de páginas',
-      icon: Icons.description_outlined,
-    ),
-    _PreviewNavAction(
-      id: _actionSiteOpenWebsiteHub,
-      label: 'Centro del Sitio Web',
-      icon: Icons.dashboard_outlined,
+      id: _actionSiteSettingsHome,
+      label: 'Ajustes del sitio',
+      icon: Icons.tune_rounded,
     ),
   ];
   static const String _actionEcomCatalog = 'ecom_catalog';
@@ -694,6 +676,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   static const String _actionSiteNavigation = 'site_navigation';
   static const String _actionSiteDestinations = 'site_destinations';
   static const String _actionSiteSettings = 'site_settings';
+  static const String _actionSiteSettingsHome = 'site_settings_home';
   static const String _actionSiteOpenWebsiteHub = 'site_hub';
 
   static const String _actionEcomOrders = 'ecom_orders';
@@ -719,6 +702,9 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
 
   bool _isConfigHubOpen = false;
   _EditorConfigHubTab _configHubTab = _EditorConfigHubTab.siteHub;
+
+  /// Where «Ajustes del sitio» opens: the last page of its index.
+  _EditorConfigHubTab _lastSiteSettingsTab = _EditorConfigHubTab.siteSettings;
   _EditorCatalogTab _catalogTab = _EditorCatalogTab.products;
   _EditorCategoryTab _categoryTab = _EditorCategoryTab.publication;
 
@@ -2650,94 +2636,21 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                   isActive: editProvider.workspaceMode ==
                       WebsiteWorkspaceMode.catalog,
                 ),
-                _buildPreviewNavMenu(
+                // What belongs to the whole site, on one page with its index
+                // at the side (approved proposal, 2026-10-06).
+                _buildPreviewWorkspaceButton(
                   context: context,
                   editProvider: editProvider,
                   websiteService: websiteService,
                   label: 'Ajustes del sitio',
+                  icon: Icons.tune_rounded,
+                  actionId: _actionSiteSettingsHome,
                   isActive: editProvider.workspaceMode ==
                           WebsiteWorkspaceMode.settings ||
                       editProvider.workspaceMode ==
-                          WebsiteWorkspaceMode.structure,
-                  actions: const [
-                    _PreviewNavAction(
-                      id: _actionSiteSettings,
-                      label: 'Marca, tema y contacto',
-                      icon: Icons.palette_outlined,
-                    ),
-                    _PreviewNavAction(
-                      id: _actionSiteNavigation,
-                      label: 'Menús',
-                      icon: Icons.menu,
-                    ),
-                    _PreviewNavAction(
-                      id: _actionSiteDestinations,
-                      label: 'Destinos y enlaces',
-                      icon: Icons.account_tree_outlined,
-                    ),
-                    _PreviewNavAction(
-                      id: _actionSitePages,
-                      label: 'Lista de páginas',
-                      icon: Icons.description_outlined,
-                    ),
-                    _PreviewNavAction.divider(),
-                    _PreviewNavAction(
-                      id: _actionConfigWebsiteSettings,
-                      label: 'SEO',
-                      icon: Icons.manage_search_outlined,
-                    ),
-                    _PreviewNavAction(
-                      id: _actionConfigDomain,
-                      label: 'Dominio y URL',
-                      icon: Icons.link_outlined,
-                    ),
-                    _PreviewNavAction(
-                      id: _actionConfigPaymentMethods,
-                      label: 'Métodos de pago',
-                      icon: Icons.payments_outlined,
-                    ),
-                    _PreviewNavAction(
-                      id: _actionConfigIntegrations,
-                      label: 'Integraciones',
-                      icon: Icons.extension_outlined,
-                    ),
-                  ],
-                ),
-                _buildPreviewNavMenu(
-                  context: context,
-                  editProvider: editProvider,
-                  websiteService: websiteService,
-                  label: 'Más',
-                  isActive: editProvider.workspaceMode ==
-                      WebsiteWorkspaceMode.operations,
-                  actions: const [
-                    _PreviewNavAction(
-                      id: _actionEcomOrders,
-                      label: 'Pedidos online',
-                      icon: Icons.shopping_bag_outlined,
-                    ),
-                    _PreviewNavAction(
-                      id: _actionReportsAnalytics,
-                      label: 'Analytics',
-                      icon: Icons.analytics_outlined,
-                    ),
-                    _PreviewNavAction(
-                      id: _actionSiteOpenWebsiteHub,
-                      label: 'Centro del Sitio Web',
-                      icon: Icons.dashboard_outlined,
-                    ),
-                    _PreviewNavAction.divider(),
-                    _PreviewNavAction(
-                      id: _actionGoogleOpenMerchantFeed,
-                      label: 'Abrir feed de productos',
-                      icon: Icons.feed_outlined,
-                    ),
-                    _PreviewNavAction(
-                      id: _actionGoogleCopyMerchantFeed,
-                      label: 'Copiar feed de productos',
-                      icon: Icons.copy,
-                    ),
-                  ],
+                          WebsiteWorkspaceMode.structure ||
+                      editProvider.workspaceMode ==
+                          WebsiteWorkspaceMode.operations,
                 ),
               ],
 
@@ -3918,20 +3831,16 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   }) {
     final entries = <PopupMenuEntry<String>>[];
     for (final a in actions) {
-      if (a.isDivider) {
-        entries.add(const PopupMenuDivider());
-        continue;
-      }
       entries.add(
         PopupMenuItem<String>(
-          value: a.id!,
+          value: a.id,
           child: ListTile(
             dense: true,
             contentPadding: EdgeInsets.zero,
             leading: Icon(a.icon,
                 color: Colors.white.withValues(alpha: 0.9), size: 20),
             title: Text(
-              a.label!,
+              a.label,
               style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.9), fontSize: 13),
             ),
@@ -4455,6 +4364,13 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
       case _actionSiteSettings:
         if (editProvider.isInEditorContext) {
           _openConfigHub(_EditorConfigHubTab.siteSettings);
+          return;
+        }
+        await goAdmin('/website/settings');
+        return;
+      case _actionSiteSettingsHome:
+        if (editProvider.isInEditorContext) {
+          _openConfigHub(_lastSiteSettingsTab);
           return;
         }
         await goAdmin('/website/settings');
@@ -8426,8 +8342,33 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         .openWorkspace(_workspaceModeForConfigTab(tab));
     setState(() {
       _configHubTab = tab;
+      if (_isSiteSettingsTab(tab)) _lastSiteSettingsTab = tab;
       _isConfigHubOpen = true;
     });
+  }
+
+  void _selectSiteSettingsEntry(_SiteSettingsEntry entry) {
+    final tab = entry.tab;
+    if (tab != null) {
+      _openConfigHub(tab);
+      return;
+    }
+    switch (entry.action) {
+      case _SiteSettingsAction.brand:
+        // The brand is drawn on the pages: back to the canvas, on «Tema».
+        _closeConfigHub();
+        context.read<WebsiteEditModeProvider>().requestInspectorTab('theme');
+      case _SiteSettingsAction.versions:
+        unawaited(
+          showDeferredWebsiteVersionsDialog(
+            context,
+            onRestoreComplete:
+                WebsiteEditorCommandScope.maybeOf(context)?.onRestoreComplete,
+          ),
+        );
+      case null:
+        break;
+    }
   }
 
   void _openWorkspacePanel(WebsiteWorkspacePanel panel) {
@@ -8625,7 +8566,42 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
             ),
           ),
           Expanded(
-            child: buildBody(),
+            child: !_isSiteSettingsTab(_configHubTab)
+                ? buildBody()
+                : LayoutBuilder(
+                    builder: (context, constraints) {
+                      final vertical = constraints.maxWidth >= 900;
+                      final index = _SiteSettingsIndexView(
+                        selected: _configHubTab,
+                        vertical: vertical,
+                        brandOnCanvas: _editorPaneInset(context) > 0,
+                        onSelect: _selectSiteSettingsEntry,
+                      );
+                      return vertical
+                          ? Row(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                index,
+                                VerticalDivider(
+                                  width: 1,
+                                  color: theme.colorScheme.outlineVariant,
+                                ),
+                                Expanded(child: buildBody()),
+                              ],
+                            )
+                          : Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                index,
+                                Divider(
+                                  height: 1,
+                                  color: theme.colorScheme.outlineVariant,
+                                ),
+                                Expanded(child: buildBody()),
+                              ],
+                            );
+                    },
+                  ),
           ),
         ],
       ),
@@ -8633,39 +8609,44 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
   }
 
   Widget _buildCatalogWorkspace(ThemeData theme) {
-    final selectedSection = switch ((_catalogTab, _categoryTab)) {
-      (_EditorCatalogTab.categories, _EditorCategoryTab.presentation) =>
-        erp.WebsiteCatalogSection.categoryPresentation,
-      (_EditorCatalogTab.categories, _) => erp.WebsiteCatalogSection.categories,
-      _ => erp.WebsiteCatalogSection.products,
+    // What is published, as tables; how a category page looks is edited on
+    // its page («Su página»), not here (approved proposal, 2026-10-06).
+    final Widget body = switch ((_catalogTab, _categoryTab)) {
+      (_EditorCatalogTab.featured, _) => erp.FeaturedProductsPage(
+          embedded: true,
+        ),
+      (_EditorCatalogTab.categories, _EditorCategoryTab.structure) =>
+        erp.HierarchicalCategoryPage(embedded: true),
+      (_EditorCatalogTab.categories, _) => erp.ProductWebsiteVisibilityPage(
+          embedded: true,
+          section: erp.WebsiteCatalogSection.categories,
+          onOpenCategoryPage: _openCategoryPageOnCanvas,
+        ),
+      (_EditorCatalogTab.services, _) => erp.ProductWebsiteVisibilityPage(
+          key: const ValueKey('catalog-services-table'),
+          embedded: true,
+          kind: erp.WebsiteCatalogItemKind.services,
+        ),
+      _ => erp.ProductWebsiteVisibilityPage(
+          key: const ValueKey('catalog-products-table'),
+          embedded: true,
+          kind: erp.WebsiteCatalogItemKind.products,
+        ),
     };
-
-    Widget body;
-    if (_catalogTab == _EditorCatalogTab.featured) {
-      body = erp.FeaturedProductsPage(embedded: true);
-    } else if (_catalogTab == _EditorCatalogTab.categories &&
-        _categoryTab == _EditorCategoryTab.structure) {
-      body = erp.HierarchicalCategoryPage(embedded: true);
-    } else {
-      body = erp.ProductWebsiteVisibilityPage(
-        embedded: true,
-        section: selectedSection,
-      );
-    }
 
     final workspaceDescription = switch (_catalogTab) {
       _EditorCatalogTab.products =>
-        'Publica artículos y revisa exactamente qué verá el cliente.',
+        'Qué productos salen en la tienda y, si no salen, por qué.',
+      _EditorCatalogTab.services =>
+        'Qué servicios salen en /servicios y, si no salen, por qué.',
       _EditorCatalogTab.categories => switch (_categoryTab) {
           _EditorCategoryTab.publication =>
-            'Elige qué categorías aparecen en la navegación; no limitan productos por sí solas.',
+            'Qué categorías salen en el menú (no ocultan productos); «Su página» abre la suya.',
           _EditorCategoryTab.structure =>
-            'Organiza nombres y jerarquías del inventario; no publica productos por sí solo.',
-          _EditorCategoryTab.presentation =>
-            'Diseña el hero, la jerarquía, los filtros y el grid de cada colección.',
+            'Nombres y jerarquía del inventario; no publican nada por sí solos.',
         },
       _EditorCatalogTab.featured =>
-        'Orden usado por los bloques de portada cuya fuente es “Destacados”.',
+        'El orden de las secciones de la portada que muestran «Destacados».',
     };
 
     return Column(
@@ -8679,7 +8660,10 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
               bottom: BorderSide(color: theme.colorScheme.outlineVariant),
             ),
           ),
-          child: Row(
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               SegmentedButton<_EditorCatalogTab>(
                 showSelectedIcon: false,
@@ -8690,6 +8674,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                     label: Text('Productos'),
                   ),
                   ButtonSegment(
+                    value: _EditorCatalogTab.services,
+                    icon: Icon(Icons.build_outlined, size: 17),
+                    label: Text('Servicios'),
+                  ),
+                  ButtonSegment(
                     value: _EditorCatalogTab.categories,
                     icon: Icon(Icons.category_outlined, size: 17),
                     label: Text('Categorías'),
@@ -8697,7 +8686,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                   ButtonSegment(
                     value: _EditorCatalogTab.featured,
                     icon: Icon(Icons.star_outline, size: 17),
-                    label: Text('Portada'),
+                    label: Text('Destacados'),
                   ),
                 ],
                 selected: {_catalogTab},
@@ -8708,8 +8697,7 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                   visualDensity: VisualDensity.compact,
                 ),
               ),
-              if (_catalogTab == _EditorCatalogTab.categories) ...[
-                const SizedBox(width: 12),
+              if (_catalogTab == _EditorCatalogTab.categories)
                 SegmentedButton<_EditorCategoryTab>(
                   showSelectedIcon: false,
                   style: const ButtonStyle(
@@ -8718,15 +8706,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                   segments: const [
                     ButtonSegment(
                       value: _EditorCategoryTab.publication,
-                      label: Text('Publicación'),
+                      label: Text('En el sitio'),
                     ),
                     ButtonSegment(
                       value: _EditorCategoryTab.structure,
-                      label: Text('Estructura'),
-                    ),
-                    ButtonSegment(
-                      value: _EditorCategoryTab.presentation,
-                      label: Text('Presentación'),
+                      label: Text('Jerarquía'),
                     ),
                   ],
                   selected: {_categoryTab},
@@ -8734,16 +8718,10 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                     setState(() => _categoryTab = selection.first);
                   },
                 ),
-              ],
-              const SizedBox(width: 16),
-              Expanded(
-                child: Text(
-                  workspaceDescription,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
+              Text(
+                workspaceDescription,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
             ],
@@ -8752,6 +8730,26 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         Expanded(child: body),
       ],
     );
+  }
+
+  /// Leaves the catalog for the category's own page on the canvas.
+  void _openCategoryPageOnCanvas(
+    String categoryId,
+    String categoryName, {
+    required bool services,
+  }) {
+    final registry = context.read<WebsiteService>().catalogPresentationRegistry;
+    final presentation = registry.forCategory(categoryId) ??
+        WebsiteCatalogPresentation.fallback(
+          categoryId: categoryId,
+          categoryName: categoryName,
+        );
+    final path = publicCategoryPath(
+      presentation: presentation,
+      services: services,
+    );
+    _closeConfigHub();
+    unawaited(_navigateToHref(context, path));
   }
 
   Widget _buildDomainAndUrlPanel() {

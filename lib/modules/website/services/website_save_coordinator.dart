@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../models/website_catalog_presentation.dart';
 import '../models/website_editor_capability.dart';
 import '../models/website_page_models.dart';
@@ -264,7 +266,21 @@ abstract class WebsiteSaveGateway {
   });
 }
 
-class WebsiteServiceSaveGateway implements WebsiteSaveGateway {
+/// A gateway that can also leave the automatic «Versión guardada» after a
+/// save (approved editor proposal, 2026-10-06). Separate so a gateway
+/// without it — the tests' fakes — simply leaves none.
+abstract interface class WebsiteSavedVersionRecorder {
+  /// Snapshots the whole site as an automatic version; the database keeps
+  /// the tenant's last 30 (`create_website_backup_internal`).
+  Future<void> recordSavedVersion({
+    required String tenantId,
+    required String name,
+    required String description,
+  });
+}
+
+class WebsiteServiceSaveGateway
+    implements WebsiteSaveGateway, WebsiteSavedVersionRecorder {
   WebsiteServiceSaveGateway(this._service);
 
   final WebsiteService _service;
@@ -288,6 +304,20 @@ class WebsiteServiceSaveGateway implements WebsiteSaveGateway {
   @override
   WebsiteEditorCapabilitySnapshot? currentCapability(String tenantId) =>
       _service.editorCapabilitySync(tenantId);
+
+  @override
+  Future<void> recordSavedVersion({
+    required String tenantId,
+    required String name,
+    required String description,
+  }) {
+    return _service.recordAutomaticVersion(
+      tenantId: tenantId,
+      name: name,
+      description: description,
+      writeGuard: writeGuard,
+    );
+  }
 
   @override
   Future<void> saveSettings(
@@ -798,6 +828,9 @@ class WebsiteSaveCoordinator {
       }
     }
 
+    await _recordSavedVersion(
+        command, document, commandEpoch, target, completed);
+
     return WebsiteEditorSaveResult(
       pageId: target?.editorPageId ?? command.pageId,
       pageSlug: target?.pageSlug ?? command.pageSlug,
@@ -806,6 +839,34 @@ class WebsiteSaveCoordinator {
       appliedToActiveDocument: _matchesCapturedDocument(command, document) &&
           _authorityStillCurrent(command, document, commandEpoch),
     );
+  }
+
+  /// Every save that wrote something leaves an automatic version, so
+  /// «Versiones guardadas» can go back to how the site was after it. The save
+  /// has already succeeded: a version that fails is logged, never a failed
+  /// save.
+  Future<void> _recordSavedVersion(
+    WebsiteEditorSaveCommand command,
+    WebsiteEditModeProvider document,
+    int commandEpoch,
+    WebsiteEditorPageTarget? target,
+    Set<WebsiteSaveSection> completed,
+  ) async {
+    final gateway = _gateway;
+    // An unrelated interface: the check does not promote, hence the cast.
+    if (completed.isEmpty || gateway is! WebsiteSavedVersionRecorder) return;
+    final recorder = gateway as WebsiteSavedVersionRecorder;
+    if (!_authorityStillCurrent(command, document, commandEpoch)) return;
+    final slug = (target?.pageSlug ?? command.pageSlug ?? '').trim();
+    try {
+      await recorder.recordSavedVersion(
+        tenantId: command.tenantId,
+        name: websiteSavedVersionName(slug),
+        description: websiteSavedVersionDescription(completed),
+      );
+    } catch (error) {
+      debugPrint('No se pudo dejar la versión automática: $error');
+    }
   }
 
   /// The document must carry a typed owner, and that owner must match BOTH
@@ -1262,4 +1323,33 @@ WebsiteNavigation _copyNavigation(WebsiteNavigation source) {
     children: source.children.map(_copyNavigation).toList(),
     linkedPage: source.linkedPage,
   );
+}
+
+/// The automatic version's name: «Al guardar · /servicios».
+String websiteSavedVersionName(String pageSlug) {
+  final slug = pageSlug.trim().replaceAll(RegExp(r'^/+'), '');
+  return slug.isEmpty ? 'Al guardar' : 'Al guardar · /$slug';
+}
+
+/// What that save changed, in the editor's words.
+String websiteSavedVersionDescription(Set<WebsiteSaveSection> sections) {
+  final parts = <String>{
+    for (final section in sections)
+      switch (section) {
+        WebsiteSaveSection.pageBlocks => 'secciones de la página',
+        WebsiteSaveSection.themeSettings => 'marca',
+        WebsiteSaveSection.headerSettings => 'encabezado',
+        WebsiteSaveSection.footerSettings => 'pie de página',
+        WebsiteSaveSection.siteSettings => 'ajustes del sitio',
+        WebsiteSaveSection.pageSeo => 'Google',
+        WebsiteSaveSection.catalogPresentations => 'páginas del catálogo',
+        WebsiteSaveSection.navigationUpdates ||
+        WebsiteSaveSection.navigationOrder ||
+        WebsiteSaveSection.navigationCreates =>
+          'menús',
+      },
+  };
+  if (parts.isEmpty) return '';
+  final text = parts.join(', ');
+  return '${text[0].toUpperCase()}${text.substring(1)}.';
 }

@@ -1494,6 +1494,29 @@ class WebsiteService extends ChangeNotifier {
   /// PostgreSQL validates the entire payload before the scoped DELETE and
   /// performs DELETE + INSERT in one transaction. The returned rows are the
   /// database-confirmed document and therefore require no fallible readback.
+  /// Leaves an automatic «Versión guardada» of the whole site (blocks,
+  /// settings, pages, menus) through `record_website_version`, which takes the
+  /// tenant from the signed-in user, lets whoever may save the site
+  /// (`can_edit_tenant_settings`) leave it and keeps its last 30 automatic
+  /// versions. Only for that same tenant.
+  Future<void> recordAutomaticVersion({
+    required String tenantId,
+    required String name,
+    required String description,
+    void Function()? writeGuard,
+  }) async {
+    final liveTenantId = await _tenantService.getTenantId();
+    writeGuard?.call();
+    if (liveTenantId != tenantId) return;
+    await _supabase.rpc(
+      'record_website_version',
+      params: {
+        'p_name': name,
+        'p_description': description.isEmpty ? null : description,
+      },
+    );
+  }
+
   Future<List<Map<String, dynamic>>> replacePageBlocks({
     required String tenantId,
     required String pageId,
@@ -2079,9 +2102,9 @@ class WebsiteService extends ChangeNotifier {
     if (normalized.catalogRoot != null &&
         !presentation.hasSamePersistedValue(normalized)) {
       throw Exception(
-        'El catálogo raíz sólo guarda lo que su editor muestra: diseño, '
-        'densidad, filtros, SEO y, en lista de precios, su portada, planes '
-        'y cierre.',
+        'La página del catálogo sólo guarda lo que su editor muestra: '
+        'diseño, tarjetas, filtros, Google y, en la lista de precios, su '
+        'portada, planes y cierre.',
       );
     }
     return normalized;

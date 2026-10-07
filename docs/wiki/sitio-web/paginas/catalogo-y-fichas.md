@@ -52,10 +52,12 @@ la misma URL con la disponibilidad correcta `[GSC]`.
 - 137 categorías activas, **11 visibles en la tienda** (2026-10-03) `[Prod]`. En el
   ERP la categoría agrupa las líneas del taller; en la tienda sólo navega. No
   publica productos.
-- `Catálogo web > Categorías > Publicación` decide si se ve; `Presentación`
-  guarda el slug público estable, la portada heredada o propia, migas,
-  subcategorías, facetas y densidad de la grilla. Quitar la presentación vuelve
-  al diseño compartido; nunca despublica `[Repo: website-editor-contract.md]`.
+- `Catálogo > Categorías > En el sitio` decide si se ve. Cómo se ve —el slug
+  público estable, la portada heredada o propia, migas, subcategorías,
+  facetas, densidad de la grilla, la foto del menú y la imagen al compartir—
+  se edita **sobre su página** («Su página» la abre en el lienzo; desde el
+  2026-10-06 ya no hay `Presentación`). «Restablecer» vuelve al diseño
+  compartido; nunca despublica `[Repo: website-editor-contract.md]`.
 - Facetas: marca y, desde el 2026-09-16, filtros técnicos (válvula, aro,
   velocidades…) cuando la especificación describe al menos el 30 % de la
   colección (`get_public_product_facets_v2`) `[Repo]`. Desde el 2026-10-05 esa
@@ -66,9 +68,14 @@ la misma URL con la disponibilidad correcta `[GSC]`.
   2026-10-05): un UUID sólo si está publicada; un slug o alias guardado en
   «Catálogo web» sólo su categoría (si no está publicada o lo reclaman dos, nada
   abre); si no, el nombre o la ruta completa entre las **publicadas**, y dos
-  iguales no abren ninguna. Importa porque hay nombres repetidos: «Cambios» y
-  «Frenos» existen dos veces cada una, una publicada y otra no
-  `[Prod 2026-10-05]`.
+  iguales no abren ninguna. Importa porque hay nombres repetidos: «Cambios»
+  existe dos veces y «Frenos», «Dirección», «Ruedas» y «Transmisión» también
+  como subcategorías de «Servicio» (2026-10-06; «Frenos» son tres) — una
+  publicada y las demás no `[Prod 2026-10-06]`. Desde el 2026-10-06 el
+  **guardia de enlaces** (`PublicCategoryPublication.allowsHref`, usado por el
+  editor al navegar y por las tarjetas de categorías del HTML) aplica esta
+  misma regla; antes miraba todas las categorías y rechazaba
+  `/productos/categoria/frenos` aunque la página abría `[Repo]`.
 - Los conteos de la lista de categorías y «Todas» salen de la misma lectura de
   facetas (filas `category` y `summary`), no de
   `get_public_product_category_counts`: respetan los demás filtros y la regla de
@@ -95,9 +102,11 @@ editan **sobre su página**, como Servicios `[Repo]` `[Prod 2026-10-06]`:
 - En los productos se eligen las tarjetas (editorial, equilibrada, compacta),
   los filtros y la ruta de categorías.
 - El nombre, la descripción, la foto de la categoría y sus productos se
-  cambian en Inventario («Abrir categorías en Inventario»). La dirección
-  (slug) y la foto del menú siguen en `Catálogo web > Categorías >
-  Presentación`.
+  cambian en Inventario («Abrir categorías en Inventario»). Desde la etapa 3b
+  la sección de página trae también la **dirección** (slug, las anteriores que
+  siguen llevando ahí, aviso si otra categoría ya la usa), **En el menú** (la
+  foto del menú desplegable), **Imagen al compartir** y **Restablecer**; los
+  filtros se ordenan con «Subir».
 - Lo que no se guardó se ve en la página, pero los enlaces y la dirección
   leen lo guardado.
 
@@ -115,8 +124,7 @@ elige «Servicios», se toca una sección (Portada, Planes, Todos los servicios,
 Cierre) o un texto y se escribe ahí; el panel derecho muestra sólo esa
 sección, y «Diseño y Google» guarda la lista o la cuadrícula y lo que ve
 Google. Se guarda con el mismo «Guardar» de todo el sitio (ver
-`editor-del-sitio.md`) `[Repo]`. `Catálogo web > Categorías > Presentación`
-sigue editando el mismo registro. Muestra todo en una página:
+`editor-del-sitio.md`) `[Repo]`. Muestra todo en una página:
 
 - **Portada:** título, texto, imagen opcional (sin ella, el color principal
   oscurecido), un botón del editor y la calificación de Google sincronizada.

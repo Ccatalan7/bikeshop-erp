@@ -251,7 +251,7 @@ void main() {
     expect(backupService.restoreCalls, 0);
     expect(
       find.text(
-        'Guarda o descarta los cambios antes de administrar copias de seguridad.',
+        'Guarda o descarta los cambios antes de volver a una versión.',
       ),
       findsOneWidget,
     );
@@ -279,11 +279,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Borrador de A'), findsNothing);
-    await tester.tap(find.text('Crear copia de seguridad'));
+    await tester.tap(find.text('Guardar con nombre'));
     await tester.pump();
     expect(backupService.createCalls, 0);
     expect(backupService.createdName, isNull);
-    expect(find.text('El nombre es requerido'), findsOneWidget);
+    expect(find.text('Escribe un nombre para esta versión'), findsOneWidget);
   });
 
   testWidgets('restore confirmation from A cannot issue an RPC after A to B',
@@ -309,7 +309,7 @@ void main() {
     await tester.tap(
       find.descendant(
         of: find.byType(AlertDialog),
-        matching: find.text('Restaurar'),
+        matching: find.text('Volver a esta'),
       ),
     );
     await tester.pump();
@@ -345,7 +345,7 @@ void main() {
     await tester.tap(
       find.descendant(
         of: find.byType(AlertDialog),
-        matching: find.text('Restaurar'),
+        matching: find.text('Volver a esta'),
       ),
     );
     await tester.pumpAndSettle();

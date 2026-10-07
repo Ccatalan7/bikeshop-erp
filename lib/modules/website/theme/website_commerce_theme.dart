@@ -19,6 +19,20 @@ class WebsiteCommerceTheme extends ThemeExtension<WebsiteCommerceTheme> {
   final Color textPrimary;
   final Color line;
 
+  // Value equality, like [WebsiteResolvedTheme]: a new instance per shell
+  // rebuild must not make the storefront ThemeData look changed.
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is WebsiteCommerceTheme &&
+          other.accent == accent &&
+          other.onAccent == onAccent &&
+          other.textPrimary == textPrimary &&
+          other.line == line;
+
+  @override
+  int get hashCode => Object.hash(accent, onAccent, textPrimary, line);
+
   @override
   WebsiteCommerceTheme copyWith({
     Color? accent,

@@ -1,6 +1,7 @@
 import '../../modules/website/models/website_catalog_presentation.dart';
 import '../../modules/website/models/website_destination.dart';
 import '../../modules/website/models/website_page_models.dart';
+import '../models/public_category_route.dart';
 
 /// Minimal projection of a product category needed to reason about
 /// publication.
@@ -49,17 +50,17 @@ class PublicCategoryPublication {
     required Map<String, PublicCategoryDescriptor> categoriesById,
     required Map<String, Set<String>> categoryIdsBySlug,
     required WebsiteCatalogPresentationRegistry presentationRegistry,
-  })  : _categoriesById = categoriesById,
-        _categoryIdsBySlug = categoryIdsBySlug,
-        _presentationRegistry = presentationRegistry;
+  }) : _categoriesById = categoriesById,
+       _categoryIdsBySlug = categoryIdsBySlug,
+       _presentationRegistry = presentationRegistry;
 
   const PublicCategoryPublication._empty()
-      : publishedIds = const <String>{},
-        menuOnlyCategoryIds = const <String>{},
-        unresolvedNavigationTokens = const <String>{},
-        _categoriesById = const <String, PublicCategoryDescriptor>{},
-        _categoryIdsBySlug = const <String, Set<String>>{},
-        _presentationRegistry = const WebsiteCatalogPresentationRegistry({});
+    : publishedIds = const <String>{},
+      menuOnlyCategoryIds = const <String>{},
+      unresolvedNavigationTokens = const <String>{},
+      _categoriesById = const <String, PublicCategoryDescriptor>{},
+      _categoryIdsBySlug = const <String, Set<String>>{},
+      _presentationRegistry = const WebsiteCatalogPresentationRegistry({});
 
   factory PublicCategoryPublication.empty() =>
       const PublicCategoryPublication._empty();
@@ -114,10 +115,7 @@ class PublicCategoryPublication {
     Iterable<Uri> internalOrigins = const <Uri>[],
   }) {
     final token = navigation.linkType == NavLinkType.category
-        ? _categoryToken(
-            navigation,
-            internalOrigins: internalOrigins,
-          )
+        ? _categoryToken(navigation, internalOrigins: internalOrigins)
         : _catalogCategoryTokenFromNavigation(
             navigation,
             internalOrigins: internalOrigins,
@@ -151,17 +149,11 @@ class PublicCategoryPublication {
     WebsiteNavigation navigation, {
     Iterable<Uri> internalOrigins = const <Uri>[],
   }) {
-    if (!isCategoryDestination(
-      navigation,
-      internalOrigins: internalOrigins,
-    )) {
+    if (!isCategoryDestination(navigation, internalOrigins: internalOrigins)) {
       return navigation.href?.trim().isNotEmpty == true;
     }
     return isPublished(
-      resolveNavigationCategoryId(
-        navigation,
-        internalOrigins: internalOrigins,
-      ),
+      resolveNavigationCategoryId(navigation, internalOrigins: internalOrigins),
     );
   }
 
@@ -200,22 +192,36 @@ class PublicCategoryPublication {
     return _allowsCategoryToken(token);
   }
 
+  /// The same rule as the route that opens it
+  /// ([resolvePublishedCategoryRouteValue]): a name several categories share
+  /// — «Frenos» is Componentes, Fundas y piolas and Servicio — names the one
+  /// that is published. Judged against every category instead, a link to
+  /// /productos/categoria/frenos was refused while the page itself opened
+  /// (2026-10-06).
   bool _allowsCategoryToken(String token) {
-    final resolved = _resolveToken(
-      token,
-      byId: _categoriesById,
-      bySlug: _categoryIdsBySlug,
-      presentationRegistry: _presentationRegistry,
-    );
-    return isPublished(resolved);
+    return resolvePublishedCategoryRouteValue(
+          token,
+          presentations: _presentationRegistry,
+          categories: [
+            for (final category in _categoriesById.values)
+              (
+                id: category.id,
+                name: category.name,
+                fullPath: category.fullPath,
+                isPublished: publishedIds.contains(category.id),
+              ),
+          ],
+        ) !=
+        null;
   }
 
   static final RegExp _uuid = RegExp(
     r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
   );
 
-  static final RegExp _categoryPath =
-      RegExp(r'^/(?:tienda/)?(?:productos|servicios)/categoria/([^/?#]+)');
+  static final RegExp _categoryPath = RegExp(
+    r'^/(?:tienda/)?(?:productos|servicios)/categoria/([^/?#]+)',
+  );
 
   static PublicCategoryPublication resolve({
     required Iterable<PublicCategoryDescriptor> categories,
@@ -252,10 +258,7 @@ class PublicCategoryPublication {
       if (!item.isVisible) continue;
       if (item.linkType != NavLinkType.category) continue;
 
-      final token = _categoryToken(
-        item,
-        internalOrigins: internalOrigins,
-      );
+      final token = _categoryToken(item, internalOrigins: internalOrigins);
       if (token == null || token.isEmpty) continue;
 
       final resolved = _resolveToken(
@@ -326,8 +329,8 @@ class PublicCategoryPublication {
     }
 
     final qp = uri.queryParameters;
-    final fromQuery =
-        (qp['category'] ?? qp['category_id'] ?? qp['cat'] ?? '').trim();
+    final fromQuery = (qp['category'] ?? qp['category_id'] ?? qp['cat'] ?? '')
+        .trim();
     return fromQuery.isEmpty ? null : fromQuery;
   }
 
@@ -356,8 +359,8 @@ class PublicCategoryPublication {
       return null;
     }
     final qp = uri.queryParameters;
-    final token =
-        (qp['category'] ?? qp['category_id'] ?? qp['cat'] ?? '').trim();
+    final token = (qp['category'] ?? qp['category_id'] ?? qp['cat'] ?? '')
+        .trim();
     return token.isEmpty ? null : token;
   }
 
@@ -390,8 +393,10 @@ class PublicCategoryPublication {
     }
     final registryClaims = presentationRegistry.categorySlugClaimCount(token);
     if (registryClaims > 0) {
-      final categoryId =
-          presentationRegistry.resolveSlug(token)?.presentation.categoryId;
+      final categoryId = presentationRegistry
+          .resolveSlug(token)
+          ?.presentation
+          .categoryId;
       return categoryId != null && byId.containsKey(categoryId)
           ? categoryId
           : null;
@@ -402,10 +407,7 @@ class PublicCategoryPublication {
   }
 }
 
-enum PublicNavigationAudience {
-  desktop,
-  mobile,
-}
+enum PublicNavigationAudience { desktop, mobile }
 
 /// Shared public projection for every surface backed by
 /// `website_navigation`.
@@ -439,32 +441,18 @@ class PublicCategoryNavigationProjection {
         internalOrigins: internalOrigins,
       );
 
-  List<WebsiteNavigation> forDesktop(
-    Iterable<WebsiteNavigation> navigation,
-  ) =>
-      _project(
-        navigation,
-        audience: PublicNavigationAudience.desktop,
-      );
+  List<WebsiteNavigation> forDesktop(Iterable<WebsiteNavigation> navigation) =>
+      _project(navigation, audience: PublicNavigationAudience.desktop);
 
-  List<WebsiteNavigation> forMobile(
-    Iterable<WebsiteNavigation> navigation,
-  ) =>
-      _project(
-        navigation,
-        audience: PublicNavigationAudience.mobile,
-      );
+  List<WebsiteNavigation> forMobile(Iterable<WebsiteNavigation> navigation) =>
+      _project(navigation, audience: PublicNavigationAudience.mobile);
 
   List<WebsiteNavigation> _project(
     Iterable<WebsiteNavigation> navigation, {
     required PublicNavigationAudience audience,
   }) {
     return List<WebsiteNavigation>.unmodifiable(
-      _projectLevel(
-        navigation,
-        audience: audience,
-        depth: 0,
-      ),
+      _projectLevel(navigation, audience: audience, depth: 0),
     );
   }
 
@@ -475,7 +463,8 @@ class PublicCategoryNavigationProjection {
   }) {
     final result = <WebsiteNavigation>[];
     for (final item in navigation) {
-      final visibleForAudience = item.isVisible &&
+      final visibleForAudience =
+          item.isVisible &&
           switch (audience) {
             PublicNavigationAudience.desktop => item.showOnDesktop,
             PublicNavigationAudience.mobile => item.showOnMobile,
@@ -501,12 +490,7 @@ class PublicCategoryNavigationProjection {
         // never expose an unpublished label such as "Piñones"; promote its
         // public children (for example "Cassette") in its place.
         if (depth <= 1) {
-          result.add(
-            _asStructuralGroup(
-              item,
-              children: projectedChildren,
-            ),
-          );
+          result.add(_asStructuralGroup(item, children: projectedChildren));
         } else {
           result.addAll(projectedChildren);
         }

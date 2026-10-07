@@ -7,6 +7,7 @@ import 'package:http/testing.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:vinabike_erp/modules/website/models/website_editor_capability.dart';
 import 'package:vinabike_erp/modules/website/models/website_responsive_authoring.dart';
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
 import 'package:vinabike_erp/modules/website/services/website_service.dart';
@@ -66,6 +67,14 @@ WebsiteEditModeProvider _editor({bool onCanvas = true}) {
   addTearDown(provider.dispose);
   return provider;
 }
+
+WebsiteEditorCapabilitySnapshot _lease(String identity) =>
+    WebsiteEditorCapabilitySnapshot(
+      identity: identity,
+      activeTenantId: 'tenant-a',
+      storefrontTenantId: 'tenant-a',
+      hasAuthority: true,
+    );
 
 List<String> _ids(WebsiteEditModeProvider provider) =>
     [for (final block in provider.blocks) block['id'] as String];
@@ -235,6 +244,63 @@ void main() {
       await tester.tap(find.text('Eliminar bloque').last);
       await tester.pumpAndSettle();
       expect(provider.getBlock('products-1'), isNull);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
+        'a section copied on one page is pasted on another, as its own '
+        'block', (tester) async {
+      final provider = _editor();
+      // The copy belongs to the editor session of this identity.
+      provider.adoptEditorEntryLease(
+        provider.editorEntryLeaseGeneration,
+        _lease('owner-a'),
+      );
+      await _pumpRail(tester, provider);
+      expect(
+          find.byKey(const ValueKey('website-sections-paste')), findsNothing);
+
+      await tester
+          .tap(find.byKey(const ValueKey('website-sections-more-reviews-1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Copiar para otra página'));
+      await tester.pumpAndSettle();
+      expect(provider.hasSectionClipboard, isTrue);
+
+      // Another page: «Contacto», with one block of its own.
+      provider
+        ..enterEditMode(
+          [
+            {
+              'id': 'contact-1',
+              'block_type': 'contact',
+              'block_data': {'title': 'Contacto'},
+              'is_visible': true,
+              'order_index': 0,
+            },
+          ],
+          const <String, dynamic>{},
+        )
+        ..publishBlockCanvas(publisher: _page);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const ValueKey('website-sections-paste')));
+      await tester.pumpAndSettle();
+      expect(provider.blocks, hasLength(2));
+      final pasted = provider.blocks.last;
+      expect(pasted['block_type'], 'googleReviews');
+      expect(pasted['block_data'], {'title': 'Reseñas'});
+      expect(pasted['id'], isNot('reviews-1'));
+      expect(provider.selectedBlockId, pasted['id']);
+      expect(provider.hasUnsavedChanges, isTrue);
+
+      // Another identity never pastes what the first one copied.
+      provider.adoptEditorEntryLease(
+        provider.editorEntryLeaseGeneration,
+        _lease('owner-b'),
+      );
+      expect(provider.hasSectionClipboard, isFalse);
+      expect(provider.pasteSectionFromClipboard(), isNull);
       expect(tester.takeException(), isNull);
     });
 

@@ -12,6 +12,35 @@ void main() {
     return (lighter + 0.05) / (darker + 0.05);
   }
 
+  test(
+      'the same settings build an equal theme, so a shell rebuild does not '
+      'tell every Theme dependent to rebuild (2026-10-06)', () {
+    WebsiteResolvedTheme resolve() => WebsiteResolvedTheme.resolve(
+          (key, fallback) => switch (key) {
+            'theme_primary_color' => '#123F68',
+            'theme_heading_font' => 'Oswald',
+            _ => fallback,
+          },
+        );
+    final base = ThemeData.light(useMaterial3: true);
+    final first = resolve();
+    final second = resolve();
+    expect(identical(first, second), isFalse);
+    expect(second, first);
+    expect(second.hashCode, first.hashCode);
+    expect(
+      WebsiteThemeBuilder.build(base: base, resolved: second),
+      WebsiteThemeBuilder.build(base: base, resolved: first),
+    );
+    expect(
+      WebsiteThemeBuilder.build(
+        base: base,
+        resolved: first.copyWith(primaryColor: const Color(0xFF00A09D)),
+      ),
+      isNot(WebsiteThemeBuilder.build(base: base, resolved: first)),
+    );
+  });
+
   test('light website palette derives readable shared surface tokens', () {
     const background = Color(0xFFF4F1E9);
     final resolved = WebsiteResolvedTheme.fallback.copyWith(

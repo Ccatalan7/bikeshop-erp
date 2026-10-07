@@ -82,6 +82,36 @@ part 'editor_panel/style_controls.dart';
 part 'editor_panel/catalog_section_controls.dart';
 part 'editor_panel/sections_outline.dart';
 
+/// Opens «Versiones guardadas» from outside the pane — the «Ajustes del
+/// sitio» index — with the same session guards as the pane's own button.
+Future<void> showWebsiteVersionsDialog(
+  BuildContext context, {
+  Future<void> Function()? onRestoreComplete,
+}) async {
+  final revision = ValueNotifier<int>(0);
+  try {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => _BackupsDialog(
+        backupService: WebsiteBackupService(),
+        ownsBackupService: true,
+        hostProviderRevision: revision,
+        liveProvider: () {
+          if (!context.mounted) return null;
+          try {
+            return context.read<WebsiteEditModeProvider>();
+          } catch (_) {
+            return null;
+          }
+        },
+        onRestoreComplete: onRestoreComplete,
+      ),
+    );
+  } finally {
+    revision.dispose();
+  }
+}
+
 /// Professional side panel editor for website blocks
 /// Clean, functional, and elegant interface
 class WebsiteEditorPanel extends StatefulWidget {
@@ -157,6 +187,12 @@ class _WebsiteEditorPanelState extends State<WebsiteEditorPanel>
     if (!identical(_hostProviderIdentity, editProvider)) {
       _hostProviderIdentity = editProvider;
       _hostProviderRevision.value++;
+    }
+
+    final requestedTab = editProvider.takeRequestedInspectorTab();
+    if (requestedTab != null &&
+        _inspectorTabs.any((tab) => tab.value == requestedTab)) {
+      _activeTab = requestedTab;
     }
 
     // Check selection changes after build

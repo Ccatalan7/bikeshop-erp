@@ -5,11 +5,6 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../public_store/services/public_inventory_service.dart';
-import 'package:vinabike_public_core/modules/website/models/website_action.dart';
-import 'package:vinabike_public_core/modules/website/models/website_catalog_price_list.dart';
-
-import '../../../public_store/widgets/catalog_collection_presentation.dart';
-import '../../../public_store/widgets/catalog_price_list_view.dart';
 import '../../inventory/models/inventory_models.dart';
 import '../../inventory/pages/product_form_page.dart';
 import '../../inventory/widgets/product_editor_dialog.dart';
@@ -20,19 +15,24 @@ import '../../../shared/services/tenant_service.dart';
 import '../../../shared/utils/chilean_utils.dart';
 import '../../../shared/widgets/branded_loading.dart';
 import '../../../shared/widgets/operational_status_badge.dart';
-import '../models/website_catalog_presentation.dart';
 import '../services/website_service.dart';
 import '../services/website_catalog_availability_loader.dart';
-import '../theme/website_resolved_theme.dart';
-import '../theme/website_theme_builder.dart';
-import '../widgets/website_action_editor.dart';
 import '../widgets/website_admin_ui.dart';
-import '../widgets/website_media_picker.dart';
 
 enum _CatalogKindFilter { all, products, services }
 
 /// Public sections exposed by the unified Website Catalog workspace.
-enum WebsiteCatalogSection { products, categories, categoryPresentation }
+enum WebsiteCatalogSection { products, categories }
+
+typedef WebsiteCatalogOpenCategoryPage = void Function(
+  String categoryId,
+  String categoryName, {
+  required bool services,
+});
+
+/// Which items the products table lists: its own tab for each (approved
+/// editor proposal, 2026-10-06: «Productos · Servicios · Categorías»).
+enum WebsiteCatalogItemKind { products, services }
 
 extension on _CatalogKindFilter {
   String get label {
@@ -225,17 +225,29 @@ class _CatalogTableMetrics {
   static const double horizontalPadding = 16;
   static const double minimumWidth = 1366;
 
-  factory _CatalogTableMetrics.forWidth(double availableWidth) {
-    final extra = math.max(0.0, availableWidth - minimumWidth);
+  /// A tab of one kind drops «Tipo», and the services tab «Stock» too: the
+  /// room goes to the product name.
+  factory _CatalogTableMetrics.forWidth(
+    double availableWidth, {
+    bool showType = true,
+    bool showStock = true,
+  }) {
+    final type = showType ? 85.0 : 0.0;
+    final stock = showStock ? 100.0 : 0.0;
+    final extra = math.max(
+      0.0,
+      availableWidth - minimumWidth + (85 - type) + (100 - stock),
+    );
     return _CatalogTableMetrics(
-      product: 330 + (extra * 0.34),
-      type: 85 + (extra * 0.06),
+      product: 330 +
+          (extra * (0.34 + (showType ? 0 : 0.06) + (showStock ? 0 : 0.07))),
+      type: showType ? type + (extra * 0.06) : 0,
       web: 100,
       status: 116,
       readiness: 150 + (extra * 0.14),
       category: 160 + (extra * 0.20),
       brand: 125 + (extra * 0.12),
-      stock: 100 + (extra * 0.07),
+      stock: showStock ? stock + (extra * 0.07) : 0,
       price: 100 + (extra * 0.07),
     );
   }
@@ -270,10 +282,21 @@ class ProductWebsiteVisibilityPage extends StatefulWidget {
     super.key,
     this.embedded = false,
     this.section = WebsiteCatalogSection.products,
+    this.kind,
+    this.onOpenCategoryPage,
   });
 
   final bool embedded;
   final WebsiteCatalogSection section;
+
+  /// Opens a published category's own page on the editor canvas, where its
+  /// look is edited (approved editor proposal, 2026-10-06: the catalog says
+  /// what is published; the design belongs to «Páginas»).
+  final WebsiteCatalogOpenCategoryPage? onOpenCategoryPage;
+
+  /// Only products or only services, as their own tab; null lists both with
+  /// a «Tipo» filter (the standalone ERP route).
+  final WebsiteCatalogItemKind? kind;
 
   @override
   State<ProductWebsiteVisibilityPage> createState() =>
@@ -292,16 +315,6 @@ class _ProductWebsiteVisibilityPageState
 
   final _searchController = TextEditingController();
   final _categorySearchController = TextEditingController();
-  final _presentationCategorySearchController = TextEditingController();
-  final _presentationSlugController = TextEditingController();
-  final _presentationAliasController = TextEditingController();
-  final _presentationEyebrowController = TextEditingController();
-  final _presentationTitleController = TextEditingController();
-  final _presentationDescriptionController = TextEditingController();
-  final _presentationSeoTitleController = TextEditingController();
-  final _presentationSeoDescriptionController = TextEditingController();
-  final _presentationClosingTitleController = TextEditingController();
-  final _presentationClosingTextController = TextEditingController();
   final _horizontalScrollController = ScrollController();
   final _verticalScrollController = ScrollController();
   final _supabase = Supabase.instance.client;
@@ -325,14 +338,6 @@ class _ProductWebsiteVisibilityPageState
   String? _error;
   PublicProductVisibilityPolicy _visibilityPolicy =
       const PublicProductVisibilityPolicy();
-  WebsiteCatalogPresentationRegistry _presentationRegistry =
-      const WebsiteCatalogPresentationRegistry({});
-  WebsiteCatalogPresentation? _presentationDraft;
-  WebsiteCatalogPresentation? _presentationBaseline;
-  String? _presentationOwnerId;
-  bool _presentationRemovalPending = false;
-  bool _syncingPresentationText = false;
-  bool _isSavingPresentation = false;
   final Set<String> _categoryDraftSelection = <String>{};
 
   final Set<_CatalogKindFilter> _kindFilters = <_CatalogKindFilter>{};
@@ -351,27 +356,16 @@ class _ProductWebsiteVisibilityPageState
         widget.section == WebsiteCatalogSection.categories;
     _searchController.addListener(_applyFilters);
     _categorySearchController.addListener(_refreshCategorySelectionPage);
-    _presentationCategorySearchController.addListener(
-      _refreshPresentationCategoryList,
-    );
-    _presentationSlugController.addListener(_handlePresentationTextChanged);
-    _presentationEyebrowController.addListener(_handlePresentationTextChanged);
-    _presentationTitleController.addListener(_handlePresentationTextChanged);
-    _presentationDescriptionController
-        .addListener(_handlePresentationTextChanged);
-    _presentationSeoTitleController.addListener(_handlePresentationTextChanged);
-    _presentationSeoDescriptionController
-        .addListener(_handlePresentationTextChanged);
-    _presentationClosingTitleController
-        .addListener(_handlePresentationTextChanged);
-    _presentationClosingTextController
-        .addListener(_handlePresentationTextChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadProducts());
   }
 
   @override
   void didUpdateWidget(ProductWebsiteVisibilityPage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.kind != widget.kind) {
+      _selectedProductIds.clear();
+      _applyFilters();
+    }
     if (oldWidget.section == widget.section) return;
     setState(() {
       _showCategorySelectionPage =
@@ -382,13 +376,6 @@ class _ProductWebsiteVisibilityPageState
           ..addAll(_visibleWebsiteCategoryIds);
       }
     });
-    if (widget.section == WebsiteCatalogSection.categoryPresentation &&
-        _presentationDraft == null) {
-      _selectPresentationTarget(
-        _presentationOwnerId ?? _preferredPresentationOwnerId(),
-        force: true,
-      );
-    }
   }
 
   @override
@@ -396,34 +383,6 @@ class _ProductWebsiteVisibilityPageState
     _searchController.dispose();
     _categorySearchController
       ..removeListener(_refreshCategorySelectionPage)
-      ..dispose();
-    _presentationCategorySearchController
-      ..removeListener(_refreshPresentationCategoryList)
-      ..dispose();
-    _presentationSlugController
-      ..removeListener(_handlePresentationTextChanged)
-      ..dispose();
-    _presentationAliasController.dispose();
-    _presentationEyebrowController
-      ..removeListener(_handlePresentationTextChanged)
-      ..dispose();
-    _presentationTitleController
-      ..removeListener(_handlePresentationTextChanged)
-      ..dispose();
-    _presentationDescriptionController
-      ..removeListener(_handlePresentationTextChanged)
-      ..dispose();
-    _presentationSeoTitleController
-      ..removeListener(_handlePresentationTextChanged)
-      ..dispose();
-    _presentationSeoDescriptionController
-      ..removeListener(_handlePresentationTextChanged)
-      ..dispose();
-    _presentationClosingTitleController
-      ..removeListener(_handlePresentationTextChanged)
-      ..dispose();
-    _presentationClosingTextController
-      ..removeListener(_handlePresentationTextChanged)
       ..dispose();
     _horizontalScrollController.dispose();
     _verticalScrollController.dispose();
@@ -461,10 +420,7 @@ class _ProductWebsiteVisibilityPageState
           .from('website_settings')
           .select('key,value')
           .eq('tenant_id', tenantId)
-          .inFilter('key', [
-        ...PublicProductVisibilityPolicy.settingKeys,
-        websiteCatalogPresentationsSettingKey,
-      ]);
+          .inFilter('key', PublicProductVisibilityPolicy.settingKeys);
 
       final rawProductRows = (response as List)
           .map((row) => Map<String, dynamic>.from(row as Map))
@@ -493,16 +449,12 @@ class _ProductWebsiteVisibilityPageState
         final map = Map<String, dynamic>.from(row as Map);
         settings[map['key']?.toString() ?? ''] = map['value']?.toString() ?? '';
       }
-      final presentationRegistry = WebsiteCatalogPresentationRegistry.decode(
-        settings[websiteCatalogPresentationsSettingKey],
-      );
 
       if (!mounted) return;
       setState(() {
         _tenantId = tenantId;
         _products = rows;
         _websiteCategories = categories;
-        _presentationRegistry = presentationRegistry;
         if (widget.section == WebsiteCatalogSection.categories) {
           _categoryDraftSelection
             ..clear()
@@ -518,13 +470,6 @@ class _ProductWebsiteVisibilityPageState
         );
         _isLoading = false;
       });
-      if (widget.section == WebsiteCatalogSection.categoryPresentation &&
-          mounted) {
-        await _selectPresentationTarget(
-          _presentationOwnerId ?? _preferredPresentationOwnerId(),
-          force: true,
-        );
-      }
       _applyFilters();
     } catch (e) {
       if (!mounted) return;
@@ -536,12 +481,6 @@ class _ProductWebsiteVisibilityPageState
   }
 
   Future<void> _refreshWorkspace() async {
-    if (widget.section == WebsiteCatalogSection.categoryPresentation &&
-        _hasUnsavedPresentationChanges &&
-        !await _confirmDiscardPresentationChanges()) {
-      return;
-    }
-    if (!mounted) return;
     await _loadProducts();
   }
 
@@ -620,323 +559,15 @@ class _ProductWebsiteVisibilityPageState
     }
   }
 
-  void _refreshPresentationCategoryList() {
-    if (mounted &&
-        widget.section == WebsiteCatalogSection.categoryPresentation) {
-      setState(() {});
-    }
-  }
-
-  String _preferredPresentationOwnerId() =>
-      websiteProductsCatalogPresentationId;
-
-  _WebsiteCatalogPresentationTarget? _presentationTarget([String? ownerId]) {
-    final selectedId = ownerId ?? _presentationOwnerId;
-    if (selectedId == null) return null;
-    if (selectedId == websiteProductsCatalogPresentationId) {
-      return const _WebsiteCatalogPresentationTarget.root(
-        WebsiteCatalogRoot.products,
-      );
-    }
-    if (selectedId == websiteServicesCatalogPresentationId) {
-      return const _WebsiteCatalogPresentationTarget.root(
-        WebsiteCatalogRoot.services,
-      );
-    }
-    final category =
-        _websiteCategories.where((item) => item.id == selectedId).firstOrNull;
-    return category == null
-        ? null
-        : _WebsiteCatalogPresentationTarget.category(category);
-  }
-
-  bool get _hasUnsavedPresentationChanges {
-    final baseline = _presentationBaseline;
-    final draft = _presentationDraft;
-    if (baseline == null || draft == null) return false;
-    // A catalog root saves only what it can show (`normalizedForOwner`):
-    // the hero of a grid, or a button half written, is no change.
-    return _presentationRemovalPending ||
-        !draft
-            .normalizedForOwner()
-            .hasSamePersistedValue(baseline.normalizedForOwner());
-  }
-
-  void _handlePresentationTextChanged() {
-    if (_syncingPresentationText || !mounted) return;
-    final current = _presentationDraft;
-    final target = _presentationTarget();
-    if (current == null || target == null) return;
-    var next = current.copyWith(
-      seoTitle: _presentationSeoTitleController.text.trim(),
-      seoDescription: _presentationSeoDescriptionController.text.trim(),
-    );
-    if (!target.isRoot) {
-      next = next.copyWith(
-        slug: websiteCategorySlug(_presentationSlugController.text),
-        heroEyebrow: _presentationEyebrowController.text.trim(),
-        heroTitle: _presentationTitleController.text.trim(),
-        heroDescription: _presentationDescriptionController.text.trim(),
-      );
-    } else {
-      // The price list's texts; a grid root drops them when it saves.
-      next = next.copyWith(
-        heroEyebrow: _presentationEyebrowController.text.trim(),
-        heroTitle: _presentationTitleController.text.trim(),
-        heroDescription: _presentationDescriptionController.text.trim(),
-        closingTitle: _presentationClosingTitleController.text.trim(),
-        closingText: _presentationClosingTextController.text.trim(),
-      );
-    }
-    if (next.hasSamePersistedValue(current)) return;
-    setState(() {
-      _presentationDraft = next;
-      _presentationRemovalPending = false;
-    });
-  }
-
-  Future<void> _selectPresentationTarget(
-    String? ownerId, {
-    bool force = false,
-  }) async {
-    if (ownerId == null || ownerId.isEmpty) return;
-    final target = _presentationTarget(ownerId);
-    if (target == null) return;
-    if (!force &&
-        _presentationOwnerId == ownerId &&
-        _presentationDraft != null) {
-      return;
-    }
-    if (!force &&
-        _hasUnsavedPresentationChanges &&
-        !await _confirmDiscardPresentationChanges()) {
-      return;
-    }
-    if (!mounted) return;
-    _loadPresentationSession(target);
-  }
-
-  void _loadPresentationSession(
-    _WebsiteCatalogPresentationTarget target,
-  ) {
-    final stored = _presentationRegistry.byOwnerId[target.id];
-    final effective = stored ?? target.fallbackPresentation;
-    _syncingPresentationText = true;
-    _presentationSlugController.text = effective.slug;
-    _presentationAliasController.clear();
-    _presentationEyebrowController.text = effective.heroEyebrow;
-    _presentationTitleController.text = effective.heroTitle;
-    _presentationDescriptionController.text = effective.heroDescription;
-    _presentationSeoTitleController.text = effective.seoTitle;
-    _presentationSeoDescriptionController.text = effective.seoDescription;
-    _presentationClosingTitleController.text = effective.closingTitle;
-    _presentationClosingTextController.text = effective.closingText;
-    _syncingPresentationText = false;
-    setState(() {
-      _presentationOwnerId = target.id;
-      _presentationBaseline = effective;
-      _presentationDraft = effective;
-      _presentationRemovalPending = false;
-    });
-  }
-
-  void _updatePresentationDraft(
-    WebsiteCatalogPresentation Function(WebsiteCatalogPresentation current)
-        update,
-  ) {
-    final current = _presentationDraft;
-    if (current == null) return;
-    setState(() {
-      _presentationDraft = update(current);
-      _presentationRemovalPending = false;
-    });
-  }
-
-  void _addPresentationAlias([String? rawValue]) {
-    final current = _presentationDraft;
-    final target = _presentationTarget();
-    if (current == null || target == null || target.isRoot) return;
-    final alias =
-        websiteCategorySlug(rawValue ?? _presentationAliasController.text);
-    if (alias.isEmpty) return;
-    if (alias == current.slug) {
-      _showSnackBar('El alias debe ser distinto de la ruta pública actual.');
-      return;
-    }
-    if (current.slugAliases.contains(alias)) {
-      _presentationAliasController.clear();
-      return;
-    }
-    _presentationAliasController.clear();
-    _updatePresentationDraft(
-      (draft) => draft.copyWith(
-        slugAliases: [...draft.slugAliases, alias],
-      ),
-    );
-  }
-
-  void _removePresentationAlias(String alias) {
-    _updatePresentationDraft(
-      (draft) => draft.copyWith(
-        slugAliases: draft.slugAliases.where((item) => item != alias).toList(),
-      ),
-    );
-  }
-
-  Future<bool> _confirmDiscardPresentationChanges() async {
-    if (!_hasUnsavedPresentationChanges) return true;
-    final discard = await showDialog<bool>(
-      context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.42),
-      builder: (dialogContext) => AlertDialog(
-        icon: const Icon(Icons.edit_note_rounded),
-        title: const Text('Hay cambios sin guardar'),
-        content: const Text(
-          'Si cambias de colección, este borrador se descartará. '
-          'La versión pública seguirá usando la última configuración guardada.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Seguir editando'),
-          ),
-          FilledButton.tonal(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Descartar borrador'),
-          ),
-        ],
-      ),
-    );
-    return discard == true;
-  }
-
-  Future<void> _savePresentation() async {
-    final current = _presentationDraft;
-    final target = _presentationTarget();
-    if (current == null ||
-        target == null ||
-        _isSavingPresentation ||
-        !_hasUnsavedPresentationChanges) {
-      return;
-    }
-    final slug =
-        target.isRoot ? target.root!.routeSegment : current.slug.trim();
-    if (!target.isRoot && slug.isEmpty) {
-      _showSnackBar('Escribe una ruta pública válida.');
-      return;
-    }
-
-    final next = current.copyWith(slug: slug).normalizedForOwner();
-    final wasRemoval = _presentationRemovalPending;
-    setState(() => _isSavingPresentation = true);
-    try {
-      final service = context.read<WebsiteService>();
-      if (wasRemoval) {
-        await service.removeCatalogPresentation(target.id);
-      } else {
-        await service.saveCatalogPresentation(next);
-      }
-      if (!mounted) return;
-      _presentationRegistry = service.catalogPresentationRegistry;
-      _loadPresentationSession(target);
-      _showSnackBar(
-        wasRemoval
-            ? 'Se restableció la presentación heredada.'
-            : 'Presentación web guardada.',
-      );
-    } catch (error) {
-      if (mounted) {
-        _showSnackBar('No se pudo guardar la presentación: $error');
-      }
-    } finally {
-      if (mounted) setState(() => _isSavingPresentation = false);
-    }
-  }
-
-  Future<void> _resetPresentation() async {
-    final target = _presentationTarget();
-    if (target == null || _isSavingPresentation) return;
-    final hasStored = _presentationRegistry.byOwnerId[target.id] != null;
-    if (!hasStored) {
-      _loadPresentationSession(target);
-      return;
-    }
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.34),
-      builder: (dialogContext) => AlertDialog(
-        icon: const Icon(Icons.restart_alt_rounded),
-        title: const Text('Restablecer presentación'),
-        content: Text(
-          'Se preparará la eliminación de los ajustes de “${target.label}”. '
-          'Nada cambiará en el sitio hasta que presiones Guardar.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton.tonal(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Restablecer'),
-          ),
-        ],
-      ),
-    );
-    if (!mounted || confirmed != true) return;
-
-    final fallback = target.fallbackPresentation;
-    _syncingPresentationText = true;
-    _presentationSlugController.text = fallback.slug;
-    _presentationAliasController.clear();
-    _presentationEyebrowController.text = fallback.heroEyebrow;
-    _presentationTitleController.text = fallback.heroTitle;
-    _presentationDescriptionController.text = fallback.heroDescription;
-    _presentationSeoTitleController.text = fallback.seoTitle;
-    _presentationSeoDescriptionController.text = fallback.seoDescription;
-    _presentationClosingTitleController.text = fallback.closingTitle;
-    _presentationClosingTextController.text = fallback.closingText;
-    _syncingPresentationText = false;
-    setState(() {
-      _presentationDraft = fallback;
-      _presentationRemovalPending = true;
-    });
-  }
-
-  void _discardPresentationChanges() {
-    final target = _presentationTarget();
-    if (target == null || _isSavingPresentation) return;
-    _loadPresentationSession(target);
-  }
-
-  Future<void> _reloadPresentationFromPersistence() async {
-    final target = _presentationTarget();
-    if (target == null || _isSavingPresentation) return;
-    if (_hasUnsavedPresentationChanges &&
-        !await _confirmDiscardPresentationChanges()) {
-      return;
-    }
-    if (!mounted) return;
-    setState(() => _isSavingPresentation = true);
-    try {
-      final service = context.read<WebsiteService>();
-      await service.loadSettings();
-      if (service.error != null) {
-        throw Exception(service.error);
-      }
-      if (!mounted) return;
-      _presentationRegistry = service.catalogPresentationRegistry;
-      _loadPresentationSession(target);
-      _showSnackBar('Se recargó la última versión guardada.');
-    } catch (error) {
-      if (mounted) _showSnackBar('No se pudo recargar: $error');
-    } finally {
-      if (mounted) setState(() => _isSavingPresentation = false);
-    }
-  }
-
   bool _matchesKindFilters(_WebsiteProductVisibilityRow product) {
+    switch (widget.kind) {
+      case WebsiteCatalogItemKind.products:
+        if (product.isService) return false;
+      case WebsiteCatalogItemKind.services:
+        if (!product.isService) return false;
+      case null:
+        break;
+    }
     if (_kindFilters.isEmpty || _kindFilters.contains(_CatalogKindFilter.all)) {
       return true;
     }
@@ -1659,15 +1290,11 @@ class _ProductWebsiteVisibilityPageState
       showHeaderWhenEmbedded: false,
       title: switch (widget.section) {
         WebsiteCatalogSection.categories => 'Categorías del catálogo',
-        WebsiteCatalogSection.categoryPresentation =>
-          'Presentación del catálogo',
         WebsiteCatalogSection.products => 'Catálogo web',
       },
       description: switch (widget.section) {
         WebsiteCatalogSection.categories =>
           'Decide qué familias organizan la experiencia pública.',
-        WebsiteCatalogSection.categoryPresentation =>
-          'Diseña los catálogos raíz y cada colección desde un solo lugar.',
         WebsiteCatalogSection.products =>
           'Controla qué productos y servicios puede encontrar el cliente.',
       },
@@ -1685,8 +1312,6 @@ class _ProductWebsiteVisibilityPageState
             const Expanded(child: Center(child: BrandedLoading()))
           else if (_error != null)
             Expanded(child: _buildErrorState(theme))
-          else if (widget.section == WebsiteCatalogSection.categoryPresentation)
-            Expanded(child: _buildCategoryPresentationPage(theme))
           else if (_showCategorySelectionPage)
             Expanded(child: _buildCategorySelectionPage(theme))
           else ...[
@@ -1698,1901 +1323,6 @@ class _ProductWebsiteVisibilityPageState
           ],
         ],
       ),
-    );
-  }
-
-  Widget _buildCategoryPresentationPage(ThemeData theme) {
-    final selected = _presentationTarget();
-    final draft = _presentationDraft;
-    if (selected == null || draft == null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _selectPresentationTarget(
-            _preferredPresentationOwnerId(),
-            force: true,
-          );
-        }
-      });
-      return const Center(child: BrandedLoading());
-    }
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final compact = constraints.maxWidth < 1180;
-          final rail = _buildPresentationCategoryRail(theme, selected.id);
-          final editor = _buildPresentationEditor(theme, selected, draft);
-          final preview = _buildPresentationPreview(theme, selected, draft);
-
-          if (compact) {
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SizedBox(width: 260, child: rail),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ListView(
-                    children: [
-                      editor,
-                      const SizedBox(height: 14),
-                      SizedBox(height: 620, child: preview),
-                    ],
-                  ),
-                ),
-              ],
-            );
-          }
-
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SizedBox(width: 280, child: rail),
-              const SizedBox(width: 16),
-              SizedBox(
-                width: math.min(410, constraints.maxWidth * 0.31),
-                child: SingleChildScrollView(child: editor),
-              ),
-              const SizedBox(width: 16),
-              Expanded(child: preview),
-            ],
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildPresentationCategoryRail(
-    ThemeData theme,
-    String selectedId,
-  ) {
-    final query = _normalizeSearch(_presentationCategorySearchController.text);
-    final rows = _websiteCategories.where((category) {
-      return query.isEmpty || _normalizeSearch(category.label).contains(query);
-    }).toList(growable: false);
-    final rootTargets = WebsiteCatalogRoot.values
-        .map(_WebsiteCatalogPresentationTarget.root)
-        .where(
-          (target) =>
-              query.isEmpty ||
-              _normalizeSearch(
-                '${target.label} ${target.supportingLabel}',
-              ).contains(query),
-        )
-        .toList(growable: false);
-    final targets = [
-      ...rootTargets,
-      ...rows.map(_WebsiteCatalogPresentationTarget.category),
-    ];
-    final configuredRoots = WebsiteCatalogRoot.values
-        .where((root) => _presentationRegistry.forCatalogRoot(root) != null)
-        .length;
-
-    return WebsiteAdminSurface(
-      padding: EdgeInsets.zero,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Colecciones',
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  '$configuredRoots/2 catálogos raíz · '
-                  '${_presentationRegistry.categoryPresentationCount} categorías personalizadas',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: _presentationCategorySearchController,
-                  decoration: const InputDecoration(
-                    isDense: true,
-                    prefixIcon: Icon(Icons.search, size: 18),
-                    hintText: 'Buscar catálogo o categoría',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Divider(height: 1, color: theme.colorScheme.outlineVariant),
-          Expanded(
-            child: ListView.separated(
-              itemCount: targets.length,
-              separatorBuilder: (_, __) => Divider(
-                height: 1,
-                color: theme.colorScheme.outlineVariant,
-              ),
-              itemBuilder: (context, index) {
-                final target = targets[index];
-                final selected = target.id == selectedId;
-                final configured =
-                    _presentationRegistry.byOwnerId[target.id] != null;
-                return Material(
-                  color: selected
-                      ? theme.colorScheme.primary.withValues(alpha: 0.08)
-                      : Colors.transparent,
-                  child: InkWell(
-                    onTap: () => _selectPresentationTarget(target.id),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 34,
-                            height: 34,
-                            clipBehavior: Clip.antiAlias,
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.surfaceContainerHighest,
-                              borderRadius: BorderRadius.circular(7),
-                            ),
-                            child: target.imageUrl.isNotEmpty
-                                ? Image.network(
-                                    target.imageUrl,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => const Icon(
-                                      Icons.category_outlined,
-                                      size: 18,
-                                    ),
-                                  )
-                                : Icon(
-                                    target.isRoot
-                                        ? Icons.storefront_outlined
-                                        : Icons.category_outlined,
-                                    size: 18,
-                                  ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  target.label,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.bodyMedium?.copyWith(
-                                    fontWeight: selected
-                                        ? FontWeight.w800
-                                        : FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  target.supportingLabel,
-                                  style: theme.textTheme.labelSmall?.copyWith(
-                                    color: target.showOnWebsite
-                                        ? theme.colorScheme.primary
-                                        : theme.colorScheme.onSurfaceVariant,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (configured)
-                            Tooltip(
-                              message: 'Presentación personalizada',
-                              child: Icon(
-                                Icons.check_circle_rounded,
-                                size: 17,
-                                color: theme.colorScheme.primary,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPresentationEditor(
-    ThemeData theme,
-    _WebsiteCatalogPresentationTarget target,
-    WebsiteCatalogPresentation draft,
-  ) {
-    final hasStored = _presentationRegistry.byOwnerId[target.id] != null;
-    final hasChanges = _hasUnsavedPresentationChanges;
-    final statusLabel = _presentationRemovalPending
-        ? 'Restablecimiento pendiente'
-        : hasChanges
-            ? 'Cambios sin guardar'
-            : hasStored
-                ? 'Versión guardada'
-                : 'Usando valores heredados';
-    final statusColor = hasChanges
-        ? theme.colorScheme.tertiary
-        : theme.colorScheme.onSurfaceVariant;
-
-    return WebsiteAdminSurface(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      target.label,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      'Presentación web',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Tooltip(
-                message: target.isRoot
-                    ? 'Esta configuración controla el diseño y los filtros de '
-                        '${target.publicPath}; no cambia qué artículos son públicos.'
-                    : 'Estos ajustes no cambian el nombre, la jerarquía ni los '
-                        'productos de la categoría.',
-                child: Icon(
-                  Icons.info_outline_rounded,
-                  size: 19,
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          if (target.isRoot)
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerLowest,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: theme.colorScheme.outlineVariant),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    Icons.route_outlined,
-                    size: 19,
-                    color: theme.colorScheme.primary,
-                  ),
-                  const SizedBox(width: 9),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          target.publicPath,
-                          style: theme.textTheme.labelLarge?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          'La ruta es canónica. Aquí defines su diseño, SEO y '
-                          'lo que muestra, para Editar, Preview y el sitio '
-                          'público.',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            )
-          else
-            _buildCategoryPresentationControls(theme, target, draft),
-          if (target.root == WebsiteCatalogRoot.services) ...[
-            const SizedBox(height: 16),
-            _buildRootLayoutControls(theme, draft),
-          ],
-          const SizedBox(height: 16),
-          _buildPresentationSeoEditor(theme, target, draft),
-          if (target.isRoot && draft.isPriceList) ...[
-            const SizedBox(height: 18),
-            ..._buildPriceListControls(theme, draft),
-          ] else ...[
-            const SizedBox(height: 18),
-            Text('Catálogo', style: _presentationSectionStyle(theme)),
-            const SizedBox(height: 10),
-            _buildPresentationDropdown<WebsiteCatalogGridDensity>(
-              theme,
-              label: 'Densidad del grid',
-              value: draft.gridDensity,
-              values: WebsiteCatalogGridDensity.values,
-              labelFor: (value) => value.label,
-              onChanged: (value) => _updatePresentationDraft(
-                (current) => current.copyWith(gridDensity: value),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              draft.gridDensity.description,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 14),
-            _buildPresentationFacetEditor(theme, draft),
-          ],
-          const SizedBox(height: 18),
-          Divider(color: theme.colorScheme.outlineVariant),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Icon(
-                hasChanges ? Icons.edit_rounded : Icons.cloud_done_outlined,
-                size: 17,
-                color: statusColor,
-              ),
-              const SizedBox(width: 7),
-              Expanded(
-                child: Text(
-                  statusLabel,
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: statusColor,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            alignment: WrapAlignment.end,
-            children: [
-              OutlinedButton.icon(
-                onPressed: _isSavingPresentation
-                    ? null
-                    : _reloadPresentationFromPersistence,
-                icon: const Icon(Icons.refresh_rounded, size: 17),
-                label: const Text('Recargar'),
-              ),
-              TextButton(
-                onPressed: _isSavingPresentation || !hasChanges
-                    ? null
-                    : _discardPresentationChanges,
-                child: const Text('Descartar'),
-              ),
-              TextButton(
-                onPressed: _isSavingPresentation ? null : _resetPresentation,
-                child: const Text('Restablecer'),
-              ),
-              FilledButton.icon(
-                onPressed: _isSavingPresentation || !hasChanges
-                    ? null
-                    : _savePresentation,
-                icon: _isSavingPresentation
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.save_outlined, size: 18),
-                label: const Text('Guardar cambios'),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPresentationSeoEditor(
-    ThemeData theme,
-    _WebsiteCatalogPresentationTarget target,
-    WebsiteCatalogPresentation draft,
-  ) {
-    final websiteService = context.read<WebsiteService>();
-    final savedStoreName =
-        websiteService.getSetting('store_name', 'VINABIKE').trim();
-    final storeName = savedStoreName.isEmpty ? 'VINABIKE' : savedStoreName;
-    final savedStoreDescription = websiteService
-        .getSetting(
-          'store_description',
-          'Todo lo que necesitas para tu bicicleta en Viña del Mar',
-        )
-        .trim();
-    final storeDescription = savedStoreDescription.isEmpty
-        ? 'Todo lo que necesitas para tu bicicleta en Viña del Mar'
-        : savedStoreDescription;
-    final inheritedTitle = target.isRoot
-        ? '${target.root == WebsiteCatalogRoot.services ? 'Servicios' : 'Productos'} | $storeName'
-        : '${draft.heroTitle.isNotEmpty ? draft.heroTitle : target.label} | $storeName';
-    final inheritedDescription = draft.heroDescription.isNotEmpty
-        ? draft.heroDescription
-        : target.description.isNotEmpty
-            ? target.description
-            : storeDescription;
-    final inheritedImage = target.isRoot
-        ? websiteService.getSetting('logo_url', '')
-        : draft.heroImageUrl.isNotEmpty
-            ? draft.heroImageUrl
-            : target.imageUrl;
-    final effectiveSocialImage =
-        draft.socialImageUrl.isNotEmpty ? draft.socialImageUrl : inheritedImage;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: theme.colorScheme.outlineVariant),
-      ),
-      child: ExpansionTile(
-        initiallyExpanded: true,
-        tilePadding: const EdgeInsets.symmetric(horizontal: 12),
-        childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 14),
-        title: Text(
-          'SEO y compartir',
-          style: theme.textTheme.labelLarge?.copyWith(
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        subtitle: Text(
-          draft.allowIndexing
-              ? 'Indexación permitida sólo si la ruta es pública y elegible'
-              : 'No solicitar indexación',
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-        children: [
-          TextField(
-            controller: _presentationSeoTitleController,
-            maxLength: 65,
-            decoration: InputDecoration(
-              labelText: 'Título para buscadores',
-              hintText: inheritedTitle,
-              helperText: 'Vacío hereda el título de la colección.',
-              border: const OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _presentationSeoDescriptionController,
-            minLines: 3,
-            maxLines: 4,
-            maxLength: 165,
-            decoration: InputDecoration(
-              labelText: 'Meta descripción',
-              hintText: inheritedDescription,
-              helperText: 'Vacía hereda la descripción pública disponible.',
-              border: const OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Imagen al compartir',
-            style: theme.textTheme.labelMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 7),
-          WebsiteImagePickerField(
-            currentUrl:
-                effectiveSocialImage.isEmpty ? null : effectiveSocialImage,
-            enableBackgroundRemoval: false,
-            onChanged: (url) => _updatePresentationDraft(
-              (current) => current.copyWith(socialImageUrl: url.trim()),
-            ),
-          ),
-          if (draft.socialImageUrl.isNotEmpty)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: () => _updatePresentationDraft(
-                  (current) => current.copyWith(socialImageUrl: ''),
-                ),
-                icon: const Icon(Icons.undo_rounded, size: 17),
-                label: Text(
-                  target.isRoot
-                      ? 'Usar imagen global del sitio'
-                      : 'Usar imagen heredada de la colección',
-                ),
-              ),
-            ),
-          const SizedBox(height: 6),
-          SwitchListTile.adaptive(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Permitir indexación'),
-            subtitle: const Text(
-              'Sólo puede restringir. Rutas filtradas, vacías, no publicadas '
-              'y Editar/Preview siguen usando noindex.',
-            ),
-            value: draft.allowIndexing,
-            onChanged: (value) => _updatePresentationDraft(
-              (current) => current.copyWith(allowIndexing: value),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCategoryPresentationControls(
-    ThemeData theme,
-    _WebsiteCatalogPresentationTarget target,
-    WebsiteCatalogPresentation draft,
-  ) {
-    final effectiveImage =
-        draft.heroImageUrl.isNotEmpty ? draft.heroImageUrl : target.imageUrl;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        TextField(
-          controller: _presentationSlugController,
-          decoration: const InputDecoration(
-            labelText: 'Segmento de ruta pública',
-            prefixText: '…/categoria/',
-            helperText:
-                'Se usa en Productos y Servicios. Al guardar un cambio, la '
-                'ruta anterior queda como alias.',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        const SizedBox(height: 14),
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                'Rutas anteriores',
-                style: theme.textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-            Tooltip(
-              message:
-                  'Los alias mantienen funcionando enlaces antiguos. No se '
-                  'indexan y redirigen a la ruta actual tanto en Productos '
-                  'como en Servicios.',
-              child: Icon(
-                Icons.info_outline_rounded,
-                size: 18,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 7),
-        if (draft.slugAliases.isEmpty)
-          Text(
-            'Sin alias guardados.',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          )
-        else
-          Wrap(
-            spacing: 7,
-            runSpacing: 7,
-            children: [
-              for (final alias in draft.slugAliases)
-                InputChip(
-                  label: Text('…/categoria/$alias'),
-                  tooltip: 'Quitar alias',
-                  onDeleted: () => _removePresentationAlias(alias),
-                ),
-            ],
-          ),
-        const SizedBox(height: 9),
-        ValueListenableBuilder<TextEditingValue>(
-          valueListenable: _presentationAliasController,
-          builder: (context, value, _) {
-            return TextField(
-              controller: _presentationAliasController,
-              textInputAction: TextInputAction.done,
-              onSubmitted: _addPresentationAlias,
-              decoration: InputDecoration(
-                labelText: 'Agregar alias',
-                prefixText: '…/categoria/',
-                hintText: 'ruta-anterior',
-                helperText: 'También puedes quitar un alias antes de guardar.',
-                border: const OutlineInputBorder(),
-                suffixIcon: IconButton(
-                  tooltip: 'Agregar alias',
-                  onPressed: websiteCategorySlug(value.text).isEmpty
-                      ? null
-                      : _addPresentationAlias,
-                  icon: const Icon(Icons.add_rounded),
-                ),
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 18),
-        Text('Hero', style: _presentationSectionStyle(theme)),
-        const SizedBox(height: 10),
-        WebsiteImagePickerField(
-          currentUrl: effectiveImage.isEmpty ? null : effectiveImage,
-          enableBackgroundRemoval: false,
-          onChanged: (url) => _updatePresentationDraft(
-            (current) => current.copyWith(heroImageUrl: url),
-          ),
-        ),
-        if (draft.heroImageUrl.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              onPressed: () => _updatePresentationDraft(
-                (current) => current.copyWith(heroImageUrl: ''),
-              ),
-              icon: const Icon(Icons.undo_rounded, size: 17),
-              label: const Text('Usar imagen de la categoría'),
-            ),
-          ),
-        ],
-        const SizedBox(height: 10),
-        TextField(
-          controller: _presentationEyebrowController,
-          decoration: const InputDecoration(
-            labelText: 'Antetítulo opcional',
-            hintText: 'Sin texto adicional',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        const SizedBox(height: 10),
-        TextField(
-          controller: _presentationTitleController,
-          decoration: InputDecoration(
-            labelText: 'Título opcional',
-            hintText: target.label,
-            helperText: 'Vacío conserva el nombre real de la categoría.',
-            border: const OutlineInputBorder(),
-          ),
-        ),
-        const SizedBox(height: 10),
-        TextField(
-          controller: _presentationDescriptionController,
-          minLines: 2,
-          maxLines: 4,
-          decoration: InputDecoration(
-            labelText: 'Descripción opcional',
-            hintText: target.description.isEmpty
-                ? 'Agrega contexto para esta colección'
-                : target.description,
-            helperText: 'Vacía hereda la descripción de la categoría.',
-            border: const OutlineInputBorder(),
-          ),
-        ),
-        const SizedBox(height: 12),
-        _buildPresentationDropdown<WebsiteCatalogHeroSize>(
-          theme,
-          label: 'Altura del hero',
-          value: draft.heroSize,
-          values: WebsiteCatalogHeroSize.values,
-          labelFor: (value) => value.label,
-          onChanged: (value) => _updatePresentationDraft(
-            (current) => current.copyWith(heroSize: value),
-          ),
-        ),
-        const SizedBox(height: 10),
-        _buildPresentationDropdown<WebsiteCatalogHeroAlignment>(
-          theme,
-          label: 'Alineación',
-          value: draft.heroAlignment,
-          values: WebsiteCatalogHeroAlignment.values,
-          labelFor: (value) => value.label,
-          onChanged: (value) => _updatePresentationDraft(
-            (current) => current.copyWith(heroAlignment: value),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          'Oscurecimiento · ${(draft.heroOverlay * 100).round()}%',
-          style: theme.textTheme.labelMedium,
-        ),
-        Slider(
-          value: draft.heroOverlay,
-          min: 0,
-          max: 0.78,
-          divisions: 13,
-          label: '${(draft.heroOverlay * 100).round()}%',
-          semanticFormatterCallback: (value) => '${(value * 100).round()}%',
-          onChanged: (value) => _updatePresentationDraft(
-            (current) => current.copyWith(heroOverlay: value),
-          ),
-        ),
-        const SizedBox(height: 18),
-        Text('Megamenú', style: _presentationSectionStyle(theme)),
-        const SizedBox(height: 4),
-        Text(
-          'Imagen visual de esta categoría en el megamenú. Se usa como portada '
-          'lateral cuando es una sección y como card cuando aparece dentro de '
-          'otra.',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: 10),
-        WebsiteImagePickerField(
-          currentUrl:
-              draft.megaMenuImageUrl.isEmpty ? null : draft.megaMenuImageUrl,
-          enableBackgroundRemoval: false,
-          onChanged: (url) => _updatePresentationDraft(
-            (current) => current.copyWith(
-              megaMenuImageUrl: url.trim(),
-            ),
-          ),
-        ),
-        if (draft.megaMenuImageUrl.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              onPressed: () => _updatePresentationDraft(
-                (current) => current.copyWith(megaMenuImageUrl: ''),
-              ),
-              icon: const Icon(Icons.hide_image_outlined, size: 17),
-              label: const Text('Quitar imagen del megamenú'),
-            ),
-          ),
-        ],
-        const SizedBox(height: 10),
-        Text(
-          'Oscurecimiento del megamenú · '
-          '${(draft.megaMenuOverlay * 100).round()}%',
-          style: theme.textTheme.labelMedium,
-        ),
-        Slider(
-          value: draft.megaMenuOverlay,
-          min: 0,
-          max: 0.85,
-          divisions: 17,
-          label: '${(draft.megaMenuOverlay * 100).round()}%',
-          semanticFormatterCallback: (value) => '${(value * 100).round()}%',
-          onChanged: (value) => _updatePresentationDraft(
-            (current) => current.copyWith(megaMenuOverlay: value),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Oscurecimiento de la card · '
-          '${(draft.megaMenuCardOverlay * 100).round()}%',
-          style: theme.textTheme.labelMedium,
-        ),
-        Slider(
-          value: draft.megaMenuCardOverlay,
-          min: 0,
-          max: 0.65,
-          divisions: 13,
-          label: '${(draft.megaMenuCardOverlay * 100).round()}%',
-          semanticFormatterCallback: (value) => '${(value * 100).round()}%',
-          onChanged: (value) => _updatePresentationDraft(
-            (current) => current.copyWith(megaMenuCardOverlay: value),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Ancho de portada · '
-          '${draft.megaMenuOverviewWidth.round()} px',
-          style: theme.textTheme.labelMedium,
-        ),
-        Slider(
-          value: draft.megaMenuOverviewWidth,
-          min: WebsiteCatalogPresentation.minMegaMenuOverviewWidth,
-          max: WebsiteCatalogPresentation.maxMegaMenuOverviewWidth,
-          divisions: 14,
-          label: '${draft.megaMenuOverviewWidth.round()} px',
-          semanticFormatterCallback: (value) => '${value.round()} píxeles',
-          onChanged: (value) => _updatePresentationDraft(
-            (current) => current.copyWith(megaMenuOverviewWidth: value),
-          ),
-        ),
-        const SizedBox(height: 10),
-        _buildPresentationDropdown<WebsiteMegaMenuContentAlignment>(
-          theme,
-          label: 'Posición del contenido',
-          value: draft.megaMenuContentAlignment,
-          values: WebsiteMegaMenuContentAlignment.values,
-          labelFor: (value) => value.label,
-          onChanged: (value) => _updatePresentationDraft(
-            (current) => current.copyWith(
-              megaMenuContentAlignment: value,
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text('Contenido', style: _presentationSectionStyle(theme)),
-        const SizedBox(height: 6),
-        SwitchListTile.adaptive(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Migas de navegación'),
-          subtitle: const Text('Muestra la jerarquía completa.'),
-          value: draft.showBreadcrumbs,
-          onChanged: (value) => _updatePresentationDraft(
-            (current) => current.copyWith(showBreadcrumbs: value),
-          ),
-        ),
-        SwitchListTile.adaptive(
-          contentPadding: EdgeInsets.zero,
-          title: const Text('Subcategorías relacionadas'),
-          subtitle: const Text('Permite profundizar sin volver al menú.'),
-          value: draft.showSubcategories,
-          onChanged: (value) => _updatePresentationDraft(
-            (current) => current.copyWith(showSubcategories: value),
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// How a catalog root is laid out: the paged grid with its filters, or
-  /// the price list (only the services offer it).
-  Widget _buildRootLayoutControls(
-    ThemeData theme,
-    WebsiteCatalogPresentation draft,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text('Diseño', style: _presentationSectionStyle(theme)),
-        const SizedBox(height: 10),
-        SegmentedButton<WebsiteCatalogLayout>(
-          segments: [
-            for (final layout in WebsiteCatalogLayout.values)
-              ButtonSegment(
-                value: layout,
-                label: Text(layout.label),
-                icon: Icon(
-                  layout == WebsiteCatalogLayout.grid
-                      ? Icons.grid_view_rounded
-                      : Icons.format_list_bulleted_rounded,
-                  size: 18,
-                ),
-              ),
-          ],
-          selected: {draft.layout},
-          showSelectedIcon: false,
-          onSelectionChanged: (selection) => _updatePresentationDraft(
-            (current) => current.copyWith(layout: selection.first),
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          draft.layout.description,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// The categories that hold published-or-not services: where a price
-  /// list's plans can come from.
-  List<_WebsiteCategoryVisibilityOption> get _serviceCategories {
-    final counts = <String, int>{};
-    for (final product in _products) {
-      if (!product.isService) continue;
-      final id = product.categoryId?.trim() ?? '';
-      if (id.isNotEmpty) counts[id] = (counts[id] ?? 0) + 1;
-    }
-    return _websiteCategories
-        .where((category) => counts.containsKey(category.id))
-        .toList(growable: false);
-  }
-
-  int _serviceCount(String categoryId) => _products
-      .where(
-        (product) =>
-            product.isService && product.categoryId?.trim() == categoryId,
-      )
-      .length;
-
-  List<Widget> _buildPriceListControls(
-    ThemeData theme,
-    WebsiteCatalogPresentation draft,
-  ) {
-    final help = theme.textTheme.bodySmall?.copyWith(
-      color: theme.colorScheme.onSurfaceVariant,
-    );
-    final rating =
-        CatalogPriceListRating.read(context.read<WebsiteService>().getSetting);
-    final planCategories = _serviceCategories;
-    // The saved choice is always the control's value: a category left
-    // without services (or deleted) stays visible with its warning instead
-    // of reading «Sin planes» while it is still saved.
-    final plansId = draft.plansCategoryId;
-    final savedWithoutServices = plansId.isNotEmpty &&
-        !planCategories.any((category) => category.id == plansId);
-    final savedCategory = _websiteCategories
-        .where((category) => category.id == plansId)
-        .firstOrNull;
-    Widget actionEditor({
-      required String title,
-      required WebsiteActionValue? value,
-      required ValueChanged<WebsiteActionValue> onChanged,
-      required VoidCallback onRemove,
-      required String keyPrefix,
-    }) {
-      return Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerLowest,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: theme.colorScheme.outlineVariant),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            WebsiteActionEditor(
-              title: title,
-              value: value ?? const WebsiteActionValue(label: '', href: ''),
-              darkStyle: theme.brightness == Brightness.dark,
-              showVariant: true,
-              keyPrefix: keyPrefix,
-              onChanged: onChanged,
-            ),
-            if (value != null) ...[
-              const SizedBox(height: 4),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: onRemove,
-                  icon: const Icon(Icons.close_rounded, size: 17),
-                  label: const Text('Quitar botón'),
-                ),
-              ),
-            ],
-          ],
-        ),
-      );
-    }
-
-    return [
-      Text('Portada', style: _presentationSectionStyle(theme)),
-      const SizedBox(height: 4),
-      Text(
-        'Sin imagen, la portada usa el color principal del sitio, '
-        'oscurecido.',
-        style: help,
-      ),
-      const SizedBox(height: 10),
-      WebsiteImagePickerField(
-        currentUrl: draft.heroImageUrl.isEmpty ? null : draft.heroImageUrl,
-        enableBackgroundRemoval: false,
-        onChanged: (url) => _updatePresentationDraft(
-          (current) => current.copyWith(heroImageUrl: url.trim()),
-        ),
-      ),
-      if (draft.heroImageUrl.isNotEmpty) ...[
-        const SizedBox(height: 4),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(
-            onPressed: () => _updatePresentationDraft(
-              (current) => current.copyWith(heroImageUrl: ''),
-            ),
-            icon: const Icon(Icons.hide_image_outlined, size: 17),
-            label: const Text('Quitar imagen'),
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Oscurecimiento · ${(draft.heroOverlay * 100).round()}%',
-          style: theme.textTheme.labelMedium,
-        ),
-        Slider(
-          value: draft.heroOverlay,
-          min: 0,
-          max: 0.78,
-          divisions: 13,
-          label: '${(draft.heroOverlay * 100).round()}%',
-          semanticFormatterCallback: (value) => '${(value * 100).round()}%',
-          onChanged: (value) => _updatePresentationDraft(
-            (current) => current.copyWith(heroOverlay: value),
-          ),
-        ),
-      ],
-      const SizedBox(height: 10),
-      TextField(
-        key: const ValueKey<String>('catalog-price-list-eyebrow'),
-        controller: _presentationEyebrowController,
-        decoration: const InputDecoration(
-          labelText: 'Antetítulo opcional',
-          hintText: 'Sin texto adicional',
-          border: OutlineInputBorder(),
-        ),
-      ),
-      const SizedBox(height: 10),
-      TextField(
-        key: const ValueKey<String>('catalog-price-list-title'),
-        controller: _presentationTitleController,
-        decoration: const InputDecoration(
-          labelText: 'Título',
-          hintText: 'Servicios',
-          helperText: 'Vacío dice «Servicios».',
-          border: OutlineInputBorder(),
-        ),
-      ),
-      const SizedBox(height: 10),
-      TextField(
-        key: const ValueKey<String>('catalog-price-list-description'),
-        controller: _presentationDescriptionController,
-        minLines: 2,
-        maxLines: 4,
-        decoration: const InputDecoration(
-          labelText: 'Texto bajo el título',
-          hintText: 'Con su precio, IVA incluido.',
-          border: OutlineInputBorder(),
-        ),
-      ),
-      const SizedBox(height: 10),
-      _buildPresentationDropdown<WebsiteCatalogHeroAlignment>(
-        theme,
-        label: 'Alineación',
-        value: draft.heroAlignment,
-        values: WebsiteCatalogHeroAlignment.values,
-        labelFor: (value) => value.label,
-        onChanged: (value) => _updatePresentationDraft(
-          (current) => current.copyWith(heroAlignment: value),
-        ),
-      ),
-      const SizedBox(height: 12),
-      actionEditor(
-        title: 'Botón de la portada',
-        keyPrefix: 'catalog-price-list-hero-action',
-        value: draft.heroAction,
-        onChanged: (value) => _updatePresentationDraft(
-          (current) => current.copyWith(heroAction: value),
-        ),
-        onRemove: () => _updatePresentationDraft(
-          (current) => current.copyWith(clearHeroAction: true),
-        ),
-      ),
-      const SizedBox(height: 4),
-      Text(
-        'El mismo botón va en cada tarjeta de plan.',
-        style: help,
-      ),
-      const SizedBox(height: 6),
-      SwitchListTile.adaptive(
-        contentPadding: EdgeInsets.zero,
-        title: const Text('Calificación de Google'),
-        subtitle: Text(
-          rating == null
-              ? 'No hay calificación sincronizada: no se muestra.'
-              : '${rating.label} de 5'
-                  '${rating.totalLabel.isEmpty ? '' : ' · ${rating.totalLabel}'}',
-        ),
-        value: draft.heroShowRating,
-        onChanged: (value) => _updatePresentationDraft(
-          (current) => current.copyWith(heroShowRating: value),
-        ),
-      ),
-      const SizedBox(height: 14),
-      Text('Planes', style: _presentationSectionStyle(theme)),
-      const SizedBox(height: 4),
-      Text(
-        'Los servicios de esta categoría salen como tarjetas con su precio y '
-        'lo que incluyen, leído de su descripción («1) …», «2) …»). El '
-        'resto va en la lista, agrupado por su categoría.',
-        style: help,
-      ),
-      const SizedBox(height: 10),
-      DropdownButtonFormField<String>(
-        initialValue: plansId,
-        isExpanded: true,
-        decoration: const InputDecoration(
-          labelText: 'Categoría de los planes',
-          border: OutlineInputBorder(),
-        ),
-        items: [
-          const DropdownMenuItem(value: '', child: Text('Sin planes')),
-          for (final category in planCategories)
-            DropdownMenuItem(
-              value: category.id,
-              child: Text(
-                '${category.label} · ${_serviceCount(category.id)}',
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          if (savedWithoutServices)
-            DropdownMenuItem(
-              value: plansId,
-              child: Text(
-                savedCategory == null
-                    ? 'Categoría que ya no existe'
-                    : '${savedCategory.label} · sin servicios',
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-        ],
-        onChanged: (value) => _updatePresentationDraft(
-          (current) => current.copyWith(plansCategoryId: value ?? ''),
-        ),
-      ),
-      if (savedWithoutServices) ...[
-        const SizedBox(height: 6),
-        Text(
-          'Esta categoría no tiene servicios: la página no muestra planes. '
-          'Elige otra o «Sin planes».',
-          style: help?.copyWith(color: theme.colorScheme.error),
-        ),
-      ],
-      const SizedBox(height: 18),
-      Text('Cierre', style: _presentationSectionStyle(theme)),
-      const SizedBox(height: 4),
-      Text('La banda al final de la página. Sin texto, no sale.', style: help),
-      const SizedBox(height: 10),
-      TextField(
-        key: const ValueKey<String>('catalog-price-list-closing-title'),
-        controller: _presentationClosingTitleController,
-        decoration: const InputDecoration(
-          labelText: 'Título del cierre',
-          hintText: '¿No ves lo que necesitas?',
-          border: OutlineInputBorder(),
-        ),
-      ),
-      const SizedBox(height: 10),
-      TextField(
-        key: const ValueKey<String>('catalog-price-list-closing-text'),
-        controller: _presentationClosingTextController,
-        minLines: 2,
-        maxLines: 4,
-        decoration: const InputDecoration(
-          labelText: 'Texto del cierre',
-          border: OutlineInputBorder(),
-        ),
-      ),
-      const SizedBox(height: 12),
-      actionEditor(
-        title: 'Botón del cierre',
-        keyPrefix: 'catalog-price-list-closing-action',
-        value: draft.closingAction,
-        onChanged: (value) => _updatePresentationDraft(
-          (current) => current.copyWith(closingAction: value),
-        ),
-        onRemove: () => _updatePresentationDraft(
-          (current) => current.copyWith(clearClosingAction: true),
-        ),
-      ),
-    ];
-  }
-
-  TextStyle? _presentationSectionStyle(ThemeData theme) =>
-      theme.textTheme.labelLarge?.copyWith(
-        fontWeight: FontWeight.w800,
-        letterSpacing: 0.2,
-      );
-
-  Widget _buildPresentationFacetEditor(
-    ThemeData theme,
-    WebsiteCatalogPresentation draft,
-  ) {
-    final enabled = draft.facets;
-    final available = WebsiteCatalogFacet.values
-        .where((facet) => !enabled.contains(facet))
-        .toList(growable: false);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                'Filtros del catálogo',
-                style: _presentationSectionStyle(theme),
-              ),
-            ),
-            Tooltip(
-              message:
-                  'Cada filtro consulta todos los productos que cumplen las reglas públicas, no solo los que ya están cargados en pantalla.',
-              child: Icon(
-                Icons.info_outline_rounded,
-                size: 18,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'El orden de esta lista será el orden visible para el cliente.',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          'Visibles · ${enabled.length}',
-          style: theme.textTheme.labelMedium?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 7),
-        if (enabled.isEmpty)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerLowest,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: theme.colorScheme.outlineVariant),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.filter_alt_off_outlined,
-                  size: 18,
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: 9),
-                Expanded(
-                  child: Text(
-                    'No hay filtros visibles en esta colección.',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          )
-        else
-          ReorderableListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            buildDefaultDragHandles: false,
-            itemCount: enabled.length,
-            onReorder: (oldIndex, newIndex) {
-              var destination = newIndex;
-              if (destination > oldIndex) destination -= 1;
-              _movePresentationFacet(oldIndex, destination);
-            },
-            itemBuilder: (context, index) {
-              final facet = enabled[index];
-              return _buildEnabledPresentationFacet(
-                theme,
-                facet: facet,
-                index: index,
-                total: enabled.length,
-              );
-            },
-          ),
-        if (available.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          Text(
-            'Disponibles',
-            style: theme.textTheme.labelMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 7),
-          Wrap(
-            spacing: 7,
-            runSpacing: 7,
-            children: available
-                .map(
-                  (facet) => OutlinedButton.icon(
-                    onPressed: () => _setPresentationFacetEnabled(
-                      facet,
-                      enabled: true,
-                    ),
-                    icon: const Icon(Icons.add_rounded, size: 17),
-                    label: Text(facet.label),
-                    style: OutlinedButton.styleFrom(
-                      visualDensity: VisualDensity.compact,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 8,
-                      ),
-                    ),
-                  ),
-                )
-                .toList(growable: false),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildEnabledPresentationFacet(
-    ThemeData theme, {
-    required WebsiteCatalogFacet facet,
-    required int index,
-    required int total,
-  }) {
-    return Container(
-      key: ValueKey('catalog-facet-${facet.storageValue}'),
-      margin: EdgeInsets.only(bottom: index == total - 1 ? 0 : 7),
-      padding: const EdgeInsets.fromLTRB(7, 8, 4, 8),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: theme.colorScheme.outlineVariant),
-      ),
-      child: Row(
-        children: [
-          ReorderableDragStartListener(
-            index: index,
-            child: Tooltip(
-              message: 'Arrastrar para ordenar',
-              child: Padding(
-                padding: const EdgeInsets.all(5),
-                child: Icon(
-                  Icons.drag_indicator_rounded,
-                  size: 19,
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 3),
-          Container(
-            width: 30,
-            height: 30,
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primaryContainer,
-              borderRadius: BorderRadius.circular(7),
-            ),
-            child: Icon(
-              _presentationFacetIcon(facet),
-              size: 17,
-              color: theme.colorScheme.onPrimaryContainer,
-            ),
-          ),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  facet.label,
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 1),
-                Text(
-                  _presentationFacetDescription(facet),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          _compactFacetIconButton(
-            tooltip: 'Subir ${facet.label}',
-            icon: Icons.keyboard_arrow_up_rounded,
-            onPressed: index == 0
-                ? null
-                : () => _movePresentationFacet(index, index - 1),
-          ),
-          _compactFacetIconButton(
-            tooltip: 'Bajar ${facet.label}',
-            icon: Icons.keyboard_arrow_down_rounded,
-            onPressed: index == total - 1
-                ? null
-                : () => _movePresentationFacet(index, index + 1),
-          ),
-          _compactFacetIconButton(
-            tooltip: 'Ocultar ${facet.label}',
-            icon: Icons.close_rounded,
-            onPressed: () => _setPresentationFacetEnabled(
-              facet,
-              enabled: false,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _compactFacetIconButton({
-    required String tooltip,
-    required IconData icon,
-    required VoidCallback? onPressed,
-  }) {
-    return IconButton(
-      tooltip: tooltip,
-      onPressed: onPressed,
-      icon: Icon(icon, size: 18),
-      visualDensity: VisualDensity.compact,
-      constraints: const BoxConstraints.tightFor(width: 30, height: 30),
-      padding: EdgeInsets.zero,
-    );
-  }
-
-  void _movePresentationFacet(int from, int to) {
-    final draft = _presentationDraft;
-    if (draft == null ||
-        from == to ||
-        from < 0 ||
-        from >= draft.facets.length ||
-        to < 0 ||
-        to >= draft.facets.length) {
-      return;
-    }
-    final next = List<WebsiteCatalogFacet>.from(draft.facets);
-    final facet = next.removeAt(from);
-    next.insert(to, facet);
-    _updatePresentationDraft(
-      (current) => current.copyWith(facets: next),
-    );
-  }
-
-  void _setPresentationFacetEnabled(
-    WebsiteCatalogFacet facet, {
-    required bool enabled,
-  }) {
-    final draft = _presentationDraft;
-    if (draft == null) return;
-    final next = List<WebsiteCatalogFacet>.from(draft.facets);
-    if (enabled) {
-      if (!next.contains(facet)) next.add(facet);
-    } else {
-      next.remove(facet);
-    }
-    _updatePresentationDraft(
-      (current) => current.copyWith(facets: next),
-    );
-  }
-
-  IconData _presentationFacetIcon(WebsiteCatalogFacet facet) => switch (facet) {
-        WebsiteCatalogFacet.categories => Icons.account_tree_outlined,
-        WebsiteCatalogFacet.availability => Icons.inventory_2_outlined,
-        WebsiteCatalogFacet.brand => Icons.sell_outlined,
-        WebsiteCatalogFacet.price => Icons.payments_outlined,
-      };
-
-  String _presentationFacetDescription(WebsiteCatalogFacet facet) =>
-      switch (facet) {
-        WebsiteCatalogFacet.categories => 'Navegación por categoría',
-        WebsiteCatalogFacet.availability => 'Productos con o sin stock',
-        WebsiteCatalogFacet.brand => 'Marcas reales del catálogo',
-        WebsiteCatalogFacet.price => 'Rango de precio público',
-      };
-
-  Widget _buildPresentationDropdown<T>(
-    ThemeData theme, {
-    required String label,
-    required T value,
-    required List<T> values,
-    required String Function(T value) labelFor,
-    required ValueChanged<T> onChanged,
-  }) {
-    return DropdownButtonFormField<T>(
-      initialValue: value,
-      decoration: InputDecoration(
-        labelText: label,
-        border: const OutlineInputBorder(),
-      ),
-      items: values
-          .map(
-            (item) => DropdownMenuItem<T>(
-              value: item,
-              child: Text(labelFor(item)),
-            ),
-          )
-          .toList(growable: false),
-      onChanged: (next) {
-        if (next != null) onChanged(next);
-      },
-    );
-  }
-
-  Set<String> _presentationCategoryTreeIds(String categoryId) {
-    final ids = <String>{categoryId};
-    var changed = true;
-    while (changed) {
-      changed = false;
-      for (final category in _websiteCategories) {
-        if (category.parentId != null &&
-            ids.contains(category.parentId) &&
-            ids.add(category.id)) {
-          changed = true;
-        }
-      }
-    }
-    return ids;
-  }
-
-  Widget _buildPresentationPreview(
-    ThemeData theme,
-    _WebsiteCatalogPresentationTarget target,
-    WebsiteCatalogPresentation draft,
-  ) {
-    final category = target.category;
-    final categoryIds = category == null
-        ? const <String>{}
-        : _presentationCategoryTreeIds(category.id);
-    final eligibleProducts = _products.where((product) {
-      if (!product.matchesPublicVisibilityPolicy(
-        _visibilityPolicy,
-        _visibleWebsiteCategoryIds,
-      )) {
-        return false;
-      }
-      if (target.root == WebsiteCatalogRoot.products) return !product.isService;
-      if (target.root == WebsiteCatalogRoot.services) return product.isService;
-      return categoryIds.contains(product.categoryFilterId);
-    }).toList(growable: false);
-    final products = eligibleProducts.take(10).toList(growable: false);
-    final subcategories = category == null
-        ? const <_WebsiteCategoryVisibilityOption>[]
-        : _websiteCategories
-            .where(
-              (item) => item.parentId == category.id && item.showOnWebsite,
-            )
-            .toList(growable: false);
-    final path = target.isRoot
-        ? target.publicPath
-        : publicCategoryPath(presentation: draft);
-    final title = draft.heroTitle.isNotEmpty ? draft.heroTitle : target.label;
-    final description = draft.heroDescription.isNotEmpty
-        ? draft.heroDescription
-        : target.description;
-    final imageUrl =
-        draft.heroImageUrl.isNotEmpty ? draft.heroImageUrl : target.imageUrl;
-
-    return WebsiteAdminSurface(
-      padding: EdgeInsets.zero,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(color: theme.colorScheme.outlineVariant),
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.visibility_outlined,
-                  size: 18,
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'Vista previa',
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const Spacer(),
-                Flexible(
-                  child: Text(
-                    path,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (target.isRoot && draft.normalizedForOwner().isPriceList)
-                    _buildPriceListPreview(
-                      draft.normalizedForOwner(),
-                      eligibleProducts,
-                    )
-                  else ...[
-                    if (!target.isRoot)
-                      CatalogCollectionPresentationHeader(
-                        presentation: draft,
-                        title: title,
-                        description: description,
-                        imageUrl: imageUrl,
-                        compact: true,
-                        breadcrumbs: [
-                          CatalogCollectionNavigationItem(
-                            id: WebsiteCatalogRoot.products.presentationId,
-                            label: 'Productos',
-                          ),
-                          for (var index = 0;
-                              index < target.pathParts.length;
-                              index++)
-                            CatalogCollectionNavigationItem(
-                              id: 'preview-breadcrumb-$index',
-                              label: target.pathParts[index],
-                              selected: index == target.pathParts.length - 1,
-                            ),
-                        ],
-                        subcategories: subcategories
-                            .map(
-                              (item) => CatalogCollectionNavigationItem(
-                                id: item.id,
-                                label: item.shortLabel,
-                              ),
-                            )
-                            .toList(growable: false),
-                      ),
-                    Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final showSidebar = constraints.maxWidth >= 660;
-                          final grid = _buildPresentationProductGridPreview(
-                            theme,
-                            draft: draft,
-                            products: products,
-                            totalCount: eligibleProducts.length,
-                          );
-                          if (!showSidebar) {
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                _buildPresentationFacetPreview(theme, draft),
-                                const SizedBox(height: 22),
-                                grid,
-                              ],
-                            );
-                          }
-                          return Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              SizedBox(
-                                width: 190,
-                                child: _buildPresentationFacetPreview(
-                                    theme, draft),
-                              ),
-                              const SizedBox(width: 30),
-                              Expanded(child: grid),
-                            ],
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// `/servicios` as a price list, drawn by the store's own widget in the
-  /// site's theme, from the services the public rules let through.
-  Widget _buildPriceListPreview(
-    WebsiteCatalogPresentation presentation,
-    List<_WebsiteProductVisibilityRow> products,
-  ) {
-    final categories = {
-      for (final category in _websiteCategories) category.id: category,
-    };
-    int compareCategories(String a, String b) {
-      final byOrder = (categories[a]?.sortOrder ?? 0).compareTo(
-        categories[b]?.sortOrder ?? 0,
-      );
-      return byOrder != 0
-          ? byOrder
-          : (categories[a]?.shortLabel ?? '').compareTo(
-              categories[b]?.shortLabel ?? '',
-            );
-    }
-
-    final websiteService = context.read<WebsiteService>();
-    final plans = categories[presentation.plansCategoryId];
-    return Theme(
-      data: WebsiteThemeBuilder.build(
-        base: Theme.of(context),
-        resolved: WebsiteResolvedTheme.resolve(websiteService.getSetting),
-      ),
-      child: CatalogPriceListView(
-        presentation: presentation,
-        list: CatalogPriceList.build(
-          items: [
-            for (final product in products)
-              CatalogPriceItem(
-                id: product.id,
-                name: product.name,
-                price: product.price,
-                categoryId: product.categoryId?.trim() ?? '',
-                description: CatalogPriceItem.descriptionOf(
-                  websiteDescription: product.websiteDescription,
-                  description: product.description,
-                ),
-              ),
-          ],
-          compareCategories: compareCategories,
-          categoryLabel: (id) => categories[id]?.shortLabel ?? '',
-          plansCategoryId: presentation.plansCategoryId,
-        ),
-        title: presentation.heroTitle.isNotEmpty
-            ? presentation.heroTitle
-            : 'Servicios',
-        intro: presentation.heroDescription,
-        heroImageUrl: presentation.heroImageUrl,
-        rootLabel: 'Servicios',
-        plansTitle: plans?.shortLabel ?? '',
-        plansIntro: plans?.description ?? '',
-        rating: presentation.heroShowRating
-            ? CatalogPriceListRating.read(websiteService.getSetting)
-            : null,
-      ),
-    );
-  }
-
-  Widget _buildPresentationFacetPreview(
-    ThemeData theme,
-    WebsiteCatalogPresentation draft,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          'Filtros',
-          style: theme.textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 12),
-        Container(
-          height: 38,
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerLowest,
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(color: theme.colorScheme.outlineVariant),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                Icons.search_rounded,
-                size: 17,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-              const SizedBox(width: 7),
-              Text(
-                'Buscar',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-        ),
-        for (final facet in draft.facets) ...[
-          const SizedBox(height: 12),
-          Divider(height: 1, color: theme.colorScheme.outlineVariant),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Icon(
-                _presentationFacetIcon(facet),
-                size: 17,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  facet.label,
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildPresentationProductGridPreview(
-    ThemeData theme, {
-    required WebsiteCatalogPresentation draft,
-    required List<_WebsiteProductVisibilityRow> products,
-    required int totalCount,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                '$totalCount resultados públicos',
-                style: theme.textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-            Text(
-              draft.gridDensity.label,
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
-        if (products.isEmpty)
-          Text(
-            'No hay resultados que cumplan las reglas públicas.',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          )
-        else
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final metrics = websiteCatalogGridMetrics(
-                width: constraints.maxWidth,
-                density: draft.gridDensity,
-              );
-              return GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: metrics.crossAxisCount,
-                  childAspectRatio: metrics.childAspectRatio,
-                  crossAxisSpacing: metrics.crossAxisSpacing,
-                  mainAxisSpacing: metrics.mainAxisSpacing,
-                ),
-                itemCount: products.length,
-                itemBuilder: (context, index) =>
-                    _PresentationProductPreview(product: products[index]),
-              );
-            },
-          ),
-      ],
     );
   }
 
@@ -3618,7 +1348,9 @@ class _ProductWebsiteVisibilityPageState
               decoration: InputDecoration(
                 isDense: true,
                 prefixIcon: const Icon(Icons.search, size: 18),
-                hintText: 'Buscar por producto, SKU o marca',
+                hintText: widget.kind == WebsiteCatalogItemKind.services
+                    ? 'Buscar por servicio o código'
+                    : 'Buscar por producto, SKU o marca',
                 contentPadding: const EdgeInsets.symmetric(
                   horizontal: 12,
                   vertical: 11,
@@ -5035,13 +2767,37 @@ class _ProductWebsiteVisibilityPageState
               ),
             ),
             Expanded(
-              child: Text(
-                category.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
+              child: Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      category.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  if (selectedList &&
+                      category.showOnWebsite &&
+                      widget.onOpenCategoryPage != null) ...[
+                    const SizedBox(width: 8),
+                    TextButton.icon(
+                      key: ValueKey('catalog-open-category-${category.id}'),
+                      onPressed: () => widget.onOpenCategoryPage!(
+                        category.id,
+                        category.shortLabel,
+                        services: _categoryListsOnlyServices(category.id),
+                      ),
+                      style: TextButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      icon: const Icon(Icons.open_in_browser_rounded, size: 16),
+                      label: const Text('Su página'),
+                    ),
+                  ],
+                ],
               ),
             ),
             SizedBox(
@@ -5074,6 +2830,17 @@ class _ProductWebsiteVisibilityPageState
         ),
       ),
     );
+  }
+
+  /// A category whose items are all services lives under /servicios.
+  bool _categoryListsOnlyServices(String categoryId) {
+    var any = false;
+    for (final product in _products) {
+      if (product.categoryId != categoryId) continue;
+      if (!product.isService) return false;
+      any = true;
+    }
+    return any;
   }
 
   List<_WebsiteCategoryVisibilityOption> _filteredCategorySelectionRows(
@@ -5162,25 +2929,26 @@ class _ProductWebsiteVisibilityPageState
                 runSpacing: spacing,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  SizedBox(
-                    width: fieldWidth,
-                    child: _buildEnumMultiSelectFilter<_CatalogKindFilter>(
-                      label: 'Tipo',
-                      values: _CatalogKindFilter.values
-                          .where((value) => value != _CatalogKindFilter.all)
-                          .toList(growable: false),
-                      selectedValues: _kindFilters,
-                      titleFor: (value) => value.label,
-                      onChanged: (values) {
-                        setState(() {
-                          _kindFilters
-                            ..clear()
-                            ..addAll(values);
-                        });
-                        _applyFilters();
-                      },
+                  if (widget.kind == null)
+                    SizedBox(
+                      width: fieldWidth,
+                      child: _buildEnumMultiSelectFilter<_CatalogKindFilter>(
+                        label: 'Tipo',
+                        values: _CatalogKindFilter.values
+                            .where((value) => value != _CatalogKindFilter.all)
+                            .toList(growable: false),
+                        selectedValues: _kindFilters,
+                        titleFor: (value) => value.label,
+                        onChanged: (values) {
+                          setState(() {
+                            _kindFilters
+                              ..clear()
+                              ..addAll(values);
+                          });
+                          _applyFilters();
+                        },
+                      ),
                     ),
-                  ),
                   SizedBox(
                     width: fieldWidth,
                     child: _buildEnumMultiSelectFilter<_VisibilityFilter>(
@@ -5414,7 +3182,11 @@ class _ProductWebsiteVisibilityPageState
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final metrics = _CatalogTableMetrics.forWidth(constraints.maxWidth);
+        final metrics = _CatalogTableMetrics.forWidth(
+          constraints.maxWidth,
+          showType: widget.kind == null,
+          showStock: widget.kind != WebsiteCatalogItemKind.services,
+        );
         final selectedFilteredCount = _filteredProducts
             .where((product) => _selectedProductIds.contains(product.id))
             .length;
@@ -5488,13 +3260,15 @@ class _ProductWebsiteVisibilityPageState
             ),
           ),
           _buildHeaderCell(theme, 'Producto', width: metrics.product),
-          _buildHeaderCell(theme, 'Tipo', width: metrics.type),
+          if (metrics.type > 0)
+            _buildHeaderCell(theme, 'Tipo', width: metrics.type),
           _buildHeaderCell(theme, 'Marcado web', width: metrics.web),
-          _buildHeaderCell(theme, 'Estado', width: metrics.status),
+          _buildHeaderCell(theme, 'En la tienda', width: metrics.status),
           _buildHeaderCell(theme, 'Calidad web', width: metrics.readiness),
           _buildHeaderCell(theme, 'Categoría', width: metrics.category),
           _buildHeaderCell(theme, 'Marca', width: metrics.brand),
-          _buildHeaderCell(theme, 'Stock', width: metrics.stock),
+          if (metrics.stock > 0)
+            _buildHeaderCell(theme, 'Stock', width: metrics.stock),
           _buildHeaderCell(
             theme,
             'Precio',
@@ -5610,7 +3384,8 @@ class _ProductWebsiteVisibilityPageState
               ],
             ),
           ),
-          SizedBox(width: metrics.type, child: Text(product.typeLabel)),
+          if (metrics.type > 0)
+            SizedBox(width: metrics.type, child: Text(product.typeLabel)),
           SizedBox(
             width: metrics.web,
             child: _buildWebIntentSwitch(theme, product),
@@ -5639,7 +3414,8 @@ class _ProductWebsiteVisibilityPageState
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          SizedBox(width: metrics.stock, child: Text(product.stockLabel)),
+          if (metrics.stock > 0)
+            SizedBox(width: metrics.stock, child: Text(product.stockLabel)),
           SizedBox(
             width: metrics.price,
             child: Text(
@@ -5765,7 +3541,11 @@ class _ProductWebsiteVisibilityPageState
       label = 'Inactivo';
       accentColor = const Color(0xFF94A3B8);
     } else if (blocked) {
-      label = 'Bloqueado';
+      // Why it does not show, in the row itself: «Sin stock», «Sin foto»…
+      // (the sentence stays in the tooltip).
+      label =
+          product.publicBlockReason(_visibilityPolicy, visibleCategoryIds) ??
+              'No sale';
       accentColor = const Color(0xFF9A742F);
     } else if (published) {
       label = 'Publicado';
@@ -5854,63 +3634,6 @@ class _ProductWebsiteVisibilityPageState
           ),
         ],
       ),
-    );
-  }
-}
-
-class _PresentationProductPreview extends StatelessWidget {
-  const _PresentationProductPreview({required this.product});
-
-  final _WebsiteProductVisibilityRow product;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        AspectRatio(
-          aspectRatio: 1,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceContainerLowest,
-              border: Border.all(color: theme.colorScheme.outlineVariant),
-            ),
-            child: product.imageUrl == null
-                ? Icon(
-                    Icons.image_not_supported_outlined,
-                    color: theme.colorScheme.onSurfaceVariant,
-                  )
-                : Padding(
-                    padding: const EdgeInsets.all(10),
-                    child: Image.network(
-                      product.imageUrl!,
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => Icon(
-                        Icons.broken_image_outlined,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          product.name,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: theme.textTheme.labelMedium?.copyWith(
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 3),
-        Text(
-          ChileanUtils.formatCurrency(product.price),
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-      ],
     );
   }
 }
@@ -6363,6 +4086,30 @@ class _WebsiteProductVisibilityRow {
     }
   }
 
+  /// Why a product marked for the site does not show, in two words, or null
+  /// when nothing blocks it. The same order as [publicVisibilityTooltip].
+  String? publicBlockReason(
+    PublicProductVisibilityPolicy policy,
+    Set<String> visibleCategoryIds,
+  ) {
+    if (!isVisibleOnWebsite) return null;
+    if (!isAllowedByStockPolicy(policy.stockPolicy)) {
+      return policy.stockPolicy == PublicCatalogStockPolicy.outOfStockOnly
+          ? 'Con stock'
+          : 'Sin stock';
+    }
+    if (policy.requireImage && !hasPublicImage) return 'Sin foto';
+    if (policy.requireVisibleCategory) {
+      final category = categoryId?.trim();
+      if (category == null || category.isEmpty) {
+        if (!policy.includeUncategorized) return 'Sin categoría';
+      } else if (!visibleCategoryIds.contains(category)) {
+        return 'Categoría oculta';
+      }
+    }
+    return null;
+  }
+
   String publicVisibilityTooltip(
     PublicProductVisibilityPolicy policy,
     Set<String> visibleCategoryIds,
@@ -6539,53 +4286,6 @@ class _WebsiteCategoryVisibilityOption {
       description: description,
       imageUrl: imageUrl,
       sortOrder: sortOrder,
-    );
-  }
-}
-
-class _WebsiteCatalogPresentationTarget {
-  const _WebsiteCatalogPresentationTarget.root(this.root) : category = null;
-
-  const _WebsiteCatalogPresentationTarget.category(this.category) : root = null;
-
-  final WebsiteCatalogRoot? root;
-  final _WebsiteCategoryVisibilityOption? category;
-
-  bool get isRoot => root != null;
-
-  String get id => root?.presentationId ?? category!.id;
-
-  String get label => root?.label ?? category!.shortLabel;
-
-  String get supportingLabel => switch (root) {
-        WebsiteCatalogRoot.products => '/productos · catálogo completo',
-        WebsiteCatalogRoot.services => '/servicios · catálogo completo',
-        null =>
-          category!.showOnWebsite ? 'En navegación' : 'Fuera de navegación',
-      };
-
-  String get description => category?.description ?? '';
-
-  String get imageUrl => category?.imageUrl ?? '';
-
-  bool get showOnWebsite => category?.showOnWebsite ?? true;
-
-  List<String> get pathParts => category?.pathParts ?? const <String>[];
-
-  String get publicPath => switch (root) {
-        WebsiteCatalogRoot.products => '/productos',
-        WebsiteCatalogRoot.services => '/servicios',
-        null => publicCategoryPath(presentation: fallbackPresentation),
-      };
-
-  WebsiteCatalogPresentation get fallbackPresentation {
-    final catalogRoot = root;
-    if (catalogRoot != null) {
-      return WebsiteCatalogPresentation.catalogRoot(catalogRoot);
-    }
-    return WebsiteCatalogPresentation.fallback(
-      categoryId: category!.id,
-      categoryName: category!.shortLabel,
     );
   }
 }

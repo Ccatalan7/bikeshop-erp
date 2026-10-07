@@ -1,22 +1,15 @@
 part of '../public_store_layout.dart';
 
 class _PreviewNavAction {
-  final String? id;
-  final String? label;
-  final IconData? icon;
-  final bool isDivider;
+  final String id;
+  final String label;
+  final IconData icon;
 
   const _PreviewNavAction({
     required this.id,
     required this.label,
     required this.icon,
-  }) : isDivider = false;
-
-  const _PreviewNavAction.divider()
-      : id = null,
-        label = null,
-        icon = null,
-        isDivider = true;
+  });
 }
 
 enum _PageNavKind {

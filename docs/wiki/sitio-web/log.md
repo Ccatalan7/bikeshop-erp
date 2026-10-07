@@ -4,6 +4,13 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-06 — corrección — [editor](paginas/editor-del-sitio.md) y
+  [catálogo](paginas/catalogo-y-fichas.md): etapa 3b sin plantillas (Catálogo
+  en tablas, todo lo de una categoría en su página, Ajustes del sitio con
+  índice, versiones automáticas, copiar y pegar secciones); «Frenos» son tres
+  categorías y el guardia de enlaces ahora sigue la regla de la ruta;
+  [estado](paginas/estado-y-pendientes.md) con la aserción de debug anterior
+  al lienzo.
 - 2026-10-06 — corrección — [catálogo](paginas/catalogo-y-fichas.md) y
   [editor](paginas/editor-del-sitio.md): etapa 3a, `/productos` y las 11
   categorías se editan sobre su página; la trampa de la recarga en caliente

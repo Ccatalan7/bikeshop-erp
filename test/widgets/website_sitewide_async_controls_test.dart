@@ -344,7 +344,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
-      find.text('Enlaces del footer'),
+      find.text('Enlaces del pie de página'),
       300,
       scrollable: find.byType(Scrollable).first,
     );
@@ -421,7 +421,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
-      find.text('Enlaces del footer'),
+      find.text('Enlaces del pie de página'),
       300,
       scrollable: find.byType(Scrollable).first,
     );

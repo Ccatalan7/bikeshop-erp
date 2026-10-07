@@ -256,6 +256,69 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('its filters go in the order the list shows', (tester) async {
+      final provider = _editor(_category())
+        ..selectBlock(_id(WebsiteCatalogSection.list));
+      await _pumpInspector(tester, provider);
+      expect(_saved().facets, [
+        WebsiteCatalogFacet.categories,
+        WebsiteCatalogFacet.availability,
+      ]);
+
+      await tester.tap(
+        find.byKey(const ValueKey('catalog-facet-up-availability')),
+      );
+      await tester.pump();
+      expect(provider.effectiveCatalogPresentation(_saved()).facets, [
+        WebsiteCatalogFacet.availability,
+        WebsiteCatalogFacet.categories,
+      ]);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
+        'its page moves its address and «Restablecer» keeps it, in the '
+        'draft', (tester) async {
+      final provider = _editor(_category())
+        ..selectBlock(_id(WebsiteCatalogSection.page))
+        ..stageCatalogPresentation(
+          _saved().copyWith(heroTitle: 'Frenos de disco'),
+          saved: _saved(),
+        );
+      await _pumpInspector(tester, provider);
+      for (final group in ['Dirección', 'En el menú', 'Restablecer']) {
+        expect(find.text(group), findsWidgets, reason: group);
+      }
+
+      await tester.tap(find.text('Dirección').first);
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.descendant(
+          of: find.byKey(const ValueKey('catalog-slug')),
+          matching: find.byType(TextFormField),
+        ),
+        'frenos-mtb',
+      );
+      await tester.pump();
+      expect(
+        provider.effectiveCatalogPresentation(_saved()).slug,
+        'frenos-mtb',
+      );
+      expect(find.text('/productos/categoria/frenos-mtb'), findsOneWidget);
+
+      await tester.tap(find.text('Restablecer'));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('catalog-reset-presentation')),
+      );
+      await tester.pump();
+      final reset = provider.effectiveCatalogPresentation(_saved());
+      expect(reset.heroTitle, isEmpty);
+      expect(reset.slug, 'frenos-mtb');
+      expect(provider.hasUnsavedChanges, isTrue);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('its page has Google, not a price-list choice', (tester) async {
       final provider = _editor(_category())
         ..selectBlock(_id(WebsiteCatalogSection.page));

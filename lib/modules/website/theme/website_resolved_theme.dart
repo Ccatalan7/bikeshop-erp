@@ -101,6 +101,55 @@ class WebsiteResolvedTheme extends ThemeExtension<WebsiteResolvedTheme> {
   /// Photo of the workshop tile that leads to the services page.
   final String customerPortalWorkshopImage;
 
+  // Value equality: the shell resolves a new instance on every rebuild, and
+  // without it the storefront ThemeData was «different» each time, telling
+  // every Theme dependent to rebuild in the middle of a layout pass. Under a
+  // LayoutBuilder that broke the category page in the editor
+  // (`_debugRelayoutBoundaryAlreadyMarkedNeedsLayout`, then a duplicate
+  // GlobalKey and a blank page; 2026-10-06).
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is WebsiteResolvedTheme &&
+          other.primaryColor == primaryColor &&
+          other.accentColor == accentColor &&
+          other.backgroundColor == backgroundColor &&
+          other.textColor == textColor &&
+          other.headingFont == headingFont &&
+          other.bodyFont == bodyFont &&
+          other.headingSize == headingSize &&
+          other.bodySize == bodySize &&
+          other.sectionSpacing == sectionSpacing &&
+          other.containerPadding == containerPadding &&
+          other.buttonStyle == buttonStyle &&
+          other.buttonSize == buttonSize &&
+          other.commerceAccentColor == commerceAccentColor &&
+          other.commerceTextColor == commerceTextColor &&
+          other.commerceLineColor == commerceLineColor &&
+          other.customerPortalImage == customerPortalImage &&
+          other.customerPortalWorkshopImage == customerPortalWorkshopImage;
+
+  @override
+  int get hashCode => Object.hash(
+        primaryColor,
+        accentColor,
+        backgroundColor,
+        textColor,
+        headingFont,
+        bodyFont,
+        headingSize,
+        bodySize,
+        sectionSpacing,
+        containerPadding,
+        buttonStyle,
+        buttonSize,
+        commerceAccentColor,
+        commerceTextColor,
+        commerceLineColor,
+        customerPortalImage,
+        customerPortalWorkshopImage,
+      );
+
   static WebsiteResolvedTheme of(BuildContext context) {
     return Theme.of(context).extension<WebsiteResolvedTheme>() ?? fallback;
   }

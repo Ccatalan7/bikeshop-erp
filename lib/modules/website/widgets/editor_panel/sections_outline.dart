@@ -167,6 +167,26 @@ class _SectionsOutline extends StatelessWidget {
               ),
             ),
           ),
+        if (blocks != null && provider.hasSectionClipboard)
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 2),
+            sliver: SliverToBoxAdapter(
+              child: TextButton.icon(
+                key: const ValueKey('website-sections-paste'),
+                onPressed: () => provider.pasteSectionFromClipboard(),
+                style: TextButton.styleFrom(
+                  minimumSize: const Size.fromHeight(36),
+                  alignment: Alignment.centerLeft,
+                ),
+                icon: const Icon(Icons.content_paste_rounded, size: 18),
+                label: Text(
+                  'Pegar «${provider.sectionClipboardLabel ?? 'sección'}»',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+          ),
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(12, 14, 12, 0),
           sliver: SliverToBoxAdapter(
@@ -710,6 +730,17 @@ class _SectionBlockMenu extends StatelessWidget {
             provider.moveBlockDown(blockId);
           case 'duplicate':
             provider.duplicateBlock(blockId);
+          case 'copy':
+            provider.copyBlockToClipboard(blockId, label: label);
+            ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+              SnackBar(
+                content: Text(
+                  '«$label» copiada: pégala aquí o en otra página.',
+                ),
+              ),
+            );
+          case 'paste':
+            provider.pasteSectionFromClipboard(afterBlockId: blockId);
           case 'visibility':
             provider.toggleBlockVisibility(blockId);
           case 'delete':
@@ -730,6 +761,13 @@ class _SectionBlockMenu extends StatelessWidget {
           enabled: canMoveDown,
         ),
         item('duplicate', Icons.copy_all_outlined, 'Duplicar'),
+        item('copy', Icons.content_copy_rounded, 'Copiar para otra página'),
+        if (provider.hasSectionClipboard)
+          item(
+            'paste',
+            Icons.content_paste_rounded,
+            'Pegar «${provider.sectionClipboardLabel ?? 'sección'}» debajo',
+          ),
         item(
           'visibility',
           hidden ? Icons.visibility_outlined : Icons.visibility_off_outlined,

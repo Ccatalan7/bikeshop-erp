@@ -388,7 +388,7 @@ void main() {
 
     await tester.pumpWidget(host(provider, WebsiteBlockEditSection.content));
     await settle(tester);
-    await expand(tester, 'Background & Overlay');
+    await expand(tester, 'Fondo y capa oscura');
 
     expect(
       shellFor('focalPoint'),
@@ -435,7 +435,7 @@ void main() {
 
     await tester.pumpWidget(host(provider, WebsiteBlockEditSection.content));
     await settle(tester);
-    await expand(tester, 'Background & Overlay');
+    await expand(tester, 'Fondo y capa oscura');
     await tapAction(tester, find.text('Reencuadrar'));
 
     var notifications = 0;
@@ -495,7 +495,7 @@ void main() {
 
     await tester.pumpWidget(host(provider, WebsiteBlockEditSection.content));
     await settle(tester);
-    await expand(tester, 'Background & Overlay');
+    await expand(tester, 'Fondo y capa oscura');
     await tapAction(tester, find.text('Reencuadrar'));
 
     final area = tester.getRect(find.byType(FocalPointPicker));

@@ -6,6 +6,20 @@ import 'website_editor_chrome_geometry.dart';
 import 'website_editor_host_theme.dart';
 import 'website_editor_panel.dart' deferred as editor;
 
+/// «Versiones guardadas», loading the editor's library first (it stays out of
+/// the storefront's first download).
+Future<void> showDeferredWebsiteVersionsDialog(
+  BuildContext context, {
+  Future<void> Function()? onRestoreComplete,
+}) async {
+  await editor.loadLibrary();
+  if (!context.mounted) return;
+  await editor.showWebsiteVersionsDialog(
+    context,
+    onRestoreComplete: onRestoreComplete,
+  );
+}
+
 class DeferredWebsiteEditorPanel extends StatefulWidget {
   final VoidCallback? onDiscard;
   final Future<void> Function()? onRestoreComplete;

@@ -120,7 +120,7 @@ create a second copy of its settings inside a block inspector.
 | CTA label, destination and presentation | `WebsiteActionValue`, `WebsiteActionEditor`, `WebsiteActionButton` | Every CTA-capable block/layer |
 | Product/category publication and eligibility | Real inventory/category records plus website visibility policy | `Catálogo web` |
 | Featured products | Canonical featured-product configuration | `Catálogo web > Productos destacados` |
-| Root/category collection presentation, SEO and route aliases | `WebsiteCatalogPresentationRegistry`, keyed by reserved root owner or stable category ID | `Catálogo web > Categorías > Presentación` |
+| Root/category collection presentation, SEO and route aliases | `WebsiteCatalogPresentationRegistry`, keyed by reserved root owner or stable category ID | The catalog page on the editor canvas (its sections and its page section; `Catálogo web > Categorías > Presentación` was removed on 2026-10-06) |
 | Public catalog facet state | `WebsiteCatalogQuery` plus the canonical public eligibility/availability query | Ordered facet controls in category/root presentation and the routed catalog |
 | Public commerce identity and offer projection | Product/category owners through `PublicCommerceProductProjection` and its equivalent shared TypeScript contract | Product `Tienda Online` controls plus catalog/SEO readiness surfaces |
 | Site SEO identity and canonical origin | Normalized `website_settings`; `store_url` is canonical and `seo_canonical_url` is a compatibility mirror | Site settings |

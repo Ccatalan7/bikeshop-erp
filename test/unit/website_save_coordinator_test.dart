@@ -519,6 +519,36 @@ void main() {
       expect(document.hasUnsavedChanges, isFalse);
     });
 
+    test(
+        'a save that wrote leaves one automatic version; one that fails '
+        'leaves none, and a failed version never fails the save', () async {
+      final document = _document([_block('Published headline')]);
+      addTearDown(document.dispose);
+      document.updateBlockData('hero-1', 'headline', 'Draft headline');
+
+      final gateway = _VersioningGateway(document.blocks)
+        ..replaceFailure = StateError('replace_page_blocks failed')
+        ..replaceFailuresRemaining = 1;
+      final coordinator = WebsiteSaveCoordinator(gateway);
+
+      await expectLater(
+        coordinator.save(tenantId: _tenantId, document: document),
+        throwsA(isA<StateError>()),
+      );
+      expect(gateway.versions, isEmpty);
+
+      gateway.versionFailure = StateError('create_website_backup failed');
+      await coordinator.save(tenantId: _tenantId, document: document);
+      expect(document.hasUnsavedChanges, isFalse);
+      expect(gateway.versions, [
+        (
+          tenantId: _tenantId,
+          name: 'Al guardar · /$_pageSlug',
+          description: 'Secciones de la página.',
+        ),
+      ]);
+    });
+
     test('an in-flight save rejects a different document scope', () async {
       final document = _document([_block('Page A')]);
       addTearDown(document.dispose);
@@ -833,4 +863,24 @@ dynamic _copyValue(dynamic value) {
   }
   if (value is List) return value.map(_copyValue).toList(growable: false);
   return value;
+}
+
+/// A gateway that also records the automatic version after a save.
+class _VersioningGateway extends _FakeWebsiteSaveGateway
+    implements WebsiteSavedVersionRecorder {
+  _VersioningGateway(super.publishedBlocks);
+
+  final versions = <({String tenantId, String name, String description})>[];
+  Object? versionFailure;
+
+  @override
+  Future<void> recordSavedVersion({
+    required String tenantId,
+    required String name,
+    required String description,
+  }) async {
+    versions.add((tenantId: tenantId, name: name, description: description));
+    final failure = versionFailure;
+    if (failure != null) throw failure;
+  }
 }

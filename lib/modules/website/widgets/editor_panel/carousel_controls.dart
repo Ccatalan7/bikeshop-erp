@@ -499,7 +499,7 @@ class _CarouselBlockControlsState extends State<_CarouselBlockControls> {
           ],
         ),
         _CollapsibleSection(
-          title: 'Overlay',
+          title: 'Capa oscura',
           icon: Icons.gradient_outlined,
           initiallyExpanded: false,
           children: [
@@ -1457,14 +1457,14 @@ class _SlideEditorState extends State<_SlideEditor> {
 
         const SizedBox(height: 20),
         _EditorToggle(
-          label: 'Mostrar overlay oscuro',
+          label: 'Oscurecer la foto',
           value: showOverlay,
           onChanged: (v) => widget.onUpdate('showOverlay', v),
         ),
         if (showOverlay) ...[
           const SizedBox(height: 12),
           _EditorSlider(
-            label: 'Opacidad del overlay',
+            label: 'Intensidad',
             value: overlayOpacity,
             min: 0.1,
             max: 0.9,

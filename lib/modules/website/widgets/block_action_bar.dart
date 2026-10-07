@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../../shared/themes/vinabike_theme_roles.dart';
+import '../models/website_block_registry.dart';
+import '../models/website_block_type.dart';
+import 'website_editor_host_theme.dart';
+
 /// Canonical floating action bar for a selected website block.
 class BlockActionBar extends StatelessWidget {
   const BlockActionBar({
@@ -14,6 +19,7 @@ class BlockActionBar extends StatelessWidget {
     this.onDuplicate,
     this.onDelete,
     this.onToggleVisibility,
+    this.onCopy,
   });
 
   final String blockId;
@@ -27,118 +33,122 @@ class BlockActionBar extends StatelessWidget {
   final VoidCallback? onDelete;
   final VoidCallback? onToggleVisibility;
 
+  /// Copies the block to paste on this page or another one.
+  final VoidCallback? onCopy;
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.blue,
-        borderRadius: BorderRadius.circular(8),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              _blockTypeLabel(blockType),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
+    // The operator's chrome wears the ERP's selection pair, never the site's
+    // brand (same rule as the selection ring around it).
+    final host = WebsiteEditorHostTheme.maybeOf(context);
+    final theme = host?.theme ?? Theme.of(context);
+    final roles = host?.roles ?? VinabikeThemeRoles.maybeOf(context);
+    final fill =
+        roles?.selectionContainer ?? theme.colorScheme.primaryContainer;
+    final onFill =
+        roles?.onSelectionContainer ?? theme.colorScheme.onPrimaryContainer;
+    final danger = roles?.danger.accent ?? theme.colorScheme.error;
+    return Material(
+      color: fill,
+      elevation: 3,
+      shadowColor: Colors.black38,
+      borderRadius: BorderRadius.circular(10),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(10, 2, 4, 2),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              blockActionBarLabel(blockType),
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: onFill,
+                fontWeight: FontWeight.w700,
               ),
             ),
-          ),
-          const SizedBox(width: 8),
-          if (!isFirst)
+            const SizedBox(width: 6),
+            if (!isFirst)
+              _ActionButton(
+                icon: Icons.arrow_upward_rounded,
+                tooltip: 'Subir',
+                color: onFill,
+                onPressed: onMoveUp,
+              ),
+            if (!isLast)
+              _ActionButton(
+                icon: Icons.arrow_downward_rounded,
+                tooltip: 'Bajar',
+                color: onFill,
+                onPressed: onMoveDown,
+              ),
             _ActionButton(
-              icon: Icons.arrow_upward,
-              tooltip: 'Mover arriba',
-              onPressed: onMoveUp,
+              icon: isVisible
+                  ? Icons.visibility_outlined
+                  : Icons.visibility_off_outlined,
+              tooltip: isVisible ? 'Ocultar' : 'Mostrar',
+              color: onFill,
+              onPressed: onToggleVisibility,
             ),
-          if (!isLast)
             _ActionButton(
-              icon: Icons.arrow_downward,
-              tooltip: 'Mover abajo',
-              onPressed: onMoveDown,
+              icon: Icons.copy_all_outlined,
+              tooltip: 'Duplicar',
+              color: onFill,
+              onPressed: onDuplicate,
             ),
-          _ActionButton(
-            icon: isVisible ? Icons.visibility : Icons.visibility_off,
-            tooltip: isVisible ? 'Ocultar' : 'Mostrar',
-            onPressed: onToggleVisibility,
-          ),
-          _ActionButton(
-            icon: Icons.copy,
-            tooltip: 'Duplicar',
-            onPressed: onDuplicate,
-          ),
-          _ActionButton(
-            icon: Icons.delete,
-            tooltip: 'Eliminar',
-            onPressed: onDelete,
-            isDestructive: true,
-          ),
-        ],
+            if (onCopy != null)
+              _ActionButton(
+                icon: Icons.content_copy_rounded,
+                tooltip: 'Copiar para otra página',
+                color: onFill,
+                onPressed: onCopy,
+              ),
+            _ActionButton(
+              icon: Icons.delete_outline_rounded,
+              tooltip: 'Eliminar',
+              color: danger,
+              onPressed: onDelete,
+            ),
+          ],
+        ),
       ),
     );
   }
+}
 
-  String _blockTypeLabel(String type) {
-    return switch (type) {
-      'hero' => 'HERO',
-      'products' => 'PRODUCTOS',
-      'about' => 'NOSOTROS',
-      'services' => 'SERVICIOS',
-      'testimonials' => 'TESTIMONIOS',
-      'contact' => 'CONTACTO',
-      'cta' => 'CTA',
-      'gallery' => 'GALERÍA',
-      'banner' => 'BANNER',
-      _ => type.toUpperCase(),
-    };
+/// The block's name in the editor's words, the same the «Secciones» list
+/// uses («Portada», «Productos destacados»), never its storage type.
+String blockActionBarLabel(String blockType) {
+  final normalised = blockType.trim().toLowerCase();
+  for (final type in WebsiteBlockType.values) {
+    if (type.name.toLowerCase() == normalised) {
+      return WebsiteBlockRegistry.definitionFor(type).title;
+    }
   }
+  return blockType.isEmpty ? 'Bloque' : blockType;
 }
 
 class _ActionButton extends StatelessWidget {
   const _ActionButton({
     required this.icon,
     required this.tooltip,
+    required this.color,
     this.onPressed,
-    this.isDestructive = false,
   });
 
   final IconData icon;
   final String tooltip;
+  final Color color;
   final VoidCallback? onPressed;
-  final bool isDestructive;
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(4),
-        child: Container(
-          padding: const EdgeInsets.all(6),
-          child: Icon(
-            icon,
-            color: isDestructive ? Colors.red.shade200 : Colors.white,
-            size: 18,
-          ),
-        ),
-      ),
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onPressed,
+      iconSize: 18,
+      color: color,
+      visualDensity: VisualDensity.compact,
+      style: IconButton.styleFrom(minimumSize: const Size(32, 32)),
+      icon: Icon(icon),
     );
   }
 }

@@ -56,6 +56,18 @@ un mapa y el editor siguió mostrando la lista vieja de 15 BSD tras el reload
 explícita en vez de derivarla: el reload sí la actualiza y no hay que
 reiniciar ni rehacer la navegación.
 
+**Un reload rechazado deja al `restart` sin compilar (2026-10-06, costo: tres
+rondas de verificación).** Quitar un campo de una clase `const`
+(`_PreviewNavAction.isDivider`) hace que el reload falle con «Const class
+cannot remove fields… Try performing a hot restart». El `restart` siguiente
+contestó «Restarted application in 1,040ms» y la app siguió corriendo el código
+viejo: la barra sobre el bloque seguía diciendo `FEATURES` en azul con el
+archivo nuevo en disco. Señal: un reinicio de ~1 s tras un reload rechazado.
+Ahí no sirve un segundo `restart`: `native_session.sh stop` y `start` (unos
+3 min). Lo mismo cuando una aserción de Flutter deja la sesión a medias: el
+`restart` queda en «Performing hot restart…» y `status` dice que el VM
+service no responde — `stop` + `start`, sin repetir el reinicio.
+
 ## The three surfaces, and when to use each
 
 **2026-09-06 — model and draft transitions during hot reload.** The product ficha

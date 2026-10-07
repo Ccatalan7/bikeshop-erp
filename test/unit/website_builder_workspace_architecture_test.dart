@@ -249,8 +249,9 @@ void main() {
     final registry =
         File('docs/architecture/canonical-ui-surfaces.md').readAsStringSync();
 
-    expect(layout, contains("label: Text('Portada')"));
-    expect(layout, contains('fuente es “Destacados”'));
+    expect(layout, contains("label: Text('Servicios')"));
+    expect(layout, contains("label: Text('Destacados')"));
+    expect(layout, contains('muestran «Destacados»'));
     expect(visibility, contains('bool _showAdvancedFilters = false'));
     expect(visibility, contains('bool _showPublicRules = false'));
     expect(visibility, contains("label: 'Reglas públicas'"));
@@ -268,13 +269,14 @@ void main() {
     );
     expect(visibility, isNot(contains("label: 'Acciones'")));
     expect(visibility, contains("'Marcado web'"));
-    expect(visibility, contains("'Estado'"));
+    expect(visibility, contains("'En la tienda'"));
     expect(visibility, contains('_buildWebIntentSwitch'));
     expect(visibility, contains('_buildPublicStatusBadge'));
     expect(visibility, contains('isMarkedForWebsite'));
     expect(visibility, contains('OperationalStatusBadge('));
     expect(visibility, contains("label = 'Publicado'"));
-    expect(visibility, contains("label = 'Bloqueado'"));
+    // A blocked row says why it does not show (2026-10-06).
+    expect(visibility, contains('product.publicBlockReason('));
     expect(visibility, contains("label = 'Oculto'"));
     expect(visibility, contains("label = 'Inactivo'"));
     expect(
@@ -299,7 +301,7 @@ void main() {
     );
     expect(
       layout,
-      contains('no limitan productos por sí solas'),
+      contains('(no ocultan productos)'),
     );
     expect(visibility, contains('_visibleWebsiteCategorySummary'));
     expect(
@@ -637,6 +639,9 @@ void main() {
     final workspace = File(
       'lib/modules/website/pages/product_website_visibility_page.dart',
     ).readAsStringSync();
+    final inspector = File(
+      'lib/modules/website/widgets/editor_panel/catalog_section_controls.dart',
+    ).readAsStringSync();
     final service =
         readLibrarySource('lib/modules/website/services/website_service.dart');
     final catalog = File(
@@ -699,35 +704,26 @@ void main() {
     expect(model, contains('WebsiteCatalogSlugResolution? resolveSlug('));
     expect(model, contains('WebsiteCatalogPresentation prepareForSave('));
     expect(model, contains('WebsiteCatalogSlugCollisionException'));
-    expect(workspace, contains('WebsiteCatalogSection.categoryPresentation'));
-    expect(workspace, contains("'Presentación del catálogo'"));
-    expect(workspace, contains('WebsiteImagePickerField('));
-    expect(workspace, contains('_hasUnsavedPresentationChanges'));
-    expect(workspace, contains('_presentationRemovalPending'));
-    expect(workspace, contains('_discardPresentationChanges'));
-    expect(workspace, contains('_reloadPresentationFromPersistence'));
-    expect(workspace, contains("'Cambios sin guardar'"));
-    expect(workspace, contains("'Descartar'"));
-    expect(workspace, contains("'Recargar'"));
-    expect(workspace, contains('_buildPresentationSeoEditor'));
-    expect(workspace, contains("'Título para buscadores'"));
-    expect(workspace, contains("'Meta descripción'"));
-    expect(workspace, contains("'Imagen al compartir'"));
-    expect(workspace, contains("'Permitir indexación'"));
-    expect(workspace, contains("'Megamenú'"));
-    expect(workspace, contains('draft.megaMenuImageUrl'));
-    expect(workspace, contains('draft.megaMenuOverlay'));
-    expect(workspace, contains('draft.megaMenuCardOverlay'));
-    expect(workspace, contains("'Oscurecimiento de la card"));
-    expect(workspace, contains('draft.megaMenuOverviewWidth'));
-    expect(workspace, contains('draft.megaMenuContentAlignment'));
-    expect(workspace, contains("'Ancho de portada"));
-    expect(workspace, contains("'Posición del contenido'"));
-    expect(workspace, contains("'Quitar imagen del megamenú'"));
-    expect(workspace, contains("'Rutas anteriores'"));
-    expect(workspace, contains("'Agregar alias'"));
-    expect(workspace, contains('_removePresentationAlias'));
-    expect(workspace, contains('socialImageUrl: url.trim()'));
+    // Since 2026-10-06 a category page is edited on its own page (the
+    // canvas inspector); the catalog tables only publish and open it.
+    expect(workspace, isNot(contains('categoryPresentation')));
+    expect(workspace, contains('onOpenCategoryPage'));
+    expect(storeLayout, contains('_openCategoryPageOnCanvas'));
+    expect(storeLayout, contains('publicCategoryPath('));
+    expect(inspector, contains('class _CatalogAddressField'));
+    expect(inspector, contains("'Direcciones anteriores'"));
+    expect(inspector, contains('catalogPresentationRegistry'));
+    expect(inspector, contains("'Imagen al compartir'"));
+    expect(inspector, contains('socialImageUrl: url.trim()'));
+    expect(inspector, contains("'Que Google la muestre'"));
+    expect(inspector, contains("title: 'En el menú'"));
+    expect(inspector, contains('megaMenuImageUrl: url.trim()'));
+    expect(inspector, contains('megaMenuOverlay: overlay'));
+    expect(inspector, contains('megaMenuCardOverlay: overlay'));
+    expect(inspector, contains('megaMenuOverviewWidth: width'));
+    expect(inspector, contains('megaMenuContentAlignment: alignment'));
+    expect(inspector, contains("title: 'Restablecer'"));
+    expect(inspector, contains('WebsiteCatalogPresentation.fallback('));
     expect(service, contains('saveCatalogPresentation('));
     expect(service, contains('removeCatalogPresentation('));
     // The registry is one row for every owner: each change is a
@@ -761,11 +757,8 @@ void main() {
     ).readAsStringSync();
     expect(routeRule, contains('categorySlugClaimCount(trimmed)'));
     expect(routeRule, contains('return matches.length == 1 ? matches.single'));
-    expect(
-      workspace,
-      contains('CatalogCollectionPresentationHeader('),
-    );
-    expect(workspace, contains('websiteCatalogGridMetrics('));
+    expect(catalog, contains('CatalogCollectionPresentationHeader('));
+    expect(catalog, contains('websiteCatalogGridMetrics('));
     expect(
       sharedPresentation,
       contains('class CatalogCollectionPresentationHeader'),
