@@ -918,37 +918,32 @@ const _draftScript = r'''
   document.addEventListener('mouseup', endShifting, true);
   addEventListener('blur', endShifting);
   // Escape lets a drag go: the layer goes back where it was.
-  document.addEventListener('keydown', function (event) {
+  function letGo() {
     var m = shifting;
-    if (!m || event.key !== 'Escape') return;
-    event.preventDefault();
-    event.stopPropagation();
+    if (!m) return false;
     stopShifting();
-    if (!m.begun) return;
-    dragged = Date.now();
-    layerMessage(m, 'cancel');
-    restoreLayer(m);
-  }, true);
-  // The arrows nudge the picked layer by one unit (ten with Shift), as on
+    if (m.begun) {
+      dragged = Date.now();
+      layerMessage(m, 'cancel');
+      restoreLayer(m);
+    }
+    return true;
+  }
+  // An arrow nudges the picked layer by one unit (ten with Shift), as on
   // the canvas: each press is a whole move, written as one step.
-  document.addEventListener('keydown', function (event) {
-    if (edit || shifting || shifted || !layerPick.target || !layerSel ||
-        event.metaKey || event.ctrlKey || event.altKey) return;
-    // Keys typed in a field of the page are the field's.
-    var t = event.target;
-    if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
-    var dx = { ArrowLeft: -1, ArrowRight: 1 }[event.key] || 0;
-    var dy = { ArrowUp: -1, ArrowDown: 1 }[event.key] || 0;
-    if (!dx && !dy) return;
+  function nudge(key, shift) {
+    if (edit || shifting || shifted || !layerPick.target || !layerSel) return false;
+    var dx = { ArrowLeft: -1, ArrowRight: 1 }[key] || 0;
+    var dy = { ArrowUp: -1, ArrowDown: 1 }[key] || 0;
+    if (!dx && !dy) return false;
     var el = layerPick.target, z = landing(el);
-    if (!z) return;
-    event.preventDefault();
-    var u = z.u, step = event.shiftKey ? 10 : 1;
+    if (!z) return false;
+    var u = z.u, step = shift ? 10 : 1;
     var to = {
       x: Math.round(keptIn(u.x + dx * step, u.w, z.dw, z)),
       y: Math.round(keptIn(u.y + dy * step, u.h, z.dh, z))
     };
-    if (to.x === u.x && to.y === u.y) return;
+    if (to.x === u.x && to.y === u.y) return true;
     var m = {
       id: pick.target.getAttribute('data-block-id'), slide: layerSel.slide, layer: layerSel.id,
       mode: 'move', el: el, style: el.getAttribute('style'), from: u, to: to
@@ -959,7 +954,43 @@ const _draftScript = r'''
     shifted = m;
     layerMessage(m, 'commit', to);
     soon();
+    return true;
+  }
+  // Delete removes the picked layer and ⌘D (Ctrl+D) duplicates it, as on
+  // the canvas: the editor does it (`vbDraftLayerCommand`).
+  function layerCommand(command) {
+    if (edit || shifting || shifted || !layerPick.target || !layerSel || !pick.target) return false;
+    var id = pick.target.getAttribute('data-block-id');
+    send('vbDraftLayerCommand', [id, layerSel.slide, layerSel.id, command],
+      { type: 'vb-draft-layer-command', id: id, slide: layerSel.slide, layer: layerSel.id,
+        command: command });
+    return true;
+  }
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape' && shifting) {
+      event.preventDefault();
+      event.stopPropagation();
+      letGo();
+      return;
+    }
+    // Keys typed in a field of the page are the field's.
+    var t = event.target;
+    if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+    var command = event.metaKey || event.ctrlKey, done = false;
+    if (/^Arrow/.test(event.key)) {
+      if (!command && !event.altKey) done = nudge(event.key, event.shiftKey);
+    } else if ((event.key === 'Delete' || event.key === 'Backspace') && !command) {
+      done = layerCommand('remove');
+    } else if (command && !event.altKey && (event.key === 'd' || event.key === 'D')) {
+      done = layerCommand('duplicate');
+    }
+    if (done) event.preventDefault();
   }, true);
+  // The same keys when the editor holds the keyboard (macOS, where a press
+  // in the page does not give it the keys).
+  window.vbDraftKey = function (key, shift) {
+    if (key === 'Escape') letGo(); else nudge(key, !!shift);
+  };
   window.vbDraftLayered = function (ok) {
     if (ok) { shifted = null; return; }
     // Refused at the start (the layer cannot be moved now) or at the end.
@@ -1077,7 +1108,7 @@ const _draftScript = r'''
   if (window.parent && window.parent !== window &&
       !(window.flutter_inappwebview && window.flutter_inappwebview.callHandler)) {
     var CALLS = ['vbDraftPicked', 'vbDraftEditing', 'vbDraftEdited', 'vbDraftSized', 'vbDraftSlides',
-      'vbDraftLayered'];
+      'vbDraftLayered', 'vbDraftKey'];
     addEventListener('message', function (event) {
       var data = event.data;
       if (event.source !== window.parent || !data || data.type !== 'vb-host' ||

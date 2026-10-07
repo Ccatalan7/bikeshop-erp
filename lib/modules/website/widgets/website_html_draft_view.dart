@@ -4,6 +4,7 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -11,6 +12,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:vinabike_public_core/modules/website/models/website_catalog_presentation.dart';
 
 import '../models/website_canvas_manipulation.dart';
+import '../models/website_canvas_responsive_document.dart';
 import '../models/website_catalog_canvas.dart';
 import '../models/website_product_canvas.dart';
 import '../models/website_responsive_authoring.dart';
@@ -118,6 +120,7 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
     _stopWriting();
     _stopSizing();
     _stopShifting();
+    _keys.dispose();
     _webPicks?.cancel();
     _debounce?.cancel();
     _provider?.removeListener(_changed);
@@ -435,6 +438,88 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
     return null;
   }
 
+  /// The keyboard of the picked canvas layer while the page is in front.
+  /// On macOS a press in the native view never gives it the keys (measured
+  /// 2026-10-07: after a click `document.hasFocus()` stays false and no key
+  /// reaches the page until a text of it is being written), so the editor
+  /// holds them after a press in the page and does what the canvas does
+  /// with them ([_key]). In a frame (the ERP on the web) the page has them
+  /// and does the same itself.
+  final FocusNode _keys = FocusNode(debugLabel: 'Vista HTML');
+
+  void _holdKeys() {
+    // On the web the editor taking the keys would take them from the page.
+    if (!kIsWeb && !_keys.hasFocus) _keys.requestFocus();
+  }
+
+  /// A key on the picked canvas layer, as on the canvas: the arrows nudge
+  /// it one unit (ten with Shift), done by the page as its own arrows
+  /// (`vbDraftKey`); Escape lets a drag in progress go; Delete removes the
+  /// layer and ⌘D (Ctrl+D) duplicates it.
+  KeyEventResult _key(FocusNode _, KeyEvent event) {
+    final provider = _provider;
+    final target = provider?.selectedCanvasLayerTarget;
+    if (event is KeyUpEvent ||
+        provider == null ||
+        target == null ||
+        target.document.blockId != provider.selectedBlockId) {
+      return KeyEventResult.ignored;
+    }
+    final keyboard = HardwareKeyboard.instance;
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.escape) {
+      if (_shifting == null) return KeyEventResult.ignored;
+      unawaited(_tell('vbDraftKey', ['Escape', false]));
+      return KeyEventResult.handled;
+    }
+    final arrow = switch (key) {
+      LogicalKeyboardKey.arrowLeft => 'ArrowLeft',
+      LogicalKeyboardKey.arrowRight => 'ArrowRight',
+      LogicalKeyboardKey.arrowUp => 'ArrowUp',
+      LogicalKeyboardKey.arrowDown => 'ArrowDown',
+      _ => null,
+    };
+    final command = keyboard.isMetaPressed || keyboard.isControlPressed;
+    if (arrow != null) {
+      if (command || keyboard.isAltPressed) return KeyEventResult.ignored;
+      unawaited(_tell('vbDraftKey', [arrow, keyboard.isShiftPressed]));
+      return KeyEventResult.handled;
+    }
+    if (event is KeyRepeatEvent || _shifting != null) {
+      return KeyEventResult.ignored;
+    }
+    final kind = switch (key) {
+      LogicalKeyboardKey.delete ||
+      LogicalKeyboardKey.backspace when !command =>
+        WebsiteHtmlDraftLayerCommandKind.remove,
+      LogicalKeyboardKey.keyD when command =>
+        WebsiteHtmlDraftLayerCommandKind.duplicate,
+      _ => null,
+    };
+    if (kind == null) return KeyEventResult.ignored;
+    _layerCommand(
+      target.document.blockId,
+      target.document.slideIndex,
+      target.layerId,
+      kind,
+    );
+    return KeyEventResult.handled;
+  }
+
+  void _layerCommand(
+    String id,
+    int? slide,
+    String layer,
+    WebsiteHtmlDraftLayerCommandKind command,
+  ) {
+    final provider = _provider;
+    if (provider == null || _shifting != null) return;
+    websiteHtmlDraftLayerCommand(
+      provider,
+      WebsiteHtmlDraftLayerCommand(id, slide, layer, command),
+    );
+  }
+
   /// A click on a canvas layer of the picked block in the page: the layer
   /// picked in the panel, as a click on it on the Flutter canvas
   /// (`selectCanvasElement`); a layer the slide or the canvas does not have
@@ -522,6 +607,7 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
       case WebsiteHtmlDraftShown(:final found):
         if (found) _bring = false;
       case WebsiteHtmlDraftPick(:final id):
+        _holdKeys();
         _picked(id);
       case WebsiteHtmlDraftAction(:final id, :final action):
         _acted(id, action);
@@ -534,10 +620,14 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
       case final WebsiteHtmlDraftButton press:
         unawaited(_button(press));
       case final WebsiteHtmlDraftLayer press:
+        _holdKeys();
         _pickLayer(press);
+      case final WebsiteHtmlDraftLayerCommand press:
+        _layerCommand(press.id, press.slide, press.layer, press.command);
       case final WebsiteHtmlDraftImage press:
         unawaited(_photo(press));
       case final WebsiteHtmlDraftLayerDrag drag:
+        if (drag.step == WebsiteHtmlDraftLayerDragStep.begin) _holdKeys();
         _layerDrag(drag);
       case WebsiteHtmlDraftSlide(:final id, :final index):
         final provider = _provider;
@@ -1103,152 +1193,227 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
     final zoom = _windowZoom(context);
     // Opaque to the pointer: a click on the view never reaches the Flutter
     // canvas mounted underneath, which would select its own block there.
-    return Listener(
-      behavior: HitTestBehavior.opaque,
-      child: ColoredBox(
-        key: const ValueKey('editor-html-view'),
-        color: scheme.surfaceContainerHighest,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final width = mode == DevicePreviewMode.desktop
-                ? constraints.maxWidth
-                : WebsiteEditorChromeGeometry.frameWidthFor(
-                    mode == DevicePreviewMode.tablet
-                        ? WebsiteViewport.tablet
-                        : WebsiteViewport.mobile,
-                    availableWidth: constraints.maxWidth,
-                  );
-            return Stack(
-              children: [
-                if (!_supported)
-                  Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Text(
-                        'El carrito, el pago, los pedidos y la cuenta del '
-                        'cliente no tienen vista HTML: se ven en el lienzo.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: scheme.onSurfaceVariant),
+    return Focus(
+      focusNode: _keys,
+      onKeyEvent: _key,
+      child: Listener(
+        behavior: HitTestBehavior.opaque,
+        child: ColoredBox(
+          key: const ValueKey('editor-html-view'),
+          color: scheme.surfaceContainerHighest,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final width = mode == DevicePreviewMode.desktop
+                  ? constraints.maxWidth
+                  : WebsiteEditorChromeGeometry.frameWidthFor(
+                      mode == DevicePreviewMode.tablet
+                          ? WebsiteViewport.tablet
+                          : WebsiteViewport.mobile,
+                      availableWidth: constraints.maxWidth,
+                    );
+              return Stack(
+                children: [
+                  if (!_supported)
+                    Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          'El carrito, el pago, los pedidos y la cuenta del '
+                          'cliente no tienen vista HTML: se ven en el lienzo.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: scheme.onSurfaceVariant),
+                        ),
                       ),
-                    ),
-                  )
-                else
-                  Center(
-                    child: Container(
-                      width: width,
-                      height: constraints.maxHeight,
-                      // Framed like the canvas's tablet and phone previews.
-                      decoration: mode == DevicePreviewMode.desktop
-                          ? null
-                          : BoxDecoration(
-                              color: Colors.white,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.1),
-                                  blurRadius: 20,
-                                  spreadRadius: 2,
-                                ),
-                              ],
-                            ),
-                      // The native view gets no pointer moves on the desktop
-                      // (measured on macOS, 2026-10-07): the page's hover
-                      // mark follows the pointer as Flutter sees it. In a
-                      // frame (the ERP on the web) the page sees it itself.
-                      child: MouseRegion(
-                        key: _pageKey,
-                        onHover: kIsWeb
+                    )
+                  else
+                    Center(
+                      child: Container(
+                        width: width,
+                        height: constraints.maxHeight,
+                        // Framed like the canvas's tablet and phone previews.
+                        decoration: mode == DevicePreviewMode.desktop
                             ? null
-                            : (event) => _hover(
-                                  event.localPosition,
-                                  Size(width, constraints.maxHeight),
-                                ),
-                        onExit: kIsWeb ? null : (_) => _hover(null, Size.zero),
-                        // Under the ERP's window zoom the page is laid out
-                        // at the width it is drawn at, so a click lands where
-                        // it is seen and the page takes the canvas's band.
-                        child: _ZoomedNativeView(
-                          zoom: zoom,
-                          child: InAppWebView(
-                            initialSettings: InAppWebViewSettings(
-                              javaScriptEnabled: true,
-                              isInspectable: kDebugMode,
-                              pageZoom: 1,
-                              supportZoom: false,
-                              transparentBackground: false,
+                            : BoxDecoration(
+                                color: Colors.white,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.1),
+                                    blurRadius: 20,
+                                    spreadRadius: 2,
+                                  ),
+                                ],
+                              ),
+                        // The native view gets no pointer moves on the desktop
+                        // (measured on macOS, 2026-10-07): the page's hover
+                        // mark follows the pointer as Flutter sees it. In a
+                        // frame (the ERP on the web) the page sees it itself.
+                        child: MouseRegion(
+                          key: _pageKey,
+                          onHover: kIsWeb
+                              ? null
+                              : (event) => _hover(
+                                    event.localPosition,
+                                    Size(width, constraints.maxHeight),
+                                  ),
+                          onExit:
+                              kIsWeb ? null : (_) => _hover(null, Size.zero),
+                          // Under the ERP's window zoom the page is laid out
+                          // at the width it is drawn at, so a click lands where
+                          // it is seen and the page takes the canvas's band.
+                          child: _ZoomedNativeView(
+                            zoom: zoom,
+                            child: InAppWebView(
+                              initialSettings: InAppWebViewSettings(
+                                javaScriptEnabled: true,
+                                isInspectable: kDebugMode,
+                                pageZoom: 1,
+                                supportZoom: false,
+                                transparentBackground: false,
+                              ),
+                              onWebViewCreated: (controller) {
+                                _web = controller;
+                                // On the web the page speaks by message
+                                // (`websiteHtmlDraftPicks`); a frame has no
+                                // handlers.
+                                for (final name in kIsWeb
+                                    ? const <String>[]
+                                    : const [
+                                        'vbDraftPick',
+                                        'vbDraftAction',
+                                        'vbDraftEdit',
+                                        'vbDraftSlide',
+                                        'vbDraftHeight',
+                                        'vbDraftMove',
+                                        'vbDraftButton',
+                                        'vbDraftLayer',
+                                        'vbDraftImage',
+                                        'vbDraftLayerDrag',
+                                      ]) {
+                                  controller.addJavaScriptHandler(
+                                    handlerName: name,
+                                    callback: _handler(name),
+                                  );
+                                }
+                                final html = _html;
+                                final origin = _server;
+                                if (html != null && origin != null) {
+                                  unawaited(_show(html, origin));
+                                }
+                              },
+                              onLoadStop: (controller, _) =>
+                                  _loaded(controller),
                             ),
-                            onWebViewCreated: (controller) {
-                              _web = controller;
-                              // On the web the page speaks by message
-                              // (`websiteHtmlDraftPicks`); a frame has no
-                              // handlers.
-                              for (final name in kIsWeb
-                                  ? const <String>[]
-                                  : const [
-                                      'vbDraftPick',
-                                      'vbDraftAction',
-                                      'vbDraftEdit',
-                                      'vbDraftSlide',
-                                      'vbDraftHeight',
-                                      'vbDraftMove',
-                                      'vbDraftButton',
-                                      'vbDraftLayer',
-                                      'vbDraftImage',
-                                      'vbDraftLayerDrag',
-                                    ]) {
-                                controller.addJavaScriptHandler(
-                                  handlerName: name,
-                                  callback: _handler(name),
-                                );
-                              }
-                              final html = _html;
-                              final origin = _server;
-                              if (html != null && origin != null) {
-                                unawaited(_show(html, origin));
-                              }
-                            },
-                            onLoadStop: (controller, _) => _loaded(controller),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                if (_loading)
-                  const Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    child: LinearProgressIndicator(minHeight: 2),
-                  ),
-                if (_message case final message?)
-                  Positioned(
-                    left: 16,
-                    right: 16,
-                    bottom: 16,
-                    child: Center(
-                      child: Material(
-                        color: scheme.inverseSurface,
-                        borderRadius: BorderRadius.circular(8),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                          child: Text(
-                            message,
-                            key: const ValueKey('editor-html-view-message'),
-                            style: TextStyle(color: scheme.onInverseSurface),
+                  if (_loading)
+                    const Positioned(
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      child: LinearProgressIndicator(minHeight: 2),
+                    ),
+                  if (_message case final message?)
+                    Positioned(
+                      left: 16,
+                      right: 16,
+                      bottom: 16,
+                      child: Center(
+                        child: Material(
+                          color: scheme.inverseSurface,
+                          borderRadius: BorderRadius.circular(8),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                            child: Text(
+                              message,
+                              key: const ValueKey('editor-html-view-message'),
+                              style: TextStyle(color: scheme.onInverseSurface),
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-              ],
-            );
-          },
+                ],
+              );
+            },
+          ),
         ),
       ),
     );
   }
+}
+
+/// Removes or duplicates the picked canvas layer (Delete, ⌘D in the
+/// «Vista HTML»), as the canvas does (`removeCanvasLayer`,
+/// `duplicateCanvasLayer`, each one step of the history), the pick
+/// following: none after a removal, the copy after a duplicate. Only the
+/// layer picked in the panel, of the picked block; `false` for anything
+/// else or a command the document refuses.
+bool websiteHtmlDraftLayerCommand(
+  WebsiteEditModeProvider provider,
+  WebsiteHtmlDraftLayerCommand press,
+) {
+  final target = provider.selectedCanvasLayerTarget;
+  final block = provider.getBlock(press.id);
+  if (block == null ||
+      target == null ||
+      provider.selectedBlockId != press.id ||
+      target.document.blockId != press.id ||
+      target.document.slideIndex != press.slide ||
+      target.layerId != press.layer) {
+    return false;
+  }
+  final place = websiteHtmlDraftLayerPlace(
+    block,
+    WebsiteHtmlDraftLayer(press.id, press.slide, press.layer),
+  );
+  if (place == null) return false;
+  final count = place.slide == null ? null : place.count;
+  switch (press.command) {
+    case WebsiteHtmlDraftLayerCommandKind.remove:
+      if (!provider.removeCanvasLayer(
+        press.id,
+        press.layer,
+        slideIndex: press.slide,
+      )) {
+        return false;
+      }
+      provider.selectCanvasElement(
+        press.id,
+        null,
+        slideIndex: press.slide,
+        slideCount: count,
+      );
+    case WebsiteHtmlDraftLayerCommandKind.duplicate:
+      final document = provider.canvasDocument(
+        press.id,
+        slideIndex: press.slide,
+      );
+      if (document == null) return false;
+      final copy = WebsiteCanvasResponsiveDocument.nextLayerId(
+        document,
+        seed: 'el_${DateTime.now().microsecondsSinceEpoch}',
+      );
+      if (!provider.duplicateCanvasLayer(
+        press.id,
+        press.layer,
+        copy,
+        slideIndex: press.slide,
+      )) {
+        return false;
+      }
+      provider.selectCanvasElement(
+        press.id,
+        copy,
+        slideIndex: press.slide,
+        slideCount: count,
+      );
+  }
+  return true;
 }
 
 /// The ERP's window zoom ([WindowZoomService], 0.8 by default on the

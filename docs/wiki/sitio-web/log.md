@@ -412,3 +412,6 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   documento; Mayús y Escape como en el lienzo.
 - Revisión de Codex: un botón o una foto pedida para otro tipo de bloque se
   rechaza (hero y CTA comparten la llave del texto).
+- En macOS las flechas de la vista HTML no hacían nada: un clic no le da el
+  teclado a la vista nativa. El editor lo toma y se lo pasa; Suprimir y ⌘D
+  borran y duplican la capa como en el lienzo.

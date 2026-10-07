@@ -55,6 +55,13 @@ sealed class WebsiteHtmlDraftMessage {
           'slide': at(1),
           'layer': at(2),
         },
+      'vbDraftLayerCommand' => {
+          'type': 'vb-draft-layer-command',
+          'id': at(0),
+          'slide': at(1),
+          'layer': at(2),
+          'command': at(3),
+        },
       'vbDraftButton' => {
           'type': 'vb-draft-button',
           'id': at(0),
@@ -226,6 +233,25 @@ sealed class WebsiteHtmlDraftMessage {
           return null;
         }
         return WebsiteHtmlDraftLayer(id, slide < 0 ? null : slide, layer);
+      case 'vb-draft-layer-command':
+        final place = WebsiteHtmlDraftMessage.fromPost({
+          'type': 'vb-draft-layer',
+          'id': data['id'],
+          'slide': data['slide'],
+          'layer': data['layer'],
+        });
+        final command = switch (data['command']) {
+          'remove' => WebsiteHtmlDraftLayerCommandKind.remove,
+          'duplicate' => WebsiteHtmlDraftLayerCommandKind.duplicate,
+          _ => null,
+        };
+        if (place is! WebsiteHtmlDraftLayer || command == null) return null;
+        return WebsiteHtmlDraftLayerCommand(
+          place.id,
+          place.slide,
+          place.layer,
+          command,
+        );
       case 'vb-draft-button':
         final spec = text('button');
         final button = spec == null || spec.length > 40
@@ -367,6 +393,27 @@ final class WebsiteHtmlDraftLayer extends WebsiteHtmlDraftMessage {
   final String id;
   final int? slide;
   final String layer;
+}
+
+/// What a key does to the picked canvas layer, as on the canvas: Delete
+/// removes it, ⌘D (Ctrl+D) duplicates it.
+enum WebsiteHtmlDraftLayerCommandKind { remove, duplicate }
+
+/// A key pressed in the page on the picked canvas layer of block [id] (of
+/// carousel slide [slide], or the canvas block's own for `null`), for the
+/// editor to remove or duplicate it.
+final class WebsiteHtmlDraftLayerCommand extends WebsiteHtmlDraftMessage {
+  const WebsiteHtmlDraftLayerCommand(
+    this.id,
+    this.slide,
+    this.layer,
+    this.command,
+  );
+
+  final String id;
+  final int? slide;
+  final String layer;
+  final WebsiteHtmlDraftLayerCommandKind command;
 }
 
 /// Where [press] picks a layer of [block] (an editor block row): the

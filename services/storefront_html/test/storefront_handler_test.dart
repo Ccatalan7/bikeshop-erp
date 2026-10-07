@@ -4233,6 +4233,10 @@ void main() {
         expect(html, contains('data-grid="8" data-pull="6"'));
         expect(html, isNot(contains('data-pull="6" data-bleed')));
         expect(html, contains("'vb-guide vb-guide-'"));
+        // The keys of the canvas: the page's own, or the editor's when it
+        // holds the keyboard (macOS).
+        expect(html, contains('window.vbDraftKey = function'));
+        expect(html, contains("send('vbDraftLayerCommand'"));
 
         final public = await _get(
           _FakeReads(

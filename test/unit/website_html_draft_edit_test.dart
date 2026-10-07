@@ -5,6 +5,7 @@ import 'package:vinabike_erp/modules/website/models/website_responsive_authoring
 import 'package:vinabike_erp/modules/website/providers/website_edit_mode_provider.dart';
 import 'package:vinabike_erp/modules/website/services/website_html_draft_picks.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_block_content_presenters.dart';
+import 'package:vinabike_erp/modules/website/widgets/website_html_draft_view.dart';
 import 'package:vinabike_erp/modules/website/widgets/website_inline_field_binding.dart';
 
 WebsiteEditModeProvider _provider(String type, Map<String, dynamic> data) {
@@ -959,6 +960,153 @@ void main() {
         {'x': -24, 'y': 0},
       ])! as WebsiteHtmlDraftLayerDrag;
       expect(bleed.values, {'x': -24.0, 'y': 0.0});
+    });
+  });
+
+  group('a key on the picked canvas layer of the HTML view', () {
+    WebsiteEditModeProvider campaign() {
+      final provider = _provider('carousel', {
+        'slides': [
+          {'title': 'Primera'},
+          {
+            'title': 'Cámaras',
+            'elements': [
+              {
+                'id': 'l1',
+                'type': 'text',
+                'text': 'CÁMARAS',
+                'x': 80,
+                'y': 120
+              },
+              {'id': 'l2', 'type': 'shape', 'x': 80, 'y': 230},
+            ],
+          },
+        ],
+      });
+      provider.selectCanvasElement('b1', 'l1', slideIndex: 1, slideCount: 2);
+      return provider;
+    }
+
+    List<Object?> layers(WebsiteEditModeProvider provider) => [
+          for (final layer in ((_data(provider)['slides'] as List)[1]
+              as Map)['elements'] as List)
+            (layer as Map)['id'],
+        ];
+
+    test('the page names the layer and what to do with it', () {
+      final remove = WebsiteHtmlDraftMessage.fromHandler(
+        'vbDraftLayerCommand',
+        ['b1', 1, 'l1', 'remove'],
+      )! as WebsiteHtmlDraftLayerCommand;
+      expect(remove.slide, 1);
+      expect(remove.layer, 'l1');
+      expect(remove.command, WebsiteHtmlDraftLayerCommandKind.remove);
+      final duplicate = WebsiteHtmlDraftMessage.fromPost({
+        'type': 'vb-draft-layer-command',
+        'id': 'c1',
+        'slide': -1,
+        'layer': 'l1',
+        'command': 'duplicate',
+      })! as WebsiteHtmlDraftLayerCommand;
+      expect(duplicate.slide, isNull);
+      expect(duplicate.command, WebsiteHtmlDraftLayerCommandKind.duplicate);
+      for (final args in [
+        ['b1', 1, 'l1', 'delete'],
+        ['b1', 1, 'l1', null],
+        ['b1', 1, 'a b', 'remove'],
+        ['b1', -2, 'l1', 'remove'],
+      ]) {
+        expect(
+          WebsiteHtmlDraftMessage.fromHandler('vbDraftLayerCommand', args),
+          isNull,
+          reason: '$args',
+        );
+      }
+    });
+
+    test('Delete removes the picked layer, one step of the history', () {
+      final provider = campaign();
+      addTearDown(provider.dispose);
+      expect(
+        websiteHtmlDraftLayerCommand(
+          provider,
+          const WebsiteHtmlDraftLayerCommand(
+            'b1',
+            1,
+            'l1',
+            WebsiteHtmlDraftLayerCommandKind.remove,
+          ),
+        ),
+        isTrue,
+      );
+      expect(layers(provider), ['l2']);
+      expect(provider.selectedCanvasLayerTarget, isNull);
+      provider.undo();
+      expect(layers(provider), ['l1', 'l2']);
+    });
+
+    test('⌘D duplicates the picked layer and picks the copy', () {
+      final provider = campaign();
+      addTearDown(provider.dispose);
+      expect(
+        websiteHtmlDraftLayerCommand(
+          provider,
+          const WebsiteHtmlDraftLayerCommand(
+            'b1',
+            1,
+            'l1',
+            WebsiteHtmlDraftLayerCommandKind.duplicate,
+          ),
+        ),
+        isTrue,
+      );
+      final ids = layers(provider);
+      expect(ids, hasLength(3));
+      final copy = provider.selectedCanvasLayerTarget!;
+      expect(copy.layerId, isNot('l1'));
+      expect(ids, contains(copy.layerId));
+      expect(copy.document.slideIndex, 1);
+    });
+
+    test('only the layer picked in the panel, of the picked block', () {
+      final provider = campaign();
+      addTearDown(provider.dispose);
+      for (final press in const [
+        WebsiteHtmlDraftLayerCommand(
+          'b1',
+          1,
+          'l2',
+          WebsiteHtmlDraftLayerCommandKind.remove,
+        ),
+        WebsiteHtmlDraftLayerCommand(
+          'b1',
+          0,
+          'l1',
+          WebsiteHtmlDraftLayerCommandKind.remove,
+        ),
+        WebsiteHtmlDraftLayerCommand(
+          'b2',
+          1,
+          'l1',
+          WebsiteHtmlDraftLayerCommandKind.duplicate,
+        ),
+      ]) {
+        expect(websiteHtmlDraftLayerCommand(provider, press), isFalse);
+      }
+      provider.selectBlock(null);
+      expect(
+        websiteHtmlDraftLayerCommand(
+          provider,
+          const WebsiteHtmlDraftLayerCommand(
+            'b1',
+            1,
+            'l1',
+            WebsiteHtmlDraftLayerCommandKind.remove,
+          ),
+        ),
+        isFalse,
+      );
+      expect(layers(provider), ['l1', 'l2']);
     });
   });
 }

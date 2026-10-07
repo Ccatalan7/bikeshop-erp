@@ -1255,9 +1255,19 @@ Dos trampas más de una vista nativa (la «Vista HTML» del editor del sitio, un
   Flutter sí los recibe sobre la vista (`MouseRegion.onHover`), así que el
   editor se los pasa a la página como fracciones de su ventana
   (`vbDraftHover(fx, fy)` + `elementFromPoint`), una llamada a la vez.
-- **El teclado sí llega** (2026-10-07): con la app al frente, lo que se
-  escribe con la herramienta de control del computador entra al texto
-  editable de la página, ⌘↵ y Esc incluidos.
+- **El teclado llega sólo a un texto que la página está escribiendo**
+  (2026-10-07): con la app al frente, lo que se escribe con la herramienta de
+  control del computador entra al texto editable de la página, ⌘↵ y Esc
+  incluidos. **Un clic no le da el teclado** (corregido el mismo día): tras
+  un clic en una capa, `document.hasFocus()` sigue en `false`, ni
+  `window.focus()` lo cambia, y las flechas, Esc y ⌘Z no llegan a la página
+  —se las queda Flutter—. Las flechas de la vista HTML parecieron andar en
+  las pruebas de la página (lógica correcta) y en la app no hacían nada.
+  Corrección: el editor toma el foco de Flutter al recibir un clic de la
+  página (`_holdKeys`) y le pasa las teclas (`vbDraftKey`) o hace el comando
+  él mismo. Para verlo: una sonda temporal con `onConsoleMessage` →
+  `debugPrint` y un `keydown`/`mousedown` que imprima `document.hasFocus()`
+  (ver el punto de abajo).
 - **Un diálogo de Flutter sobre la vista web sí recibe los clics reales**
   (2026-10-07, la tarjeta de un botón de la vista HTML): no se los lleva la
   vista nativa de abajo. Ese mismo día un `app_click` en segundo plano sobre

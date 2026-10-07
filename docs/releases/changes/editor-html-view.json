@@ -20,7 +20,7 @@
     },
     {
       "path": "lib/modules/website/widgets/website_html_draft_view.dart",
-      "sha256": "d5b958029844761b69279acdac7eacbf994f02bde7fd8b3b5be8dc82dafd6bb8"
+      "sha256": "df0e5af61566872210097b2d6e6c715be73b0bf61b695f60778bf96bbfd70ff4"
     },
     {
       "path": "lib/modules/website/providers/website_edit_mode_provider.dart",
@@ -48,7 +48,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/editor_draft_view.dart",
-      "sha256": "111bad075bfe3900305a59433d661221ec109cc95815ed5ed38ae10a7ff3a2cc"
+      "sha256": "b5dcc5548844f141d976daa0175138834c4dc53b919dbc95ffb8a4d9ddceeb34"
     },
     {
       "path": "services/storefront_html/lib/src/editor_page_model.dart",
@@ -80,7 +80,7 @@
     },
     {
       "path": "lib/modules/website/services/website_html_draft_picks.dart",
-      "sha256": "82e9a85274a2fc1767957c5db0bd16b57655b6084151aa7065095dbd54c81493"
+      "sha256": "207f06ef6d0cdcbbc39d3c915ca47e0c2faaba74dd95cd0fbf1dbd96ff991da8"
     },
     {
       "path": "lib/modules/website/services/website_html_draft_picks_stub.dart",
