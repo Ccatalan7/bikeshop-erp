@@ -5,6 +5,7 @@ import 'package:vinabike_public_core/public_store/models/public_policy_content.d
 import 'package:vinabike_public_core/public_store/seo/storefront_seo_route.dart';
 
 import '../models/website_editor_mode_route_binding.dart';
+import '../models/website_page_models.dart';
 import '../providers/website_edit_mode_provider.dart' show WebsiteEditorMode;
 
 /// The page on the editor's screen, as the store's HTML server draws it from
@@ -122,6 +123,27 @@ String? websiteHtmlDraftPath(Uri location) {
   ).toString();
 }
 
+/// [sections] (a menu's roots with their children) as the
+/// `website_navigation` rows the server reads, each in its drafted place.
+List<Map<String, dynamic>> websiteHtmlDraftNavigationRows(
+  List<WebsiteNavigation> sections,
+) {
+  final rows = <Map<String, dynamic>>[];
+  void add(List<WebsiteNavigation> level, String? parentId) {
+    for (final (index, item) in level.indexed) {
+      rows.add({
+        ...item.toJson(),
+        'parent_id': parentId,
+        'order_index': index,
+      });
+      add(item.children, item.id);
+    }
+  }
+
+  add(sections, null);
+  return rows;
+}
+
 /// The open document as the server names it: the home, a page by its slug,
 /// or none (a slug the server would refuse).
 Map<String, Object?>? _document(String? pageId, String? pageSlug) {
@@ -132,14 +154,16 @@ Map<String, Object?>? _document(String? pageId, String? pageSlug) {
 }
 
 /// The request body: the public [path] on screen, the open page with its
-/// draft blocks in their order (as `replace_page_blocks` would save them)
-/// and the unsaved site settings.
+/// draft blocks in their order (as `replace_page_blocks` would save them),
+/// the unsaved site settings and, when it has changes, the footer's menu as
+/// drafted ([footerNavigation], `website_navigation` rows).
 String websiteHtmlDraftBody({
   required String path,
   required String? pageId,
   required String? pageSlug,
   required List<Map<String, dynamic>> blocks,
   required Map<String, String> settings,
+  List<Map<String, dynamic>>? footerNavigation,
 }) {
   return jsonEncode(
     {
@@ -163,6 +187,7 @@ String websiteHtmlDraftBody({
           },
       ],
       'settings': settings,
+      if (footerNavigation != null) 'footer_navigation': footerNavigation,
     },
     // A draft value that is not JSON (it never should be) travels as text
     // rather than failing the whole view.

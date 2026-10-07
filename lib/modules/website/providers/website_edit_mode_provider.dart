@@ -2851,6 +2851,51 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     return roots.map((root) => buildNode(root, const <String>{})).toList();
   }
 
+  /// The footer's menu as the draft has it: [getEffectiveFooterNavigation]
+  /// in the pending section order, each section's links in their pending
+  /// order. What the footer draws in Edit and what the HTML view receives.
+  List<WebsiteNavigation> draftedFooterNavigation(
+    List<WebsiteNavigation> savedRoots,
+  ) {
+    final sections = getEffectiveFooterNavigation(savedRoots);
+    final sectionOrder = _sitewideDraft.pendingFooterSectionOrder;
+    if (sectionOrder != null && sectionOrder.isNotEmpty) {
+      final position = {
+        for (final (index, id) in sectionOrder.indexed) id: index,
+      };
+      sections.sort(
+        (a, b) => (position[a.id] ?? a.orderIndex)
+            .compareTo(position[b.id] ?? b.orderIndex),
+      );
+    }
+    final linkOrder = _sitewideDraft.pendingFooterLinkOrder;
+    if (linkOrder.isEmpty) return sections;
+    List<WebsiteNavigation> ordered(
+      List<WebsiteNavigation> links,
+      List<String> order,
+    ) {
+      final position = {for (final (index, id) in order.indexed) id: index};
+      return List<WebsiteNavigation>.from(links)
+        ..sort((a, b) {
+          final aAt = position[a.id];
+          final bAt = position[b.id];
+          if (aAt != null && bAt != null) return aAt.compareTo(bAt);
+          if (aAt != null) return -1;
+          if (bAt != null) return 1;
+          return a.orderIndex.compareTo(b.orderIndex);
+        });
+    }
+
+    return [
+      for (final section in sections)
+        switch (linkOrder[section.id]) {
+          final order? when order.isNotEmpty =>
+            section.copyWith(children: ordered(section.children, order)),
+          _ => section,
+        },
+    ];
+  }
+
   void acknowledgeSavedFooterSettings(Map<String, String> savedSnapshot) {
     _markSitewideBucketMutation(WebsiteSitewideDraftBucket.footer);
     _mergeSavedSettingsBaseline(savedSnapshot);

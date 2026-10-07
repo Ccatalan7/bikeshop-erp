@@ -120,6 +120,13 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
       pageSlug: document.pageSlug,
       blocks: document.blocks,
       settings: _draftSettings(provider),
+      footerNavigation: provider.hasFooterChanges
+          ? websiteHtmlDraftNavigationRows(
+              provider.draftedFooterNavigation(
+                context.read<WebsiteService>().footerNavigation,
+              ),
+            )
+          : null,
     );
     if (body == _shownBody || body == _pendingBody) return;
     _pendingBody = body;

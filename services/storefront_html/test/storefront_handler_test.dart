@@ -3598,6 +3598,58 @@ void main() {
       expect(html, contains('class="draft-missing"'));
     });
 
+    test('the footer menu as drafted, in place of the saved one', () async {
+      Map<String, Object?> link(
+        String id,
+        String label, {
+        String? parent,
+        int order = 0,
+      }) => {
+        'id': id,
+        'tenant_id': _tenant,
+        'menu_location': 'footer',
+        'label': label,
+        'link_type': 'external',
+        'link_value': 'https://example.invalid/$id',
+        'parent_id': parent,
+        'order_index': order,
+        'is_visible': true,
+        'show_on_desktop': true,
+        'show_on_mobile': true,
+      };
+      final shell = _shell();
+      shell['navigation'] = [
+        ...(shell['navigation'] as List),
+        link('saved-section', 'Sección guardada'),
+        link('saved-link', 'Enlace guardado', parent: 'saved-section'),
+      ];
+      final (status, answer, _) = await draft(_FakeReads(shell: shell), {
+        'path': '/productos',
+        'page': null,
+        'blocks': [],
+        'footer_navigation': [
+          link('draft-section', 'Ayuda'),
+          link('draft-link', 'Despachos a regiones', parent: 'draft-section'),
+        ],
+      });
+      expect(status, 200);
+      final html = answer['html'] as String;
+      expect(html, contains('Despachos a regiones'));
+      expect(html, isNot(contains('Enlace guardado')));
+      // The header's menu is not the footer's: it stays as saved.
+      expect(html, contains('Horquillas'));
+      expect(
+        (await draft(_FakeReads(), {
+          'page': null,
+          'blocks': [],
+          'footer_navigation': [
+            {'label': 'sin id'},
+          ],
+        })).$2,
+        {'state': 'invalid'},
+      );
+    });
+
     test('a moved path is drawn where it lands; a path that is not a page '
         'is not drawn', () async {
       final reads = _FakeReads();

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:vinabike_erp/modules/website/models/website_page_models.dart';
 import 'package:vinabike_erp/modules/website/services/website_html_draft_client.dart';
 
 void main() {
@@ -93,6 +94,37 @@ void main() {
     ]) {
       expect(path(location), isNull, reason: location);
     }
+  });
+
+  test('a drafted menu travels as rows, each in its drafted place', () {
+    final now = DateTime.utc(2026, 10, 7);
+    WebsiteNavigation nav(String id, int order,
+            [List<WebsiteNavigation> children = const []]) =>
+        WebsiteNavigation(
+          id: id,
+          tenantId: 'tenant',
+          menuLocation: MenuLocation.footer,
+          label: id,
+          linkType: NavLinkType.external,
+          linkValue: 'https://example.invalid/$id',
+          orderIndex: order,
+          children: children,
+          createdAt: now,
+          updatedAt: now,
+        );
+    // Drafted order, not the saved `orderIndex`.
+    final rows = websiteHtmlDraftNavigationRows([
+      nav('b', 7, [nav('b2', 9), nav('b1', 0)]),
+      nav('a', 0),
+    ]);
+    expect(
+      [
+        for (final row in rows)
+          (row['id'], row['parent_id'], row['order_index'])
+      ],
+      [('b', null, 0), ('b2', 'b', 0), ('b1', 'b', 1), ('a', null, 1)],
+    );
+    expect(rows.first['menu_location'], 'footer');
   });
 
   test('asks the store with the session and reads its answer', () async {

@@ -2789,7 +2789,8 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
                   // In the bar where it fits; in the actions sheet («Vista»)
                   // everywhere, which this bar always has with the canvas.
                   if (editorWidth >=
-                      WebsiteEditorChromeGeometry.denseBarHtmlToggleMinWidth) ...[
+                      WebsiteEditorChromeGeometry
+                          .denseBarHtmlToggleMinWidth) ...[
                     _HtmlCanvasToggle(
                       on: editProvider.showsHtmlCanvas,
                       onChanged: editProvider.setShowsHtmlCanvas,
@@ -6613,53 +6614,11 @@ class _PublicStoreLayoutState extends State<PublicStoreLayout> {
         builder: (context, constraints) {
           final websiteService = context.watch<WebsiteService>();
           final editProvider = context.watch<WebsiteEditModeProvider>();
-          var footerNavItems = editProvider.getEffectiveFooterNavigation(
-            websiteService.footerNavigation,
+          var footerNavItems = _pagePublication.forAllAudiences(
+            editProvider.draftedFooterNavigation(
+              websiteService.footerNavigation,
+            ),
           );
-          footerNavItems = _pagePublication.forAllAudiences(footerNavItems);
-
-          // Apply pending section order from provider for live preview
-          final pendingSectionOrder = editProvider.pendingFooterSectionOrder;
-          if (pendingSectionOrder != null && pendingSectionOrder.isNotEmpty) {
-            final orderMap = <String, int>{};
-            for (var i = 0; i < pendingSectionOrder.length; i++) {
-              orderMap[pendingSectionOrder[i]] = i;
-            }
-            footerNavItems.sort((a, b) {
-              final aIdx = orderMap[a.id] ?? a.orderIndex;
-              final bIdx = orderMap[b.id] ?? b.orderIndex;
-              return aIdx.compareTo(bIdx);
-            });
-          }
-
-          // Apply pending link order for each section - create new section objects
-          final pendingLinkOrder = editProvider.pendingFooterLinkOrder;
-          if (pendingLinkOrder.isNotEmpty) {
-            footerNavItems = footerNavItems.map((section) {
-              final linkOrder = pendingLinkOrder[section.id];
-              if (linkOrder != null && linkOrder.isNotEmpty) {
-                final orderMap = <String, int>{};
-                for (var i = 0; i < linkOrder.length; i++) {
-                  orderMap[linkOrder[i]] = i;
-                }
-                final sortedChildren =
-                    List<WebsiteNavigation>.from(section.children)
-                      ..sort((a, b) {
-                        final aHas = orderMap.containsKey(a.id);
-                        final bHas = orderMap.containsKey(b.id);
-                        if (aHas && bHas) {
-                          return orderMap[a.id]!.compareTo(orderMap[b.id]!);
-                        }
-                        if (aHas) return -1;
-                        if (bHas) return 1;
-                        return a.orderIndex.compareTo(b.orderIndex);
-                      });
-
-                return section.copyWith(children: sortedChildren);
-              }
-              return section;
-            }).toList();
-          }
 
           final screenWidth = MediaQuery.of(context).size.width;
           final isMobile = screenWidth < 800;

@@ -27,7 +27,9 @@ import 'storefront_handler.dart';
 /// none, as on a catalog page opened directly); `blocks` that page's draft
 /// block rows (`id`, `block_type`, `block_data`, `is_visible`,
 /// `order_index`), as `website_blocks` keeps them; `settings` the unsaved
-/// `website_settings` values by key. The editor's session goes as
+/// `website_settings` values by key; `footer_navigation`, when the footer's
+/// menu has unsaved changes, all of it as drafted (`website_navigation`
+/// rows). The editor's session goes as
 /// `authorization: Bearer <token>`, and only someone who may save the site
 /// gets a page: the server asks `can_edit_tenant_settings` as that person.
 ///
@@ -109,6 +111,7 @@ Future<Response> editorDraftResponse(
       title: draft.title,
       blocks: draft.blocks,
       settings: draft.settings,
+      footerNavigation: draft.footerNavigation,
     ),
     orderSummaryFonts: fonts,
     draft: true,
@@ -167,6 +170,7 @@ class EditorDraft {
     required this.path,
     required this.blocks,
     required this.settings,
+    required this.footerNavigation,
   });
 
   /// The page the editor has open: the home, a page by its [slug], or none.
@@ -178,6 +182,9 @@ class EditorDraft {
   final Uri path;
   final List<Map<String, dynamic>> blocks;
   final Map<String, String> settings;
+
+  /// The footer's menu as drafted, or null when it has no unsaved change.
+  final List<Map<String, dynamic>>? footerNavigation;
 
   static final _slug = RegExp(r'^[a-z0-9][a-z0-9-]{0,199}$');
 
@@ -220,6 +227,22 @@ class EditorDraft {
       if (!_slug.hasMatch(raw)) return null;
       slug = raw;
     }
+    final List<Map<String, dynamic>>? footer;
+    switch (body['footer_navigation']) {
+      case null:
+        footer = null;
+      case final List<Object?> rows when rows.length <= 500:
+        footer = [];
+        for (final row in rows) {
+          if (row is! Map || row['id'] is! String) return null;
+          footer.add({
+            ...Map<String, dynamic>.from(row),
+            'menu_location': 'footer',
+          });
+        }
+      default:
+        return null;
+    }
     final path = switch (body['path']) {
       null => Uri(path: slug == null ? '/' : '/pagina/$slug'),
       final raw => publicPath(raw.toString()),
@@ -250,6 +273,7 @@ class EditorDraft {
       title: page?['title']?.toString() ?? '',
       path: path,
       blocks: rows,
+      footerNavigation: footer,
       settings: {
         for (final entry in settings.entries)
           if (entry.value != null)

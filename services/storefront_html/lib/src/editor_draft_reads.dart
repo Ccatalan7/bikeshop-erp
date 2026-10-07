@@ -20,6 +20,7 @@ class EditorDraftReads implements PublicReads {
     required this.title,
     required this.blocks,
     required this.settings,
+    this.footerNavigation,
   });
 
   final PublicReads _saved;
@@ -38,6 +39,10 @@ class EditorDraftReads implements PublicReads {
   /// Unsaved `website_settings` values, by key.
   final Map<String, String> settings;
 
+  /// The footer's menu as drafted (`website_navigation` rows), in place of
+  /// the saved one; null when it has no unsaved change.
+  final List<Map<String, dynamic>>? footerNavigation;
+
   Map<String, dynamic> _shell(Map<String, dynamic> saved) => {
     ...saved,
     'settings': {
@@ -45,6 +50,13 @@ class EditorDraftReads implements PublicReads {
         for (final entry in values.entries) entry.key.toString(): entry.value,
       ...settings,
     },
+    if (footerNavigation case final footer?)
+      'navigation': [
+        if (saved['navigation'] case final List<Object?> rows)
+          for (final row in rows)
+            if (row is! Map || row['menu_location'] != 'footer') row,
+        ...footer,
+      ],
   };
 
   /// [saved] (the published page, or null) as the draft has it.
