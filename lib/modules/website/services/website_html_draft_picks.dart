@@ -4,6 +4,23 @@ import 'package:vinabike_public_core/modules/website/models/website_image_fields
 import 'website_html_draft_picks_stub.dart'
     if (dart.library.js_interop) 'website_html_draft_picks_web.dart';
 
+/// The names the page calls the editor by on the desktop and the phone (the
+/// web view's handlers), every one [WebsiteHtmlDraftMessage.fromHandler]
+/// reads: a name missing here is a message the editor never hears.
+const websiteHtmlDraftHandlerNames = <String>[
+  'vbDraftPick',
+  'vbDraftAction',
+  'vbDraftEdit',
+  'vbDraftSlide',
+  'vbDraftHeight',
+  'vbDraftMove',
+  'vbDraftButton',
+  'vbDraftLayer',
+  'vbDraftLayerCommand',
+  'vbDraftImage',
+  'vbDraftLayerDrag',
+];
+
 /// What the page of the editor's «Vista HTML» tells the editor: through the
 /// web view's handlers on the desktop and the phone, or, on the ERP on the
 /// web, where the page is a frame, as messages signed with the view's nonce

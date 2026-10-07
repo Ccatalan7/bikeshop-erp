@@ -331,9 +331,9 @@ Future<void> main() async {
       );
     };
 
-    // The site editor's «Vista HTML» choice on this device, read while the
-    // app starts (the editor opens on the default until then).
-    unawaited(WebsiteHtmlCanvasPreference.load());
+    // The site editor's «Vista HTML» choice on this device, read before the
+    // editor can open (a read of local storage, a few milliseconds).
+    await WebsiteHtmlCanvasPreference.load();
     runApp(const VinabikeApp());
     _logTiming('RUN_APP');
 

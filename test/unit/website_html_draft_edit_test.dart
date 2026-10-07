@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:vinabike_erp/modules/website/models/website_canvas_manipulation.dart';
 import 'package:vinabike_erp/modules/website/models/website_action.dart';
 import 'package:vinabike_public_core/modules/website/models/website_image_fields.dart';
 import 'package:vinabike_erp/modules/website/models/website_responsive_authoring.dart';
@@ -1163,6 +1166,84 @@ void main() {
     expect(
       websiteHtmlDraftOpenedAt('<p>sin cuerpo</p>', scrollY: 9, slides: null),
       '<p>sin cuerpo</p>',
+    );
+  });
+
+  test('every message the page sends has its handler in the editor', () {
+    // The page's script names each message it sends; on the desktop a name
+    // the web view does not register is a message the editor never hears
+    // (Delete and ⌘D were lost that way, Codex 2026-10-07).
+    final script = File(
+      'services/storefront_html/lib/src/editor_draft_view.dart',
+    ).readAsStringSync();
+    final sent = {
+      for (final match in RegExp(r"send\('(\w+)'").allMatches(script))
+        match.group(1)!,
+    };
+    expect(sent, isNotEmpty);
+    expect(websiteHtmlDraftHandlerNames.toSet(), containsAll(sent));
+  });
+
+  test('a commit is of the gesture admitted when the drag began', () {
+    WebsiteCanvasManipulationSession session(
+      WebsiteCanvasManipulationMode mode,
+    ) =>
+        WebsiteCanvasManipulationSession(
+          target: const WebsiteCanvasLayerTarget(
+            document: WebsiteCanvasDocumentTarget(blockId: 'b1', slideIndex: 2),
+            layerId: 'l1',
+          ),
+          mode: mode,
+          viewport: WebsiteViewport.desktop,
+          generation: 1,
+        );
+    WebsiteHtmlDraftLayerDrag commit(String mode, Map<String, Object> values,
+            {String layer = 'l1'}) =>
+        WebsiteHtmlDraftMessage.fromHandler(
+          'vbDraftLayerDrag',
+          ['b1', 2, layer, 'commit', mode, values],
+        )! as WebsiteHtmlDraftLayerDrag;
+    final move = session(WebsiteCanvasManipulationMode.move);
+    final kept = <String, dynamic>{};
+    final bleeds = <String, dynamic>{'constrainElementsToSafeArea': false};
+    expect(
+      websiteHtmlDraftCommitFits(move, kept, commit('move', {'x': 8, 'y': 0})),
+      isTrue,
+    );
+    // Begun as a move, it cannot end as a turn or a resize.
+    expect(
+      websiteHtmlDraftCommitFits(
+          move, kept, commit('rotate', {'rotation': 30})),
+      isFalse,
+    );
+    expect(
+      websiteHtmlDraftCommitFits(
+          move, kept, commit('resize', {'w': 80, 'h': 40})),
+      isFalse,
+    );
+    expect(
+      websiteHtmlDraftCommitFits(
+          move, kept, commit('move', {'x': 8, 'y': 0}, layer: 'l2')),
+      isFalse,
+    );
+    // Past the left edge only where the document lets layers bleed.
+    expect(
+      websiteHtmlDraftCommitFits(move, kept, commit('move', {'x': -4, 'y': 0})),
+      isFalse,
+    );
+    expect(
+      websiteHtmlDraftCommitFits(
+          move, bleeds, commit('move', {'x': -4, 'y': 0})),
+      isTrue,
+    );
+    // A turn's negative degrees are not a place.
+    expect(
+      websiteHtmlDraftCommitFits(
+        session(WebsiteCanvasManipulationMode.rotate),
+        kept,
+        commit('rotate', {'rotation': -30}),
+      ),
+      isTrue,
     );
   });
 }

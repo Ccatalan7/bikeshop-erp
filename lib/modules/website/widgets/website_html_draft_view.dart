@@ -776,17 +776,13 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
         final shifting = _shifting;
         _shifting = null;
         final values = drag.values;
-        // Left of or above the canvas only where the document lets layers
-        // bleed, as the canvas keeps them.
-        final inside = values == null ||
-            shifting == null ||
-            shifting.document['constrainElementsToSafeArea'] == false ||
-            ['x', 'y'].every((key) => (values[key] ?? 0) >= 0);
         final written = shifting != null &&
             values != null &&
-            inside &&
-            shifting.session.target.layerId == drag.layer &&
-            shifting.session.target.document.blockId == drag.id &&
+            websiteHtmlDraftCommitFits(
+              shifting.session,
+              shifting.document,
+              drag,
+            ) &&
             provider.commitCanvasManipulation(
               shifting.session,
               shifting.document,
@@ -829,14 +825,7 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
     final viewport = provider.renderedCanvasViewport(target.document);
     if (viewport == null ||
         !provider.startCanvasManipulation(
-          switch (drag.mode) {
-            WebsiteHtmlDraftLayerDragMode.move =>
-              WebsiteCanvasManipulationMode.move,
-            WebsiteHtmlDraftLayerDragMode.resize =>
-              WebsiteCanvasManipulationMode.resize,
-            WebsiteHtmlDraftLayerDragMode.rotate =>
-              WebsiteCanvasManipulationMode.rotate,
-          },
+          websiteHtmlDraftManipulationMode(drag.mode),
           target: target,
           viewport: viewport,
         )) {
@@ -1289,18 +1278,7 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
                               // handlers.
                               for (final name in kIsWeb
                                   ? const <String>[]
-                                  : const [
-                                      'vbDraftPick',
-                                      'vbDraftAction',
-                                      'vbDraftEdit',
-                                      'vbDraftSlide',
-                                      'vbDraftHeight',
-                                      'vbDraftMove',
-                                      'vbDraftButton',
-                                      'vbDraftLayer',
-                                      'vbDraftImage',
-                                      'vbDraftLayerDrag',
-                                    ]) {
+                                  : websiteHtmlDraftHandlerNames) {
                                 controller.addJavaScriptHandler(
                                   handlerName: name,
                                   callback: _handler(name),
@@ -1492,6 +1470,39 @@ class _ZoomedNativeView extends StatelessWidget {
 
 /// [html] with a `<base>` at the store's [origin], first in its `<head>`,
 /// and the [nonce] its picks are signed with (`window.vbDraftNonce`).
+/// The canvas manipulation a page's drag of [mode] is.
+WebsiteCanvasManipulationMode websiteHtmlDraftManipulationMode(
+  WebsiteHtmlDraftLayerDragMode mode,
+) =>
+    switch (mode) {
+      WebsiteHtmlDraftLayerDragMode.move => WebsiteCanvasManipulationMode.move,
+      WebsiteHtmlDraftLayerDragMode.resize =>
+        WebsiteCanvasManipulationMode.resize,
+      WebsiteHtmlDraftLayerDragMode.rotate =>
+        WebsiteCanvasManipulationMode.rotate,
+    };
+
+/// Whether the page's commit [drag] is the gesture [session] admitted when
+/// it began: the same layer of the same block, the same manipulation (a drag
+/// begun as a move cannot end as a turn), and a place left of or above the
+/// canvas only where [document] lets layers bleed, as the canvas keeps them.
+@visibleForTesting
+bool websiteHtmlDraftCommitFits(
+  WebsiteCanvasManipulationSession session,
+  Map<String, dynamic> document,
+  WebsiteHtmlDraftLayerDrag drag,
+) {
+  final values = drag.values;
+  if (values == null ||
+      session.mode != websiteHtmlDraftManipulationMode(drag.mode) ||
+      session.target.layerId != drag.layer ||
+      session.target.document.blockId != drag.id) {
+    return false;
+  }
+  return document['constrainElementsToSafeArea'] == false ||
+      ['x', 'y'].every((key) => (values[key] ?? 0) >= 0);
+}
+
 /// [html] opened at [scrollY] with each carousel on its slide in [slides]
 /// before it is first painted: a script at the end of its body, after the
 /// carousels' and the draft's own (`vbDraftSlides`, at once).

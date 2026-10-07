@@ -2069,6 +2069,14 @@ de 15 px de alto Flutter lo esconde y el HTML lo muestra.
   que la primera carga tras el deploy aún corría el `main.dart.js` viejo del
   worker (lo retira `web/index.html` antes de arrancar).
 - **Lo que falta del 5c/5d:** medir el zoom en Windows.
+- **Tercera revisión de Codex (2026-10-07, sólo lectura).** Tres P2,
+  corregidos con prueba: el anfitrión de macOS no registraba
+  `vbDraftLayerCommand` (Suprimir/⌘D pedidos por la página se perdían; ahora
+  los nombres viven en `websiteHtmlDraftHandlerNames` y una prueba exige que
+  cada `send('…')` del script tenga el suyo); un arrastre iniciado como
+  «mover» podía confirmarse como «girar» (`websiteHtmlDraftCommitFits`
+  exige el mismo gesto); y la preferencia de la vista podía leerse después
+  de abrir el editor (se espera antes de `runApp`).
 - **La vista HTML es el lienzo por defecto (2026-10-07).** Con la vista
   igualando al lienzo en lo que la tienda usa (bloques, textos, botones,
   fotos, capas con guías, giro y teclas, superficie de bloque), el editor
