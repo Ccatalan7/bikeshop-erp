@@ -41,6 +41,11 @@ const _draftCss = '''
 .vb-add i{display:grid;place-items:center;width:18px;height:18px;border-radius:50%;font:700 14px/1 system-ui,sans-serif;font-style:normal}
 .vb-add:hover,.vb-add:focus-visible{filter:brightness(1.08);outline:2px solid rgb(255 255 255 / .6)}
 .vb-mark.vb-writing .vb-add{display:none}
+.vb-size{position:absolute;left:8px;bottom:8px;display:flex;align-items:center;gap:4px;height:24px;padding:0 10px;
+  border-radius:8px;box-shadow:0 1px 4px rgb(0 0 0 / .3);pointer-events:auto;cursor:ns-resize;user-select:none;
+  font:700 11px/1 system-ui,-apple-system,sans-serif;white-space:nowrap;font-variant-numeric:tabular-nums}
+.vb-mark.vb-writing .vb-size{display:none}
+.vb-sizing,.vb-sizing *{cursor:ns-resize!important;user-select:none!important}
 .draft-missing{display:grid;place-items:center;gap:4px;min-height:160px;margin:0;padding:24px;
   border:1px dashed #9aa0a6;border-radius:8px;background:repeating-linear-gradient(135deg,#f8f9fa 0 12px,#f1f3f4 12px 24px);
   color:#5f6368;font:400 14px/1.4 var(--body,system-ui);text-align:center}
@@ -71,7 +76,7 @@ const _draftScript = r'''
   // The bar of the picked block, as the canvas draws it (`BlockActionBar`):
   // the editor says which buttons apply and in which colours.
   function drawBar() {
-    [].forEach.call(pick.el.querySelectorAll('.vb-bar,.vb-add'), function (old) { old.remove(); });
+    [].forEach.call(pick.el.querySelectorAll('.vb-bar,.vb-add,.vb-size'), function (old) { old.remove(); });
     pick.el.classList.remove('vb-has-bar');
     var b = meta && meta.bar;
     if (!b || !pick.target) return;
@@ -101,6 +106,24 @@ const _draftScript = r'''
     button('delete', 'Eliminar', 'remove', true);
     pick.el.appendChild(bar);
     pick.el.classList.add('vb-has-bar');
+    // The height handle, for a block whose height is authored.
+    if (meta.height) {
+      var size = document.createElement('div');
+      size.className = 'vb-size';
+      size.setAttribute('role', 'slider');
+      size.setAttribute('aria-label', 'Alto del bloque (doble clic: automático)');
+      size.title = 'Arrastra para cambiar el alto; doble clic lo vuelve automático';
+      size.style.background = meta.fill || '#d3e3fd';
+      size.style.color = meta.onFill || '#041e49';
+      size.textContent = '↕ ' + Math.round(pick.target.getBoundingClientRect().height) + ' px';
+      size.addEventListener('mousedown', startSizing);
+      size.addEventListener('dblclick', function (event) {
+        event.preventDefault();
+        var id = pick.target && pick.target.getAttribute('data-block-id');
+        if (id) send('vbDraftHeight', [id, 'reset', null], { type: 'vb-draft-height', id: id, phase: 'reset' });
+      });
+      pick.el.appendChild(size);
+    }
     // «Agregar aquí» on the block's two seams, as the canvas's markers.
     ['before', 'after'].forEach(function (side) {
       var add = document.createElement('button');
@@ -374,6 +397,74 @@ const _draftScript = r'''
     slides[id] = event.detail;
     send('vbDraftSlide', [id, event.detail], { type: 'vb-draft-slide', id: id, index: event.detail });
   });
+  // Dragging the height handle: the block takes the height as it goes (the
+  // block and, when it sets its own, its first element), snapped to 10 px
+  // between the editor's bounds; the editor writes it when the drag ends
+  // (`vbDraftHeight` begin / commit / cancel) and the page puts the block
+  // back if the write is refused (`vbDraftSized(false)`).
+  var sizing = null, sized = null;
+  function heightMessage(id, phase, value) {
+    send('vbDraftHeight', [id, phase, value === undefined ? null : value],
+      { type: 'vb-draft-height', id: id, phase: phase, value: value });
+  }
+  function restoreSize(s) {
+    if (!s) return;
+    if (s.style === null) s.el.removeAttribute('style'); else s.el.setAttribute('style', s.style);
+    if (s.child) {
+      if (s.childStyle === null) s.child.removeAttribute('style'); else s.child.setAttribute('style', s.childStyle);
+    }
+    soon();
+  }
+  function startSizing(event) {
+    if (event.button !== 0 || !pick.target || !meta || !meta.height || edit) return;
+    event.preventDefault();
+    event.stopPropagation();
+    var el = pick.target, child = el.firstElementChild;
+    sizing = {
+      id: el.getAttribute('data-block-id'), el: el,
+      child: child && child.style.height ? child : null,
+      style: el.getAttribute('style'),
+      childStyle: child ? child.getAttribute('style') : null,
+      y: event.clientY, from: el.getBoundingClientRect().height, to: null
+    };
+    sizing.to = Math.round(sizing.from);
+    sized = null;
+    document.documentElement.classList.add('vb-sizing');
+  }
+  document.addEventListener('mousemove', function (event) {
+    if (!sizing) return;
+    event.preventDefault();
+    var h = sizing.from + event.clientY - sizing.y;
+    h = Math.max(meta.height.min, Math.min(meta.height.max, Math.round(h / 10) * 10));
+    if (h === sizing.to) return;
+    // The editor leases the height at the first step, not at a mere press
+    // (a double click asks for the automatic height instead).
+    if (!sizing.begun) { sizing.begun = true; heightMessage(sizing.id, 'begin'); }
+    sizing.to = h;
+    sizing.el.style[meta.height.exact ? 'height' : 'minHeight'] = h + 'px';
+    if (sizing.child) sizing.child.style.height = h + 'px';
+    var label = pick.el.querySelector('.vb-size');
+    if (label) label.textContent = '↕ ' + h + ' px';
+    soon();
+  }, true);
+  document.addEventListener('mouseup', function () {
+    if (!sizing) return;
+    var s = sizing;
+    sizing = null;
+    document.documentElement.classList.remove('vb-sizing');
+    if (!s.begun) return;
+    if (s.to === Math.round(s.from)) { heightMessage(s.id, 'cancel'); restoreSize(s); return; }
+    sized = s;
+    heightMessage(s.id, 'commit', s.to);
+  }, true);
+  window.vbDraftSized = function (ok) {
+    if (ok) { sized = null; return; }
+    // Refused at the start (the block cannot be sized now) or at the end.
+    var s = sizing || sized;
+    if (sizing) { sizing = null; document.documentElement.classList.remove('vb-sizing'); }
+    sized = null;
+    restoreSize(s);
+  };
   window.vbDraftPicked = function (id, info, show) {
     pickedId = id || null;
     meta = info || null;
