@@ -180,6 +180,10 @@
     {
       "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_surface_spec.dart",
       "sha256": "58162b7840bf38805f1e34678326ff2be20f7570217c79026419f904dc925563"
+    },
+    {
+      "path": "lib/modules/website/widgets/text_formatting_toolbar.dart",
+      "sha256": "7d1a00f6f7bbe5f92cac543aa063ade2e382cdec39a7a9609241dfa005a6a044"
     }
   ]
 }

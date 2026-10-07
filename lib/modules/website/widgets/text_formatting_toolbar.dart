@@ -491,23 +491,33 @@ class _ToolbarButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: isActive ? Colors.blue : Colors.transparent,
-        borderRadius: BorderRadius.circular(4),
-        child: InkWell(
-          canRequestFocus: false,
-          onTap: onPressed,
+    // The tooltip shows the shortcut; a screen reader hears the action, that
+    // it is a button and, for a style, whether it is on.
+    return Semantics(
+      button: true,
+      selected: isActive,
+      label: tooltip.replaceFirst(RegExp(r'\s*\(.*\)$'), ''),
+      onTap: onPressed,
+      excludeSemantics: true,
+      child: Tooltip(
+        message: tooltip,
+        excludeFromSemantics: true,
+        child: Material(
+          color: isActive ? Colors.blue : Colors.transparent,
           borderRadius: BorderRadius.circular(4),
-          child: Container(
-            width: 32,
-            height: 32,
-            alignment: Alignment.center,
-            child: Icon(
-              icon,
-              size: 18,
-              color: isActive ? Colors.white : Colors.white70,
+          child: InkWell(
+            canRequestFocus: false,
+            onTap: onPressed,
+            borderRadius: BorderRadius.circular(4),
+            child: Container(
+              width: 32,
+              height: 32,
+              alignment: Alignment.center,
+              child: Icon(
+                icon,
+                size: 18,
+                color: isActive ? Colors.white : Colors.white70,
+              ),
             ),
           ),
         ),
@@ -545,39 +555,48 @@ class _FontSizeButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: 'Tamaño de fuente',
-      child: Material(
-        color: isExpanded
-            ? Colors.blue.withValues(alpha: 0.3)
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(4),
-        child: InkWell(
-          canRequestFocus: false,
-          onTap: onToggleExpanded,
+    return Semantics(
+      button: true,
+      expanded: isExpanded,
+      label: 'Tamaño de texto',
+      value: '${currentSize.toInt()}',
+      onTap: onToggleExpanded,
+      excludeSemantics: true,
+      child: Tooltip(
+        message: 'Tamaño de fuente',
+        excludeFromSemantics: true,
+        child: Material(
+          color: isExpanded
+              ? Colors.blue.withValues(alpha: 0.3)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(4),
-          child: Container(
-            height: 32,
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            alignment: Alignment.center,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '${currentSize.toInt()}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
+          child: InkWell(
+            canRequestFocus: false,
+            onTap: onToggleExpanded,
+            borderRadius: BorderRadius.circular(4),
+            child: Container(
+              height: 32,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              alignment: Alignment.center,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '${currentSize.toInt()}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 2),
-                Icon(
-                  isExpanded ? Icons.arrow_drop_up : Icons.arrow_drop_down,
-                  size: 16,
-                  color: Colors.white70,
-                ),
-              ],
+                  const SizedBox(width: 2),
+                  Icon(
+                    isExpanded ? Icons.arrow_drop_up : Icons.arrow_drop_down,
+                    size: 16,
+                    color: Colors.white70,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -722,38 +741,46 @@ class _ColorPickerButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: 'Color de texto',
-      child: Material(
-        color: isExpanded
-            ? Colors.blue.withValues(alpha: 0.3)
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(4),
-        child: InkWell(
-          canRequestFocus: false,
-          onTap: onToggleExpanded,
+    return Semantics(
+      button: true,
+      expanded: isExpanded,
+      label: 'Color de texto',
+      onTap: onToggleExpanded,
+      excludeSemantics: true,
+      child: Tooltip(
+        message: 'Color de texto',
+        excludeFromSemantics: true,
+        child: Material(
+          color: isExpanded
+              ? Colors.blue.withValues(alpha: 0.3)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(4),
-          child: Container(
-            width: 32,
-            height: 32,
-            alignment: Alignment.center,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.format_color_text,
-                  size: 16,
-                  color: Colors.white70,
-                ),
-                Container(
-                  width: 14,
-                  height: 3,
-                  decoration: BoxDecoration(
-                    color: currentColor,
-                    borderRadius: BorderRadius.circular(1),
+          child: InkWell(
+            canRequestFocus: false,
+            onTap: onToggleExpanded,
+            borderRadius: BorderRadius.circular(4),
+            child: Container(
+              width: 32,
+              height: 32,
+              alignment: Alignment.center,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.format_color_text,
+                    size: 16,
+                    color: Colors.white70,
                   ),
-                ),
-              ],
+                  Container(
+                    width: 14,
+                    height: 3,
+                    decoration: BoxDecoration(
+                      color: currentColor,
+                      borderRadius: BorderRadius.circular(1),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

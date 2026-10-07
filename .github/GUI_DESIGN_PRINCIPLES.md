@@ -1404,6 +1404,12 @@ de <línea>', onTap: abrir el menú, excludeSemantics: true)`, con el menú
 abierto por `GlobalKey<PopupMenuButtonState>().showButtonMenu()`
 (`JobLineRow`, prueba en `test/widget/job_line_row_test.dart`). El nombre
 lleva la línea: «Acciones» a secas repetido no distingue una fila de otra.
+El `onTap` del patrón no es adorno: `excludeSemantics` se lleva también la
+acción de tocar del `InkWell` de adentro, y sin él el botón queda con nombre
+pero sin poder activarse. Los botones de «Formato» del editor del sitio
+(negrita, cursiva, tamaño, color: sólo un `Tooltip` hasta el 2026-10-07)
+salieron así en la primera pasada; lo atrapó `matchesSemantics(hasTapAction:
+true)` en `test/widgets/text_formatting_toolbar_semantics_test.dart`.
 
 ## 13. Validation and living learning
 
