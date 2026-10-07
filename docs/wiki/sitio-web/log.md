@@ -4,6 +4,10 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-06 — corrección — [catálogo](paginas/catalogo-y-fichas.md) y
+  [editor](paginas/editor-del-sitio.md): etapa 3c, una plantilla para las 11
+  categorías (`@catalog/categories`, «Diseño propio» por categoría, la misma
+  regla en Flutter y en el servidor HTML).
 - 2026-10-06 — corrección — [editor](paginas/editor-del-sitio.md) y
   [catálogo](paginas/catalogo-y-fichas.md): etapa 3b sin plantillas (Catálogo
   en tablas, todo lo de una categoría en su página, Ajustes del sitio con

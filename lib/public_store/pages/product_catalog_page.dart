@@ -1632,17 +1632,27 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
   WebsiteEditModeProvider? _drawingEditor;
 
   /// What the page draws for [categoryId]: the editor's draft while one is
-  /// open, else as saved. Only for what is drawn — the portada, the trail,
-  /// the filters and the grid; the category's route always reads the saved
-  /// value, so an unsaved draft never moves a link.
+  /// open, else as saved; a category without a look of its own draws the
+  /// category template's (its draft too). Only for what is drawn — the
+  /// portada, the trail, the filters and the grid; the category's route
+  /// always reads the saved value, so an unsaved draft never moves a link.
   WebsiteCatalogPresentation? _shownPresentationForCategory(
     String? categoryId,
   ) {
     final saved = _savedPresentationForCategory(categoryId);
+    if (saved == null) return null;
     final editor = _drawingEditor;
-    if (saved == null || editor == null) return saved;
-    return editor.effectiveCatalogPresentation(saved);
+    final template = _savedCategoryTemplate;
+    if (editor == null) return saved.withCategoryTemplate(template);
+    return editor
+        .effectiveCatalogPresentation(saved)
+        .withCategoryTemplate(editor.effectiveCatalogPresentation(template));
   }
+
+  /// The category template as saved (the default look while there is none).
+  WebsiteCatalogPresentation get _savedCategoryTemplate =>
+      _presentationRegistry.categoryTemplate ??
+      WebsiteCatalogPresentation.categoryTemplate();
 
   WebsiteCatalogPresentation? _presentationForCategory(String? categoryId) =>
       _savedPresentationForCategory(categoryId);
@@ -2824,6 +2834,8 @@ class _ProductCatalogPageState extends State<ProductCatalogPage>
       planCount: 0,
       categories: children,
       collection: true,
+      template: _savedCategoryTemplate,
+      categoryPageCount: _publishedCategoryIds.length,
     );
   }
 

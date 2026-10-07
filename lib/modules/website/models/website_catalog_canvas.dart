@@ -96,6 +96,8 @@ class WebsiteCatalogCanvasContext {
     this.ratingSummary,
     this.collection = false,
     this.offersPriceList = false,
+    this.template,
+    this.categoryPageCount = 0,
   });
 
   final WebsiteCatalogPresentation saved;
@@ -126,6 +128,14 @@ class WebsiteCatalogCanvasContext {
   /// catalog page is a grid.
   final bool offersPriceList;
 
+  /// On a category's page, the category template as saved: the look its
+  /// portada and grid draw unless the category has its own.
+  final WebsiteCatalogPresentation? template;
+
+  /// How many category pages the site publishes (all of them follow the
+  /// template unless they have their own look).
+  final int categoryPageCount;
+
   String get ownerId => saved.ownerId;
 
   @override
@@ -140,7 +150,10 @@ class WebsiteCatalogCanvasContext {
       listEquals(other.categories, categories) &&
       other.ratingSummary == ratingSummary &&
       other.collection == collection &&
-      other.offersPriceList == offersPriceList;
+      other.offersPriceList == offersPriceList &&
+      (other.template == null) == (template == null) &&
+      (template == null || other.template!.hasSamePersistedValue(template!)) &&
+      other.categoryPageCount == categoryPageCount;
 
   @override
   int get hashCode => Object.hash(
@@ -153,5 +166,6 @@ class WebsiteCatalogCanvasContext {
         ratingSummary,
         collection,
         offersPriceList,
+        categoryPageCount,
       );
 }

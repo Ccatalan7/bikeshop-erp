@@ -114,6 +114,21 @@ Las 11 presentaciones de categoría seguían en los valores por defecto el
 2026-10-06 (sin título propio ni foto, cuadrícula equilibrada)
 `[Prod 2026-10-06]`.
 
+**Una plantilla para todas las categorías (etapa 3c, 2026-10-06)** `[Repo]`:
+el aspecto de una página de categoría —alto, alineación y capa oscura de la
+portada, tamaño de las tarjetas, los filtros y su orden, la ruta y las
+subcategorías— es el de la **plantilla de categorías**, una entrada más del
+mismo registro (`@catalog/categories`) que no tiene dirección ni es una
+categoría. En el editor, en cualquier categoría, esos controles dicen arriba
+«Plantilla · cambia las 11 categorías» y lo que se cambia ahí cambia en todas.
+«Diseño propio para Frenos» deja a esa categoría con su aspecto (parte del de
+la plantilla, nada salta) y apagarlo la devuelve a la plantilla. Los textos, la
+foto, la dirección, el menú y Google siguen siendo de cada categoría. La misma
+regla (`withCategoryTemplate`) la aplican la tienda en Flutter, el editor y el
+servidor HTML (`drawnCategory`). Una categoría guardada antes conserva su
+aspecto sólo si no era el de por defecto: las 11 de producción lo eran, así que
+todas siguen la plantilla `[Prod 2026-10-06]`.
+
 ## Servicios: la lista de precios
 
 Desde el 2026-10-06 `/servicios` es una **lista de precios**, no la grilla de

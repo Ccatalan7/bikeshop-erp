@@ -20,6 +20,11 @@ const websiteCatalogPresentationsSettingKey =
 const websiteProductsCatalogPresentationId = '@catalog/products';
 const websiteServicesCatalogPresentationId = '@catalog/services';
 
+/// The category template (approved editor proposal, 2026-10-06: «Categoría ·
+/// una plantilla para las 11»): the look every category page draws unless it
+/// has its own ([WebsiteCatalogPresentation.ownLook]). Never routed.
+const websiteCategoryTemplatePresentationId = '@catalog/categories';
+
 enum WebsiteCatalogRoot { products, services }
 
 extension WebsiteCatalogRootX on WebsiteCatalogRoot {
@@ -238,6 +243,7 @@ class WebsiteCatalogPresentation {
     String closingTitle = '',
     String closingText = '',
     this.closingAction,
+    this.ownLook = false,
   }) : plansCategoryId = plansCategoryId.trim(),
        closingTitle = closingTitle.trim(),
        closingText = closingText.trim(),
@@ -305,6 +311,11 @@ class WebsiteCatalogPresentation {
   final String closingText;
   final WebsiteActionValue? closingAction;
 
+  /// A category with its own look (portada height, alignment and darkening,
+  /// cards, filters, trail, subcategories); without it the page draws the
+  /// category template's ([withCategoryTemplate]).
+  final bool ownLook;
+
   bool get isPriceList => layout == WebsiteCatalogLayout.priceList;
 
   bool get hasClosing =>
@@ -321,7 +332,41 @@ class WebsiteCatalogPresentation {
 
   bool get isCatalogRoot => catalogRoot != null;
 
-  bool get isCategoryPresentation => !isCatalogRoot;
+  bool get isCategoryTemplate =>
+      ownerId == websiteCategoryTemplatePresentationId;
+
+  bool get isCategoryPresentation => !isCatalogRoot && !isCategoryTemplate;
+
+  /// The look a category template carries, and a category may own.
+  bool hasSameLook(WebsiteCatalogPresentation other) =>
+      heroSize == other.heroSize &&
+      heroAlignment == other.heroAlignment &&
+      heroOverlay == other.heroOverlay &&
+      gridDensity == other.gridDensity &&
+      showBreadcrumbs == other.showBreadcrumbs &&
+      showSubcategories == other.showSubcategories &&
+      _sameFacets(facets, other.facets);
+
+  /// This presentation with [other]'s look.
+  WebsiteCatalogPresentation copyLookFrom(WebsiteCatalogPresentation other) =>
+      copyWith(
+        heroSize: other.heroSize,
+        heroAlignment: other.heroAlignment,
+        heroOverlay: other.heroOverlay,
+        gridDensity: other.gridDensity,
+        showBreadcrumbs: other.showBreadcrumbs,
+        showSubcategories: other.showSubcategories,
+        facets: other.facets,
+      );
+
+  /// What a category page draws: its own look, or the template's (the
+  /// default look while the site has none saved). A catalog root and the
+  /// template itself are left as they are.
+  WebsiteCatalogPresentation withCategoryTemplate(
+    WebsiteCatalogPresentation? template,
+  ) => !isCategoryPresentation || ownLook
+      ? this
+      : copyLookFrom(template ?? WebsiteCatalogPresentation.categoryTemplate());
 
   factory WebsiteCatalogPresentation.catalogRoot(WebsiteCatalogRoot root) {
     return WebsiteCatalogPresentation(
@@ -331,6 +376,14 @@ class WebsiteCatalogPresentation {
       showSubcategories: false,
     );
   }
+
+  /// The shared look of every category page, as it was before there was a
+  /// template.
+  factory WebsiteCatalogPresentation.categoryTemplate() =>
+      WebsiteCatalogPresentation(
+        categoryId: websiteCategoryTemplatePresentationId,
+        slug: 'categorias',
+      );
 
   factory WebsiteCatalogPresentation.fallback({
     required String categoryId,
@@ -353,7 +406,7 @@ class WebsiteCatalogPresentation {
           )
         : const <WebsiteCatalogFacet>[];
     final overlay = (json['hero_overlay'] as num?)?.toDouble() ?? 0.42;
-    return WebsiteCatalogPresentation(
+    final parsed = WebsiteCatalogPresentation(
       categoryId: json['category_id']?.toString() ?? '',
       slug: websiteCategorySlug(json['slug']?.toString() ?? ''),
       slugAliases:
@@ -397,7 +450,16 @@ class WebsiteCatalogPresentation {
       closingTitle: json['closing_title']?.toString() ?? '',
       closingText: json['closing_text']?.toString() ?? '',
       closingAction: _actionFromJson(json['closing_action']),
-    ).normalizedForOwner();
+      ownLook: false,
+    );
+    // A category saved before the template keeps the look it had, if it had
+    // one of its own; from then on the flag says it.
+    final ownLook = json.containsKey('own_look')
+        ? json['own_look'] == true
+        : !parsed.hasSameLook(
+            WebsiteCatalogPresentation(categoryId: '', slug: 'x'),
+          );
+    return parsed.copyWith(ownLook: ownLook).normalizedForOwner();
   }
 
   Map<String, dynamic> toJson() => {
@@ -431,6 +493,7 @@ class WebsiteCatalogPresentation {
     'closing_title': closingTitle,
     'closing_text': closingText,
     'closing_action': closingAction?.toJson(),
+    'own_look': ownLook,
   };
 
   WebsiteCatalogPresentation copyWith({
@@ -465,6 +528,7 @@ class WebsiteCatalogPresentation {
     String? closingText,
     WebsiteActionValue? closingAction,
     bool clearClosingAction = false,
+    bool? ownLook,
   }) {
     return WebsiteCatalogPresentation(
       categoryId: categoryId,
@@ -501,6 +565,7 @@ class WebsiteCatalogPresentation {
       closingAction: clearClosingAction
           ? null
           : closingAction ?? this.closingAction,
+      ownLook: ownLook ?? this.ownLook,
     );
   }
 
@@ -520,6 +585,10 @@ class WebsiteCatalogPresentation {
   /// survive there. This prevents imports/automation from creating hidden
   /// root values that no administrator could inspect in the workspace.
   WebsiteCatalogPresentation normalizedForOwner() {
+    // The template is only a look: no texts, photos, address or Google.
+    if (isCategoryTemplate) {
+      return WebsiteCatalogPresentation.categoryTemplate().copyLookFrom(this);
+    }
     final root = catalogRoot;
     // A category keeps its own hero and the grid: the price list, its
     // button, rating, plans and closing band are a catalog root's.
@@ -585,6 +654,14 @@ class WebsiteCatalogPresentation {
         );
 }
 
+bool _sameFacets(List<WebsiteCatalogFacet> a, List<WebsiteCatalogFacet> b) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
+}
+
 List<WebsiteCatalogFacet> _dedupeFacets(Iterable<WebsiteCatalogFacet> facets) {
   final seen = <WebsiteCatalogFacet>{};
   return facets.where(seen.add).toList(growable: false);
@@ -610,6 +687,22 @@ class WebsiteCatalogPresentationRegistry {
   WebsiteCatalogPresentation? forCatalogRoot(WebsiteCatalogRoot root) {
     return byCategoryId[root.presentationId];
   }
+
+  /// The saved category template, if the site has one.
+  WebsiteCatalogPresentation? get categoryTemplate =>
+      byCategoryId[websiteCategoryTemplatePresentationId];
+
+  /// How many saved categories have a look of their own; the rest, and every
+  /// category never saved, draw [categoryTemplate].
+  int get categoriesWithOwnLook => byCategoryId.values
+      .where((presentation) =>
+          presentation.isCategoryPresentation && presentation.ownLook)
+      .length;
+
+  /// What [category] draws on its page: its own look or the template's.
+  WebsiteCatalogPresentation drawnCategory(
+    WebsiteCatalogPresentation category,
+  ) => category.withCategoryTemplate(categoryTemplate);
 
   WebsiteCatalogPresentation? forSlug(String rawSlug) {
     return resolveSlug(rawSlug)?.presentation;

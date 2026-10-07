@@ -722,6 +722,24 @@ any other). The filters list the ones shown in their order, each with
 `Subir`, then the ones off. `Catálogo web > Categorías > Presentación` was
 removed: the catalog publishes, the page is designed on the canvas.
 
+**One template for every category page (stage 3c, 2026-10-06).** The look of
+a category page (portada height, alignment and darkening, card density, the
+filters and their order, the trail, the subcategories) is the category
+template's: a reserved owner `@catalog/categories`
+(`websiteCategoryTemplatePresentationId`) in the same registry, never routed,
+never a category (`isCategoryTemplate`), normalized to look only. A category
+draws it unless it has its own (`own_look`); `withCategoryTemplate` is the one
+rule, read by the Flutter page (`_shownPresentationForCategory`, with the
+editor's drafts of both) and the HTML server (`drawnCategory`). On a category,
+the look controls stage into the template and say so above them
+(«Plantilla · cambia las N categorías»); «Diseño propio para X» copies the
+template's look into the category first, so nothing on the page jumps, and
+turning it off draws the template again. Texts, photo, address, menu and
+Google stay the category's. A category saved before the template keeps its
+look only if it differed from the default (none in production on
+2026-10-06: the 11 categories follow it). Without a saved template a category
+draws the default look.
+
 **A link to a category follows the route's rule.** `PublicCategoryPublication`
 allows a category href with `resolvePublishedCategoryRouteValue`, the rule
 that opens it: a name several categories share («Frenos» is Componentes,
@@ -744,10 +762,12 @@ return context.
   `Destacados`. A row that does not show says why in its own badge («Sin
   stock», «Sin foto», «Sin categoría», «Categoría oculta»), column `En la
   tienda`. Site rules stay in one panel (`Reglas públicas`).
-- A category's optional presentation (slug and aliases, portada, trail,
-  subcategories, facets, density, mega-menu photo, Google) is edited on its
-  page on the canvas (see «Catalog pages on the canvas»). Restablecer goes
-  back to the shared default; it never removes or unpublishes the category.
+- A category's optional presentation (slug and aliases, portada texts and
+  photo, mega-menu photo, Google, and a look of its own when it has one) is
+  edited on its page on the canvas (see «Catalog pages on the canvas»); the
+  shared look is the category template, edited from any category page.
+  Restablecer goes back to the shared default and the template; it never
+  removes or unpublishes the category.
   The technical-spec filters (valve, wheel size, speeds…) are not a stored
   facet: the catalog page offers them next to the brand facet whenever the
   spec describes at least 30 % of the collection (2026-09-16,

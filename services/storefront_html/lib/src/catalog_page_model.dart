@@ -64,7 +64,8 @@ class CatalogPageModel {
     final presentation = categoryId == null
         ? shell.presentations.forCatalogRoot(root) ??
               WebsiteCatalogPresentation.catalogRoot(root)
-        : shell.presentationFor(categoryId);
+        // A category without a look of its own draws the template's.
+        : shell.presentations.drawnCategory(shell.presentationFor(categoryId));
     final category = categoryId == null ? null : shell.categories[categoryId];
     final displayTitle = categoryId == null
         ? (presentation.heroTitle.trim().isNotEmpty

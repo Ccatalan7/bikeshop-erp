@@ -529,4 +529,102 @@ void main() {
     expect(destination.kind, WebsiteDestinationKind.category);
     expect(destination.reference, 'camaras');
   });
+
+  group('the category template (one look for every category page)', () {
+    WebsiteCatalogPresentation category(
+            {Map<String, dynamic> extra = const {}}) =>
+        WebsiteCatalogPresentation.fromJson({
+          'category_id': 'frenos',
+          'slug': 'frenos',
+          ...extra,
+        });
+
+    test('a category saved before it follows it unless its look was its own',
+        () {
+      // Production on 2026-10-06: every saved category at the default look.
+      expect(category().ownLook, isFalse);
+      expect(category(extra: {'hero_size': 'compact'}).ownLook, isTrue);
+      expect(category(extra: {'facets': <String>[]}).ownLook, isTrue);
+      // From then on the flag says it.
+      expect(
+        category(extra: {'hero_size': 'compact', 'own_look': false}).ownLook,
+        isFalse,
+      );
+      expect(category(extra: {'own_look': true}).ownLook, isTrue);
+    });
+
+    test('a category draws the template look; its own look stays its own', () {
+      final template = WebsiteCatalogPresentation.categoryTemplate().copyWith(
+        heroSize: WebsiteCatalogHeroSize.compact,
+        gridDensity: WebsiteCatalogGridDensity.editorial,
+        showBreadcrumbs: false,
+        facets: const [WebsiteCatalogFacet.brand],
+      );
+      final follows = category().copyWith(heroTitle: 'Frenos de disco');
+      final drawn = follows.withCategoryTemplate(template);
+      expect(drawn.heroSize, WebsiteCatalogHeroSize.compact);
+      expect(drawn.gridDensity, WebsiteCatalogGridDensity.editorial);
+      expect(drawn.showBreadcrumbs, isFalse);
+      expect(drawn.facets, [WebsiteCatalogFacet.brand]);
+      // Texts, photo and address stay the category's.
+      expect(drawn.heroTitle, 'Frenos de disco');
+      expect(drawn.slug, 'frenos');
+
+      final own = follows.copyWith(
+        ownLook: true,
+        heroSize: WebsiteCatalogHeroSize.immersive,
+      );
+      expect(
+        own.withCategoryTemplate(template).heroSize,
+        WebsiteCatalogHeroSize.immersive,
+      );
+      // Without a saved template, the default look.
+      expect(
+        category(extra: {'hero_size': 'compact', 'own_look': false})
+            .withCategoryTemplate(null)
+            .heroSize,
+        WebsiteCatalogHeroSize.standard,
+      );
+      // A catalog root is never a category.
+      final root = WebsiteCatalogPresentation.catalogRoot(
+        WebsiteCatalogRoot.products,
+      );
+      expect(root.withCategoryTemplate(template).gridDensity, root.gridDensity);
+    });
+
+    test('is only a look, never routed, and round-trips in the registry', () {
+      final template = WebsiteCatalogPresentation.fromJson({
+        'category_id': websiteCategoryTemplatePresentationId,
+        'slug': 'frenos',
+        'hero_title': 'Hidden',
+        'seo_title': 'Hidden',
+        'hero_size': 'compact',
+        'grid_density': 'compact',
+      });
+      expect(template.isCategoryTemplate, isTrue);
+      expect(template.isCategoryPresentation, isFalse);
+      expect(template.heroTitle, isEmpty);
+      expect(template.seoTitle, isEmpty);
+      expect(template.slug, 'categorias');
+      expect(template.heroSize, WebsiteCatalogHeroSize.compact);
+
+      final registry = const WebsiteCatalogPresentationRegistry({})
+          .put(category().copyWith(slug: 'categorias'))
+          .put(template);
+      final decoded = WebsiteCatalogPresentationRegistry.decode(
+        registry.encode(),
+      );
+      expect(decoded.categoryTemplate?.gridDensity,
+          WebsiteCatalogGridDensity.compact);
+      expect(
+          decoded.forCategory(websiteCategoryTemplatePresentationId), isNull);
+      // Its slug claims no address: the category called «categorias» keeps it.
+      expect(decoded.resolveSlug('categorias')?.presentation.ownerId, 'frenos');
+      expect(decoded.categoryPresentationCount, 1);
+      expect(
+        decoded.drawnCategory(decoded.forCategory('frenos')!).gridDensity,
+        WebsiteCatalogGridDensity.compact,
+      );
+    });
+  });
 }

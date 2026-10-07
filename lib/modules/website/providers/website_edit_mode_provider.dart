@@ -3211,13 +3211,6 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     return draft != null && draft.changed ? draft.value : saved;
   }
 
-  /// Stages one catalog page's presentation (saved on the global Guardar).
-  /// A value equal to what the registry holds is no change, so undoing an
-  /// edit by hand leaves nothing to save.
-  ///
-  /// The draft is kept even then, with what it was compared against: a value
-  /// written back while a save of the previous one is in flight must survive
-  /// that save's acknowledgement, which moves the comparison to what it wrote.
   String? _requestedInspectorTab;
 
   /// Asks the pane to show one of its tabs, from outside it: the «Ajustes del
@@ -3234,6 +3227,13 @@ class WebsiteEditModeProvider extends ChangeNotifier {
     return tab;
   }
 
+  /// Stages one catalog page's presentation (saved on the global Guardar).
+  /// A value equal to what the registry holds is no change, so undoing an
+  /// edit by hand leaves nothing to save.
+  ///
+  /// The draft is kept even then, with what it was compared against: a value
+  /// written back while a save of the previous one is in flight must survive
+  /// that save's acknowledgement, which moves the comparison to what it wrote.
   void stageCatalogPresentation(
     WebsiteCatalogPresentation next, {
     required WebsiteCatalogPresentation saved,

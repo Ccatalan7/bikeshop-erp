@@ -134,8 +134,14 @@ página, tarjetas, filtros y Google al costado; detalle en
   «encabezado», «pie de página», «franja superior») y la barra sobre el bloque
   lo nombra como la lista («Características», no «FEATURES») `[Repo]`.
 
-Sigue pendiente ([estado-y-pendientes](estado-y-pendientes.md)): una plantilla
-que cambie las 11 categorías a la vez y la ficha de producto en el lienzo.
+**Una plantilla para las 11 categorías (etapa 3c, 2026-10-06):** en cualquier
+categoría, el «Diseño» de la portada y las tarjetas y filtros cambian la
+plantilla, que dibujan todas las que no tienen diseño propio; «Diseño propio
+para X» la separa. Detalle en [catálogo y fichas](catalogo-y-fichas.md)
+`[Repo]`.
+
+Sigue pendiente ([estado-y-pendientes](estado-y-pendientes.md)): la ficha de
+producto en el lienzo.
 
 ## Bloques
 

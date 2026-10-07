@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-editor-category-template",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "windows",
+    "android"
+  ],
+  "title": "Una plantilla para todas las páginas de categoría",
+  "summary": "El aspecto de las páginas de categoría (portada, tarjetas, filtros, ruta y subcategorías) se cambia una vez desde cualquiera de ellas y se ve en todas; una categoría puede tener su diseño propio sin tocar a las demás.",
+  "items": [
+    "En una categoría, el diseño de la portada, las tarjetas y los filtros cambia la plantilla de todas: «Plantilla · cambia las 11 categorías».",
+    "«Diseño propio» separa a una categoría, a partir del aspecto de la plantilla; apagarlo la devuelve. Textos, foto, dirección y Google siguen siendo suyos.",
+    "La tienda, el editor y el sitio publicado dibujan la misma plantilla."
+  ],
+  "evidence": [
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_catalog_presentation.dart",
+      "sha256": "fd0b2cb65938c8f1543dc4a38258f2f39ecde1f5622b5cbfd97824cfdd953aae"
+    },
+    {
+      "path": "lib/modules/website/models/website_catalog_canvas.dart",
+      "sha256": "8f720473f5e9a58493952ca75e963a090ddade03adcea65514fad8efebd93cf6"
+    },
+    {
+      "path": "lib/modules/website/widgets/editor_panel/catalog_section_controls.dart",
+      "sha256": "2de8fce51d6072aa3e1c79ad6067f1ba2a7009d90691483a8eec5acda40d9fd7"
+    },
+    {
+      "path": "lib/public_store/pages/product_catalog_page.dart",
+      "sha256": "c059d0fdcd029d56ab4f8a90d9411590dd6da14f9c388fee80fc489a09ebdd61"
+    },
+    {
+      "path": "lib/modules/website/providers/website_edit_mode_provider.dart",
+      "sha256": "24eb3fa9adb312a3b6bb162aabf559d2351b07079f3b858db48f88c486672806"
+    },
+    {
+      "path": "services/storefront_html/lib/src/catalog_page_model.dart",
+      "sha256": "aad63f1f6cbf84bbe52d51fb9995eabc5a72a4e6c3f2c439f2e1e5b5df2c4c4e"
+    }
+  ]
+}

@@ -1379,6 +1379,62 @@ void main() {
     );
 
     test(
+      'a category draws the category template unless it has its own look',
+      () async {
+        Map<String, dynamic> withTemplate({bool ownLook = false}) {
+          final shell = _shell();
+          shell['settings'] = {
+            ...shell['settings'] as Map,
+            websiteCatalogPresentationsSettingKey: jsonEncode({
+              'items': [
+                {
+                  'category_id': websiteCategoryTemplatePresentationId,
+                  'slug': 'categorias',
+                  'grid_density': 'compact',
+                  'show_breadcrumbs': false,
+                  'show_subcategories': false,
+                },
+                {
+                  'category_id': _parent,
+                  'slug': 'componentes',
+                  'own_look': ownLook,
+                },
+              ],
+            }),
+          };
+          return shell;
+        }
+
+        final follows = await (await _get(
+          reads(shell: withTemplate()),
+          '/productos/categoria/componentes',
+        )).readAsString();
+        expect(follows, contains('<ul class="cards compact"'));
+        expect(follows, isNot(contains('<nav class="subcats"')));
+        expect(
+          follows,
+          isNot(contains('<nav class="trail" aria-label="Ruta">')),
+        );
+
+        final own = await (await _get(
+          reads(shell: withTemplate(ownLook: true)),
+          '/productos/categoria/componentes',
+        )).readAsString();
+        expect(own, isNot(contains('<ul class="cards compact"')));
+        expect(own, contains('<nav class="subcats"'));
+        expect(own, contains('<nav class="trail" aria-label="Ruta">'));
+        // The template is never a page.
+        expect(
+          (await _get(
+            reads(shell: withTemplate()),
+            '/productos/categoria/categorias',
+          )).statusCode,
+          404,
+        );
+      },
+    );
+
+    test(
       'a name shared with a hidden category opens the published one',
       () async {
         final shell = _shell();

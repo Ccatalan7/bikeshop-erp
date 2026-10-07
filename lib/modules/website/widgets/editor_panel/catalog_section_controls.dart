@@ -147,16 +147,57 @@ class _CatalogSectionControls extends StatelessWidget {
     void stage(WebsiteCatalogPresentation next) =>
         provider.stageCatalogPresentation(next, saved: saved);
 
+    // A category's look (portada height, alignment and darkening, cards,
+    // filters, trail, subcategories) is the category template's, shared by
+    // every category page, unless this category has its own.
+    final templateSaved = canvas != null && canvas.collection
+        ? canvas.template ?? WebsiteCatalogPresentation.categoryTemplate()
+        : null;
+    final followsTemplate = templateSaved != null && !value.ownLook;
+    final look = followsTemplate
+        ? provider.effectiveCatalogPresentation(templateSaved)
+        : value;
+    void stageLook(WebsiteCatalogPresentation next) => followsTemplate
+        ? provider.stageCatalogPresentation(next, saved: templateSaved)
+        : stage(next);
+    final lookScope = templateSaved == null
+        ? null
+        : _CategoryLookScope(
+            categoryName: canvas!.rootLabel,
+            ownLook: value.ownLook,
+            categoryPageCount: canvas.categoryPageCount,
+            ownLookCount: _ownLookCount(context, saved, value),
+            onOwnLookChanged: (own) => stage(
+              own
+                  ? value.copyLookFrom(look).copyWith(ownLook: true)
+                  : value.copyWith(ownLook: false),
+            ),
+          );
+
     final offersPriceList = canvas?.offersPriceList ?? true;
     final priceList = offersPriceList && value.isPriceList;
     final children = switch (target.section) {
       WebsiteCatalogSection.hero => canvas?.collection == true
-          ? _collectionHero(context, value, canvas!, stage)
+          ? _collectionHero(
+              context,
+              value,
+              canvas!,
+              stage,
+              look: look,
+              stageLook: stageLook,
+              lookScope: lookScope!,
+            )
           : _hero(context, value, canvas, stage),
       WebsiteCatalogSection.plans => _plans(context, value, canvas, stage),
       WebsiteCatalogSection.list => priceList
           ? _list(context, canvas)
-          : _gridList(context, value, canvas, stage),
+          : _gridList(
+              context,
+              look,
+              canvas,
+              stageLook,
+              lookScope: lookScope,
+            ),
       WebsiteCatalogSection.closing => _closing(context, value, stage),
       WebsiteCatalogSection.page => _page(
           context,
@@ -373,14 +414,18 @@ class _CatalogSectionControls extends StatelessWidget {
     ];
   }
 
-  /// A category's portada: its own texts and look over the category's name,
-  /// description and photo, which stay the category's.
+  /// A category's portada: its own texts and photo over the category's name,
+  /// description and photo, which stay the category's; its look is the
+  /// template's ([look], staged by [stageLook]) unless it has its own.
   List<Widget> _collectionHero(
     BuildContext context,
     WebsiteCatalogPresentation value,
     WebsiteCatalogCanvasContext canvas,
-    ValueChanged<WebsiteCatalogPresentation> stage,
-  ) {
+    ValueChanged<WebsiteCatalogPresentation> stage, {
+    required WebsiteCatalogPresentation look,
+    required ValueChanged<WebsiteCatalogPresentation> stageLook,
+    required Widget lookScope,
+  }) {
     return [
       _CollapsibleSection(
         title: 'Textos',
@@ -417,7 +462,7 @@ class _CatalogSectionControls extends StatelessWidget {
         ],
       ),
       _CollapsibleSection(
-        title: 'Foto y color',
+        title: 'Foto',
         icon: Icons.image_outlined,
         children: [
           _ImagePicker(
@@ -438,49 +483,47 @@ class _CatalogSectionControls extends StatelessWidget {
               'Sin foto propia, usa la de la categoría; sin ninguna, el color '
               'de la marca.',
             ),
-          const SizedBox(height: 6),
-          _CatalogOverlaySlider(
-            value: value.heroOverlay,
-            onChanged: (overlay) => stage(value.copyWith(heroOverlay: overlay)),
-          ),
         ],
       ),
       _CollapsibleSection(
-        title: 'Alto y alineación',
-        icon: Icons.height_rounded,
-        initiallyExpanded: false,
+        title: 'Diseño',
+        icon: Icons.dashboard_customize_outlined,
         children: [
+          lookScope,
+          const SizedBox(height: 14),
+          _CatalogOverlaySlider(
+            value: look.heroOverlay,
+            onChanged: (overlay) =>
+                stageLook(look.copyWith(heroOverlay: overlay)),
+          ),
+          const SizedBox(height: 12),
           VbSegmented<WebsiteCatalogHeroSize>(
             groupLabel: 'Alto de la portada',
-            value: value.heroSize,
+            value: look.heroSize,
             options: [
               for (final size in WebsiteCatalogHeroSize.values)
                 VbSegmentedOption(value: size, label: size.label),
             ],
-            onChanged: (size) => stage(value.copyWith(heroSize: size)),
+            onChanged: (size) => stageLook(look.copyWith(heroSize: size)),
           ),
           const SizedBox(height: 12),
           VbSegmented<WebsiteCatalogHeroAlignment>(
             groupLabel: 'Alineación de la portada',
-            value: value.heroAlignment,
+            value: look.heroAlignment,
             options: [
               for (final alignment in WebsiteCatalogHeroAlignment.values)
                 VbSegmentedOption(value: alignment, label: alignment.label),
             ],
             onChanged: (alignment) =>
-                stage(value.copyWith(heroAlignment: alignment)),
+                stageLook(look.copyWith(heroAlignment: alignment)),
           ),
-        ],
-      ),
-      _CollapsibleSection(
-        title: 'Subcategorías',
-        icon: Icons.account_tree_outlined,
-        initiallyExpanded: false,
-        children: [
+          const SizedBox(height: 12),
           _EditorToggle(
-            label: 'Mostrarlas bajo la portada',
-            value: value.showSubcategories,
-            onChanged: (show) => stage(value.copyWith(showSubcategories: show)),
+            key: const ValueKey('catalog-show-subcategories'),
+            label: 'Subcategorías bajo la portada',
+            value: look.showSubcategories,
+            onChanged: (show) =>
+                stageLook(look.copyWith(showSubcategories: show)),
           ),
           _CatalogHelp(
             canvas.groupCount == 0
@@ -495,13 +538,16 @@ class _CatalogSectionControls extends StatelessWidget {
   }
 
   /// The product grid of a catalog page: how dense its cards are, which
-  /// filters it offers, and (for a category) the trail above it.
+  /// filters it offers, and (for a category) the trail above it. On a
+  /// category, [value] is its look: the template's unless it has its own,
+  /// as [lookScope] says.
   List<Widget> _gridList(
     BuildContext context,
     WebsiteCatalogPresentation value,
     WebsiteCatalogCanvasContext? canvas,
-    ValueChanged<WebsiteCatalogPresentation> stage,
-  ) {
+    ValueChanged<WebsiteCatalogPresentation> stage, {
+    Widget? lookScope,
+  }) {
     final noun = canvas?.noun ?? 'productos';
     void toggleFacet(WebsiteCatalogFacet facet, bool on) {
       final next = [
@@ -513,6 +559,7 @@ class _CatalogSectionControls extends StatelessWidget {
     }
 
     return [
+      if (lookScope != null) ...[lookScope, const SizedBox(height: 12)],
       _CollapsibleSection(
         title: 'Tarjetas',
         icon: Icons.grid_view_rounded,
@@ -942,6 +989,122 @@ class _CatalogSectionControls extends StatelessWidget {
 
 /// The category's address: its current slug and the old ones that still lead
 /// here. A slug another category claims is said before «Guardar» refuses it.
+/// How many category pages have a look of their own, counting this
+/// category's draft instead of what it saved.
+int _ownLookCount(
+  BuildContext context,
+  WebsiteCatalogPresentation saved,
+  WebsiteCatalogPresentation value,
+) {
+  final WebsiteCatalogPresentationRegistry registry;
+  try {
+    registry = context.read<WebsiteService>().catalogPresentationRegistry;
+  } catch (_) {
+    // A host without the site's service (a test, a preview): only this one.
+    return value.ownLook ? 1 : 0;
+  }
+  final savedOwn = registry.forCategory(saved.ownerId)?.ownLook ?? false;
+  return registry.categoriesWithOwnLook -
+      (savedOwn ? 1 : 0) +
+      (value.ownLook ? 1 : 0);
+}
+
+/// Above a category's look controls: whose look they change. Following the
+/// template, every category page that follows it; with its own look, only
+/// this one. The switch moves between the two without changing what shows.
+class _CategoryLookScope extends StatelessWidget {
+  const _CategoryLookScope({
+    required this.categoryName,
+    required this.ownLook,
+    required this.categoryPageCount,
+    required this.ownLookCount,
+    required this.onOwnLookChanged,
+  });
+
+  final String categoryName;
+  final bool ownLook;
+  final int categoryPageCount;
+  final int ownLookCount;
+  final ValueChanged<bool> onOwnLookChanged;
+
+  String get _title {
+    if (ownLook) return 'Diseño propio de $categoryName';
+    final following = (categoryPageCount - ownLookCount).clamp(1, 1 << 20);
+    if (categoryPageCount <= 1) return 'Plantilla de las categorías';
+    if (following >= categoryPageCount) {
+      return 'Plantilla · cambia las $categoryPageCount categorías';
+    }
+    return 'Plantilla · cambia $following de las $categoryPageCount '
+        'categorías';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = websiteEditorAccent(context);
+    return Container(
+      key: const ValueKey('catalog-look-scope'),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+      decoration: BoxDecoration(
+        color: ownLook
+            ? Colors.white.withValues(alpha: 0.05)
+            : accent.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: ownLook
+              ? Colors.white.withValues(alpha: 0.14)
+              : accent.withValues(alpha: 0.35),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                ownLook ? Icons.brush_outlined : Icons.copy_all_rounded,
+                size: 16,
+                color: ownLook ? Colors.white70 : accent,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            ownLook
+                ? 'Sólo esta categoría se ve así. Las demás siguen la '
+                    'plantilla.'
+                : 'La portada, las tarjetas y los filtros se ven igual en '
+                    'todas las categorías: lo que cambies aquí cambia en '
+                    'todas.',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.7),
+              fontSize: 12,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 4),
+          _EditorToggle(
+            key: const ValueKey('catalog-own-look'),
+            label: 'Diseño propio para $categoryName',
+            value: ownLook,
+            onChanged: onOwnLookChanged,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _CatalogAddressField extends StatefulWidget {
   const _CatalogAddressField({
     required this.value,

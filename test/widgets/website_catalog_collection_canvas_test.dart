@@ -43,7 +43,12 @@ WebsiteCatalogCanvasContext _category() => WebsiteCatalogCanvasContext(
         ),
       ],
       collection: true,
+      categoryPageCount: 11,
     );
+
+/// The category template as saved: none yet, so the default look.
+WebsiteCatalogPresentation _template() =>
+    WebsiteCatalogPresentation.categoryTemplate();
 
 final _publisher = Object();
 
@@ -193,14 +198,14 @@ void main() {
         ..selectBlock(_id(WebsiteCatalogSection.hero));
       await _pumpInspector(tester, provider);
 
-      for (final group in [
-        'Textos',
-        'Foto y color',
-        'Alto y alineación',
-        'Subcategorías',
-      ]) {
+      for (final group in ['Textos', 'Foto', 'Diseño']) {
         expect(find.text(group), findsOneWidget, reason: group);
       }
+      // Its look is the template's, and says how many pages it changes.
+      expect(
+        find.text('Plantilla · cambia las 11 categorías'),
+        findsOneWidget,
+      );
       // A category's portada has no button and no Google rating.
       expect(find.text('Botón'), findsNothing);
       expect(find.text('Calificación de Google'), findsNothing);
@@ -230,15 +235,29 @@ void main() {
       expect(find.text('Tarjetas'), findsOneWidget);
       expect(find.text('Filtros'), findsOneWidget);
       expect(find.text('Ruta'), findsOneWidget);
+      expect(
+        find.text('Plantilla · cambia las 11 categorías'),
+        findsOneWidget,
+      );
 
+      // Following the template, the look changes it (every category page),
+      // not Frenos.
       await tester.tap(find.text('Compacta'));
       await tester.pump();
       expect(
-        provider.effectiveCatalogPresentation(_saved()).gridDensity,
+        provider.effectiveCatalogPresentation(_template()).gridDensity,
         WebsiteCatalogGridDensity.compact,
       );
+      expect(
+        provider.effectiveCatalogPresentation(_saved()).gridDensity,
+        WebsiteCatalogGridDensity.balanced,
+      );
+      expect(
+        provider.pendingCatalogPresentations.keys,
+        [websiteCategoryTemplatePresentationId],
+      );
 
-      final brandOn = _saved().facets.contains(WebsiteCatalogFacet.brand);
+      final brandOn = _template().facets.contains(WebsiteCatalogFacet.brand);
       await tester.tap(
         find.descendant(
           of: find.byKey(const ValueKey('catalog-facet-brand')),
@@ -248,10 +267,66 @@ void main() {
       await tester.pump();
       expect(
         provider
-            .effectiveCatalogPresentation(_saved())
+            .effectiveCatalogPresentation(_template())
             .facets
             .contains(WebsiteCatalogFacet.brand),
         !brandOn,
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
+        'a look of its own starts from the template and changes only it',
+        (tester) async {
+      final provider = _editor(_category())
+        ..selectBlock(_id(WebsiteCatalogSection.list))
+        ..stageCatalogPresentation(
+          _template().copyWith(gridDensity: WebsiteCatalogGridDensity.compact),
+          saved: _template(),
+        );
+      await _pumpInspector(tester, provider);
+
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(const ValueKey('catalog-own-look')),
+          matching: find.byType(Switch),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final own = provider.effectiveCatalogPresentation(_saved());
+      expect(own.ownLook, isTrue);
+      // Nothing jumps: it keeps the look it was drawing.
+      expect(own.gridDensity, WebsiteCatalogGridDensity.compact);
+      expect(find.text('Diseño propio de Frenos'), findsOneWidget);
+
+      await tester.tap(find.text('Editorial'));
+      await tester.pump();
+      expect(
+        provider.effectiveCatalogPresentation(_saved()).gridDensity,
+        WebsiteCatalogGridDensity.editorial,
+      );
+      expect(
+        provider.effectiveCatalogPresentation(_template()).gridDensity,
+        WebsiteCatalogGridDensity.compact,
+      );
+
+      // Back to the template: it draws the template's look again.
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(const ValueKey('catalog-own-look')),
+          matching: find.byType(Switch),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final back = provider.effectiveCatalogPresentation(_saved());
+      expect(back.ownLook, isFalse);
+      expect(
+        back
+            .withCategoryTemplate(
+              provider.effectiveCatalogPresentation(_template()),
+            )
+            .gridDensity,
+        WebsiteCatalogGridDensity.compact,
       );
       expect(tester.takeException(), isNull);
     });
@@ -269,7 +344,7 @@ void main() {
         find.byKey(const ValueKey('catalog-facet-up-availability')),
       );
       await tester.pump();
-      expect(provider.effectiveCatalogPresentation(_saved()).facets, [
+      expect(provider.effectiveCatalogPresentation(_template()).facets, [
         WebsiteCatalogFacet.availability,
         WebsiteCatalogFacet.categories,
       ]);
