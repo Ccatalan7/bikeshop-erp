@@ -124,10 +124,24 @@ class CanvasLayersView extends StatelessComponent {
         drawn.add(WebsiteViewport.tablet.wireName);
       }
     }
+    // For the editor's draft, how a dragged layer lands, as `CanvasBlock`
+    // does: the grid it snaps to (0 when the document turns snapping off),
+    // the distance in pixels that pulls it, and whether it may bleed past
+    // the design area.
+    final grid = document['snap'] == false
+        ? 0.0
+        : numberValue(document['gridSize']) ?? 8.0;
+    final pull = numberValue(document['snapDistance']) ?? 6.0;
     return div(
       classes: 'cnv',
       attributes: context.draft
-          ? {'data-canvas-slide': slide == null ? 'root' : '$slide'}
+          ? {
+              'data-canvas-slide': slide == null ? 'root' : '$slide',
+              'data-grid': cssNum(grid > 0 ? grid : 0),
+              'data-pull': cssNum(pull > 0 ? pull : 0),
+              if (document['constrainElementsToSafeArea'] == false)
+                'data-bleed': '',
+            }
           : const {},
       [
         for (final MapEntry(:key, :value) in sets.entries)

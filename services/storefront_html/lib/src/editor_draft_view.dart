@@ -43,6 +43,8 @@ const _draftCss = '''
 .vb-ghost{position:fixed;z-index:2147483647;pointer-events:none;padding:6px 10px;border-radius:8px;display:none;
   box-shadow:0 4px 12px rgb(0 0 0 / .3);font:700 12px/1 system-ui,-apple-system,sans-serif;white-space:nowrap}
 .vb-moving,.vb-moving *{cursor:grabbing!important;user-select:none!important}
+.vb-guide{position:fixed;z-index:2147483646;pointer-events:none;display:none;opacity:.8}
+.vb-guide-x{width:1px;margin-left:-.5px}.vb-guide-y{height:1px;margin-top:-.5px}
 .vb-bar button{flex:none}
 .vb-bar button{all:unset;display:grid;place-items:center;width:30px;height:30px;border-radius:8px;cursor:pointer}
 .vb-bar button:hover,.vb-bar button:focus-visible{background:rgb(0 0 0 / .1)}
@@ -702,12 +704,12 @@ const _draftScript = r'''
   };
   // Moving the picked canvas layer (a press inside it and a drag) or
   // resizing it (its corner grip): the layer follows the pointer in the
-  // canvas's own units (`--x`/`--y`/`--w`/`--h`), snapped to the canvas's
-  // 8-unit grid within 6, as the canvas snaps, and kept inside the canvas;
-  // the editor writes it when the drag ends, as the canvas's direct
-  // manipulation (`vbDraftLayerDrag` begin / commit / cancel), and the page
-  // puts it back if the write is refused (`vbDraftLayered(false)`). A press
-  // that does not move is a click, which picks as always.
+  // canvas's own units (`--x`/`--y`/`--w`/`--h`) and lands as the canvas
+  // lands it (`landing`); the editor writes it when the drag ends, as the
+  // canvas's direct manipulation (`vbDraftLayerDrag` begin / commit /
+  // cancel), and the page puts it back if the write is refused
+  // (`vbDraftLayered(false)`) or Escape lets it go. A press that does not
+  // move is a click, which picks as always.
   var shifting = null, shifted = null;
   function layerMessage(m, phase, values) {
     send('vbDraftLayerDrag', [m.id, m.slide, m.layer, phase, m.mode, values || null],
@@ -721,7 +723,84 @@ const _draftScript = r'''
       w: parseFloat(st.getPropertyValue('--w')) || 0, h: parseFloat(st.getPropertyValue('--h')) || 0
     };
   }
-  function snap(v) { var g = Math.round(v / 8) * 8; return Math.abs(g - v) <= 6 ? g : v; }
+  // How a layer of [set] lands, as `CanvasBlock` lands it: its center, then
+  // its near edge, then its far edge pulled to the canvas's edges and middle
+  // or to another layer's, within the document's distance in pixels
+  // (`data-pull`), a line showing what it lined up with; otherwise to the
+  // document's grid (`data-grid`, 0 when snapping is off). Kept inside the
+  // canvas, or with a grab of it inside where the document lets layers
+  // bleed (`data-bleed`). `null` for a layer the page cannot measure.
+  function landing(el) {
+    var u = unitsOf(el), set = el.closest('.cnv-set'), cnv = set && set.closest('.cnv');
+    if (!(u.w > 0) || !el.offsetWidth || !cnv) return null;
+    var s = el.offsetWidth / u.w, r = set.getBoundingClientRect();
+    var dw = parseFloat(getComputedStyle(set).getPropertyValue('--dw')) || u.x + u.w;
+    var dh = r.height / s;
+    var grid = parseFloat(cnv.getAttribute('data-grid')), pull = parseFloat(cnv.getAttribute('data-pull'));
+    var z = {
+      u: u, s: s, dw: dw, dh: dh, rect: r, ox: r.left + Math.max(0, (r.width - dw * s) / 2),
+      grid: grid >= 0 ? grid : 8, reach: (pull >= 0 ? pull : 6) / s,
+      bleed: cnv.hasAttribute('data-bleed'),
+      button: el.classList.contains('cl-btn') || el.classList.contains('cl-tbtn'),
+      xs: [0, dw / 2, dw], ys: [0, dh / 2, dh]
+    };
+    [].forEach.call(set.querySelectorAll('[data-layer]'), function (other) {
+      if (other === el || !other.getClientRects().length) return;
+      var o = unitsOf(other);
+      z.xs.push(o.x, o.x + o.w / 2, o.x + o.w);
+      z.ys.push(o.y, o.y + o.h / 2, o.y + o.h);
+    });
+    return z;
+  }
+  // The nearest target within reach of [pos] plus each share of [size]
+  // (the center, the near edge, the far edge, in that order on a tie).
+  function pulled(pos, size, targets, z, shares) {
+    var best = null;
+    shares.forEach(function (k) {
+      targets.forEach(function (t) {
+        var d = Math.abs(pos + k * size - t);
+        if (d <= z.reach && (!best || d < best.d)) best = { d: d, at: t - k * size, line: t };
+      });
+    });
+    return best;
+  }
+  function gridded(v, z) {
+    if (!(z.grid > 0)) return v;
+    var g = Math.round(v / z.grid) * z.grid;
+    return Math.abs(g - v) <= z.reach ? g : v;
+  }
+  function keptIn(v, size, room, z) {
+    if (z.bleed) {
+      var grab = Math.min(32, Math.max(12, size));
+      return Math.max(grab - size, Math.min(v, room - grab));
+    }
+    return Math.max(0, Math.min(v, Math.max(0, room - size)));
+  }
+  var guides = ['x', 'y'].map(function (axis) {
+    var el = document.createElement('div');
+    el.className = 'vb-guide vb-guide-' + axis;
+    document.body.appendChild(el);
+    return el;
+  });
+  // The lines a landing lined up with, in units of [z]; `null` hides one.
+  function showGuides(z, lineX, lineY) {
+    var color = (meta && meta.accent) || '#1a73e8';
+    [[guides[0], lineX], [guides[1], lineY]].forEach(function (g, i) {
+      var el = g[0], at = g[1];
+      el.style.display = at == null ? 'none' : 'block';
+      if (at == null) return;
+      el.style.background = color;
+      if (i === 0) {
+        el.style.left = (z.ox + at * z.s) + 'px';
+        el.style.top = z.rect.top + 'px';
+        el.style.height = z.rect.height + 'px';
+      } else {
+        el.style.top = (z.rect.top + at * z.s) + 'px';
+        el.style.left = z.rect.left + 'px';
+        el.style.width = z.rect.width + 'px';
+      }
+    });
+  }
   function restoreLayer(m) {
     if (!m) return;
     if (m.style === null) m.el.removeAttribute('style'); else m.el.setAttribute('style', m.style);
@@ -735,20 +814,72 @@ const _draftScript = r'''
     var inside = event.clientX >= r.left && event.clientX <= r.right &&
       event.clientY >= r.top && event.clientY <= r.bottom;
     if (!grip && !inside) return;
-    var u = unitsOf(el), set = el.closest('.cnv-set');
-    if (!(u.w > 0) || !el.offsetWidth || !set) return;
-    var scale = el.offsetWidth / u.w;
+    var z = landing(el);
+    if (!z) return;
     // Text and photos would start their own selection or drag.
     event.preventDefault();
     if (grip) event.stopPropagation();
     shifting = {
       id: pick.target.getAttribute('data-block-id'), slide: layerSel.slide, layer: layerSel.id,
-      mode: grip ? 'resize' : 'move', el: el, style: el.getAttribute('style'), from: u, to: null,
-      sx: event.clientX, sy: event.clientY, s: scale,
-      dw: parseFloat(getComputedStyle(set).getPropertyValue('--dw')) || u.x + u.w,
-      dh: set.getBoundingClientRect().height / scale, begun: false
+      mode: grip ? 'resize' : 'move', el: el, style: el.getAttribute('style'), from: z.u, to: null,
+      sx: event.clientX, sy: event.clientY, z: z, lock: null, begun: false
     };
   }, true);
+  // Where the drag puts the layer: a place (Shift keeps it on one axis) or
+  // a size from the corner (Shift keeps its proportions; the canvas's
+  // smallest frame, larger for a button).
+  function shiftedTo(m, event) {
+    var z = m.z, f = m.from, dx = (event.clientX - m.sx) / z.s, dy = (event.clientY - m.sy) / z.s;
+    var lineX = null, lineY = null, to, hit;
+    if (m.mode === 'move') {
+      if (event.shiftKey) {
+        if (!m.lock) m.lock = Math.abs(dx) >= Math.abs(dy) ? 'x' : 'y';
+      } else {
+        m.lock = null;
+      }
+      if (m.lock === 'x') dy = 0;
+      if (m.lock === 'y') dx = 0;
+      var x = f.x + dx, y = f.y + dy;
+      hit = m.lock === 'y' ? null : pulled(x, f.w, z.xs, z, [0.5, 0, 1]);
+      if (hit) { x = hit.at; lineX = hit.line; } else if (m.lock !== 'y') x = gridded(x, z);
+      hit = m.lock === 'x' ? null : pulled(y, f.h, z.ys, z, [0.5, 0, 1]);
+      if (hit) { y = hit.at; lineY = hit.line; } else if (m.lock !== 'x') y = gridded(y, z);
+      to = { x: Math.round(keptIn(x, f.w, z.dw, z)), y: Math.round(keptIn(y, f.h, z.dh, z)) };
+      if (lineX != null && Math.abs(to.x - Math.round(x)) > 0) lineX = null;
+      if (lineY != null && Math.abs(to.y - Math.round(y)) > 0) lineY = null;
+    } else {
+      var minW = z.button ? 120 : 40, minH = z.button ? 44 : 32;
+      var right = f.x + f.w + dx, bottom = f.y + f.h + dy, w, h;
+      var ratio = f.w / Math.max(f.h, 1);
+      var byWidth = !event.shiftKey || Math.abs(dx) >= Math.abs(dy);
+      var byHeight = !event.shiftKey || !byWidth;
+      if (byWidth) {
+        hit = pulled(right, 0, z.xs, z, [0]);
+        right = hit ? hit.at : gridded(right, z);
+        if (hit) lineX = hit.line;
+      }
+      if (byHeight) {
+        hit = pulled(bottom, 0, z.ys, z, [0]);
+        bottom = hit ? hit.at : gridded(bottom, z);
+        if (hit) lineY = hit.line;
+      }
+      w = right - f.x;
+      h = bottom - f.y;
+      if (event.shiftKey) {
+        if (byWidth) h = w / ratio; else w = h * ratio;
+      }
+      var maxW = z.bleed ? 20000 : Math.max(minW, z.dw - f.x);
+      var maxH = z.bleed ? 20000 : Math.max(minH, z.dh - f.y);
+      to = {
+        w: Math.round(Math.max(minW, Math.min(w, maxW))),
+        h: Math.round(Math.max(minH, Math.min(h, maxH)))
+      };
+      if (lineX != null && to.w !== Math.round(w)) lineX = null;
+      if (lineY != null && to.h !== Math.round(h)) lineY = null;
+    }
+    showGuides(z, lineX, lineY);
+    return to;
+  }
   document.addEventListener('mousemove', function (event) {
     var m = shifting;
     if (!m) return;
@@ -759,29 +890,22 @@ const _draftScript = r'''
       layerMessage(m, 'begin');
     }
     event.preventDefault();
-    var f = m.from, dx = (event.clientX - m.sx) / m.s, dy = (event.clientY - m.sy) / m.s, to;
-    if (m.mode === 'move') {
-      to = {
-        x: Math.round(Math.max(0, Math.min(snap(f.x + dx), Math.max(0, m.dw - f.w)))),
-        y: Math.round(Math.max(0, Math.min(snap(f.y + dy), Math.max(0, m.dh - f.h))))
-      };
-    } else {
-      to = {
-        w: Math.round(Math.max(16, Math.min(snap(f.x + f.w + dx) - f.x, Math.max(16, m.dw - f.x)))),
-        h: Math.round(Math.max(8, Math.min(snap(f.y + f.h + dy) - f.y, Math.max(8, m.dh - f.y))))
-      };
-    }
+    var to = shiftedTo(m, event);
     m.to = to;
     Object.keys(to).forEach(function (k) { m.el.style.setProperty('--' + k, to[k]); });
     soon();
   }, true);
+  function stopShifting() {
+    shifting = null;
+    showGuides(null, null, null);
+    document.documentElement.classList.remove('vb-moving');
+  }
   function endShifting() {
     var m = shifting;
     if (!m) return;
-    shifting = null;
+    stopShifting();
     if (!m.begun) return;
     dragged = Date.now();
-    document.documentElement.classList.remove('vb-moving');
     var to = m.to || {};
     if (Object.keys(to).every(function (k) { return to[k] === m.from[k]; })) {
       layerMessage(m, 'cancel');
@@ -793,6 +917,18 @@ const _draftScript = r'''
   }
   document.addEventListener('mouseup', endShifting, true);
   addEventListener('blur', endShifting);
+  // Escape lets a drag go: the layer goes back where it was.
+  document.addEventListener('keydown', function (event) {
+    var m = shifting;
+    if (!m || event.key !== 'Escape') return;
+    event.preventDefault();
+    event.stopPropagation();
+    stopShifting();
+    if (!m.begun) return;
+    dragged = Date.now();
+    layerMessage(m, 'cancel');
+    restoreLayer(m);
+  }, true);
   // The arrows nudge the picked layer by one unit (ten with Shift), as on
   // the canvas: each press is a whole move, written as one step.
   document.addEventListener('keydown', function (event) {
@@ -804,15 +940,13 @@ const _draftScript = r'''
     var dx = { ArrowLeft: -1, ArrowRight: 1 }[event.key] || 0;
     var dy = { ArrowUp: -1, ArrowDown: 1 }[event.key] || 0;
     if (!dx && !dy) return;
-    var el = layerPick.target, u = unitsOf(el), set = el.closest('.cnv-set');
-    if (!(u.w > 0) || !el.offsetWidth || !set) return;
+    var el = layerPick.target, z = landing(el);
+    if (!z) return;
     event.preventDefault();
-    var step = event.shiftKey ? 10 : 1, scale = el.offsetWidth / u.w;
-    var dw = parseFloat(getComputedStyle(set).getPropertyValue('--dw')) || u.x + u.w;
-    var dh = set.getBoundingClientRect().height / scale;
+    var u = z.u, step = event.shiftKey ? 10 : 1;
     var to = {
-      x: Math.round(Math.max(0, Math.min(u.x + dx * step, Math.max(0, dw - u.w)))),
-      y: Math.round(Math.max(0, Math.min(u.y + dy * step, Math.max(0, dh - u.h))))
+      x: Math.round(keptIn(u.x + dx * step, u.w, z.dw, z)),
+      y: Math.round(keptIn(u.y + dy * step, u.h, z.dh, z))
     };
     if (to.x === u.x && to.y === u.y) return;
     var m = {
@@ -830,7 +964,7 @@ const _draftScript = r'''
     if (ok) { shifted = null; return; }
     // Refused at the start (the layer cannot be moved now) or at the end.
     var m = shifting || shifted;
-    if (shifting) { shifting = null; document.documentElement.classList.remove('vb-moving'); }
+    if (shifting) stopShifting();
     shifted = null;
     restoreLayer(m);
   };

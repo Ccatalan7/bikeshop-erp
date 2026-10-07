@@ -212,8 +212,10 @@ los mismos campos y la misma escritura del lienzo (`WebsiteButtonFields`,
 `WebsiteInlineFieldBinding.beginButton`) `[Repo 2026-10-07]`. En una
 campaña de capas (la diapositiva de cámaras), un clic en una capa la elige
 en el panel y la página la marca; arrastrándola se mueve y desde su esquina
-cambia de tamaño, con la misma escritura del lienzo (las guías de
-alineación siguen sólo en el lienzo) `[Repo 2026-10-07]`. Un clic en una foto del bloque (sobre nosotros,
+cambia de tamaño, con la misma escritura del lienzo y el mismo imán: se
+pega a los bordes y centros del canvas y de las otras capas con una línea
+guía, o a la grilla; Mayús fija el eje o la proporción y Escape la devuelve
+`[Repo 2026-10-07]`. Un clic en una foto del bloque (sobre nosotros,
 servicios, galería, equipo) abre el selector de imágenes del lienzo
 `[Repo 2026-10-07]`. En el
 borrador el carrusel no avanza solo, muestra la diapositiva elegida en el

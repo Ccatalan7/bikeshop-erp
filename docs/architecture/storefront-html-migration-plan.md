@@ -1956,15 +1956,29 @@ de 15 px de alto Flutter lo esconde y el HTML lo muestra.
   capa que la diapositiva o el canvas tienen (`websiteHtmlDraftLayerPlace`).
   La capa elegida se mueve arrastrándola y cambia de tamaño desde su
   esquina: sigue al puntero en las unidades del canvas (`--x`/`--y`/`--w`/
-  `--h`), se ajusta a la grilla de 8 a menos de 6, como el lienzo, y queda
-  dentro del canvas; al soltar el editor la escribe por la manipulación
+  `--h`) y cae como en el lienzo (`CanvasBlock._calculateSnappedPosition`):
+  su centro, luego su borde cercano, luego el lejano, se pegan a los bordes y
+  al centro del canvas o de otra capa a menos de la distancia del documento
+  (`snapDistance`, en píxeles), con una línea guía que muestra con qué se
+  alineó; si no, a la grilla del documento (`gridSize`, nada si `snap` está
+  apagado). Mayús fija el eje al mover y la proporción al cambiar el tamaño;
+  el marco más chico es el del lienzo (40×32, 120×44 un botón); Escape la
+  suelta donde estaba. Queda dentro del canvas, o con un agarre adentro si
+  el documento deja salirse (`constrainElementsToSafeArea: false`; el
+  servidor lo pasa al borrador en `data-grid`, `data-pull`, `data-bleed`, y
+  el editor rechaza un lugar fuera si el documento no lo deja); al soltar
+  el editor la escribe por la manipulación
   directa del lienzo (`startCanvasManipulation` al empezar, con la capa
   elegida, visible, sin candado y en la banda dibujada;
   `commitCanvasManipulation` al soltar, rechazada si el documento o el
   alcance cambiaron), y la página la devuelve si se rechaza. Un clic sin
   arrastre elige, como siempre. Las flechas la empujan 1 unidad (10 con
-  Mayús), cada pulsación un paso, como en el lienzo. Las guías de
-  alineación del lienzo no están en el HTML.
+  Mayús), cada pulsación un paso, como en el lienzo. Revisión de Codex
+  (2026-10-07): un botón o una foto que la página pide para otro tipo de
+  bloque se rechaza (`WebsiteButtonFields.block`, `WebsiteImageFields.block`;
+  un hero y un CTA guardan su texto en la misma llave, pero sólo el CTA
+  escribe `actions`), y la diapositiva de una capa es su lugar en la lista
+  guardada, como la nombran la página y los comandos del lienzo.
 - **Arrastrar para mover (servidor `715a6f0e`).** El nombre del bloque
   elegido, en su barra, se arrastra: una línea marca el borde de destino
   entre los bloques de la página como se ven, la página se desplaza cerca

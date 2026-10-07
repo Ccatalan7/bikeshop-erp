@@ -1,3 +1,5 @@
+import 'website_block_type.dart';
+
 /// Where a block keeps one of the photos the editor replaces where it is
 /// drawn: the keys of its address (its own first, then older names) and the
 /// list it belongs to (a gallery photo, a team member).
@@ -30,6 +32,16 @@ enum WebsiteImageFields {
   /// The list the photo's item is in (its canonical key first); empty for a
   /// photo of the block itself.
   final List<String> collection;
+
+  /// The one block type that draws this photo: a page that names it for any
+  /// other block names a photo that block does not have.
+  WebsiteBlockType get block => switch (this) {
+    about => WebsiteBlockType.about,
+    cta => WebsiteBlockType.cta,
+    services => WebsiteBlockType.services,
+    gallery => WebsiteBlockType.gallery,
+    team => WebsiteBlockType.team,
+  };
 
   /// How the editor's HTML names this photo: `about`, or `gallery#2` for the
   /// one of the item stored at [index].

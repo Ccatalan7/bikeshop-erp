@@ -407,3 +407,8 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   un clic en la vista HTML (selector de imágenes del lienzo).
 - La capa elegida se mueve y cambia de tamaño arrastrando en la vista HTML,
   por la manipulación directa del lienzo.
+- La capa arrastrada en la vista HTML cae como en el lienzo: se pega a bordes
+  y centros (del canvas y de otras capas) con línea guía, o a la grilla del
+  documento; Mayús y Escape como en el lienzo.
+- Revisión de Codex: un botón o una foto pedida para otro tipo de bloque se
+  rechaza (hero y CTA comparten la llave del texto).

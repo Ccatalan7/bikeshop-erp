@@ -136,9 +136,13 @@ class WebsiteInlineFieldBinding {
   /// Starts editing one of the block's buttons where the page draws it (the
   /// editor's «Vista HTML»): [spec]'s, of the item stored at [index] for a
   /// button of a list, guarded from now as the canvas's action slot guards
-  /// its card. `null` for a block not drawn yet or not picked, or a button
-  /// whose fields the block's schema does not have.
+  /// its card. `null` for a block not drawn yet or not picked, a button of
+  /// another block type ([WebsiteButtonFields.block]: a hero and a call to
+  /// action keep their labels under the same key, and only the latter
+  /// mirrors its `actions`), or one whose fields the block's schema does
+  /// not have.
   WebsiteInlineButtonWrite? beginButton(WebsiteButtonFields spec, int index) {
+    if (registeredType != spec.block) return null;
     final item = _buttonItem(spec, index);
     final fields = actionFields(
       item,
@@ -167,9 +171,11 @@ class WebsiteInlineFieldBinding {
   /// Starts replacing one of the block's photos where the page draws it
   /// (the editor's «Vista HTML»): [spec]'s, of the item stored at [index]
   /// for a photo of a list, guarded from now as the canvas's media slot
-  /// guards its picker. `null` for a block not drawn yet or not picked, an
-  /// item that is not there, or a photo the block's schema does not have.
+  /// guards its picker. `null` for a block not drawn yet or not picked, a
+  /// photo of another block type ([WebsiteImageFields.block]), an item that
+  /// is not there, or a photo the block's schema does not have.
   WebsiteInlineImageWrite? beginImage(WebsiteImageFields spec, int index) {
+    if (registeredType != spec.block) return null;
     final item = spec.collection.isEmpty
         ? null
         : WebsiteInlineRepeaterTarget(

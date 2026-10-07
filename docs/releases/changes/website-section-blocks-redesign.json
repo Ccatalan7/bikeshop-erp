@@ -139,7 +139,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_canvas_view.dart",
-      "sha256": "962bf8ca4e9be93d4de6edcf128816253bfb9a5d02d646e9e0a4bc12f51721ab"
+      "sha256": "58aeb5dc0bf223d17304b4e6f6f16dd5be8f12ec29327f2ea393a72e06eef918"
     },
     {
       "path": "lib/modules/website/widgets/website_features_block_content.dart",

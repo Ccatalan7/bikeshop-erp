@@ -4225,10 +4225,14 @@ void main() {
         expect(html, contains('data-layer="cam_title"'));
         expect(html, contains('data-layer="cam_rule"'));
         expect(html, contains("send('vbDraftLayer'"));
-      // The picked layer moves and resizes in the page, written by the
-      // editor when the drag ends.
-      expect(html, contains("send('vbDraftLayerDrag'"));
-      expect(html, contains('window.vbDraftLayered = function'));
+        // The picked layer moves and resizes in the page, written by the
+        // editor when the drag ends, and lands as the canvas lands it: the
+        // slide's grid and pull, lines on what it lined up with.
+        expect(html, contains("send('vbDraftLayerDrag'"));
+        expect(html, contains('window.vbDraftLayered = function'));
+        expect(html, contains('data-grid="8" data-pull="6"'));
+        expect(html, isNot(contains('data-pull="6" data-bleed')));
+        expect(html, contains("'vb-guide vb-guide-'"));
 
         final public = await _get(
           _FakeReads(
@@ -4246,6 +4250,8 @@ void main() {
         expect(visit, contains('CÁMARAS'));
         expect(visit, isNot(contains('data-layer')));
         expect(visit, isNot(contains('data-canvas-slide')));
+        expect(visit, isNot(contains('data-grid')));
+        expect(visit, isNot(contains('vb-guide')));
       },
     );
 

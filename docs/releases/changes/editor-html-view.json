@@ -11,7 +11,7 @@
   "title": "Vista HTML en el editor del sitio",
   "summary": "En el editor del sitio, «Vista HTML» muestra la página en pantalla —inicio, páginas, catálogo, categorías y ficha de producto— tal como la arma la tienda en HTML, con lo que aún no guardas, y se actualiza con cada cambio.",
   "items": [
-    "Un clic elige el bloque o una capa, que se arrastra y cambia de tamaño; los textos se escriben ahí y botones y fotos se cambian en su lugar."
+    "Un clic elige el bloque o una capa, que se arrastra con guías y cambia de tamaño; los textos se escriben ahí y botones y fotos se cambian en su lugar."
   ],
   "evidence": [
     {
@@ -20,7 +20,7 @@
     },
     {
       "path": "lib/modules/website/widgets/website_html_draft_view.dart",
-      "sha256": "1a22c52336ad265db9bd39b5f9e12f3f26ec25671d66365ec14c971001544202"
+      "sha256": "d5b958029844761b69279acdac7eacbf994f02bde7fd8b3b5be8dc82dafd6bb8"
     },
     {
       "path": "lib/modules/website/providers/website_edit_mode_provider.dart",
@@ -48,7 +48,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/editor_draft_view.dart",
-      "sha256": "fadd2f14b5777cbdcc5e15dd8b62af2ba0fb9a45ebe468211363fa84d2237500"
+      "sha256": "111bad075bfe3900305a59433d661221ec109cc95815ed5ed38ae10a7ff3a2cc"
     },
     {
       "path": "services/storefront_html/lib/src/editor_page_model.dart",
@@ -80,7 +80,7 @@
     },
     {
       "path": "lib/modules/website/services/website_html_draft_picks.dart",
-      "sha256": "127b9e2ee0010ffc63ecc61594600ba87c12021f20e7d8d2205a651947cda6be"
+      "sha256": "82e9a85274a2fc1767957c5db0bd16b57655b6084151aa7065095dbd54c81493"
     },
     {
       "path": "lib/modules/website/services/website_html_draft_picks_stub.dart",
@@ -128,7 +128,7 @@
     },
     {
       "path": "lib/modules/website/widgets/website_inline_field_binding.dart",
-      "sha256": "b613476cce6bb66323b489ef0cc9e41bc072e2f5265b476f668717ea4f9169ec"
+      "sha256": "b5cefac0aa9dc4520353de90ff3b9701070f14964374559d2b76ad04af72cc92"
     },
     {
       "path": "services/storefront_html/lib/src/website_carousel_view.dart",
@@ -176,7 +176,7 @@
     },
     {
       "path": "packages/vinabike_public_core/lib/modules/website/models/website_action.dart",
-      "sha256": "88fe3b52b9e72718c5924541e9a6aeef5ea4ecaa07d6a50d4ca2ca1e29e2d317"
+      "sha256": "741e6605e497ee10b8e4adb4ba50c4b7d7f522b9f4a442f5003a6bd061fcf5ee"
     },
     {
       "path": "packages/vinabike_public_core/lib/modules/website/models/website_hero_content.dart",
@@ -188,11 +188,11 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_canvas_view.dart",
-      "sha256": "962bf8ca4e9be93d4de6edcf128816253bfb9a5d02d646e9e0a4bc12f51721ab"
+      "sha256": "58aeb5dc0bf223d17304b4e6f6f16dd5be8f12ec29327f2ea393a72e06eef918"
     },
     {
       "path": "packages/vinabike_public_core/lib/modules/website/models/website_image_fields.dart",
-      "sha256": "1669b3cdd35ea498a2a29e2caf21b89c25ece1e19a2cc5e0a46617cbe62c43ef"
+      "sha256": "60445afcc2c732cbf40e070286ee48155f738e85c76836e7314b2e01d90fcc60"
     }
   ]
 }

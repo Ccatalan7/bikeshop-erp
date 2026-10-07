@@ -1,3 +1,5 @@
+import 'website_block_type.dart';
+
 /// Canonical value for any visible website action such as a banner button,
 /// carousel button, pricing-plan button, or standalone button block.
 ///
@@ -274,6 +276,17 @@ enum WebsiteButtonFields {
   /// Where the block's primary action is mirrored, or `null` for a button
   /// that is not it.
   String? get actionsKey => mirrorsPrimary ? 'actions' : null;
+
+  /// The one block type that draws this button: a page that names it for
+  /// any other block names a button that block does not have, even when
+  /// both keep a label under the same key.
+  WebsiteBlockType get block => switch (this) {
+    button => WebsiteBlockType.button,
+    hero => WebsiteBlockType.hero,
+    slide => WebsiteBlockType.carousel,
+    cta || ctaSecondary => WebsiteBlockType.cta,
+    plan => WebsiteBlockType.pricing,
+  };
 
   /// How the editor's HTML names this button: `cta`, or `plan#2` for the
   /// one of the item stored at [index].

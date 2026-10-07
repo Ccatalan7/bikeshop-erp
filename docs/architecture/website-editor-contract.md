@@ -99,8 +99,11 @@ nominal constant.
   (`data-edit-button`, `cta` or `plan#2`) name the same fields, and both
   write through `WebsiteInlineFieldBinding` (`actionFields`, `beginButton`).
   The page names a button, never its keys: a spec the core does not know is
-  refused (2026-10-07). Photos replaced where they are drawn follow the
-  same rule through `WebsiteImageFields` (`beginImage`).
+  refused (2026-10-07), and so is one of another block type
+  (`WebsiteButtonFields.block`): a hero and a call to action keep their
+  label under the same key, but only the latter mirrors `actions`. Photos
+  replaced where they are drawn follow the same rule through
+  `WebsiteImageFields` (`beginImage`, `.block`).
 - Edit, Preview and public read the same catalog. A catalog page asks the
   server, which applies publication and `product_visibility_stock_policy`, in
   every mode; Edit never loads a wider set of its own (unpublished or out of

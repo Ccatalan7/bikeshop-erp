@@ -669,8 +669,15 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
         final shifting = _shifting;
         _shifting = null;
         final values = drag.values;
+        // Left of or above the canvas only where the document lets layers
+        // bleed, as the canvas keeps them.
+        final inside = values == null ||
+            shifting == null ||
+            shifting.document['constrainElementsToSafeArea'] == false ||
+            values.values.every((value) => value >= 0);
         final written = shifting != null &&
             values != null &&
+            inside &&
             shifting.session.target.layerId == drag.layer &&
             shifting.session.target.document.blockId == drag.id &&
             provider.commitCanvasManipulation(

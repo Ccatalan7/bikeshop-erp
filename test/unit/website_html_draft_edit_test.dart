@@ -625,6 +625,42 @@ void main() {
       provider.selectBlock(null);
       expect(fields.beginButton(WebsiteButtonFields.hero, 0), isNull);
     });
+
+    test(
+        'a button of another block type is refused, even one whose label '
+        'shares a key with the block', () {
+      // A hero and a call to action both keep `ctaText`, but only the
+      // latter mirrors its `actions` and writes `actionVariant`: a page
+      // naming the call to action's button on a hero writes nothing.
+      final blocks = <String, Map<String, dynamic>>{
+        'hero': {'ctaText': 'Agendar', 'ctaLink': '/contacto'},
+        'carousel': {
+          'slides': [
+            {'ctaText': 'Ver', 'ctaLink': '/'},
+          ],
+        },
+        'cta': {'buttonText': 'Escríbenos', 'secondaryText': 'Cómo llegar'},
+        'pricing': {
+          'plans': [
+            {'name': 'Básica', 'ctaText': 'Agendar'},
+          ],
+        },
+        'button': {'label': 'Ver', 'link': '/productos'},
+      };
+      for (final MapEntry(key: type, value: data) in blocks.entries) {
+        final provider = _provider(type, data);
+        addTearDown(provider.dispose);
+        final fields = _fields(provider, type);
+        for (final spec in WebsiteButtonFields.values) {
+          final write = fields.beginButton(spec, 0);
+          if (spec.block.name == type) {
+            expect(write, isNotNull, reason: '$type ${spec.name}');
+          } else {
+            expect(write, isNull, reason: '$type ${spec.name}');
+          }
+        }
+      }
+    });
   });
 
   group('a canvas layer clicked in the HTML view', () {
@@ -714,6 +750,45 @@ void main() {
         isNull,
       );
     });
+
+    test(
+        'a slide is where the list stores it, as the page and the canvas '
+        'address it', () {
+      // An entry that is not a slide keeps its place: the page draws the
+      // third entry as slide 2, and so does the canvas's command.
+      final gapped = <String, dynamic>{
+        'id': 'b1',
+        'block_type': 'carousel',
+        'block_data': {
+          'slides': [
+            {'title': 'Primera'},
+            7,
+            {
+              'elements': [
+                {'id': 'l1', 'type': 'text'},
+              ],
+            },
+          ],
+        },
+      };
+      expect(
+        websiteHtmlDraftLayerPlace(
+          gapped,
+          const WebsiteHtmlDraftLayer('b1', 2, 'l1'),
+        ),
+        (slide: 2, count: 3),
+      );
+      for (final slide in [0, 1, 3]) {
+        expect(
+          websiteHtmlDraftLayerPlace(
+            gapped,
+            WebsiteHtmlDraftLayer('b1', slide, 'l1'),
+          ),
+          isNull,
+          reason: '$slide',
+        );
+      }
+    });
   });
 
   group('a photo replaced in the HTML view', () {
@@ -780,6 +855,21 @@ void main() {
       provider.selectBlock(null);
       expect(fields.beginImage(WebsiteImageFields.about, 0), isNull);
     });
+
+    test(
+        'a photo of another block type is refused, even under a key the '
+        'block has', () {
+      // About and services both keep `imageUrl`.
+      final provider = _provider('services', {
+        'title': 'Servicios',
+        'imageUrl': 'https://x/a.jpg',
+      });
+      addTearDown(provider.dispose);
+      final fields = _fields(provider, 'services');
+      expect(fields.beginImage(WebsiteImageFields.services, 0), isNotNull);
+      expect(fields.beginImage(WebsiteImageFields.about, 0), isNull);
+      expect(fields.beginImage(WebsiteImageFields.cta, 0), isNull);
+    });
   });
 
   group('a canvas layer dragged in the HTML view', () {
@@ -816,7 +906,7 @@ void main() {
         {'x': 1},
         {'x': 1, 'y': 2, 'w': 3},
         {'w': 10, 'h': 10},
-        {'x': -1, 'y': 0},
+        {'x': -30000, 'y': 0},
         {'x': double.infinity, 'y': 0},
         {'x': 30000, 'y': 0},
         {'x': '10', 'y': 0},
@@ -841,6 +931,34 @@ void main() {
         ),
         isNull,
       );
+      // A size is never empty; a place may bleed past the left or top edge
+      // (the host refuses it where the document keeps layers inside).
+      for (final size in [
+        {'w': 0, 'h': 40},
+        {'w': 120, 'h': -8},
+      ]) {
+        expect(
+          WebsiteHtmlDraftMessage.fromHandler('vbDraftLayerDrag', [
+            'b1',
+            0,
+            'l1',
+            'commit',
+            'resize',
+            size,
+          ]),
+          isNull,
+          reason: '$size',
+        );
+      }
+      final bleed = WebsiteHtmlDraftMessage.fromHandler('vbDraftLayerDrag', [
+        'b1',
+        0,
+        'l1',
+        'commit',
+        'move',
+        {'x': -24, 'y': 0},
+      ])! as WebsiteHtmlDraftLayerDrag;
+      expect(bleed.values, {'x': -24.0, 'y': 0.0});
     });
   });
 }

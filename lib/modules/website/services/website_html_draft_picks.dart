@@ -171,7 +171,9 @@ sealed class WebsiteHtmlDraftMessage {
           return null;
         }
         // A commit carries the layer's new place (x, y) or size (w, h), in
-        // the canvas's units: those two keys only, each a finite number.
+        // the canvas's units: those two keys only, each a finite number. A
+        // place may be left of or above the canvas when the document lets
+        // layers bleed; a size is never empty.
         Map<String, double>? values;
         if (step == WebsiteHtmlDraftLayerDragStep.commit) {
           final raw = data['values'];
@@ -185,7 +187,10 @@ sealed class WebsiteHtmlDraftMessage {
             for (final key in keys) key: (raw[key] as num).toDouble(),
           };
           if (values.values.any(
-            (value) => !value.isFinite || value < 0 || value > 20000,
+            (value) =>
+                !value.isFinite ||
+                value > 20000 ||
+                (resize ? value <= 0 : value < -20000),
           )) {
             return null;
           }
@@ -378,15 +383,13 @@ final class WebsiteHtmlDraftLayer extends WebsiteHtmlDraftMessage {
       elements.any((element) => element is Map && element['id'] == press.layer);
   switch ((block['block_type'] ?? block['type'] ?? '').toString()) {
     case 'carousel':
-      final slides = data['slides'] is List
-          ? (data['slides'] as List).whereType<Map>().toList()
-          : const <Map>[];
+      // The slide's place in the stored list, as the page and the canvas's
+      // commands address it: an entry that is not a slide keeps its place.
+      final slides = data['slides'] is List ? data['slides'] as List : const [];
       final slide = press.slide;
-      if (slide == null ||
-          slide >= slides.length ||
-          !holds(slides[slide]['elements'])) {
-        return null;
-      }
+      if (slide == null || slide >= slides.length) return null;
+      final stored = slides[slide];
+      if (stored is! Map || !holds(stored['elements'])) return null;
       return (slide: slide, count: slides.length);
     case 'canvas':
       if (press.slide != null || !holds(data['elements'])) return null;
