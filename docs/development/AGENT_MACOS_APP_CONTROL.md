@@ -1217,6 +1217,32 @@ el operador ve.
 Regla corta: **si lo que quieres verificar no lo dibuja Flutter, `shot` no
 sirve como evidencia de que falta; sólo prueba que Flutter no lo dibujó.**
 
+### Tampoco le llegan los clics de `app_control`, y el zoom la desalinea (2026-10-07)
+
+Dos trampas más de una vista nativa (la «Vista HTML» del editor del sitio, una
+`InAppWebView` sobre el lienzo), que costaron media hora:
+
+- **`app_control.sh click`/`tap` no llegan a la vista web.** Inyectan el
+  toque en Flutter, y una vista nativa no lo recibe: el primer clic de prueba
+  atravesó la vista y seleccionó un bloque del lienzo Flutter de abajo. Para
+  clics dentro de una vista nativa sirve un clic real del sistema (la
+  herramienta de control del computador, con la app al frente: con la ventana
+  en segundo plano el clic llega pero WebKit no lo procesa). Y una vista que
+  tapa a otra se marca opaca al puntero (`Listener(behavior: opaque)`) para
+  que nada la atraviese.
+- **Bajo el zoom de ventana del ERP (0,8) el marco nativo sale «tamaño lógico
+  ÷ zoom».** La vista medía 1248 lógicos, la página se armó a 1559 px CSS, se
+  dibujó achicada en ~998 puntos y un clic en la segunda sección cayó en la
+  primera. La compensación medida: armarla a «ancho × zoom²» y dibujarla de
+  vuelta con `Transform.scale(1 / zoom²)` (`ClipRect > SizedBox.expand >
+  Align > Transform.scale > SizedBox`; con un `OverflowBox` en vez de
+  `Align` dio 1948 px), más `pageZoom = zoom`. Se comprueba leyendo
+  `innerWidth` y `devicePixelRatio` desde `evaluateJavascript`: tiene que dar
+  el ancho lógico de la caja (1247) a 0,8. Código:
+  `_ZoomedNativeView` en `website_html_draft_view.dart`. El navegador del ERP
+  compensa sólo «× zoom» y podría tener el mismo desfase (pendiente de
+  verificar).
+
 ## Probar un atajo de teclado: tres trampas, una detrás de otra (2026-09-17)
 
 Verificar `⌘K` y «escribir abre el buscador» costó cuatro rondas, todas gastadas

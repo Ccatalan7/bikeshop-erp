@@ -1644,3 +1644,31 @@ Lo que la medición enseñó y sirve para cualquier paridad que quede:
 - **Un plan sin botón muestra «Seleccionar» a `/productos`**: lo agrega la
   normalización (`syncNestedActions`), no el widget.
 
+### 5b y 5c: la vista HTML del borrador (2026-10-07)
+
+- **5b, el servidor dibuja el borrador.** `POST /_html/editor/borrador`
+  (`editor_draft_route.dart`) recibe la portada o una página del editor con
+  sus bloques y los ajustes sin guardar, y la dibuja con los mismos
+  componentes de la página pública (`HomePageModel`/`EditorPageModel` con
+  `draft: true`). Sólo para quien puede guardar el sitio: el servidor pregunta
+  `can_edit_tenant_settings` con la sesión del ERP (Supabase rechaza una firma
+  falsa: «expired»). Sin caché, sin índice y sin medición (la página es
+  `hidden`). Cada bloque lleva `data-block-id`; uno que el HTML aún no dibuja
+  aparece como aviso en su lugar («La vista HTML todavía no dibuja este
+  bloque»), en vez de mandar la página entera a Flutter como hace la ruta
+  pública. CORS sólo para el ERP web (`project-vinabike.web.app` y
+  `.firebaseapp.com`); el ERP nativo no manda origen.
+- **5c, «Vista HTML» en el editor.** `WebsiteHtmlDraftView` se monta sobre el
+  lienzo (que queda montado debajo), pide el borrador 350 ms después de cada
+  cambio del panel, conserva el desplazamiento al redibujar, marca la sección
+  elegida y un clic en la página la elige en el panel
+  (`window.flutter_inappwebview.callHandler('vbDraftPick')` →
+  `selectBlock`). Enlaces y formularios no hacen nada, como en el lienzo. El
+  interruptor está en la barra desde 1540 px (medido) y siempre en «Más
+  acciones › Vista». Probado en macOS contra producción: portada, sección
+  elegida por clic, título cambiado en el panel y visto en HTML en ~2 s,
+  Tablet y Móvil.
+- **Lo que falta del 5c:** las plantillas del catálogo y de la ficha de
+  producto (hoy dicen que la vista HTML no las dibuja todavía); medir el zoom
+  en Windows; en el ERP web el clic llega por `postMessage` y falta
+  escucharlo.

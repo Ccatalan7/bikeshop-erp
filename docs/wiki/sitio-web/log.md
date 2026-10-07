@@ -4,6 +4,9 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-07 — corrección — [editor](paginas/editor-del-sitio.md) y
+  [estado](paginas/estado-y-pendientes.md): la Vista HTML del editor (fases
+  5b y 5c) y lo que le falta.
 - 2026-10-07 — corrección — [rendimiento](paginas/rendimiento.md),
   [catálogo](paginas/catalogo-y-fichas.md) y
   [estado](paginas/estado-y-pendientes.md): el 503 del catálogo con muchas

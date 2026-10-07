@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "editor-html-view",
+  "scope": "release",
+  "platforms": [
+    "macos"
+  ],
+  "title": "Vista HTML en el editor del sitio",
+  "summary": "En el editor del sitio, «Vista HTML» muestra la página tal como la arma la tienda en HTML, con lo que aún no guardas, y se actualiza con cada cambio.",
+  "items": [
+    "Un clic en una sección de la vista HTML la elige en el panel, igual que en el lienzo.",
+    "Sirve en Escritorio, Tablet y Móvil; una sección que el HTML aún no dibuja aparece señalada en su lugar."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/website/services/website_html_draft_client.dart",
+      "sha256": "a215e9094b3f351e5394660aecfa738a07a8f252b32e0983bc4165580607eacd"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_html_draft_view.dart",
+      "sha256": "dffc6662b6f9174e258ed94cfc51d421b1cce768ad985e7beb68f892b37496a6"
+    },
+    {
+      "path": "lib/modules/website/providers/website_edit_mode_provider.dart",
+      "sha256": "e2b6a4901f725a30d43ebcc85ce96effffd842bcd90ccc66decd3d3c0a350521"
+    },
+    {
+      "path": "lib/modules/website/widgets/website_editor_chrome_geometry.dart",
+      "sha256": "6c591b272312bfb13badada6bb39e50d95ebbafb0de16334e53117f1cb569de3"
+    },
+    {
+      "path": "lib/public_store/widgets/persistent_editor_shell.dart",
+      "sha256": "6640f894d1829772a4f67e784b90a20cd08a554783c47aff361d44d04c4be6d1"
+    },
+    {
+      "path": "lib/public_store/widgets/public_store_layout.dart",
+      "sha256": "6d8e305acedf04fed0998baae72146304ba2cc5f95fed585b742228b2ffbab32"
+    },
+    {
+      "path": "lib/public_store/widgets/store_layout/compact_editor_chrome.dart",
+      "sha256": "64b2ba2dc07a2e5d822f9bd7217839627d92086e0984f8747f525822722056c0"
+    },
+    {
+      "path": "services/storefront_html/lib/src/editor_draft_route.dart",
+      "sha256": "355b3e8e5ddffc5a6792f58b98df58596b5dafc3d0d161a796765622cf2d7747"
+    },
+    {
+      "path": "services/storefront_html/lib/src/editor_draft_view.dart",
+      "sha256": "fd77bda80a4416f0a3fe518b04a786fb397bb03098cf4873d77648cbeddc4814"
+    },
+    {
+      "path": "services/storefront_html/lib/src/editor_page_model.dart",
+      "sha256": "ffa60379fbb12a0d3f4b85848c18cf7ade0c58c8645adbcea0269f604862582b"
+    },
+    {
+      "path": "services/storefront_html/lib/src/editor_page_view.dart",
+      "sha256": "6054c6e57aa9a68055a98faf956e9214838c1371a8dd9d00e5a1af4898b950a1"
+    },
+    {
+      "path": "services/storefront_html/lib/src/home_page_model.dart",
+      "sha256": "c558cf52c7f3b6a8cb689f920c1e2f400199326643368713b259a157a9ac6394"
+    },
+    {
+      "path": "services/storefront_html/lib/src/home_page_view.dart",
+      "sha256": "0a727fe39963882285e211439b73c4e0402b06738fd2eda7225224bb69357e22"
+    },
+    {
+      "path": "services/storefront_html/lib/src/public_reads.dart",
+      "sha256": "59ee6e917d624dfb41170dd74d6c53c5ed9dfc34926f9fd1a89f5cc63f81f18c"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_handler.dart",
+      "sha256": "f06cce517166f89d782064b3a862eeb307e3a6cc61273f197d5a71b07b62bd09"
+    },
+    {
+      "path": "services/storefront_html/lib/src/website_blocks_view.dart",
+      "sha256": "f3baf7697ddc570f3a53b1fd31a6904a4e343fe177fb4f35fcaa7442ad6eb59c"
+    }
+  ]
+}

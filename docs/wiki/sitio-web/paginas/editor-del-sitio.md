@@ -170,6 +170,16 @@ responde Flutter entera: el visitante nunca pierde lo que el editor guardó.
 El lienzo del editor sigue siendo Flutter; el plan para que sea el HTML real
 está en la fase 5 de `storefront-html-migration-plan.md` `[Repo]`.
 
+**Vista HTML (desde el 2026-10-07).** El botón `<>` de la barra (desde 1540 px;
+siempre en «Más acciones › Vista») muestra la portada o una página del editor
+tal como la arma el servidor HTML **con lo que todavía no se guarda**, y se
+redibuja ~350 ms después de cada cambio del panel. Un clic en una sección la
+elige en el panel; los enlaces no navegan. Una sección que el HTML aún no
+dibuja aparece señalada en su lugar, así se ve qué le falta al HTML antes de
+publicar. Sólo la ve quien puede guardar el sitio, y no cuenta como visita en
+Analytics. Las plantillas del catálogo y de la ficha todavía no se ven ahí
+`[Repo 2026-10-07]` `[Prod 2026-10-07]`.
+
 Lo que arma un agente (campañas, banners, diapositivas, secciones) son
 operaciones reales del editor: mismos valores por defecto, validaciones, esquema
 y guardado que una persona, y el resultado se reabre y se edita en sus controles
@@ -249,6 +259,11 @@ geometría pasa la prueba real de iOS
   (`lib/modules/website/providers/website_edit_mode_provider.dart`); inspector:
   `PersistentEditorShell`, `WebsiteEditorPanel`; composición: `PageComposition`,
   `WebsitePageComposition`; render público: `WebsiteBlockRenderer`.
+- Vista HTML: `WebsiteHtmlDraftView`
+  (`lib/modules/website/widgets/website_html_draft_view.dart`) y
+  `WebsiteHtmlDraftClient`; en el servidor, `POST /_html/editor/borrador`
+  (`services/storefront_html/lib/src/editor_draft_route.dart`) con
+  `can_edit_tenant_settings`.
 - Tablas: `website_pages`, `website_blocks`, `website_navigation`,
   `website_settings`, `featured_products`.
 - Superficies registradas: filas «Website …» de

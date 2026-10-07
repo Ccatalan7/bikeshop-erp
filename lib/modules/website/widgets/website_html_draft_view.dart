@@ -11,6 +11,7 @@ import '../models/website_responsive_authoring.dart';
 import '../providers/website_edit_mode_provider.dart';
 import '../services/website_html_draft_client.dart';
 import '../services/website_service.dart';
+import '../../../shared/services/window_zoom_service.dart';
 import 'website_editor_chrome_geometry.dart';
 
 /// The «Vista HTML» of the editor (phase 5c of the move to HTML): the open
@@ -206,100 +207,185 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
     final mode = context.select<WebsiteEditModeProvider, DevicePreviewMode>(
       (provider) => provider.devicePreviewMode,
     );
-    return ColoredBox(
-      key: const ValueKey('editor-html-view'),
-      color: scheme.surfaceContainerHighest,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final width = mode == DevicePreviewMode.desktop
-              ? constraints.maxWidth
-              : WebsiteEditorChromeGeometry.frameWidthFor(
-                  mode == DevicePreviewMode.tablet
-                      ? WebsiteViewport.tablet
-                      : WebsiteViewport.mobile,
-                  availableWidth: constraints.maxWidth,
-                );
-          return Stack(
-            children: [
-              if (!_supported)
-                Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(
-                      'La vista HTML todavía no dibuja las páginas del '
-                      'catálogo ni la ficha de producto. Usa el lienzo para '
-                      'esta página.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: scheme.onSurfaceVariant),
-                    ),
-                  ),
-                )
-              else
-                Center(
-                  child: SizedBox(
-                    width: width,
-                    height: constraints.maxHeight,
-                    child: InAppWebView(
-                      initialSettings: InAppWebViewSettings(
-                        javaScriptEnabled: true,
-                        isInspectable: kDebugMode,
-                        supportZoom: false,
-                        transparentBackground: false,
+    final zoom = _windowZoom(context);
+    // Opaque to the pointer: a click on the view never reaches the Flutter
+    // canvas mounted underneath, which would select its own block there.
+    return Listener(
+      behavior: HitTestBehavior.opaque,
+      child: ColoredBox(
+        key: const ValueKey('editor-html-view'),
+        color: scheme.surfaceContainerHighest,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final width = mode == DevicePreviewMode.desktop
+                ? constraints.maxWidth
+                : WebsiteEditorChromeGeometry.frameWidthFor(
+                    mode == DevicePreviewMode.tablet
+                        ? WebsiteViewport.tablet
+                        : WebsiteViewport.mobile,
+                    availableWidth: constraints.maxWidth,
+                  );
+            return Stack(
+              children: [
+                if (!_supported)
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        'La vista HTML todavía no dibuja las páginas del '
+                        'catálogo ni la ficha de producto. Usa el lienzo para '
+                        'esta página.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: scheme.onSurfaceVariant),
                       ),
-                      onWebViewCreated: (controller) {
-                        _web = controller;
-                        controller.addJavaScriptHandler(
-                          handlerName: 'vbDraftPick',
-                          callback: _picked,
-                        );
-                        final html = _html;
-                        final origin = Uri.tryParse(
-                          context
-                              .read<WebsiteService>()
-                              .getSetting('store_url', '')
-                              .trim(),
-                        );
-                        if (html != null && origin != null) {
-                          unawaited(_show(html, origin));
-                        }
-                      },
-                      onLoadStop: (controller, _) => _loaded(controller),
                     ),
-                  ),
-                ),
-              if (_loading)
-                const Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  child: LinearProgressIndicator(minHeight: 2),
-                ),
-              if (_message case final message?)
-                Positioned(
-                  left: 16,
-                  right: 16,
-                  bottom: 16,
-                  child: Center(
-                    child: Material(
-                      color: scheme.inverseSurface,
-                      borderRadius: BorderRadius.circular(8),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
-                        child: Text(
-                          message,
-                          key: const ValueKey('editor-html-view-message'),
-                          style: TextStyle(color: scheme.onInverseSurface),
+                  )
+                else
+                  Center(
+                    child: Container(
+                      width: width,
+                      height: constraints.maxHeight,
+                      // Framed like the canvas's tablet and phone previews.
+                      decoration: mode == DevicePreviewMode.desktop
+                          ? null
+                          : BoxDecoration(
+                              color: Colors.white,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.1),
+                                  blurRadius: 20,
+                                  spreadRadius: 2,
+                                ),
+                              ],
+                            ),
+                      // Under the ERP's window zoom the page is laid out at
+                      // the width it is drawn at, so a click lands where it
+                      // is seen and the page takes the canvas's own band.
+                      child: _ZoomedNativeView(
+                        zoom: zoom,
+                        child: InAppWebView(
+                          initialSettings: InAppWebViewSettings(
+                            javaScriptEnabled: true,
+                            isInspectable: kDebugMode,
+                            pageZoom: zoom,
+                            supportZoom: false,
+                            transparentBackground: false,
+                          ),
+                          onWebViewCreated: (controller) {
+                            _web = controller;
+                            controller.addJavaScriptHandler(
+                              handlerName: 'vbDraftPick',
+                              callback: _picked,
+                            );
+                            final html = _html;
+                            final origin = Uri.tryParse(
+                              context
+                                  .read<WebsiteService>()
+                                  .getSetting('store_url', '')
+                                  .trim(),
+                            );
+                            if (html != null && origin != null) {
+                              unawaited(_show(html, origin));
+                            }
+                          },
+                          onLoadStop: (controller, _) => _loaded(controller),
                         ),
                       ),
                     ),
                   ),
-                ),
-            ],
-          );
-        },
+                if (_loading)
+                  const Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: LinearProgressIndicator(minHeight: 2),
+                  ),
+                if (_message case final message?)
+                  Positioned(
+                    left: 16,
+                    right: 16,
+                    bottom: 16,
+                    child: Center(
+                      child: Material(
+                        color: scheme.inverseSurface,
+                        borderRadius: BorderRadius.circular(8),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          child: Text(
+                            message,
+                            key: const ValueKey('editor-html-view-message'),
+                            style: TextStyle(color: scheme.onInverseSurface),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+/// The ERP's window zoom ([WindowZoomService], 0.8 by default on the
+/// desktop), or 1 where it does not apply.
+double _windowZoom(BuildContext context) {
+  if (!WindowZoomService.isDesktop) return 1.0;
+  try {
+    return context.watch<WindowZoomService>().scale.clamp(0.5, 3.0).toDouble();
+  } on ProviderNotFoundException {
+    return 1.0;
+  }
+}
+
+/// Lays a native web view out so it is drawn where it is hit under the ERP's
+/// window zoom, which scales the Flutter scene by [zoom].
+///
+/// Measured on macOS (2026-10-07, zoom 0.8): the web view's native frame
+/// comes out as its logical size divided by the zoom, and the engine shrinks
+/// it back to fit only in the drawing. Laid out at the canvas width (1248),
+/// the page took 1559 CSS px and was drawn into 998 points, and a click on
+/// the second section landed on the first. Laid out at width × zoom² and
+/// drawn back with the inverse scale, the native frame is exactly the drawn
+/// size, and `pageZoom = zoom` gives the page the canvas's own width (1247
+/// CSS px, the same band as the Flutter canvas). Other platforms keep the
+/// zoom as is: Windows is not measured yet, phones have no window zoom.
+class _ZoomedNativeView extends StatelessWidget {
+  const _ZoomedNativeView({required this.zoom, required this.child});
+
+  final double zoom;
+  final Widget child;
+
+  // The structure is measured too: the same sizes under an `OverflowBox`
+  // gave the page 1948 CSS px instead of 1247.
+  @override
+  Widget build(BuildContext context) {
+    if ((zoom - 1).abs() < 0.001 ||
+        defaultTargetPlatform != TargetPlatform.macOS) {
+      return child;
+    }
+    final factor = zoom * zoom;
+    return LayoutBuilder(
+      builder: (context, constraints) => ClipRect(
+        child: SizedBox.expand(
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: Transform.scale(
+              scale: 1 / factor,
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: constraints.maxWidth * factor,
+                height: constraints.maxHeight * factor,
+                child: child,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
