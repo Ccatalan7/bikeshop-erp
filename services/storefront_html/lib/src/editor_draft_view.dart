@@ -22,7 +22,9 @@ const _draftCss = '''
 .vb-bar{position:absolute;right:8px;top:8px;display:flex;align-items:center;gap:2px;padding:2px 4px 2px 10px;
   border-radius:10px;box-shadow:0 2px 6px rgb(0 0 0 / .3);pointer-events:auto;
   font:700 12px/1 system-ui,-apple-system,sans-serif;white-space:nowrap}
-.vb-bar b{margin-right:6px}
+.vb-bar{max-width:calc(100% - 16px);box-sizing:border-box}
+.vb-bar b{margin-right:6px;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.vb-bar button{flex:none}
 .vb-bar button{all:unset;display:grid;place-items:center;width:30px;height:30px;border-radius:8px;cursor:pointer}
 .vb-bar button:hover,.vb-bar button:focus-visible{background:rgb(0 0 0 / .1)}
 .vb-bar svg{width:18px;height:18px;fill:currentColor}
@@ -112,10 +114,12 @@ const _draftScript = r'''
     m.el.classList.add('vb-on');
     var bar = m.el.querySelector('.vb-bar');
     if (bar) {
-      // In sight while the block is: below the sticky header, inside the block.
+      // In sight while the block is: below the header that stays on top
+      // (sticky, or fixed over the home's first block), inside the block.
       var header = document.querySelector('header.top');
-      var cover = header && getComputedStyle(header).position === 'sticky'
-        ? header.getBoundingClientRect().bottom : 0;
+      var position = header ? getComputedStyle(header).position : '';
+      var cover = position === 'sticky' || position === 'fixed'
+        ? Math.max(0, header.getBoundingClientRect().bottom) : 0;
       var top = Math.max(8, cover - r.top + 8);
       bar.style.top = Math.min(top, Math.max(8, r.height - 42)) + 'px';
     }

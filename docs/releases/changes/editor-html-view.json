@@ -49,7 +49,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/editor_draft_view.dart",
-      "sha256": "fff02f1fd9c4973e4a1b256be3b997817db6cedd38b6a56c36ecc1b6ac8876a6"
+      "sha256": "9e67e6c43145fd80f0aaadcc9eb252603ef91310ad2bdf3efc8a23bb5cd2b5a7"
     },
     {
       "path": "services/storefront_html/lib/src/editor_page_model.dart",
