@@ -48,7 +48,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_page_css.dart",
-      "sha256": "a877b336a42ac84d116dabcb361de604d0fdde2bd2e696816b4f92675bb8f5d0"
+      "sha256": "69b7418cdd2da5d981c825caf20d811fa339309f8a31b1b4e176a652e4ba881d"
     },
     {
       "path": "services/storefront_html/lib/src/website_reviews_view.dart",
@@ -56,7 +56,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_section_blocks_view.dart",
-      "sha256": "f4ca3390562d8eaf7d9df8d5e3af2a95fb81b9e2bbb7f04b3ff1c09dd3355c0c"
+      "sha256": "1876e2fc20b3adbec5e6c9e2bbe61dd6528bc3c16aec5fe5663580812fb0ca43"
     },
     {
       "path": "services/storefront_html/lib/src/website_video_banner_view.dart",
@@ -64,7 +64,7 @@
     },
     {
       "path": "services/storefront_html/test/storefront_handler_test.dart",
-      "sha256": "db3d2587fa09d05faaabcad0f6a00fd3a3904cbfccfa19144df1eaaa2dc4fe85"
+      "sha256": "eea2cab34337d041cc2e1cbf8ed9c010226fe4f4f2cfeaa7dbc74786a0162854"
     },
     {
       "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_surface_presence.dart",
@@ -88,15 +88,15 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_products_view.dart",
-      "sha256": "f381502671718568b93695f5112000894f86af04772a9f7754de82845362de57"
+      "sha256": "9c79425337b2c4351810bfefe9440b70ce70a58ea2c450ea77cd7e6adbb8bcf3"
     },
     {
       "path": "services/storefront_html/lib/src/block_product_picks.dart",
-      "sha256": "44f2568eac8c0cdf23a76f82b97e4e2b6eab6b0294c3a914b77c7a27e4567b35"
+      "sha256": "a8414e48c9a197138e8c47bfa6d0530ccaf5cf468a88b75ccaa8f186c6c67ef1"
     },
     {
       "path": "services/storefront_html/lib/src/public_reads.dart",
-      "sha256": "06c1af70bd27a5d274f7dc3221981ed5e15364d8f458cfb2652a283f8011693a"
+      "sha256": "2c1c1daa7684108d8b5e9487698cce706f3680067b6330c85d92a0fe7603f73a"
     },
     {
       "path": "services/storefront_html/lib/src/editor_draft_reads.dart",
@@ -128,7 +128,11 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_canvas_view.dart",
-      "sha256": "c19717f4d79cb1f2013b09117b8c370ea2b2c1cdaa29dae59354cee4163d7ba9"
+      "sha256": "3568d3b011acca0168c752e9bc86f514331bb5fcd257b7e1820a4ac454ead5f9"
+    },
+    {
+      "path": "services/storefront_html/test/public_reads_test.dart",
+      "sha256": "98e587394a00caceea77c15442332aba89d080a8fd573e06712386e66ca2682b"
     }
   ]
 }

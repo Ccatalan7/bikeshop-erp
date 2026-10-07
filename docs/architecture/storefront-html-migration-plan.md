@@ -1768,9 +1768,10 @@ y el velo con la opacidad en lugar del alfa del color (`withValues`), un
 escenario por vista que el documento dibuja distinto. Un botón de capa que
 hereda el tema es el botón Material del tema del sitio (fondo
 `surfaceContainerLow`, texto primario, `labelLarge`, elevación 1), no el
-acento del bloque Botón: el tema del sitio no le da colores propios. Sigue
-cayendo a Flutter un canvas con una capa de producto (tarjeta, galería o
-foto del producto); el video de fondo se dibuja desde el 2026-10-07.
+acento del bloque Botón: el tema del sitio no le da colores propios. El video
+de fondo y las capas de producto (tarjeta, galería y foto del producto) se
+dibujan desde el 2026-10-07; sólo una capa de un tipo desconocido cae a
+Flutter.
 
 Comparado contra Flutter a 1392, 786 y 342 (prueba de render con Oswald y
 Barlow y el tema real, `WebsiteThemeBuilder`): el escenario y las capas
@@ -2189,3 +2190,35 @@ de 15 px de alto Flutter lo esconde y el HTML lo muestra.
   al diseño por `--sp-*`. Medido en Chrome: alto 420, arriba 32, el contenido
   queda centrado entre 32 y 120 (escritorio) y entre 32 y 64 (teléfono), como
   el `Align` de Flutter.
+- **Quinta revisión de Codex (2026-10-07, sólo lectura), sobre `ee4f7be9`…
+  `98e56ae8`.** Cuatro hallazgos confirmados y corregidos: (P1) la portada
+  Flutter precargaba 8 destacados fijos y un bloque de 12 mostraba 8 (el
+  HTML, 12): ahora precarga el máximo del contrato
+  (`WebsiteProductsBlockContract.maxProductsLimit`, 16) y cada bloque toma
+  el suyo; (P2) una lista de productos que fallaba devolvía la página entera
+  con 503: ahora deja vacío sólo su bloque, como Flutter (la página es
+  `private, no-cache`, nada queda guardado así); (P2) el video del lienzo se
+  cargaba en todo escenario visible aunque estuviera lejos: ahora con
+  `IntersectionObserver` (200 px), se descarga al salir, como Flutter suelta
+  un video lejos de la pantalla; (P2) el botón de color de «Formato» no
+  decía su valor: ahora `#RRGGBB`. Y uno probable, también corregido: un
+  llamado con `blockHeight` guardado como texto (`"420"`) es de alto fijo
+  en Flutter y no lo era en HTML.
+- **Capas de producto del lienzo en HTML (2026-10-07).** Lo último de un
+  bloque agregable que mandaba la página a Flutter. Antes de dibujarlas se
+  alinearon las lecturas: el lienzo Flutter leía `products` directo (sin
+  mirar stock, sólo `image_url`, sin `sku`, así que su tarjeta enlazaba por
+  id y no por la ruta canónica, y «lo último» por `updated_at`), y además
+  pedía otra vez en cada redibujo un producto oculto o agotado. Ahora lee
+  con `PublicInventoryService` como el bloque de productos (público, en
+  stock, reglas de visibilidad; «lo último» `newest`, 1 a 24) y cada id una
+  sola vez. El servidor suma a `pagePicks` las capas de los lienzos y de las
+  diapositivas compuestas (`canvasDocumentPicks`, `CanvasProductGallery`) y
+  las dibuja con la misma tarjeta del bloque de productos (`productCard`):
+  la tarjeta llena su caja; la galería en grilla de tarjetas 3:4 con 20 de
+  separación escaladas, o en fila de tarjetas de 220 a 380 que se desplaza
+  (quieta en el borrador); su alto es el que calcula `CanvasBlock` por las
+  tarjetas que planea, no el de la capa; la foto de una imagen es la pública
+  del producto, o la propia si el producto no está. En producción no hay
+  ninguna capa de producto (2026-10-07). Probado en Chrome y con una prueba
+  de widgets que exige la lectura pública.

@@ -87,5 +87,16 @@ void main() {
       expect(contract.maxProducts, 4);
       expect(contract.showPrice, isTrue);
     });
+
+    test('a block shows at most the limit a page reads ahead for it', () {
+      // The home reads that many featured products for all its blocks; a
+      // block of more would be cut to what was read.
+      expect(
+        WebsiteProductsBlockContract.fromData(const {
+          'maxProducts': 99,
+        }).maxProducts,
+        WebsiteProductsBlockContract.maxProductsLimit,
+      );
+    });
   });
 }

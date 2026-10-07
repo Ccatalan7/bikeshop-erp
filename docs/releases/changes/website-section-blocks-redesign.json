@@ -83,7 +83,7 @@
     },
     {
       "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_base_definitions.dart",
-      "sha256": "88312a6bd7ada9809dad03ddcfea92e58a356dbd54d3555da93fe156b265aa9f"
+      "sha256": "ee90a048503251d237a55d1f870857d6472e9f2abd21c8975649b1fdc5769529"
     },
     {
       "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_capabilities.dart",
@@ -127,19 +127,19 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_page_css.dart",
-      "sha256": "a877b336a42ac84d116dabcb361de604d0fdde2bd2e696816b4f92675bb8f5d0"
+      "sha256": "69b7418cdd2da5d981c825caf20d811fa339309f8a31b1b4e176a652e4ba881d"
     },
     {
       "path": "services/storefront_html/lib/src/website_section_blocks_view.dart",
-      "sha256": "f4ca3390562d8eaf7d9df8d5e3af2a95fb81b9e2bbb7f04b3ff1c09dd3355c0c"
+      "sha256": "1876e2fc20b3adbec5e6c9e2bbe61dd6528bc3c16aec5fe5663580812fb0ca43"
     },
     {
       "path": "lib/modules/website/widgets/canvas_block.dart",
-      "sha256": "804e7289d19a0bfa0f80719af0b443e60542da73794064a4a76e02a69c97ecd3"
+      "sha256": "fe93d5a7fb2dd65e0a6fca92035fd16eac52ea6d2b434342ab7174ae644b5b49"
     },
     {
       "path": "services/storefront_html/lib/src/website_canvas_view.dart",
-      "sha256": "c19717f4d79cb1f2013b09117b8c370ea2b2c1cdaa29dae59354cee4163d7ba9"
+      "sha256": "3568d3b011acca0168c752e9bc86f514331bb5fcd257b7e1820a4ac454ead5f9"
     },
     {
       "path": "lib/modules/website/widgets/website_features_block_content.dart",
@@ -183,7 +183,23 @@
     },
     {
       "path": "lib/modules/website/widgets/text_formatting_toolbar.dart",
-      "sha256": "7d1a00f6f7bbe5f92cac543aa063ade2e382cdec39a7a9609241dfa005a6a044"
+      "sha256": "39311a212d290ed99429de93bee61dcbabfea1cd3fd84e3997b7323a7de8073a"
+    },
+    {
+      "path": "lib/public_store/pages/public_home_page.dart",
+      "sha256": "dec0963d4876c8fa3c2362599fb5896da638ee342642d949f788489551eedae6"
+    },
+    {
+      "path": "test/widgets/canvas_block_public_products_test.dart",
+      "sha256": "d15a70d0b243197d3074ebc8c29e1f19f379fd22468e9b4dd62fab4baec38882"
+    },
+    {
+      "path": "test/unit/website_products_block_contract_test.dart",
+      "sha256": "50628a82a7d83da71a20a9082caa99680570672348fd8da691505ffc72ba7058"
+    },
+    {
+      "path": "test/widgets/text_formatting_toolbar_semantics_test.dart",
+      "sha256": "c8434427eb8074ab2e972d4af0edbbdacf152cbf49968f5aff6fb5a29061fa36"
     }
   ]
 }

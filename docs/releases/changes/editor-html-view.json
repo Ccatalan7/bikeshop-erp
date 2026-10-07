@@ -68,7 +68,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/public_reads.dart",
-      "sha256": "06c1af70bd27a5d274f7dc3221981ed5e15364d8f458cfb2652a283f8011693a"
+      "sha256": "2c1c1daa7684108d8b5e9487698cce706f3680067b6330c85d92a0fe7603f73a"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
@@ -144,7 +144,7 @@
     },
     {
       "path": "packages/vinabike_public_core/lib/modules/website/models/website_block_base_definitions.dart",
-      "sha256": "88312a6bd7ada9809dad03ddcfea92e58a356dbd54d3555da93fe156b265aa9f"
+      "sha256": "ee90a048503251d237a55d1f870857d6472e9f2abd21c8975649b1fdc5769529"
     },
     {
       "path": "lib/modules/website/widgets/website_block_content_presenters.dart",
@@ -184,11 +184,11 @@
     },
     {
       "path": "services/storefront_html/lib/src/website_section_blocks_view.dart",
-      "sha256": "f4ca3390562d8eaf7d9df8d5e3af2a95fb81b9e2bbb7f04b3ff1c09dd3355c0c"
+      "sha256": "1876e2fc20b3adbec5e6c9e2bbe61dd6528bc3c16aec5fe5663580812fb0ca43"
     },
     {
       "path": "services/storefront_html/lib/src/website_canvas_view.dart",
-      "sha256": "c19717f4d79cb1f2013b09117b8c370ea2b2c1cdaa29dae59354cee4163d7ba9"
+      "sha256": "3568d3b011acca0168c752e9bc86f514331bb5fcd257b7e1820a4ac454ead5f9"
     },
     {
       "path": "packages/vinabike_public_core/lib/modules/website/models/website_image_fields.dart",

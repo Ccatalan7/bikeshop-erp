@@ -160,66 +160,86 @@ class ProductsBlockView extends StatelessComponent {
     required bool canonical,
     String? sizes,
   }) {
-    final image = publicProductPrimaryImageUrl(product) ?? '';
-    final copies = image.isEmpty ? null : context.thumbnails[image];
-    final brand = product.brand?.trim() ?? '';
-    final sku = product.sku.trim();
-    final name = product.name.isEmpty ? 'Producto' : product.name;
-    final label = [
-      name.trim().isEmpty ? 'Producto' : name.trim(),
-      if (contract.showBrand && brand.isNotEmpty) 'Marca $brand',
-      if (contract.showSku && sku.isNotEmpty) 'SKU $sku',
-      if (contract.showPrice) ChileanUtils.formatCurrency(product.price),
-    ].join('. ');
     final (phone, tablet) = canonical ? (599, 899) : (639, 1023);
-    return a(
-      classes: 'pcard',
-      href: publicProductPath(product),
-      attributes: {'aria-label': label},
-      [
-        span(classes: 'pcard-shot', [
-          if (image.isNotEmpty)
-            img(
-              src: copies?.smallestUrl ?? image,
-              alt: '',
-              loading: MediaLoading.lazy,
-              attributes: {
-                if (copies != null && copies.variants.isNotEmpty) ...{
-                  'srcset': copies.srcset,
-                  // The photo is the card less 16 px each side: a phone's
-                  // single column, a tablet's two, a desktop's four of at
-                  // most 1.200 px.
-                  'sizes':
-                      sizes ??
-                      '(max-width: ${phone}px) calc(100vw - 112px), '
-                          '(max-width: ${tablet}px) calc(50vw - 90px), '
-                          '(max-width: 1295px) calc(25vw - 71px), 253px',
-                },
-                'decoding': 'async',
-              },
-            )
-          else
-            RawText(materialIcon(mdPedalBikeOutlined, size: 56)),
-          span(
-            classes: 'pcard-cta',
-            attributes: {'aria-hidden': 'true'},
-            [.text('VER DETALLES')],
-          ),
-        ]),
-        span(classes: 'pcard-info', [
-          if (contract.showBrand && brand.isNotEmpty)
-            span(classes: 'pcard-brand', [.text(brand.toUpperCase())]),
-          span(classes: 'pcard-name', [.text(name.toUpperCase())]),
-          if (contract.showSku && sku.isNotEmpty)
-            span(classes: 'pcard-sku', [.text('SKU: $sku')]),
-          if (contract.showPrice)
-            span(classes: 'pcard-price', [
-              .text(ChileanUtils.formatCurrency(product.price)),
-            ]),
-        ]),
-      ],
+    return productCard(
+      product,
+      context,
+      showBrand: contract.showBrand,
+      showSku: contract.showSku,
+      showPrice: contract.showPrice,
+      // The photo is the card less 16 px each side: a phone's single column,
+      // a tablet's two, a desktop's four of at most 1.200 px.
+      sizes:
+          sizes ??
+          '(max-width: ${phone}px) calc(100vw - 112px), '
+              '(max-width: ${tablet}px) calc(50vw - 90px), '
+              '(max-width: 1295px) calc(25vw - 71px), 253px',
     );
   }
+}
+
+/// `PremiumProductCard`: the photo over its name, its brand and SKU when
+/// asked, and its price, as one link to the product; [sizes] says how wide
+/// its photo is drawn (the card less 16 px each side).
+Component productCard(
+  Product product,
+  BlockRenderContext context, {
+  required bool showBrand,
+  required bool showSku,
+  required bool showPrice,
+  required String sizes,
+}) {
+  final image = publicProductPrimaryImageUrl(product) ?? '';
+  final copies = image.isEmpty ? null : context.thumbnails[image];
+  final brand = product.brand?.trim() ?? '';
+  final sku = product.sku.trim();
+  final name = product.name.isEmpty ? 'Producto' : product.name;
+  final label = [
+    name.trim().isEmpty ? 'Producto' : name.trim(),
+    if (showBrand && brand.isNotEmpty) 'Marca $brand',
+    if (showSku && sku.isNotEmpty) 'SKU $sku',
+    if (showPrice) ChileanUtils.formatCurrency(product.price),
+  ].join('. ');
+  return a(
+    classes: 'pcard',
+    href: publicProductPath(product),
+    attributes: {'aria-label': label},
+    [
+      span(classes: 'pcard-shot', [
+        if (image.isNotEmpty)
+          img(
+            src: copies?.smallestUrl ?? image,
+            alt: '',
+            loading: MediaLoading.lazy,
+            attributes: {
+              if (copies != null && copies.variants.isNotEmpty) ...{
+                'srcset': copies.srcset,
+                'sizes': sizes,
+              },
+              'decoding': 'async',
+            },
+          )
+        else
+          RawText(materialIcon(mdPedalBikeOutlined, size: 56)),
+        span(
+          classes: 'pcard-cta',
+          attributes: {'aria-hidden': 'true'},
+          [.text('VER DETALLES')],
+        ),
+      ]),
+      span(classes: 'pcard-info', [
+        if (showBrand && brand.isNotEmpty)
+          span(classes: 'pcard-brand', [.text(brand.toUpperCase())]),
+        span(classes: 'pcard-name', [.text(name.toUpperCase())]),
+        if (showSku && sku.isNotEmpty)
+          span(classes: 'pcard-sku', [.text('SKU: $sku')]),
+        if (showPrice)
+          span(classes: 'pcard-price', [
+            .text(ChileanUtils.formatCurrency(product.price)),
+          ]),
+      ]),
+    ],
+  );
 }
 
 /// Plays the products carousels on a phone as `_MobileProductAutoCarousel`:

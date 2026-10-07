@@ -163,13 +163,16 @@ El sitio público lo dibuja el **servidor HTML**, que hoy cubre `hero`,
 `testimonials`, `gallery`, `team` y `partnersBanner` (`pageCoveredBlockTypes`);
 las páginas de información leen `about`, `faq` y `features` como secciones de
 texto, como Flutter. También `canvas` (las campañas de capas libres), desde
-el 2026-10-07, salvo que tenga una capa de producto (el video de fondo, sí); el
+el 2026-10-07, con su video de fondo y sus capas de producto; el
 `footer` no es un bloque que se agregue (el pie es del sitio). El fondo,
 borde, sombra y relleno propios de un bloque (pestaña Estilo) los pinta el
 HTML como Flutter desde el 2026-10-07 (`WebsiteBlockSurfaceSpec` en el
 núcleo, `BlockSurface` en el servidor) `[Repo 2026-10-07]`. Una página con
-otro tipo, o con un lienzo con capa de producto, la responde Flutter entera:
-el visitante nunca pierde lo que el editor guardó.
+otro tipo, o con una capa de un tipo que el HTML no conoce, la responde
+Flutter entera: el visitante nunca pierde lo que el editor guardó. Las capas
+de producto del lienzo leen el catálogo como la tienda (público y en stock,
+`PublicInventoryService` en Flutter, `canvasDocumentPicks` en el servidor)
+desde el 2026-10-07; antes el lienzo leía `products` directo.
 El lienzo del editor sigue siendo Flutter; el plan para que sea el HTML real
 está en la fase 5 de `storefront-html-migration-plan.md` `[Repo]`.
 

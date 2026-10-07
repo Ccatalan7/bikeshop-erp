@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:test/test.dart';
+import 'package:vinabike_storefront_html/src/block_product_picks.dart';
 import 'package:vinabike_storefront_html/storefront_html.dart';
 
 /// Supabase's edge closes a kept-alive connection after a quiet spell; the
@@ -195,4 +196,73 @@ void main() {
       expect(page.optionLabels, isEmpty);
     });
   });
+
+  // A home with a featured block and a hand-picked one: the featured list
+  // failing (2026-10-07, Codex) answered the whole home with a 503; Flutter
+  // only leaves that block empty.
+  test(
+    'a product list that cannot be read leaves only its block empty',
+    () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(() => server.close(force: true));
+      server.listen((request) async {
+        final name = request.uri.pathSegments.last;
+        Object? body;
+        switch (name) {
+          case 'get_public_featured_products':
+            request.response.statusCode = 500;
+          case 'get_public_storefront_shell_v1':
+            body = <String, Object?>{};
+          case 'website_pages':
+            body = [
+              {
+                'id': 'home',
+                'slug': 'inicio',
+                'is_published': true,
+                'website_blocks': [
+                  {
+                    'id': 'f',
+                    'block_type': 'products',
+                    'order_index': 0,
+                    'is_visible': true,
+                    'block_data': {'productSource': 'featured'},
+                  },
+                  {
+                    'id': 'm',
+                    'block_type': 'products',
+                    'order_index': 1,
+                    'is_visible': true,
+                    'block_data': {
+                      'productSource': 'manual',
+                      'productIds': ['p1'],
+                    },
+                  },
+                ],
+              },
+            ];
+          case 'get_public_products':
+            body = [
+              {'id': 'p1', 'name': 'Casco', 'sku': 'C1', 'price': 1000},
+            ];
+          default:
+            body = <Object?>[];
+        }
+        if (request.response.statusCode == 200) {
+          request.response
+            ..headers.contentType = ContentType.json
+            ..write(jsonEncode(body));
+        }
+        await request.response.close();
+      });
+      final reads = SupabasePublicReads(
+        StorefrontConfig(
+          supabaseUrl: 'http://127.0.0.1:${server.port}',
+          publishableKey: 'test',
+        ),
+      );
+      final home = await reads.homePage(pagePicks);
+      expect(home.lists.values.single, isEmpty);
+      expect(home.products, hasLength(1));
+    },
+  );
 }

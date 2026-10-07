@@ -26,6 +26,10 @@ class WebsiteProductsBlockContract {
     required this.showViewAll,
   });
 
+  /// The most products a block shows: what a page reads ahead for all its
+  /// blocks of one source (the home's featured ones).
+  static const int maxProductsLimit = 16;
+
   static const String productIdsKey = 'productIds';
   static const String legacySelectedProductsKey = 'selectedProducts';
 
@@ -76,7 +80,7 @@ class WebsiteProductsBlockContract {
         data['maxProducts'],
         fallback: 8,
         min: 4,
-        max: 16,
+        max: maxProductsLimit,
       ),
       showPrice: data['showPrice'] is bool ? data['showPrice'] as bool : true,
       showSku: data['showSku'] is bool ? data['showSku'] as bool : false,

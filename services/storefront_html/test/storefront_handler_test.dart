@@ -2616,7 +2616,11 @@ void main() {
                 'blockHeight': 420,
                 'style': {'paddingTop': 32},
               }),
-              block('flat', 'cta', 1, {'title': 'Agenda', 'blockHeight': 300}),
+              // Saved as text, as Flutter also reads it.
+              block('flat', 'cta', 1, {
+                'title': 'Agenda',
+                'blockHeight': '300',
+              }),
             ]),
           },
         ),
@@ -3292,15 +3296,14 @@ void main() {
         ),
       );
 
-      // A product card reads products the page does not load yet: Flutter
-      // draws it.
-      final product = await page(
+      // A layer of a kind it does not know: Flutter draws the page.
+      final unknown = await page(
         canvas([
           text,
-          {'id': 'p1', 'type': 'product', 'productId': 'x', 'x': 0, 'y': 0},
+          {'id': 'm1', 'type': 'mapa', 'x': 0, 'y': 0},
         ]),
       );
-      expect(product.$3, isNotNull);
+      expect(unknown.$3, isNotNull);
 
       // A video plays under the photo, YouTube before a file as
       // `VideoBannerPlatform`; its source waits for the page to load.
@@ -3345,6 +3348,119 @@ void main() {
       );
       // Without a video the page carries no script for it.
       expect(html, isNot(contains('.cv-media video,.cv-media iframe')));
+    });
+
+    test('a canvas draws its product layers as the store reads them: a '
+        'card, a gallery of the newest or of picks, a photo taken from a '
+        'product', () async {
+      Map<String, dynamic> row(String id, String name) => {
+        ..._product(name: name, sku: id.toUpperCase()),
+        'id': id,
+        'image_urls': ['https://example.invalid/$id.jpg'],
+      };
+      Map<String, dynamic> at(Map<String, dynamic> layer) => {
+        'x': 0,
+        'y': 0,
+        'w': 300,
+        'h': 400,
+        ...layer,
+      };
+      final response = await _get(
+        _FakeReads(
+          products: [row('p1', 'Casco'), row('p2', 'Rueda'), row('p3', 'Luz')],
+          lists: {
+            'newest': ['p3', 'p1', 'p2'],
+          },
+          editorPages: {
+            'campana': {
+              'id': 'p9',
+              'slug': 'campana',
+              'title': 'Campaña',
+              'is_published': true,
+              'website_blocks': [
+                {
+                  'id': 'cv',
+                  'block_type': 'canvas',
+                  'order_index': 0,
+                  'is_visible': true,
+                  'block_data': {
+                    'canvasResponsiveVersion': 2,
+                    'blockHeight': 1400.0,
+                    'heightMode': 'fixed',
+                    'elements': [
+                      at({'id': 'c1', 'type': 'product', 'productId': 'p1'}),
+                      // Not public or out of stock: the box, empty.
+                      at({
+                        'id': 'c2',
+                        'type': 'product',
+                        'productId': 'gone',
+                        'x': 320,
+                      }),
+                      at({
+                        'id': 'g1',
+                        'type': 'productsGallery',
+                        'maxProducts': 2,
+                        'columns': 2,
+                        'y': 420,
+                        'w': 620,
+                        'h': 100,
+                      }),
+                      at({
+                        'id': 'g2',
+                        'type': 'productsGallery',
+                        'mode': 'manual',
+                        'productIds': ['p2', 'p1'],
+                        'layout': 'carousel',
+                        'cardWidth': 500,
+                        'x': 0,
+                        'y': 840,
+                        'w': 900,
+                      }),
+                      at({
+                        'id': 'i1',
+                        'type': 'image',
+                        'productId': 'p2',
+                        'imageUrl': 'https://example.invalid/own.jpg',
+                        'x': 640,
+                        'w': 200,
+                        'h': 200,
+                      }),
+                    ],
+                  },
+                },
+              ],
+            },
+          },
+        ),
+        '/pagina/campana',
+      );
+      final html = await response.readAsString();
+      final preview = Platform.environment['CANVAS_PREVIEW_OUT'];
+      if (preview != null)
+        File('$preview.products.html').writeAsStringSync(html);
+      expect(response.headers['x-storefront-uncovered'], isNull);
+      // A card, two newest in the grid and two picks in the row.
+      expect('class="pcard"'.allMatches(html), hasLength(5));
+      expect(html, contains('class="cl cl-prod empty"'));
+      // The newest, at most the gallery's two: Luz and Casco, not Rueda.
+      final grid = html.substring(
+        html.indexOf('class="cl-gal-grid"'),
+        html.indexOf('class="cl-gal-row"'),
+      );
+      expect(grid, contains('style="--cols:2"'));
+      expect(grid, contains('LUZ'));
+      expect(grid, contains('CASCO'));
+      expect(grid, isNot(contains('RUEDA')));
+      // `CanvasBlock` sizes the gallery by its cards: one row of two 300
+      // wide (620 less 20 between them), 400 tall.
+      expect(html, contains('--w:620;--h:400'));
+      // The row: cards of 380 at most, in the order picked.
+      final strip = html.substring(html.indexOf('class="cl-gal-row"'));
+      expect(strip, contains('style="--cw:380px"'));
+      expect(strip.indexOf('RUEDA'), lessThan(strip.indexOf('CASCO')));
+      // The photo is the product's, not the layer's own.
+      expect(html, contains('src="https://example.invalid/p2.jpg"'));
+      expect(html, isNot(contains('own.jpg')));
     });
 
     test('a page that does not exist answers 404, an upper-case slug the '

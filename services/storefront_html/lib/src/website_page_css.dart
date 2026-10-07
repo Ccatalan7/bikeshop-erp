@@ -357,6 +357,14 @@ String carouselCss(WebsiteThemeRoles theme) {
 .cl-text p{margin:0;max-width:100%;overflow-wrap:break-word}
 .cl-img{display:block;overflow:hidden}
 .cl-img.empty{background:rgb(0 0 0 / .04)}
+.cl-prod{display:block}.cl-prod>.pcard,.cl-gal-row .pcard{aspect-ratio:auto;height:100%}
+.cl-prod.empty,.cl-gal.empty{background:rgb(0 0 0 / .03)}
+.cl-gal{overflow:hidden}
+.cl-gal-grid{display:grid;grid-template-columns:repeat(var(--cols),minmax(0,1fr));gap:calc(20 * var(--s));margin:0;padding:0;list-style:none}
+.cl-gal-grid>li{min-width:0}
+.cl-gal-row{display:flex;gap:20px;box-sizing:border-box;height:100%;margin:0;padding:4px;list-style:none;overflow-x:auto;scrollbar-width:thin}
+.cl-gal-row.still{overflow:hidden}
+.cl-gal-row>li{flex:0 0 var(--cw)}
 .cl-btn{display:flex;align-items:center;justify-content:center;border:1px solid transparent;font-family:var(--body);font-weight:600;line-height:1.2;text-decoration:none;white-space:nowrap;overflow:hidden}
 .cl-btn:hover{box-shadow:inset 0 0 0 999px rgb(255 255 255 / .08)}
 @keyframes cl-fade{from{opacity:0}}

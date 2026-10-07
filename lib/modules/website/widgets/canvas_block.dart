@@ -4,8 +4,11 @@ import 'dart:ui' as ui;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../shared/services/public_catalog_client.dart';
+import 'package:provider/provider.dart';
+import 'package:vinabike_public_core/public_store/models/public_commerce_product_projection.dart';
+import '../../../public_store/services/public_inventory_service.dart';
+import '../../../shared/models/product.dart';
+import '../../../shared/models/public_product_visibility_policy.dart';
 import '../../../shared/services/tenant_service.dart';
 import '../../../shared/widgets/safe_layout_builder.dart';
 import '../models/website_action.dart';
@@ -161,11 +164,13 @@ class _CanvasBlockState extends State<CanvasBlock> {
   _AxisLock _axisLock = _AxisLock.none;
 
   // Product data cache for product/gallery elements
-  final Map<String, Map<String, dynamic>> _productCache = {};
+  final Map<String, Product> _productCache = {};
+  // Ids already asked for: one hidden or out of stock never comes back, and
+  // asking again on every build would read the catalog without end.
+  final Set<String> _requestedProductIds = {};
   // Cache for latest products queries to prevent FutureBuilder reset on rebuild
-  final Map<int, Future<List<Map<String, dynamic>>>> _latestProductsCache = {};
+  final Map<int, Future<List<Product>>> _latestProductsCache = {};
 
-  bool _isLoadingProducts = false;
   String? _resolvedTenantId;
   bool _isResolvingTenantId = false;
 
@@ -188,72 +193,90 @@ class _CanvasBlockState extends State<CanvasBlock> {
     }
   }
 
-  Future<void> _ensureProductsLoaded(Set<String> productIds) async {
-    if (productIds.isEmpty) return;
-    final tenantId = await _effectiveTenantId();
-    if (tenantId == null || tenantId.isEmpty) return;
-    if (_isLoadingProducts) return;
+  /// A product as the products block draws it (`PremiumProductCard` with
+  /// its public photo and its path by SKU), price only.
+  Widget _productCard(Product product) => PremiumProductCard(
+        productId: product.id,
+        productSku: product.sku,
+        productBrand: product.brand,
+        name: product.name,
+        price: product.price,
+        imageUrl: publicProductPrimaryImageUrl(product),
+        bodyFont: widget.bodyFont,
+        interactionsEnabled: !widget.editable,
+        onNavigate: widget.onNavigate,
+      );
 
-    final missing =
-        productIds.where((id) => !_productCache.containsKey(id)).toList();
-    if (missing.isEmpty) return;
-
-    _isLoadingProducts = true;
+  // Edit, Preview and Public read the catalog as a visitor does, as the
+  // products block (`_loadPublicProductsFromPolicy`) and the HTML storefront
+  // do: public, in stock and within the site's visibility rules.
+  PublicInventoryService get _inventory {
     try {
-      // El editor lee con la sesión del staff (ve borradores); la página
-      // publicada, como anónimo.
-      final client = widget.editable
-          ? Supabase.instance.client
-          : PublicCatalogClient.instance;
-      var query = client
-          .from('products')
-          .select(
-              'id,name,price,image_url,show_on_website,is_active,is_published')
-          .eq('tenant_id', tenantId)
-          .inFilter('id', missing);
-      if (!widget.editable) {
-        query = query
-            .eq('show_on_website', true)
-            .eq('is_published', true)
-            .eq('is_active', true);
-      }
-      final response = await query.limit(50);
-      for (final row in response as List) {
-        final m = Map<String, dynamic>.from(row as Map);
-        final id = m['id']?.toString();
-        if (id != null) _productCache[id] = m;
-      }
-      if (mounted) setState(() {});
+      return context.read<PublicInventoryService>();
     } catch (_) {
-      // Silent: keep placeholders
-    } finally {
-      _isLoadingProducts = false;
+      return PublicInventoryService();
     }
   }
 
-  Future<List<Map<String, dynamic>>> _loadLatestProducts(int limit) async {
+  PublicProductVisibilityPolicy? get _visibilityPolicy {
+    try {
+      final settings = context.read<WebsiteService>().settings;
+      return PublicProductVisibilityPolicy.hasAnySetting(settings)
+          ? PublicProductVisibilityPolicy.fromSettings(settings)
+          : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _ensureProductsLoaded(Set<String> productIds) async {
+    if (productIds.isEmpty) return;
+    final missing = productIds
+        .where((id) => !_requestedProductIds.contains(id))
+        .toList(growable: false);
+    if (missing.isEmpty) return;
+    _requestedProductIds.addAll(missing);
+    final tenantId = await _effectiveTenantId();
+    if (tenantId == null || tenantId.isEmpty) {
+      _requestedProductIds.removeAll(missing);
+      return;
+    }
+    try {
+      final page = await _inventory.getProductPageForTenant(
+        tenantId: tenantId,
+        productIds: missing,
+        policy: _visibilityPolicy,
+        onlyInStock: true,
+        limit: missing.length,
+      );
+      for (final product in page.products) {
+        _productCache[product.id] = product;
+      }
+      if (mounted) setState(() {});
+    } catch (_) {
+      // Silent: keep placeholders; a later build asks again.
+      _requestedProductIds.removeAll(missing);
+    }
+  }
+
+  Future<List<Product>> _loadLatestProducts(int limit) async {
     final tenantId = await _effectiveTenantId();
     if (tenantId == null || tenantId.isEmpty) return const [];
     try {
-      final response = await PublicCatalogClient.instance
-          .from('products')
-          .select(
-              'id,name,price,image_url,show_on_website,is_active,is_published')
-          .eq('tenant_id', tenantId)
-          .eq('show_on_website', true)
-          .eq('is_published', true)
-          .eq('is_active', true)
-          .order('updated_at', ascending: false)
-          .limit(limit.clamp(1, 24));
-      return (response as List)
-          .map((r) => Map<String, dynamic>.from(r as Map))
-          .toList();
+      final page = await _inventory.getProductPageForTenant(
+        tenantId: tenantId,
+        policy: _visibilityPolicy,
+        onlyInStock: true,
+        sortBy: 'newest',
+        limit: limit.clamp(1, 24),
+      );
+      return page.products;
     } catch (_) {
       return const [];
     }
   }
 
-  Future<List<Map<String, dynamic>>> _getCachedLatestProducts(int limit) {
+  Future<List<Product>> _getCachedLatestProducts(int limit) {
     if (_latestProductsCache.containsKey(limit)) {
       return _latestProductsCache[limit]!;
     }
@@ -466,6 +489,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
     if (oldWidget.tenantId != widget.tenantId) {
       _latestProductsCache.clear();
       _productCache.clear();
+      _requestedProductIds.clear();
       _resolvedTenantId = null;
     }
 
@@ -3380,7 +3404,9 @@ class _CanvasBlockState extends State<CanvasBlock> {
         }
         final sourceProduct =
             useProductImage ? _productCache[sourceProductId] : null;
-        final productImageUrl = sourceProduct?['image_url']?.toString().trim();
+        final productImageUrl = sourceProduct == null
+            ? null
+            : publicProductPrimaryImageUrl(sourceProduct)?.trim();
         final imageUrl = useProductImage &&
                 productImageUrl != null &&
                 productImageUrl.isNotEmpty
@@ -3464,7 +3490,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
           _ensureProductsLoaded({productId});
         }
         final product = productId.isNotEmpty ? _productCache[productId] : null;
-        if (product == null || product.isEmpty) {
+        if (product == null) {
           content = Container(
             color: Colors.black.withValues(alpha: 0.03),
             child: Center(
@@ -3478,23 +3504,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
             ),
           );
         } else {
-          final id = product['id']?.toString() ?? '';
-          final name = product['name']?.toString() ?? 'Producto';
-          final priceRaw = product['price'];
-          final price = priceRaw is num
-              ? priceRaw.toDouble()
-              : double.tryParse('$priceRaw') ?? 0.0;
-          final imageUrl = product['image_url']?.toString();
-          content = PremiumProductCard(
-            productId: id,
-            productSku: product['sku']?.toString(),
-            name: name,
-            price: price,
-            imageUrl: imageUrl,
-            bodyFont: widget.bodyFont,
-            interactionsEnabled: !widget.editable,
-            onNavigate: widget.onNavigate,
-          );
+          content = _productCard(product);
         }
         break;
       case 'productsGallery':
@@ -3531,7 +3541,7 @@ class _CanvasBlockState extends State<CanvasBlock> {
         // Save dynamic height so Positioned uses it (even before data loads)
         overrideHeight = galleryH;
 
-        Widget buildGallery(List<Map<String, dynamic>> products) {
+        Widget buildGallery(List<Product> products) {
           if (products.isEmpty) {
             return Container(
               color: Colors.black.withValues(alpha: 0.03),
@@ -3556,29 +3566,10 @@ class _CanvasBlockState extends State<CanvasBlock> {
               padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
               itemCount: items.length,
               separatorBuilder: (context, index) => const SizedBox(width: 20),
-              itemBuilder: (context, index) {
-                final p = items[index];
-                final id = p['id']?.toString() ?? '';
-                final name = p['name']?.toString() ?? 'Producto';
-                final priceRaw = p['price'];
-                final price = priceRaw is num
-                    ? priceRaw.toDouble()
-                    : double.tryParse('$priceRaw') ?? 0.0;
-                final imageUrl = p['image_url']?.toString();
-                return SizedBox(
-                  width: cardWidth.clamp(220, 380),
-                  child: PremiumProductCard(
-                    productId: id,
-                    productSku: p['sku']?.toString(),
-                    name: name,
-                    price: price,
-                    imageUrl: imageUrl,
-                    bodyFont: widget.bodyFont,
-                    interactionsEnabled: !widget.editable,
-                    onNavigate: widget.onNavigate,
-                  ),
-                );
-              },
+              itemBuilder: (context, index) => SizedBox(
+                width: cardWidth.clamp(220, 380),
+                child: _productCard(items[index]),
+              ),
             );
           }
 
@@ -3596,40 +3587,20 @@ class _CanvasBlockState extends State<CanvasBlock> {
                 mainAxisSpacing: spacing,
               ),
               itemCount: itemCount,
-              itemBuilder: (context, index) {
-                final p = products.take(maxProducts).elementAt(index);
-                final id = p['id']?.toString() ?? '';
-                final name = p['name']?.toString() ?? 'Producto';
-                final priceRaw = p['price'];
-                final price = priceRaw is num
-                    ? priceRaw.toDouble()
-                    : double.tryParse('$priceRaw') ?? 0.0;
-                final imageUrl = p['image_url']?.toString();
-                return PremiumProductCard(
-                  productId: id,
-                  productSku: p['sku']?.toString(),
-                  name: name,
-                  price: price,
-                  imageUrl: imageUrl,
-                  bodyFont: widget.bodyFont,
-                  interactionsEnabled: !widget.editable,
-                  onNavigate: widget.onNavigate,
-                );
-              },
+              itemBuilder: (context, index) =>
+                  _productCard(products.elementAt(index)),
             ),
           );
         }
 
         if (mode == 'latest') {
-          content = FutureBuilder<List<Map<String, dynamic>>>(
+          content = FutureBuilder<List<Product>>(
             future: _getCachedLatestProducts(maxProducts),
             builder: (context, snap) => buildGallery(snap.data ?? []),
           );
         } else {
-          final manualProducts = ids
-              .map((id) => _productCache[id])
-              .whereType<Map<String, dynamic>>()
-              .toList();
+          final manualProducts =
+              ids.map((id) => _productCache[id]).whereType<Product>().toList();
           content = buildGallery(manualProducts);
         }
         break;

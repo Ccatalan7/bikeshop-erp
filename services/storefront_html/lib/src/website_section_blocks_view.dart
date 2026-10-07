@@ -1120,8 +1120,9 @@ class CtaSectionView extends StatelessComponent {
             if (site.address.trim().isNotEmpty)
               ('Dirección', site.address.trim()),
           ];
-    final height = switch (data['blockHeight']) {
-      final num value when value > 0 => value.toDouble(),
+    // A number or its text, as `WebsiteCtaBlockContent._positive` reads it.
+    final height = switch (numberValue(data['blockHeight'])) {
+      final value? when value > 0 => value,
       _ => null,
     };
     // A side the operator set keeps the design at the others, also at a

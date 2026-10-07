@@ -436,4 +436,9 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 - El video de fondo de un lienzo se dibuja en HTML (sólo en el escenario
   visible, después de cargar la página) y el llamado de alto fijo con
   relleno también: ya ningún estilo de bloque manda la página a Flutter.
-  Queda la capa de producto del lienzo, anotada en pendientes con su causa.
+- Las capas de producto del lienzo se dibujan en HTML. Antes, el lienzo de
+  Flutter leía la tabla de productos directo (mostraba agotados y enlazaba
+  por id); ahora los dos leen como la tienda. Codex revisó el bloque: la
+  portada Flutter cortaba un bloque de destacados a 8, una lista caída
+  tumbaba la página entera, el video del lienzo cargaba lejos de la pantalla
+  y el botón de color no decía su valor; todo corregido.

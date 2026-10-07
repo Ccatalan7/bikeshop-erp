@@ -6,27 +6,24 @@ import 'package:vinabike_public_core/modules/website/models/website_action.dart'
 import 'package:vinabike_public_core/modules/website/models/website_canvas_responsive_document.dart';
 import 'package:vinabike_public_core/modules/website/models/website_responsive_authoring.dart';
 import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
+import 'package:vinabike_public_core/public_store/models/public_commerce_product_projection.dart';
+import 'package:vinabike_public_core/shared/models/product.dart';
 
 import 'block_composition.dart';
+import 'block_product_picks.dart';
 import 'css_values.dart';
 import 'website_blocks_view.dart';
+import 'website_products_view.dart';
 
 /// The width a canvas document's coordinates are written in when it does
 /// not say (`CanvasBlock._kReferenceWidth`).
 const canvasReferenceWidth = 1200.0;
 
-/// The layer kinds [CanvasLayersView] draws. A product card or a product
-/// gallery reads products the page does not load yet.
-bool canvasLayerIsCovered(Map<String, dynamic> layer) {
-  final kind = WebsiteCanvasLayerKind.fromRaw(layer['type']);
-  return switch (kind) {
-    WebsiteCanvasLayerKind.text ||
-    WebsiteCanvasLayerKind.shape ||
-    WebsiteCanvasLayerKind.button => true,
-    WebsiteCanvasLayerKind.image => !_usesProductImage(layer),
-    _ => false,
-  };
-}
+/// The layer kinds [CanvasLayersView] draws: all of `CanvasBlock`'s, the
+/// products the page reads with it ([canvasDocumentPicks]).
+bool canvasLayerIsCovered(Map<String, dynamic> layer) =>
+    WebsiteCanvasLayerKind.fromRaw(layer['type']) !=
+    WebsiteCanvasLayerKind.unknown;
 
 /// Every layer of [document] the HTML storefront can draw, in every
 /// viewport.
@@ -41,14 +38,6 @@ bool canvasDocumentIsCovered(Map<String, dynamic> document) {
     }
   }
   return true;
-}
-
-bool _usesProductImage(Map<String, dynamic> layer) {
-  final productId = (layer['productId'] ?? '').toString().trim();
-  final source =
-      (layer['imageSource'] ?? (productId.isNotEmpty ? 'product' : 'manual'))
-          .toString();
-  return productId.isNotEmpty && source != 'manual';
 }
 
 /// The viewports a canvas switches between: the shared 600/900 bands for a
@@ -194,9 +183,112 @@ class CanvasLayersView extends StatelessComponent {
         return _image(layer, classes, box, mark);
       case WebsiteCanvasLayerKind.button:
         return _button(layer, classes, box, mark);
-      default:
+      case WebsiteCanvasLayerKind.product:
+        return _product(layer, classes, box, mark, width: w);
+      case WebsiteCanvasLayerKind.productsGallery:
+        final gallery = CanvasProductGallery.of(layer);
+        return _gallery(
+          gallery,
+          classes,
+          [
+            for (final part in box)
+              part.startsWith('--h:')
+                  ? '--h:${cssNum(gallery.height(w))}'
+                  : part,
+          ],
+          mark,
+          width: w,
+        );
+      case WebsiteCanvasLayerKind.unknown:
         return null;
     }
+  }
+
+  /// A product card (`PremiumProductCard`, price only) filling its box, or
+  /// the box empty while the product is not public and in stock.
+  Component _product(
+    Map<String, dynamic> layer,
+    List<String> classes,
+    List<String> box,
+    Map<String, String> mark, {
+    required double width,
+  }) {
+    final product = switch (canvasLayerProductId(layer)) {
+      final id? => context.products[id],
+      null => null,
+    };
+    return div(
+      classes: [...classes, 'cl-prod', if (product == null) 'empty'].join(' '),
+      attributes: {...mark, 'style': box.join(';')},
+      [
+        if (product != null)
+          productCard(
+            product,
+            context,
+            showBrand: false,
+            showSku: false,
+            showPrice: true,
+            sizes: '${cssNum((width - 32).clamp(1, double.infinity))}px',
+          ),
+      ],
+    );
+  }
+
+  /// A gallery of product cards: a grid of 3:4 cards with 20 between them,
+  /// scaled with the canvas, or a row of cards of their own width that
+  /// scrolls sideways (still in the editor's draft); the box empty without
+  /// products.
+  Component _gallery(
+    CanvasProductGallery gallery,
+    List<String> classes,
+    List<String> box,
+    Map<String, String> mark, {
+    required double width,
+  }) {
+    final shown = gallery.newest
+        ? context.productLists[gallery.list.key] ?? const <Product>[]
+        : [for (final id in gallery.ids) ?context.products[id]];
+    final items = shown.take(gallery.maxProducts.clamp(0, shown.length));
+    if (items.isEmpty) {
+      return div(
+        classes: [...classes, 'cl-gal', 'empty'].join(' '),
+        attributes: {...mark, 'style': box.join(';')},
+        const [],
+      );
+    }
+    final card = gallery.carousel
+        ? gallery.cardWidth
+        : (width - (gallery.columns - 1) * 20) / gallery.columns;
+    final sizes = '${cssNum((card - 32).clamp(1, double.infinity))}px';
+    return div(
+      classes: [...classes, 'cl-gal'].join(' '),
+      attributes: {...mark, 'style': box.join(';')},
+      [
+        ul(
+          classes: gallery.carousel
+              ? ['cl-gal-row', if (context.draft) 'still'].join(' ')
+              : 'cl-gal-grid',
+          attributes: {
+            'style': gallery.carousel
+                ? '--cw:${cssPx(gallery.cardWidth)}'
+                : '--cols:${gallery.columns}',
+          },
+          [
+            for (final product in items)
+              li([
+                productCard(
+                  product,
+                  context,
+                  showBrand: false,
+                  showSku: false,
+                  showPrice: true,
+                  sizes: sizes,
+                ),
+              ]),
+          ],
+        ),
+      ],
+    );
   }
 
   Component _text(
@@ -294,7 +386,18 @@ class CanvasLayersView extends StatelessComponent {
     List<String> box,
     Map<String, String> mark,
   ) {
-    final url = (layer['imageUrl'] ?? '').toString().trim();
+    // A product's public photo when it takes one and the product is public
+    // and in stock; otherwise its own.
+    final product = switch (canvasLayerProductId(layer)) {
+      final id? => context.products[id],
+      null => null,
+    };
+    final productPhoto = product == null
+        ? ''
+        : publicProductPrimaryImageUrl(product)?.trim() ?? '';
+    final url = productPhoto.isNotEmpty
+        ? productPhoto
+        : (layer['imageUrl'] ?? '').toString().trim();
     final fit = layer['fit'] == 'contain' ? 'contain' : 'cover';
     final fx = (numberValue(layer['focalPointX']) ?? 0.5).clamp(0.0, 1.0);
     final fy = (numberValue(layer['focalPointY']) ?? 0.5).clamp(0.0, 1.0);
@@ -417,15 +520,19 @@ bool canvasBlockPlaysVideo(Map<String, dynamic> data) =>
           (projected['backgroundYoutubeId'] ?? '').toString().trim().isNotEmpty;
     });
 
-/// Loads the background video of the canvas stages on screen once the page
-/// has loaded, and pauses (a YouTube one unloads) one whose stage a resize
-/// hid; nothing for a visitor who asks for less motion. A stage for another
-/// width never fetches its video.
+/// Plays the background video of a canvas stage while it is on screen or
+/// about to be (200 px), once the page has loaded: a file pauses and a
+/// YouTube one unloads when it leaves, or when a resize hides its stage, as
+/// Flutter drops a video far off screen. Nothing for a visitor who asks for
+/// less motion; a stage for another width never fetches its video.
 const canvasMediaScript = r'''
 (function(){if(matchMedia("(prefers-reduced-motion: reduce)").matches)return;
-function run(){document.querySelectorAll(".cv-media video,.cv-media iframe").forEach(function(v){if(!v.offsetParent){if(v.tagName==="VIDEO")v.pause();else if(!v.dataset.vsrc&&v.src){v.dataset.vsrc=v.src;v.src="about:blank"}return}if(v.dataset.vsrc){v.src=v.dataset.vsrc;v.removeAttribute("data-vsrc")}if(v.play)v.play().catch(function(){})})}
-var t=0;function later(){clearTimeout(t);t=setTimeout(run,200)}
-if(document.readyState==="complete")run();else addEventListener("load",run);addEventListener("resize",later);
+var near=new Map();
+function apply(v){if(!v.offsetParent||!near.get(v)){if(v.tagName==="VIDEO")v.pause();else if(!v.dataset.vsrc&&v.src){v.dataset.vsrc=v.src;v.src="about:blank"}return}if(v.dataset.vsrc){v.src=v.dataset.vsrc;v.removeAttribute("data-vsrc")}if(v.play)v.play().catch(function(){})}
+function all(){return document.querySelectorAll(".cv-media video,.cv-media iframe")}
+function start(){if(!("IntersectionObserver" in window)){all().forEach(function(v){near.set(v,true);apply(v)});return}var io=new IntersectionObserver(function(es){es.forEach(function(e){near.set(e.target,e.isIntersecting);apply(e.target)})},{rootMargin:"200px 0px"});all().forEach(function(v){io.observe(v)})}
+var t=0;addEventListener("resize",function(){clearTimeout(t);t=setTimeout(function(){all().forEach(apply)},200)});
+if(document.readyState==="complete")start();else addEventListener("load",start);
 })();
 ''';
 

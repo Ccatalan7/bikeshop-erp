@@ -741,10 +741,16 @@ class _ColorPickerButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // The color it holds, as the editor writes one (`#RRGGBB`).
+    final hex = (currentColor.toARGB32() & 0xFFFFFF)
+        .toRadixString(16)
+        .padLeft(6, '0')
+        .toUpperCase();
     return Semantics(
       button: true,
       expanded: isExpanded,
       label: 'Color de texto',
+      value: '#$hex',
       onTap: onToggleExpanded,
       excludeSemantics: true,
       child: Tooltip(

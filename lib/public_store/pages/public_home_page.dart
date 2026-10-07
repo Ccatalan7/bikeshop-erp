@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:vinabike_public_core/modules/website/models/website_block_base_definitions.dart';
 
 import '../../modules/website/models/website_page_composition.dart';
 import '../../modules/website/models/website_responsive_authoring.dart';
@@ -249,13 +250,17 @@ class _PublicHomePageState extends State<PublicHomePage>
                   websiteService.settings,
                 )
               : null;
+      // As many as a block may show: each featured block takes its own
+      // `maxProducts`, as the HTML storefront reads them (a fixed 8 cut a
+      // block of 12 to 8).
+      const limit = WebsiteProductsBlockContract.maxProductsLimit;
       final products = await inventoryService.getFeaturedProductsForTenant(
         tenantId: tenantId,
         policy: visibilityPolicy,
-        limit: 8,
+        limit: limit,
       );
       if (!mounted) return;
-      final nextProducts = products.take(8).toList(growable: false);
+      final nextProducts = products.take(limit).toList(growable: false);
       if (!_featuredProductsLoaded ||
           !_samePublicProductSnapshots(_featuredProducts, nextProducts)) {
         setState(() {

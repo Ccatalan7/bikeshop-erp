@@ -528,32 +528,49 @@ class SupabasePublicReads implements PublicReads {
         lists: const <String, List<String>>{},
       );
     }
+    // A list that cannot be read leaves its block empty, as Flutter's
+    // products block does when its read fails, instead of the whole page.
+    Future<Object?> optional(String what, Future<Object?> read) async {
+      try {
+        return await read;
+      } on Exception catch (error) {
+        stderr.writeln('page products read failed ($what): $error');
+        return const <Object?>[];
+      }
+    }
+
     final reads = await Future.wait([
       if (picks.ids.isEmpty)
         Future<Object?>.value(const <Object?>[])
       else
-        _rpc('get_public_products', {
-          'p_tenant_id': config.tenantId,
-          'p_product_ids': picks.ids,
-          'p_only_in_stock': true,
-          'p_sort_by': 'name',
-          'p_limit': picks.ids.length,
-          'p_offset': 0,
-        }),
+        optional(
+          'picked',
+          _rpc('get_public_products', {
+            'p_tenant_id': config.tenantId,
+            'p_product_ids': picks.ids,
+            'p_only_in_stock': true,
+            'p_sort_by': 'name',
+            'p_limit': picks.ids.length,
+            'p_offset': 0,
+          }),
+        ),
       for (final list in picks.lists)
-        list.source == 'featured'
-            ? _rpc('get_public_featured_products', {
-                'p_tenant_id': config.tenantId,
-                'p_limit': list.limit,
-              })
-            : _rpc('get_public_products', {
-                'p_tenant_id': config.tenantId,
-                if (list.categoryId case final id?) 'p_category_ids': [id],
-                'p_only_in_stock': true,
-                'p_sort_by': list.source == 'newest' ? 'newest' : 'name',
-                'p_limit': list.limit,
-                'p_offset': 0,
-              }),
+        optional(
+          list.key,
+          list.source == 'featured'
+              ? _rpc('get_public_featured_products', {
+                  'p_tenant_id': config.tenantId,
+                  'p_limit': list.limit,
+                })
+              : _rpc('get_public_products', {
+                  'p_tenant_id': config.tenantId,
+                  if (list.categoryId case final id?) 'p_category_ids': [id],
+                  'p_only_in_stock': true,
+                  'p_sort_by': list.source == 'newest' ? 'newest' : 'name',
+                  'p_limit': list.limit,
+                  'p_offset': 0,
+                }),
+        ),
     ]);
     List<Object?> rowsOf(Object? read) =>
         read is List ? read.cast<Object?>() : const <Object?>[];
