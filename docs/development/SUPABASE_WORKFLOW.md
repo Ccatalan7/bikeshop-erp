@@ -724,6 +724,16 @@ local temporary eszip path; it does not relax project identity or function
 authentication. Read back the resulting active version and exercise the real
 endpoint before treating the deployment as complete.
 
+**2026-10-08 — a deploy ships everything the function never shipped.** A
+one-line change to `_shared/google_merchant_feed.ts` deployed
+`google-merchant-feed`, whose live version dated from 2026-07-21; the repo had
+since added a rule that excluded products without GTIN/MPN, and the feed fell
+from 65 items to 1 until it was corrected the same hour. Before a deploy,
+compare the function's `updated_at` from `functions list` (milliseconds) with
+`git log --since` of its folder and of every `_shared` file it imports, read
+any diff that is not yours, and save the endpoint's real output so the
+read-back after the deploy has something to be compared with.
+
 For hosted outages, first compare the wrapped project-list result, project DNS,
 and the Auth health endpoint. A healthy hosted project plus a failed local
 status is a local Docker issue. Backup and recovery operations follow
