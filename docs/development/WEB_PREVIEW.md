@@ -162,6 +162,14 @@ scripts/dev/web_preview.sh stop --local    # (stop --all also stops it)
   URL that is not exactly `http://127.0.0.1:<port>` or `http://localhost:<port>`
   (so `http://127.0.0.1:54321@host` fails), and a key that is not public (a
   `service_role` JWT or an `sb_secret_…` key).
+- **The editor's HTML view draws from the local store server.** The ERP
+  bundle also gets `STOREFRONT_HTML_ORIGIN=http://127.0.0.1:4328`, the server
+  of `services/storefront_html/tool/run_local_checkout.sh` on the same stack
+  (`VINABIKE_LOCAL_STOREFRONT_HTML_ORIGIN` changes it; only a local address is
+  accepted, and it is part of the stamp). Before 2026-10-08 the local ERP
+  asked `https://vinabike.cl` for its drafts with a local session, so the
+  HTML view could never draw there. Start that server before opening the
+  editor.
 - **No bundle crosses over.** The build fails unless the local API URL is
   compiled into the JS, and stamps the release with the stack's URL and a key
   fingerprint (`.vinabike-local-profile`, no key). The local server refuses a

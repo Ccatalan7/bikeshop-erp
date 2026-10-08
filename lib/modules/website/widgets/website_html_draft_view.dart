@@ -68,6 +68,21 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
   InAppWebViewController? _web;
   Timer? _debounce;
 
+  /// The view's frame on the ERP on the web, and whether it takes the
+  /// pointer now ([websiteHtmlDraftFramePointer]).
+  String? _frameId;
+  bool? _frameTakes;
+  Timer? _frameBack;
+
+  /// How long the frame waits for the pointer once nothing is open over it.
+  /// A touch on a sheet's row or outside it is followed by the browser's own
+  /// `click` at the same spot, after Flutter has already closed the sheet:
+  /// handed back at once, the frame took that click (iPhone Safari,
+  /// 2026-10-08: choosing «Móvil» over the hero's text started writing it).
+  /// The wait outlasts the sheet's exit and that click; a touch inside it
+  /// lands on the view's own opaque [Listener] and does nothing.
+  static const _frameBackDelay = Duration(milliseconds: 400);
+
   /// The draft on screen and the one wanted.
   final _queue = WebsiteHtmlDraftQueue();
   String? _selected;
@@ -121,6 +136,34 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
       _provider = provider..addListener(_changed);
       _changed(immediately: true);
     }
+    _syncFramePointer();
+  }
+
+  /// On the ERP on the web the frame takes the pointer only while nothing of
+  /// Flutter's is open over it. The view lives in the store's shell, a route
+  /// of the root navigator, where the editor's sheets, dialogs and menus
+  /// open: one of them on top makes this route not current
+  /// ([ModalRoute.isCurrentOf] calls this again when that changes).
+  void _syncFramePointer() {
+    if (!kIsWeb) return;
+    _frameBack?.cancel();
+    final takes = ModalRoute.isCurrentOf(context) ?? true;
+    if (takes && _frameTakes == false) {
+      _frameBack = Timer(_frameBackDelay, () {
+        if (mounted && (ModalRoute.isCurrentOf(context) ?? true)) {
+          _frameTakesPointer(true);
+        }
+      });
+    } else {
+      _frameTakesPointer(takes);
+    }
+  }
+
+  void _frameTakesPointer(bool takes) {
+    final id = _frameId;
+    if (id == null || takes == _frameTakes) return;
+    _frameTakes = takes;
+    websiteHtmlDraftFramePointer(id, takes: takes);
   }
 
   @override
@@ -131,6 +174,7 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
     _keys.dispose();
     _webPicks?.cancel();
     _debounce?.cancel();
+    _frameBack?.cancel();
     _provider?.removeListener(_changed);
     _router?.routerDelegate.removeListener(_changed);
     if (widget.client == null) _client.close();
@@ -1338,6 +1382,17 @@ class _WebsiteHtmlDraftViewState extends State<WebsiteHtmlDraftView> {
                             ),
                             onWebViewCreated: (controller) {
                               _web = controller;
+                              if (kIsWeb) {
+                                unawaited(controller.getIFrameId().then((id) {
+                                  if (!mounted ||
+                                      !identical(controller, _web)) {
+                                    return;
+                                  }
+                                  _frameId = id;
+                                  _frameTakes = null;
+                                  _syncFramePointer();
+                                }));
+                              }
                               // On the web the page speaks by message
                               // (`websiteHtmlDraftPicks`); a frame has no
                               // handlers.

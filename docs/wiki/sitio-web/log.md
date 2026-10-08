@@ -527,3 +527,19 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   el teclado abierto, el menú de selección de Android sobre la barra, el
   bloque oculto que desaparecía del borrador y otra página que abría en el
   lugar de la anterior. Windows y el iPhone siguen en el lienzo Flutter.
+
+## 2026-10-08 — El editor en el iPhone, que es el ERP web
+
+- Sin app de iOS publicada (ML Kit no compila para el simulador arm64), el
+  iPhone usa el ERP web en Safari. Medido en el simulador contra la base
+  local: con una hoja o un menú del editor abierto, el toque se lo llevaba
+  la página de abajo. Corregido en `WebsiteHtmlDraftView` (la vista le quita
+  el puntero a su marco mientras una ruta está encima y se lo devuelve tras
+  el `click` sintético del toque).
+- El perfil local del ERP web (`web_preview.sh --local`) le pedía el
+  borrador a vinabike.cl con la sesión local; ahora usa el servidor HTML
+  local.
+- Diapositiva de cámaras: en teléfono su primera línea quedaba bajo el
+  encabezado (las capas se ubican desde el borde del bloque y el encabezado
+  transparente flota encima, en el editor igual que en la tienda). Corregida
+  desde el editor; en tableta sigue montada (pendiente).

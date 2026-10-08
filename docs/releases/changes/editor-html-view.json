@@ -12,7 +12,8 @@
   "title": "Vista HTML en el editor del sitio",
   "summary": "En macOS, Android y el ERP web el editor del sitio abre en «Vista HTML»: la página tal como la arma la tienda en HTML, con lo que aún no guardas, y se actualiza con cada cambio.",
   "items": [
-    "Un clic o un toque elige el bloque o una capa, que se arrastra con guías, se gira y cambia de tamaño; textos, botones y fotos se cambian en su lugar."
+    "Un clic o un toque elige el bloque o una capa, que se arrastra con guías, se gira y cambia de tamaño; textos, botones y fotos se cambian en su lugar.",
+    "En el ERP web, las hojas, menús y diálogos que se abren sobre la vista responden al toque y al clic, y cerrarlos no toca la página."
   ],
   "evidence": [
     {
@@ -21,7 +22,7 @@
     },
     {
       "path": "lib/modules/website/widgets/website_html_draft_view.dart",
-      "sha256": "317134e0e833bfda95d0ecc8c7c9c2b0f946618561c7f6a0666cb3ebd65b7ebc"
+      "sha256": "ee2fbe1014578987a7a357b26ce8d9e0780fa9af9a5e2297e629fd3da73de0f4"
     },
     {
       "path": "lib/modules/website/providers/website_edit_mode_provider.dart",
@@ -81,15 +82,15 @@
     },
     {
       "path": "lib/modules/website/services/website_html_draft_picks.dart",
-      "sha256": "b7f097d38ba822e85349c283f10d737f43ea6eb4bb71c6dabbd263541b794397"
+      "sha256": "fbe7172cdd14bbf8478d1fbb1a696c7a48e972dbacbbf988ca65d9fdd8319e4d"
     },
     {
       "path": "lib/modules/website/services/website_html_draft_picks_stub.dart",
-      "sha256": "6d48aa56251f98df757cc38b135e97c5fed9b26b45fe74c10c19fa300b94cc74"
+      "sha256": "fedfbe108a2618cf51faabc1607be996ce92974c4533a94c4998d0e7a2fc209f"
     },
     {
       "path": "lib/modules/website/services/website_html_draft_picks_web.dart",
-      "sha256": "8a34d7cf3c65e5e58b6e0edd40b8d9a171b309e6c8ca6cdf5d90e28cfca564d8"
+      "sha256": "47f8bd9580565bf1ec79defd4ba5a395270b7c4e674d46aaccecbf3b0f54f139"
     },
     {
       "path": "services/storefront_html/lib/src/editor_draft_reads.dart",

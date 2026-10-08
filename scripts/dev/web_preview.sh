@@ -368,10 +368,14 @@ local_stack_defines() {
     echo "local profile: the local Supabase stack is not running (scripts/supabase_cli.sh status)" >&2
     return 1
   fi
-  if ! LOCAL_STACK_STAMP="$(python3 - "$LOCAL_DEFINES_DIR" <<'PY'
+  # No apostrophe anywhere in this heredoc, comments included: the bash 3.2
+  # of macOS balances quotes inside $(...) and the whole script stops parsing.
+  if ! LOCAL_STACK_STAMP="$(VINABIKE_LOCAL_STOREFRONT_HTML_ORIGIN="${VINABIKE_LOCAL_STOREFRONT_HTML_ORIGIN:-}" \
+      python3 - "$LOCAL_DEFINES_DIR" "$TARGET" <<'PY'
 import base64, hashlib, json, os, re, sys
 
 directory = sys.argv[1]
+target = sys.argv[2]
 status_path = os.path.join(directory, 'status.env')
 values = {}
 try:
@@ -415,6 +419,18 @@ if publishable and not is_public(publishable):
 defines = {'SUPABASE_URL': url, 'SUPABASE_ANON_KEY': anon}
 if publishable:
     defines['SUPABASE_PUBLISHABLE_KEY'] = publishable
+# The HTML view of the editor asks the HTML store server for its drafts with
+# the session of the editor. Without this the local ERP asked
+# https://vinabike.cl with a local session, which can never draw
+# (2026-10-08). The local server is
+# services/storefront_html/tool/run_local_checkout.sh, on the same stack.
+storefront = ''
+if target == 'erp-local':
+    storefront = (os.environ.get('VINABIKE_LOCAL_STOREFRONT_HTML_ORIGIN')
+                  or 'http://127.0.0.1:4328').rstrip('/')
+    if not re.fullmatch(r'http://(127\.0\.0\.1|localhost):[0-9]{2,5}', storefront):
+        fail('refusing a non-local VINABIKE_LOCAL_STOREFRONT_HTML_ORIGIN')
+    defines['STOREFRONT_HTML_ORIGIN'] = storefront
 descriptor = os.open(os.path.join(directory, 'defines.json'),
                      os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
 with os.fdopen(descriptor, 'w') as defines_file:
@@ -422,6 +438,8 @@ with os.fdopen(descriptor, 'w') as defines_file:
 fingerprint = hashlib.sha256('\n'.join([url, anon, publishable]).encode()).hexdigest()[:16]
 print(f'api_url={url}')
 print(f'keys_sha256_16={fingerprint}')
+if storefront:
+    print(f'storefront_html_origin={storefront}')
 PY
 )"; then
     cleanup_local_defines

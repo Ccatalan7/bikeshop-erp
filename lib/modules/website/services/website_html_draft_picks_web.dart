@@ -46,6 +46,12 @@ Stream<WebsiteHtmlDraftMessage> websiteHtmlDraftPicksImpl(String nonce) {
   return controller.stream;
 }
 
+void websiteHtmlDraftFramePointerImpl(String frameId, {required bool takes}) {
+  final frame = web.document.getElementById(frameId);
+  if (frame == null) return;
+  (frame as web.HTMLElement).style.pointerEvents = takes ? '' : 'none';
+}
+
 bool websiteHtmlDraftTellImpl(
   String nonce,
   String call,

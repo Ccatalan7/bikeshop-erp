@@ -857,6 +857,29 @@ pero no califica el binario completo ni su ruta autenticada. La prueba sin
 Auth/Storage para ese arnés ya está en
 `integration_test/workshop_completion_ios_smoke_test.dart`.
 
+**Lo que sí se prueba hoy en el simulador: el ERP web en Safari
+(2026-10-08).** No hay app de iOS publicada; en un iPhone el ERP se usa en el
+navegador, y eso se mide sin compilar nada. `xcrun simctl boot <udid>`,
+`attach`, y el ERP web local (`scripts/dev/web_preview.sh build|start
+--local`, con `services/storefront_html/tool/run_local_checkout.sh` para la
+vista HTML del editor): `localhost` del simulador es el del Mac. Trampas
+medidas:
+
+- En el primer arranque tras instalar un runtime, `open_url` y
+  `simctl openurl` se agotan (`Operation timed out`) mientras el simulador
+  compila sombreadores; la carga del Mac pasó de 150. Esperar a que Safari
+  muestre la página y no reintentar en cadena.
+- Un `text` enviado antes de que el teclado termine de subir se pierde o se
+  revuelve en un campo de Flutter web («…poise-iphone-staff@example.testeq»).
+  Tocar el campo, comprobar con una captura que el teclado está arriba y
+  recién escribir. La barra de direcciones de Safari también se comió letras:
+  las direcciones van por `simctl openurl`.
+- La contraseña de la cuenta de prueba nunca se escribe con `text` (quedaría
+  en el registro): `xcrun simctl pbcopy <udid> < archivo-privado`, mantener
+  apretado el campo (`tap` con `duration` 1,2) y elegir **Paste** en el menú
+  de iOS.
+- El ✓ del teclado sólo lo cierra; el formulario se envía con su botón.
+
 Use the `mcp__Claude_Code_iOS_Simulator__control` tool. Order matters:
 
 1. `attach` **first** — it opens the live panel instantly on a booted device

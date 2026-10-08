@@ -28,6 +28,7 @@ class _Sandbox {
   String get state => '${root.path}/state';
   String get argvFile => '${root.path}/flutter-argv.txt';
   String get definesModeFile => '${root.path}/defines-mode.txt';
+  String get storefrontFile => '${root.path}/storefront-origin.txt';
 
   /// A `supabase status -o env` that prints [lines].
   void stack(List<String> lines) {
@@ -60,6 +61,7 @@ if [ -n "\$defines" ]; then
   # `stat -f %Lp` is BSD-only; CI runs this on Linux (2026-10-01).
   python3 -c 'import os,sys; print(format(os.stat(sys.argv[1]).st_mode & 0o777, "o"))' "\$defines" >"$definesModeFile"
   url="\$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["SUPABASE_URL"])' "\$defines")"
+  python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("STOREFRONT_HTML_ORIGIN", ""))' "\$defines" >"$storefrontFile"
 fi
 ${compileUrl ? r'printf "var u=\"%s/rest/v1\";\n" "$url"' : r'printf "var u=null;\n"'} >"\$output/main.dart.js"
 ''');
@@ -192,6 +194,45 @@ void main() {
     expect(stamp, isNot(contains(_anonKey)));
   });
 
+  // The editor's HTML view sends the editor's session to the store's HTML
+  // server; the local ERP must ask the local one (2026-10-08), never
+  // https://vinabike.cl, and only a local address is accepted.
+  test('the local ERP draws its HTML view from the local store server',
+      () async {
+    sandbox
+      ..stack(['API_URL="http://127.0.0.1:54321"', 'ANON_KEY="$_anonKey"'])
+      ..flutter();
+
+    final result = await sandbox.run(['build', '--local']);
+
+    expect(result.exitCode, 0, reason: '${result.stdout}\n${result.stderr}');
+    expect(File(sandbox.storefrontFile).readAsStringSync().trim(),
+        'http://127.0.0.1:4328');
+    final stamp = File('${sandbox.state}/current/.vinabike-local-profile')
+        .readAsStringSync();
+    expect(stamp, contains('storefront_html_origin=http://127.0.0.1:4328'));
+
+    final moved = await sandbox.run([
+      'build',
+      '--local'
+    ], extra: {
+      'VINABIKE_LOCAL_STOREFRONT_HTML_ORIGIN': 'http://localhost:4400'
+    });
+    expect(moved.exitCode, 0, reason: '${moved.stdout}\n${moved.stderr}');
+    expect(File(sandbox.storefrontFile).readAsStringSync().trim(),
+        'http://localhost:4400');
+
+    final remote = await sandbox.run([
+      'build',
+      '--local'
+    ], extra: {
+      'VINABIKE_LOCAL_STOREFRONT_HTML_ORIGIN': 'https://vinabike.cl'
+    });
+    expect(remote.exitCode, isNot(0));
+    expect(remote.stderr,
+        contains('refusing a non-local VINABIKE_LOCAL_STOREFRONT_HTML_ORIGIN'));
+  });
+
   test('a bundle without the local URL is refused, not published', () async {
     sandbox
       ..stack(['API_URL="http://127.0.0.1:54321"', 'ANON_KEY="$_anonKey"'])
@@ -232,6 +273,9 @@ void main() {
     expect(stamp,
         contains('store_tenant_id=b5380d4f-dfb4-492e-b592-6420308be916'));
     expect(stamp, contains('store_subdomain=c3-privado'));
+    // The portal has no editor: no HTML view, no store server address.
+    expect(File(sandbox.storefrontFile).readAsStringSync().trim(), isEmpty);
+    expect(stamp, isNot(contains('storefront_html_origin')));
   });
 
   test('the local server refuses an unstamped (production) bundle', () async {

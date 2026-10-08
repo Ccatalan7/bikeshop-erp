@@ -620,3 +620,17 @@ Stream<WebsiteHtmlDraftMessage> websiteHtmlDraftPicks(String nonce) =>
 /// page that said it is ready. `false` before then, and on other platforms.
 bool websiteHtmlDraftTell(String nonce, String call, List<Object?> arguments) =>
     websiteHtmlDraftTellImpl(nonce, call, arguments);
+
+/// Lets the frame [frameId] of the ERP on the web take the pointer, or not.
+///
+/// Flutter's web engine leaves every platform view open to the pointer
+/// (`pointer-events: auto` on its slot), whatever Flutter draws over it: the
+/// browser hands a touch or a click to the frame before Flutter sees it.
+/// With a sheet, a dialog or a menu of the editor open over the view, a
+/// touch there selected a block of the page instead (iPhone Safari,
+/// 2026-10-08: the «Vista» sheet could be neither used nor closed). Taken
+/// off, the touch falls on the view's slot, reaches Flutter and Flutter
+/// hit-tests it like any other. On the desktop and the phone the native view
+/// is drawn under Flutter's own layers and nothing is needed.
+void websiteHtmlDraftFramePointer(String frameId, {required bool takes}) =>
+    websiteHtmlDraftFramePointerImpl(frameId, takes: takes);

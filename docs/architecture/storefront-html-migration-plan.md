@@ -2549,3 +2549,30 @@ prender «Vista HTML»; y con el teclado abierto, un «toque fuera» calculado
 para la pantalla entera cae sobre el teclado. La base local compartida había perdido
 `website_blocks_page_id_fkey` (PostgREST respondía PGRST200 y la portada
 local daba 503); se repuso como está en la línea base y en producción.
+
+## Fase 5f: el editor en el iPhone es el ERP web (2026-10-08)
+
+No hay app de iOS publicada (ningún flujo la compila; ML Kit no trae arm64 de
+simulador, `docs/development/AGENT_MACOS_APP_CONTROL.md` §4): en el iPhone el
+editor es el ERP web en Safari. Se midió en el simulador (iOS 26.5) con el ERP
+web local (`web_preview.sh --local`, que desde hoy dibuja la vista HTML con el
+servidor local de `run_local_checkout.sh`) y una cuenta de prueba local.
+
+- **Lo que Flutter abre sobre la vista no recibía el toque.** El motor web
+  de Flutter deja cada platform view en `pointer-events: auto`: el
+  navegador le da el toque al marco antes de que Flutter lo vea, aunque
+  encima haya una hoja. Con «Vista» o la hoja del bloque abiertas, un toque
+  elegía un bloque de la página o la desplazaba, y la hoja no se podía usar
+  ni cerrar. Vale igual para el clic en el escritorio. La vista vive en el
+  armazón de la tienda, una ruta del navegador raíz, donde abren las hojas,
+  los diálogos y los menús del editor: mientras esa ruta no es la actual
+  (`ModalRoute.isCurrentOf`) la vista le quita el puntero a su marco
+  (`websiteHtmlDraftFramePointer`) y Flutter lo procesa.
+- **El `click` del toque.** Devuelto el puntero al cerrar la hoja, el `click`
+  que el navegador agrega al toque caía en la página: elegir «Móvil» sobre
+  el texto del carrusel lo ponía a escribir. Se devuelve 400 ms después.
+- Medido después del arreglo: «Móvil» se aplica y la hoja se cierra sin tocar
+  la página; tocar fuera la cierra sin elegir nada; la hoja del bloque
+  cambia de pestaña; pasado el cierre, la página vuelve a elegir bloques.
+
+Windows sigue sin medir.

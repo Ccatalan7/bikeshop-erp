@@ -195,8 +195,10 @@ de información) `[Repo 2026-10-07]` `[Prod 2026-10-07]`.
 
 **Vista HTML (desde el 2026-10-07).** Es el lienzo con que abre el editor en
 macOS y en el ERP web desde el 2026-10-07, y en Android desde el 2026-10-08
-(medido con el dedo en el emulador); en Windows (su zoom no está medido) y en
-el iPhone sigue el lienzo Flutter. Cada equipo recuerda si el operador
+(medido con el dedo en el emulador); en Windows (su zoom no está medido)
+sigue el lienzo Flutter. No hay app de iPhone publicada: en el iPhone el
+editor es el ERP web en Safari, medido con el dedo en el simulador el
+2026-10-08 `[Repo 2026-10-08]`. Cada equipo recuerda si el operador
 la apaga (`WebsiteHtmlCanvasPreference`), y en el carrito, el pago, los pedidos
 y la cuenta, que no tienen vista HTML, se ve el lienzo `[Repo 2026-10-07]`. El
 botón `<>` de la barra (desde 1540 px;
@@ -236,6 +238,8 @@ panel y, si se gira con sus flechas, la elige en el panel
 HTML aún no dibuja aparece señalada en su lugar. Carrito, pago, pedidos y
 cuenta siguen en el lienzo. Sólo la ve quien puede guardar el sitio, y no
 cuenta como visita en Analytics `[Repo 2026-10-07]` `[Prod 2026-10-07]`.
+
+**El encabezado transparente tapa la parte de arriba del primer bloque (2026-10-08).** En la portada flota encima del carrusel (en el lienzo, en la vista HTML y en la tienda), y las capas de una campaña se ubican desde el borde del bloque: lo que se ponga en los primeros ~70 px de diseño (68 px de encabezado en teléfono, más en uno de 360 px, donde el diseño de 390 se reduce) queda debajo. Una capa de texto no se achica con el ancho: un diseño de escritorio (1200) reducido a tableta monta sus líneas. La diapositiva de cámaras tenía las dos cosas; el teléfono se corrigió desde el editor y la tableta sigue pendiente `[Prod 2026-10-08]`.
 
 **El catálogo del lienzo es el del cliente (2026-10-07).** Editar cargaba su
 propio catálogo —también lo no publicado y lo agotado— y lo filtraba y
@@ -358,6 +362,17 @@ encabezado al abrirse el teclado y un bloque oculto sigue a la vista con
   (`lib/modules/website/services/website_html_draft_picks_web.dart`): esa
   ventana sólo se guarda y se le escribe, porque leerla (un `!` de Dart lo
   hace) lanza `SecurityError` (2026-10-07) `[Repo]`.
+- En el ERP web el marco recibe el puntero aunque Flutter dibuje encima: el
+  motor web deja todo platform view en `pointer-events: auto`. Con una hoja,
+  un diálogo o un menú del editor abierto, el toque elegía un bloque de la
+  página y la hoja no se podía usar ni cerrar (iPhone, 2026-10-08). La vista
+  le quita el puntero a su marco (`websiteHtmlDraftFramePointer`) mientras
+  su ruta, la del armazón de la tienda en el navegador raíz, no es la actual
+  (`ModalRoute.isCurrentOf`), y se lo devuelve 400 ms después de cerrarse:
+  antes, el `click` que el navegador agrega a un toque caía en la página y
+  la ponía a escribir `[Repo 2026-10-08]`. Una capa de Flutter sobre la
+  vista que no sea una ruta (un `MenuAnchor`, un `OverlayPortal`) tendría
+  que hacer lo mismo; hoy ninguna cae sobre ella.
 - Secciones del muestrario: los tonos y medidas en el núcleo
   (`website_section_palette.dart`, `website_section_content.dart`), el HTML
   en `services/storefront_html/lib/src/website_section_blocks_view.dart` y
