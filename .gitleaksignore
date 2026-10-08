@@ -26,3 +26,13 @@ edc67935b9c8fc390edc46ba8acb42304ff95ee0:test/unit/supplier_need_portal_evidence
 # measurement record (docs), not a credential.
 ea38266babc3f9427c009bb34616e1fe74d3d969:docs/development/product-specs-research-2026-09-05/progress-measurement-2026-09-08.json:generic-api-key:453
 ea38266babc3f9427c009bb34616e1fe74d3d969:docs/development/product-specs-research-2026-09-05/progress-measurement-2026-09-08.json:generic-api-key:516
+
+# 2026-10-08 · the HTML portal chat's tests (5fa6ef37, ebb33a84): the
+# synthetic consultation key `abcdef0123456789` the browser would send as
+# `create_customer_support_request`'s idempotency key. Not a credential.
+5fa6ef37f86563a6c6573151b48038677322db65:services/storefront_html/test/storefront_handler_test.dart:generic-api-key:6840
+5fa6ef37f86563a6c6573151b48038677322db65:services/storefront_html/test/storefront_handler_test.dart:generic-api-key:6852
+5fa6ef37f86563a6c6573151b48038677322db65:services/storefront_html/test/storefront_handler_test.dart:generic-api-key:6853
+5fa6ef37f86563a6c6573151b48038677322db65:services/storefront_html/test/storefront_handler_test.dart:generic-api-key:6874
+5fa6ef37f86563a6c6573151b48038677322db65:services/storefront_html/test/storefront_handler_test.dart:generic-api-key:6888
+ebb33a8452f28f4f8c089d2d50e2a5fdf92a1d16:services/storefront_html/test/storefront_handler_test.dart:generic-api-key:6855
