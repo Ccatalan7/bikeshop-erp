@@ -18,6 +18,10 @@
 ///   before sending (its message comes in `data-required`), as Flutter's
 ///   form does on «Guardar». The password dialog moves between its steps
 ///   with what the server answers.
+/// - **Pages that add to it.** `window.vinabikePortal` lends what a page's
+///   own script needs (the session's POST, the toast, the sheets) and calls
+///   its `swapped` hooks after every redraw; `extra` goes with every view
+///   request («Soporte»'s window of messages).
 const portalPageScript = r'''
 (function () {
   var root = document.querySelector('[data-portal-root]');
@@ -75,7 +79,13 @@ const portalPageScript = r'''
     if (!strip || strip.scrollWidth <= strip.clientWidth) return;
     strip.scrollLeft = tab.offsetLeft - (strip.clientWidth - tab.offsetWidth) / 2;
   }
-  function swap(markup) { root.innerHTML = markup; reveal(); }
+  // A page script that adds to the portal («Soporte») hears every redraw.
+  var api = { extra: {}, swapped: [] };
+  function swap(markup) {
+    root.innerHTML = markup;
+    reveal();
+    api.swapped.forEach(function (hook) { try { hook(); } catch (e) { /* the page still stands */ } });
+  }
   // An answer that is not the page: the way in, or «No pudimos abrir».
   function lost(answer) {
     if (!answer) return false;
@@ -88,7 +98,9 @@ const portalPageScript = r'''
   function load() {
     if (!session || !session.read()) { boundary('signedOut'); return; }
     boundary('loading');
-    post(viewUrl, { path: path, query: query(), pending: pending() }).then(function (answer) {
+    var payload = { path: path, query: query(), pending: pending() };
+    Object.keys(api.extra).forEach(function (key) { payload[key] = api.extra[key]; });
+    post(viewUrl, payload).then(function (answer) {
       if (answer && typeof answer.html === 'string') { swap(answer.html); return; }
       if (!lost(answer)) boundary('notCustomer');
     }, function () { boundary('unavailable'); });
@@ -660,6 +672,10 @@ const portalPageScript = r'''
     if (fallback) fallback.hidden = false;
   }, true);
 
+  api.root = root; api.viewUrl = viewUrl; api.path = path; api.query = query;
+  api.post = post; api.act = act; api.toast = toast; api.lost = lost; api.load = load; api.swap = swap;
+  api.openSheet = openSheet; api.closeSheet = closeSheet; api.busy = busy; api.clearErrors = clearErrors;
+  window.vinabikePortal = api;
   load();
 })();
 ''';

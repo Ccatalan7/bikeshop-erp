@@ -2,8 +2,8 @@
 titulo: Portal de clientes
 resumen: lo que ve un cliente con cuenta en /cuenta — pedidos, taller, bicis, soporte — cómo entra, cómo se ve y qué sigue pendiente
 fuentes: [repositorio]
-archivos: [services/storefront_html/lib/src/portal_page_view.dart, services/storefront_html/lib/src/portal_forms_view.dart, services/storefront_html/lib/src/portal_page_route.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_forms.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_plans.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_snapshot.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_presentation.dart, lib/public_store/pages/customer_dashboard_page.dart, lib/public_store/pages/customer_orders_page.dart, lib/public_store/pages/customer_service_history_page.dart, lib/public_store/pages/customer_bikes_page.dart, lib/public_store/pages/customer_chat_hub_page.dart, lib/public_store/pages/customer_auth_page.dart, lib/public_store/widgets/customer_portal_style.dart, lib/public_store/widgets/customer_portal_layout.dart, lib/public_store/services/customer_account_service.dart, services/storefront_html/lib/src/android_download_page.dart, packages/vinabike_public_core/lib/public_store/models/android_download_words.dart]
-tablas: [customers, bikes, mechanic_jobs, online_orders, website_settings]
+archivos: [services/storefront_html/lib/src/portal_page_view.dart, services/storefront_html/lib/src/portal_forms_view.dart, services/storefront_html/lib/src/portal_page_route.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_forms.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_plans.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_snapshot.dart, packages/vinabike_public_core/lib/public_store/models/customer_portal_presentation.dart, lib/public_store/pages/customer_dashboard_page.dart, lib/public_store/pages/customer_orders_page.dart, lib/public_store/pages/customer_service_history_page.dart, lib/public_store/pages/customer_bikes_page.dart, lib/public_store/pages/customer_chat_hub_page.dart, lib/public_store/pages/customer_auth_page.dart, lib/public_store/widgets/customer_portal_style.dart, lib/public_store/widgets/customer_portal_layout.dart, lib/public_store/services/customer_account_service.dart, services/storefront_html/lib/src/android_download_page.dart, packages/vinabike_public_core/lib/public_store/models/android_download_words.dart, services/storefront_html/lib/src/portal_chat_view.dart, services/storefront_html/lib/src/portal_chat_script.dart, packages/vinabike_public_core/lib/public_store/models/customer_chat_words.dart]
+tablas: [customers, bikes, mechanic_jobs, online_orders, website_settings, conversations, messages, messaging_attachments]
 revisado: 2026-10-06
 ---
 
@@ -25,7 +25,7 @@ el soporte por chat. No es otra base: lee los mismos `online_orders`,
 | `/cuenta/pedidos` | `customer_orders_page.dart` | pedidos web |
 | `/cuenta/servicios` | `customer_service_history_page.dart` | trabajos del taller; `?bike_id=` filtra por bici |
 | `/cuenta/bicicletas` | `customer_bikes_page.dart` | sus bicis (dibujadas por tipo: 0 de 472 bicis tienen foto) |
-| `/cuenta/chats`, `/cuenta/chats/:id` | `customer_chat_hub_page.dart` (con la conversación abierta en `:id`) | soporte |
+| `/cuenta/chats`, `/cuenta/chats/:id` | `portal_chat_view.dart` del servidor HTML (2026-10-08); en el ERP sigue `customer_chat_hub_page.dart` | soporte: la lista y cada conversación |
 | `/cuenta/perfil`, `/cuenta/direcciones` | `customer_profile_page.dart`, `customer_addresses_page.dart` | datos y direcciones |
 | `/cuenta/login` | `customer_auth_page.dart` | entrar o crear cuenta |
 | `/cuenta/descargas/android` | `android_download_page.dart` del servidor HTML (2026-10-08); en el ERP sigue `android_app_download_page.dart` | la app Android privada, para el equipo |
@@ -95,6 +95,31 @@ Arreglado en las dos tiendas (2026-10-06): el teléfono escrito al crear la
 cuenta se perdía si había que confirmar el correo (1 de 7 cuentas); ahora se
 guarda al entrar si el cliente no tiene. El gris del panel de la izquierda
 llega al fondo de la tarjeta `[Repo 2026-10-06]`.
+
+## «Soporte» en HTML (2026-10-08)
+
+Los chats del portal (7 conversaciones en toda su vida al 2026-10-06, 105
+mensajes, todos de texto `[Prod 2026-10-08]`) los dibuja el servidor desde la
+fase 4h, con las palabras y reglas del núcleo (`customer_chat_words.dart`)
+que la copia Flutter del ERP también usa. La página calza la ventana bajo el
+encabezado, sin franja: la lista con su «Nueva consulta», o la conversación
+con sus avisos («Esperando respuesta del equipo…», archivada, cerrada), los
+mensajes por día, las solicitudes de la tienda (aprobar o pedir cambios a un
+presupuesto, confirmar una entrega; un pago sólo informa) y los archivos, y
+al lado, en ancho, el trabajo del que trata.
+
+- Lee y escribe **como el cliente**: la base decide qué conversación, mensaje
+  o archivo ve (`messaging_can_read_conversation_messages`,
+  `messaging_attachment_storage_can_read`) y las acciones son sus funciones
+  auditadas (`create_customer_support_request`, `mark_conversation_read`,
+  `respond_to_action_request`). Cada lectura nombra la tienda.
+- En vivo con Supabase Realtime (la sesión del cliente; la seguridad de filas
+  filtra los cambios); sin conexión, pregunta cada 15 s mientras se ve.
+- Un mensaje lleva su `client_message_id`: si se pierde la respuesta y se
+  reenvía, no queda dos veces.
+- El contexto de una factura no se muestra: `sales_invoices` deja leer a la
+  tienda (`customer_id = auth.uid()` nunca calza con un cliente del portal);
+  el de un trabajo sale de los trabajos del propio cliente `[Prod 2026-10-08]`.
 
 ## La descarga de Android del equipo (2026-10-08)
 

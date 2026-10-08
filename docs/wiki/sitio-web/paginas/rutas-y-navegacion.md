@@ -24,13 +24,14 @@ sus 301 son respuestas reales del servidor `[Repo]`. Desde el 2026-10-08 la
 responde su «No encontramos esta página» con **404** y `noindex`, y las
 direcciones viejas (`/tienda/...`, `/cuenta/mensajes`) un **301** real. Hasta
 ese día `**` cargaba Flutter, que respondía **200** a todo (un soft 404) y
-redirigía sólo en el navegador `[Prod 2026-10-07]`. Flutter queda sólo en sus
-reescrituras a `app.html` (su página; no se llama `index.html` para que `/`
-sea del servidor): `/cuenta/chats` y `/cuenta/chats/**` `[Repo]` (la descarga
-de Android del equipo pasó al servidor el 2026-10-08). Flutter sólo arranca para el soporte y para la vuelta de Google
-del editor (todo enlace de Auth de un cliente lo canjea el login HTML desde el
-2026-10-08; el carrito, el checkout, el pedido, todo el
-portal salvo el soporte y el login son del servidor desde el 2026-10-06); un clic suyo hacia una ruta del servidor hace una carga completa
+redirigía sólo en el navegador `[Prod 2026-10-07]`. Desde el 2026-10-08
+(fase 4h) **ninguna** reescritura de la tienda va a `app.html` (la página de
+Flutter; no se llama `index.html` para que `/` sea del servidor): los chats y
+la descarga de Android del equipo también son del servidor `[Repo]`. Flutter
+sólo arranca para la vuelta de Google del editor (`/cuenta/login?enlace=1`,
+que el servidor responde con `app.html` adaptada); el carrito, el checkout,
+el pedido, todo el portal y el login son del servidor. Desde el Flutter del
+ERP, un clic hacia una ruta del servidor hace una carga completa
 (`storefrontHtmlServes` en el núcleo, comparada con `firebase.json` por una
 prueba), salvo en el editor, su vista previa y `/tienda` `[Repo]`.
 
@@ -50,7 +51,7 @@ prueba), salvo en el editor, su vista previa y `/tienda` `[Repo]`.
 | `/carrito` | carrito; lo dibuja el servidor HTML y sus líneas llegan de `/carrito/lineas` (JSON, `no-store`) | no (`X-Robots-Tag` y meta) |
 | `/checkout` | compra, servidor HTML desde el 2026-10-06; sus líneas en `/checkout/lineas` (JSON, `no-store`) | no (`X-Robots-Tag` y meta) |
 | `/pedido/:id` | confirmación de un pedido (con token de acceso), servidor HTML desde el 2026-10-06; su resumen en PDF es `POST /pedido/resumen.pdf` (token en el cuerpo) | no |
-| `/cuenta`, `/cuenta/login`, `/cuenta/perfil`, `/cuenta/direcciones`, `/cuenta/pedidos`, `/cuenta/bicicletas`, `/cuenta/servicios`, `/cuenta/chats`, `/cuenta/chats/:id`, `/cuenta/mensajes`, `/cuenta/mensajes/:id`, `/cuenta/descargas/android` | portal de clientes ([portal-de-clientes](portal-de-clientes.md)); `/cuenta`, `/cuenta/pedidos`, `/cuenta/servicios`, `/cuenta/bicicletas`, `/cuenta/perfil`, `/cuenta/direcciones`, `/cuenta/login` y `/cuenta/descargas/android` las dibuja el servidor HTML (con `POST /cuenta/vista`, `/cuenta/archivo`, `/cuenta/accion` y `/cuenta/descargas/android/version`); el login canjea él mismo los enlaces de Auth y sólo `?enlace=1` (la vuelta de Google del editor) lo responde Flutter; los chats, Flutter | no |
+| `/cuenta`, `/cuenta/login`, `/cuenta/perfil`, `/cuenta/direcciones`, `/cuenta/pedidos`, `/cuenta/bicicletas`, `/cuenta/servicios`, `/cuenta/chats`, `/cuenta/chats/:id`, `/cuenta/mensajes`, `/cuenta/mensajes/:id`, `/cuenta/descargas/android` | portal de clientes ([portal-de-clientes](portal-de-clientes.md)); `/cuenta`, `/cuenta/pedidos`, `/cuenta/servicios`, `/cuenta/bicicletas`, `/cuenta/perfil`, `/cuenta/direcciones`, `/cuenta/chats`, `/cuenta/chats/:id`, `/cuenta/login` y `/cuenta/descargas/android` las dibuja el servidor HTML (con `POST /cuenta/vista`, `/cuenta/archivo`, `/cuenta/accion` y `/cuenta/descargas/android/version`); el login canjea él mismo los enlaces de Auth y sólo `?enlace=1` (la vuelta de Google del editor) lo responde Flutter | no |
 | `/auth/callback` | vuelta del inicio de sesión con Google; el login HTML canjea el código con el verificador PKCE que dejó el login y entra a «Mi cuenta» (la del editor, que deja su intención en el navegador, la canjea Flutter) | no |
 | `/shop/:slug` | URL de la tienda vieja | redirige 301 |
 | (cualquier otra) | «No encontramos esta página», del servidor HTML | no (404) |

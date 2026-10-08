@@ -5,6 +5,7 @@ import 'package:jaspr/dom.dart';
 import 'package:jaspr/server.dart';
 import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
 import 'package:vinabike_public_core/public_store/models/customer_bike_drawing_geometry.dart';
+import 'package:vinabike_public_core/public_store/models/customer_chat_words.dart';
 import 'package:vinabike_public_core/public_store/models/customer_portal_forms.dart';
 import 'package:vinabike_public_core/public_store/models/customer_portal_plans.dart';
 import 'package:vinabike_public_core/public_store/models/customer_portal_presentation.dart';
@@ -17,11 +18,14 @@ import 'package:vinabike_public_core/shared/utils/chilean_utils.dart';
 import 'css_values.dart';
 import 'material_icons.dart';
 import 'places_script.dart';
+
+import 'portal_chat_script.dart';
 import 'portal_page_css.dart';
 import 'portal_page_script.dart';
 import 'public_reads.dart';
 import 'site_layout.dart';
 
+part 'portal_chat_view.dart';
 part 'portal_forms_view.dart';
 
 /// Where the portal page asks for its content, with the customer's session
@@ -35,13 +39,15 @@ const portalFilePath = '/cuenta/archivo';
 /// the session in the `authorization` header (`portal_action_route.dart`).
 const portalActionPath = '/cuenta/accion';
 
-/// The customer portal's pages the HTML store draws: reading (4a) and the
-/// profile and addresses (4b). The chats and the way in are still Flutter's.
+/// The customer portal's pages the HTML store draws: reading (4a), the
+/// profile and addresses (4b) and «Soporte» (4h, with its conversations at
+/// `/cuenta/chats/<id>`).
 enum PortalPage {
   dashboard('/cuenta'),
   orders('/cuenta/pedidos'),
   workshop('/cuenta/servicios'),
   bikes('/cuenta/bicicletas'),
+  chats('/cuenta/chats'),
   profile('/cuenta/perfil'),
   addresses('/cuenta/direcciones');
 
@@ -52,7 +58,7 @@ enum PortalPage {
     for (final page in values) {
       if (page.path == path) return page;
     }
-    return null;
+    return portalChatId(path) == null ? null : chats;
   }
 }
 
@@ -86,7 +92,9 @@ Component portalPageDocument(PageContext page, PortalPage which) {
           '${shell.storeName}.',
       canonicalUrl: '${page.storeUrl}${which.path}',
       indexable: false,
-      styles: portalPageCss(roles),
+      styles: which == PortalPage.chats
+          ? '${portalPageCss(roles)}${portalChatCss(roles)}'
+          : portalPageCss(roles),
     ),
     content: [
       div(
@@ -135,6 +143,7 @@ Component portalPageDocument(PageContext page, PortalPage which) {
       // The address form's search (4b) shares the checkout's Places client.
       if (which == PortalPage.addresses) script(content: placesScript),
       script(content: portalPageScript),
+      if (which == PortalPage.chats) script(content: portalChatScript),
     ],
     showFooter: false,
   );
@@ -267,6 +276,7 @@ class PortalViewData {
     required this.addresses,
     required this.jobFiles,
     required this.pendingRevocation,
+    this.chat,
   });
 
   /// The rows as read, completed like `CustomerAccountService` completes
@@ -276,6 +286,7 @@ class PortalViewData {
     String query,
     CustomerPortalReads reads, {
     bool pendingRevocation = false,
+    PortalChatData? chat,
   }) {
     final settings = reads.shell['settings'];
     String setting(String key, [String fallback = '']) {
@@ -305,6 +316,7 @@ class PortalViewData {
       addresses: [for (final row in reads.addresses) ?_address(row)],
       jobFiles: reads.jobFiles,
       pendingRevocation: pendingRevocation,
+      chat: chat,
     );
   }
 
@@ -322,6 +334,9 @@ class PortalViewData {
   /// The password changed but closing the other sessions failed, in this
   /// browser (`hasPendingOtherSessionsRevocation`, kept by the page).
   final bool pendingRevocation;
+
+  /// «Soporte»'s conversations, on that page.
+  final PortalChatData? chat;
 
   Map<String, String> get queryParameters =>
       query.isEmpty ? const {} : Uri.splitQueryString(query);
@@ -381,6 +396,9 @@ Component portalView(PortalViewData data) {
         href: '/cuenta/chats',
       );
       body = _workshop(data, sheets);
+    case PortalPage.chats:
+      // It fits the window and has no band (`enableContentScrolling`).
+      return _chatPage(data, sheets);
     case PortalPage.bikes:
       title = 'Bicicletas';
       meta = 'Las bicis que el taller registró a tu nombre.';
@@ -1309,7 +1327,9 @@ class _Sheets {
 
   String job(Map<String, dynamic> job) {
     final key = 'job:${job['id']}';
-    return _ids[key] ??= _add(_jobSheet(job, data.jobFiles));
+    return _ids[key] ??= _add(
+      _jobSheet(job, data.jobFiles, inChat: data.page == PortalPage.chats),
+    );
   }
 
   String bike(Map<String, dynamic> bike) {
@@ -1326,8 +1346,9 @@ class _Sheets {
 
 Component Function(String id) _jobSheet(
   Map<String, dynamic> job,
-  Map<String, String> files,
-) => (id) {
+  Map<String, String> files, {
+  bool inChat = false,
+}) => (id) {
   final presentation = CustomerWorkshopPresentation.of(job);
   final number = (job['job_number'] ?? '').toString().trim();
   final received = CustomerWorkshopPresentation.receivedAt(job);
@@ -1410,14 +1431,17 @@ Component Function(String id) _jobSheet(
           ),
         ]),
     ],
+    // From the conversation itself, «Preguntar al taller» would lead back
+    // to it.
     actions: [
-      _button(
-        presentation.needsCustomer
-            ? 'Responder al taller'
-            : 'Preguntar al taller',
-        arrow: true,
-        href: '/cuenta/chats',
-      ),
+      if (!inChat)
+        _button(
+          presentation.needsCustomer
+              ? 'Responder al taller'
+              : 'Preguntar al taller',
+          arrow: true,
+          href: '/cuenta/chats',
+        ),
     ],
   );
 };

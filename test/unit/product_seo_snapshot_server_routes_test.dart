@@ -79,6 +79,9 @@ void main() {
       // The team's Android download and its release (2026-10-08).
       '/cuenta/descargas/android',
       '/cuenta/descargas/android/version',
+      // «Soporte» and a conversation (phase 4h).
+      '/cuenta/chats',
+      '/cuenta/chats/46a51a87-aa3a-430c-a6e1-af48c8d74541',
       // The editor's own pages (phase 5a).
       '/pagina/arriendo',
       // The ERP's old mount, redirected (2026-10-08): no snapshot there.
@@ -93,8 +96,7 @@ void main() {
       '/pedido',
       '/carritox',
       '/cuenta/loginx',
-      '/cuenta/chats',
-      '/cuenta/chats/46a51a87-aa3a-430c-a6e1-af48c8d74541',
+      '/cuenta/chatsx',
       '/cuenta/perfilx',
       '/serviciosx',
       '/productosx',
@@ -112,8 +114,8 @@ void main() {
   });
 
   test(
-      'Flutter keeps only the chats; Hosting hands the server everything '
-      'else', () {
+      'no public route loads Flutter: Hosting hands the server everything',
+      () {
     // Until 2026-10-08 `**` loaded Flutter: an unknown address answered 200
     // with the app, and `/tienda/...` redirected only in the browser.
     final config = jsonDecode(File('firebase.json').readAsStringSync()) as Map;
@@ -137,13 +139,16 @@ void main() {
       return 'none';
     }
 
-    for (final path in [
-      '/cuenta/chats',
-      '/cuenta/chats/46a51a87-aa3a-430c-a6e1-af48c8d74541',
-    ]) {
-      expect(answer(path), '/${snapshots.seoFlutterEntryFileName}',
-          reason: path);
-    }
+    // Since 2026-10-08 (4h) not even the chats: `app.html` is only the
+    // page the server adapts for the editor's own Google return.
+    expect(
+      [
+        for (final rewrite in rewrites)
+          if (rewrite['destination'] == '/${snapshots.seoFlutterEntryFileName}')
+            rewrite['source'],
+      ],
+      isEmpty,
+    );
     for (final path in [
       // Google's return: the HTML login redeems its code (2026-10-08) and
       // hands Flutter only the editor's own link.
@@ -158,6 +163,9 @@ void main() {
       // The team's Android download, in HTML since 2026-10-08.
       '/cuenta/descargas/android',
       '/cuenta/descargas/android/version',
+      // «Soporte» (4h).
+      '/cuenta/chats',
+      '/cuenta/chats/46a51a87-aa3a-430c-a6e1-af48c8d74541',
       '/productos',
     ]) {
       expect(answer(path), snapshots.seoStorefrontHtmlServiceId, reason: path);
@@ -205,7 +213,7 @@ void main() {
     for (final path in [
       '/pedido',
       '/auth/callback',
-      '/cuenta/chats',
+      '/cuenta/chatsx',
       '/carritox',
       '/checkoutx',
     ]) {
@@ -405,15 +413,16 @@ void main() {
     final store = (repository['hosting'] as List)
         .cast<Map>()
         .singleWhere((entry) => entry['target'] == 'store');
-    // Flutter's own routes enter by app.html (the catch-all went to the
-    // server on 2026-10-08).
+    // No route enters Flutter by a rewrite since the chats moved (4h,
+    // 2026-10-08): app.html is a plain file the server reads to answer the
+    // editor's own Google return.
     expect(
       (store['rewrites'] as List).cast<Map>().where(
             (rewrite) =>
                 rewrite['destination'] ==
                 '/${snapshots.seoFlutterEntryFileName}',
           ),
-      isNotEmpty,
+      isEmpty,
     );
     final routes = snapshots.SeoServerRenderedRoutes.fromFirebaseConfig(
       config([toServer('/')]),

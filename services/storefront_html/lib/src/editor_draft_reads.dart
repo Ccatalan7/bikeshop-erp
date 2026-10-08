@@ -261,6 +261,35 @@ class EditorDraftReads implements PublicReads {
   Future<List<int>?> signedObjectBytes(String url, {required int maxBytes}) =>
       _never();
 
+  @override
+  Future<CustomerChatReads> customerChats(
+    String accessToken, {
+    String? conversationId,
+    int window = 50,
+  }) => _never();
+
+  @override
+  Future<Object?> customerChatCommand(
+    String accessToken,
+    String function,
+    Map<String, Object?> params,
+  ) => _never();
+
+  @override
+  Future<String?> customerChatFile(
+    String accessToken, {
+    required String conversationId,
+    required String messageId,
+  }) => _never();
+
+  @override
+  Future<bool> customerChatMessage(
+    String accessToken, {
+    required String conversationId,
+    required String text,
+    required String clientId,
+  }) => _never();
+
   static Never _never() =>
       throw StateError('The editor\'s draft draws no customer page.');
 }

@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "storefront-html-portal-chat",
+  "scope": "internal",
+  "platforms": [
+    "web",
+    "macos",
+    "windows",
+    "android"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/customer_chat_words.dart",
+      "sha256": "5500c941043403ae91b3b8acbd6c1272d6ac675e24fad1009ea227618d319648"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/seo/storefront_html_routes.dart",
+      "sha256": "7bab7f7c6c45838f0ff44c7b2f070bd8c773365997e34c08d7579b11e03134c6"
+    },
+    {
+      "path": "lib/public_store/widgets/customer_chat_view.dart",
+      "sha256": "32ab9e57ece637d2a31d0ea562f1500e4cc8468dc14f8974083563cd4c0955e5"
+    },
+    {
+      "path": "lib/public_store/pages/customer_chat_hub_page.dart",
+      "sha256": "eea45486234c7a069151a4929970456ca050b88e67fb27675ce1105d15b86ecf"
+    },
+    {
+      "path": "lib/modules/messaging/providers/chat_provider.dart",
+      "sha256": "596c5096fd88133696f657a001effaecab3e0baaec5bbc89c9e77a1af4b5d557"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_chat_view.dart",
+      "sha256": "289e37906c06d7523376ba2bcc59c4bd391bb8cda180e3c476d6be00efac8f0e"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_chat_css.dart",
+      "sha256": "9574e2c20fde3b90a12e53188974fc2e6f3836f971513fc0a4eed67ee3bd0341"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_chat_script.dart",
+      "sha256": "7786218d56836535cbf4fd2a38ef03b3a8cbe671156c75d4cddfccae7dc5c2e2"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_page_view.dart",
+      "sha256": "2d08d323ac26f87df55c03d1657a6ee5abc1455ae78f352efe84bef714f91324"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_page_css.dart",
+      "sha256": "3fafa91cf57633a09293ec7c0ea5f399c8270a0ef9fead4991148ad95397da1f"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_page_script.dart",
+      "sha256": "089b6f5ef13d63be4f5b077f17bde3ada3f64d710813b136aed395586dcf7cd7"
+    },
+    {
+      "path": "services/storefront_html/lib/src/portal_page_route.dart",
+      "sha256": "30349f72515260339791177e1ef26f6d9c847531801fc1aad59c85a4b39da3a9"
+    },
+    {
+      "path": "services/storefront_html/lib/src/public_reads.dart",
+      "sha256": "ce6001e4648790910cdbeaff44cd4a9d2bc082d3b0afe591e07cf64b2121759c"
+    },
+    {
+      "path": "services/storefront_html/lib/src/editor_draft_reads.dart",
+      "sha256": "ec579b2aec249081def17cd660923ce4ab54d80b32ada31c02cb18ccd672409a"
+    },
+    {
+      "path": "services/storefront_html/lib/src/material_icons.dart",
+      "sha256": "7937ce67299e652ab5c72d0fc0ba72b4082d51242f5d887d26f865508ab78f0a"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_handler.dart",
+      "sha256": "d03d0495fef6252ae5ce3ea334e286e795d16796107918a14a2940257956a842"
+    },
+    {
+      "path": "services/storefront_html/test/storefront_handler_test.dart",
+      "sha256": "415f4f82badab2b74c1bf8e96dcdffe950dba153b511802977497c31316ab336"
+    },
+    {
+      "path": "firebase.json",
+      "sha256": "1481bc4ce4858f721bddc4cafecfda02076bfe6be7982f329aa24c7aed431a71"
+    },
+    {
+      "path": "test/unit/product_seo_snapshot_server_routes_test.dart",
+      "sha256": "65e9c8c36deec406c825f41823343191f78744edbaa649d4e17984e50545dd15"
+    },
+    {
+      "path": "test/unit/customer_chat_surface_contract_test.dart",
+      "sha256": "bf1f0f54ffe4c2e07501c303b202393573a5fc017e844e0f446c1c32dbcebe66"
+    },
+    {
+      "path": "test/unit/messaging_history_pagination_contract_test.dart",
+      "sha256": "97f369a569135f320c644088b8dda6eabf2e19171bc461199336b2d40717943e"
+    },
+    {
+      "path": "test/unit/messaging_inbox_architecture_test.dart",
+      "sha256": "c2b51819b43cc681e3f9de846c63ce106fa7346e7596ff6b458e94c6fcf8329b"
+    },
+    {
+      "path": "test/unit/messaging_runtime_contract_test.dart",
+      "sha256": "d8dc17cb13ad9bd6694d49296f35a3da6f78c2cd938e45af908772c733aacad0"
+    }
+  ]
+}

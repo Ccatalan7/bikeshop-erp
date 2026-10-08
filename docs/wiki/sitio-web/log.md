@@ -495,3 +495,20 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   perfil del equipo recibe 404 y ve «todavía no está publicada», como en
   Flutter.
 
+## 2026-10-08 — «Soporte» en HTML
+
+- Los chats del portal pasaron al servidor (fase 4h): ninguna reescritura de
+  la tienda va ya a `app.html`. Palabras y reglas en el núcleo
+  (`customer_chat_words.dart`), compartidas con la copia Flutter del ERP.
+- El stack local de Supabase corre **sin Realtime** (los recorridos lo
+  excluyen); levantarlo a mano deja una ranura de replicación en la base
+  compartida. El saludo del protocolo se probó contra el Realtime de
+  producción con la llave pública (unión y latido `ok`, sin filas) y el
+  evento → redibujo con un socket simulado en la página.
+- Trampas de la base local al armar un chat de prueba: `messages.type` sólo
+  admite `text|image|file|system|action_request`; un archivo privado necesita
+  su fila `attached` en `messaging_attachments`; el contexto de una
+  conversación exige su fila primaria en `conversation_contexts` (un
+  disparador diferido lo revisa al confirmar); aprobar un presupuesto exige
+  al menos una línea (rechazar no).
+

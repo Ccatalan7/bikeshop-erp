@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:vinabike_public_core/public_store/models/customer_chat_words.dart';
 import '../../modules/messaging/services/messaging_service.dart';
 import '../models/customer_portal_presentation.dart';
 import '../services/customer_account_service.dart';
@@ -161,14 +162,11 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
     final wide = MediaQuery.sizeOf(context).width >= PortalStyle.wideBreakpoint;
 
     return CustomerPortalLayout(
-      title: selected?.title ?? 'Soporte',
-      subtitle: selected == null
-          ? 'Escríbele a la tienda y al taller: pedidos, tu bici o lo que '
-              'necesites.'
-          : null,
+      title: selected?.title ?? customerChatTitle,
+      subtitle: selected == null ? customerChatLead : null,
       headerAction: selected == null && _conversations.isNotEmpty
           ? PortalButton(
-              label: 'Nueva consulta',
+              label: customerChatNew,
               kind: PortalButtonKind.onPhoto,
               icon: Icons.add,
               onPressed: _showNewChatDialog,
@@ -207,12 +205,11 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
       return SingleChildScrollView(
         padding: const EdgeInsets.only(bottom: 48),
         child: PortalEmptyState(
-          title: 'No tienes conversaciones.',
-          message: 'Pregúntanos por un pedido, un repuesto o tu bici en el '
-              'taller. Te respondemos aquí mismo.',
+          title: customerChatEmptyTitle,
+          message: customerChatEmptyBody,
           actions: [
             PortalButton(
-              label: 'Nueva consulta',
+              label: customerChatNew,
               icon: Icons.add,
               onPressed: _showNewChatDialog,
             ),
@@ -297,17 +294,13 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
               Semantics(
                 header: true,
                 child: Text(
-                  'NUEVA CONSULTA',
-                  semanticsLabel: 'Nueva consulta',
+                  customerChatNew.toUpperCase(),
+                  semanticsLabel: customerChatNew,
                   style: style.heading(24),
                 ),
               ),
               const SizedBox(height: 6),
-              Text(
-                'Cuéntanos qué necesitas. Si es por un pedido o tu bici, '
-                'indica cuál.',
-                style: style.pageSubtitle,
-              ),
+              Text(customerChatNewLead, style: style.pageSubtitle),
               const SizedBox(height: 16),
               TextField(
                 controller: controller,
@@ -315,13 +308,13 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
                 minLines: 3,
                 textCapitalization: TextCapitalization.sentences,
                 decoration: const InputDecoration(
-                  hintText: '¿En qué podemos ayudarte?',
+                  hintText: customerChatNewHint,
                 ),
                 autofocus: true,
               ),
               const SizedBox(height: 16),
               PortalButton(
-                label: 'Enviar',
+                label: customerChatSend,
                 arrow: true,
                 expand: true,
                 onPressed: () async {
@@ -331,12 +324,7 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
                   Navigator.pop(modalContext);
                   if (tenantId == null) {
                     messenger.showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'No pudimos enviar tu consulta. Recarga la página e '
-                          'intenta de nuevo.',
-                        ),
-                      ),
+                      const SnackBar(content: Text(customerChatNewNoStore)),
                     );
                     return;
                   }
@@ -349,11 +337,7 @@ class _CustomerChatHubPageState extends State<CustomerChatHubPage> {
                     if (mounted) _selectConversation(id);
                   } catch (_) {
                     messenger.showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'No pudimos enviar tu consulta. Intenta de nuevo.',
-                        ),
-                      ),
+                      const SnackBar(content: Text(customerChatNewFailed)),
                     );
                   }
                 },
@@ -434,7 +418,7 @@ class _ConversationRow extends StatelessWidget {
       leading: PortalThumb(fallbackIcon: icon),
       title: p.title,
       meta: [
-        p.preview ?? 'Sin mensajes todavía',
+        p.preview ?? customerChatNoMessages,
         if (compact && when != null) when,
       ].join(' · '),
       footer: compact ? pill : null,

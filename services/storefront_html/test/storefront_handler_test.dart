@@ -10,6 +10,7 @@ import 'package:vinabike_public_core/modules/website/models/website_catalog_pres
 import 'package:vinabike_public_core/modules/website/models/website_product_page_template.dart';
 import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.dart';
 import 'package:vinabike_public_core/public_store/models/android_download_words.dart';
+import 'package:vinabike_public_core/public_store/models/customer_chat_words.dart';
 import 'package:vinabike_public_core/public_store/models/customer_portal_presentation.dart';
 import 'package:vinabike_public_core/public_store/models/portal_time_zone.dart';
 import 'package:vinabike_public_core/public_store/utils/product_url.dart';
@@ -194,7 +195,18 @@ class _FakeReads implements PublicReads {
     this.writeOk = true,
     this.auth = const {},
     this.storage = const {},
+    this.chats,
+    this.chatAnswers = const {},
   }) : shellJson = shell;
+
+  /// What `customerChats` answers; null refuses the session.
+  final CustomerChatReads? chats;
+
+  /// What each chat command answers; a [PublicReadException] is thrown.
+  final Map<String, Object?> chatAnswers;
+
+  /// The chat's reads and writes, as asked.
+  final chatCalls = <(String, Map<String, Object?>)>[];
 
   /// Private Storage objects by `<bucket>/<path>`: their bytes, or the
   /// `statusCode` Storage refuses to sign them with.
@@ -346,6 +358,61 @@ class _FakeReads implements PublicReads {
     if (object == null) throw const StorageRefused('404');
     signed.add(('$bucket/$path', expiresIn));
     return 'https://example.invalid/storage/v1/object/sign/$bucket/$path?t=x';
+  }
+
+  @override
+  Future<CustomerChatReads> customerChats(
+    String accessToken, {
+    String? conversationId,
+    int window = 50,
+  }) async {
+    chatCalls.add(('read', {'conversation': conversationId, 'window': window}));
+    if (fail) throw PublicReadException('down');
+    final read = chats;
+    if (read == null) throw const CustomerSessionRefused();
+    return read;
+  }
+
+  @override
+  Future<Object?> customerChatCommand(
+    String accessToken,
+    String function,
+    Map<String, Object?> params,
+  ) async {
+    chatCalls.add((function, params));
+    final answer = chatAnswers[function];
+    if (answer is Exception) throw answer;
+    return answer;
+  }
+
+  @override
+  Future<String?> customerChatFile(
+    String accessToken, {
+    required String conversationId,
+    required String messageId,
+  }) async {
+    chatCalls.add((
+      'file',
+      {'conversation': conversationId, 'message': messageId},
+    ));
+    final answer = chatAnswers['file'];
+    return answer is String ? answer : null;
+  }
+
+  @override
+  Future<bool> customerChatMessage(
+    String accessToken, {
+    required String conversationId,
+    required String text,
+    required String clientId,
+  }) async {
+    chatCalls.add((
+      'send',
+      {'conversation': conversationId, 'text': text, 'client': clientId},
+    ));
+    final answer = chatAnswers['send'];
+    if (answer is Exception) throw answer;
+    return answer != false;
   }
 
   @override
@@ -5433,7 +5500,8 @@ void main() {
     test('the view needs a session and a portal page', () async {
       final reads = _FakeReads(portal: portal());
       expect((await view(reads, '/cuenta', auth: ''))['state'], 'invalid');
-      expect((await view(reads, '/cuenta/chats'))['state'], 'invalid');
+      expect((await view(reads, '/cuenta/ayuda'))['state'], 'invalid');
+      expect((await view(reads, '/cuenta/chats/x'))['state'], 'invalid');
       expect(
         (await _get(reads, portalViewPath)).statusCode,
         405,
@@ -6465,6 +6533,567 @@ void main() {
         ))['state'],
         'invalid',
       );
+    });
+
+    // ------------------------------------------------------------ 4h
+
+    group('«Soporte»', () {
+      const me = '7e570000-0000-4000-8000-0000000000aa';
+      const open = 'c1000000-0000-4000-8000-000000000001';
+      const other = 'c1000000-0000-4000-8000-000000000002';
+      const job = 'd1000000-0000-4000-8000-000000000001';
+      Map<String, dynamic> conversation(
+        String id, {
+        String status = 'active',
+        String? title,
+        String? contextType,
+        String? contextId,
+        Map<String, dynamic>? last,
+      }) => {
+        'id': id,
+        'title': title,
+        'status': status,
+        'reject_reason': null,
+        'context_type': contextType,
+        'context_id': contextId,
+        'last_message_at': '2026-03-30T15:04:00Z',
+        'created_at': '2026-03-29T12:00:00Z',
+        'messages': [?last],
+      };
+      Map<String, dynamic> message(
+        String id,
+        String content, {
+        String sender = 'e1000000-0000-4000-8000-0000000000ee',
+        String type = 'text',
+        Map<String, dynamic> metadata = const {},
+        String at = '2026-03-30T15:04:00Z',
+      }) => {
+        'id': id,
+        'conversation_id': open,
+        'sender_id': sender,
+        'content': content,
+        'type': type,
+        'metadata': metadata,
+        'created_at': at,
+      };
+      CustomerChatReads chats({
+        List<Map<String, dynamic>>? conversations,
+        List<Map<String, dynamic>> messages = const [],
+        bool more = false,
+        Map<String, String> files = const {},
+      }) => (
+        conversations:
+            conversations ??
+            [
+              conversation(
+                open,
+                status: 'pending',
+                last: message('m0', 'Hola, ¿tienen frenos?', sender: me),
+              ),
+              conversation(
+                other,
+                title: 'Chat: Trabajo #PG-00305',
+                contextType: 'job',
+                contextId: job,
+                last: message('m9', 'Está lista tu bici'),
+              ),
+            ],
+        messages: messages,
+        more: more,
+        files: files,
+      );
+      Future<Map<String, Object?>> chatView(
+        _FakeReads reads,
+        String path, {
+        int? window,
+      }) async {
+        final response = await _get(
+          reads,
+          portalViewPath,
+          method: 'POST',
+          headers: {
+            'authorization': 'Bearer ${token()}',
+            'content-type': 'application/json',
+          },
+          body: jsonEncode({'path': path, 'query': '', 'window': ?window}),
+        );
+        return jsonDecode(await response.readAsString())
+            as Map<String, Object?>;
+      }
+
+      test('its frames are the portal with its styles and script; an id '
+          'that is not one is a 404', () async {
+        for (final path in ['/cuenta/chats', '/cuenta/chats/$open']) {
+          final response = await _get(_FakeReads(), path);
+          expect(response.statusCode, 200, reason: path);
+          final html = await response.readAsString();
+          expect(html, contains('data-portal-root'));
+          expect(html, contains('.pt-chatpage{'));
+          expect(html, contains('window.vinabikePortal'));
+          expect(html, contains('realtime/v1/websocket'));
+          expect(html, contains('.chat-fab{display:none}'));
+          expect(html, isNot(contains('flutter_bootstrap.js')));
+        }
+        // Only «Soporte» carries them.
+        final other = await (await _get(
+          _FakeReads(),
+          '/cuenta',
+        )).readAsString();
+        expect(other, isNot(contains('.pt-chatpage{')));
+        expect(other, isNot(contains('realtime/v1/websocket')));
+        expect((await _get(_FakeReads(), '/cuenta/chats/x')).statusCode, 404);
+      });
+
+      test(
+        'the list: each conversation, its last message and its state',
+        () async {
+          final reads = _FakeReads(portal: portal(), chats: chats());
+          final html =
+              (await chatView(reads, '/cuenta/chats'))['html']! as String;
+          expect(reads.chatCalls.single.$2, {
+            'conversation': null,
+            'window': 50,
+          });
+          expect(html, contains('<h1 class="pt-chat-title">'));
+          expect(html, contains(customerChatLead));
+          expect(html, contains('data-chat-new'));
+          expect(html, contains('href="/cuenta/chats/$open"'));
+          expect(html, contains('Tú: Hola, ¿tienen frenos?'));
+          expect(html, contains('Esperando al equipo'));
+          expect(html, contains('Trabajo #PG-00305'));
+          expect(html, contains('Está lista tu bici'));
+          expect(
+            html,
+            contains(
+              'aria-current="page" href="/cuenta/chats"><span class="pt-x">Soporte',
+            ),
+          );
+          expect(html, contains('id="pt-chat-new"'));
+          expect(html, isNot(contains('data-chat-compose')));
+
+          final none =
+              (await chatView(
+                    _FakeReads(
+                      portal: portal(),
+                      chats: chats(conversations: []),
+                    ),
+                    '/cuenta/chats',
+                  ))['html']!
+                  as String;
+          expect(none, contains(customerChatEmptyTitle));
+          expect(none, contains(customerChatEmptyBody));
+        },
+      );
+
+      test('a conversation: its messages by day, the store\'s request, its '
+          'files and the composer while it can be written', () async {
+        const image = 'a1000000-0000-4000-8000-000000000001';
+        const document = 'a1000000-0000-4000-8000-000000000002';
+        Map<String, dynamic> file(String id, String ext, String mime) => {
+          'attachment_id': id,
+          'storage_bucket': 'chat-attachments',
+          'storage_path': '$_tenant/$open/$id.$ext',
+          'content_type': mime,
+          'filename': 'presupuesto.$ext',
+        };
+        final reads = _FakeReads(
+          portal: portal(),
+          chats: chats(
+            more: true,
+            messages: [
+              message(
+                'm1',
+                'Hola, ¿tienen frenos?',
+                sender: me,
+                at: '2026-03-29T15:04:00Z',
+              ),
+              message('m2', 'Sí, te mando la foto'),
+              message(
+                'm3',
+                '',
+                type: 'image',
+                metadata: file(image, 'jpg', 'image/jpeg'),
+              ),
+              message(
+                'm4',
+                '',
+                type: 'document',
+                metadata: file(document, 'pdf', 'application/pdf'),
+              ),
+              message(
+                'm5',
+                'Cambio de pastillas: \$25.000',
+                type: 'action_request',
+                metadata: {'action_type': 'approve_quote', 'status': 'pending'},
+              ),
+            ],
+            files: {'m3': 'https://example.invalid/sign/foto?token=t'},
+          ),
+        );
+        final html =
+            (await chatView(reads, '/cuenta/chats/$open', window: 100))['html']!
+                as String;
+        expect(reads.chatCalls.single.$2, {
+          'conversation': open,
+          'window': 100,
+        });
+        expect(html, contains('data-chat="$open"'));
+        expect(html, contains('data-chat-window="100"'));
+        expect(html, contains('29/03/2026'));
+        expect(html, contains('30/03/2026'));
+        expect(html, contains('class="pt-msg mine" data-msg="m1"'));
+        expect(html, contains('class="pt-msg" data-msg="m2" data-mine="0"'));
+        expect(html, contains('12:04'));
+        expect(
+          html,
+          contains('src="https://example.invalid/sign/foto?token=t"'),
+        );
+        // No link for the document: «no disponible · Reintentar».
+        expect(html, contains('presupuesto.pdf no disponible · Reintentar'));
+        expect(
+          html,
+          contains('<p class="pt-ask-title"><span class="pt-x">Presupuesto'),
+        );
+        expect(html, contains('Espera tu respuesta'));
+        expect(html, contains('data-chat-answer="accepted"'));
+        expect(html, contains('Aprobar presupuesto'));
+        expect(html, contains('data-chat-answer="declined"'));
+        expect(html, contains('id="pt-chat-changes"'));
+        expect(html, contains(customerChatWaiting));
+        expect(html, contains('placeholder="$customerChatHintPending"'));
+        expect(html, contains('data-chat-older'));
+        expect(html, contains('class="pt-back"'));
+      });
+
+      test('archived, unknown and about a job', () async {
+        final archived =
+            (await chatView(
+                  _FakeReads(
+                    portal: portal(),
+                    chats: chats(
+                      conversations: [conversation(open, status: 'resolved')],
+                    ),
+                  ),
+                  '/cuenta/chats/$open',
+                ))['html']!
+                as String;
+        expect(archived, contains(customerChatArchived));
+        expect(archived, isNot(contains('data-chat-compose')));
+
+        final unknown =
+            (await chatView(
+                  _FakeReads(
+                    portal: portal(),
+                    chats: chats(conversations: []),
+                  ),
+                  '/cuenta/chats/$open',
+                ))['html']!
+                as String;
+        expect(unknown, contains(customerChatUnavailable));
+        expect(unknown, isNot(contains('data-chat-compose')));
+
+        final about =
+            (await chatView(
+                  _FakeReads(
+                    portal: portal(
+                      jobs: [
+                        {
+                          'id': job,
+                          'job_number': 'PG-00305',
+                          'bike_id': bike,
+                          'status': 'finalizado',
+                          'customer_id': customer,
+                          'tenant_id': _tenant,
+                          'arrival_date': '2026-03-20T12:00:00Z',
+                          'created_at': '2026-03-20T12:00:00Z',
+                          'client_request': 'Revisar frenos',
+                        },
+                      ],
+                    ),
+                    chats: chats(
+                      conversations: [
+                        conversation(open, contextType: 'job', contextId: job),
+                      ],
+                    ),
+                  ),
+                  '/cuenta/chats/$open',
+                ))['html']!
+                as String;
+        expect(about, contains('class="pt-chat-side"'));
+        expect(about, contains('Servicio PG-00305'));
+        expect(about, contains('Ver el trabajo'));
+        expect(about, contains(customerChatDetails));
+        expect(about, contains('class="pt-col pt-chat-main thread side"'));
+      });
+
+      test('a new consultation names this store\'s key; a refusal says so, a '
+          'lost answer may have opened it', () async {
+        final reads = _FakeReads(
+          portal: portal(),
+          chatAnswers: {
+            'create_customer_support_request': {'conversation_id': open},
+          },
+        );
+        expect(
+          await action(reads, '/cuenta/chats', 'chat-new', {
+            'message': '  Necesito una mantención  ',
+            'key': 'abcdef0123456789',
+          }),
+          {'conversation': open},
+        );
+        expect(reads.chatCalls.single.$1, 'create_customer_support_request');
+        expect(reads.chatCalls.single.$2, {
+          'p_initial_message': 'Necesito una mantención',
+          'p_context_type': null,
+          'p_context_id': null,
+          'p_idempotency_key': 'web:abcdef0123456789',
+        });
+        for (final values in [
+          {'message': '', 'key': 'abcdef0123456789'},
+          {'message': 'x' * 4001, 'key': 'abcdef0123456789'},
+          {'message': 'Hola', 'key': 'corta'},
+        ]) {
+          expect(
+            (await action(reads, '/cuenta/chats', 'chat-new', values))['state'],
+            'invalid',
+          );
+        }
+        expect(
+          await action(
+            _FakeReads(
+              portal: portal(),
+              chatAnswers: {
+                'create_customer_support_request': PublicReadException(
+                  'refused',
+                  statusCode: 403,
+                ),
+              },
+            ),
+            '/cuenta/chats',
+            'chat-new',
+            {'message': 'Hola', 'key': 'abcdef0123456789'},
+          ),
+          {'toast': customerChatNewFailed},
+        );
+        expect(
+          await action(
+            _FakeReads(
+              portal: portal(),
+              chatAnswers: {
+                'create_customer_support_request': const SocketException('x'),
+              },
+            ),
+            '/cuenta/chats',
+            'chat-new',
+            {'message': 'Hola', 'key': 'abcdef0123456789'},
+          ),
+          {'toast': customerChatNewFailed, 'uncertain': true},
+        );
+      });
+
+      test('a message goes with its key; a refused one says so', () async {
+        final reads = _FakeReads(portal: portal());
+        expect(
+          await action(reads, '/cuenta/chats/$open', 'chat-send', {
+            'conversation': open,
+            'text': ' ¿A qué hora cierran? ',
+            'client': 'k0123456789abcdef',
+          }),
+          {'sent': true},
+        );
+        expect(reads.chatCalls.single.$2, {
+          'conversation': open,
+          'text': '¿A qué hora cierran?',
+          'client': 'k0123456789abcdef',
+        });
+        expect(
+          await action(
+            _FakeReads(portal: portal(), chatAnswers: {'send': false}),
+            '/cuenta/chats/$open',
+            'chat-send',
+            {
+              'conversation': open,
+              'text': 'Hola',
+              'client': 'k0123456789abcdef',
+            },
+          ),
+          {'toast': customerChatSendFailed},
+        );
+        expect(
+          await action(
+            _FakeReads(
+              portal: portal(),
+              chatAnswers: {'send': const SocketException('x')},
+            ),
+            '/cuenta/chats/$open',
+            'chat-send',
+            {
+              'conversation': open,
+              'text': 'Hola',
+              'client': 'k0123456789abcdef',
+            },
+          ),
+          {'toast': customerChatSendFailed, 'uncertain': true},
+        );
+        expect(
+          (await action(reads, '/cuenta/chats/$open', 'chat-send', {
+            'conversation': 'x',
+            'text': 'Hola',
+            'client': 'k0123456789abcdef',
+          }))['state'],
+          'invalid',
+        );
+      });
+
+      test('reading, answering the store and opening a file', () async {
+        final reads = _FakeReads(
+          portal: portal(),
+          chatAnswers: {'file': 'https://example.invalid/sign/doc?token=t'},
+        );
+        expect(
+          await action(reads, '/cuenta/chats/$open', 'chat-read', {
+            'conversation': open,
+            'message': 'f1000000-0000-4000-8000-000000000001',
+          }),
+          {'read': true},
+        );
+        expect(reads.chatCalls.last.$1, 'mark_conversation_read');
+        expect(reads.chatCalls.last.$2, {
+          'p_conversation_id': open,
+          'p_read_through_message_id': 'f1000000-0000-4000-8000-000000000001',
+        });
+        const ask = 'f1000000-0000-4000-8000-000000000002';
+        expect(
+          await action(reads, '/cuenta/chats/$open', 'chat-answer', {
+            'message': ask,
+            'type': 'approve_quote',
+            'status': 'accepted',
+          }),
+          {'toast': customerChatAccepted},
+        );
+        expect(reads.chatCalls.last.$1, 'respond_to_action_request');
+        expect(reads.chatCalls.last.$2, {
+          'p_message_id': ask,
+          'p_action_type': 'approve_quote',
+          'p_status': 'accepted',
+          'p_metadata_updates': <String, Object?>{},
+        });
+        expect(
+          await action(reads, '/cuenta/chats/$open', 'chat-answer', {
+            'message': ask,
+            'type': 'approve_quote',
+            'status': 'declined',
+            'note': 'Sin el cambio de cadena',
+          }),
+          {'toast': customerChatDeclined},
+        );
+        expect(reads.chatCalls.last.$2['p_metadata_updates'], {
+          'response_note': 'Sin el cambio de cadena',
+        });
+        for (final values in [
+          {'message': ask, 'type': 'approve_quote', 'status': 'declined'},
+          {'message': ask, 'type': 'pay_now', 'status': 'accepted'},
+          {
+            'message': ask,
+            'type': 'confirm_delivery',
+            'status': 'declined',
+            'note': 'x',
+          },
+        ]) {
+          expect(
+            (await action(
+              reads,
+              '/cuenta/chats/$open',
+              'chat-answer',
+              values,
+            ))['state'],
+            'invalid',
+          );
+        }
+        expect(
+          await action(
+            _FakeReads(
+              portal: portal(),
+              chatAnswers: {
+                'respond_to_action_request': PublicReadException(
+                  'refused',
+                  statusCode: 400,
+                ),
+              },
+            ),
+            '/cuenta/chats/$open',
+            'chat-answer',
+            {'message': ask, 'type': 'confirm_delivery', 'status': 'accepted'},
+          ),
+          {'toast': customerChatAnswerFailed},
+        );
+        // A rule of the base says why, as Flutter shows it.
+        expect(
+          await action(
+            _FakeReads(
+              portal: portal(),
+              chatAnswers: {
+                'respond_to_action_request': PublicReadException(
+                  'refused',
+                  statusCode: 400,
+                  code: '23514',
+                  reason: 'La cotización venció y requiere revisión del taller',
+                ),
+              },
+            ),
+            '/cuenta/chats/$open',
+            'chat-answer',
+            {'message': ask, 'type': 'approve_quote', 'status': 'accepted'},
+          ),
+          {
+            'toast':
+                'No se pudo registrar la respuesta: La cotización venció y '
+                'requiere revisión del taller',
+          },
+        );
+        expect(
+          await action(
+            _FakeReads(
+              portal: portal(),
+              chatAnswers: {'respond_to_action_request': TimeoutException('x')},
+            ),
+            '/cuenta/chats/$open',
+            'chat-answer',
+            {'message': ask, 'type': 'confirm_delivery', 'status': 'accepted'},
+          ),
+          {'toast': customerChatAnswerUncertain},
+        );
+        expect(
+          await action(reads, '/cuenta/chats/$open', 'chat-file', {
+            'conversation': open,
+            'message': ask,
+          }),
+          {'url': 'https://example.invalid/sign/doc?token=t'},
+        );
+        expect(
+          await action(
+            _FakeReads(portal: portal()),
+            '/cuenta/chats/$open',
+            'chat-file',
+            {'conversation': open, 'message': ask},
+          ),
+          {'toast': customerChatFileRenewFailed},
+        );
+        expect(
+          await action(
+            _FakeReads(
+              portal: portal(),
+              chatAnswers: {
+                'mark_conversation_read': const CustomerSessionRefused(),
+              },
+            ),
+            '/cuenta/chats/$open',
+            'chat-read',
+            {'conversation': open, 'message': ask},
+          ),
+          {'state': 'expired'},
+        );
+      });
     });
   });
 

@@ -2,6 +2,8 @@ import 'package:vinabike_public_core/modules/website/theme/website_theme_roles.d
 
 import 'css_values.dart';
 
+part 'portal_chat_css.dart';
+
 /// The portal's styles, «Sendero» as Flutter's `PortalStyle` draws it: every
 /// color from the editor theme's roles, square corners, the heading font in
 /// capitals, sizes and gaps from `customer_portal_style.dart`,

@@ -1,3 +1,4 @@
+import 'package:vinabike_public_core/public_store/models/customer_chat_words.dart';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -117,9 +118,16 @@ void main() {
     expect(customerHub, contains('subscribeToConversationLifecycleUpdates(()'));
     expect(customerChat,
         contains('_messagingService.subscribeToConversationLifecycleUpdates('));
-    expect(customerChat, contains("status == 'loading'"));
-    expect(customerChat, contains("status == 'unavailable'"));
-    expect(customerChat, contains('if (!isClosed)'));
+    // Fail-closed: while it loads, and when it cannot be read, nothing can
+    // be written (the rule is the core's since 2026-10-08).
+    expect(customerChat, contains("?.toString() ?? 'loading'"));
+    expect(customerChat, contains('if (state.canWrite)'));
+    expect(CustomerChatState.of('loading').canWrite, isFalse);
+    expect(CustomerChatState.of('unavailable').canWrite, isFalse);
+    expect(CustomerChatState.of('archived').canWrite, isFalse);
+    expect(CustomerChatState.of('rejected').canWrite, isFalse);
+    expect(CustomerChatState.of('pending').canWrite, isTrue);
+    expect(CustomerChatState.of('active').canWrite, isTrue);
   });
 
   test('customer signed URL preview cache expires before server authorization',

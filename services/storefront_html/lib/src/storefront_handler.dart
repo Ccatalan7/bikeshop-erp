@@ -191,6 +191,10 @@ Handler storefrontHandler({
           'cuenta',
           'pedidos' || 'servicios' || 'bicicletas' || 'perfil' || 'direcciones',
         ] => await route.portal(PortalPage.ofPath('/${segments.join('/')}')!),
+        // «Soporte» (4h): the list and each conversation.
+        ['cuenta', 'chats'] => await route.portal(PortalPage.chats),
+        ['cuenta', 'chats', final id] when _uuid.hasMatch(id) =>
+          await route.portal(PortalPage.chats),
         // Old addresses, answered with a permanent redirect as Flutter did
         // in the browser: Hosting hands this server every path no other rule
         // claims, so they and an unknown path get a real status.

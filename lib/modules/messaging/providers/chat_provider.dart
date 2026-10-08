@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:vinabike_public_core/public_store/models/customer_chat_words.dart';
 import '../../../shared/services/tenant_broadcast_channel.dart';
 import '../../../shared/services/user_management_service.dart';
 import '../../../shared/services/tenant_service.dart';
@@ -2531,7 +2532,7 @@ class ChatProvider extends ChangeNotifier {
       }
       debugPrint('❌ Error loading older messages: $error');
       _olderMessagesErrorByConversation[conversationId] =
-          'No pudimos cargar los mensajes anteriores.';
+          customerChatOlderFailed;
     } finally {
       if (_isCurrentSession(operationEpoch) &&
           _historyLoadEpochByConversation[conversationId] == requestEpoch) {
@@ -2602,8 +2603,7 @@ class ChatProvider extends ChangeNotifier {
 
     if (_messagesRetryAttempt >= _maxMessageStreamRetryAttempts) {
       debugPrint('❌ Error stream messages after retries: $error');
-      _messageStreamErrorByConversation[conversationId] =
-          'La conversación perdió conexión. Tus mensajes visibles se conservaron.';
+      _messageStreamErrorByConversation[conversationId] = customerChatOffline;
       _isLoading = false;
       notifyListeners();
       return;

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:vinabike_public_core/public_store/models/customer_chat_words.dart';
 import 'package:vinabike_public_core/public_store/models/customer_portal_snapshot.dart';
 import 'package:vinabike_public_core/public_store/models/public_commerce_product_projection.dart';
 import 'package:vinabike_public_core/public_store/models/public_policy_content.dart';
@@ -145,6 +146,24 @@ typedef CustomerPortalReads = ({
   Map<String, String> jobFiles,
 });
 
+/// The portal's support chat as the customer reads it ([PublicReads.customerChats]):
+/// the conversations, newest first, each with its last message; and for the
+/// open one its latest messages, oldest first, whether older ones exist and
+/// a short link to each private file, by message id.
+typedef CustomerChatReads = ({
+  List<Map<String, dynamic>> conversations,
+  List<Map<String, dynamic>> messages,
+  bool more,
+  Map<String, String> files,
+});
+
+/// The chat's audited commands a customer may run.
+const customerChatCommands = {
+  'create_customer_support_request',
+  'mark_conversation_read',
+  'respond_to_action_request',
+};
+
 /// What Supabase Auth answered a customer's request: its [status] and, when
 /// it refused, its error code and message (the request is never kept).
 typedef CustomerAuthAnswer = ({int status, String? code, String message});
@@ -287,6 +306,47 @@ abstract interface class PublicReads {
   /// The bytes behind a signed Storage link, never from a cache; null when
   /// Storage does not answer 200 or the object is larger than [maxBytes].
   Future<List<int>?> signedObjectBytes(String url, {required int maxBytes});
+
+  /// The customer's conversations with the store, as
+  /// `getCustomerConversations` reads them (support, from the portal, where
+  /// the session's user takes part), and with [conversationId] its latest
+  /// [window] messages (`getMessagesStream`) and a link to each private file
+  /// (`createCachedPreviewSignedUrl`). As the customer, every read naming
+  /// the store; throws [CustomerSessionRefused] when Supabase does not
+  /// accept the session.
+  Future<CustomerChatReads> customerChats(
+    String accessToken, {
+    String? conversationId,
+    int window = 50,
+  });
+
+  /// One of [customerChatCommands] as the customer: what it answers. A
+  /// refusal is a [PublicReadException] with Supabase's status.
+  Future<Object?> customerChatCommand(
+    String accessToken,
+    String function,
+    Map<String, Object?> params,
+  );
+
+  /// A fresh link to the private file of [messageId] in [conversationId]
+  /// (`createRuntimeSignedUrl`), read and signed as the customer; null when
+  /// the message carries none or Storage does not sign it.
+  Future<String?> customerChatFile(
+    String accessToken, {
+    required String conversationId,
+    required String messageId,
+  });
+
+  /// The customer's text in a conversation (`ChatProvider.sendMessage`),
+  /// marked with [clientId] (`client_message_id`): true once it is there. A
+  /// send whose answer was lost and is sent again finds it and is not
+  /// written twice.
+  Future<bool> customerChatMessage(
+    String accessToken, {
+    required String conversationId,
+    required String text,
+    required String clientId,
+  });
 }
 
 /// The claims of a customer's session token, read without checking its
@@ -306,11 +366,23 @@ Map<String, Object?> customerSessionClaims(String token) {
 }
 
 class PublicReadException implements Exception {
-  PublicReadException(this.message, {this.statusCode, this.busy = false});
+  PublicReadException(
+    this.message, {
+    this.statusCode,
+    this.busy = false,
+    this.code,
+    this.reason,
+  });
   final String message;
 
   /// What Supabase answered, when it answered.
   final int? statusCode;
+
+  /// The database's error code and its words, when PostgREST gave them for
+  /// a customer's call (a rule of the base the customer can be told,
+  /// `23514`). Never written to a log: it may name the customer's data.
+  final String? code;
+  final String? reason;
 
   /// No turn at the database in time ([DatabaseGate]).
   final bool busy;
@@ -1127,6 +1199,196 @@ class SupabasePublicReads implements PublicReads {
       });
 
   @override
+  Future<CustomerChatReads> customerChats(
+    String accessToken, {
+    String? conversationId,
+    int window = 50,
+  }) async {
+    final userId = _sessionUser(accessToken);
+    if (userId == null) throw const CustomerSessionRefused();
+    final tenant = config.tenantId;
+    final open = conversationId != null && _uuid.hasMatch(conversationId)
+        ? conversationId
+        : null;
+    final size = window.clamp(1, 500);
+    final reads = await Future.wait<List<Object?>>([
+      _customerSelect(accessToken, 'conversations', {
+        'select':
+            'id,title,status,reject_reason,context_type,context_id,'
+            'last_message_at,created_at,'
+            'conversation_participants!inner(user_id),'
+            'messages(id,content,sender_id,created_at,type,message_sequence)',
+        'type': 'eq.support',
+        'channel': 'eq.website_portal',
+        'tenant_id': 'eq.$tenant',
+        'conversation_participants.user_id': 'eq.$userId',
+        // Only the last message: Flutter reads them all for the preview.
+        'messages.order': 'message_sequence.desc',
+        'messages.limit': '1',
+        'order': 'last_message_at.desc.nullslast,created_at.desc',
+        'limit': '200',
+      }),
+      if (open != null)
+        _customerSelect(accessToken, 'messages', {
+          'select':
+              'id,conversation_id,sender_id,content,type,metadata,'
+              'created_at,message_sequence',
+          'conversation_id': 'eq.$open',
+          'tenant_id': 'eq.$tenant',
+          'order': 'message_sequence.desc,created_at.desc',
+          'limit': '${size + 1}',
+        }),
+    ]);
+    final conversations = [
+      for (final row in reads[0])
+        if (row is Map) Map<String, dynamic>.from(row),
+    ];
+    // A conversation the account is not in is never opened, even if a read
+    // answered rows of it.
+    final known = open != null && conversations.any((c) => c['id'] == open);
+    final rows = known ? reads[1] : const <Object?>[];
+    final messages = [
+      for (final row in rows.take(size).toList().reversed)
+        if (row is Map) Map<String, dynamic>.from(row),
+    ];
+    final files = <String, String>{};
+    await Future.wait([
+      for (final message in messages)
+        if (customerChatFilePath(
+              Map<String, dynamic>.from(message['metadata'] as Map? ?? {}),
+              open!,
+            )
+            case final path?)
+          customerSignedObject(
+            accessToken,
+            customerChatFileBucket,
+            path,
+            expiresIn: customerChatFileLinkSeconds,
+          ).then((url) => files['${message['id']}'] = url).catchError((
+            Object error,
+          ) {
+            if (error is CustomerSessionRefused) throw error;
+            // Flutter shows «no disponible · Reintentar».
+            stderr.writeln('chat file unavailable: ${error.runtimeType}');
+            return '';
+          }),
+    ]);
+    return (
+      conversations: conversations,
+      messages: messages,
+      more: known && rows.length > size,
+      files: files,
+    );
+  }
+
+  @override
+  Future<Object?> customerChatCommand(
+    String accessToken,
+    String function,
+    Map<String, Object?> params,
+  ) {
+    if (!customerChatCommands.contains(function)) {
+      throw ArgumentError('not a chat command: $function');
+    }
+    if (_sessionUser(accessToken) == null) {
+      throw const CustomerSessionRefused();
+    }
+    // Each is idempotent in the base (a key, a read mark, a decision keyed
+    // by its message), so a lost answer can be asked again. A new
+    // consultation names this store, whatever the caller says.
+    return _customerRpc(accessToken, function, {
+      ...params,
+      if (function == 'create_customer_support_request')
+        'p_tenant_id': config.tenantId,
+    });
+  }
+
+  @override
+  Future<String?> customerChatFile(
+    String accessToken, {
+    required String conversationId,
+    required String messageId,
+  }) async {
+    if (_sessionUser(accessToken) == null) {
+      throw const CustomerSessionRefused();
+    }
+    if (!_uuid.hasMatch(conversationId) || !_uuid.hasMatch(messageId)) {
+      return null;
+    }
+    final rows = await _customerSelect(accessToken, 'messages', {
+      'select': 'id,metadata',
+      'id': 'eq.$messageId',
+      'conversation_id': 'eq.$conversationId',
+      'tenant_id': 'eq.${config.tenantId}',
+      'limit': '1',
+    });
+    final row = rows.isEmpty ? null : rows.first;
+    final metadata = row is Map && row['metadata'] is Map
+        ? Map<String, dynamic>.from(row['metadata'] as Map)
+        : const <String, dynamic>{};
+    final path = customerChatFilePath(metadata, conversationId);
+    if (path == null) return null;
+    try {
+      return await customerSignedObject(
+        accessToken,
+        customerChatFileBucket,
+        path,
+        expiresIn: customerChatFileLinkSeconds,
+      );
+    } on StorageRefused {
+      return null;
+    }
+  }
+
+  @override
+  Future<bool> customerChatMessage(
+    String accessToken, {
+    required String conversationId,
+    required String text,
+    required String clientId,
+  }) async {
+    final userId = _sessionUser(accessToken);
+    if (userId == null) throw const CustomerSessionRefused();
+    if (!_uuid.hasMatch(conversationId)) return false;
+    final tenant = config.tenantId;
+    Future<bool> already() async =>
+        (await _customerSelect(accessToken, 'messages', {
+          'select': 'id',
+          'conversation_id': 'eq.$conversationId',
+          'tenant_id': 'eq.$tenant',
+          'sender_id': 'eq.$userId',
+          'metadata->>client_message_id': 'eq.$clientId',
+          'limit': '1',
+        })).isNotEmpty;
+    if (await already()) return true;
+    try {
+      await _customerSend(
+        accessToken,
+        'POST',
+        Uri.parse('${config.supabaseUrl}/rest/v1/messages'),
+        {
+          'conversation_id': conversationId,
+          'sender_id': userId,
+          'content': text,
+          'type': 'text',
+          'metadata': {'client_message_id': clientId},
+        },
+        'messages post',
+        prefer: 'return=minimal',
+      );
+      return true;
+    } on CustomerSessionRefused {
+      rethrow;
+    } on PublicReadException catch (error) {
+      // Row security refused it: the conversation is not open to them.
+      if (error.statusCode case final code? when code >= 400 && code < 500) {
+        return false;
+      }
+      rethrow;
+    }
+  }
+
+  @override
   Future<Map<String, dynamic>?> customerEnter(String accessToken) async {
     if (_sessionUser(accessToken) == null) {
       throw const CustomerSessionRefused();
@@ -1342,9 +1604,17 @@ class SupabasePublicReads implements PublicReads {
     final (response, text) = await _exchange(request);
     if (response.statusCode == 401) throw const CustomerSessionRefused();
     if (response.statusCode >= 300) {
+      Object? error;
+      try {
+        error = text.isEmpty ? null : jsonDecode(text);
+      } on FormatException {
+        error = null;
+      }
       throw PublicReadException(
         '$name → ${response.statusCode}',
         statusCode: response.statusCode,
+        code: error is Map ? error['code']?.toString() : null,
+        reason: error is Map ? error['message']?.toString() : null,
       );
     }
     return text.isEmpty ? null : jsonDecode(text);

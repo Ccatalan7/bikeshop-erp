@@ -1459,9 +1459,9 @@ devuelve al editor su intento de OAuth (`WebsiteEditorOAuthIntentGate`).
 
 Con eso, lo que ve un cliente en vinabike.cl es HTML de punta a punta; Flutter
 arranca sólo en esas tres rutas y al canjear un enlace del correo. (Corregido
-el 2026-10-08: los enlaces del correo pasaron al HTML en la fase 4f y la
-descarga del personal en la 4g; Flutter queda en los chats y la vuelta de
-Google del editor.) Lo que
+el 2026-10-08: los enlaces del correo pasaron al HTML en la fase 4f, la
+descarga del personal en la 4g y los chats en la 4h; en vinabike.cl Flutter
+queda sólo para la vuelta de Google del editor.) Lo que
 sigue del plan es el lienzo del editor (la sección «El editor» de arriba).
 
 ## Fase 5: el lienzo del editor — plan (2026-10-06)
@@ -2406,3 +2406,46 @@ las lee de ahí en su copia del ERP) y las mismas reglas.
   memoria dejaba el botón trabado y sin aviso; ahora reserva dentro, y un
   fallo dice «No pudimos iniciar la descarga.» y libera el botón (probado
   forzando el fallo en el navegador).
+
+## Fase 4h: «Soporte» en HTML (2026-10-08)
+
+El dueño pidió «todo» de la lista: cambiar el chat por un botón de WhatsApp o
+rehacerlo. Se rehízo: conserva lo que hoy existe (las consultas entran a la
+bandeja del ERP, con su trabajo al lado, las solicitudes de presupuesto y
+entrega, los archivos) y no le quita nada a un cliente. Con esto ninguna
+regla de la tienda manda a `app.html`; queda como archivo que el servidor
+adapta para la vuelta de Google del editor.
+
+- `PortalPage.chats` (`/cuenta/chats`, `/cuenta/chats/<uuid>`): la página del
+  portal sin franja, que calza la ventana bajo el encabezado (`--pt-top`,
+  medido por el guion), como `enableContentScrolling: false` en Flutter. Las
+  palabras y reglas son del núcleo (`customer_chat_words.dart`:
+  `CustomerChatState`, `CustomerChatActionCard`, `customerChatFilePath`) y
+  Flutter las usa también.
+- Lee como el cliente (`customerChats`): sus conversaciones de soporte del
+  portal, con la tienda y el participante en el filtro y **sólo el último
+  mensaje** de cada una (Flutter traía todos para la vista previa); la
+  abierta, sus últimos 50 (ventana que crece de a 50 hasta 500) y un enlace
+  firmado por 5 minutos a cada archivo privado (la base decide por
+  `messaging_attachments`).
+- Escribe por `POST /cuenta/accion`: `chat-new`
+  (`create_customer_support_request` con la llave del navegador y la tienda
+  que pone el servidor), `chat-send` (el mensaje con su `client_message_id`;
+  reenviar con la misma llave no lo duplica: probado en la base local),
+  `chat-read` (`mark_conversation_read`), `chat-answer`
+  (`respond_to_action_request`; un rechazo de regla `23514` se dice con las
+  palabras de la base, como Flutter) y `chat-file` (enlace fresco).
+- En vivo: Supabase Realtime con la sesión del cliente (protocolo Phoenix
+  1.0.0 escrito a mano, sin librería) y, si no conecta, consulta cada 15 s
+  mientras la página se ve. Un redibujo cambia sólo lo que cambió: una foto ya
+  mostrada conserva su dirección (cada redibujo firma de nuevo) y no se
+  vuelve a bajar.
+- Probado contra el Supabase local de punta a punta: crear la consulta,
+  respuesta del equipo, leído (`last_read_message_sequence`), enviar y
+  reenviar, imagen privada que carga, PDF sin archivo («no disponible ·
+  Reintentar»), presupuesto real rechazado con nota (la cotización quedó
+  `rejected`). **El stack local corre sin Realtime** (los recorridos lo
+  excluyen y levantarlo deja una ranura de replicación en la base
+  compartida): el saludo se probó contra el Realtime de producción con la
+  llave pública (unión y latido `ok`, sin filas por la seguridad de filas) y
+  el evento → redibujo con un socket simulado en la página.

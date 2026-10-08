@@ -3,9 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:vinabike_public_core/public_store/models/customer_chat_words.dart';
 import '../../modules/messaging/providers/chat_provider.dart';
 import '../../modules/messaging/models/message_delivery_state.dart';
 import '../../modules/messaging/models/message.dart';
@@ -229,9 +229,7 @@ class _CustomerChatViewState extends State<CustomerChatView> {
       }
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'No se envió el mensaje. El texto quedó listo para reintentar.',
-          ),
+          content: Text(customerChatSendFailed),
         ),
       );
     }
@@ -292,16 +290,12 @@ class _CustomerChatViewState extends State<CustomerChatView> {
       _scheduleOlderMessagesIfAtStart(chatProvider);
     }
 
-    final status = _conversation?['status']?.toString() ?? 'loading';
-    final isPending = status == 'pending';
-    final isRejected = status == 'rejected';
-    final isClosed = isRejected ||
-        status == 'resolved' ||
-        status == 'closed' ||
-        status == 'archived' ||
-        status == 'cancelled' ||
-        status == 'unavailable' ||
-        status == 'loading';
+    final state = CustomerChatState.of(
+      _conversation?['status']?.toString() ?? 'loading',
+    );
+    final banner = state.banner(
+      rejectReason: _conversation?['reject_reason']?.toString(),
+    );
 
     final style = PortalStyle.of(context);
 
@@ -316,38 +310,23 @@ class _CustomerChatViewState extends State<CustomerChatView> {
               border: Border(bottom: BorderSide(color: style.line)),
             ),
             child: PortalLink(
-              label: 'Ver detalles',
+              label: customerChatDetails,
               onTap: widget.onInfoPressed!,
             ),
           ),
 
-        if (isPending)
-          _statusBanner(
-            style,
-            marker: style.attention,
-            text: 'Esperando respuesta del equipo…',
-          ),
-        if (isRejected)
-          _statusBanner(
-            style,
-            marker: style.danger,
-            text:
-                _conversation?['reject_reason'] ?? 'Esta consulta fue cerrada.',
-          ),
         // Mientras carga no se dice nada: antes salía «archivada» un instante.
-        if (status == 'unavailable')
+        if (banner != null)
           _statusBanner(
             style,
-            marker: style.danger,
-            text: 'No pudimos abrir esta conversación. Vuelve a Soporte e '
-                'inténtalo de nuevo.',
-          )
-        else if (!isRejected && isClosed && status != 'loading')
-          _statusBanner(
-            style,
-            marker: style.inkMuted,
-            text: 'Esta conversación está archivada y se conserva como '
-                'respaldo.',
+            marker: switch (state) {
+              CustomerChatState.pending => style.attention,
+              CustomerChatState.rejected ||
+              CustomerChatState.unavailable =>
+                style.danger,
+              _ => style.inkMuted,
+            },
+            text: banner,
           ),
 
         if (streamError != null)
@@ -402,7 +381,7 @@ class _CustomerChatViewState extends State<CustomerChatView> {
         ),
 
         // Input Area
-        if (!isClosed)
+        if (state.canWrite)
           DecoratedBox(
             decoration: BoxDecoration(
               color: style.page,
@@ -433,9 +412,7 @@ class _CustomerChatViewState extends State<CustomerChatView> {
                             keyboardType: TextInputType.multiline,
                             textInputAction: TextInputAction.newline,
                             decoration: InputDecoration(
-                              hintText: isPending
-                                  ? 'Agregar más información…'
-                                  : 'Escribe un mensaje…',
+                              hintText: state.hint,
                               contentPadding: const EdgeInsets.symmetric(
                                 horizontal: 16,
                                 vertical: 14,
@@ -449,7 +426,7 @@ class _CustomerChatViewState extends State<CustomerChatView> {
                       SizedBox.square(
                         dimension: 48,
                         child: IconButton(
-                          tooltip: 'Enviar',
+                          tooltip: customerChatSend,
                           onPressed: _sendMessage,
                           style: IconButton.styleFrom(
                             backgroundColor: style.action,
@@ -534,7 +511,7 @@ class _CustomerChatViewState extends State<CustomerChatView> {
             const SizedBox(width: 6),
             TextButton(
               onPressed: () => provider.retryOlderMessages(conversationId),
-              child: const Text('Reintentar'),
+              child: const Text(customerChatRetry),
             ),
           ],
         ),
@@ -546,7 +523,7 @@ class _CustomerChatViewState extends State<CustomerChatView> {
         child: TextButton.icon(
           onPressed: () => provider.loadOlderMessages(conversationId),
           icon: const Icon(Icons.history_rounded, size: 17),
-          label: const Text('Cargar mensajes anteriores'),
+          label: const Text(customerChatOlder),
         ),
       );
     }
@@ -555,7 +532,7 @@ class _CustomerChatViewState extends State<CustomerChatView> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Text(
-        'Inicio de la conversación',
+        customerChatStart,
         textAlign: TextAlign.center,
         style: theme.textTheme.labelSmall?.copyWith(
           color: colorScheme.onSurfaceVariant,
@@ -593,7 +570,10 @@ class _CustomerChatViewState extends State<CustomerChatView> {
               shape: PortalStyle.shape,
               textStyle: style.label.copyWith(fontSize: 12),
             ),
-            child: const Text('REINTENTAR', semanticsLabel: 'Reintentar'),
+            child: Text(
+              customerChatRetry.toUpperCase(),
+              semanticsLabel: customerChatRetry,
+            ),
           ),
         ],
       ),
@@ -658,7 +638,7 @@ class _CustomerChatViewState extends State<CustomerChatView> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  DateFormat('HH:mm').format(msg.createdAt),
+                  customerChatTime(msg.createdAt),
                   style: style.micro.copyWith(
                     color: foreground.withValues(alpha: 0.7),
                     fontSize: 10,
@@ -698,13 +678,7 @@ class _CustomerChatViewState extends State<CustomerChatView> {
   }
 
   Widget _buildDaySeparator(BuildContext context, DateTime day) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final label = day == today
-        ? 'Hoy'
-        : day == today.subtract(const Duration(days: 1))
-            ? 'Ayer'
-            : DateFormat('dd/MM/yyyy').format(day);
+    final label = customerChatDay(day, DateTime.now());
     final style = PortalStyle.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -728,7 +702,7 @@ class _CustomerChatViewState extends State<CustomerChatView> {
             false);
     final filename = message.metadata['filename']?.toString().trim();
     final label = filename == null || filename.isEmpty
-        ? (isImage ? 'Imagen' : 'Documento')
+        ? (isImage ? customerChatImage : customerChatDocument)
         : filename;
 
     return FutureBuilder<String?>(
@@ -750,7 +724,7 @@ class _CustomerChatViewState extends State<CustomerChatView> {
               children: [
                 const Icon(Icons.refresh_rounded, size: 18),
                 const SizedBox(width: 8),
-                Flexible(child: Text('$label no disponible · Reintentar')),
+                Flexible(child: Text(customerChatFileUnavailable(label))),
               ],
             ),
           );
@@ -769,7 +743,7 @@ class _CustomerChatViewState extends State<CustomerChatView> {
                   onTap: () => _retryAttachmentPreview(message.id),
                   child: const Padding(
                     padding: EdgeInsets.symmetric(vertical: 8),
-                    child: Text('No se pudo cargar la imagen · Reintentar'),
+                    child: Text(customerChatImageFailed),
                   ),
                 ),
               ),
@@ -850,7 +824,7 @@ class _CustomerChatViewState extends State<CustomerChatView> {
       _retryAttachmentPreview(message.id);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('No se pudo renovar el acceso al adjunto.'),
+          content: Text(customerChatFileRenewFailed),
         ),
       );
       return;
@@ -875,49 +849,19 @@ class _CustomerChatViewState extends State<CustomerChatView> {
   /// los botones del portal.
   Widget _buildActionRequestCard(BuildContext context, Message msg) {
     final style = PortalStyle.of(context);
-    final actionType = msg.metadata['action_type'] as String? ?? 'unknown';
-    final status = msg.metadata['status'] as String? ?? 'pending';
-    final amount = msg.metadata['amount'] as num?;
-    final responseNote = msg.metadata['response_note']?.toString().trim();
+    final card = CustomerChatActionCard.of(msg.metadata);
     final isResponding = _pendingActionResponses.contains(msg.id);
-    final isDecisionAction =
-        actionType == 'approve_quote' || actionType == 'confirm_delivery';
-
-    final String title;
-    final String buttonLabel;
-    switch (actionType) {
-      case 'approve_quote':
-        title = 'Presupuesto';
-        buttonLabel = 'Aprobar presupuesto';
-      case 'pay_now':
-        title = 'Pago solicitado';
-        buttonLabel = amount != null
-            ? 'Monto: \$${amount.toStringAsFixed(0)}'
-            : 'Revisa tu pedido';
-      case 'confirm_delivery':
-        title = 'Confirmar entrega';
-        buttonLabel = 'Confirmar recibido';
-      default:
-        title = 'Acción requerida';
-        buttonLabel = 'Ver detalles';
-    }
-
-    final Widget? statusTag = switch (status) {
-      'accepted' => PortalTag(
-          label: actionType == 'approve_quote' ? 'Aprobado' : 'Listo',
-          kind: PortalTagKind.success,
-        ),
-      'declined' => PortalTag(
-          label:
-              actionType == 'approve_quote' ? 'Pediste cambios' : 'Rechazado',
-          kind: PortalTagKind.quiet,
-        ),
-      'pending' => const PortalTag(
-          label: 'Espera tu respuesta',
-          kind: PortalTagKind.attention,
-        ),
-      _ => null,
-    };
+    final Widget? statusTag = card.tag == null
+        ? null
+        : PortalTag(
+            label: card.tag!.$1,
+            kind: switch (card.tag!.$2) {
+              'success' => PortalTagKind.success,
+              'attention' => PortalTagKind.attention,
+              _ => PortalTagKind.quiet,
+            },
+          );
+    final responseNote = card.note;
 
     return Align(
       alignment: Alignment.centerLeft,
@@ -943,13 +887,13 @@ class _CustomerChatViewState extends State<CustomerChatView> {
                 runSpacing: 8,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Text(title.toUpperCase(), style: style.heading(18)),
+                  Text(card.title.toUpperCase(), style: style.heading(18)),
                   if (statusTag != null) statusTag,
                 ],
               ),
               const SizedBox(height: 10),
               Text(msg.content, style: style.body(14)),
-              if (responseNote != null && responseNote.isNotEmpty) ...[
+              if (responseNote != null) ...[
                 const SizedBox(height: 10),
                 Container(
                   width: double.infinity,
@@ -961,30 +905,27 @@ class _CustomerChatViewState extends State<CustomerChatView> {
                   ),
                 ),
               ],
-              if (status == 'pending' && actionType == 'pay_now') ...[
+              if (card.payNote != null) ...[
                 const SizedBox(height: 10),
-                Text(
-                  '$buttonLabel. El chat no abre cobros sin una sesión de pago autorizada; revisa el pedido o solicita un enlace vigente al equipo.',
-                  style: style.rowMeta,
-                ),
+                Text(card.payNote!, style: style.rowMeta),
               ],
               // Workshop decisions are persisted by the canonical audited
               // server command. Unknown and payment actions remain read-only.
-              if (status == 'pending' && isDecisionAction) ...[
+              if (card.answerable) ...[
                 const SizedBox(height: 14),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
                   children: [
                     PortalButton(
-                      label: buttonLabel,
+                      label: card.buttonLabel,
                       icon: Icons.check,
                       busy: isResponding,
                       onPressed: () => _handlePrimaryAction(msg),
                     ),
-                    if (actionType == 'approve_quote')
+                    if (card.canAskChanges)
                       PortalButton(
-                        label: 'Solicitar cambios',
+                        label: customerChatAskChanges,
                         kind: PortalButtonKind.secondary,
                         onPressed: isResponding
                             ? null
@@ -995,7 +936,7 @@ class _CustomerChatViewState extends State<CustomerChatView> {
               ],
               const SizedBox(height: 8),
               Text(
-                DateFormat('HH:mm').format(msg.createdAt),
+                customerChatTime(msg.createdAt),
                 style: style.micro.copyWith(fontSize: 10),
               ),
             ],
@@ -1022,24 +963,24 @@ class _CustomerChatViewState extends State<CustomerChatView> {
     final feedback = await showDialog<String>(
       context: context,
       builder: (dialogContext) => PortalDialog(
-        title: 'Solicitar cambios',
+        title: customerChatAskChanges,
         content: TextField(
           controller: controller,
           autofocus: true,
           minLines: 3,
           maxLines: 5,
           decoration: const InputDecoration(
-            hintText: 'Indica qué necesitas ajustar',
+            hintText: customerChatAskChangesHint,
           ),
         ),
         actions: [
           PortalButton(
-            label: 'Cancelar',
+            label: customerChatCancel,
             kind: PortalButtonKind.secondary,
             onPressed: () => Navigator.pop(dialogContext),
           ),
           PortalButton(
-            label: 'Enviar solicitud',
+            label: customerChatAskChangesSend,
             onPressed: () {
               final value = controller.text.trim();
               if (value.isNotEmpty) Navigator.pop(dialogContext, value);
@@ -1091,18 +1032,22 @@ class _CustomerChatViewState extends State<CustomerChatView> {
           SnackBar(
             content: Text(
               response == 'accepted'
-                  ? 'Listo, le avisamos al taller.'
-                  : 'Enviamos tu pedido de cambios.',
+                  ? customerChatAccepted
+                  : customerChatDeclined,
             ),
           ),
         );
       }
     } on PostgrestException catch (error) {
+      // A rule of the base (`23514`) says why in its own words; a refused
+      // permission does not (2026-10-08, shared with the HTML store).
       if (mounted) {
         messenger.showSnackBar(
           SnackBar(
             content: Text(
-              'No se pudo registrar la respuesta: ${error.message}',
+              error.code == '23514' && error.message.trim().isNotEmpty
+                  ? customerChatAnswerRefused(error.message)
+                  : customerChatAnswerFailed,
             ),
           ),
         );
@@ -1112,9 +1057,7 @@ class _CustomerChatViewState extends State<CustomerChatView> {
       if (mounted) {
         messenger.showSnackBar(
           const SnackBar(
-            content: Text(
-              'No pudimos confirmar la respuesta. Puede haberse guardado; vuelve a pulsar la misma opción para verificarla sin duplicar.',
-            ),
+            content: Text(customerChatAnswerUncertain),
             duration: Duration(seconds: 10),
           ),
         );

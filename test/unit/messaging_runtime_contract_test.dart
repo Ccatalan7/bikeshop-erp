@@ -1,3 +1,4 @@
+import 'package:vinabike_public_core/public_store/models/customer_chat_words.dart';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -246,7 +247,11 @@ void main() {
     expect(customerChatSource, contains('MessageDeliveryState.fromMessage'));
     expect(customerChatSource, contains('MessagingAttachmentService'));
     expect(customerChatSource, contains('_CustomerTimelineItem.day'));
-    expect(customerChatSource, contains('Esta conversación está archivada'));
+    expect(customerChatSource, contains('state.banner('));
+    expect(
+      CustomerChatState.of('archived').banner(),
+      'Esta conversación está archivada y se conserva como respaldo.',
+    );
   });
 
   test('notification diagnostics never print tokens or raw message payloads',

@@ -711,14 +711,6 @@
           "destination": "/app-open.html"
         },
         {
-          "source": "/cuenta/chats",
-          "destination": "/app.html"
-        },
-        {
-          "source": "/cuenta/chats/**",
-          "destination": "/app.html"
-        },
-        {
           "source": "/_html/**",
           "run": {
             "serviceId": "storefront-html",
@@ -909,6 +901,20 @@
         },
         {
           "source": "/cuenta/login",
+          "run": {
+            "serviceId": "storefront-html",
+            "region": "southamerica-east1"
+          }
+        },
+        {
+          "source": "/cuenta/chats",
+          "run": {
+            "serviceId": "storefront-html",
+            "region": "southamerica-east1"
+          }
+        },
+        {
+          "source": "/cuenta/chats/**",
           "run": {
             "serviceId": "storefront-html",
             "region": "southamerica-east1"

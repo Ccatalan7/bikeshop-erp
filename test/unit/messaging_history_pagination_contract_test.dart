@@ -50,8 +50,10 @@ void main() {
       expect(source, contains('provider.loadOlderMessages(conversationId)'));
       expect(source, contains('provider.retryOlderMessages(conversationId)'));
       expect(source, contains('provider.retryConversationMessages('));
-      expect(source, contains('Cargar mensajes anteriores'));
     }
+    // The customer's words are the core's since 2026-10-08.
+    expect(employeeTimelineSource, contains('Cargar mensajes anteriores'));
+    expect(customerTimelineSource, contains('customerChatOlder'));
   });
 
   test('stream failure is scoped to the conversation and remains recoverable',

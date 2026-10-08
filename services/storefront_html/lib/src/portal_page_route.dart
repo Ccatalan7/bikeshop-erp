@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:jaspr/server.dart';
 import 'package:vinabike_public_core/public_store/models/customer_auth_forms.dart';
+import 'package:vinabike_public_core/public_store/models/customer_chat_words.dart';
 import 'package:vinabike_public_core/public_store/models/customer_portal_forms.dart';
 import 'package:vinabike_public_core/shared/utils/auth_input_validation.dart';
 import 'package:vinabike_public_core/shared/utils/self_password_rules.dart';
@@ -29,7 +30,8 @@ Future<Response> portalViewResponse(
   final watch = Stopwatch()..start();
   final token = requestBearer(request);
   final body = await requestJsonBody(request);
-  final page = PortalPage.ofPath(body?['path']?.toString() ?? '');
+  final path = body?['path']?.toString() ?? '';
+  final page = PortalPage.ofPath(path);
   final query = body?['query']?.toString() ?? '';
   if (token == null || page == null || query.length > 512) {
     return _json(request, 400, {'state': 'invalid'});
@@ -41,6 +43,8 @@ Future<Response> portalViewResponse(
     page,
     query,
     pending: body?['pending'] == true,
+    chatId: portalChatId(path),
+    chatWindow: _chatWindow(body?['window']),
   );
   return _json(
     request,
@@ -61,15 +65,29 @@ Future<({Map<String, Object?> answer, int dataMs})> _drawn(
   PortalPage page,
   String query, {
   bool pending = false,
+  String? chatId,
+  int chatWindow = portalChatPage,
 }) async {
   final watch = Stopwatch()..start();
   final CustomerPortalReads read;
+  CustomerChatReads? chat;
   try {
-    // Only the summary and the workshop open a job's files.
-    read = await reads.customerPortal(
-      token,
-      files: page == PortalPage.dashboard || page == PortalPage.workshop,
-    );
+    if (page == PortalPage.chats) {
+      // The account (its jobs, for the one a conversation is about) and the
+      // conversations, at once.
+      final both = await Future.wait<Object>([
+        reads.customerPortal(token, files: false),
+        reads.customerChats(token, conversationId: chatId, window: chatWindow),
+      ]);
+      read = both[0] as CustomerPortalReads;
+      chat = both[1] as CustomerChatReads;
+    } else {
+      // Only the summary and the workshop open a job's files.
+      read = await reads.customerPortal(
+        token,
+        files: page == PortalPage.dashboard || page == PortalPage.workshop,
+      );
+    }
   } on CustomerSessionRefused {
     return (answer: const {'state': 'expired'}, dataMs: 0);
   } on Object catch (error) {
@@ -90,7 +108,23 @@ Future<({Map<String, Object?> answer, int dataMs})> _drawn(
   final dataMs = watch.elapsedMilliseconds;
   final rendered = await renderComponent(
     portalView(
-      PortalViewData.fromReads(page, query, read, pendingRevocation: pending),
+      PortalViewData.fromReads(
+        page,
+        query,
+        read,
+        pendingRevocation: pending,
+        chat: chat == null
+            ? null
+            : PortalChatData(
+                conversations: chat.conversations,
+                messages: chat.messages,
+                more: chat.more,
+                files: chat.files,
+                open: chatId,
+                window: chatWindow,
+                userId: customerSessionClaims(token)['sub']?.toString(),
+              ),
+      ),
     ),
     request: request,
     standalone: true,
@@ -125,7 +159,8 @@ Future<Response> portalActionResponse(
   required PublicReads reads,
 }) async {
   final token = requestBearer(request);
-  final body = await requestJsonBody(request, limit: 8192);
+  // A chat message can be a few thousand characters (4h).
+  final body = await requestJsonBody(request, limit: 32 * 1024);
   final page = PortalPage.ofPath(body?['path']?.toString() ?? '');
   final query = body?['query']?.toString() ?? '';
   final action = body?['action']?.toString() ?? '';
@@ -136,6 +171,10 @@ Future<Response> portalActionResponse(
         if (entry.value is String || entry.value is bool)
           entry.key.toString(): entry.value.toString(),
   };
+  if (action.startsWith('chat-')) {
+    if (token == null) return _json(request, 400, {'state': 'invalid'});
+    return _json(request, 200, await _chatAction(reads, token, action, values));
+  }
   if (values.values.any((value) => value.length > 1024)) {
     return _json(request, 400, {'state': 'invalid'});
   }
@@ -251,6 +290,161 @@ Future<Response> portalActionResponse(
 }
 
 typedef _Drawn = Future<Map<String, Object?>> Function([String? toast]);
+
+/// How many messages a conversation draws: what the page asks, in pages of
+/// [portalChatPage], up to 500.
+int _chatWindow(Object? raw) {
+  final value = raw is num ? raw.toInt() : portalChatPage;
+  return value.clamp(portalChatPage, 500);
+}
+
+/// The longest message the chat sends.
+const _chatMessageLimit = 4000;
+
+final _chatKey = RegExp(r'^[A-Za-z0-9_-]{8,64}$');
+
+/// «Soporte»'s actions (4h), each as the customer through the base's own
+/// rules: `chat-new` (`create_customer_support_request`, keyed by the
+/// browser so a lost answer does not open two), `chat-send` (the message,
+/// marked so it is not written twice), `chat-read`
+/// (`mark_conversation_read`), `chat-answer` (`respond_to_action_request`)
+/// and `chat-file` (a fresh link to a message's file). Answers what the page
+/// does next, or the `toast` Flutter shows.
+Future<Map<String, Object?>> _chatAction(
+  PublicReads reads,
+  String token,
+  String action,
+  Map<String, String> values,
+) async {
+  String? id(String key) {
+    final value = values[key]?.trim().toLowerCase() ?? '';
+    return _uuid.hasMatch(value) ? value : null;
+  }
+
+  final conversation = id('conversation');
+  final message = id('message');
+  try {
+    switch (action) {
+      case 'chat-new':
+        final text = values['message']?.trim() ?? '';
+        final key = values['key'] ?? '';
+        if (text.isEmpty ||
+            text.length > _chatMessageLimit ||
+            !_chatKey.hasMatch(key)) {
+          return const {'state': 'invalid'};
+        }
+        final answer = await reads
+            .customerChatCommand(token, 'create_customer_support_request', {
+              'p_initial_message': text,
+              'p_context_type': null,
+              'p_context_id': null,
+              'p_idempotency_key': 'web:$key',
+            });
+        final created = answer is Map
+            ? answer['conversation_id']?.toString()
+            : null;
+        if (created == null || !_uuid.hasMatch(created)) {
+          return const {'toast': customerChatNewFailed};
+        }
+        return {'conversation': created};
+      case 'chat-send':
+        final text = values['text']?.trim() ?? '';
+        final client = values['client'] ?? '';
+        if (conversation == null ||
+            text.isEmpty ||
+            text.length > _chatMessageLimit ||
+            !_chatKey.hasMatch(client)) {
+          return const {'state': 'invalid'};
+        }
+        final sent = await reads.customerChatMessage(
+          token,
+          conversationId: conversation,
+          text: text,
+          clientId: client,
+        );
+        return sent
+            ? const {'sent': true}
+            : const {'toast': customerChatSendFailed};
+      case 'chat-read':
+        if (conversation == null || message == null) {
+          return const {'state': 'invalid'};
+        }
+        await reads.customerChatCommand(token, 'mark_conversation_read', {
+          'p_conversation_id': conversation,
+          'p_read_through_message_id': message,
+        });
+        return const {'read': true};
+      case 'chat-answer':
+        final status = values['status'];
+        final type = values['type'];
+        final note = values['note']?.trim() ?? '';
+        if (message == null ||
+            (status != 'accepted' && status != 'declined') ||
+            (type != 'approve_quote' && type != 'confirm_delivery') ||
+            (status == 'declined' &&
+                (type != 'approve_quote' || note.isEmpty)) ||
+            note.length > 1000) {
+          return const {'state': 'invalid'};
+        }
+        await reads.customerChatCommand(token, 'respond_to_action_request', {
+          'p_message_id': message,
+          'p_action_type': type,
+          'p_status': status,
+          'p_metadata_updates': {if (note.isNotEmpty) 'response_note': note},
+        });
+        return {
+          'toast': status == 'accepted'
+              ? customerChatAccepted
+              : customerChatDeclined,
+        };
+      case 'chat-file':
+        if (conversation == null || message == null) {
+          return const {'state': 'invalid'};
+        }
+        final url = await reads.customerChatFile(
+          token,
+          conversationId: conversation,
+          messageId: message,
+        );
+        return url == null
+            ? const {'toast': customerChatFileRenewFailed}
+            : {'url': url};
+    }
+    return const {'state': 'invalid'};
+  } on CustomerSessionRefused {
+    return const {'state': 'expired'};
+  } on Object catch (error) {
+    stderr.writeln(
+      'portal $action failed: '
+      '${error is PublicReadException ? error.message : error.runtimeType}',
+    );
+    // A refusal said something about the request; anything else may have
+    // been written (Flutter's «Puede haberse guardado»).
+    final refused =
+        error is PublicReadException &&
+        !error.retryable &&
+        error.statusCode != null;
+    return switch (action) {
+      'chat-new' => {
+        'toast': customerChatNewFailed,
+        if (!refused) 'uncertain': true,
+      },
+      'chat-send' => {
+        'toast': customerChatSendFailed,
+        if (!refused) 'uncertain': true,
+      },
+      'chat-answer' => {
+        'toast': !refused
+            ? customerChatAnswerUncertain
+            : error.code == '23514' && (error.reason ?? '').trim().isNotEmpty
+            ? customerChatAnswerRefused(error.reason!)
+            : customerChatAnswerFailed,
+      },
+      'chat-file' => const {'toast': customerChatFileRenewFailed},
+      _ => const {'read': false},
+    };
+  }
+}
 
 /// The login's fields that do not pass, by name, or null for a form the
 /// login does not have.

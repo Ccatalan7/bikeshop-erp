@@ -55,10 +55,17 @@ void main() {
       'lib/public_store/widgets/customer_chat_view.dart',
     ).readAsStringSync();
 
+    // The card's rules and words live in the core since 2026-10-08, shared
+    // with the HTML store's chat.
+    final card = File(
+      'packages/vinabike_public_core/lib/public_store/models/customer_chat_words.dart',
+    ).readAsStringSync();
+
     expect(source, isNot(contains('/tienda/cuenta/facturas/')));
     expect(source, isNot(contains('action=pay')));
-    expect(source, contains("actionType == 'pay_now'"));
-    expect(source, contains('El chat no abre cobros'));
+    expect(source, contains('CustomerChatActionCard.of(msg.metadata)'));
+    expect(card, contains("actionType == 'pay_now'"));
+    expect(card, contains('El chat no abre cobros'));
   });
 
   test('every compact customer chat host composes the canonical provider view',

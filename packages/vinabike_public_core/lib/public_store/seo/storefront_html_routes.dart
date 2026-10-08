@@ -1,8 +1,9 @@
 /// The public paths Firebase Hosting hands to the HTML storefront: the
 /// `run` rewrites of the store target in `firebase.json`, in the same
-/// spelling (a test keeps the two equal). Flutter still draws the chats
-/// and redeems the editor's own return from Google; from them it leaves for
-/// these paths with a full page load, so every visitor reads the same pages.
+/// spelling (a test keeps the two equal). Flutter only redeems the editor's
+/// own return from Google (and draws the editor's pages with a block the
+/// HTML does not draw yet); from them it leaves for these paths with a full
+/// page load, so every visitor reads the same pages.
 const storefrontHtmlRouteSources = <String>[
   '/',
   '/productos',
@@ -40,6 +41,9 @@ const storefrontHtmlRouteSources = <String>[
   // The team's Android download and the release it reads (2026-10-08).
   '/cuenta/descargas/android',
   '/cuenta/descargas/android/version',
+  // «Soporte» and each conversation (phase 4h).
+  '/cuenta/chats',
+  '/cuenta/chats/**',
   // Where the store lived inside the ERP's web app: a permanent redirect to
   // the same page without the prefix (2026-10-08). Flutter never leaves for
   // them; under `/tienda` its own routes answer.
