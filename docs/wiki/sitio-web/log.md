@@ -468,3 +468,9 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   sólo en `/auth/callback`, `/cuenta/chats(/**)` y
   `/cuenta/descargas/android`. `/shop/**` ya eran 125 redirecciones de
   Hosting, que corren antes que cualquier reescritura.
+- La vuelta de Google y la confirmación de una cuenta las canjea el login
+  HTML (`grant_type=pkce` desde el navegador, `enter`, «Mi cuenta»); Flutter
+  queda con la recuperación, la invitación y la vuelta de Google del editor.
+  Probado contra el Auth local: un `auth.flow_state` hecho a mano necesita
+  `provider_access_token` y `provider_refresh_token` en `''`, no NULL (con
+  NULL GoTrue 2.188 cae en un 500 por puntero nulo al leerlo).

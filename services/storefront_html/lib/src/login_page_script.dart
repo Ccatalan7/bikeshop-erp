@@ -11,8 +11,8 @@ import 'package:vinabike_public_core/public_store/models/customer_auth_forms.dar
 /// `supabase_flutter` keeps it: the session in `sb-<ref>-auth-token`, a PKCE
 /// verifier in `flutter.supabase.auth.token-code-verifier` (the JSON text
 /// `shared_preferences` writes, `/passwordRecovery` after it for a
-/// recovery), so the e-mail's link and Google's return, which Flutter
-/// redeems, find it. The fields are checked by the server with the core's
+/// recovery), so whoever redeems the e-mail's link or Google's return finds
+/// it: this page, or Flutter for a link that sets a password. The fields are checked by the server with the core's
 /// rules before anything goes to Auth; the password itself never goes
 /// there, only its shape (each letter, digit or sign replaced by one of its
 /// kind), which is all the rules read.
@@ -59,6 +59,8 @@ const _script = r'''
   var resetForm = dialog.querySelector('[data-reset-form]');
   var mode = 'login', busy = false, leaving = false, verifyEmail = null, toastEl = null, toastTimer = 0;
   var VERIFIER = 'flutter.supabase.auth.token-code-verifier';
+  // `WebsiteEditorOAuthIntentGate.storageKey`: the editor's Google link.
+  var EDITOR_INTENT = 'google_oauth_editor_intent';
 
   function field(name) { return form.querySelector('[name="' + name + '"]'); }
   function value(name) { var f = field(name); return f ? f.value : ''; }
@@ -261,8 +263,8 @@ const _script = r'''
     } else if (target.hasAttribute('data-google')) {
       if (busy || leaving) return;
       leaving = true;
-      // `signInWithOAuth`: Google returns to /auth/callback, where Flutter
-      // redeems the code with this verifier.
+      // `signInWithOAuth`: Google returns to /auth/callback, where this
+      // page redeems the code with this verifier.
       pkce().then(function (challenge) {
         var q = new URLSearchParams({
           provider: 'google', redirect_to: origin + '/auth/callback', flow_type: 'pkce',
@@ -331,6 +333,45 @@ const _script = r'''
 
   // ---- what the address says ----------------------------------------------
   var params = new URLSearchParams(location.search);
+  var callback = location.pathname === prefix + '/auth/callback';
+  var code = params.get('code');
+  if (callback || code) {
+    // `exchangeCodeForSession` with this browser's verifier: Google's return
+    // and an account's confirmation. What only this browser can tell goes
+    // back to the server with `enlace`, which answers Flutter: the editor's
+    // own Google link (its intent waits here) and a recovery (its verifier
+    // is marked), which ends in setting a password.
+    var verifier = null;
+    try { verifier = JSON.parse(localStorage.getItem(VERIFIER) || 'null'); } catch (e) { verifier = null; }
+    if (typeof verifier !== 'string' || !verifier) verifier = null;
+    if ((callback && localStorage.getItem(EDITOR_INTENT) !== null) ||
+        (code && ((verifier && /\/passwordRecovery$/.test(verifier)) || params.get('recovery') === 'true'))) {
+      params.set('enlace', '1');
+      location.replace(location.pathname + '?' + params.toString());
+      return;
+    }
+    // A code is good once: the address forgets it before it is redeemed.
+    var confirmed = !callback && params.get('confirmed') === 'true';
+    history.replaceState(history.state, '', prefix + '/cuenta/login' + (confirmed ? '?confirmed=true' : ''));
+    params = new URLSearchParams(location.search);
+    if (!code || !verifier) {
+      // Google said no, or the link was opened in another browser: an
+      // account's link confirmed it all the same (the notice below says so).
+      if (callback) toast(W.googleFailed, true);
+    } else {
+      localStorage.removeItem(VERIFIER);
+      setBusy(true);
+      auth('/auth/v1/token?grant_type=pkce', { auth_code: code, code_verifier: verifier }).then(function (r) {
+        if (!r.ok || !r.body || !r.body.access_token || !r.body.user) throw new Error('refused');
+        return enter(r.body);
+      }).catch(function (error) {
+        setBusy(false);
+        if (error && error.message === 'unavailable') toast(W.storeBusy, true);
+        else if (callback) toast(W.googleFailed, true);
+        else if (!confirmed) toast(W.signInFailed, true);
+      });
+    }
+  }
   if (params.get('confirmed') === 'true') root.querySelector('[data-confirmed]').hidden = false;
   var notice = W.notices[params.get(W.noticeParameter) || ''];
   if (notice) {

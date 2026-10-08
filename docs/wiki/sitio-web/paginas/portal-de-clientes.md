@@ -64,8 +64,17 @@ manda el enlace de «¿Olvidaste tu contraseña?», con las palabras y reglas de
 Supabase Auth directo, como Flutter: Auth cuenta los intentos por dirección y,
 pasando por el servidor, todos los clientes compartirían una. Lo que Auth da
 queda donde lo deja `supabase_flutter` (la sesión en `sb-<ref>-auth-token`, el
-verificador PKCE en `flutter.supabase.auth.token-code-verifier`), así que el
-enlace del correo y la vuelta de Google, que canjea Flutter, lo encuentran.
+verificador PKCE en `flutter.supabase.auth.token-code-verifier`), así que
+quien canjee el enlace del correo o la vuelta de Google lo encuentra. Desde el
+2026-10-08 la vuelta de Google (`/auth/callback?code=`) y la confirmación de
+una cuenta (`/cuenta/login?confirmed=true&code=`) las canjea el mismo login
+HTML (`POST /auth/v1/token?grant_type=pkce`, como `exchangeCodeForSession`),
+borra el verificador y sigue con `enter`; un enlace abierto en otro navegador
+no tiene verificador y queda el aviso «Tu cuenta ha sido confirmada». Lo que
+termina en fijar una contraseña (recuperación: verificador marcado con
+`/passwordRecovery`; invitación; un token en el fragmento) y la vuelta de
+Google del editor (su intención `google_oauth_editor_intent` en este
+navegador) vuelven al servidor con `?enlace=1`, que responde Flutter.
 Antes de llamar a Auth el servidor revisa los campos (`check`); la contraseña
 no le llega, sólo su forma (cada letra, número o signo cambiado por uno de su
 tipo), que es todo lo que miran las reglas. Con la sesión, `enter` crea o

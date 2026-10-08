@@ -6010,51 +6010,112 @@ void main() {
       expect(hidden, isNot(contains('vinabikeAuthHandoff=true')));
     });
 
-    test(
-      'a link back from Auth is answered with Flutter, with the login '
-      'head; the hidden copy stays HTML; no Flutter page, try again',
-      () async {
-        for (final query in [
-          'confirmed=true&code=abc',
-          'error=access_denied&error_code=otp_expired',
-          'enlace=1',
-          'token_hash=x&type=recovery',
-        ]) {
-          final flutter = _FakeFlutterShell();
-          final response = await _get(
-            _FakeReads(),
-            '/cuenta/login?$query',
-            flutterShell: flutter,
-          );
-          expect(response.statusCode, 200, reason: query);
-          expect(response.headers['x-storefront-fallback'], 'flutter');
-          expect(response.headers['x-robots-tag'], 'noindex');
-          final html = await response.readAsString();
-          expect(html, contains('flutter_bootstrap.js'));
-          expect(html, contains('<title>Iniciar sesión | '));
-          expect(html, contains('noindex'));
-        }
-        final plain = await _get(
+    test('a link back from Auth that sets a password is answered with Flutter, '
+        'with the login head; the hidden copy stays HTML; no Flutter page, '
+        'try again', () async {
+      for (final query in [
+        'confirmed=true&code=abc&enlace=1',
+        'error=access_denied&error_code=otp_expired',
+        'enlace=1',
+        'token_hash=x&type=recovery',
+      ]) {
+        final flutter = _FakeFlutterShell();
+        final response = await _get(
           _FakeReads(),
-          '/cuenta/login?confirmed=true',
+          '/cuenta/login?$query',
+          flutterShell: flutter,
+        );
+        expect(response.statusCode, 200, reason: query);
+        expect(response.headers['x-storefront-fallback'], 'flutter');
+        expect(response.headers['x-robots-tag'], 'noindex');
+        final html = await response.readAsString();
+        expect(html, contains('flutter_bootstrap.js'));
+        expect(html, contains('<title>Iniciar sesión | '));
+        expect(html, contains('noindex'));
+      }
+      final plain = await _get(
+        _FakeReads(),
+        '/cuenta/login?confirmed=true',
+        flutterShell: _FakeFlutterShell(),
+      );
+      expect(plain.headers['x-storefront-fallback'], isNull);
+      final hidden = await _get(
+        _FakeReads(),
+        '/_html/cuenta/login?token_hash=x&type=recovery',
+        flutterShell: _FakeFlutterShell(),
+      );
+      expect(hidden.headers['x-storefront-fallback'], isNull);
+      expect(
+        (await _get(_FakeReads(), '/cuenta/login?enlace=1')).statusCode,
+        503,
+      );
+      expect(loginAnsweredByFlutter(['confirmed']), isFalse);
+      expect(loginAnsweredByFlutter(['clave']), isFalse);
+      expect(loginAnsweredByFlutter(['code']), isFalse);
+      expect(loginAnsweredByFlutter(['error']), isTrue);
+      expect(loginAnsweredByFlutter(['error'], callback: true), isFalse);
+      expect(loginAnsweredByFlutter(['code', 'enlace']), isTrue);
+    });
+
+    test('the page redeems a code itself: Google\'s return to /auth/callback '
+        'and an account\'s confirmation are the HTML login', () async {
+      // Until 2026-10-08 both loaded Flutter (~3,6 MB) to redeem the code
+      // and come back.
+      for (final path in [
+        '/auth/callback?code=abc',
+        '/auth/callback?error=access_denied&error_description=x',
+        '/auth/callback',
+        '/cuenta/login?confirmed=true&code=abc',
+      ]) {
+        final response = await _get(
+          _FakeReads(),
+          path,
           flutterShell: _FakeFlutterShell(),
         );
-        expect(plain.headers['x-storefront-fallback'], isNull);
-        final hidden = await _get(
-          _FakeReads(),
-          '/_html/cuenta/login?code=abc',
-          flutterShell: _FakeFlutterShell(),
-        );
-        expect(hidden.headers['x-storefront-fallback'], isNull);
-        expect(
-          (await _get(_FakeReads(), '/cuenta/login?code=abc')).statusCode,
-          503,
-        );
-        expect(loginIsAuthReturn(['confirmed']), isFalse);
-        expect(loginIsAuthReturn(['clave']), isFalse);
-        expect(loginIsAuthReturn(['code']), isTrue);
-      },
-    );
+        expect(response.statusCode, 200, reason: path);
+        expect(response.headers['x-storefront-fallback'], isNull);
+        expect(response.headers['x-robots-tag'], 'noindex', reason: path);
+        final html = await response.readAsString();
+        expect(html, contains('data-login'), reason: path);
+        expect(html, isNot(contains('flutter_bootstrap.js')), reason: path);
+        // The script redeems with gotrue-dart's request and verifier.
+        expect(html, contains("'/auth/v1/token?grant_type=pkce'"));
+        expect(html, contains('auth_code: code, code_verifier: verifier'));
+        expect(html, contains("'google_oauth_editor_intent'"));
+      }
+
+      // What only the browser can tell comes back with `enlace`: the
+      // editor's own Google link and a recovery stay Flutter's.
+      final editor = await _get(
+        _FakeReads(),
+        '/auth/callback?code=abc&enlace=1',
+        flutterShell: _FakeFlutterShell(),
+      );
+      expect(editor.headers['x-storefront-fallback'], 'flutter');
+      expect(await editor.readAsString(), contains('flutter_bootstrap.js'));
+
+      // A closed store has no login, but the editor's Google link still
+      // reaches Flutter.
+      final closed = _FakeReads(
+        shell: {
+          ..._shell(),
+          'settings': {..._shell()['settings'], 'site_published': 'false'},
+        },
+      );
+      final callback = await _get(
+        closed,
+        '/auth/callback?code=abc',
+        flutterShell: _FakeFlutterShell(),
+      );
+      expect(callback.headers['x-storefront-fallback'], 'flutter');
+      final login = await _get(
+        closed,
+        '/cuenta/login',
+        flutterShell: _FakeFlutterShell(),
+      );
+      expect(login.headers['x-storefront-fallback'], isNull);
+      expect(await login.readAsString(), isNot(contains('data-login')));
+    });
 
     Future<(int, Map<String, Object?>)> login(
       _FakeReads reads,

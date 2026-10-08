@@ -177,6 +177,7 @@ Handler storefrontHandler({
         ['pedido', final id] when _orderIdPattern.hasMatch(id) =>
           await route.order(id),
         ['cuenta', 'login'] => await route.login(),
+        ['auth', 'callback'] => await route.login(callback: true),
         ['cuenta'] ||
         [
           'cuenta',
@@ -584,17 +585,36 @@ class _Route {
     return _render(portalPageDocument(context, which));
   }
 
-  /// `/cuenta/login` (4c): the way in. A link back from Supabase Auth
-  /// ([loginIsAuthReturn]) is answered with the Flutter store, which redeems
-  /// it, with the login's head; when that page cannot be read the visitor is
-  /// asked to try again rather than shown a page that would drop the link.
-  Future<Response> login() async {
+  /// `/cuenta/login` (4c): the way in, and `/auth/callback` ([callback]),
+  /// where Google returns. The page redeems a PKCE code itself; a link that
+  /// sets a password ([loginAnsweredByFlutter]) is answered with the Flutter
+  /// store, which redeems it, with the login's head; when that page cannot
+  /// be read the visitor is asked to try again rather than shown a page that
+  /// would drop the link.
+  Future<Response> login({bool callback = false}) async {
     final context = _context(await reads.shell());
-    if (_closed(context)) return _unpublished(context);
     final document = loginPageDocument(context);
-    if (hidden || !loginIsAuthReturn(_uri.queryParameters.keys)) {
+    if (_closed(context)) {
+      // A closed store has no login, but Google still returns the editor's
+      // own link to /auth/callback, which Flutter redeems as it always did.
+      return callback && !hidden
+          ? _loginWithFlutter(context, document)
+          : _unpublished(context);
+    }
+    if (hidden ||
+        !loginAnsweredByFlutter(
+          _uri.queryParameters.keys,
+          callback: callback,
+        )) {
       return _render(document);
     }
+    return _loginWithFlutter(context, document);
+  }
+
+  Future<Response> _loginWithFlutter(
+    PageContext context,
+    Component document,
+  ) async {
     final shell = await flutterShell?.html(context.storeUrl);
     if (shell == null) return _readFailed();
     final rendered = await renderComponent(document, request: request);

@@ -2273,3 +2273,37 @@ un `meta refresh` a la ficha.
 
 Revertir = devolver `**` a `/app.html` y quitar `/tienda` y `/tienda/**`.
 
+## Fase 4e: el login HTML canjea la vuelta de Google y la confirmación (2026-10-08)
+
+Hasta aquí cada vuelta de Supabase Auth bajaba la app de Flutter (~3,6 MB,
+hasta ~18 s en un teléfono lento) sólo para canjear el código y volver al
+login HTML: entrar con Google pasaba siempre por ahí (3 de las 7 cuentas de
+clientes son de Google, medido el 2026-10-08).
+
+- `/auth/callback` es del servidor (salió de las reescrituras de Flutter) y
+  responde el login; `/cuenta/login?code=` también. El script del login lee
+  el verificador que dejó (`flutter.supabase.auth.token-code-verifier`), lo
+  borra, llama `POST /auth/v1/token?grant_type=pkce` con `auth_code` y
+  `code_verifier` (lo que manda `exchangeCodeForSession`) y sigue con `enter`:
+  sesión en `sb-<ref>-auth-token`, cliente creado o confirmado, «Mi cuenta».
+  La dirección pierde el código antes del canje (sirve una vez).
+- Vuelven al servidor con `?enlace=1`, que responde Flutter como antes, lo
+  que sólo el navegador sabe y termina en otra cosa: la vuelta de Google del
+  editor (su intención `google_oauth_editor_intent`, la llave de
+  `WebsiteEditorOAuthIntentGate`, prueba de contrato en la raíz) y una
+  recuperación (verificador marcado `/passwordRecovery` o `recovery=true`).
+  `token_hash`, `type`, los tokens y el `error` de un correo siguen siendo de
+  Flutter desde el servidor (`loginAnsweredByFlutter`).
+- Google que dice que no (`/auth/callback?error=`) queda en el login con
+  «No pudimos iniciar sesión con Google»; antes Flutter esperaba 12 s y
+  mandaba a `/cuenta`. Una confirmación abierta en otro navegador (sin
+  verificador) muestra «Tu cuenta ha sido confirmada»: Auth ya la confirmó.
+- Con la tienda cerrada `/auth/callback` sigue yendo a Flutter: el editor
+  vincula Google aunque el sitio no esté publicado.
+- Probado contra el Auth local (GoTrue 2.188) con un `auth.flow_state` hecho
+  a mano: confirmación y Google llegan a «Mi cuenta» con el cliente creado en
+  la tienda de prueba; intención del editor y recuperación vuelven con
+  `enlace=1` y el verificador intacto; el rechazo de Google deja el aviso.
+  Trampa: los dos tokens del proveedor van en `''`, no NULL (con NULL la
+  lectura falla y GoTrue se cae con un 500 por puntero nulo).
+

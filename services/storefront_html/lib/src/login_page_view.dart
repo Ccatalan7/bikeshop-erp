@@ -21,10 +21,11 @@ import 'site_layout.dart';
 /// counts attempts by address), and keeps the session where
 /// `supabase_flutter` keeps it; the server checks the fields first and,
 /// once there is a session, makes it the store's customer
-/// ([portalActionPath], `check` and `enter`). A link coming back from an
-/// e-mail (a code, a token or an error) is Flutter's: the server answers it
-/// with the Flutter store ([loginIsAuthReturn]), and one that carries it in
-/// the fragment, which never reaches the server, is sent back with
+/// ([portalActionPath], `check` and `enter`). The page redeems a PKCE `code`
+/// itself (Google's return to `/auth/callback`, an account's confirmation);
+/// a link that sets a password (a recovery, an invitation: a token, a
+/// `type`) is Flutter's ([loginAnsweredByFlutter]), and one that carries it
+/// in the fragment, which never reaches the server, is sent back with
 /// `?enlace=1` before the page paints.
 Component loginPageDocument(PageContext page) {
   final prefix = page.hidden ? '/_html' : '';
@@ -79,19 +80,23 @@ PageMeta loginPageMeta(PageContext page) {
 }
 
 /// What in the address makes the login Flutter's: a link back from Supabase
-/// Auth (a PKCE `code`, a `token_hash`, an access token or an `error`), or
-/// `enlace`, which the page adds when the link carries it in the fragment.
-bool loginIsAuthReturn(Iterable<String> queryKeys) => queryKeys.any(
-  const {
-    'code',
-    'error',
-    'error_code',
-    'error_description',
+/// Auth that sets a password (a recovery or an invitation: a `token_hash`, a
+/// `type`, tokens), an `error` from an e-mail's link, or `enlace`, which the
+/// page adds when only the browser can tell (the token in the fragment, a
+/// recovery's verifier, the editor's own Google intent). A bare PKCE `code`
+/// is redeemed by the page, and on [callback] (`/auth/callback`) also
+/// Google's refusal (until 2026-10-08 every one of them loaded Flutter).
+bool loginAnsweredByFlutter(
+  Iterable<String> queryKeys, {
+  bool callback = false,
+}) => queryKeys.any(
+  {
     'token_hash',
     'type',
     'access_token',
     'refresh_token',
     'enlace',
+    if (!callback) ...['error', 'error_code', 'error_description'],
   }.contains,
 );
 

@@ -109,8 +109,8 @@ void main() {
   });
 
   test(
-      'Flutter keeps only the chats, the Android download and the way back '
-      'from Auth; Hosting hands the server everything else', () {
+      'Flutter keeps only the chats and the Android download; Hosting hands '
+      'the server everything else', () {
     // Until 2026-10-08 `**` loaded Flutter: an unknown address answered 200
     // with the app, and `/tienda/...` redirected only in the browser.
     final config = jsonDecode(File('firebase.json').readAsStringSync()) as Map;
@@ -135,7 +135,6 @@ void main() {
     }
 
     for (final path in [
-      '/auth/callback',
       '/cuenta/chats',
       '/cuenta/chats/46a51a87-aa3a-430c-a6e1-af48c8d74541',
       '/cuenta/descargas/android',
@@ -144,6 +143,9 @@ void main() {
           reason: path);
     }
     for (final path in [
+      // Google's return: the HTML login redeems its code (2026-10-08) and
+      // hands Flutter only the editor's own link.
+      '/auth/callback',
       '/no-existe',
       '/buscar',
       '/tienda',

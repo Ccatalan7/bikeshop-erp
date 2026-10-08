@@ -702,10 +702,6 @@
           "destination": "/app-open.html"
         },
         {
-          "source": "/auth/callback",
-          "destination": "/app.html"
-        },
-        {
           "source": "/cuenta/chats",
           "destination": "/app.html"
         },

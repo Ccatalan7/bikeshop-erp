@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "storefront-html-auth-return",
+  "scope": "internal",
+  "platforms": [
+    "web",
+    "macos",
+    "windows",
+    "android"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "services/storefront_html/lib/src/login_page_script.dart",
+      "sha256": "3b4212f7ae9380d71e7b28f94fc84310d4aa95c8ff6a5f86c21ecaea10da5e6c"
+    },
+    {
+      "path": "services/storefront_html/lib/src/login_page_view.dart",
+      "sha256": "0e84a179af3faa128ac4463b12392d8033de2b6e9eab00eda1882b026a45620e"
+    },
+    {
+      "path": "services/storefront_html/lib/src/storefront_handler.dart",
+      "sha256": "b0ef3f2ab04b5fa81a1e7e41114c39e82639217d4e104766be0b225f81ece900"
+    },
+    {
+      "path": "services/storefront_html/lib/storefront_html.dart",
+      "sha256": "3b7a9511d167bad8ab66cb5f67694789494c946afd20dd8484abf57269a8f057"
+    },
+    {
+      "path": "services/storefront_html/test/storefront_handler_test.dart",
+      "sha256": "38848083e89c79ee4d4857a3cf67455d3563651a75aa6e62034eb7274c2f51d4"
+    },
+    {
+      "path": "firebase.json",
+      "sha256": "d255b8c6248c9d3630836265bf1263fbcc490e56c1ca2f0766db86f2ce18a985"
+    },
+    {
+      "path": "test/unit/product_seo_snapshot_server_routes_test.dart",
+      "sha256": "346f1878f726b2d34c59f22ccc66da103dfc0097d61f4b28a76f0962d133c658"
+    },
+    {
+      "path": "test/unit/storefront_html_auth_return_contract_test.dart",
+      "sha256": "9c805672b4d50a6acbcb8f2a3e048056f0df6196bd7b53cc93c42b7485c4bad2"
+    }
+  ]
+}

@@ -26,9 +26,10 @@ direcciones viejas (`/tienda/...`, `/cuenta/mensajes`) un **301** real. Hasta
 ese día `**` cargaba Flutter, que respondía **200** a todo (un soft 404) y
 redirigía sólo en el navegador `[Prod 2026-10-07]`. Flutter queda sólo en sus
 reescrituras a `app.html` (su página; no se llama `index.html` para que `/`
-sea del servidor): `/auth/callback`, `/cuenta/chats`, `/cuenta/chats/**` y
+sea del servidor): `/cuenta/chats`, `/cuenta/chats/**` y
 `/cuenta/descargas/android` `[Repo]`. Flutter sólo arranca para el soporte y para canjear los enlaces que
-vuelven de un correo o de Google (el carrito, el checkout, el pedido, todo el
+fijan una contraseña o la vuelta de Google del editor (el login HTML canjea
+la de los clientes desde el 2026-10-08; el carrito, el checkout, el pedido, todo el
 portal salvo el soporte y el login son del servidor desde el 2026-10-06); un clic suyo hacia una ruta del servidor hace una carga completa
 (`storefrontHtmlServes` en el núcleo, comparada con `firebase.json` por una
 prueba), salvo en el editor, su vista previa y `/tienda` `[Repo]`.
@@ -50,7 +51,7 @@ prueba), salvo en el editor, su vista previa y `/tienda` `[Repo]`.
 | `/checkout` | compra, servidor HTML desde el 2026-10-06; sus líneas en `/checkout/lineas` (JSON, `no-store`) | no (`X-Robots-Tag` y meta) |
 | `/pedido/:id` | confirmación de un pedido (con token de acceso), servidor HTML desde el 2026-10-06; su resumen en PDF es `POST /pedido/resumen.pdf` (token en el cuerpo) | no |
 | `/cuenta`, `/cuenta/login`, `/cuenta/perfil`, `/cuenta/direcciones`, `/cuenta/pedidos`, `/cuenta/bicicletas`, `/cuenta/servicios`, `/cuenta/chats`, `/cuenta/chats/:id`, `/cuenta/mensajes`, `/cuenta/mensajes/:id`, `/cuenta/descargas/android` | portal de clientes ([portal-de-clientes](portal-de-clientes.md)); `/cuenta`, `/cuenta/pedidos`, `/cuenta/servicios`, `/cuenta/bicicletas`, `/cuenta/perfil`, `/cuenta/direcciones` y `/cuenta/login` las dibuja el servidor HTML (con `POST /cuenta/vista`, `/cuenta/archivo` y `/cuenta/accion`); `/cuenta/login` con un enlace que vuelve de Auth en la dirección (`code`, `token_hash`, `type`, `error`, `access_token` o `enlace`, que la página agrega si el enlace lo trae en el fragmento) lo responde Flutter; el resto, Flutter | no |
-| `/auth/callback` | vuelta del inicio de sesión con Google; Flutter canjea el código con el verificador PKCE que dejó el login (HTML o Flutter) | no |
+| `/auth/callback` | vuelta del inicio de sesión con Google; el login HTML canjea el código con el verificador PKCE que dejó el login y entra a «Mi cuenta» (la del editor, que deja su intención en el navegador, la canjea Flutter) | no |
 | `/shop/:slug` | URL de la tienda vieja | redirige 301 |
 | (cualquier otra) | «No encontramos esta página», del servidor HTML | no (404) |
 
