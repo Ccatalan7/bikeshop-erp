@@ -126,6 +126,23 @@ No ve Search Console hasta reconectar la cuenta Google con el permiso
   en WhatsApp.
 - El fragmento de una categoría lo arma Google con lo visible: el de Belda son
   nombres y precios de sus productos.
+- **Fichas de comercio por marcado** (informe «Merchant listings»): la otra
+  puerta a la grilla de productos, desde el JSON-LD de la ficha y sin Merchant
+  Center. Cayó de ~87 válidas el 9-jul a 3–6 desde agosto (última
+  actualización del informe: 6-oct), y fragmentos de producto y migas igual
+  (6 y 5). Las fichas son HTML con `Product` desde la migración y 1.295
+  cambiaron de URL el 8-oct (301): hay que esperar que Google las vuelva a
+  leer. Avisos no críticos: `hasMerchantReturnPolicy` y `shippingDetails` en
+  la oferta y `description` (3, ya resuelto). La devolución ya se declara a
+  nivel de tienda con `merchantReturnLink`, la «opción B» que Google acepta;
+  el envío se omite a propósito ([datos estructurados](datos-estructurados.md))
+  `[GSC 2026-10-08]`.
+- **Pedidos a Google el 2026-10-08:** indexar neumáticos, pastillas, llantas,
+  pedales, luces y rayos (Google las tenía como `noindex` o «alternativa con
+  canonical», de cuando estaban ocultas; última lectura de neumáticos: 28-jul)
+  y volver a leer portada, frenos y cámaras; el sitemap se reenvió (lo había
+  leído el 7-oct con 1.315 URL; hoy tiene ~1.397). Cadenas, cassette y ruedas
+  ya estaban indexadas. La cuota es de unas 10 por día `[Consola 2026-10-08]`.
 
 ## Trampas
 

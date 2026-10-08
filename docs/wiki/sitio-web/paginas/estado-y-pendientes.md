@@ -69,7 +69,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 
 | Desde | Qué | Página |
 |---|---|---|
-| 2026-10-08 | Mirar en una semana qué vínculos a sitio muestra «viñabike viña del mar» (el 8-oct: Nosotros, Productos, Servicios, Envíos y una ficha vieja) y si las categorías aparecen con su rama | [seo-tecnico](seo-tecnico.md) |
+| 2026-10-08 | Mirar en una semana qué vínculos a sitio muestra «viñabike viña del mar» (el 8-oct: Nosotros, Productos, Servicios, Envíos y una ficha vieja), si las 6 categorías pedidas quedaron indexadas y si «Merchant listings» sube de 6; pedir indexar las categorías que sigan fuera (cuota ~10/día) | [seo-tecnico](seo-tecnico.md) |
 | 2026-10-07 | Vista HTML del editor: medir el zoom de ventana en Windows (en el ERP web quedó verificada con 2450c55e: barra, «Agregar aquí», alto y escritura) | [editor](editor-del-sitio.md) |
 | 2026-10-04 | Términos de devolución (días, quién paga, reembolso) como campos del editor, para declararlos además del link (regla 1: primero el control) | [datos-estructurados](datos-estructurados.md) |
 | 2026-10-04 | Los tramos de envío no tienen control en el editor y la página `/envios` los repite como texto: un cambio de tarifa hay que hacerlo en dos lados. Llevarlos al editor y que la página los lea de `get_public_online_shipping_tiers` | [checkout](checkout-y-pedidos.md) |
