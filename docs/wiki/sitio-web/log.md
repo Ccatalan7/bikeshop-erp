@@ -450,3 +450,6 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   de la página. Codex revisó las capas de producto y el embudo de GA4:
   cuatro arreglos (una lectura por lienzo, pasos del checkout medidos sólo
   por decisión del cliente, carrito sin eventos falsos).
+- El nodo del local en los datos estructurados publica sus coordenadas
+  (`geo`) y el país como `CL`, tomados de la ficha de Google por el refresco
+  diario y la sincronización del editor.

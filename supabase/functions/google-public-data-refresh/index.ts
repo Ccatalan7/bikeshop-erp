@@ -43,6 +43,8 @@ type GooglePlaceDetailsResult = {
   user_ratings_total?: number;
   reviews?: GooglePlaceReview[];
   opening_hours?: Record<string, unknown>;
+  geometry?: { location?: { lat?: number; lng?: number } };
+  address_components?: { short_name?: string; types?: string[] }[];
 };
 
 const corsHeaders = {
@@ -216,6 +218,20 @@ async function refreshTenant(
       updates.business_google_maps_url = place.url;
       updates.google_maps_url = place.url;
     }
+    // Where the store is, for its business node (`geo`, and the country by
+    // its ISO code, as Google asks): basic place data, no extra charge.
+    const lat = place.geometry?.location?.lat;
+    const lng = place.geometry?.location?.lng;
+    if (isCoordinate(lat, 90) && isCoordinate(lng, 180)) {
+      updates.seo_geo_latitude = lat.toFixed(6);
+      updates.seo_geo_longitude = lng.toFixed(6);
+    }
+    const country = (place.address_components ?? []).find((part) =>
+      (part.types ?? []).includes("country")
+    )?.short_name?.trim().toUpperCase();
+    if (country && /^[A-Z]{2}$/.test(country)) {
+      updates.seo_address_country_code = country;
+    }
     if (
       place.opening_hours &&
       settings.business_hours_source !== "erp_settings"
@@ -244,6 +260,11 @@ async function refreshTenant(
   }
 }
 
+function isCoordinate(value: unknown, limit: number): value is number {
+  return typeof value === "number" && Number.isFinite(value) &&
+    Math.abs(value) <= limit;
+}
+
 function isReviewDataStale(lastSyncedAt?: string): boolean {
   if (!lastSyncedAt) return true;
   const lastSyncMs = Date.parse(lastSyncedAt);
@@ -257,7 +278,7 @@ async function fetchPlaceDetails(
 ): Promise<GooglePlaceDetailsResult> {
   const params = new URLSearchParams({
     place_id: placeId,
-    fields: "place_id,name,formatted_address,opening_hours,url,rating,user_ratings_total,reviews",
+    fields: "place_id,name,formatted_address,geometry,address_components,opening_hours,url,rating,user_ratings_total,reviews",
     language: "es",
     reviews_sort: "newest",
     key: apiKey,

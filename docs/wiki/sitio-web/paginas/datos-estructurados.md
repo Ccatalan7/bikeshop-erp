@@ -114,9 +114,14 @@ Envío y devoluciones se pueden declarar **una vez** en la organización desde e
 ## Lo que falta
 
 1. **Descripciones de producto** (29 de 1.541): es contenido, no marcado.
-2. `geo` del local (no hay latitud/longitud en ningún dueño).
-3. `addressCountry` va como «Chile»; Google prefiere el código `CL`, y
-   `seo_address_country_code` no tiene quien la escriba.
+2. ~~`geo` del local~~ y 3. ~~`addressCountry` como código~~ (2026-10-07):
+   la ficha del local en Google es su dueño. El refresco diario
+   (`google-public-data-refresh`) y la sincronización del editor guardan
+   `seo_geo_latitude`, `seo_geo_longitude` y `seo_address_country_code`;
+   `public_business_identity.dart` y `sync_seo_index.sh` publican `geo` y
+   `addressCountry: CL` cuando existen (si no, el nombre del país y nada de
+   `geo`). Esto es la dirección del local, no una promesa de envío: el envío
+   sigue sin declararse (arriba).
 4. Términos de devolución como campos del editor (ver arriba).
 5. Envío: sólo si Google llega a aceptar una región que excluya las islas, o
    si Merchant Center lo configura por su lado (ahí sí hay más control).

@@ -420,6 +420,7 @@ class _IntegrationsPageState extends State<IntegrationsPage> {
         if (selected.addressCountry != null) {
           settings['seo_address_country'] = selected.addressCountry!;
         }
+        settings.addAll(selected.placeSettings);
         if (selected.hours != null && selected.hours!.isNotEmpty) {
           settings['google_business_regular_hours'] =
               jsonEncode(selected.hours);

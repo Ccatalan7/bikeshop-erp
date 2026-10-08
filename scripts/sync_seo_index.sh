@@ -101,6 +101,10 @@ ADDRESS_REGION=$(get_setting "seo_address_region" "")
 ADDRESS_POSTAL=$(get_setting "seo_address_postal" "")
 ADDRESS_COUNTRY=$(get_setting "seo_address_country" "")
 ADDRESS_COUNTRY_CODE=$(get_setting "seo_address_country_code" "")
+# Where the store is, from its Google place (google-public-data-refresh and
+# the editor's sync); `public_business_identity.dart` reads the same keys.
+GEO_LATITUDE=$(get_setting "seo_geo_latitude" "")
+GEO_LONGITUDE=$(get_setting "seo_geo_longitude" "")
 INSTAGRAM=$(get_setting "instagram" "")
 META_TITLE=$(get_setting "seo_meta_title" "$(get_setting "meta_title" "")")
 META_DESCRIPTION=$(get_setting "seo_meta_description" "$(get_setting "meta_description" "$(get_setting "store_description" "")")")
@@ -400,8 +404,16 @@ if [[ "$CHECK_ONLY" == true ]]; then
     --arg country "$ADDRESS_COUNTRY" \
     --arg country_code "$ADDRESS_COUNTRY_CODE" \
     --arg instagram "$INSTAGRAM" \
+    --arg latitude "$GEO_LATITUDE" \
+    --arg longitude "$GEO_LONGITUDE" \
     '
-      .["@type"] == "BikeStore"
+      def coord($value; $limit):
+        (try ($value | tonumber) catch null) as $n
+        | if $n != null and $n >= -$limit and $n <= $limit then $n else null end;
+      (coord($latitude; 90)) as $lat
+      | (coord($longitude; 180)) as $lng
+      | (if $country_code | test("^[A-Z]{2}$") then $country_code else $country end) as $address_country
+      | .["@type"] == "BikeStore"
       and .["@id"] == ($url + "/#negocio")
       and .name == $name
       and .legalName == $legal_name
@@ -414,7 +426,13 @@ if [[ "$CHECK_ONLY" == true ]]; then
       and .address.addressLocality == $locality
       and .address.addressRegion == $region
       and .address.postalCode == $postal
-      and .address.addressCountry == $country
+      and .address.addressCountry == $address_country
+      and (
+        if $lat != null and $lng != null and ($lat != 0 or $lng != 0)
+        then .geo == {"@type": "GeoCoordinates", latitude: $lat, longitude: $lng}
+        else (has("geo") | not)
+        end
+      )
       and .areaServed["@type"] == "Country"
       and .areaServed.name == $country
       and .contactPoint["@type"] == "ContactPoint"
@@ -458,7 +476,14 @@ JSON_LD=$(jq -cn \
   --arg country "$ADDRESS_COUNTRY" \
   --arg country_code "$ADDRESS_COUNTRY_CODE" \
   --arg instagram "$INSTAGRAM" \
-  '({
+  --arg latitude "$GEO_LATITUDE" \
+  --arg longitude "$GEO_LONGITUDE" \
+  'def coord($value; $limit):
+     (try ($value | tonumber) catch null) as $n
+     | if $n != null and $n >= -$limit and $n <= $limit then $n else null end;
+   (coord($latitude; 90)) as $lat
+   | (coord($longitude; 180)) as $lng
+   | ({
     "@context": "https://schema.org",
     "@type": "BikeStore",
     "@id": ($url + "/#negocio"),
@@ -474,7 +499,7 @@ JSON_LD=$(jq -cn \
       addressLocality: $locality,
       addressRegion: $region,
       postalCode: $postal,
-      addressCountry: $country
+      addressCountry: (if $country_code | test("^[A-Z]{2}$") then $country_code else $country end)
     },
     areaServed: {"@type": "Country", name: $country},
     contactPoint: {
@@ -487,6 +512,10 @@ JSON_LD=$(jq -cn \
   }
   | if $country_code == "" then .
     else .contactPoint.areaServed = $country_code
+    end
+  | if $lat != null and $lng != null and ($lat != 0 or $lng != 0)
+    then .geo = {"@type": "GeoCoordinates", latitude: $lat, longitude: $lng}
+    else .
     end
   | if $instagram == "" then .
     else .sameAs = [$instagram]

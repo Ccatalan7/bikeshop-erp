@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "storefront-business-geo",
+  "scope": "internal",
+  "platforms": [
+    "web",
+    "macos",
+    "windows",
+    "android"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "supabase/functions/google-public-data-refresh/index.ts",
+      "sha256": "33f2ac33133e3770d11ea36c220a36f8536cd9ef9d706d5b13028cf3c1b9ca80"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/seo/public_business_identity.dart",
+      "sha256": "834b7f1f6a296035f4f29babff19f96c873d8ac00fcaf2929d4fa86e5300f93d"
+    },
+    {
+      "path": "scripts/sync_seo_index.sh",
+      "sha256": "e1b2ab2bed2e75b2ec6129084ff11ed085894202be2f7c897f37997cd4debff8"
+    },
+    {
+      "path": "lib/modules/website/services/google_business_service.dart",
+      "sha256": "7ef7d18812ffa0ba66bb9e99c748de0ba466e6409ffe4811e59dfb95451a481b"
+    },
+    {
+      "path": "lib/modules/website/widgets/editor_panel/sync_tab.dart",
+      "sha256": "374c5cf3c1855a115623ab957d30775ce3947dcf00ebc8f7e9114a9925e59bc6"
+    },
+    {
+      "path": "lib/modules/website/pages/integrations_page.dart",
+      "sha256": "4dcdf74693e00cd433d2c3204916fc9076422a4d1d2fe37429390caf73c820b7"
+    },
+    {
+      "path": "test/unit/public_business_geo_test.dart",
+      "sha256": "045b0ed7dab3bd4e1629169b7a1a8ec7b32097ab8420d59934bd18f5c0261597"
+    }
+  ]
+}

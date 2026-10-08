@@ -65,8 +65,14 @@ de 1.635 con EAN), lo que limita la calidad del feed.
 
 - `google-business-reviews` es el proxy de la API de Business Profile; las
   reseñas se guardan en `website_settings` (`google_reviews_*`) y las refresca
-  `google-public-data-refresh`; el bloque `googleReviews` de la portada las
-  muestra `[Repo]` `[Prod]`.
+  `google-public-data-refresh` (pg_cron `google-public-data-refresh-daily`,
+  08:17 UTC); el bloque `googleReviews` de la portada las muestra `[Repo]`
+  `[Prod]`.
+- Desde el 2026-10-07 ese mismo refresco (y la sincronización del editor con
+  la ficha) guarda dónde está el local: `seo_geo_latitude`,
+  `seo_geo_longitude` y `seo_address_country_code`, campos básicos de Places
+  sin costo extra. El nodo `BikeStore` los publica como `geo` y
+  `addressCountry: CL` ([datos-estructurados](datos-estructurados.md)).
 - Places (`google_maps_place_id`) también alimenta el autocompletado del checkout
   vía `google-places-proxy`.
 

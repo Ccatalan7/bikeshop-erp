@@ -100,6 +100,18 @@ Map<String, dynamic> buildPublicBusinessIdentity(Map<String, String> settings) {
     _setting(settings, 'seo_address_country', ''),
   );
   final countryCode = _setting(settings, 'seo_address_country_code', '');
+  // Where the store is, from its Google place (`google-public-data-refresh`
+  // and the editor's sync): only a pair of real coordinates.
+  final latitude = double.tryParse(_setting(settings, 'seo_geo_latitude', ''));
+  final longitude = double.tryParse(
+    _setting(settings, 'seo_geo_longitude', ''),
+  );
+  final geo =
+      latitude != null &&
+      longitude != null &&
+      latitude.abs() <= 90 &&
+      longitude.abs() <= 180 &&
+      !(latitude == 0 && longitude == 0);
   final instagram = _setting(settings, 'instagram', '');
   final url = _setting(settings, 'store_url', '');
 
@@ -119,8 +131,17 @@ Map<String, dynamic> buildPublicBusinessIdentity(Map<String, String> settings) {
       'addressLocality': city,
       'addressRegion': region,
       'postalCode': postal,
-      'addressCountry': country,
+      // Google asks for the ISO code; the name until the place gives it.
+      'addressCountry': RegExp(r'^[A-Z]{2}$').hasMatch(countryCode)
+          ? countryCode
+          : country,
     },
+    if (geo)
+      'geo': {
+        '@type': 'GeoCoordinates',
+        'latitude': latitude,
+        'longitude': longitude,
+      },
     'areaServed': {'@type': 'Country', 'name': country},
     'contactPoint': {
       '@type': 'ContactPoint',

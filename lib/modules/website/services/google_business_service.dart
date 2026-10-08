@@ -820,9 +820,34 @@ class GoogleLocation {
   final String? addressRegion;
   final String? addressPostalCode;
   final String? addressCountry;
+
+  /// The country's ISO code (`storefrontAddress.regionCode`, `CL`).
+  final String? addressCountryCode;
   final Map<String, dynamic>? hours;
   final String? mapsUri;
   final String? newReviewUri;
+
+  /// Where the store is, for its business node (`geo` and the country by
+  /// its code, `public_business_identity.dart`): the same keys the daily
+  /// `google-public-data-refresh` writes from the place.
+  Map<String, String> get placeSettings {
+    final latitude = lat, longitude = lng;
+    final code = addressCountryCode?.trim().toUpperCase() ?? '';
+    return {
+      if (latitude != null &&
+          longitude != null &&
+          latitude.isFinite &&
+          longitude.isFinite &&
+          latitude.abs() <= 90 &&
+          longitude.abs() <= 180 &&
+          !(latitude == 0 && longitude == 0)) ...{
+        'seo_geo_latitude': latitude.toStringAsFixed(6),
+        'seo_geo_longitude': longitude.toStringAsFixed(6),
+      },
+      if (RegExp(r'^[A-Z]{2}$').hasMatch(code))
+        'seo_address_country_code': code,
+    };
+  }
 
   GoogleLocation({
     required this.name,
@@ -836,6 +861,7 @@ class GoogleLocation {
     this.addressRegion,
     this.addressPostalCode,
     this.addressCountry,
+    this.addressCountryCode,
     this.hours,
     this.mapsUri,
     this.newReviewUri,
@@ -903,6 +929,9 @@ class GoogleLocation {
       addressRegion: _emptyToNull(addressRegion),
       addressPostalCode: _emptyToNull(addressPostalCode),
       addressCountry: _emptyToNull(addressCountry),
+      addressCountryCode: _emptyToNull(
+        storefrontAddress['regionCode']?.toString(),
+      ),
       hours: json['regularHours'],
       mapsUri: metadata['mapsUri']?.toString(),
       newReviewUri: metadata['newReviewUri']?.toString(),

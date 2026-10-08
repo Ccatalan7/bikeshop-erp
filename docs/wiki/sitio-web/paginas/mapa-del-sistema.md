@@ -103,7 +103,7 @@ productos siguen por compatibilidad. Detalle en [seguridad](seguridad.md).
 | `google-product-diagnostics` | revisa cómo se ve una ficha pública desde fuera (con borde anti-SSRF) |
 | `google-places-proxy` | autocompletado de direcciones del checkout para visitantes sin cuenta |
 | `google-business-reviews` | proxy de la API de Google Business Profile (reseñas) |
-| `google-public-data-refresh` | refresca datos públicos de Google (reseñas, Places) que muestra el sitio |
+| `google-public-data-refresh` | refresca datos públicos de Google (reseñas, Places) que muestra el sitio, y desde el 2026-10-07 dónde está el local (`seo_geo_*`, `seo_address_country_code`) |
 | `google-oauth-callback` | conexión Google del ERP (centro SEO, Merchant) |
 | `dispatch-storefront-publication` | publicar la tienda desde el editor vía GitHub; **no activa**: falta la GitHub App y su migración no está aplicada ([publicacion-y-despliegue](publicacion-y-despliegue.md)) |
 | `mercadopago-create-preference`, `mercadopago-webhook`, `mercadopago-get-payment`, `mercadopago-refund-payment`, `mercadopago-expire-preferences` | pago con Mercado Pago de punta a punta ([checkout-y-pedidos](checkout-y-pedidos.md)) |

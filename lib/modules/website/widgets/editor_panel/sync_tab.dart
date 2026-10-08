@@ -671,6 +671,7 @@ class _SyncTabState extends State<_SyncTab> {
     if (location.addressCountry != null) {
       settings['seo_address_country'] = location.addressCountry!;
     }
+    settings.addAll(location.placeSettings);
     if (location.hours != null && location.hours!.isNotEmpty) {
       settings['google_business_regular_hours'] = jsonEncode(location.hours);
     }
