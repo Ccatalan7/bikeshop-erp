@@ -358,7 +358,8 @@ void main(List<String> args) async {
     publicFallbackPaths: publicFallbackPaths,
   );
   await baseIndexFile.writeAsString(baseHtml);
-  // Every route Flutter draws loads this page (`**` in firebase.json): the
+  // Every route Flutter draws loads this page (its rewrites in firebase.json,
+  // the chats and the links back from Auth): the
   // same page without the instant home, under a name the HTML server's home
   // cannot shadow.
   await File(pathJoin(buildDir.path, seoFlutterEntryFileName))
@@ -5938,8 +5939,8 @@ String _unescapeXml(String text) {
 /// (`services/storefront_html`).
 const seoStorefrontHtmlServiceId = 'storefront-html';
 
-/// The page every Flutter route of the store loads (`**` in the store's
-/// rewrites). It is not `index.html` so that `/` can belong to the HTML
+/// The page every Flutter route of the store loads (its rewrites in the
+/// store target). It is not `index.html` so that `/` can belong to the HTML
 /// server: Hosting serves an existing file before any rewrite.
 const seoFlutterEntryFileName = 'app.html';
 
@@ -5951,10 +5952,22 @@ const seoFlutterEntryFileName = 'app.html';
 /// rewrite there brings the snapshots back on the next build, which is how a
 /// phase of `docs/architecture/storefront-html-migration-plan.md` is
 /// reverted.
+///
+/// The last rewrite may hand the server every path no earlier rule claims
+/// (`**`): unknown and old addresses, which it answers with a 404 or a
+/// redirect. That catch-all writes no snapshot and claims no static file
+/// (Hosting serves those first), so [owns] reads only the named routes.
 class SeoServerRenderedRoutes {
-  const SeoServerRenderedRoutes._(this.exactPaths, this.prefixes);
+  const SeoServerRenderedRoutes._(
+    this.exactPaths,
+    this.prefixes, {
+    this.servesTheRest = false,
+  });
 
   static const none = SeoServerRenderedRoutes._({}, {});
+
+  /// Whether the last rewrite (`**`) goes to the server.
+  final bool servesTheRest;
 
   /// Rewrite sources without wildcards (`/productos`).
   final Set<String> exactPaths;
@@ -5987,14 +6000,21 @@ class SeoServerRenderedRoutes {
     }
     final exact = <String>{};
     final prefixes = <String>{};
+    var servesTheRest = false;
     final rewrites = store.single['rewrites'];
-    for (final rewrite in rewrites is List ? rewrites : const []) {
+    final list = rewrites is List ? rewrites : const [];
+    for (var index = 0; index < list.length; index++) {
+      final rewrite = list[index];
       if (rewrite is! Map) continue;
       final run = rewrite['run'];
       if (run is! Map || run['serviceId'] != seoStorefrontHtmlServiceId) {
         continue;
       }
       final source = rewrite['source'];
+      if (source == '**' && index == list.length - 1) {
+        servesTheRest = true;
+        continue;
+      }
       if (source is! String || !source.startsWith('/')) {
         throw FormatException(
           'La reescritura a $seoStorefrontHtmlServiceId debe usar "source" '
@@ -6016,6 +6036,7 @@ class SeoServerRenderedRoutes {
     return SeoServerRenderedRoutes._(
       Set.unmodifiable(exact),
       Set.unmodifiable(prefixes),
+      servesTheRest: servesTheRest,
     );
   }
 }

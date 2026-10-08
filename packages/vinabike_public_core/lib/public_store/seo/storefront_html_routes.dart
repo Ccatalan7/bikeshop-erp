@@ -38,6 +38,11 @@ const storefrontHtmlRouteSources = <String>[
   '/cuenta/accion',
   // The way in (phase 4c); a link back from Auth gets Flutter from it.
   '/cuenta/login',
+  // Where the store lived inside the ERP's web app: a permanent redirect to
+  // the same page without the prefix (2026-10-08). Flutter never leaves for
+  // them; under `/tienda` its own routes answer.
+  '/tienda',
+  '/tienda/**',
 ];
 
 /// Whether the HTML storefront answers [path] (no query, no fragment), as

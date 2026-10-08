@@ -182,6 +182,15 @@ Handler storefrontHandler({
           'cuenta',
           'pedidos' || 'servicios' || 'bicicletas' || 'perfil' || 'direcciones',
         ] => await route.portal(PortalPage.ofPath('/${segments.join('/')}')!),
+        // Old addresses, answered with a permanent redirect as Flutter did
+        // in the browser: Hosting hands this server every path no other rule
+        // claims, so they and an unknown path get a real status.
+        ['tienda', 'producto' || 'productos', final id]
+            when _uuid.hasMatch(id) =>
+          await route.legacyProduct(id),
+        ['tienda', ...final rest] => route.legacyStorePath(rest),
+        ['cuenta', 'mensajes'] => route.oldChats(null),
+        ['cuenta', 'mensajes', final id] => route.oldChats(id),
         _ => await route.notFound(),
       };
     } on PublicReadException catch (error) {
@@ -457,6 +466,19 @@ class _Route {
     if (_closed(context)) return _unpublished(context);
     return _productNotFound(context);
   }
+
+  /// `/tienda/...`, where the store lived inside the ERP's web app: the
+  /// same path without the prefix, with its query.
+  Response legacyStorePath(List<String> rest) => _redirect(
+    '/${rest.map(Uri.encodeComponent).join('/')}',
+    query: _uri.query,
+  );
+
+  /// `/cuenta/mensajes[/<id>]`, the chats' old address.
+  Response oldChats(String? id) => _redirect(
+    id == null ? '/cuenta/chats' : '/cuenta/chats/${Uri.encodeComponent(id)}',
+    query: _uri.query,
+  );
 
   /// `/nosotros`, `/envios`, `/devoluciones`, `/terminos`, `/privacidad`:
   /// the editor page and its blocks. A page without public content answers

@@ -78,6 +78,9 @@ void main() {
       '/cuenta/login',
       // The editor's own pages (phase 5a).
       '/pagina/arriendo',
+      // The ERP's old mount, redirected (2026-10-08): no snapshot there.
+      '/tienda',
+      '/tienda/producto/46a51a87-aa3a-430c-a6e1-af48c8d74541',
     ]) {
       expect(routes.owns(path), isTrue, reason: path);
     }
@@ -93,7 +96,6 @@ void main() {
       '/serviciosx',
       '/productosx',
       '/producto',
-      '/tienda/producto/46a51a87-aa3a-430c-a6e1-af48c8d74541',
       '/nosotros/equipo',
       '/contacto/x',
       '/pagina',
@@ -101,6 +103,59 @@ void main() {
     ]) {
       expect(routes.owns(path), isFalse, reason: path);
     }
+    // Every other path reaches it too (its 404 and old addresses), but no
+    // snapshot or static file belongs to that catch-all.
+    expect(routes.servesTheRest, isTrue);
+  });
+
+  test(
+      'Flutter keeps only the chats, the Android download and the way back '
+      'from Auth; Hosting hands the server everything else', () {
+    // Until 2026-10-08 `**` loaded Flutter: an unknown address answered 200
+    // with the app, and `/tienda/...` redirected only in the browser.
+    final config = jsonDecode(File('firebase.json').readAsStringSync()) as Map;
+    final store = (config['hosting'] as List)
+        .cast<Map>()
+        .firstWhere((entry) => entry['target'] == 'store');
+    final rewrites = (store['rewrites'] as List).cast<Map>();
+    String answer(String path) {
+      for (final rewrite in rewrites) {
+        final source = rewrite['source'] as String;
+        final matches = source == '**' ||
+            source == path ||
+            (source.endsWith('/**') &&
+                path.startsWith(source.substring(0, source.length - 2)));
+        if (!matches) continue;
+        final run = rewrite['run'] as Map?;
+        return run != null
+            ? run['serviceId'] as String
+            : '${rewrite['destination']}';
+      }
+      return 'none';
+    }
+
+    for (final path in [
+      '/auth/callback',
+      '/cuenta/chats',
+      '/cuenta/chats/46a51a87-aa3a-430c-a6e1-af48c8d74541',
+      '/cuenta/descargas/android',
+    ]) {
+      expect(answer(path), '/${snapshots.seoFlutterEntryFileName}',
+          reason: path);
+    }
+    for (final path in [
+      '/no-existe',
+      '/buscar',
+      '/tienda',
+      '/tienda/productos',
+      '/cuenta/mensajes',
+      '/cuenta/mensajes/x',
+      '/cuenta/descargas',
+      '/productos',
+    ]) {
+      expect(answer(path), snapshots.seoStorefrontHtmlServiceId, reason: path);
+    }
+    expect(rewrites.last['source'], '**');
   });
 
   test('Flutter leaves for exactly the routes Firebase hands the server', () {
@@ -112,7 +167,8 @@ void main() {
       for (final rewrite in (store['rewrites'] as List).cast<Map>())
         if ((rewrite['run'] as Map?)?['serviceId'] ==
                 snapshots.seoStorefrontHtmlServiceId &&
-            rewrite['source'] != '/_html/**')
+            rewrite['source'] != '/_html/**' &&
+            rewrite['source'] != '**')
           rewrite['source'] as String,
     ];
     // A route opened to the server and not listed here would keep Flutter's
@@ -169,7 +225,7 @@ void main() {
   });
 
   test('a rewrite source it cannot read exactly fails the build', () {
-    for (final source in ['/productos/*', '/productos/**/x', '**', 'x']) {
+    for (final source in ['/productos/*', '/productos/**/x', 'x']) {
       expect(
         () => snapshots.SeoServerRenderedRoutes.fromFirebaseConfig(
           config([toServer(source)]),
@@ -178,6 +234,20 @@ void main() {
         reason: source,
       );
     }
+    // A catch-all counts only as the last rule: before another one it would
+    // hide it.
+    expect(
+      () => snapshots.SeoServerRenderedRoutes.fromFirebaseConfig(
+        config([toServer('**'), toServer('/productos')]),
+      ),
+      throwsA(isA<FormatException>()),
+    );
+    final last = snapshots.SeoServerRenderedRoutes.fromFirebaseConfig(
+      config([toServer('/productos'), toServer('**')]),
+    );
+    expect(last.servesTheRest, isTrue);
+    expect(last.owns('/productos'), isTrue);
+    expect(last.owns('/main.dart.js'), isFalse);
   });
 
   test(
@@ -328,9 +398,15 @@ void main() {
     final store = (repository['hosting'] as List)
         .cast<Map>()
         .singleWhere((entry) => entry['target'] == 'store');
+    // Flutter's own routes enter by app.html (the catch-all went to the
+    // server on 2026-10-08).
     expect(
-      (store['rewrites'] as List).last,
-      {'source': '**', 'destination': '/${snapshots.seoFlutterEntryFileName}'},
+      (store['rewrites'] as List).cast<Map>().where(
+            (rewrite) =>
+                rewrite['destination'] ==
+                '/${snapshots.seoFlutterEntryFileName}',
+          ),
+      isNotEmpty,
     );
     final routes = snapshots.SeoServerRenderedRoutes.fromFirebaseConfig(
       config([toServer('/')]),

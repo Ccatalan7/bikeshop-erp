@@ -2244,3 +2244,32 @@ de 15 px de alto Flutter lo esconde y el HTML lo muestra.
   reales (CDP): la capa se mueve sin desplazar la página y un dedo fuera
   de ella la desplaza. El ERP nativo de Android y los teléfonos siguen
   abriendo el lienzo Flutter por defecto hasta medirlo en el dispositivo.
+
+## Fase 5d: lo que ninguna regla nombra va al servidor (2026-10-08)
+
+Un recorrido de vinabike.cl tras la fase 5 encontró las dos últimas páginas
+de Flutter fuera de sus rutas. La reescritura final `**` llevaba a `app.html`:
+una dirección inexistente (`/buscar`, `/no-existe`) cargaba la app entera y
+respondía **200**, un soft 404 que Search Console cuenta como página; y
+`/tienda/producto/<uuid>` era una copia estática de la página de Flutter con
+un `meta refresh` a la ficha.
+
+- `**` va ahora al servidor HTML, que ya tenía su 404 («No encontramos esta
+  página», `noindex`). `/tienda` y `/tienda/**` son rutas suyas con nombre:
+  301 a la misma ruta sin el prefijo, con su consulta, y
+  `/tienda/producto(s)/<uuid>` directo a la ficha. Al ser rutas con nombre, el
+  generador ya no escribe ahí copias estáticas (`SeoServerRenderedRoutes`), y
+  el validador falla si queda una.
+- `/cuenta/mensajes[/<id>]` va por 301 a `/cuenta/chats[/<id>]`.
+- Flutter queda sólo en sus reescrituras a `app.html`: `/auth/callback`,
+  `/cuenta/chats`, `/cuenta/chats/**` y `/cuenta/descargas/android` (fase 4d
+  y el canje de Google). Van antes de `**`: Hosting aplica la primera que
+  calza.
+- `/shop/**` no cambia: son 125 redirecciones de Hosting, que corren antes que
+  cualquier reescritura (`legacy_shop_redirects_test.dart`).
+- El generador acepta `**` hacia el servidor sólo como última regla
+  (`servesTheRest`); no le da ningún archivo ni copia, porque Hosting sirve
+  los archivos estáticos antes que las reescrituras.
+
+Revertir = devolver `**` a `/app.html` y quitar `/tienda` y `/tienda/**`.
+

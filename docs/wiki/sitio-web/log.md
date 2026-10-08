@@ -457,3 +457,14 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   código que el lugar ya no trae, y el generador del `index.html` recorta los
   espacios de cada ajuste como el servidor HTML. Refresco forzado una vez: el
   nodo vivo ya publica `geo` y `CL`.
+
+## 2026-10-08 — Lo que ninguna regla nombra va al servidor
+
+- Un recorrido de vinabike.cl encontró las dos últimas páginas de Flutter
+  fuera de sus rutas: una dirección inexistente respondía la app con **200**
+  (soft 404) y `/tienda/producto/<uuid>` era una copia estática de la página
+  de Flutter que redirigía en el navegador. Ahora `**`, `/tienda` y
+  `/tienda/**` van al servidor HTML (404 real y 301 reales) y Flutter queda
+  sólo en `/auth/callback`, `/cuenta/chats(/**)` y
+  `/cuenta/descargas/android`. `/shop/**` ya eran 125 redirecciones de
+  Hosting, que corren antes que cualquier reescritura.

@@ -1836,6 +1836,47 @@ void main() {
       expect((await _get(_FakeReads(), '/producto/$id911')).statusCode, 404);
     });
 
+    test('Hosting hands over every unclaimed path: old addresses redirect, an '
+        'unknown one is a real 404', () async {
+      // Until 2026-10-08 these loaded Flutter, which answered 200 for all.
+      for (final (path, location) in [
+        ('/tienda', '/'),
+        ('/tienda/', '/'),
+        ('/tienda/productos?categoria=frenos', '/productos?categoria=frenos'),
+        ('/tienda/pedido/ab12?status=approved', '/pedido/ab12?status=approved'),
+        ('/tienda/cuenta/mensajes/c1', '/cuenta/mensajes/c1'),
+        ('/tienda//evil.example/x', '/evil.example/x'),
+        ('/cuenta/mensajes', '/cuenta/chats'),
+        ('/cuenta/mensajes/c1', '/cuenta/chats/c1'),
+        ('/_html/tienda/contacto', '/_html/contacto'),
+      ]) {
+        final response = await _get(_FakeReads(), path);
+        expect(response.statusCode, 301, reason: path);
+        expect(response.headers['location'], location, reason: path);
+      }
+
+      // A product by its id goes straight to its page (until 2026-10-08 a
+      // static copy of the Flutter page sent it there from the browser).
+      for (final path in [
+        '/tienda/producto/$id911',
+        '/tienda/productos/$id911',
+      ]) {
+        final legacy = await _get(_FakeReads(byId: {id911: _product()}), path);
+        expect(legacy.statusCode, 301, reason: path);
+        expect(legacy.headers['location'], _canonical(), reason: path);
+      }
+
+      for (final path in ['/no-existe', '/buscar', '/wp-login.php', '/a/b/c']) {
+        final response = await _get(_FakeReads(), path);
+        expect(response.statusCode, 404, reason: path);
+        expect(response.headers['x-robots-tag'], 'noindex', reason: path);
+        final html = await response.readAsString();
+        expect(html, contains('No encontramos esta página'), reason: path);
+        expect(html, isNot(contains('flutter_bootstrap')), reason: path);
+        expect(html, isNot(contains('main.dart.js')), reason: path);
+      }
+    });
+
     test(
       'measurement: only public pages, and the browser checks the mark',
       () async {

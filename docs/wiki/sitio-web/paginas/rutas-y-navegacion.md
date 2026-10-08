@@ -4,7 +4,7 @@ resumen: cada URL pública de vinabike.cl, cuáles indexa Google, las redireccio
 fuentes: [repositorio, google-search-central]
 archivos: [lib/public_store/routes/public_store_router.dart, firebase.json, web/robots.txt, packages/vinabike_public_core/lib/public_store/utils/product_url.dart, services/storefront_html/lib/src/storefront_handler.dart]
 tablas: [website_navigation, website_pages, product_categories, product_url_aliases]
-revisado: 2026-10-06
+revisado: 2026-10-08
 ---
 
 # Rutas, redirecciones y navegación
@@ -19,12 +19,15 @@ categorías, las fichas, `/producto/<uuid>`, `/servicios` (y sus categorías),
 que crea el editor (`/pagina/<slug>`, 2026-10-06) las
 responde el **servidor HTML** (Cloud Run
 `storefront-html`, reescrituras del target `store` en `firebase.json`): su 404 y
-sus 301 son respuestas reales del servidor `[Repo]`. Toda otra ruta desconocida
-Firebase la reescribe a `app.html` (la página de Flutter; no se llama
-`index.html` para que `/` sea del servidor) y Flutter la resuelve en
-`public_store_router.dart`; ahí el 404 lo decide la app, y una ruta inexistente
-responde «Página no encontrada» con `noindex` para no ser un soft 404 `[Repo]`
-`[GSC]`. Flutter sólo arranca para el soporte y para canjear los enlaces que
+sus 301 son respuestas reales del servidor `[Repo]`. Desde el 2026-10-08 la
+última reescritura (`**`) también va al servidor: una ruta que no existe
+responde su «No encontramos esta página» con **404** y `noindex`, y las
+direcciones viejas (`/tienda/...`, `/cuenta/mensajes`) un **301** real. Hasta
+ese día `**` cargaba Flutter, que respondía **200** a todo (un soft 404) y
+redirigía sólo en el navegador `[Prod 2026-10-07]`. Flutter queda sólo en sus
+reescrituras a `app.html` (su página; no se llama `index.html` para que `/`
+sea del servidor): `/auth/callback`, `/cuenta/chats`, `/cuenta/chats/**` y
+`/cuenta/descargas/android` `[Repo]`. Flutter sólo arranca para el soporte y para canjear los enlaces que
 vuelven de un correo o de Google (el carrito, el checkout, el pedido, todo el
 portal salvo el soporte y el login son del servidor desde el 2026-10-06); un clic suyo hacia una ruta del servidor hace una carga completa
 (`storefrontHtmlServes` en el núcleo, comparada con `firebase.json` por una
@@ -49,14 +52,16 @@ prueba), salvo en el editor, su vista previa y `/tienda` `[Repo]`.
 | `/cuenta`, `/cuenta/login`, `/cuenta/perfil`, `/cuenta/direcciones`, `/cuenta/pedidos`, `/cuenta/bicicletas`, `/cuenta/servicios`, `/cuenta/chats`, `/cuenta/chats/:id`, `/cuenta/mensajes`, `/cuenta/mensajes/:id`, `/cuenta/descargas/android` | portal de clientes ([portal-de-clientes](portal-de-clientes.md)); `/cuenta`, `/cuenta/pedidos`, `/cuenta/servicios`, `/cuenta/bicicletas`, `/cuenta/perfil`, `/cuenta/direcciones` y `/cuenta/login` las dibuja el servidor HTML (con `POST /cuenta/vista`, `/cuenta/archivo` y `/cuenta/accion`); `/cuenta/login` con un enlace que vuelve de Auth en la dirección (`code`, `token_hash`, `type`, `error`, `access_token` o `enlace`, que la página agrega si el enlace lo trae en el fragmento) lo responde Flutter; el resto, Flutter | no |
 | `/auth/callback` | vuelta del inicio de sesión con Google; Flutter canjea el código con el verificador PKCE que dejó el login (HTML o Flutter) | no |
 | `/shop/:slug` | URL de la tienda vieja | redirige 301 |
-| (cualquier otra) | «Página no encontrada» | no |
+| (cualquier otra) | «No encontramos esta página», del servidor HTML | no (404) |
 
-`[Repo: public_store_router.dart, firebase.json, 2026-10-05]`
+`[Repo: public_store_router.dart, firebase.json, 2026-10-08]`
 
 **`/tienda/*`** repite todas las rutas para la tienda montada **dentro del ERP**
-(el editor la usa para editar en vivo). En el target público, `/tienda` y
-`/tienda/**` llevan `noindex` y una ruta `/tienda/*` desconocida vuelve a la ruta
-pública `[Repo]`.
+(el editor la usa para editar en vivo). En el target público es del servidor
+HTML desde el 2026-10-08: `/tienda` y `/tienda/<ruta>` van por 301 a la misma
+ruta sin el prefijo, con su consulta, y `/tienda/producto/<uuid>` directo a la
+ficha; antes era una copia estática de la página de Flutter que redirigía en
+el navegador `[Repo]`.
 
 ## Redirecciones (`firebase.json`, target `store`)
 
@@ -106,8 +111,7 @@ generador ya no escribe instantáneas bajo esas rutas y el build falla si queda
 un archivo ahí (`SeoServerRenderedRoutes` en
 `scripts/generate_product_seo_snapshots.dart`, que lee las reescrituras de
 `firebase.json`; quitar una reescritura devuelve las instantáneas en el build
-siguiente). `/tienda/producto/<uuid>` sigue como instantánea `noindex` que
-manda a la ficha. Lo que decide cada ruta es el mismo código que usa Flutter
+siguiente). Lo que decide cada ruta es el mismo código que usa Flutter
 (`packages/vinabike_public_core`), con estas respuestas de servidor que
 Flutter sólo podía imitar en el navegador:
 
