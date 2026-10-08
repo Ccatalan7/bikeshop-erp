@@ -16,7 +16,7 @@
   "evidence": [
     {
       "path": "supabase/functions/google-public-data-refresh/index.ts",
-      "sha256": "33f2ac33133e3770d11ea36c220a36f8536cd9ef9d706d5b13028cf3c1b9ca80"
+      "sha256": "2cf32c14c61ee4417f7e79e5759a73960d797b8d7aeb438e3692ac8f90f54eb6"
     },
     {
       "path": "packages/vinabike_public_core/lib/public_store/seo/public_business_identity.dart",
@@ -24,11 +24,11 @@
     },
     {
       "path": "scripts/sync_seo_index.sh",
-      "sha256": "e1b2ab2bed2e75b2ec6129084ff11ed085894202be2f7c897f37997cd4debff8"
+      "sha256": "0bfd282ac18909660f08731d98b1feee5374ef9f7b9aede2686e0d77796664f9"
     },
     {
       "path": "lib/modules/website/services/google_business_service.dart",
-      "sha256": "7ef7d18812ffa0ba66bb9e99c748de0ba466e6409ffe4811e59dfb95451a481b"
+      "sha256": "9918fcb861cda8d8dffdb13b0db116d2f4b65da7a892c19bc8e5085b57bf745b"
     },
     {
       "path": "lib/modules/website/widgets/editor_panel/sync_tab.dart",
@@ -40,7 +40,7 @@
     },
     {
       "path": "test/unit/public_business_geo_test.dart",
-      "sha256": "045b0ed7dab3bd4e1629169b7a1a8ec7b32097ab8420d59934bd18f5c0261597"
+      "sha256": "dc9a7f2f61cc9d4461640e9b5dfb8050fd6df430d50b32058b37c44fe1bf7df9"
     }
   ]
 }

@@ -219,19 +219,22 @@ async function refreshTenant(
       updates.google_maps_url = place.url;
     }
     // Where the store is, for its business node (`geo`, and the country by
-    // its ISO code, as Google asks): basic place data, no extra charge.
+    // its ISO code, as Google asks): basic place data, no extra charge. The
+    // place owns them, so a place without them clears the last ones (the
+    // node then leaves `geo` out and names the country) instead of keeping
+    // another place's.
     const lat = place.geometry?.location?.lat;
     const lng = place.geometry?.location?.lng;
-    if (isCoordinate(lat, 90) && isCoordinate(lng, 180)) {
-      updates.seo_geo_latitude = lat.toFixed(6);
-      updates.seo_geo_longitude = lng.toFixed(6);
-    }
+    const located = isCoordinate(lat, 90) && isCoordinate(lng, 180) &&
+      !(lat === 0 && lng === 0);
+    updates.seo_geo_latitude = located ? lat.toFixed(6) : "";
+    updates.seo_geo_longitude = located ? lng.toFixed(6) : "";
     const country = (place.address_components ?? []).find((part) =>
       (part.types ?? []).includes("country")
-    )?.short_name?.trim().toUpperCase();
-    if (country && /^[A-Z]{2}$/.test(country)) {
-      updates.seo_address_country_code = country;
-    }
+    )?.short_name?.trim().toUpperCase() ?? "";
+    updates.seo_address_country_code = /^[A-Z]{2}$/.test(country)
+      ? country
+      : "";
     if (
       place.opening_hours &&
       settings.business_hours_source !== "erp_settings"

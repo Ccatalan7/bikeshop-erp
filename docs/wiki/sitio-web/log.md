@@ -453,3 +453,7 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 - El nodo del local en los datos estructurados publica sus coordenadas
   (`geo`) y el país como `CL`, tomados de la ficha de Google por el refresco
   diario y la sincronización del editor.
+- Séptima revisión de Codex (geo): el refresco vacía las coordenadas y el
+  código que el lugar ya no trae, y el generador del `index.html` recorta los
+  espacios de cada ajuste como el servidor HTML. Refresco forzado una vez: el
+  nodo vivo ya publica `geo` y `CL`.

@@ -829,7 +829,10 @@ class GoogleLocation {
 
   /// Where the store is, for its business node (`geo` and the country by
   /// its code, `public_business_identity.dart`): the same keys the daily
-  /// `google-public-data-refresh` writes from the place.
+  /// `google-public-data-refresh` writes from the place. A location without
+  /// them leaves the saved ones, as with the address: Business Profile
+  /// returns `latlng` only when someone set it by hand, and the daily
+  /// refresh, which owns them, clears what the place no longer has.
   Map<String, String> get placeSettings {
     final latitude = lat, longitude = lng;
     final code = addressCountryCode?.trim().toUpperCase() ?? '';

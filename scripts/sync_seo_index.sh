@@ -80,12 +80,15 @@ if ! echo "$SETTINGS" | jq -e '
   exit 65
 fi
 
-# Parse settings using jq (with fallbacks)
+# Parse settings using jq (with fallbacks). Trimmed, and blank falls back,
+# as `_setting` in `public_business_identity.dart` does: the HTML storefront
+# builds the same node, and a stray space must not split them (a `"CL "`
+# code or a `" -33.02"` latitude published here as missing).
 get_setting() {
   local key=$1
   local default=$2
   local value
-  value=$(echo "$SETTINGS" | jq -r ".[] | select(.key == \"$key\") | .value // empty" 2>/dev/null)
+  value=$(echo "$SETTINGS" | jq -r ".[] | select(.key == \"$key\") | .value // empty | gsub(\"^\\\\s+|\\\\s+$\"; \"\")" 2>/dev/null)
   echo "${value:-$default}"
 }
 

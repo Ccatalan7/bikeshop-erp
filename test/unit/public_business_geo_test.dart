@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:vinabike_erp/modules/website/services/google_business_service.dart';
 import 'package:vinabike_public_core/public_store/seo/public_business_identity.dart';
@@ -48,6 +51,38 @@ void main() {
       expect(node.containsKey('geo'), isFalse, reason: '$lat,$lng');
       expect((node['address'] as Map)['addressCountry'], 'Chile');
     }
+  });
+
+  test('the index generator reads the settings trimmed, as the server does',
+      () async {
+    // `sync_seo_index.sh` builds the same node for the Flutter store's
+    // index.html; until 2026-10-08 it read `"CL "` as no code and a padded
+    // latitude as no `geo` while the HTML server trimmed them.
+    final script = File('scripts/sync_seo_index.sh').readAsStringSync();
+    final reader =
+        RegExp(r'^get_setting\(\) \{\n.*?^\}', multiLine: true, dotAll: true)
+            .firstMatch(script)!
+            .group(0)!;
+    final settings = jsonEncode([
+      {'key': 'seo_address_country_code', 'value': 'CL '},
+      {'key': 'seo_geo_latitude', 'value': ' -33.025195\n'},
+      {'key': 'seo_phone', 'value': '   '},
+    ]);
+    final result = await Process.run('bash', [
+      '-c',
+      '$reader\n'
+          'get_setting seo_address_country_code x\n'
+          'get_setting seo_geo_latitude x\n'
+          'get_setting seo_phone fallback\n',
+    ], environment: {
+      ...Platform.environment,
+      'SETTINGS': settings
+    });
+    expect(result.exitCode, 0, reason: '${result.stderr}');
+    expect(
+      const LineSplitter().convert(result.stdout as String),
+      ['CL', '-33.025195', 'fallback'],
+    );
   });
 
   test('the editor\'s sync takes them from the Business Profile location', () {

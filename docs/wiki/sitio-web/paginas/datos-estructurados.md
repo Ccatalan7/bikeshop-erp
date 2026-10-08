@@ -121,7 +121,12 @@ Envío y devoluciones se pueden declarar **una vez** en la organización desde e
    `public_business_identity.dart` y `sync_seo_index.sh` publican `geo` y
    `addressCountry: CL` cuando existen (si no, el nombre del país y nada de
    `geo`). Esto es la dirección del local, no una promesa de envío: el envío
-   sigue sin declararse (arriba).
+   sigue sin declararse (arriba). El refresco es el dueño: si el lugar deja de
+   traerlos, los vacía en vez de dejar los de otro lugar; la sincronización
+   del editor sólo escribe, porque Business Profile entrega `latlng` sólo
+   cuando alguien lo fijó a mano. Ambos generadores recortan los espacios de
+   cada ajuste igual. `[Prod 2026-10-08]` `-33.025195, -71.562306` y `CL`,
+   publicados en el nodo de vinabike.cl.
 4. Términos de devolución como campos del editor (ver arriba).
 5. Envío: sólo si Google llega a aceptar una región que excluya las islas, o
    si Merchant Center lo configura por su lado (ahí sí hay más control).
