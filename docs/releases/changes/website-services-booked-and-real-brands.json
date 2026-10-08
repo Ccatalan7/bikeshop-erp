@@ -11,7 +11,7 @@
   "summary": "La ficha de un servicio del taller se agenda por WhatsApp y dice dónde se hace, y la tienda ya no muestra «Aliexpress», «Genérico» ni un distribuidor como marca de un producto.",
   "items": [
     "La ficha de un servicio muestra «Agendar por WhatsApp» y «Se hace en el taller», sin carrito ni despacho, y Google la encuentra como servicio.",
-    "«Aliexpress», «Genérico», «Taiwan», «China» y «Andes Industrial» ya no salen como marca en tarjetas, fichas, filtros ni datos para Google."
+    "«Aliexpress», «Genérico» o un distribuidor ya no salen como marca, y Google Shopping no descarta productos sin código de barras."
   ],
   "evidence": [
     {
@@ -57,6 +57,10 @@
     {
       "path": "supabase/functions/_shared/google_merchant_feed.ts",
       "sha256": "2059849e55f419b7655f336853e2549cb5fd460693bd4fb605504dca41e7459b"
+    },
+    {
+      "path": "supabase/functions/google-product-diagnostics/index.ts",
+      "sha256": "8e98f850ea001aea3c43303ed0f9d3ada8861ac6959104aa6b4b66854cd713c3"
     }
   ]
 }

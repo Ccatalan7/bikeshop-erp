@@ -2,9 +2,9 @@
 titulo: Catálogo, categorías y fichas de producto
 resumen: qué producto sale en la tienda y por qué, cómo se arman categorías, facetas, búsqueda y la ficha pública, y qué pasa con los agotados
 fuentes: [repositorio, google-search-central]
-archivos: [packages/vinabike_public_core/lib/shared/models/public_product_visibility_policy.dart, packages/vinabike_public_core/lib/public_store/models/public_category_route.dart, packages/vinabike_public_core/lib/public_store/models/public_catalog_facets.dart, services/storefront_html/lib/src/catalog_page_model.dart, packages/vinabike_public_core/lib/public_store/models/public_commerce_product_projection.dart, packages/vinabike_public_core/lib/public_store/models/public_product_seo_copy.dart, lib/public_store/pages/product_catalog_page.dart, lib/public_store/pages/product_detail_page.dart, packages/vinabike_public_core/lib/public_store/utils/public_spec_display.dart, packages/vinabike_public_core/lib/modules/website/models/website_catalog_price_list.dart, services/storefront_html/lib/src/catalog_price_list_view.dart, lib/public_store/widgets/catalog_price_list_view.dart]
+archivos: [packages/vinabike_public_core/lib/shared/models/public_product_visibility_policy.dart, packages/vinabike_public_core/lib/public_store/models/public_category_route.dart, packages/vinabike_public_core/lib/public_store/models/public_catalog_facets.dart, services/storefront_html/lib/src/catalog_page_model.dart, packages/vinabike_public_core/lib/public_store/seo/public_catalog_seo.dart, packages/vinabike_public_core/lib/public_store/models/public_commerce_product_projection.dart, packages/vinabike_public_core/lib/public_store/models/public_product_seo_copy.dart, lib/public_store/pages/product_catalog_page.dart, lib/public_store/pages/product_detail_page.dart, packages/vinabike_public_core/lib/public_store/utils/public_spec_display.dart, packages/vinabike_public_core/lib/modules/website/models/website_catalog_price_list.dart, services/storefront_html/lib/src/catalog_price_list_view.dart, lib/public_store/widgets/catalog_price_list_view.dart]
 tablas: [products, product_categories, product_url_aliases, website_settings, featured_products]
-revisado: 2026-10-06
+revisado: 2026-10-08
 ---
 
 # Catálogo, categorías y fichas de producto
@@ -49,9 +49,31 @@ la misma URL con la disponibilidad correcta `[GSC]`.
 
 ## Categorías
 
-- 137 categorías activas, **11 visibles en la tienda** (2026-10-03) `[Prod]`. En el
-  ERP la categoría agrupa las líneas del taller; en la tienda sólo navega. No
-  publica productos.
+- 137 categorías activas, **30 visibles en la tienda** desde el 2026-10-08 (11
+  hasta ese día) `[Prod]`. En el ERP la categoría agrupa las líneas del taller;
+  en la tienda sólo navega. No publica productos.
+- **Cada categoría es una página que Google puede mostrar** para lo que la
+  gente busca («neumáticos para bicicleta», «luces para bicicleta»). El
+  2026-10-08 se publicaron 19 con al menos 7 productos en stock y búsqueda
+  propia: Neumáticos, Llantas, Mazas, Rayos, Tubeless, Pastillas, V-Brake,
+  Desviadores, Shifters, Postiza, Motores, Piñones, Tee, Fundas y piolas,
+  Luces, Asientos, Pedales, Mantenimiento y Lubricantes. Quedaron fuera
+  «Frenos Hidráulicos» (son olivas y mangueras: el título engañaría),
+  «Herramientas» (dos categorías con ese nombre: el slug es ambiguo) y las de
+  menos de 7 en stock. Publicar no agrega nada al menú (lo arma
+  `website_navigation`); suma la página, el sitemap y las subcategorías de su
+  madre `[Prod]`.
+- **El texto que presenta la categoría** es `product_categories.description`
+  («Descripción» de la categoría en el ERP), salvo que el editor ponga uno en su
+  portada: se ve bajo el título y es la meta descripción. Las 30 publicadas lo
+  tienen desde el 2026-10-08 (antes ninguna; Google leía «157 productos
+  publicados en Ruedas de Viñabike.»). Se escribió con lo que hay en stock
+  (marcas y medidas reales) y con los servicios del taller que existen.
+- **El título por defecto** es «{Categoría} para bicicleta | {tienda}
+  {ciudad}» («… de bicicleta» en una categoría de servicios; sin agregado si
+  el nombre ya dice bici), desde el 2026-10-08; antes «Ruedas | Viñabike».
+  El título SEO de su portada en el editor manda sobre la fórmula
+  (`public_catalog_seo.dart`).
 - `Catálogo > Categorías > En el sitio` decide si se ve. Cómo se ve —el slug
   público estable, la portada heredada o propia, migas, subcategorías,
   facetas, densidad de la grilla, la foto del menú y la imagen al compartir—
@@ -94,7 +116,7 @@ la misma URL con la disponibilidad correcta `[GSC]`.
 ## Las categorías y `/productos` en el editor
 
 Desde el 2026-10-06 (etapa 3a del rediseño) `/productos` y cada categoría
-publicada (hoy 11: Accesorios y Componentes en la raíz, 9 subcategorías) se
+publicada (30 desde el 2026-10-08; 11 antes) se
 editan **sobre su página**, como Servicios `[Repo]` `[Prod 2026-10-06]`:
 
 - La lista «Secciones» muestra la **Portada** (sólo en una categoría), **Todos

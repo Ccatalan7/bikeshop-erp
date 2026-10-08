@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "website-categories-found-by-google",
+  "scope": "release",
+  "platforms": [
+    "web"
+  ],
+  "title": "Categorías que Google encuentra",
+  "summary": "Neumáticos, Pastillas, Luces, Pedales y otras 15 categorías tienen su propia página en la tienda, y cada categoría dice qué es, para qué bicicleta y dónde, en su título y su texto.",
+  "items": [
+    "19 categorías nuevas con página propia y cada categoría con título «… para bicicleta | Viñabike Viña del Mar» y un texto que la presenta."
+  ],
+  "evidence": [
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/seo/public_catalog_seo.dart",
+      "sha256": "70c9a70920568a294f5956088f280d731a72192922547736c27aa20e4c13a3e0"
+    },
+    {
+      "path": "services/storefront_html/lib/src/catalog_page_model.dart",
+      "sha256": "42e62369bc1c7ac9db25829d7dc5dda4870a392459b5d9224868528c6420ac23"
+    }
+  ]
+}

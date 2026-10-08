@@ -495,6 +495,8 @@ class CatalogPageModel {
             seoTitle: presentation.seoTitle,
             displayTitle: displayTitle,
             storeName: storeName,
+            storeLocality: locality,
+            services: services,
           );
     final description = categoryId == null
         ? (services
@@ -513,6 +515,8 @@ class CatalogPageModel {
             productCount: total,
             displayTitle: displayTitle,
             storeName: storeName,
+            storeLocality: locality,
+            services: services,
           );
     final image = presentation.socialImageUrl.trim().isNotEmpty
         ? presentation.socialImageUrl.trim()

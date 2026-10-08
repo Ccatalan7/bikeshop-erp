@@ -5,14 +5,13 @@
   "id": "merchant-feed-keeps-products-without-barcode",
   "scope": "release",
   "platforms": [
-    "web",
     "macos",
     "android"
   ],
-  "title": "Google Shopping no descarta productos sin código de barras",
-  "summary": "Un producto con marca, foto, precio y stock entra al feed de Google aunque no tenga código de barras ni número de parte del fabricante; Google lo muestra con alcance limitado en vez de quedar fuera.",
+  "title": "Aviso de código de barras en la ficha",
+  "summary": "En la ficha del producto, el diagnóstico de Google ya no presenta la falta de código de barras como motivo de exclusión: la muestra como aviso, porque Google igual publica el producto.",
   "items": [
-    "Un producto sin código de barras sigue en el feed de Google, sin inventar uno; la ficha lo muestra como aviso, no como exclusión."
+    "En la ficha del producto, la falta de código de barras aparece como aviso de Google y no como motivo para quedar fuera de Shopping."
   ],
   "evidence": [
     {

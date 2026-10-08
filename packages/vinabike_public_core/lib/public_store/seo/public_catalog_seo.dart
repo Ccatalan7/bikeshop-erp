@@ -35,16 +35,37 @@ String publicCategoryIntro(
 }
 
 /// [seoTitle] is the editor's SEO title for the category, if any.
+///
+/// Without one, the title says what people search for and where:
+/// «Neumáticos para bicicleta | Viñabike Viña del Mar». Until 2026-10-08 it
+/// was «Neumáticos | Viñabike», which matches neither the bicycle nor the
+/// city a local search names.
 String publicCategorySeoTitle({
   required String seoTitle,
   required String displayTitle,
   required String storeName,
+  String storeLocality = '',
+  bool services = false,
 }) {
   if (seoTitle.trim().isNotEmpty) return seoTitle.trim();
-  final cleanStoreName = cleanPublicSeoText(storeName);
-  return cleanStoreName.isEmpty
-      ? displayTitle
-      : '$displayTitle | $cleanStoreName';
+  final subject = publicCategorySearchSubject(displayTitle, services: services);
+  final store = cleanPublicSeoText(
+    '$storeName ${cleanPublicSeoText(storeLocality)}',
+  );
+  return store.isEmpty ? subject : '$subject | $store';
+}
+
+/// «Neumáticos para bicicleta», or «Mantenciones de bicicleta» for a group
+/// of workshop [services]: the category's name with what it is for, unless
+/// the name already says it («Bicicletas urbanas»).
+String publicCategorySearchSubject(
+  String displayTitle, {
+  bool services = false,
+}) {
+  final title = cleanPublicSeoText(displayTitle);
+  if (title.isEmpty) return title;
+  if (RegExp(r'bici', caseSensitive: false).hasMatch(title)) return title;
+  return services ? '$title de bicicleta' : '$title para bicicleta';
 }
 
 /// [seoDescription] is the editor's SEO description for the category, if any.
@@ -54,15 +75,24 @@ String publicCategorySeoDescription({
   required int productCount,
   required String displayTitle,
   required String storeName,
+  String storeLocality = '',
+  bool services = false,
 }) {
   if (seoDescription.trim().isNotEmpty) return seoDescription.trim();
   if (intro.isNotEmpty) return intro;
 
   // A factual fallback projected from canonical owners. It deliberately does
   // not infer technical attributes or buying claims from product titles.
+  final store = cleanPublicSeoText(storeName);
+  final locality = cleanPublicSeoText(storeLocality);
+  final subject = publicCategorySearchSubject(displayTitle, services: services);
+  final one = productCount == 1;
+  final items = services
+      ? '${one ? 'servicio' : 'servicios'} con precio publicado'
+      : '${one ? 'producto' : 'productos'} con precio y stock al día';
   return cleanPublicSeoText(
-    '$productCount productos publicados en '
-    '$displayTitle${storeName.trim().isEmpty ? '' : ' de $storeName'}.',
+    '$subject${store.isEmpty ? '' : ' en $store'}'
+    '${locality.isEmpty ? '' : ', $locality'}: $productCount $items.',
   );
 }
 

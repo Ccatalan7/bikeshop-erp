@@ -568,6 +568,12 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   actualizado el carrusel pone sus flechas a los costados desde 600 px (antes
   640): la línea naranja de tableta se corrió 8 unidades por eso.
 
+## 2026-10-08 — categorías que Google puede encontrar
+
+- 19 categorías publicadas (30 en total) y texto propio en las 30, en su
+  «Descripción» del ERP; título por defecto «… para bicicleta | Viñabike Viña
+  del Mar». «Neumáticos» respondía 404.
+
 ## 2026-10-08 — feed de Merchant al día y marcas del fabricante
 
 - `google-merchant-feed` seguía en la versión del 21-jul; la regla del 24-jul
