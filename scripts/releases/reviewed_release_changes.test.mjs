@@ -15,7 +15,9 @@ const sha = (text) => createHash("sha256").update(text).digest("hex");
 
 async function fixture(t) {
   const repoDir = await mkdtemp(path.join(os.tmpdir(), "reviewed-release-test-"));
-  t.after(() => rm(repoDir, { recursive: true, force: true }));
+  // A git process can still be writing into `.git` as the test ends: the
+  // removal retries instead of failing the gate with ENOTEMPTY (2026-10-07).
+  t.after(() => rm(repoDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
   const git = (...args) => execFileSync("git", args, { cwd: repoDir, encoding: "utf8" }).trim();
   const put = async (file, contents) => {
     await mkdir(path.dirname(path.join(repoDir, file)), { recursive: true });
