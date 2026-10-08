@@ -27,9 +27,9 @@ ese día `**` cargaba Flutter, que respondía **200** a todo (un soft 404) y
 redirigía sólo en el navegador `[Prod 2026-10-07]`. Flutter queda sólo en sus
 reescrituras a `app.html` (su página; no se llama `index.html` para que `/`
 sea del servidor): `/cuenta/chats`, `/cuenta/chats/**` y
-`/cuenta/descargas/android` `[Repo]`. Flutter sólo arranca para el soporte y para canjear los enlaces que
-fijan una contraseña o la vuelta de Google del editor (el login HTML canjea
-la de los clientes desde el 2026-10-08; el carrito, el checkout, el pedido, todo el
+`/cuenta/descargas/android` `[Repo]`. Flutter sólo arranca para el soporte y para la vuelta de Google
+del editor (todo enlace de Auth de un cliente lo canjea el login HTML desde el
+2026-10-08; el carrito, el checkout, el pedido, todo el
 portal salvo el soporte y el login son del servidor desde el 2026-10-06); un clic suyo hacia una ruta del servidor hace una carga completa
 (`storefrontHtmlServes` en el núcleo, comparada con `firebase.json` por una
 prueba), salvo en el editor, su vista previa y `/tienda` `[Repo]`.

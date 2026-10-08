@@ -6010,15 +6010,10 @@ void main() {
       expect(hidden, isNot(contains('vinabikeAuthHandoff=true')));
     });
 
-    test('a link back from Auth that sets a password is answered with Flutter, '
-        'with the login head; the hidden copy stays HTML; no Flutter page, '
-        'try again', () async {
-      for (final query in [
-        'confirmed=true&code=abc&enlace=1',
-        'error=access_denied&error_code=otp_expired',
-        'enlace=1',
-        'token_hash=x&type=recovery',
-      ]) {
+    test('only the editor\'s own Google return is answered with Flutter, with '
+        'the login head; the hidden copy stays HTML; no Flutter page, try '
+        'again', () async {
+      for (final query in ['confirmed=true&code=abc&enlace=1', 'enlace=1']) {
         final flutter = _FakeFlutterShell();
         final response = await _get(
           _FakeReads(),
@@ -6041,7 +6036,7 @@ void main() {
       expect(plain.headers['x-storefront-fallback'], isNull);
       final hidden = await _get(
         _FakeReads(),
-        '/_html/cuenta/login?token_hash=x&type=recovery',
+        '/_html/cuenta/login?enlace=1',
         flutterShell: _FakeFlutterShell(),
       );
       expect(hidden.headers['x-storefront-fallback'], isNull);
@@ -6051,9 +6046,15 @@ void main() {
       );
       expect(loginAnsweredByFlutter(['confirmed']), isFalse);
       expect(loginAnsweredByFlutter(['clave']), isFalse);
-      expect(loginAnsweredByFlutter(['code']), isFalse);
-      expect(loginAnsweredByFlutter(['error']), isTrue);
-      expect(loginAnsweredByFlutter(['error'], callback: true), isFalse);
+      // Since 2026-10-08 the page redeems every other link itself.
+      for (final keys in [
+        ['code'],
+        ['error', 'error_code'],
+        ['token_hash', 'type'],
+        ['access_token', 'refresh_token', 'type'],
+      ]) {
+        expect(loginAnsweredByFlutter(keys), isFalse, reason: '$keys');
+      }
       expect(loginAnsweredByFlutter(['code', 'enlace']), isTrue);
     });
 
@@ -6066,6 +6067,9 @@ void main() {
         '/auth/callback?error=access_denied&error_description=x',
         '/auth/callback',
         '/cuenta/login?confirmed=true&code=abc',
+        '/cuenta/login?recovery=true&code=abc',
+        '/cuenta/login?error=access_denied&error_code=otp_expired',
+        '/cuenta/login?token_hash=x&type=recovery',
       ]) {
         final response = await _get(
           _FakeReads(),
@@ -6194,6 +6198,98 @@ void main() {
       expect(status, 400);
       expect(answer['state'], 'invalid');
       expect(reads.requested, isEmpty);
+    });
+
+    test('set-password: a link\'s session sets the password through the '
+        'store, an invitation is this store\'s customer first, and no code '
+        'is ever mailed', () async {
+      Future<Map<String, Object?>> setPassword(
+        _FakeReads reads,
+        String password,
+        String confirm, {
+        String kind = 'recovery',
+      }) async => (await login(reads, {
+        'action': 'set-password',
+        'kind': kind,
+        'values': {'password': password, 'confirm': confirm},
+      }, auth: 'Bearer ${token()}')).$2;
+
+      var reads = _FakeReads(portal: portal());
+      expect((await setPassword(reads, 'pedal2026', 'pedal2025'))['errors'], {
+        'confirm': 'Las contraseñas no coinciden',
+      });
+      expect(reads.authCalls, isEmpty);
+      expect(await setPassword(reads, 'pedal2026', 'pedal2026'), {
+        'done': true,
+        'toast': 'Contraseña actualizada y demás sesiones cerradas.',
+      });
+      expect(reads.authCalls.map((c) => c.$1), [
+        CustomerAuthCall.updatePassword,
+        CustomerAuthCall.signOutOthers,
+      ]);
+      // A recovery is an account that already is the store's.
+      expect(reads.requested, isNot(contains('enter')));
+
+      // An invitation: this store's customer first, then the password.
+      reads = _FakeReads(portal: portal());
+      expect(
+        (await setPassword(
+          reads,
+          'pedal2026',
+          'pedal2026',
+          kind: 'invitation',
+        ))['done'],
+        isTrue,
+      );
+      expect(reads.requested, ['enter']);
+      reads = _FakeReads(portal: portal(profile: null));
+      expect(
+        await setPassword(reads, 'pedal2026', 'pedal2026', kind: 'invitation'),
+        {
+          'error':
+              'No pudimos preparar tu acceso. Solicita un nuevo correo de '
+              'invitación e inténtalo nuevamente.',
+        },
+      );
+      expect(reads.authCalls, isEmpty);
+      expect(
+        await setPassword(
+          _FakeReads(),
+          'pedal2026',
+          'pedal2026',
+          kind: 'invitation',
+        ),
+        {'state': 'expired'},
+      );
+
+      // Auth asking for a code is an answer like another: nothing mailed.
+      reads = _FakeReads(
+        portal: portal(),
+        auth: {
+          CustomerAuthCall.updatePassword: (
+            status: 400,
+            code: 'reauthentication_needed',
+            message: 'Password update requires reauthentication',
+          ),
+        },
+      );
+      expect(
+        (await setPassword(reads, 'pedal2026', 'pedal2026'))['error'],
+        'No pudimos actualizar la contraseña. Inténtalo nuevamente.',
+      );
+      expect(reads.authCalls.map((c) => c.$1), [
+        CustomerAuthCall.updatePassword,
+      ]);
+
+      // Without the link's session there is nothing to set.
+      expect(
+        (await login(_FakeReads(portal: portal()), {
+          'action': 'set-password',
+          'kind': 'recovery',
+          'values': {'password': 'pedal2026', 'confirm': 'pedal2026'},
+        })).$2,
+        {'state': 'invalid'},
+      );
     });
 
     test('enter: the store\'s customer behind the session, the signup phone '

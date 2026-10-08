@@ -11,7 +11,8 @@ export 'src/catalog_page_model.dart';
 export 'src/checkout_page_script.dart' show checkoutPageScript;
 export 'src/checkout_records_script.dart' show checkoutRecordsScript;
 export 'src/order_page_script.dart' show orderPageScript;
-export 'src/login_page_view.dart' show loginAnsweredByFlutter, loginPageDocument;
+export 'src/login_page_view.dart'
+    show loginAnsweredByFlutter, loginPageDocument;
 export 'src/order_summary_pdf_route.dart' show OrderSummaryFonts;
 export 'src/order_page_view.dart'
     show OrderPageData, orderPageDocument, orderSummaryPdfPath;

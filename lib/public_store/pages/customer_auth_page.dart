@@ -337,9 +337,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'No pudimos preparar tu acceso. Solicita un nuevo correo de invitación e inténtalo nuevamente.',
-          ),
+          content: Text(customerInvitationPrepareFailed),
           backgroundColor: Colors.red,
         ),
       );
@@ -736,7 +734,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
                           ),
                           const SizedBox(height: 24),
                           if (isPasswordSetupMode) ...[
-                            _buildFieldLabel('Nueva contraseña'),
+                            _buildFieldLabel(customerAuthNewPasswordLabel),
                             TextFormField(
                               key: ValueKey(
                                 isInvitationMode
@@ -770,11 +768,11 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
                               ),
                             ),
                             const SizedBox(height: 16),
-                            _buildFieldLabel('Confirmar contraseña'),
+                            _buildFieldLabel(customerAuthConfirmLabel),
                             TextFormField(
                               controller: _confirmPasswordController,
                               decoration: const InputDecoration(
-                                hintText: 'Repite la contraseña',
+                                hintText: customerAuthConfirmHint,
                                 prefixIcon: Icon(Icons.lock_reset_outlined),
                               ),
                               obscureText: _obscurePassword,
@@ -832,7 +830,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
                                       }
                                       _leaveRecoveryMode();
                                     },
-                              child: const Text('Volver al inicio de sesión'),
+                              child: const Text(customerAuthBackToLogin),
                             ),
                           ] else ...[
                             if (_showAccountConfirmedNotice) ...[
@@ -1181,7 +1179,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
         ),
         const SizedBox(height: 16),
         Text(
-          'No pudimos validar esta invitación',
+          customerInvitationInvalidTitle,
           textAlign: TextAlign.center,
           style: theme.textTheme.headlineSmall?.copyWith(
             color: PublicStoreTheme.textPrimary,
@@ -1189,7 +1187,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
         ),
         const SizedBox(height: 10),
         Text(
-          'El enlace venció, ya fue usado o no abrió una sesión válida. Solicita a la tienda un nuevo correo de invitación.',
+          customerInvitationInvalidBody,
           textAlign: TextAlign.center,
           style: theme.textTheme.bodyMedium?.copyWith(
             color: PublicStoreTheme.textSecondary,
@@ -1211,7 +1209,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
                     color: Colors.white,
                   ),
                 )
-              : const Text('VOLVER AL INICIO DE SESIÓN'),
+              : Text(customerAuthBackToLogin.toUpperCase()),
         ),
       ],
     );
@@ -1246,7 +1244,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
         const CircularProgressIndicator(),
         const SizedBox(height: 18),
         Text(
-          'Validando tu enlace de recuperación…',
+          customerAuthLinkChecking(CustomerAuthMode.recovery),
           textAlign: TextAlign.center,
           style: theme.textTheme.bodyLarge?.copyWith(
             color: PublicStoreTheme.textSecondary,

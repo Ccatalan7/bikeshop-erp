@@ -474,3 +474,10 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   Probado contra el Auth local: un `auth.flow_state` hecho a mano necesita
   `provider_access_token` y `provider_refresh_token` en `''`, no NULL (con
   NULL GoTrue 2.188 cae en un 500 por puntero nulo al leerlo).
+- Recuperar la contraseña y aceptar una invitación también son del login
+  HTML: verifica el `token_hash` del correo, pide la clave y la cambia por la
+  tienda. Flutter ya no arranca para ningún enlace de Auth de un cliente.
+  Probado con enlaces reales de `auth/v1/admin/generate_link` contra el Auth
+  local (un cambio de hash en la misma página no recarga: probar entrando
+  desde otra página, como llega un correo).
+

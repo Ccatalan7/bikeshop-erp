@@ -159,6 +159,32 @@ Future<Response> portalActionResponse(
       });
     }
   }
+  if (action == 'set-password' && token != null) {
+    try {
+      return _json(
+        request,
+        200,
+        await _setPassword(
+          reads,
+          token,
+          values,
+          invitation: body?['kind'] == 'invitation',
+        ),
+      );
+    } on CustomerSessionRefused {
+      return _json(request, 200, {'state': 'expired'});
+    } on Object catch (error) {
+      stderr.writeln(
+        'login set-password failed: '
+        '${error is PublicReadException ? error.message : error.runtimeType}',
+      );
+      return _json(request, 200, {
+        'error': _passing(error)
+            ? customerAuthStoreBusy
+            : customerPasswordUpdateFailed,
+      });
+    }
+  }
   if (token == null || page == null || query.length > 512) {
     return _json(request, 400, {'state': 'invalid'});
   }
@@ -403,13 +429,41 @@ Future<bool> _written(Future<bool> Function() write, String what) async {
   }
 }
 
+/// The login's link that sets a password (`completePasswordRecovery`,
+/// `completeInvitedFirstPassword`), with the session the link itself gave
+/// (the page keeps it in memory, never as the browser's session): an
+/// invitation first makes the account this store's customer, then the
+/// password changes and the other sessions close, as in the portal. No
+/// verification code: a session the link just opened needs none.
+Future<Map<String, Object?>> _setPassword(
+  PublicReads reads,
+  String token,
+  Map<String, String> values, {
+  required bool invitation,
+}) async {
+  if (invitation) {
+    final entered = await _enter(reads, token);
+    if (entered['state'] != 'entered') {
+      return {
+        'error': entered['state'] == 'unavailable'
+            ? customerAuthStoreBusy
+            : customerInvitationPrepareFailed,
+      };
+    }
+  }
+  return _changePassword(reads, token, values, verification: false);
+}
+
 /// The password step, or the verification step when the dialog sends the
 /// code: `SelfPasswordService.updatePassword` and the dialog's answers.
+/// Without [verification] (the login's link) Auth asking for a code is an
+/// answer like any other refusal.
 Future<Map<String, Object?>> _changePassword(
   PublicReads reads,
   String token,
-  Map<String, String> values,
-) async {
+  Map<String, String> values, {
+  bool verification = true,
+}) async {
   final password = values['password'] ?? '';
   final code = values['code'];
   final verifying = code != null;
@@ -471,7 +525,8 @@ Future<Map<String, Object?>> _changePassword(
     return _afterPasswordChange(reads, token);
   }
   if (verifying) return {'error': customerVerificationIssueMessage(issue)};
-  if (issue == SelfPasswordUpdateIssue.reauthenticationRequired) {
+  if (verification &&
+      issue == SelfPasswordUpdateIssue.reauthenticationRequired) {
     return _requestCode(reads, token);
   }
   return {'error': customerPasswordIssueMessage(issue)};

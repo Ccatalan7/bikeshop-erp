@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:vinabike_public_core/public_store/models/customer_auth_forms.dart';
+import 'package:vinabike_public_core/public_store/models/customer_portal_forms.dart';
 
 /// The login's script: the two modes, the fields' messages, entering,
 /// creating the account, Google and «¿Olvidaste tu contraseña?», as
@@ -16,31 +17,47 @@ import 'package:vinabike_public_core/public_store/models/customer_auth_forms.dar
 /// rules before anything goes to Auth; the password itself never goes
 /// there, only its shape (each letter, digit or sign replaced by one of its
 /// kind), which is all the rules read.
-String loginPageScript() => _script.replaceFirst(
-  '/*WORDS*/{}',
-  jsonEncode({
-    'signInFailed': customerAuthSignInFailed,
-    'signUpFailed': customerAuthSignUpFailed,
-    'googleFailed': customerAuthGoogleFailed,
-    'storeBusy': customerAuthStoreBusy,
-    'sent': customerAuthVerificationSent('{email}'),
-    'resent': customerAuthResent,
-    'resendFailed': customerAuthResendFailed,
-    'resetSent': customerResetSent,
-    'resetLimited': customerResetRateLimited,
-    'resetOffline': customerResetOffline,
-    'notices': {
-      'actualizada': customerAuthPasswordNotice('actualizada'),
-      'creada': customerAuthPasswordNotice('creada'),
-    },
-    'noticeParameter': customerAuthPasswordNoticeParameter,
-  }),
-);
+String loginPageScript() => _script
+    .replaceFirst('/*LINK_KEYS*/[]', jsonEncode(loginLinkKeys))
+    .replaceFirst(
+      '/*WORDS*/{}',
+      jsonEncode({
+        'signInFailed': customerAuthSignInFailed,
+        'signUpFailed': customerAuthSignUpFailed,
+        'googleFailed': customerAuthGoogleFailed,
+        'storeBusy': customerAuthStoreBusy,
+        'sent': customerAuthVerificationSent('{email}'),
+        'resent': customerAuthResent,
+        'resendFailed': customerAuthResendFailed,
+        'resetSent': customerResetSent,
+        'resetLimited': customerResetRateLimited,
+        'resetOffline': customerResetOffline,
+        'notices': {
+          'actualizada': customerAuthPasswordNotice('actualizada'),
+          'creada': customerAuthPasswordNotice('creada'),
+        },
+        'noticeParameter': customerAuthPasswordNoticeParameter,
+        'recoveryFailed': customerRecoveryLinkFailed,
+        'linkExpired': customerAuthLinkExpired,
+        'passwordFailed': customerPasswordUpdateFailed,
+      }),
+    );
+
+/// What an e-mail's link or Auth brings back besides a PKCE `code`, in the
+/// fragment or the query.
+const loginLinkKeys = [
+  'token_hash',
+  'type',
+  'access_token',
+  'refresh_token',
+  'error',
+  'error_code',
+  'error_description',
+];
 
 const _script = r'''
 (function () {
   'use strict';
-  if (window.vinabikeAuthHandoff) return;
   var root = document.querySelector('[data-login]');
   if (!root) return;
   var W = /*WORDS*/{};
@@ -61,6 +78,7 @@ const _script = r'''
   var VERIFIER = 'flutter.supabase.auth.token-code-verifier';
   // `WebsiteEditorOAuthIntentGate.storageKey`: the editor's Google link.
   var EDITOR_INTENT = 'google_oauth_editor_intent';
+  var LINK_KEYS = /*LINK_KEYS*/[];
 
   function field(name) { return form.querySelector('[name="' + name + '"]'); }
   function value(name) { var f = field(name); return f ? f.value : ''; }
@@ -232,6 +250,7 @@ const _script = r'''
   form.addEventListener('submit', function (event) {
     event.preventDefault();
     if (busy) return;
+    if (mode === 'recovery' || mode === 'invitation') { setPassword(); return; }
     // The mode and the values as they are now: the check and Auth get the
     // same ones, whatever changes while the check answers.
     var sent = mode, v = { name: value('name'), email: value('email'), phone: value('phone'), password: value('password') };
@@ -256,8 +275,10 @@ const _script = r'''
     if (!target || !root.contains(target)) return;
     if (target.hasAttribute('data-switch')) { if (!busy) setMode(mode === 'login' ? 'register' : 'login'); }
     else if (target.hasAttribute('data-reveal')) {
+      // Flutter's `_obscurePassword`: one eye for both fields of a link.
       var password = field('password'), shown = password.type === 'password';
       password.type = shown ? 'text' : 'password';
+      field('confirm').type = password.type;
       target.setAttribute('aria-pressed', shown ? 'true' : 'false');
       target.setAttribute('aria-label', shown ? 'Ocultar contraseña' : 'Mostrar contraseña');
     } else if (target.hasAttribute('data-google')) {
@@ -282,6 +303,7 @@ const _script = r'''
         toast(r.ok ? W.resent : W.resendFailed, !r.ok);
       }, function () { setBusy(false); toast(W.resendFailed, true); });
     } else if (target.hasAttribute('data-forgot')) openReset();
+    else if (target.hasAttribute('data-leave')) { if (!busy) leaveLink(); }
   });
 
   // ---- «¿Olvidaste tu contraseña?» -----------------------------------------
@@ -331,32 +353,141 @@ const _script = r'''
 
   window.addEventListener('pageshow', function () { leaving = false; });
 
+  // ---- an e-mail's link that sets a password ------------------------------
+  // `completePasswordRecovery` and `completeInvitedFirstPassword`: the
+  // session the link opens stays in this page (never as the browser's
+  // session), sets the password through the store (the portal's command,
+  // which also closes the other sessions), is closed again, and the login
+  // says so (`?clave=`), as Flutter did.
+  var linkSession = null, uncertain = false;
+  function linkState(next, state) { setMode(next); root.dataset.link = state || ''; }
+  function closeLink() {
+    if (!linkSession) return;
+    var token = linkSession.access_token;
+    linkSession = null;
+    fetch(sbUrl + '/auth/v1/logout?scope=local', {
+      method: 'POST', headers: { apikey: sbKey, authorization: 'Bearer ' + token }, keepalive: true
+    }).catch(function () { return null; });
+  }
+  function leaveLink() {
+    closeLink();
+    field('password').value = ''; field('confirm').value = '';
+    linkState('login');
+  }
+  function linkFailed(kind) {
+    linkSession = null;
+    setBusy(false);
+    if (kind === 'invitation') { linkState('invitation', 'invalid'); return; }
+    linkState('login');
+    toast(W.recoveryFailed, true);
+  }
+  function openLink(kind, obtain) {
+    linkState(kind, 'checking');
+    obtain().then(function (session) {
+      if (!session || !session.access_token) throw new Error('refused');
+      linkSession = session;
+      linkState(kind);
+      field('password').focus();
+    }).catch(function (error) {
+      if (error && error.message === 'refused') { linkFailed(kind); return; }
+      // Auth could not be reached: the link was not used, it still works.
+      linkSession = null;
+      linkState('login');
+      toast(W.storeBusy, true);
+    });
+  }
+  function authGet(path, token) {
+    return fetch(sbUrl + path, { headers: { apikey: sbKey, authorization: 'Bearer ' + token } })
+      .then(function (r) { return r.ok ? r.json() : null; });
+  }
+  function setPassword() {
+    if (!linkSession) { linkFailed(mode); return; }
+    var kind = mode, values = { password: value('password'), confirm: value('confirm') };
+    if (uncertain) values.uncertain = 'true';
+    setBusy(true);
+    post({ action: 'set-password', kind: kind, values: values }, linkSession.access_token).then(function (answer) {
+      if (!answer) throw new Error('offline');
+      if (answer.state === 'expired') { linkFailed(kind); return; }
+      if (answer.errors) { setBusy(false); showErrors(answer.errors); return; }
+      if (answer.error) { uncertain = !!answer.uncertain; setBusy(false); toast(answer.error, true); return; }
+      if (answer.done || answer.step === 'revocation') {
+        closeLink();
+        location.assign(prefix + '/cuenta/login?' + W.noticeParameter + '=' + (kind === 'invitation' ? 'creada' : 'actualizada'));
+        return;
+      }
+      throw new Error('unknown');
+    }).catch(function () { setBusy(false); toast(W.passwordFailed, true); });
+  }
+
   // ---- what the address says ----------------------------------------------
   var params = new URLSearchParams(location.search);
+  var link = window.vinabikeAuthReturn || {};
+  LINK_KEYS.forEach(function (k) { if (!(k in link) && params.has(k)) link[k] = params.get(k); });
   var callback = location.pathname === prefix + '/auth/callback';
   var code = params.get('code');
-  if (callback || code) {
-    // `exchangeCodeForSession` with this browser's verifier: Google's return
-    // and an account's confirmation. What only this browser can tell goes
-    // back to the server with `enlace`, which answers Flutter: the editor's
-    // own Google link (its intent waits here) and a recovery (its verifier
-    // is marked), which ends in setting a password.
-    var verifier = null;
-    try { verifier = JSON.parse(localStorage.getItem(VERIFIER) || 'null'); } catch (e) { verifier = null; }
-    if (typeof verifier !== 'string' || !verifier) verifier = null;
-    if ((callback && localStorage.getItem(EDITOR_INTENT) !== null) ||
-        (code && ((verifier && /\/passwordRecovery$/.test(verifier)) || params.get('recovery') === 'true'))) {
-      params.set('enlace', '1');
-      location.replace(location.pathname + '?' + params.toString());
-      return;
-    }
+  var verifier = null;
+  try { verifier = JSON.parse(localStorage.getItem(VERIFIER) || 'null'); } catch (e) { verifier = null; }
+  if (typeof verifier !== 'string' || !verifier) verifier = null;
+  // The editor's own Google link (its intent waits in this browser) goes
+  // back to the server with `enlace`, which answers Flutter: it returns to
+  // the editor.
+  if (callback && localStorage.getItem(EDITOR_INTENT) !== null) {
+    params.set('enlace', '1');
+    location.replace(location.pathname + '?' + params.toString());
+    return;
+  }
+  var confirmed = !callback && params.get('confirmed') === 'true' && !link.error && !link.error_code;
+  // Whatever brought the link, the address forgets it (a token or a code is
+  // good once); a code waits for Auth's answer first (see below).
+  var forget = function () {
+    history.replaceState(history.state, '', prefix + '/cuenta/login' + (confirmed ? '?confirmed=true' : ''));
+  };
+  var tokenHash = /^[A-Za-z0-9._~-]{20,512}$/.test(link.token_hash || '') ? link.token_hash : null;
+  var linkKind = link.type === 'invite' ? 'invitation' : link.type === 'recovery' ? 'recovery' : null;
+  var recoveryCode = !!code && ((verifier && /\/passwordRecovery$/.test(verifier)) || params.get('recovery') === 'true');
+  if (linkKind && (tokenHash || link.access_token)) {
+    forget();
+    openLink(linkKind, function () {
+      if (tokenHash) {
+        return auth('/auth/v1/verify', { type: link.type, token_hash: tokenHash }).then(function (r) {
+          return r.ok && r.body && r.body.access_token && r.body.user ? r.body : null;
+        });
+      }
+      // An older link: the session itself, checked with Auth.
+      return authGet('/auth/v1/user', link.access_token).then(function (user) {
+        return user && user.id ? { access_token: link.access_token, refresh_token: link.refresh_token, user: user } : null;
+      });
+    });
+  } else if (recoveryCode) {
+    forget();
+    if (!verifier) linkFailed('recovery');
+    else openLink('recovery', function () {
+      return auth('/auth/v1/token?grant_type=pkce', { auth_code: code, code_verifier: verifier }).then(function (r) {
+        localStorage.removeItem(VERIFIER);
+        return r.ok && r.body && r.body.access_token && r.body.user ? r.body : null;
+      });
+    });
+  } else if (!linkKind && link.access_token) {
+    // An older confirmation (or e-mail change) link that brings the session
+    // itself: checked with Auth, then in, as `supabase_flutter` did.
+    forget();
+    setBusy(true);
+    authGet('/auth/v1/user', link.access_token).then(function (user) {
+      if (!user || !user.id) throw new Error('refused');
+      return enter({ access_token: link.access_token, refresh_token: link.refresh_token, token_type: 'bearer', user: user });
+    }).catch(function (error) {
+      setBusy(false);
+      toast(error && error.message === 'unavailable' ? W.storeBusy : W.linkExpired, true);
+    });
+  } else if (linkKind || link.error || link.error_code) {
+    // Auth sent the link back refused (it expired, or was used).
+    forget();
+    if (linkKind === 'invitation') linkState('invitation', 'invalid');
+    else toast(callback ? W.googleFailed : linkKind === 'recovery' ? W.recoveryFailed : W.linkExpired, true);
+  } else if (callback || code) {
     // A code is good once: once Auth answers, the address and this storage
     // forget it (gotrue-dart drops the verifier then too); a request that
     // never reached Auth keeps both, so reloading the page tries again.
-    var confirmed = !callback && params.get('confirmed') === 'true';
-    var forget = function () {
-      history.replaceState(history.state, '', prefix + '/cuenta/login' + (confirmed ? '?confirmed=true' : ''));
-    };
     if (!code || !verifier) {
       // Google said no, or the link was opened in another browser: an
       // account's link confirmed it all the same (the notice below says so).
@@ -378,8 +509,8 @@ const _script = r'''
         else if (!confirmed) toast(W.signInFailed, true);
       });
     }
-    params = new URLSearchParams(location.search);
   }
+  params = new URLSearchParams(location.search);
   if (params.get('confirmed') === 'true') root.querySelector('[data-confirmed]').hidden = false;
   var notice = W.notices[params.get(W.noticeParameter) || ''];
   if (notice) {

@@ -71,11 +71,20 @@ una cuenta (`/cuenta/login?confirmed=true&code=`) las canjea el mismo login
 HTML (`POST /auth/v1/token?grant_type=pkce`, como `exchangeCodeForSession`)
 y sigue con `enter`; el código y el verificador se olvidan cuando Auth
 contesta (un corte de red los deja para reintentar al recargar); un enlace abierto en otro navegador
-no tiene verificador y queda el aviso «Tu cuenta ha sido confirmada». Lo que
-termina en fijar una contraseña (recuperación: verificador marcado con
-`/passwordRecovery`; invitación; un token en el fragmento) y la vuelta de
-Google del editor (su intención `google_oauth_editor_intent` en este
-navegador) vuelven al servidor con `?enlace=1`, que responde Flutter.
+no tiene verificador y queda el aviso «Tu cuenta ha sido confirmada». Los
+enlaces que fijan una contraseña también son del login HTML (2026-10-08): el
+correo de recuperación o de invitación pasa por `auth-action.html` y llega con
+`#token_hash=…&type=recovery|invite`; un guion antes de pintar lo lee y lo saca
+de la dirección, el login lo verifica (`POST /auth/v1/verify`) y pide «Nueva
+contraseña» o «Crea tu contraseña». La sesión del enlace queda sólo en la
+página (nunca como la sesión del navegador), cambia la clave por la tienda
+(`set-password`: el comando del portal sin código de verificación, que cierra
+las demás sesiones; la invitación primero pasa por `enter`), se cierra y el
+login dice «Contraseña actualizada / creada». Un enlace usado o vencido dice
+«El enlace de recuperación venció…» o muestra «No pudimos validar esta
+invitación». Sólo la vuelta de Google del editor (su intención
+`google_oauth_editor_intent` en este navegador) vuelve al servidor con
+`?enlace=1`, que responde Flutter.
 Antes de llamar a Auth el servidor revisa los campos (`check`); la contraseña
 no le llega, sólo su forma (cada letra, número o signo cambiado por uno de su
 tipo), que es todo lo que miran las reglas. Con la sesión, `enter` crea o

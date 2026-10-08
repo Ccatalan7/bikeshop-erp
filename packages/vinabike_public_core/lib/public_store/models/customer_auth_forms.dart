@@ -5,7 +5,7 @@
 import '../../shared/utils/auth_input_validation.dart';
 
 /// What the page is doing: entering, creating an account, or one of the two
-/// e-mail links that set a password (only Flutter draws those).
+/// e-mail links that set a password (a recovery, an invitation).
 enum CustomerAuthMode { login, register, recovery, invitation }
 
 const customerAuthEyebrow = 'CUENTA VINABIKE';
@@ -27,9 +27,11 @@ String customerAuthLead(CustomerAuthMode mode) => switch (mode) {
   CustomerAuthMode.invitation =>
     'Este enlace de invitación confirma tu correo. Define una clave fuerte y '
         'luego inicia sesión.',
+  // Both stores close the link's session after the change and ask to enter
+  // with the new password (until 2026-10-08 this said «entrarás directo»).
   CustomerAuthMode.recovery =>
     'Este enlace seguro confirma tu identidad. Define una clave nueva y '
-        'entrarás directo a tu cuenta.',
+        'luego inicia sesión con ella.',
   CustomerAuthMode.login =>
     'Una experiencia más ordenada, rápida y clara que el checkout improvisado '
         'de invitado.',
@@ -86,6 +88,12 @@ const customerAuthEmailHint = 'nombre@correo.com';
 const customerAuthPhoneLabel = 'Teléfono';
 const customerAuthPhoneHint = '+56 9 1234 5678';
 const customerAuthPasswordLabel = 'Contraseña';
+
+/// The two fields of a link that sets a password.
+const customerAuthNewPasswordLabel = 'Nueva contraseña';
+const customerAuthConfirmLabel = 'Confirmar contraseña';
+const customerAuthConfirmHint = 'Repite la contraseña';
+const customerAuthBackToLogin = 'Volver al inicio de sesión';
 
 String customerAuthPasswordHint(CustomerAuthMode mode) =>
     mode == CustomerAuthMode.login
@@ -187,6 +195,33 @@ const customerAuthPasswordCreated =
 
 /// `?clave=` of the login: which of the two messages above it shows.
 const customerAuthPasswordNoticeParameter = 'clave';
+
+// ================================================ the links that set a password
+
+/// While the link is checked with Auth.
+String customerAuthLinkChecking(CustomerAuthMode mode) =>
+    mode == CustomerAuthMode.invitation
+    ? 'Validando tu invitación…'
+    : 'Validando tu enlace de recuperación…';
+
+/// A recovery link Auth no longer takes (used, expired, or opened where the
+/// request was not made).
+const customerRecoveryLinkFailed =
+    'El enlace de recuperación venció o ya fue usado. Pide uno nuevo con '
+    '«¿Olvidaste tu contraseña?».';
+
+/// A link Auth sent back refused (its `error`): a confirmation that expired
+/// or was already used.
+const customerAuthLinkExpired =
+    'El enlace venció o ya fue usado. Inicia sesión o pide uno nuevo.';
+
+const customerInvitationInvalidTitle = 'No pudimos validar esta invitación';
+const customerInvitationInvalidBody =
+    'El enlace venció, ya fue usado o no abrió una sesión válida. Solicita a '
+    'la tienda un nuevo correo de invitación.';
+const customerInvitationPrepareFailed =
+    'No pudimos preparar tu acceso. Solicita un nuevo correo de invitación e '
+    'inténtalo nuevamente.';
 
 String? customerAuthPasswordNotice(String? value) => switch (value) {
   'actualizada' => customerAuthPasswordRecovered,

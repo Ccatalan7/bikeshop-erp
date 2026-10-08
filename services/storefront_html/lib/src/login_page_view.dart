@@ -21,12 +21,12 @@ import 'site_layout.dart';
 /// counts attempts by address), and keeps the session where
 /// `supabase_flutter` keeps it; the server checks the fields first and,
 /// once there is a session, makes it the store's customer
-/// ([portalActionPath], `check` and `enter`). The page redeems a PKCE `code`
-/// itself (Google's return to `/auth/callback`, an account's confirmation);
-/// a link that sets a password (a recovery, an invitation: a token, a
-/// `type`) is Flutter's ([loginAnsweredByFlutter]), and one that carries it
-/// in the fragment, which never reaches the server, is sent back with
-/// `?enlace=1` before the page paints.
+/// ([portalActionPath], `check`, `enter` and `set-password`). The page
+/// redeems every link back from Auth itself: Google's return to
+/// `/auth/callback`, an account's confirmation, and the links that set a
+/// password (a recovery, an invitation), whose token the page reads from the
+/// fragment before it paints. Only the editor's own Google return is
+/// Flutter's ([loginAnsweredByFlutter]).
 Component loginPageDocument(PageContext page) {
   final prefix = page.hidden ? '/_html' : '';
   return sitePage(
@@ -34,9 +34,9 @@ Component loginPageDocument(PageContext page) {
     meta: loginPageMeta(page),
     content: [
       if (!page.hidden)
-        // Before anything paints: a link that carries its token in the
-        // fragment goes back to the server, which then answers Flutter.
-        script(content: _fragmentHandoff),
+        // Before anything paints: a token in the fragment leaves the
+        // address and waits for the login's script.
+        script(content: _fragmentCapture),
       div(
         classes: 'lg',
         attributes: {
@@ -79,37 +79,26 @@ PageMeta loginPageMeta(PageContext page) {
   );
 }
 
-/// What in the address makes the login Flutter's: a link back from Supabase
-/// Auth that sets a password (a recovery or an invitation: a `token_hash`, a
-/// `type`, tokens), an `error` from an e-mail's link, or `enlace`, which the
-/// page adds when only the browser can tell (the token in the fragment, a
-/// recovery's verifier, the editor's own Google intent). A bare PKCE `code`
-/// is redeemed by the page, and on [callback] (`/auth/callback`) also
-/// Google's refusal (until 2026-10-08 every one of them loaded Flutter).
-bool loginAnsweredByFlutter(
-  Iterable<String> queryKeys, {
-  bool callback = false,
-}) => queryKeys.any(
-  {
-    'token_hash',
-    'type',
-    'access_token',
-    'refresh_token',
-    'enlace',
-    if (!callback) ...['error', 'error_code', 'error_description'],
-  }.contains,
-);
+/// What in the address makes the login Flutter's: only `enlace`, which the
+/// page adds to the editor's own Google return (its intent waits in the
+/// browser) so that it reaches the editor. Every other link back from Auth
+/// is redeemed by the page: a PKCE `code` (Google, a confirmation, a
+/// recovery) since 2026-10-08, and a recovery's or an invitation's token
+/// since the same day (until then, all of them loaded Flutter).
+bool loginAnsweredByFlutter(Iterable<String> queryKeys) =>
+    queryKeys.contains('enlace');
 
-/// The fragment's keys that `CustomerAccountService.captureInitialUrl` and
-/// `supabase_flutter` read, checked before the page paints.
-final _fragmentHandoff =
+/// Before anything paints: a link that carries its token in the fragment
+/// (`auth-action.html` sends recovery and invitation links so; Auth, its
+/// errors) is read into `window.vinabikeAuthReturn` and leaves the address at
+/// once, as `CustomerAccountService.captureInitialUrl` does. The login's
+/// script redeems it.
+final _fragmentCapture =
     '(function(){var h=location.hash;if(!h||h.length<2)return;'
-    'var k=new URLSearchParams(h.slice(1));'
-    'if(!${jsonEncode(const ['access_token', 'token_hash', 'error', 'error_code', 'refresh_token', 'type'])}'
-    '.some(function(n){return k.has(n)}))return;'
-    'window.vinabikeAuthHandoff=true;'
-    'var q=new URLSearchParams(location.search);q.set("enlace","1");'
-    'location.replace(location.pathname+"?"+q.toString()+h)})();';
+    'var k=new URLSearchParams(h.slice(1)),o={},n=0;'
+    '${jsonEncode(loginLinkKeys)}.forEach(function(x){if(k.has(x)){o[x]=k.get(x);n++}});'
+    'if(!n)return;window.vinabikeAuthReturn=o;'
+    'history.replaceState(history.state,"",location.pathname+location.search)})();';
 
 // ================================================================== the intro
 
@@ -151,7 +140,11 @@ Component _intro() => section(classes: 'lg-intro', [
   ]),
 ]);
 
-const _modes = [CustomerAuthMode.login, CustomerAuthMode.register];
+/// Every mode the page draws; entering and creating an account are the two
+/// a visitor switches between, the other two come from an e-mail's link.
+const _modes = CustomerAuthMode.values;
+const _entry = 'login register';
+const _setup = 'recovery invitation';
 
 const _benefitIcons = {
   'shopping_bag': mdShoppingBagOutlined,
@@ -162,6 +155,42 @@ const _benefitIcons = {
 // =================================================================== the form
 
 Component _form() => section(classes: 'lg-form', [
+  // An e-mail's link while Auth checks it, and an invitation it no longer
+  // takes (Flutter's `_buildRecoveryVerificationLoadingView` and
+  // `_buildInvalidInvitationView`): the rest of the form waits hidden.
+  div(
+    classes: 'lg-wait',
+    attributes: {'data-link-panel': 'checking', 'role': 'status'},
+    [
+      span(classes: 'lg-spin', [RawText(_spinner)]),
+      p([
+        for (final mode in const [
+          CustomerAuthMode.recovery,
+          CustomerAuthMode.invitation,
+        ])
+          span(
+            attributes: {'data-only': mode.name},
+            [.text(customerAuthLinkChecking(mode))],
+          ),
+      ]),
+    ],
+  ),
+  div(
+    classes: 'lg-bad',
+    attributes: {'data-link-panel': 'invalid', 'role': 'alert'},
+    [
+      RawText(materialIcon(mdMarkEmailUnreadOutlined, size: 44)),
+      h2([.text(customerInvitationInvalidTitle)]),
+      p([.text(customerInvitationInvalidBody)]),
+      button(
+        classes: 'lg-submit',
+        attributes: {'type': 'button', 'data-leave': ''},
+        [
+          span([.text(customerAuthBackToLogin.toUpperCase())]),
+        ],
+      ),
+    ],
+  ),
   h2(classes: 'lg-title', [
     for (final mode in _modes)
       span(
@@ -224,6 +253,7 @@ Component _form() => section(classes: 'lg-form', [
       ),
       _field(
         'email',
+        only: _entry,
         customerAuthEmailLabel,
         hint: customerAuthEmailHint,
         icon: mdEmailOutlined,
@@ -242,6 +272,10 @@ Component _form() => section(classes: 'lg-form', [
       _field(
         'password',
         customerAuthPasswordLabel,
+        labels: {
+          _entry: customerAuthPasswordLabel,
+          _setup: customerAuthNewPasswordLabel,
+        },
         hints: {
           for (final mode in _modes) mode.name: customerAuthPasswordHint(mode),
         },
@@ -249,6 +283,15 @@ Component _form() => section(classes: 'lg-form', [
         type: 'password',
         autocomplete: 'current-password',
         reveal: true,
+      ),
+      _field(
+        'confirm',
+        customerAuthConfirmLabel,
+        hint: customerAuthConfirmHint,
+        icon: mdLockResetOutlined,
+        type: 'password',
+        autocomplete: 'new-password',
+        only: _setup,
       ),
       button(
         classes: 'lg-submit',
@@ -268,12 +311,22 @@ Component _form() => section(classes: 'lg-form', [
       ),
     ],
   ),
-  div(classes: 'lg-or', [
-    span([.text(customerAuthOr)]),
-  ]),
+  // A link that sets a password: Flutter's «Volver al inicio de sesión».
+  button(
+    classes: 'lg-leave',
+    attributes: {'type': 'button', 'data-only': _setup, 'data-leave': ''},
+    [.text(customerAuthBackToLogin)],
+  ),
+  div(
+    classes: 'lg-or',
+    attributes: {'data-only': _entry},
+    [
+      span([.text(customerAuthOr)]),
+    ],
+  ),
   button(
     classes: 'lg-google',
-    attributes: {'type': 'button', 'data-google': ''},
+    attributes: {'type': 'button', 'data-google': '', 'data-only': _entry},
     [
       RawText(_googleGlyph),
       for (final mode in _modes)
@@ -283,22 +336,29 @@ Component _form() => section(classes: 'lg-form', [
         ),
     ],
   ),
-  p(classes: 'lg-switch', [
-    for (final mode in _modes) ...[
-      span(
-        attributes: {'data-only': mode.name},
-        [.text(customerAuthSwitchQuestion(mode))],
-      ),
-      button(
-        attributes: {
-          'type': 'button',
-          'data-only': mode.name,
-          'data-switch': '',
-        },
-        [.text(customerAuthSwitchAction(mode))],
-      ),
+  p(
+    classes: 'lg-switch',
+    attributes: {'data-only': _entry},
+    [
+      for (final mode in const [
+        CustomerAuthMode.login,
+        CustomerAuthMode.register,
+      ]) ...[
+        span(
+          attributes: {'data-only': mode.name},
+          [.text(customerAuthSwitchQuestion(mode))],
+        ),
+        button(
+          attributes: {
+            'type': 'button',
+            'data-only': mode.name,
+            'data-switch': '',
+          },
+          [.text(customerAuthSwitchAction(mode))],
+        ),
+      ],
     ],
-  ]),
+  ),
   button(
     classes: 'lg-forgot',
     attributes: {'type': 'button', 'data-only': 'login', 'data-forgot': ''},
@@ -308,10 +368,12 @@ Component _form() => section(classes: 'lg-form', [
 
 /// A field as the login draws it: its label above, the hint inside, the
 /// icon at the start, and the message under it when it does not pass.
-/// [hints] is the hint by mode when it changes with it.
+/// [labels] and [hints] are the label and the hint by mode when they change
+/// with it ([labels] keyed by `data-only`'s list of modes).
 Component _field(
   String name,
   String label, {
+  Map<String, String>? labels,
   String? hint,
   Map<String, String>? hints,
   required String icon,
@@ -328,7 +390,12 @@ Component _field(
       Component.element(
         tag: 'label',
         attributes: {'for': id},
-        children: [.text(label)],
+        children: labels == null
+            ? [.text(label)]
+            : [
+                for (final MapEntry(key: modes, value: text) in labels.entries)
+                  span(attributes: {'data-only': modes}, [.text(text)]),
+              ],
       ),
       div(classes: 'lg-box', [
         RawText(materialIcon(icon, classes: 'lg-ic')),

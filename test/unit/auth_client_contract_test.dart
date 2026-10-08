@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:vinabike_public_core/public_store/models/customer_auth_forms.dart';
 
 void main() {
   late String loginSource;
@@ -374,11 +375,11 @@ void main() {
       customerAuthPageSource,
       contains('await accountService.signOut()'),
     );
+    // The words are the core's, which the HTML login also says (2026-10-08).
+    expect(customerAuthPageSource, contains('customerInvitationInvalidBody'));
     expect(
-      customerAuthPageSource,
-      contains(
-        'Solicita a la tienda un nuevo correo de invitación.',
-      ),
+      customerInvitationInvalidBody,
+      contains('Solicita a la tienda un nuevo correo de invitación.'),
     );
     expect(
       customerAccountServiceSource,

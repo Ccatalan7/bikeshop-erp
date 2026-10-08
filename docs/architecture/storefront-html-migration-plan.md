@@ -2319,3 +2319,37 @@ clientes son de Google, medido el 2026-10-08).
   `project-vinabike.web.app` y Auth sólo permite `/reset-password` ahí
   (`supabase/config.toml`).
 
+## Fase 4f: los enlaces que fijan una contraseña (2026-10-08)
+
+Lo último de Auth que hacía Flutter: recuperar la contraseña (1 vez en 90
+días) y aceptar una invitación. Los correos (`auth_recovery.html`,
+`auth_invite.html`) llevan a `auth-action.html`, que tras el clic manda a
+`/cuenta/login#token_hash=…&type=recovery|invite`.
+
+- Un guion antes de pintar lee del fragmento `token_hash`, `type`, los tokens
+  y el error, los deja en `window.vinabikeAuthReturn` y los saca de la
+  dirección al tiro (lo que hacía `captureInitialUrl`). El login verifica con
+  `POST /auth/v1/verify` (`verifyOTP`), o con el `code` PKCE marcado
+  `/passwordRecovery`, o con la sesión de un enlace antiguo (`/auth/v1/user`),
+  y pasa a los modos `recovery` o `invitation` del núcleo: las mismas
+  palabras, los mismos campos (nueva y confirmar, un solo ojo) y «Volver al
+  inicio de sesión».
+- La sesión del enlace queda en la página, nunca en `sb-<ref>-auth-token`:
+  sólo puede cambiar la clave de la cuenta que el enlace verificó (lo que
+  Flutter cuidaba con `_verifiedPasswordRecoveryUserId`).
+- `POST /cuenta/accion` `set-password` es `_changePassword` del portal sin el
+  paso del código (una sesión recién abierta no lo necesita; si Auth lo pide,
+  es una respuesta más); la invitación pasa antes por `enter`, como
+  `completeInvitedFirstPassword`. Después se cierra la sesión del enlace y el
+  login dice «Contraseña actualizada / creada» (`?clave=`), como Flutter.
+- El encabezado de la recuperación prometía «entrarás directo a tu cuenta»,
+  pero las dos tiendas piden entrar con la clave nueva: el texto ahora dice
+  eso. Las palabras que Flutter tenía sueltas pasaron al núcleo.
+- Con esto `loginAnsweredByFlutter` es sólo `enlace` (la vuelta de Google del
+  editor). Probado contra el Auth local con enlaces reales
+  (`/auth/v1/admin/generate_link`): recuperación con confirmación que no
+  calza, cambio, entrar con la nueva y no con la vieja, enlace usado;
+  invitación con el cliente creado en la tienda de prueba, entrar con la
+  clave creada e invitación usada (en teléfono). Un cambio de hash en la misma
+  página no recarga: se prueba entrando desde otra, como llega un correo.
+

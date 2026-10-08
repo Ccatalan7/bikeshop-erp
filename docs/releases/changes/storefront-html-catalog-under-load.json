@@ -33,7 +33,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/portal_page_route.dart",
-      "sha256": "7698cc8d1c0c39cb6ccc44224b4d428639df33c9755413a76eda81a904cb6c95"
+      "sha256": "aff1da731984820c96827e020e153d4f23c9ad76a8cd98f09dfd213d628ff968"
     },
     {
       "path": "services/storefront_html/lib/src/portal_page_view.dart",
@@ -45,15 +45,15 @@
     },
     {
       "path": "services/storefront_html/lib/src/login_page_script.dart",
-      "sha256": "289bfe7e65ae2cbe9641c94613ac3c5ea8b7a3c7062f568ef1f63709bbe9430d"
+      "sha256": "1e5e529c7edd9bc4b1689b495d1ab8358bfee0116f5067dc7445fc359c10f074"
     },
     {
       "path": "services/storefront_html/lib/storefront_html.dart",
-      "sha256": "3b7a9511d167bad8ab66cb5f67694789494c946afd20dd8484abf57269a8f057"
+      "sha256": "963a31971d4064530be45d7d354237d3c49b34ba4407ccede9bdf3bce2f02f41"
     },
     {
       "path": "packages/vinabike_public_core/lib/public_store/models/customer_auth_forms.dart",
-      "sha256": "5f889262d629c64433121c9f155a803d8027288df95275059d6314bd6123af6e"
+      "sha256": "9cfa97ab0c5c24337ac8619f852427d7f735dba8a61d7754a8691b0babaf435a"
     }
   ]
 }

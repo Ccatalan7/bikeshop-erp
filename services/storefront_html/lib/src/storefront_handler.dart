@@ -586,11 +586,11 @@ class _Route {
   }
 
   /// `/cuenta/login` (4c): the way in, and `/auth/callback` ([callback]),
-  /// where Google returns. The page redeems a PKCE code itself; a link that
-  /// sets a password ([loginAnsweredByFlutter]) is answered with the Flutter
-  /// store, which redeems it, with the login's head; when that page cannot
-  /// be read the visitor is asked to try again rather than shown a page that
-  /// would drop the link.
+  /// where Google returns. The page redeems every link back from Auth; the
+  /// editor's own Google return ([loginAnsweredByFlutter]) is answered with
+  /// the Flutter store, with the login's head; when that page cannot be read
+  /// the visitor is asked to try again rather than shown a page that would
+  /// drop the link.
   Future<Response> login({bool callback = false}) async {
     final context = _context(await reads.shell());
     final document = loginPageDocument(context);
@@ -601,11 +601,7 @@ class _Route {
           ? _loginWithFlutter(context, document)
           : _unpublished(context);
     }
-    if (hidden ||
-        !loginAnsweredByFlutter(
-          _uri.queryParameters.keys,
-          callback: callback,
-        )) {
+    if (hidden || !loginAnsweredByFlutter(_uri.queryParameters.keys)) {
       return _render(document);
     }
     return _loginWithFlutter(context, document);
