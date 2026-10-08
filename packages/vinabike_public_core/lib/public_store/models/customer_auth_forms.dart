@@ -215,6 +215,10 @@ const customerRecoveryLinkFailed =
 const customerAuthLinkExpired =
     'El enlace venció o ya fue usado. Inicia sesión o pide uno nuevo.';
 
+/// «Volver al inicio de sesión» could not close the link's session.
+const customerAuthLinkCloseFailed =
+    'No pudimos cerrar esta sesión. Recarga la página e inténtalo nuevamente.';
+
 const customerInvitationInvalidTitle = 'No pudimos validar esta invitación';
 const customerInvitationInvalidBody =
     'El enlace venció, ya fue usado o no abrió una sesión válida. Solicita a '

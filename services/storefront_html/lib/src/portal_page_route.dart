@@ -433,8 +433,9 @@ Future<bool> _written(Future<bool> Function() write, String what) async {
 /// `completeInvitedFirstPassword`), with the session the link itself gave
 /// (the page keeps it in memory, never as the browser's session): an
 /// invitation first makes the account this store's customer, then the
-/// password changes and the other sessions close, as in the portal. No
-/// verification code: a session the link just opened needs none.
+/// password changes and every session closes, the link's too (Flutter closed
+/// the others, then its own, and stopped if that failed). No verification
+/// code: a session the link just opened needs none.
 Future<Map<String, Object?>> _setPassword(
   PublicReads reads,
   String token,
@@ -451,18 +452,27 @@ Future<Map<String, Object?>> _setPassword(
       };
     }
   }
-  return _changePassword(reads, token, values, verification: false);
+  return _changePassword(
+    reads,
+    token,
+    values,
+    verification: false,
+    everywhere: true,
+  );
 }
 
 /// The password step, or the verification step when the dialog sends the
 /// code: `SelfPasswordService.updatePassword` and the dialog's answers.
 /// Without [verification] (the login's link) Auth asking for a code is an
 /// answer like any other refusal.
+///
+/// [everywhere] closes this session as well as the others once it changed.
 Future<Map<String, Object?>> _changePassword(
   PublicReads reads,
   String token,
   Map<String, String> values, {
   bool verification = true,
+  bool everywhere = false,
 }) async {
   final password = values['password'] ?? '';
   final code = values['code'];
@@ -515,14 +525,14 @@ Future<Map<String, Object?>> _changePassword(
   if (answer.status < 300) {
     // The password is already changed: whatever happens next never asks
     // for it again, only for closing the other sessions.
-    return _afterPasswordChange(reads, token);
+    return _afterPasswordChange(reads, token, everywhere: everywhere);
   }
   final issue = selfPasswordIssueOf(code: answer.code, message: answer.message);
   if (issue == SelfPasswordUpdateIssue.samePassword &&
       values['uncertain'] == 'true') {
     // The attempt whose answer was lost did change it: only the other
     // sessions are left.
-    return _afterPasswordChange(reads, token);
+    return _afterPasswordChange(reads, token, everywhere: everywhere);
   }
   if (verifying) return {'error': customerVerificationIssueMessage(issue)};
   if (verification &&
@@ -534,9 +544,10 @@ Future<Map<String, Object?>> _changePassword(
 
 Future<Map<String, Object?>> _afterPasswordChange(
   PublicReads reads,
-  String token,
-) async {
-  final revoked = await _signOutOthers(reads, token);
+  String token, {
+  bool everywhere = false,
+}) async {
+  final revoked = await _signOutOthers(reads, token, everywhere: everywhere);
   return revoked == true
       ? const {'done': true, 'toast': customerPasswordUpdated}
       : const {'step': 'revocation', 'pending': true};
@@ -544,11 +555,17 @@ Future<Map<String, Object?>> _afterPasswordChange(
 
 /// True when the other sessions closed, false when Auth refused, null when
 /// it could not be asked.
-Future<bool?> _signOutOthers(PublicReads reads, String token) async {
+Future<bool?> _signOutOthers(
+  PublicReads reads,
+  String token, {
+  bool everywhere = false,
+}) async {
   try {
     final answer = await reads.customerAuth(
       token,
-      CustomerAuthCall.signOutOthers,
+      everywhere
+          ? CustomerAuthCall.signOutEverywhere
+          : CustomerAuthCall.signOutOthers,
     );
     return answer.status < 300;
   } on Object catch (error) {

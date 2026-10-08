@@ -361,7 +361,7 @@ class _CustomerAuthPageState extends State<CustomerAuthPage>
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'No pudimos cerrar esta sesión. Recarga la página e inténtalo nuevamente.',
+            customerAuthLinkCloseFailed,
           ),
           backgroundColor: Colors.red,
         ),

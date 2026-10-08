@@ -40,6 +40,8 @@ String loginPageScript() => _script
         'recoveryFailed': customerRecoveryLinkFailed,
         'linkExpired': customerAuthLinkExpired,
         'passwordFailed': customerPasswordUpdateFailed,
+        'revocationFailed': customerRevocationRetryFailed,
+        'closeFailed': customerAuthLinkCloseFailed,
       }),
     );
 
@@ -356,23 +358,29 @@ const _script = r'''
   // ---- an e-mail's link that sets a password ------------------------------
   // `completePasswordRecovery` and `completeInvitedFirstPassword`: the
   // session the link opens stays in this page (never as the browser's
-  // session), sets the password through the store (the portal's command,
-  // which also closes the other sessions), is closed again, and the login
-  // says so (`?clave=`), as Flutter did.
+  // session) and sets the password through the store, which then closes
+  // every session, this one too (the portal's command); the login says so
+  // (`?clave=`), as Flutter did.
   var linkSession = null, uncertain = false;
   function linkState(next, state) { setMode(next); root.dataset.link = state || ''; }
-  function closeLink() {
-    if (!linkSession) return;
-    var token = linkSession.access_token;
-    linkSession = null;
-    fetch(sbUrl + '/auth/v1/logout?scope=local', {
-      method: 'POST', headers: { apikey: sbKey, authorization: 'Bearer ' + token }, keepalive: true
-    }).catch(function () { return null; });
-  }
+  // «Volver al inicio de sesión»: the link's session is closed in Auth
+  // first, as Flutter's `signOut` (an answer of 401 or 403 means it already
+  // was); if it cannot be, the page says so and stays.
   function leaveLink() {
-    closeLink();
-    field('password').value = ''; field('confirm').value = '';
-    linkState('login');
+    var done = function () {
+      linkSession = null;
+      field('password').value = ''; field('confirm').value = '';
+      setBusy(false);
+      linkState('login');
+    };
+    if (!linkSession) { done(); return; }
+    setBusy(true);
+    fetch(sbUrl + '/auth/v1/logout?scope=local', {
+      method: 'POST', headers: { apikey: sbKey, authorization: 'Bearer ' + linkSession.access_token }
+    }).then(function (r) {
+      if (!r.ok && r.status !== 401 && r.status !== 403 && r.status !== 404) throw new Error('refused');
+      done();
+    }).catch(function () { setBusy(false); toast(W.closeFailed, true); });
   }
   function linkFailed(kind) {
     linkSession = null;
@@ -407,12 +415,22 @@ const _script = r'''
     setBusy(true);
     post({ action: 'set-password', kind: kind, values: values }, linkSession.access_token).then(function (answer) {
       if (!answer) throw new Error('offline');
-      if (answer.state === 'expired') { linkFailed(kind); return; }
+      var finish = function () {
+        linkSession = null;
+        location.assign(prefix + '/cuenta/login?' + W.noticeParameter + '=' + (kind === 'invitation' ? 'creada' : 'actualizada'));
+      };
+      // After a change whose answer was lost, a closed session means the
+      // store did close it: the password is the new one.
+      if (answer.state === 'expired') { if (uncertain) finish(); else linkFailed(kind); return; }
       if (answer.errors) { setBusy(false); showErrors(answer.errors); return; }
       if (answer.error) { uncertain = !!answer.uncertain; setBusy(false); toast(answer.error, true); return; }
-      if (answer.done || answer.step === 'revocation') {
-        closeLink();
-        location.assign(prefix + '/cuenta/login?' + W.noticeParameter + '=' + (kind === 'invitation' ? 'creada' : 'actualizada'));
+      if (answer.done) { finish(); return; }
+      if (answer.step === 'revocation') {
+        // The password changed but the sessions could not be closed: the
+        // same button asks again for the closing only.
+        uncertain = true;
+        setBusy(false);
+        toast(W.revocationFailed, true);
         return;
       }
       throw new Error('unknown');

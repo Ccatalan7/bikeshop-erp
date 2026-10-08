@@ -159,6 +159,10 @@ enum CustomerAuthCall {
 
   /// `POST /auth/v1/logout?scope=others`: closes every other session.
   signOutOthers,
+
+  /// `POST /auth/v1/logout?scope=global`: closes every session, this one
+  /// too (an e-mail link's, once it set the password).
+  signOutEverywhere,
 }
 
 /// Supabase refused the customer's session (expired or not valid): the page
@@ -1114,6 +1118,10 @@ class SupabasePublicReads implements PublicReads {
       CustomerAuthCall.signOutOthers => (
         'POST',
         '/auth/v1/logout?scope=others',
+      ),
+      CustomerAuthCall.signOutEverywhere => (
+        'POST',
+        '/auth/v1/logout?scope=global',
       ),
     };
     final request = await _client

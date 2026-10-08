@@ -2352,4 +2352,13 @@ días) y aceptar una invitación. Los correos (`auth_recovery.html`,
   invitación con el cliente creado en la tienda de prueba, entrar con la
   clave creada e invitación usada (en teléfono). Un cambio de hash en la misma
   página no recarga: se prueba entrando desde otra, como llega un correo.
+- **Octava revisión de Codex** (sólo lectura, sobre `019fa582`): un hallazgo
+  real, corregido. La página cerraba la sesión del enlace sin esperar ni mirar
+  la respuesta (`keepalive`); si fallaba, seguía válida en Auth hasta vencer
+  (Flutter esperaba su `signOut` y se detenía). Ahora `set-password` cierra
+  todas las sesiones, la del enlace incluida (`logout?scope=global`); si no
+  puede, la clave ya cambió y el mismo botón pide sólo el cierre otra vez.
+  «Volver al inicio de sesión» espera el cierre y dice si falló. Probado contra
+  el Auth local contando `auth.sessions`: 1 con el enlace abierto, 0 tras
+  cambiar la clave y 0 tras volver.
 

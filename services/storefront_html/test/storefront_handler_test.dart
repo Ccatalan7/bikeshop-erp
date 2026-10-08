@@ -6223,12 +6223,50 @@ void main() {
         'done': true,
         'toast': 'Contraseña actualizada y demás sesiones cerradas.',
       });
+      // Every session closes, the link's too.
       expect(reads.authCalls.map((c) => c.$1), [
         CustomerAuthCall.updatePassword,
-        CustomerAuthCall.signOutOthers,
+        CustomerAuthCall.signOutEverywhere,
       ]);
       // A recovery is an account that already is the store's.
       expect(reads.requested, isNot(contains('enter')));
+
+      // The sessions could not be closed: the same button asks for the
+      // closing only (Auth says «same password» once it changed).
+      reads = _FakeReads(
+        portal: portal(),
+        auth: {CustomerAuthCall.signOutEverywhere: null},
+      );
+      expect(await setPassword(reads, 'pedal2026', 'pedal2026'), {
+        'step': 'revocation',
+        'pending': true,
+      });
+      reads = _FakeReads(
+        portal: portal(),
+        auth: {
+          CustomerAuthCall.updatePassword: (
+            status: 422,
+            code: 'same_password',
+            message: 'New password should be different from the old password.',
+          ),
+        },
+      );
+      expect(
+        (await login(reads, {
+          'action': 'set-password',
+          'kind': 'recovery',
+          'values': {
+            'password': 'pedal2026',
+            'confirm': 'pedal2026',
+            'uncertain': 'true',
+          },
+        }, auth: 'Bearer ${token()}')).$2,
+        {
+          'done': true,
+          'toast': 'Contraseña actualizada y demás sesiones cerradas.',
+        },
+      );
+      expect(reads.authCalls.last.$1, CustomerAuthCall.signOutEverywhere);
 
       // An invitation: this store's customer first, then the password.
       reads = _FakeReads(portal: portal());

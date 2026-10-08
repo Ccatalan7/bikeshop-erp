@@ -68,7 +68,7 @@
     },
     {
       "path": "services/storefront_html/lib/src/public_reads.dart",
-      "sha256": "2c1c1daa7684108d8b5e9487698cce706f3680067b6330c85d92a0fe7603f73a"
+      "sha256": "d34edb5ef6e0186bb7c074ea84a2c1fe8d602ceb4eedd3c95efa9c16132ee8b4"
     },
     {
       "path": "services/storefront_html/lib/src/storefront_handler.dart",
