@@ -331,19 +331,87 @@ abstract final class WebsiteCanvasResponsiveDocument {
             )
             .toList(growable: false)
         : const <Map<String, dynamic>>[];
+    final provenance = slide[WebsiteCanvasMigration.provenanceKey];
+    final storedPhoneWidth = (slide['mobileDesignWidth'] as num?)?.toDouble();
     return <String, dynamic>{
       'backgroundColor': '#00000000',
       'showGrid': showGrid,
       'snap': true,
       'designWidth': (slide['designWidth'] as num?)?.toDouble() ?? 1200.0,
-      'mobileDesignWidth':
-          (slide['mobileDesignWidth'] as num?)?.toDouble() ?? 390.0,
+      // A legacy slide reads its phone width through the old alias, with the
+      // historical 390. A canonical slide carries it in its own responsive
+      // container: synthesizing the alias there read as legacy left over, and
+      // the editor kept offering the update. One that still STORES the alias
+      // keeps reading it, and is honestly not fully migrated.
+      if (!_carouselDeclaresCanonical(slide) || storedPhoneWidth != null)
+        'mobileDesignWidth': storedPhoneWidth ?? 390.0,
       'constrainElementsToSafeArea':
           slide['constrainElementsToSafeArea'] != false,
       'blockHeight': (slide['designHeight'] as num?)?.toDouble() ?? 750.0,
       WebsiteCanvasResponsivePolicy.elementsKey: elements,
       ..._carouselResponsiveContract(slide),
+      // What the migration was made from: the editor reads «Actualizado» and
+      // offers the restore from it.
+      if (provenance is Map)
+        WebsiteCanvasMigration.provenanceKey: _deepCopy(provenance),
     };
+  }
+
+  /// A legacy slide as its phone already reads it, before a migration
+  /// absorbs it: the historical 390 made explicit when the slide never stored
+  /// it, so the canonical slide keeps it in its mobile branch instead of
+  /// falling back to the desktop width. Anything else is returned unchanged.
+  static Map<String, dynamic> carouselSlideBeforeMigration(
+    Map<String, dynamic> slide,
+  ) {
+    if (_carouselDeclaresCanonical(slide) ||
+        slide.containsKey('mobileDesignWidth')) {
+      return slide;
+    }
+    return _deepCopyMap(slide)..['mobileDesignWidth'] = 390.0;
+  }
+
+  /// The migration of [original], run on [carouselSlideBeforeMigration] of it,
+  /// recorded as [original] was: a phone width that was only the historical
+  /// default is recorded as absent, so restoring withdraws the override the
+  /// migration created and leaves no `mobileDesignWidth` behind.
+  static Map<String, dynamic> carouselSlideAfterMigration({
+    required Map<String, dynamic> original,
+    required Map<String, dynamic> migrated,
+  }) {
+    if (_carouselDeclaresCanonical(original) ||
+        original.containsKey('mobileDesignWidth')) {
+      return migrated;
+    }
+    final provenance =
+        _stringKeyedMap(migrated[WebsiteCanvasMigration.provenanceKey]);
+    final records = provenance?['rootAliases'];
+    if (provenance == null || records is! List) return migrated;
+    final next = _deepCopyMap(migrated);
+    next[WebsiteCanvasMigration.provenanceKey] = <String, dynamic>{
+      ...provenance,
+      'rootAliases': <Object?>[
+        for (final raw in records)
+          if (_stringKeyedMap(raw) case final record?
+              when record['alias'] == 'mobileDesignWidth')
+            (<String, dynamic>{...record, 'present': false}..remove('value'))
+          else
+            _deepCopy(raw),
+      ],
+    };
+    return next;
+  }
+
+  static bool _carouselDeclaresCanonical(Map<String, dynamic> slide) {
+    final marker = slide[schemaVersionKey];
+    final rawContainer = slide[WebsiteResponsiveDataCodec.containerKey];
+    final containerVersion = rawContainer is Map
+        ? rawContainer[WebsiteResponsiveDataCodec.versionKey]
+        : null;
+    return (marker is num && marker.toInt() >= schemaVersion) ||
+        (containerVersion is num &&
+            containerVersion.toInt() >=
+                WebsiteResponsiveDataCodec.schemaVersion);
   }
 
   /// Forwards only the nested Canvas root override vocabulary.
@@ -353,17 +421,12 @@ abstract final class WebsiteCanvasResponsiveDocument {
   static Map<String, dynamic> _carouselResponsiveContract(
     Map<String, dynamic> slide,
   ) {
+    if (!_carouselDeclaresCanonical(slide)) return const <String, dynamic>{};
     final marker = slide[schemaVersionKey];
     final rawContainer = slide[WebsiteResponsiveDataCodec.containerKey];
     final containerVersion = rawContainer is Map
         ? rawContainer[WebsiteResponsiveDataCodec.versionKey]
         : null;
-    final declaresCanonical =
-        (marker is num && marker.toInt() >= schemaVersion) ||
-            (containerVersion is num &&
-                containerVersion.toInt() >=
-                    WebsiteResponsiveDataCodec.schemaVersion);
-    if (!declaresCanonical) return const <String, dynamic>{};
 
     final contract = <String, dynamic>{};
     if (marker is num) contract[schemaVersionKey] = marker.toInt();

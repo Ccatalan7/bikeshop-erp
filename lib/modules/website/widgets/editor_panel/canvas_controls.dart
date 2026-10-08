@@ -1,5 +1,14 @@
 part of '../website_editor_panel.dart';
 
+/// The width a Canvas lays its layers out in when it declares none
+/// (`CanvasBlock`, and `canvasReferenceWidth` in the HTML store).
+const double _kCanvasReferenceDesignWidth = 1200;
+
+/// The narrowest and widest design width the inspector accepts: a phone
+/// design narrower than 320 or a desktop wider than 2400 has no screen.
+const double _kCanvasMinDesignWidth = 320;
+const double _kCanvasMaxDesignWidth = 2400;
+
 /// One Canvas document, resolved once for the surface that is editing it.
 ///
 /// Everything the inspector shows comes from here: the effective root values
@@ -944,6 +953,52 @@ class _CanvasBlockControls extends StatelessWidget {
             icon: Icons.crop_free_rounded,
             initiallyExpanded: true,
             children: [
+              // The width the layers are placed in, one per view like their
+              // geometry: a tablet laid out in 768 instead of shrinking the
+              // desktop's 1200, whose text keeps its size while the rest
+              // shrinks. Ignores partial input: typing «768» passes 7 and 76.
+              _mount<num>(
+                surface.number('designWidth', label: 'Ancho de diseño'),
+                (binding) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _EditorTextField(
+                      label: '',
+                      value: (binding.value?.toDouble() ??
+                              _kCanvasReferenceDesignWidth)
+                          .toStringAsFixed(0),
+                      asyncBinding: _asyncFieldBinding(binding),
+                      onChanged: (v) {
+                        final parsed = double.tryParse(v.trim());
+                        if (parsed == null || parsed < _kCanvasMinDesignWidth) {
+                          return;
+                        }
+                        binding.write(
+                          parsed
+                              .clamp(
+                                _kCanvasMinDesignWidth,
+                                _kCanvasMaxDesignWidth,
+                              )
+                              .roundToDouble(),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Las capas se ubican en este ancho. En una pantalla más '
+                      'angosta todo se achica en proporción, menos el texto; '
+                      'en una más ancha se centra. Tablet y Móvil pueden '
+                      'tener el suyo.',
+                      style: TextStyle(
+                        color: Colors.white38,
+                        fontSize: 11,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
               _mount<bool>(
                 surface.boolean(
                   'constrainElementsToSafeArea',

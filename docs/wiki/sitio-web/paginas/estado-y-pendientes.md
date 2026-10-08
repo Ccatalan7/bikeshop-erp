@@ -67,7 +67,6 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 
 | Desde | Qué | Página |
 |---|---|---|
-| 2026-10-08 | **Diapositiva de cámaras entre 600 y 1050 px** (tableta, laptop angosta): usa el diseño de escritorio reducido; las posiciones se achican y el texto no, así que «CÁMARAS» se monta sobre «PARA SEGUIR RODANDO» y la primera línea queda bajo el encabezado (medido a 768 y 1024 px). Necesita su propio diseño de tableta en el editor (Tablet) | [editor](editor-del-sitio.md) |
 | 2026-10-07 | Vista HTML del editor: medir el zoom de ventana en Windows (en el ERP web quedó verificada con 2450c55e: barra, «Agregar aquí», alto y escritura) | [editor](editor-del-sitio.md) |
 | 2026-10-04 | **Descripciones de producto**: 29 de 1.541 publicados tienen texto; el JSON-LD y la página no tienen qué mostrar en el resto (contenido, no marcado) | [datos-estructurados](datos-estructurados.md) |
 | 2026-10-04 | Términos de devolución (días, quién paga, reembolso) como campos del editor, para declararlos además del link (regla 1: primero el control) | [datos-estructurados](datos-estructurados.md) |
@@ -92,6 +91,7 @@ en [seo-de-referentes](seo-de-referentes.md); lo que sigue es la lista de trabaj
 
 | Fecha | Qué | Página |
 |---|---|---|
+| 2026-10-08 | **Diapositiva de cámaras en tableta y escritorio angosto**: entre 600 y 900 px usaba el escritorio de 1200 reducido (el título se montaba sobre la segunda línea) y entre 900 y ~1046 la primera línea quedaba bajo el encabezado y las flechas tapaban el botón. Se agregó al editor «Ancho de diseño» por dispositivo, se actualizó la diapositiva a las bandas 600/900 y se le dio una tableta propia de 768 (dos columnas) y un escritorio corrido; 80 valores (el primer guardado, igual a la simulación previa), sin tocar el teléfono ni las otras diapositivas. En vivo de 390 a 1440 px: nada bajo el encabezado, ningún texto cruzado y nada bajo las flechas | [editor](editor-del-sitio.md) |
 | 2026-10-08 | **Diapositiva de cámaras en teléfono**: la primera línea («Equipamiento para tu ruta», y=38) quedaba bajo el encabezado de 68 px y la nota final rozaba las flechas del carrusel. Reacomodadas desde el editor (Móvil) las 15 capas de teléfono: texto desde y=84, productos al 88 %; 26 valores, comparado contra la base antes y después sin otro cambio; en vivo a 390 px: primera línea a 84, nota hasta 683, flechas en 696 | [editor](editor-del-sitio.md) |
 | 2026-10-08 | **ERP web (también el iPhone en Safari)**: las hojas, menús y diálogos del editor sobre la Vista HTML reciben el toque y el clic; antes se los llevaba la página de abajo | [editor](editor-del-sitio.md) |
 | 2026-10-07 | **Embudo de GA4 completo**: listas (`view_item_list`, `select_item`), carrito (`view_cart`, `add_to_cart`/`remove_from_cart` con + y −) y checkout (`add_shipping_info`, `add_payment_info`) desde la tienda HTML; probado de la lista al medio de pago en la tienda local de prueba | [medicion](medicion.md) |

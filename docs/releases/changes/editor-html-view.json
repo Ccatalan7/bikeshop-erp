@@ -12,8 +12,7 @@
   "title": "Vista HTML en el editor del sitio",
   "summary": "En macOS, Android y el ERP web el editor del sitio abre en «Vista HTML»: la página tal como la arma la tienda en HTML, con lo que aún no guardas, y se actualiza con cada cambio.",
   "items": [
-    "Un clic o un toque elige el bloque o una capa, que se arrastra con guías, se gira y cambia de tamaño; textos, botones y fotos se cambian en su lugar.",
-    "En el ERP web, las hojas, menús y diálogos que se abren sobre la vista responden al toque y al clic, y cerrarlos no toca la página."
+    "Un clic o un toque elige un bloque o una capa para moverla, girarla o editarla en su lugar; en el ERP web, hojas y menús sobre la vista responden al toque."
   ],
   "evidence": [
     {
@@ -26,7 +25,7 @@
     },
     {
       "path": "lib/modules/website/providers/website_edit_mode_provider.dart",
-      "sha256": "74fc3f9145529d227dc20cdfa853e9dcc7c66c90269cce7eaf1300bb5c96761e"
+      "sha256": "545ebf4a4a3a786f7c9e996234ce55db463af9f2d2b69651eb5ff604f598f37f"
     },
     {
       "path": "lib/modules/website/widgets/website_editor_chrome_geometry.dart",

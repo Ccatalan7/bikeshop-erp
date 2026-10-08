@@ -2,7 +2,7 @@
 titulo: El editor del sitio
 resumen: cómo funciona el editor de vinabike.cl dentro del ERP — sus dos planos de control, los espacios de administración, los bloques, el guardado y el teléfono
 fuentes: [repositorio]
-archivos: [docs/architecture/website-editor-contract.md, lib/public_store/widgets/store_layout/site_settings_index.dart, lib/modules/website/widgets/editor_panel/backups_dialog.dart, supabase/migrations/20261006200000_website_versions_keep_last_30.sql, lib/modules/website/models/website_catalog_canvas.dart, lib/modules/website/widgets/website_editor_selectable_surface.dart, lib/modules/website/widgets/editor_panel/catalog_section_controls.dart, services/storefront_html/lib/src/website_blocks_view.dart, services/storefront_html/lib/src/website_section_blocks_view.dart, lib/modules/website/widgets/website_section_frame.dart, packages/vinabike_public_core/lib/modules/website/models/website_block_surface_spec.dart, lib/modules/website/providers/website_edit_mode_provider.dart, lib/modules/website/services/website_save_coordinator.dart, lib/modules/website/models/website_block_type.dart, lib/modules/website/services/website_editor_draft_controller.dart, lib/shared/routes/public_store_shell_page.dart]
+archivos: [docs/architecture/website-editor-contract.md, lib/public_store/widgets/store_layout/site_settings_index.dart, lib/modules/website/widgets/editor_panel/backups_dialog.dart, supabase/migrations/20261006200000_website_versions_keep_last_30.sql, lib/modules/website/models/website_catalog_canvas.dart, lib/modules/website/widgets/website_editor_selectable_surface.dart, lib/modules/website/widgets/editor_panel/catalog_section_controls.dart, services/storefront_html/lib/src/website_blocks_view.dart, services/storefront_html/lib/src/website_section_blocks_view.dart, lib/modules/website/widgets/website_section_frame.dart, packages/vinabike_public_core/lib/modules/website/models/website_block_surface_spec.dart, lib/modules/website/providers/website_edit_mode_provider.dart, lib/modules/website/services/website_save_coordinator.dart, lib/modules/website/models/website_block_type.dart, lib/modules/website/services/website_editor_draft_controller.dart, lib/shared/routes/public_store_shell_page.dart, lib/modules/website/widgets/editor_panel/canvas_controls.dart, packages/vinabike_public_core/lib/modules/website/models/website_canvas_responsive_document.dart]
 tablas: [website_pages, website_blocks, website_navigation, website_settings, featured_products, website_backups]
 revisado: 2026-10-06
 ---
@@ -239,7 +239,19 @@ HTML aún no dibuja aparece señalada en su lugar. Carrito, pago, pedidos y
 cuenta siguen en el lienzo. Sólo la ve quien puede guardar el sitio, y no
 cuenta como visita en Analytics `[Repo 2026-10-07]` `[Prod 2026-10-07]`.
 
-**El encabezado transparente tapa la parte de arriba del primer bloque (2026-10-08).** En la portada flota encima del carrusel (en el lienzo, en la vista HTML y en la tienda), y las capas de una campaña se ubican desde el borde del bloque: lo que se ponga en los primeros ~70 px de diseño (68 px de encabezado en teléfono, más en uno de 360 px, donde el diseño de 390 se reduce) queda debajo. Una capa de texto no se achica con el ancho: un diseño de escritorio (1200) reducido a tableta monta sus líneas. La diapositiva de cámaras tenía las dos cosas; el teléfono se corrigió desde el editor y la tableta sigue pendiente `[Prod 2026-10-08]`.
+**El encabezado transparente tapa la parte de arriba del primer bloque (2026-10-08).** En la portada flota encima del carrusel (en el lienzo, en la vista HTML y en la tienda), y las capas de una campaña se ubican desde el borde del bloque: lo que se ponga en los primeros ~70 px de diseño (68 px de encabezado en teléfono, más en uno de 360 px, donde el diseño de 390 se reduce) queda debajo. Una capa de texto no se achica con el ancho: un diseño de escritorio (1200) reducido a tableta monta sus líneas. La diapositiva de cámaras tenía las dos cosas; se corrigió entera desde el editor el 2026-10-08 (ver abajo) `[Prod 2026-10-08]`.
+
+**Cada dispositivo de una composición tiene su ancho de diseño (2026-10-08).** Las capas de un lienzo o de una diapositiva se ubican en un ancho de diseño y se achican en proporción cuando la pantalla es más angosta, **menos el texto**; en una más ancha se centran. Un documento actualizado («Actualizar configuración», que se puede restaurar) usa las bandas 600/900: Móvil bajo 600, Tablet de 600 a 899 y Escritorio desde 900; uno anterior pasa de teléfono a escritorio en 600, sin tableta. «Ancho de diseño», en «Reglas del lienzo», le da a cada dispositivo el suyo: en Escritorio es el común y en Tablet o Móvil, con el alcance de escritura en ese dispositivo, crea el propio (sin elegir el alcance, Tablet escribe el común). Antes no había control y la tableta heredaba los 1200 del escritorio `[Repo 2026-10-08]`.
+
+Cómo se diseña una banda, aprendido con la diapositiva de cámaras: se mide en el ancho más angosto que la usa, porque ahí las posiciones están más juntas y el texto no cambió. Entre dos textos seguidos el diseño deja al menos (alto del texto + aire) ÷ escala; la primera línea queda bajo el encabezado sólo si su y de diseño × escala pasa los 68 px; y nada se cruza con las flechas del carrusel, que desde 600 px van a los costados (24–70 px del borde, 352–398 px de alto) y bajo 600 abajo, junto a los puntos. Cámaras quedó así `[Prod 2026-10-08]`:
+
+| Banda | Ancho de diseño | Escala | Composición |
+|---|---|---|---|
+| Móvil (< 600) | 390 | ≤ 1 | apilada: texto desde y 84, productos abajo |
+| Tablet (600–899) | 768 | 0,78–1 (centrada desde 768) | dos columnas: texto en x 104 desde y 150; productos en un círculo de 250 desde y 200; título 64 px y segunda línea 26 |
+| Escritorio (≥ 900) | 1200 | 0,75–1 | dos columnas: texto en x 100 desde y 104; productos 40 a la izquierda de antes |
+
+Antes, entre 900 y ~1046 px la primera línea quedaba bajo el encabezado, entre 900 y ~1000 las flechas tapaban el botón y el producto 10Ten, y entre 600 y 900 el título se montaba sobre la segunda línea. Comprobado en vivo a 390, 600, 640, 768, 834, 899, 900, 1024, 1200 y 1440 px: ningún texto bajo el encabezado, ningún texto cruzado y nada bajo las flechas.
 
 **El catálogo del lienzo es el del cliente (2026-10-07).** Editar cargaba su
 propio catálogo —también lo no publicado y lo agotado— y lo filtraba y
@@ -291,7 +303,8 @@ de la página se desplaza. Es la que abre el ERP en la web, también en el
 navegador de un teléfono, y la app de Android desde el 2026-10-08: ahí se
 escribe con «Listo» o ✕ en la barra del texto, el texto queda bajo el
 encabezado al abrirse el teclado y un bloque oculto sigue a la vista con
-«Oculto». El iPhone sigue en el lienzo Flutter `[Repo 2026-10-08]`.
+«Oculto». En el iPhone el editor es el ERP web en Safari, con la misma vista
+HTML `[Repo 2026-10-08]`.
 
 ## Trampas
 
@@ -328,6 +341,17 @@ encabezado al abrirse el teclado y un bloque oculto sigue a la vista con
   desecharse guardaba el borrador abierto y el nuevo lo ofrecía como «Hay un
   borrador local sin guardar». Cada lugar condicional del editor lleva llave
   `[Repo 2026-10-07]`.
+- **Una diapositiva se lee por una proyección y se escribe cruda.** El
+  inspector lee `carouselAuthoringDocument`, que inventaba `mobileDesignWidth`
+  (390) para toda diapositiva y no traía el registro de la migración: una
+  diapositiva actualizada, y también toda la que se compone en el editor,
+  seguía diciendo «Configuración anterior» y nunca ofrecía restaurar. Desde el
+  2026-10-08 el alias sólo se proyecta en una diapositiva anterior, el registro
+  viaja, y la migración de una diapositiva que nunca guardó su ancho de
+  teléfono lo deja explícito (390) antes de absorberlo
+  (`carouselSlideBeforeMigration`) y lo registra como ausente
+  (`carouselSlideAfterMigration`), así «Restaurar» devuelve la diapositiva tal
+  como estaba guardada (hallazgo de Codex) `[Repo 2026-10-08]`.
 - Material pinta un botón sin `onPressed` con su gris de deshabilitado, encima
   de los colores que le da el bloque: en Editar el botón blanco del banner se
   leía oscuro sobre oscuro. `WebsiteActionButton` conserva los colores del

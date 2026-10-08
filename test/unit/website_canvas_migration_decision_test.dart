@@ -900,4 +900,163 @@ void main() {
       );
     });
   });
+
+  // The slide's Canvas is read through `carouselAuthoringDocument`, while the
+  // commands write the stored slide. The projection used to synthesize the
+  // legacy `mobileDesignWidth` for every slide and to drop the provenance, so
+  // a migrated or newly composed slide still read as «Configuración anterior»
+  // and «Restaurar» was never offered (camera slide, 2026-10-08).
+  group('H · un slide lee su propio estado de migración', () {
+    test('migrado: queda actualizado y ofrece restaurar', () {
+      final provider = _provider(<Map<String, dynamic>>[
+        _carouselBlock(_safeDocument()),
+      ]);
+      addTearDown(provider.dispose);
+      final before = jsonEncode(
+        provider.canvasDocument('carousel-block', slideIndex: 0),
+      );
+
+      expect(
+        provider.migrateCanvasDocument('carousel-block', slideIndex: 0),
+        isTrue,
+      );
+      final status =
+          provider.canvasMigrationStatus('carousel-block', slideIndex: 0)!;
+      expect(status.state, WebsiteCanvasMigrationState.migrated);
+      expect(status.canRestore, isTrue);
+      final migrated =
+          provider.canvasDocument('carousel-block', slideIndex: 0)!;
+      expect(migrated.containsKey('mobileDesignWidth'), isFalse);
+      expect(
+        WebsiteCanvasResponsiveDocument.project(
+          data: migrated,
+          viewport: WebsiteViewport.mobile,
+        )['designWidth'],
+        390.0,
+      );
+
+      expect(
+        provider.restoreCanvasLegacyDocument(
+          'carousel-block',
+          slideIndex: 0,
+        ),
+        isTrue,
+      );
+      expect(
+        provider.canvasMigrationStatus('carousel-block', slideIndex: 0)!.state,
+        WebsiteCanvasMigrationState.safe,
+      );
+      expect(
+        jsonEncode(provider.canvasDocument('carousel-block', slideIndex: 0)),
+        before,
+      );
+    });
+
+    test('compuesto en el editor: nace actualizado, con su teléfono a 390', () {
+      final provider = _provider(<Map<String, dynamic>>[
+        <String, dynamic>{
+          'id': 'carousel-block',
+          'block_type': 'carousel',
+          'order_index': 0,
+          'is_visible': true,
+          'block_data': <String, dynamic>{
+            'slides': <Map<String, dynamic>>[
+              <String, dynamic>{
+                'title': 'Cámaras',
+                'subtitle': 'Para seguir rodando',
+                'imageUrl': 'https://example.com/camaras.webp',
+              },
+            ],
+          },
+        },
+      ]);
+      addTearDown(provider.dispose);
+
+      expect(
+        provider.initializeCanvasComposition('carousel-block', slideIndex: 0),
+        isTrue,
+      );
+      final document =
+          provider.canvasDocument('carousel-block', slideIndex: 0)!;
+      expect(
+        provider.canvasMigrationStatus('carousel-block', slideIndex: 0)!.state,
+        WebsiteCanvasMigrationState.canonical,
+      );
+      expect(
+        WebsiteCanvasResponsiveDocument.project(
+          data: document,
+          viewport: WebsiteViewport.mobile,
+        )['designWidth'],
+        390.0,
+      );
+    });
+
+    test('canónico que aún guarda el ancho viejo: lo sigue leyendo', () {
+      final provider = _provider(<Map<String, dynamic>>[
+        _carouselBlock(<String, dynamic>{
+          'canvasResponsiveVersion': 2,
+          'designWidth': 1200.0,
+          'mobileDesignWidth': 420.0,
+          'elements': <Map<String, dynamic>>[
+            <String, dynamic>{'id': 'a', 'type': 'text', 'visible': true},
+          ],
+        }),
+      ]);
+      addTearDown(provider.dispose);
+      final document =
+          provider.canvasDocument('carousel-block', slideIndex: 0)!;
+
+      expect(
+        WebsiteCanvasResponsiveDocument.project(
+          data: document,
+          viewport: WebsiteViewport.mobile,
+        )['designWidth'],
+        420.0,
+        reason: 'lo que el teléfono dibujaba antes',
+      );
+      expect(
+        provider.canvasMigrationStatus('carousel-block', slideIndex: 0)!.state,
+        isNot(WebsiteCanvasMigrationState.canonical),
+        reason: 'todavía guarda una clave anterior',
+      );
+    });
+
+    test('anterior sin ancho de teléfono guardado: conserva sus 390', () {
+      final legacy = _safeDocument()..remove('mobileDesignWidth');
+      final provider = _provider(<Map<String, dynamic>>[
+        _carouselBlock(legacy),
+      ]);
+      addTearDown(provider.dispose);
+      double phoneWidth() => WebsiteCanvasResponsiveDocument.project(
+            data: provider.canvasDocument('carousel-block', slideIndex: 0)!,
+            viewport: WebsiteViewport.mobile,
+          )['designWidth'] as double;
+
+      Object? storedSlide() => jsonDecode(
+            jsonEncode(
+              (provider.blocks.first['block_data'] as Map)['slides'][0],
+            ),
+          );
+      final before = storedSlide();
+
+      expect(phoneWidth(), 390.0, reason: 'lo que el teléfono lee hoy');
+      expect(
+        provider.migrateCanvasDocument('carousel-block', slideIndex: 0),
+        isTrue,
+      );
+      expect(phoneWidth(), 390.0);
+
+      // Restoring gives back the slide as stored: the 390 was a default, so
+      // it does not stay written (Codex, 2026-10-08).
+      expect(
+        provider.restoreCanvasLegacyDocument(
+          'carousel-block',
+          slideIndex: 0,
+        ),
+        isTrue,
+      );
+      expect(storedSlide(), equals(before));
+      expect(phoneWidth(), 390.0);
+    });
+  });
 }

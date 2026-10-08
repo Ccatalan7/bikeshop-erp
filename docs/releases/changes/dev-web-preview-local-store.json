@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "general",
+  "id": "dev-web-preview-local-store",
+  "scope": "internal",
+  "platforms": [
+    "web"
+  ],
+  "title": "",
+  "summary": "",
+  "items": [],
+  "evidence": [
+    {
+      "path": "scripts/dev/web_preview.sh",
+      "sha256": "9d80435c3a0ac742da5d8a4a596b488a056c41b8d503a8b42320827a6ca0754e"
+    }
+  ]
+}

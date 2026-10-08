@@ -6244,7 +6244,14 @@ class WebsiteEditModeProvider extends ChangeNotifier {
       slideIndex,
       'migrateCanvasDocument',
       (document) {
-        final result = WebsiteCanvasMigration.migrate(document);
+        final result = WebsiteCanvasMigration.migrate(
+          _canvasBeforeMigration(document, slideIndex),
+        );
+        final migrated = _canvasAfterMigration(
+          document,
+          slideIndex,
+          result.document,
+        );
         if (result.issues.isNotEmpty) {
           throw StateError(
             'this Canvas needs a decision first: '
@@ -6256,7 +6263,7 @@ class WebsiteEditModeProvider extends ChangeNotifier {
             'the migrated document still carries legacy visibility flags',
           );
         }
-        return result.document;
+        return migrated;
       },
     );
   }
@@ -6274,7 +6281,14 @@ class WebsiteEditModeProvider extends ChangeNotifier {
       slideIndex,
       'migrateCanvasDocumentKeepingLayers',
       (document) {
-        final result = WebsiteCanvasMigration.migrateKeepDistinct(document);
+        final result = WebsiteCanvasMigration.migrateKeepDistinct(
+          _canvasBeforeMigration(document, slideIndex),
+        );
+        final migrated = _canvasAfterMigration(
+          document,
+          slideIndex,
+          result.document,
+        );
         if (!result.changed) {
           throw StateError(
             'this Canvas cannot be migrated from here: '
@@ -6286,10 +6300,37 @@ class WebsiteEditModeProvider extends ChangeNotifier {
             'the migrated document still carries legacy visibility flags',
           );
         }
-        return result.document;
+        return migrated;
       },
     );
   }
+
+  /// A carousel slide is migrated as its phone already reads it
+  /// ([WebsiteCanvasResponsiveDocument.carouselSlideBeforeMigration]); a
+  /// Canvas block as stored.
+  static Map<String, dynamic> _canvasBeforeMigration(
+    Map<String, dynamic> document,
+    int? slideIndex,
+  ) =>
+      slideIndex == null
+          ? document
+          : WebsiteCanvasResponsiveDocument.carouselSlideBeforeMigration(
+              document,
+            );
+
+  /// ... and recorded as it was stored, so a restore is exact
+  /// ([WebsiteCanvasResponsiveDocument.carouselSlideAfterMigration]).
+  static Map<String, dynamic> _canvasAfterMigration(
+    Map<String, dynamic> original,
+    int? slideIndex,
+    Map<String, dynamic> migrated,
+  ) =>
+      slideIndex == null
+          ? migrated
+          : WebsiteCanvasResponsiveDocument.carouselSlideAfterMigration(
+              original: original,
+              migrated: migrated,
+            );
 
   /// Restores the exact document a migration came from.
   ///

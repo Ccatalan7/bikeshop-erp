@@ -4,6 +4,9 @@ Una línea por operación, la más nueva arriba: `fecha — operación — qué 
 Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
 **corrección**.
 
+- 2026-10-08 — corrección — [editor](paginas/editor-del-sitio.md) y
+  [estado](paginas/estado-y-pendientes.md): ancho de diseño por dispositivo y
+  la diapositiva de cámaras en tableta.
 - 2026-10-07 — corrección — [editor](paginas/editor-del-sitio.md) y
   [estado](paginas/estado-y-pendientes.md): la Vista HTML del editor (fases
   5b y 5c) y lo que le falta.
@@ -543,3 +546,24 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   encabezado (las capas se ubican desde el borde del bloque y el encabezado
   transparente flota encima, en el editor igual que en la tienda). Corregida
   desde el editor; en tableta sigue montada (pendiente).
+
+## 2026-10-08 — Una tableta propia para la diapositiva de cámaras
+
+- La composición sólo tenía escritorio (1200) y teléfono (390). Entre 600 y
+  900 px el escritorio se achicaba con el texto del mismo tamaño y el título
+  montaba la segunda línea; entre 900 y ~1046 la primera línea quedaba bajo
+  el encabezado y las flechas del carrusel tapaban el botón.
+- El editor no tenía cómo darle a Tablet su propio ancho de diseño (el dato
+  existía; faltaba el control). Se agregó «Ancho de diseño» en «Reglas del
+  lienzo», con valor propio por dispositivo.
+- Al actualizar la diapositiva, el editor la seguía mostrando como
+  «Configuración anterior»: la proyección que lee el inspector inventaba el
+  ancho de teléfono viejo y perdía el registro de la migración. Corregido,
+  con pruebas que lo reproducen (también afectaba a toda diapositiva compuesta
+  en el editor). Codex revisó el cambio y halló que restaurar una diapositiva
+  que nunca guardó su ancho de teléfono dejaba escrito el 390; corregido.
+- Desde el editor de producción: actualizar, 24 valores de escritorio, ancho
+  de tableta 768 y 55 valores de tableta, cada capa comprobada antes de
+  escribir; el guardado quedó igual a la simulación local. Con el documento
+  actualizado el carrusel pone sus flechas a los costados desde 600 px (antes
+  640): la línea naranja de tableta se corrió 8 unidades por eso.

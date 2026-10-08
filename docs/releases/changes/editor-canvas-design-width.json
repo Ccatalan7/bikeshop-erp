@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "editor-canvas-design-width",
+  "scope": "release",
+  "platforms": [
+    "web",
+    "macos",
+    "windows",
+    "android"
+  ],
+  "title": "Diseño de tableta en los lienzos del sitio",
+  "summary": "El lienzo de un bloque o de una diapositiva puede tener su propio ancho de diseño en Tablet y en Móvil, y una diapositiva actualizada ya no vuelve a pedir la actualización.",
+  "items": [
+    "En «Reglas del lienzo», «Ancho de diseño» le da a Tablet y Móvil su propio ancho; una diapositiva actualizada queda «Actualizado» y se puede restaurar."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/website/widgets/editor_panel/canvas_controls.dart",
+      "sha256": "27ed31a21c3109233a5fbe0a1942f44be6fa82401b15648af1725f8c29fb0b51"
+    },
+    {
+      "path": "lib/modules/website/providers/website_edit_mode_provider.dart",
+      "sha256": "545ebf4a4a3a786f7c9e996234ce55db463af9f2d2b69651eb5ff604f598f37f"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/modules/website/models/website_canvas_responsive_document.dart",
+      "sha256": "fb58caf269b0b9d45e80d15c317fce6245c7cc9870c15cf241cdbd0fa72f949c"
+    }
+  ]
+}

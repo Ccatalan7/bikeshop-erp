@@ -281,6 +281,13 @@ correrlo. Sin eso valida la versión anterior y dice «verified» igual; el
 2026-10-02 un ítem de 186 letras pasó así y se commiteó, y el error recién
 apareció al volver a validar después del commit.
 
+**Siempre con `--from-commit <base>`.** Sin él, `--check-index` revisa la
+forma y las huellas de los registros del índice, pero no el rango: no ve un
+archivo cambiado que ningún registro cubre ni el tope de tres novedades por
+módulo. El 2026-10-08 `ae0218a7` salió así con `scripts/dev/web_preview.sh`
+sin registro y una cuarta novedad del sitio; lo atrapó la validación con base
+del commit siguiente, que tuvo que agregar el registro y fundir novedades.
+
 Se valida antes de **cada** commit, también uno «sólo de CI» o de
 configuración: si toca un archivo que un registro abierto cita como evidencia
 (un flujo de `.github/workflows/`, `firebase.json`), ese registro necesita su

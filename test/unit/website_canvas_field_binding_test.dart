@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/widgets.dart' show Size;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:vinabike_erp/modules/website/models/website_canvas_responsive_document.dart';
 import 'package:vinabike_erp/modules/website/models/website_responsive_authoring.dart';
 import 'package:vinabike_erp/modules/website/models/website_responsive_field_state.dart';
 import 'package:vinabike_erp/modules/website/models/website_canvas_manipulation.dart';
@@ -309,6 +310,52 @@ void main() {
         'version': 2,
         'tablet': <String, dynamic>{'x': 700.0},
       },
+      reason: 'the sibling slide is untouched',
+    );
+  });
+
+  // «Ancho de diseño» in «Reglas del lienzo»: a tablet laid out in its own
+  // width instead of the desktop's shrunk (camera slide, 2026-10-08).
+  test('the design width is one per view: the tablet gets its own', () {
+    final provider = _provider(<Map<String, dynamic>>[_carouselBlock()]);
+    addTearDown(provider.dispose);
+    final sibling = jsonEncode(
+      provider.canvasDocument('carousel-block', slideIndex: 1),
+    );
+    provider.setDevicePreviewMode(DevicePreviewMode.tablet);
+    // A root field has no layer to select: the inspector shows it for the
+    // block being edited.
+    provider.selectBlock('carousel-block');
+
+    final field = _numberField(
+      provider,
+      blockId: 'carousel-block',
+      slideIndex: 0,
+      propertyKey: 'designWidth',
+    )!;
+    expect(field.value, 1200.0, reason: 'the tablet inherits the base');
+    field.customize();
+    _numberField(
+      provider,
+      blockId: 'carousel-block',
+      slideIndex: 0,
+      propertyKey: 'designWidth',
+    )!
+        .write(768.0);
+
+    final document = provider.canvasDocument('carousel-block', slideIndex: 0)!;
+    double width(WebsiteViewport viewport) =>
+        WebsiteCanvasResponsiveDocument.project(
+          data: document,
+          viewport: viewport,
+        )['designWidth'] as double;
+    expect(width(WebsiteViewport.tablet), 768.0);
+    expect(width(WebsiteViewport.desktop), 1200.0);
+    expect(width(WebsiteViewport.mobile), 1200.0,
+        reason: 'the phone keeps what it read, here the base');
+    expect(
+      jsonEncode(provider.canvasDocument('carousel-block', slideIndex: 1)),
+      sibling,
       reason: 'the sibling slide is untouched',
     );
   });

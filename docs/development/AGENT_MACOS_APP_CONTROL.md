@@ -1348,6 +1348,33 @@ es actual. Y `app_control.sh type` sin un campo con foco no escribe en el
 lienzo: el ERP lo toma como «escribir abre el buscador» y abre la paleta
 global.
 
+### Editar un lienzo del sitio desde el inspector (2026-10-08)
+
+Lo que sirvió para mover 80 valores de capas en producción sin un error (la
+diapositiva de cámaras):
+
+- **Las filas de «Canvas Elements» van en el orden del documento, cada 40
+  px.** `find`/`tap` sólo alcanzan las que están a la vista, y varias capas
+  repiten nombre («Forma», o el mismo texto en escritorio y teléfono). Se
+  sube el panel (`scroll 1685 600 200`), se baja una cantidad fija y se mide
+  una vez dónde cae una fila conocida: la fila k queda en `base + 40·k`. La
+  base cambia cuando cambia el alto de lo que va arriba (en Tablet, con un
+  ancho de diseño propio, bajó 23 px): se vuelve a medir.
+- **Antes de escribir se compara la geometría de la capa elegida** (X, Y,
+  Ancho, Alto leídos con `read`) con la esperada; si no calza, no se escribe.
+  Los campos se rotulan «X: Común», «X: Heredado» o «X: Personalizado para
+  Tablet»: el rótulo se toma de `read` hasta el primer punto y se usa en
+  `enter-text --label`.
+- **En Tablet o Móvil hay que elegir el alcance de escritura del dispositivo**
+  (barra superior, «Alcance de escritura: Común | Tablet»). Con «Común», lo
+  que se escribe en Tablet cambia el escritorio.
+- **Un deslizador (tamaño de letra) se fija tocando su riel, no
+  arrastrando.** El arrastre pierde el umbral del gesto: de 72 a «64» quedó en
+  70. Un `click` en `x = inicio + (valor − mín) / (máx − mín) × largo` deja el
+  valor exacto; el riel se mide en un recorte del `shot`.
+- **«Guardar» saca al editor del modo edición.** Para seguir hay que tocar
+  «Editar» (en la barra) y volver a elegir el bloque.
+
 ## Probar un atajo de teclado: tres trampas, una detrás de otra (2026-09-17)
 
 Verificar `⌘K` y «escribir abre el buscador» costó cuatro rondas, todas gastadas

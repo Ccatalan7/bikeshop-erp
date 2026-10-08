@@ -13,8 +13,7 @@
   "title": "Secciones nuevas y el catálogo del cliente en el editor del sitio",
   "summary": "Cifras, carta del taller, planes, reseñas, galería, equipo, preguntas, franja de marcas y llamado tienen un diseño nuevo de borde a borde, igual en el editor y en la página, con su formato y su fondo. El catálogo del editor muestra los mismos productos que ve el cliente.",
   "items": [
-    "Secciones nuevas de borde a borde (cifras, planes, reseñas, galería, llamado) con datos reales de la tienda; un texto que no cabe en el lienzo ya no se corta.",
-    "En Editar, el catálogo muestra los mismos productos, cantidades y páginas que ve el cliente; antes sumaba los no publicados y los agotados."
+    "Secciones nuevas de borde a borde con datos reales, sin textos cortados; en Editar el catálogo muestra los mismos productos y páginas que ve el cliente."
   ],
   "evidence": [
     {
