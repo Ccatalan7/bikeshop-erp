@@ -237,15 +237,20 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel>
     // descartaba el chat restaurado antes de poder mostrarlo.
     if (selectedConversationId != null &&
         selectedConversation == null &&
-        provider.conversations.isNotEmpty) {
+        provider.conversations.isNotEmpty &&
+        !isAwaitingConversation(selectedConversationId)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || selectedConversationId == null) return;
         returnToInbox(selectedConversationId!);
       });
     }
 
+    final awaiting = selectedConversation == null &&
+        isAwaitingConversation(selectedConversationId);
     // Se anuncia lo que se DIBUJA, no lo que se pretendía abrir.
-    announceConversationVisibility(selectedConversation != null);
+    announceConversationVisibility(selectedConversation != null || awaiting);
+
+    if (awaiting) return buildAwaitingConversation();
 
     if (selectedConversation != null) {
       return _buildConversationView(selectedConversation);
@@ -265,6 +270,9 @@ class _QuickMessagesPanelState extends State<QuickMessagesPanel>
     return ChatWindow(
       conversation: conversation,
       compact: true,
+      // «Atrás» del sistema vuelve a la bandeja, como en WhatsApp; antes
+      // cerraba la pantalla de mensajes entera.
+      onSystemBack: () => returnToInbox(conversation.id),
       initialThreadRootMessageId: selectedThreadRootMessageId,
       headerLeading: IconButton(
         key: const ValueKey('quick-messages-back-to-inbox'),

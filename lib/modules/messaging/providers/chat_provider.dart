@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:vinabike_public_core/public_store/models/customer_chat_words.dart';
+import '../../../shared/services/realtime_health.dart';
 import '../../../shared/services/tenant_broadcast_channel.dart';
 import '../../../shared/services/user_management_service.dart';
 import '../../../shared/services/tenant_service.dart';
@@ -16,11 +17,13 @@ import '../services/conversation_history_store.dart';
 import '../services/meta_messaging_service.dart';
 import '../services/messaging_service.dart';
 import '../utils/message_receipt_projection.dart';
+import '../utils/message_side.dart';
 import '../utils/message_receipt_refresh_coalescer.dart';
 import '../utils/message_timeline_merge.dart';
 import '../models/message_reply.dart';
 import '../models/chat_attachment_draft.dart';
 import '../../../shared/services/notification_service.dart';
+import '../../../shared/services/whatsapp_service.dart';
 
 /// How the inbox learns about conversation, participant and message changes.
 ///
@@ -28,6 +31,22 @@ import '../../../shared/services/notification_service.dart';
 /// triggers (migration 20260916010000); store customers, who have no tenant
 /// profile, keep the RLS-scoped postgres_changes subscriptions.
 enum ChatInboxTransport { postgresChanges, tenantBroadcast }
+
+/// Whether a degraded Broadcast join was the server refusing it (policy,
+/// membership) rather than the network or the socket going away. Only a
+/// refusal warrants the postgres_changes fallback.
+@visibleForTesting
+bool isRefusedRealtimeJoin(Object? error) {
+  if (error == null) return false;
+  if (error is RealtimeCloseEvent) return false;
+  final text = error.toString().toLowerCase();
+  if (text.contains('realtimecloseevent')) return false;
+  return text.contains('unauthorized') ||
+      text.contains('permission') ||
+      text.contains('not allowed') ||
+      text.contains('forbidden') ||
+      text.contains('private channel');
+}
 
 class ConversationDraft {
   final String body;
@@ -183,6 +202,9 @@ class ChatProvider extends ChangeNotifier {
   Timer? _conversationsFollowUpRefreshTimer;
   Timer? _messagesRetryTimer;
   Timer? _contextHintCachePersistTimer;
+  Timer? _safetyRefreshTimer;
+  StreamSubscription<void>? _realtimeRecoverySubscription;
+  DateTime? _lastResyncAt;
   int _messagesRetryAttempt = 0;
   int _sessionEpoch = 0;
   int _sessionResolutionEpoch = 0;
@@ -523,6 +545,11 @@ class ChatProvider extends ChangeNotifier {
     _messageReceiptRefreshCoalescer.clear();
     _messagesRetryTimer?.cancel();
     _contextHintCachePersistTimer?.cancel();
+    _safetyRefreshTimer?.cancel();
+    _safetyRefreshTimer = null;
+    unawaited(_realtimeRecoverySubscription?.cancel() ?? Future<void>.value());
+    _realtimeRecoverySubscription = null;
+    _lastResyncAt = null;
     unawaited(_messagesSubscription?.cancel() ?? Future<void>.value());
     unawaited(_reactionsSubscription?.cancel() ?? Future<void>.value());
     unawaited(_notificationSubscription?.cancel() ?? Future<void>.value());
@@ -700,6 +727,85 @@ class ChatProvider extends ChangeNotifier {
         applyIncomingNotification(message);
       },
     );
+
+    // Un envío que la app no alcanzó a entregar antes de cerrarse sale ahora.
+    unawaited(_replayPendingWhatsAppSends(epoch));
+
+    // A revived socket replays nothing: what arrived while it was dead is
+    // read again.
+    _realtimeRecoverySubscription =
+        RealtimeHealth.instance.recoveries.listen((_) {
+      if (!_isCurrentSession(epoch)) return;
+      resyncAfterRealtimeGap(reason: 'socket revived');
+    });
+
+    // Red de seguridad: aunque el aviso en vivo funcione, una señal perdida
+    // no puede dejar una bandeja atrasada más de un minuto y medio. Es una
+    // lectura de la bandeja (~1 s de servidor) y sólo con la app al frente.
+    _safetyRefreshTimer?.cancel();
+    _safetyRefreshTimer = Timer.periodic(safetyRefreshInterval, (_) {
+      if (!_isCurrentSession(epoch) || !_isApplicationForeground) return;
+      _scheduleConversationRefresh(const Duration(milliseconds: 50));
+    });
+  }
+
+  bool _replayingPendingSends = false;
+
+  /// Retries WhatsApp sends that never reached the server (see
+  /// [WhatsAppPendingSendStore]). One the database refuses comes back to the
+  /// operator as a prepared message in its chat, never silently lost.
+  Future<void> _replayPendingWhatsAppSends(int epoch) async {
+    if (_replayingPendingSends || !_isCurrentSession(epoch)) return;
+    if (inboxTransport != ChatInboxTransport.tenantBroadcast) return;
+    _replayingPendingSends = true;
+    try {
+      final refused = await WhatsAppService().replayPendingSends();
+      if (!_isCurrentSession(epoch)) return;
+      for (final send in refused) {
+        final conversationId = send.conversationId;
+        if (conversationId == null) continue;
+        setConversationDraft(
+          conversationId,
+          send.text,
+          title: 'Mensaje sin enviar',
+          subtitle: 'WhatsApp no lo aceptó cuando volvió la conexión. '
+              'Revísalo y envíalo de nuevo.',
+        );
+      }
+    } catch (error) {
+      debugPrint('⚠️ [ChatProvider] pending WhatsApp sends: $error');
+    } finally {
+      _replayingPendingSends = false;
+    }
+  }
+
+  /// How often a foreground inbox re-reads itself even if Realtime is quiet.
+  static const Duration safetyRefreshInterval = Duration(seconds: 90);
+
+  /// Re-reads the inbox and the open conversation after Realtime was away.
+  ///
+  /// Broadcast no guarda lo que se envió mientras nadie escuchaba: un mensaje
+  /// que llega con el socket caído, el Mac dormido o la app en segundo plano no
+  /// vuelve a avisarse. Antes la bandeja sólo se ponía al día si llegaba OTRO
+  /// aviso después; el 2026-10-08 la foto de un proveedor llegó al teléfono y
+  /// no al escritorio. Ahora toda vuelta —el tema se une otra vez, el vigilante
+  /// revive el socket, la app vuelve al frente— lee de nuevo.
+  void resyncAfterRealtimeGap({required String reason}) {
+    if (_disposed || !_sessionReady) return;
+    final now = DateTime.now();
+    final last = _lastResyncAt;
+    if (last != null && now.difference(last) < const Duration(seconds: 2)) {
+      return;
+    }
+    _lastResyncAt = now;
+    _debugInboxSync('resync', details: {'reason': reason});
+    unawaited(_replayPendingWhatsAppSends(_sessionEpoch));
+    _scheduleConversationRefresh(const Duration(milliseconds: 80));
+    final activeId = _activeConversationId;
+    if (activeId != null) {
+      // Un stream nuevo lee el timeline entero antes de escuchar.
+      retryConversationMessages(activeId);
+    }
   }
 
   /// Store customers and any session without a tenant profile keep the
@@ -732,6 +838,8 @@ class ChatProvider extends ChangeNotifier {
   /// postgres_changes path only.
   Future<void> _initTenantBroadcastListener(int epoch, String tenantId) async {
     var fellBack = false;
+    var everSubscribed = false;
+    var awayFromTopic = false;
     final listener = await _service.subscribeToTenantMessagingUpdates(
       tenantId: tenantId,
       onUpdate: () {
@@ -747,7 +855,24 @@ class ChatProvider extends ChangeNotifier {
       },
       onStatus: (status, error) {
         if (!_isCurrentSession(epoch) || fellBack) return;
-        if (status == TenantBroadcastStatus.degraded) {
+        if (status == TenantBroadcastStatus.subscribed) {
+          if (awayFromTopic) {
+            resyncAfterRealtimeGap(reason: 'messaging topic joined again');
+          }
+          everSubscribed = true;
+          awayFromTopic = false;
+          return;
+        }
+        awayFromTopic = true;
+        // Una caída del socket también llega como «degraded», y el hub y el
+        // SDK la reintentan solos. Caer a postgres_changes por eso volvía a
+        // pagar RLS por cada cambio del WAL y, peor, era quitar y crear
+        // canales justo cuando el SDK los recorre (ver RealtimeHealth). Sólo
+        // un join rechazado de entrada —sin membresía, política revocada—
+        // justifica el camino alternativo.
+        if (status == TenantBroadcastStatus.degraded &&
+            !everSubscribed &&
+            isRefusedRealtimeJoin(error)) {
           // A refused join (no tenant membership, revoked policy) must not
           // leave the inbox blind: fall back to the RLS-scoped subscription.
           fellBack = true;
@@ -877,9 +1002,12 @@ class ChatProvider extends ChangeNotifier {
     final old = _conversations[index];
     final isCurrentUserSender =
         senderId != null && senderId == _service.currentUserId;
-    final isIncoming = messageType != 'system' &&
-        direction != 'outbound' &&
-        !isCurrentUserSender;
+    // Lo que escribe un compañero a un cliente sale de Viñabike: no es un
+    // mensaje entrante ni suma no leídos.
+    final isBusinessSender = isCurrentUserSender ||
+        (old.isSupport && senderId != null && isTenantStaffUser(senderId));
+    final isIncoming =
+        messageType != 'system' && direction != 'outbound' && !isBusinessSender;
     final shouldIncrementUnread =
         isIncoming && !isConversationVisible(conversationId);
     final existingPreview = _incomingConversationPreviews[conversationId];
@@ -937,6 +1065,7 @@ class ChatProvider extends ChangeNotifier {
       lastMessageType: messageType,
       lastMessageMetadata: old.lastMessageMetadata,
       lastMessageIsMine: isCurrentUserSender,
+      lastMessageSenderId: senderId,
       lastMessageDirection: nextDirection,
       lastMessageExternalStatus:
           externalStatus ?? old.lastMessageExternalStatus,
@@ -1348,6 +1477,23 @@ class ChatProvider extends ChangeNotifier {
     );
   }
 
+  /// Loads the inbox until it lists [conversationId] (two reads at most) and
+  /// says whether it did. A notification or a share can name a thread before
+  /// the list that carries it arrived.
+  Future<bool> ensureConversationListed(String conversationId) async {
+    bool listed() => _conversations.any((c) => c.id == conversationId);
+    // Al arrancar en frío la sesión todavía se está resolviendo.
+    for (var wait = 0; wait < 15 && !_sessionReady && !_disposed; wait++) {
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+    }
+    for (var attempt = 0; attempt < 2; attempt++) {
+      if (_disposed || !_sessionReady) return false;
+      if (listed()) return true;
+      await loadConversations(refreshContextHints: false);
+    }
+    return !_disposed && listed();
+  }
+
   /// Por chat de WhatsApp: el número del hilo y cuándo escribió por última
   /// vez ese contacto (la ventana de 24 h en la que Meta deja mandar archivos
   /// sin plantilla).
@@ -1470,6 +1616,7 @@ class ChatProvider extends ChangeNotifier {
         },
       );
       notifyListeners();
+      _dropAlertsOfReadConversationsIfDue();
 
       unawaited(_prefetchRecentConversations(operationEpoch));
 
@@ -1710,6 +1857,7 @@ class ChatProvider extends ChangeNotifier {
       lastMessageType: conversation.lastMessageType,
       lastMessageMetadata: conversation.lastMessageMetadata,
       lastMessageIsMine: conversation.lastMessageIsMine,
+      lastMessageSenderId: conversation.lastMessageSenderId,
       lastMessageDirection: conversation.lastMessageDirection,
       lastMessageExternalStatus: conversation.lastMessageExternalStatus,
       unreadCount: conversation.unreadCount,
@@ -1725,6 +1873,26 @@ class ChatProvider extends ChangeNotifier {
   /// foreground. A resume waits for a rendered frame before reusing the last
   /// host report, so background Realtime events can never be acknowledged as
   /// read merely because an IndexedStack branch remains mounted.
+  /// The first inbox read and the first after each return to the foreground
+  /// also clear alerts of chats the team already read.
+  bool _dropReadAlertsAfterLoad = true;
+
+  void _dropAlertsOfReadConversationsIfDue() {
+    if (!_dropReadAlertsAfterLoad || !_isApplicationForeground) return;
+    _dropReadAlertsAfterLoad = false;
+    final readThrough = <String, int>{
+      for (final conversation in _conversations)
+        if (conversation.type == 'support' &&
+            conversation.status != 'pending' &&
+            conversation.unreadCount == 0 &&
+            conversation.staffLastReadMessageSequence != null)
+          conversation.id: conversation.staffLastReadMessageSequence!,
+    };
+    unawaited(
+      NotificationService().dropAlertsForReadConversations(readThrough),
+    );
+  }
+
   void setApplicationForeground(bool isForeground) {
     if (_disposed || _isApplicationForeground == isForeground) return;
 
@@ -1738,6 +1906,11 @@ class ChatProvider extends ChangeNotifier {
 
     _awaitingForegroundFrame = true;
     notifyListeners();
+    // Volver al frente es la vuelta más común: el teléfono suspende la app y
+    // el Mac duerme. El socket pudo morir sin que el SDK lo notara.
+    _dropReadAlertsAfterLoad = true;
+    unawaited(RealtimeHealth.instance.check(appResumed: true));
+    resyncAfterRealtimeGap(reason: 'application foreground');
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_disposed ||
           !_isApplicationForeground ||
@@ -2591,11 +2764,47 @@ class ChatProvider extends ChangeNotifier {
     );
   }
 
+  /// The newest message the reader can mark as read: one from the other side.
+  ///
+  /// Con un cliente o proveedor el otro lado es el contacto, no «cualquiera
+  /// menos yo». Tomar el mensaje de un compañero hacía que la base rechazara
+  /// la lectura («Read-through message is not visible unread evidence»): el
+  /// chat quedaba no leído para todo el equipo aunque alguien lo hubiera
+  /// abierto.
   Message? _latestVisibleMessageFromAnotherSender(List<Message> messages) {
+    final conversationId =
+        messages.isEmpty ? null : messages.first.conversationId;
+    final conversation = conversationId == null
+        ? null
+        : _conversations.where((c) => c.id == conversationId).firstOrNull;
     return latestMessageByTimelineOrder(
-      messages.where((message) => message.type != 'system' && !message.isMe),
+      messages.where((message) {
+        if (message.type == 'system' || message.isMe) return false;
+        if (conversation == null) return true;
+        return !isWrittenByBusiness(
+          message,
+          conversation,
+          isStaffUser: isTenantStaffUser,
+        );
+      }),
     );
   }
+
+  /// The team member's name as the tenant directory knows it.
+  String? tenantUserDisplayName(String userId) {
+    final user = _userCache[userId];
+    if (user == null) return null;
+    final name = user['employee_name']?.toString().trim();
+    if (name != null && name.isNotEmpty) return name;
+    final email = user['email']?.toString() ?? '';
+    final local = email.split('@').first.trim();
+    return local.isEmpty ? null : local;
+  }
+
+  /// Whether [userId] is a member of the team (not a customer with a portal
+  /// account). Known once the tenant's users loaded; unknown counts as no.
+  bool isTenantStaffUser(String userId) =>
+      userId == _sessionUserId || _userCache.containsKey(userId);
 
   void _handleMessageStreamError(String conversationId, Object error) {
     if (_activeConversationId != conversationId) return;
@@ -2648,6 +2857,11 @@ class ChatProvider extends ChangeNotifier {
     final readThroughMessageId = readThroughMessage.id;
     _lastReadSyncByConversation[conversationId] = readMarker;
     _lastReadSyncMessageIdByConversation[conversationId] = readThroughMessageId;
+    // Leído aquí: la notificación de este chat sobra en este dispositivo. Los
+    // demás la sueltan con la señal que manda la base al avanzar el cursor.
+    unawaited(
+      NotificationService().dismissConversationNotifications(conversationId),
+    );
     _markConversationLocallyRead(
       conversationId,
       readAt: readMarker,
@@ -2738,6 +2952,7 @@ class ChatProvider extends ChangeNotifier {
         lastMessageType: local.lastMessageType,
         lastMessageMetadata: local.lastMessageMetadata,
         lastMessageIsMine: local.lastMessageIsMine,
+        lastMessageSenderId: local.lastMessageSenderId,
         lastMessageDirection: local.lastMessageDirection,
         lastMessageExternalStatus: local.lastMessageExternalStatus,
         unreadCount: server.unreadCount,
@@ -2949,6 +3164,7 @@ class ChatProvider extends ChangeNotifier {
       lastMessageType: preview.messageType,
       lastMessageMetadata: old.lastMessageMetadata,
       lastMessageIsMine: false,
+      lastMessageSenderId: null,
       lastMessageDirection: preview.direction ?? old.lastMessageDirection,
       lastMessageExternalStatus:
           preview.externalStatus ?? old.lastMessageExternalStatus,
@@ -2995,6 +3211,7 @@ class ChatProvider extends ChangeNotifier {
       lastMessageType: preview.messageType,
       lastMessageMetadata: preview.metadata,
       lastMessageIsMine: true,
+      lastMessageSenderId: _sessionUserId,
       lastMessageDirection: preview.direction ?? old.lastMessageDirection,
       lastMessageExternalStatus:
           preview.externalStatus ?? old.lastMessageExternalStatus,
@@ -3061,6 +3278,7 @@ class ChatProvider extends ChangeNotifier {
       lastMessageType: old.lastMessageType,
       lastMessageMetadata: old.lastMessageMetadata,
       lastMessageIsMine: old.lastMessageIsMine,
+      lastMessageSenderId: old.lastMessageSenderId,
       lastMessageDirection: old.lastMessageDirection,
       lastMessageExternalStatus: old.lastMessageExternalStatus,
       updatedAt: old.updatedAt,
@@ -3732,6 +3950,8 @@ class ChatProvider extends ChangeNotifier {
     _conversationsFollowUpRefreshTimer?.cancel();
     _messagesRetryTimer?.cancel();
     _contextHintCachePersistTimer?.cancel();
+    _safetyRefreshTimer?.cancel();
+    _realtimeRecoverySubscription?.cancel();
     _messageReceiptRefreshCoalescer.dispose();
     _messagesSubscription?.cancel();
     _reactionsSubscription?.cancel();

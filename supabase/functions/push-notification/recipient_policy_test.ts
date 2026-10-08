@@ -1,6 +1,9 @@
 import {
+  buildConversationReadPushData,
   buildMessagingPushData,
   isSilentMessagingRow,
+  messagePushBody,
+  readSignalIsStale,
   resolveMessagingRecipientIds,
 } from "./recipient_policy.ts";
 import type {
@@ -87,7 +90,7 @@ Deno.test("customer portal messages without provider direction are inbound suppo
   );
 });
 
-Deno.test("support outbound stays participant-only and never notifies the sender", () => {
+Deno.test("support outbound reaches only the customer, never the team", () => {
   const recipients = resolveMessagingRecipientIds({
     record: message({ sender_id: staffA, message_direction: "outbound" }),
     conversation: conversation("support"),
@@ -103,8 +106,8 @@ Deno.test("support outbound stays participant-only and never notifies the sender
 
   assertEquals(
     recipients,
-    [customerA, staffB],
-    "outbound support recipients must be scoped participants",
+    [customerA],
+    "a teammate's reply to a customer is Viñabike speaking, not news to staff",
   );
 });
 
@@ -210,4 +213,103 @@ Deno.test("Meta push data uses a provider-specific external sender id", () => {
     "external_instagram",
     "Meta sender fallback must not be mislabeled as WhatsApp",
   );
+});
+
+Deno.test("a photo with a caption says the caption, not «Imagen adjunta»", () => {
+  assertEquals(
+    messagePushBody(message({
+      type: "image",
+      content: "confirmame si es eso entonces",
+      metadata: {},
+    })),
+    "📷 confirmame si es eso entonces",
+    "the caption travels in content for WhatsApp images",
+  );
+  assertEquals(
+    messagePushBody(message({ type: "image", content: "Imagen enviada" })),
+    "📷 Foto",
+    "a generic media label is not news",
+  );
+  assertEquals(
+    messagePushBody(message({
+      type: "file",
+      content: "Pedido.pdf",
+      metadata: { filename: "Pedido - 298454.pdf" },
+    })),
+    "📄 Pedido - 298454.pdf",
+    "a document says its name",
+  );
+  assertEquals(
+    messagePushBody(message({
+      type: "file",
+      metadata: { content_type: "audio/ogg" },
+    })),
+    "🎤 Audio",
+    "a voice note says it is audio",
+  );
+});
+
+Deno.test("the read signal is data-only and names the conversation", () => {
+  assertEquals(
+    buildConversationReadPushData("conversation-001", 42),
+    {
+      kind: "conversation_read",
+      read_conversation_id: "conversation-001",
+      read_through_sequence: "42",
+    },
+    "FCM data values are strings",
+  );
+  assertEquals(
+    "conversation_id" in buildConversationReadPushData("conversation-001", 42),
+    false,
+    "the published app would announce it as a new message",
+  );
+});
+
+Deno.test("chat pushes say which inbox the app opens before its list loads", () => {
+  const data = buildMessagingPushData(
+    message({ sender_id: null, message_direction: "inbound" }),
+    "Diego Muñoz",
+    "Hola",
+    "supplier",
+  );
+  assertEquals(data.counterparty_type, "supplier", "supplier inbox hint");
+});
+
+Deno.test("a message push carries its sequence for the read signal", () => {
+  const data = buildMessagingPushData(
+    message({ message_sequence: 11, message_direction: "inbound" }),
+    "Diego Muñoz",
+    "Hola",
+  );
+  assertEquals(data.message_sequence, "11", "FCM data values are strings");
+});
+
+Deno.test("a read overtaken by a customer message keeps its alert", () => {
+  const staff = new Set([staffA, staffB]);
+  assertEquals(
+    readSignalIsStale(
+      [{ sender_id: null, message_direction: "inbound", type: "image" }],
+      staff,
+    ),
+    true,
+    "the supplier wrote after the read: its alert stays",
+  );
+  assertEquals(
+    readSignalIsStale(
+      [{ sender_id: staffB, message_direction: "outbound", type: "text" }],
+      staff,
+    ),
+    false,
+    "a teammate's reply does not make the chat unread",
+  );
+  assertEquals(
+    readSignalIsStale(
+      [{ sender_id: null, message_direction: "inbound", type: "system" }],
+      staff,
+    ),
+    false,
+    "a silent row never alerted anyone",
+  );
+  assertEquals(readSignalIsStale([], staff), false, "nothing after the read");
 });

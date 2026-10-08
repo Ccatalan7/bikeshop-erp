@@ -2,8 +2,11 @@ import { createClient } from "@supabase/supabase-js";
 import { JWT } from "google-auth-library";
 import { pushWebhookAuthorized } from "../_shared/push_notification_auth.ts";
 import {
+  buildConversationReadPushData,
   buildMessagingPushData,
   isSilentMessagingRow,
+  messagePushBody,
+  readSignalIsStale,
   resolveMessagingRecipientIds,
 } from "./recipient_policy.ts";
 import type {
@@ -16,6 +19,18 @@ interface NotificationPayload {
   type: "INSERT";
   table: "messages";
   record: PushMessageRecord;
+  schema: "public";
+}
+
+/** A teammate read a conversation: other devices drop its notification. */
+interface ConversationReadPayload {
+  type: "READ";
+  table: "conversations";
+  record: {
+    id?: string;
+    tenant_id?: string;
+    staff_last_read_message_sequence?: number | null;
+  };
   schema: "public";
 }
 
@@ -36,15 +51,6 @@ function cleanText(value: unknown, fallback: string) {
   if (typeof value !== "string") return fallback;
   const clean = value.replaceAll(/[\r\n\t]+/g, " ").trim().slice(0, 120);
   return clean || fallback;
-}
-
-function messageBody(record: PushMessageRecord) {
-  if (record.type === "text" || record.type === "action_request") {
-    return cleanText(record.content, "Nuevo mensaje");
-  }
-  if (record.type === "image") return "Imagen adjunta";
-  if (record.type === "file") return "Archivo adjunto";
-  return "Nuevo mensaje";
 }
 
 function metadataRecord(value: unknown): Record<string, unknown> {
@@ -138,11 +144,15 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "Unauthorized" }, 401);
   }
 
-  let payload: NotificationPayload;
+  let payload: NotificationPayload | ConversationReadPayload;
   try {
     payload = await req.json();
   } catch (_) {
     return jsonResponse({ error: "Invalid JSON body" }, 400);
+  }
+
+  if (payload.type === "READ" && payload.table === "conversations") {
+    return await handleConversationRead(payload);
   }
 
   if (payload.type !== "INSERT" || payload.table !== "messages") {
@@ -175,7 +185,7 @@ Deno.serve(async (req) => {
   // out using a tenant or participant list supplied by the webhook payload.
   const { data: rawConversation, error: conversationError } = await supabase
     .from("conversations")
-    .select("id, tenant_id, type, channel")
+    .select("id, tenant_id, type, channel, counterparty_type")
     .eq("id", record.conversation_id)
     .maybeSingle();
 
@@ -293,8 +303,13 @@ Deno.serve(async (req) => {
     activeStaffUserIds: new Set(activeStaffUserIds),
     customerNamesByUserId,
   });
-  const body = messageBody(record);
-  const data = buildMessagingPushData(record, senderName, body);
+  const body = messagePushBody(record);
+  const data = buildMessagingPushData(
+    record,
+    senderName,
+    body,
+    conversation.counterparty_type ?? null,
+  );
 
   let accessToken: string;
   try {
@@ -365,6 +380,7 @@ Deno.serve(async (req) => {
           message_id: record.id,
           status: response.status,
         });
+        await pruneIfUnregistered(supabase, response, tokenRow);
       }
       return response.ok;
     } catch (error) {
@@ -386,6 +402,230 @@ Deno.serve(async (req) => {
     failed: results.length - delivered,
   }, delivered > 0 ? 200 : 502);
 });
+
+async function sendFcmMessage(
+  accessToken: string,
+  message: Record<string, unknown>,
+) {
+  return await fetch(
+    `https://fcm.googleapis.com/v1/projects/${
+      Deno.env.get("FIREBASE_PROJECT_ID")
+    }/messages:send`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ message }),
+    },
+  );
+}
+
+/**
+ * Removes a device token FCM reports as no longer registered.
+ *
+ * El 2026-10-08 cada aviso iba a 68 dispositivos de 3 personas y llegaba a 4:
+ * los otros eran instalaciones borradas o reinstaladas desde diciembre, que FCM
+ * contesta con 404 `UNREGISTERED`. Nadie los quitaba. Sólo ese código borra:
+ * cualquier otro error deja el token como estaba.
+ */
+async function pruneIfUnregistered(
+  supabase: ReturnType<typeof createClient>,
+  response: Response,
+  tokenRow: { fcm_token: string; user_id: string },
+) {
+  if (response.status !== 404) {
+    await response.body?.cancel();
+    return;
+  }
+  let unregistered = false;
+  try {
+    const body = await response.json() as {
+      error?: { details?: Array<{ errorCode?: string }> };
+    };
+    unregistered = (body.error?.details ?? []).some((detail) =>
+      detail.errorCode === "UNREGISTERED"
+    );
+  } catch (_) {
+    unregistered = false;
+  }
+  if (!unregistered) return;
+  const { error } = await supabase
+    .from("user_fcm_tokens")
+    .delete()
+    .eq("user_id", tokenRow.user_id)
+    .eq("fcm_token", tokenRow.fcm_token);
+  if (error) console.error("Unregistered token cleanup failed", error);
+}
+
+/**
+ * Someone at Viñabike read a support conversation. Every staff device gets a
+ * silent signal and drops that chat's notification, so a message read on the
+ * desktop stops waiting on the phone (owner, 2026-10-08: «cuando se lee en
+ * uno, que actualice eso automáticamente para todos, como lo hace WhatsApp»).
+ * The conversation row read here, not the payload, decides the tenant.
+ */
+async function handleConversationRead(payload: ConversationReadPayload) {
+  const conversationId = payload.record?.id;
+  if (!conversationId) {
+    return jsonResponse({ error: "Conversation id is required" }, 400);
+  }
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!supabaseUrl || !serviceRoleKey) {
+    return jsonResponse({
+      error: "Supabase service configuration is incomplete",
+    }, 500);
+  }
+  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  const { data: rawConversation, error: conversationError } = await supabase
+    .from("conversations")
+    .select("id, tenant_id, type, staff_last_read_message_sequence")
+    .eq("id", conversationId)
+    .maybeSingle();
+  if (conversationError) {
+    console.error("Read signal conversation lookup failed", conversationError);
+    return jsonResponse({ error: "Could not resolve conversation scope" }, 500);
+  }
+  const conversation = rawConversation as {
+    id: string;
+    tenant_id: string | null;
+    type: string;
+    staff_last_read_message_sequence: number | null;
+  } | null;
+  if (!conversation?.tenant_id || conversation.type !== "support") {
+    return jsonResponse({ message: "Ignored read outside support" });
+  }
+  if (
+    payload.record?.tenant_id != null &&
+    payload.record.tenant_id !== conversation.tenant_id
+  ) {
+    return jsonResponse({ message: "Ignored tenant mismatch" });
+  }
+  // The cursor this read reached, as the trigger saw it. The live cursor may
+  // already be another read, which sends its own signal.
+  const readThrough = Number(
+    payload.record?.staff_last_read_message_sequence ??
+      conversation.staff_last_read_message_sequence,
+  );
+  if (!Number.isFinite(readThrough)) {
+    return jsonResponse({ message: "Ignored read without a cursor" });
+  }
+
+  const { data: staffRows, error: staffError } = await supabase
+    .from("user_profiles")
+    .select("user_id")
+    .eq("tenant_id", conversation.tenant_id)
+    .or("is_active.eq.true,is_active.is.null");
+  if (staffError) {
+    console.error("Read signal staff lookup failed", staffError);
+    return jsonResponse({ error: "Could not resolve staff" }, 500);
+  }
+  const staffIds = ((staffRows ?? []) as TenantMemberRow[])
+    .map((row) => row.user_id)
+    .filter((userId): userId is string => Boolean(userId));
+  if (staffIds.length === 0) {
+    return jsonResponse({ message: "No staff to signal" });
+  }
+
+  // Something the customer side wrote after this read is unread again: its
+  // alert must stay on every device. Staff replies are skipped in the query
+  // and the rest is read in order, page by page: a fixed window could miss
+  // the supplier's message behind a run of team rows.
+  const staffSet = new Set(staffIds);
+  const pageSize = 200;
+  const maxRows = 2000;
+  let stale = false;
+  for (let from = 0; from < maxRows && !stale; from += pageSize) {
+    const { data: laterRows, error: laterError } = await supabase
+      .from("messages")
+      .select("sender_id, message_direction, type, metadata")
+      .eq("conversation_id", conversation.id)
+      .eq("tenant_id", conversation.tenant_id)
+      .gt("message_sequence", readThrough)
+      .or("message_direction.is.null,message_direction.neq.outbound")
+      .order("message_sequence", { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (laterError) {
+      console.error("Read signal later-message lookup failed", laterError);
+      return jsonResponse({ error: "Could not resolve later messages" }, 500);
+    }
+    const rows = (laterRows ?? []) as PushMessageRecord[];
+    stale = readSignalIsStale(rows, staffSet);
+    if (rows.length < pageSize) break;
+    // Too many rows to prove the chat is read: keep the alerts.
+    if (from + pageSize >= maxRows) stale = true;
+  }
+  if (stale) {
+    return jsonResponse({
+      message: "Ignored read overtaken by an unread message",
+      conversation_id: conversation.id,
+    });
+  }
+
+  const { data: tokens, error: tokenError } = await supabase
+    .from("user_fcm_tokens")
+    .select("fcm_token, user_id")
+    .in("user_id", staffIds)
+    // Only installations that declare they understand the signal: a browser
+    // must show something for every push, and the app published before
+    // 2026-10-08 does not send device_type.
+    .in("device_type", ["android", "ios"]);
+  if (tokenError) {
+    console.error("Read signal token lookup failed", tokenError);
+    return jsonResponse({ error: "Could not resolve devices" }, 500);
+  }
+  if (!tokens?.length) {
+    return jsonResponse({ message: "No staff devices registered" });
+  }
+
+  let accessToken: string;
+  try {
+    accessToken = await getAccessToken();
+  } catch (error) {
+    console.error("Firebase authorization failed", error);
+    return jsonResponse(
+      { error: "Could not authorize Firebase delivery" },
+      500,
+    );
+  }
+
+  const data = buildConversationReadPushData(conversation.id, readThrough);
+  const results = await Promise.all(tokens.map(async (tokenRow) => {
+    try {
+      const response = await sendFcmMessage(accessToken, {
+        token: tokenRow.fcm_token,
+        data,
+        android: {
+          // Normal, not high: FCM deprioritizes an app whose high-priority
+          // messages show nothing, and that would delay real message alerts.
+          priority: "normal",
+          // A newer read of the same chat replaces a pending one.
+          collapse_key: `read-${conversation.id}`,
+        },
+        apns: {
+          headers: { "apns-push-type": "background", "apns-priority": "5" },
+          payload: { aps: { "content-available": 1 } },
+        },
+      });
+      if (!response.ok) {
+        await pruneIfUnregistered(supabase, response, tokenRow);
+      }
+      return response.ok;
+    } catch (error) {
+      console.error("Read signal delivery failed", error);
+      return false;
+    }
+  }));
+  const delivered = results.filter((result) => result).length;
+  return jsonResponse({
+    message: "Read signal sent",
+    conversation_id: conversation.id,
+    device_count: tokens.length,
+    delivered,
+  });
+}
 
 async function getAccessToken() {
   const serviceAccount = JSON.parse(

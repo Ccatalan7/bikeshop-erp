@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import '../../modules/messaging/widgets/compact_chat_route.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -11,9 +10,9 @@ import '../services/current_user_profile_navigation.dart';
 import '../services/navigation_service.dart';
 import '../services/query_performance_service.dart';
 import '../services/right_toolbar_service.dart';
+import 'compact_messages_host.dart';
+import 'compact_sheet_parts.dart';
 import 'notifications_panel.dart';
-import 'quick_messages_panel.dart';
-import 'quick_supplier_messages_panel.dart';
 import '../services/workspace_manager.dart';
 import '../services/window_zoom_service.dart';
 import '../services/notification_service.dart';
@@ -2054,24 +2053,19 @@ class _CompactShellActions extends StatelessWidget {
       constraints: BoxConstraints(
         maxHeight: MediaQuery.sizeOf(context).height * 0.88,
       ),
-      builder: (sheetContext) => const _CompactSheetFrame(
+      builder: (sheetContext) => const CompactSheetFrame(
         title: 'Notificaciones',
         child: NotificationsToolbarPanel(),
       ),
     );
   }
 
-  Future<void> _showMessages(BuildContext context) async {
+  void _showMessages(BuildContext context) {
     // Messaging is a sustained workspace: O-05 explicitly reserves sheets
-    // for short choices. A full-screen dialog also gives the IME one Scaffold
-    // inset owner instead of squeezing the timeline below a drag handle.
-    await showDialog<void>(
-      context: context,
-      useSafeArea: false,
-      builder: (dialogContext) => Dialog.fullscreen(
-        child: const CompactMessagingViewport(child: _CompactMessagesSheet()),
-      ),
-    );
+    // for short choices. It is one full-screen route with its own Scaffold —
+    // the IME's single inset owner — and the same route every notification,
+    // share and search result opens (see CompactMessagesHost).
+    CompactMessagesHost.open(context);
   }
 
   Future<void> _showWorkspacesAndTools(BuildContext context) async {
@@ -2130,199 +2124,6 @@ class _CompactShellActions extends StatelessWidget {
           ],
         );
       },
-    );
-  }
-}
-
-/// Marco común de las hojas compactas: título arriba y contenido debajo.
-class _CompactSheetFrame extends StatelessWidget {
-  const _CompactSheetFrame({
-    required this.title,
-    required this.child,
-    this.showHeader = true,
-    this.onClose,
-  });
-
-  final String title;
-  final Widget child;
-  final VoidCallback? onClose;
-
-  /// La cabecera se ESCONDE, no se desmonta el marco. Devolver un árbol de
-  /// otra forma cuando hay chat abierto hacía que Flutter recreara el panel, y
-  /// el `initState` nuevo corría antes de que el `dispose` viejo guardara la
-  /// sesión: el chat se abría y se cerraba solo en el mismo instante.
-  final bool showHeader;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // `Visibility` y no `if`: quitar el hijo cambia el ÍNDICE de lo que
-        // viene después, y Flutter, sin llaves, recrea esos elementos. El
-        // panel de abajo se remontaba —y con él, el chat abierto se cerraba
-        // solo. `Visibility` conserva la posición en la lista.
-        Visibility(
-          visible: showHeader,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 8, 10),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    title,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w800),
-                  ),
-                ),
-                if (onClose != null)
-                  IconButton(
-                    tooltip: 'Cerrar mensajes',
-                    onPressed: onClose,
-                    icon: const Icon(Icons.close),
-                  ),
-              ],
-            ),
-          ),
-        ),
-        Expanded(child: child),
-      ],
-    );
-  }
-}
-
-/// Las dos bandejas de conversación del taller.
-enum _MessagesTab { suppliers, customers }
-
-/// La hoja de Mensajes en compacto.
-///
-/// Proveedores y clientes son dos bandejas distintas con dueños distintos, y
-/// cada una lleva su propio contador de no leídos: mezclarlas en un solo número
-/// escondía cuál de las dos estaba esperando respuesta.
-class _CompactMessagesSheet extends StatefulWidget {
-  const _CompactMessagesSheet();
-
-  @override
-  State<_CompactMessagesSheet> createState() => _CompactMessagesSheetState();
-}
-
-class _CompactMessagesSheetState extends State<_CompactMessagesSheet> {
-  /// La pestaña sobrevive al cierre: quien sigue una conversación con un
-  /// proveedor vuelve a ella, no a la bandeja de clientes.
-  static _MessagesTab _lastTab = _MessagesTab.suppliers;
-
-  late _MessagesTab _tab;
-
-  /// Con un chat abierto la hoja cede TODA su cabecera: el título y las
-  /// pestañas no aportan ahí y en un teléfono le quitaban al mensaje casi un
-  /// tercio de la pantalla.
-  ///
-  /// Es un `ValueNotifier` y NO un `setState` a propósito: reconstruir la hoja
-  /// entera reconstruye el subárbol del panel, y dos intentos de esta función
-  /// murieron por eso — el panel se remontaba y el chat recién abierto se
-  /// cerraba solo. Con el notifier sólo la cabecera escucha; el panel ni se
-  /// entera.
-  final ValueNotifier<bool> _conversationOpen = ValueNotifier(false);
-
-  @override
-  void initState() {
-    super.initState();
-    _tab = _lastTab;
-  }
-
-  @override
-  void dispose() {
-    _conversationOpen.dispose();
-    super.dispose();
-  }
-
-  void _handleConversationVisibility(bool visible) {
-    if (!mounted) return;
-    _conversationOpen.value = visible;
-  }
-
-  int _supplierCount(ChatProvider chat) => chat.conversations.fold(0, (sum, c) {
-        if (!c.isSupplierConversation) return sum;
-        if (c.type == 'support' && c.status == 'pending') {
-          return sum + (c.unreadCount > 0 ? c.unreadCount : 1);
-        }
-        return sum + c.unreadCount;
-      });
-
-  int _customerCount(ChatProvider chat) => chat.conversations.fold(0, (sum, c) {
-        if (c.isSupplierConversation) return sum;
-        if (c.type == 'support' && c.status == 'pending') {
-          return sum + (c.unreadCount > 0 ? c.unreadCount : 1);
-        }
-        return sum + c.unreadCount;
-      });
-
-  @override
-  Widget build(BuildContext context) {
-    final chat = context.watch<ChatProvider>();
-    final counts = <_MessagesTab, int>{
-      _MessagesTab.suppliers: _supplierCount(chat),
-      _MessagesTab.customers: _customerCount(chat),
-    };
-
-    final inbox = Column(
-      children: [
-        ValueListenableBuilder<bool>(
-          valueListenable: _conversationOpen,
-          builder: (context, open, child) =>
-              Visibility(visible: !open, child: child!),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: _CompactTabBar<_MessagesTab>(
-              selected: _tab,
-              values: _MessagesTab.values,
-              counts: counts,
-              keyPrefix: 'compact-messages-tab',
-              labelOf: (tab) => switch (tab) {
-                _MessagesTab.suppliers => 'Proveedores',
-                _MessagesTab.customers => 'Clientes',
-              },
-              iconOf: (tab) => switch (tab) {
-                _MessagesTab.suppliers => Icons.local_shipping_outlined,
-                _MessagesTab.customers => Icons.person_outline_rounded,
-              },
-              nameOf: (tab) => tab.name,
-              onChanged: (tab) => setState(() {
-                _tab = tab;
-                _lastTab = tab;
-              }),
-            ),
-          ),
-        ),
-        Expanded(
-          child: switch (_tab) {
-            _MessagesTab.suppliers => QuickSupplierMessagesPanel(
-                showTitle: false,
-                onConversationVisibilityChanged: _handleConversationVisibility,
-              ),
-            _MessagesTab.customers => QuickMessagesPanel(
-                showTitle: false,
-                onConversationVisibilityChanged: _handleConversationVisibility,
-              ),
-          },
-        ),
-      ],
-    );
-
-    // Mismo árbol siempre; con chat abierto la cabecera sólo se esconde, y el
-    // título escucha el notifier sin reconstruir la hoja.
-    return ValueListenableBuilder<bool>(
-      valueListenable: _conversationOpen,
-      builder: (context, open, child) => _CompactSheetFrame(
-        title: 'Mensajes',
-        showHeader: !open,
-        onClose: () => Navigator.of(context).pop(),
-        child: child!,
-      ),
-      child: inbox,
     );
   }
 }
@@ -2448,7 +2249,7 @@ class _CompactWorkspaceToolsSheetState
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (badge > 0) _CompactCountBadge(count: badge),
+                    if (badge > 0) CompactCountBadge(count: badge),
                     const SizedBox(width: 6),
                     const Icon(Icons.chevron_right_rounded, size: 20),
                   ],
@@ -2686,13 +2487,13 @@ class _CompactWorkspaceToolsSheetState
   Widget build(BuildContext context) {
     final workspaceCount = context.watch<WorkspaceManager>().workspaces.length;
 
-    return _CompactSheetFrame(
+    return CompactSheetFrame(
       title: 'Tareas y herramientas',
       child: Column(
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: _CompactTabBar<_WorkspaceToolsTab>(
+            child: CompactTabBar<_WorkspaceToolsTab>(
               selected: _tab,
               values: _WorkspaceToolsTab.values,
               counts: {
@@ -2730,140 +2531,6 @@ class _CompactWorkspaceToolsSheetState
 /// Se dibujan a mano y no con `SegmentedButton`: ése no se estrecha con icono
 /// —ni densidad compacta ni padding reducen su ancho— y desborda en un teléfono
 /// angosto.
-class _CompactTabBar<T> extends StatelessWidget {
-  const _CompactTabBar({
-    required this.selected,
-    required this.values,
-    required this.counts,
-    required this.labelOf,
-    required this.iconOf,
-    required this.nameOf,
-    required this.keyPrefix,
-    required this.onChanged,
-  });
-
-  final T selected;
-  final List<T> values;
-  final Map<T, int> counts;
-  final String Function(T) labelOf;
-  final IconData Function(T) iconOf;
-  final String Function(T) nameOf;
-  final String keyPrefix;
-  final ValueChanged<T> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          for (final value in values)
-            Expanded(
-              child: _CompactTab(
-                tabKey: ValueKey('$keyPrefix-${nameOf(value)}'),
-                label: labelOf(value),
-                icon: iconOf(value),
-                count: counts[value] ?? 0,
-                isSelected: value == selected,
-                onTap: () => onChanged(value),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CompactTab extends StatelessWidget {
-  const _CompactTab({
-    required this.tabKey,
-    required this.label,
-    required this.icon,
-    required this.count,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  final Key tabKey;
-  final String label;
-  final IconData icon;
-  final int count;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final foreground = isSelected
-        ? theme.colorScheme.onSurface
-        : theme.colorScheme.onSurfaceVariant;
-
-    return Semantics(
-      button: true,
-      selected: isSelected,
-      label: count > 0 ? '$label, $count sin leer' : label,
-      excludeSemantics: true,
-      child: InkWell(
-        key: tabKey,
-        borderRadius: BorderRadius.circular(9),
-        onTap: onTap,
-        child: Container(
-          // 48px reales: en compacto no hay escala 0.8 que los encoja.
-          height: 48,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: isSelected ? theme.colorScheme.surface : Colors.transparent,
-            borderRadius: BorderRadius.circular(9),
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.08),
-                      blurRadius: 3,
-                      offset: const Offset(0, 1),
-                    ),
-                  ]
-                : null,
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            // Explícito: sin esto el contador se estiraba a lo alto de la
-            // pestaña y se leía como una barra, no como un número.
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Icon(icon, size: 18, color: foreground),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    color: foreground,
-                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                  ),
-                ),
-              ),
-              if (count > 0) ...[
-                const SizedBox(width: 5),
-                SizedBox(
-                  height: 16,
-                  child: _CompactCountBadge(count: count),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _CompactHeaderAction extends StatelessWidget {
   const _CompactHeaderAction({
     required this.chrome,
@@ -2910,7 +2577,7 @@ class _CompactHeaderAction extends StatelessWidget {
               right: 3,
               top: 3,
               child: IgnorePointer(
-                child: _CompactCountBadge(
+                child: CompactCountBadge(
                   count: count,
                   background: chrome.attention,
                   foreground: chrome.onAttention,
@@ -2918,40 +2585,6 @@ class _CompactHeaderAction extends StatelessWidget {
               ),
             ),
         ],
-      ),
-    );
-  }
-}
-
-class _CompactCountBadge extends StatelessWidget {
-  const _CompactCountBadge({
-    required this.count,
-    this.background,
-    this.foreground,
-  });
-
-  final int count;
-  final Color? background;
-  final Color? foreground;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      constraints: const BoxConstraints(minWidth: 18, minHeight: 16),
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: background ?? theme.colorScheme.primary,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        count > 99 ? '99+' : '$count',
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: foreground ?? theme.colorScheme.onPrimary,
-          fontWeight: FontWeight.w800,
-          fontSize: 9.5,
-        ),
       ),
     );
   }

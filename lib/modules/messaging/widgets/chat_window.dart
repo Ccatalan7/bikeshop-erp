@@ -46,6 +46,7 @@ import 'parsed_message_text.dart';
 import 'purchase_document_preview_dialog.dart';
 import '../providers/chat_provider.dart';
 import '../utils/message_parser.dart';
+import '../utils/message_side.dart';
 import '../utils/conversation_channel_presentation.dart';
 import 'assign_context_dialog.dart';
 import 'chat_attachment_viewer.dart';
@@ -169,6 +170,10 @@ class ChatWindow extends StatefulWidget {
   final VoidCallback? onShowContextPanel;
   final List<Widget> headerActions;
   final Widget? headerLeading;
+
+  /// What the system «back» does while this chat is open. Without it the
+  /// route pops; an inbox passes «return to the list», like WhatsApp.
+  final VoidCallback? onSystemBack;
   final bool compact;
   @visibleForTesting
   final MessagingAttachmentService? attachmentService;
@@ -199,6 +204,7 @@ class ChatWindow extends StatefulWidget {
     this.onShowContextPanel,
     this.headerActions = const [],
     this.headerLeading,
+    this.onSystemBack,
     this.compact = false,
     this.attachmentService,
     this.initialThreadRootMessageId,
@@ -1941,8 +1947,15 @@ class _ChatWindowState extends State<ChatWindow> {
   }
 
   bool _isUnreadInboundCandidate(Message message) {
-    return !message.isMe && message.type != 'system';
+    return !_isBusinessSide(message) && message.type != 'system';
   }
+
+  /// Lado del mensaje: Viñabike (cualquiera del equipo) o el contacto.
+  bool _isBusinessSide(Message message) => isWrittenByBusiness(
+        message,
+        widget.conversation,
+        isStaffUser: context.read<ChatProvider>().isTenantStaffUser,
+      );
 
   bool _isCurrentComposer(String conversationId, int? session) =>
       mounted &&
@@ -4347,11 +4360,14 @@ class _ChatWindowState extends State<ChatWindow> {
         widget.conversation.status == 'pending';
 
     final chatContent = PopScope(
-      canPop: _selectedMessages.isEmpty,
+      canPop: _selectedMessages.isEmpty && widget.onSystemBack == null,
       onPopInvokedWithResult: (didPop, result) {
-        if (!didPop && _selectedMessages.isNotEmpty) {
+        if (didPop) return;
+        if (_selectedMessages.isNotEmpty) {
           setState(_selectedMessages.clear);
+          return;
         }
+        widget.onSystemBack?.call();
       },
       child: Column(
         children: [
@@ -6474,9 +6490,12 @@ class _ChatWindowState extends State<ChatWindow> {
     }
 
     final content = message.content.trim();
+    // «Imagen enviada» / «Imagen recibida» son el relleno que guarda el
+    // servidor cuando la foto viene sin texto: no son un pie de foto.
+    const placeholders = {'imagen recibida', 'imagen enviada', 'imagen adjunta'};
     if (content.isNotEmpty &&
         !content.startsWith('http') &&
-        content.toLowerCase() != 'imagen recibida') {
+        !placeholders.contains(content.toLowerCase())) {
       return content;
     }
 
@@ -7057,7 +7076,9 @@ class _ChatWindowState extends State<ChatWindow> {
         metadata['channel'] == 'whatsapp';
     final contactName = message.isMe
         ? 'Tú'
-        : (metadata['contact_name']?.toString().trim().isNotEmpty == true
+        : _isBusinessSide(message)
+            ? 'Viñabike'
+            : (metadata['contact_name']?.toString().trim().isNotEmpty == true
             ? metadata['contact_name'].toString().trim()
             : widget.conversation.creatorName?.trim());
     final conversationTitle = widget.conversation.title?.trim();
@@ -11681,7 +11702,8 @@ class _ChatWindowState extends State<ChatWindow> {
         newer.type == 'action_request') {
       return false;
     }
-    if (older.isMe != newer.isMe || older.senderId != newer.senderId) {
+    if (_isBusinessSide(older) != _isBusinessSide(newer) ||
+        older.senderId != newer.senderId) {
       return false;
     }
     if (older.createdAt.year != newer.createdAt.year ||
@@ -11720,7 +11742,7 @@ class _ChatWindowState extends State<ChatWindow> {
       ChatMessageRow(
         key: ValueKey('chat-message-row-${message.id}'),
         selected: _selectedMessages.containsKey(message.id),
-        selectionOnLeading: message.isMe,
+        selectionOnLeading: _isBusinessSide(message),
         selecting: _selectedMessages.isNotEmpty,
         onSelect: _canSelectMessage(message)
             ? () => _toggleMessageSelection(message)
@@ -11978,7 +12000,9 @@ class _ChatWindowState extends State<ChatWindow> {
   ) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isMe = msg.isMe;
+        // A la derecha va todo lo que escribió Viñabike, no sólo lo mío.
+        final isMe = _isBusinessSide(msg);
+        final isTeammate = isMe && !msg.isMe;
         final isThreadReply =
             widget.conversation.isInternal && msg.isThreadReply;
         final contentIsMe = isThreadReply ? false : isMe;
@@ -11996,8 +12020,11 @@ class _ChatWindowState extends State<ChatWindow> {
               senderId != null ? _getSenderInfo(senderId) : Future.value(null),
           builder: (context, snapshot) {
             final senderInfo = snapshot.data;
-            final senderName =
-                isMe ? 'Tú' : _resolveIncomingSenderName(msg, senderInfo);
+            final senderName = msg.isMe
+                ? 'Tú'
+                : isTeammate
+                    ? businessAuthorLabel(senderInfo?['name']?.toString())
+                    : _resolveIncomingSenderName(msg, senderInfo);
             final senderAvatar = senderInfo?['avatar_url']?.toString();
             // Message Content Widget
             Widget contentWidget;
@@ -12337,6 +12364,23 @@ class _ChatWindowState extends State<ChatWindow> {
                                   mainAxisSize: MainAxisSize.min,
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
+                                    // Un compañero firma como Viñabike con
+                                    // su nombre, una vez por grupo.
+                                    if (isTeammate &&
+                                        !grouping.withPrevious) ...[
+                                      Text(
+                                        senderName,
+                                        key: ValueKey(
+                                            'chat-business-author-${msg.id}'),
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          color: onBubbleColor.withValues(
+                                              alpha: 0.72),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                    ],
                                     if (msg.metadata[
                                             'recovered_outbound_attempt'] ==
                                         true) ...[

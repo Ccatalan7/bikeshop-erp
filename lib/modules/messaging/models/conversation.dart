@@ -40,6 +40,11 @@ class Conversation {
   final String? lastMessageType;
   final Map<String, dynamic> lastMessageMetadata;
   final bool lastMessageIsMine;
+
+  /// Author of the last message when someone at Viñabike wrote it; null for
+  /// the customer or supplier side. The inbox signs a teammate's line with
+  /// their name instead of «Tú».
+  final String? lastMessageSenderId;
   final String? lastMessageDirection;
   final String? lastMessageExternalStatus;
   final int unreadCount; // Computed client-side or via view
@@ -69,6 +74,7 @@ class Conversation {
     this.lastMessageType,
     this.lastMessageMetadata = const {},
     this.lastMessageIsMine = false,
+    this.lastMessageSenderId,
     this.lastMessageDirection,
     this.lastMessageExternalStatus,
     this.unreadCount = 0,
@@ -299,6 +305,7 @@ class Conversation {
             const {},
       ),
       lastMessageIsMine: json['last_message_is_mine'] == true,
+      lastMessageSenderId: json['last_message_sender_id']?.toString(),
       lastMessageDirection: json['last_message_direction']?.toString(),
       lastMessageExternalStatus:
           json['last_message_external_status']?.toString(),

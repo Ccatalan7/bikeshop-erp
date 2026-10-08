@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -8,6 +11,7 @@ import '../../modules/sales/models/sales_models.dart';
 import '../../modules/bikeshop/models/bikeshop_models.dart';
 import '../services/tenant_service.dart';
 import '../services/whatsapp_send_receipt.dart';
+import 'whatsapp_pending_send_store.dart';
 import '../widgets/whatsapp_web_viewer.dart';
 import 'supabase_functions_region.dart';
 
@@ -852,10 +856,7 @@ class WhatsAppService {
       if (body['conversationId'] != null &&
           clientMessageId?.isNotEmpty == true &&
           body['type'] != 'reaction') {
-        final data = await _client.rpc(
-          'enqueue_whatsapp_message_v1',
-          params: {'p_request': body},
-        );
+        final data = await _enqueueDurably(body, clientMessageId!);
         final receipt = parseDurableWhatsAppSendReceipt(
           data,
           resolvedMessageText: resolvedMessageText,
@@ -956,6 +957,125 @@ class WhatsAppService {
         unsafeToFallback: true,
       );
     }
+  }
+
+  /// Waits between acceptance attempts while the network is down; the last
+  /// one repeats.
+  static const List<Duration> _enqueueRetryDelays = [
+    Duration(seconds: 1),
+    Duration(seconds: 2),
+    Duration(seconds: 4),
+    Duration(seconds: 8),
+    Duration(seconds: 15),
+    Duration(seconds: 30),
+  ];
+
+  /// A request with no answer this long is asked again; same key, same row.
+  static const Duration _enqueueAttemptTimeout = Duration(seconds: 20);
+
+  final Set<String> _enqueuesInFlight = <String>{};
+
+  /// Asks the database to accept [body] until it answers.
+  ///
+  /// Un fallo de red ya no deja el mensaje «incierto» y abandonado: la llave
+  /// del cliente hace que repetir la petición devuelva la misma fila, así que
+  /// se repite —con el reloj en la burbuja— hasta que la base contesta. Una
+  /// respuesta de la base (aceptado o rechazado) es definitiva. El envío queda
+  /// guardado en [WhatsAppPendingSendStore] mientras tanto y, si la app se
+  /// cierra, se retoma al volver ([replayPendingSends]).
+  Future<Object?> _enqueueDurably(
+    Map<String, dynamic> body,
+    String clientMessageId,
+  ) async {
+    final userId = _client.auth.currentUser?.id;
+    final tenantId = TenantService().currentTenantId;
+    final store = WhatsAppPendingSendStore.instance;
+    if (userId != null && tenantId != null) {
+      await store.remember(
+        PendingWhatsAppSend(
+          clientMessageId: clientMessageId,
+          userId: userId,
+          tenantId: tenantId,
+          body: body,
+          savedAt: DateTime.now(),
+        ),
+      );
+    }
+    // Otra persona entró en este equipo, o la misma pasó a otra tienda: lo
+    // pendiente queda guardado para su dueño y su tienda, y no se manda desde
+    // el alcance nuevo (revisión cruzada, 2026-10-08: sólo se miraba la
+    // persona).
+    bool sameScope() =>
+        _client.auth.currentUser?.id == userId &&
+        TenantService().currentTenantId == tenantId;
+    _enqueuesInFlight.add(clientMessageId);
+    try {
+      var attempt = 0;
+      while (true) {
+        // También antes del primer intento: el cambio pudo ocurrir mientras
+        // se guardaba el pendiente.
+        if (!sameScope()) {
+          throw StateError('The session or the shop changed during a retry');
+        }
+        try {
+          final data = await _client.rpc(
+            'enqueue_whatsapp_message_v1',
+            params: {'p_request': body},
+          ).timeout(_enqueueAttemptTimeout);
+          await store.forget(clientMessageId);
+          return data;
+        } on PostgrestException {
+          if (sameScope()) await store.forget(clientMessageId);
+          rethrow;
+        } catch (error) {
+          if (!sameScope()) rethrow;
+          final delay = _enqueueRetryDelays[
+              math.min(attempt, _enqueueRetryDelays.length - 1)];
+          attempt += 1;
+          debugPrint(
+            '⏳ [WhatsAppService] outbox_retry client=$clientMessageId '
+            'attempt=$attempt in=${delay.inSeconds}s error=$error',
+          );
+          await Future<void>.delayed(delay);
+        }
+      }
+    } finally {
+      _enqueuesInFlight.remove(clientMessageId);
+    }
+  }
+
+  /// Sends that never reached the server in an earlier run of the app.
+  ///
+  /// Returns the ones the database refused, so the chat can give their text
+  /// back to the operator. A send still in flight in this run is skipped.
+  Future<List<PendingWhatsAppSend>> replayPendingSends() async {
+    final userId = _client.auth.currentUser?.id;
+    final tenantId = TenantService().currentTenantId;
+    if (userId == null || tenantId == null) return const [];
+    final pending = await WhatsAppPendingSendStore.instance.pendingFor(
+      userId: userId,
+      tenantId: tenantId,
+    );
+    final refused = <PendingWhatsAppSend>[];
+    for (final send in pending) {
+      if (_enqueuesInFlight.contains(send.clientMessageId)) continue;
+      try {
+        await _enqueueDurably(send.body, send.clientMessageId);
+        debugPrint(
+          '✅ [WhatsAppService] outbox_replayed client=${send.clientMessageId}',
+        );
+      } on PostgrestException catch (error) {
+        debugPrint(
+          '❌ [WhatsAppService] outbox_replay_refused '
+          'client=${send.clientMessageId} code=${error.code}',
+        );
+        refused.add(send);
+      } catch (_) {
+        // Sesión cambiada: se intentará con su dueño.
+        break;
+      }
+    }
+    return refused;
   }
 
   Future<WhatsAppSendReceipt> _sendWithFallback({

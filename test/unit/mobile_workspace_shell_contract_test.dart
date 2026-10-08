@@ -329,10 +329,12 @@ void main() {
 
     // Las pestañas de la hoja del encabezado toman el relevo del conmutador
     // retirado, y su blanco táctil se declara entero, no calculado a mano.
+    // 2026-10-08: la pestaña se mudó a su dueño compartido, porque la usan la
+    // hoja del encabezado y la pantalla de Mensajes del teléfono.
     final compactTab = _between(
-      mainLayoutSource,
+      File('lib/shared/widgets/compact_sheet_parts.dart').readAsStringSync(),
       'class _CompactTab extends StatelessWidget {',
-      'class _CompactCountBadge extends StatelessWidget {',
+      'class CompactCountBadge extends StatelessWidget {',
     );
     expect(compactTab, contains('height: 48'));
     expect(compactTab, contains('Semantics('));

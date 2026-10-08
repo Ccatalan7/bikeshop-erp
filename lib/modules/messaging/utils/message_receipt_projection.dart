@@ -64,6 +64,7 @@ Conversation projectLatestMessageReceipt(
         ? conversation.lastMessageMetadata
         : latestMessage.metadata,
     lastMessageIsMine: latestMessage.isMe,
+    lastMessageSenderId: latestMessage.senderId,
     lastMessageDirection:
         latestMessage.metadata['message_direction']?.toString(),
     lastMessageExternalStatus: keepsCurrentReceipt

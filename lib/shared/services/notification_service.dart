@@ -23,6 +23,26 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // Ensure Firebase is initialized (required for background isolate)
   await Firebase.initializeApp();
 
+  // Alguien de Viñabike leyó el chat en otro dispositivo: su notificación sale
+  // de la bandeja del sistema aunque esta app esté cerrada, como en WhatsApp.
+  final readConversationId = conversationReadSignalId(message.data);
+  if (readConversationId != null) {
+    try {
+      if (!await readSignalCoversAlerts(message.data)) return;
+      final plugin = FlutterLocalNotificationsPlugin();
+      await plugin.initialize(
+        const InitializationSettings(
+          android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        ),
+      );
+      await dismissConversationNotificationsWith(plugin, readConversationId);
+    } catch (error) {
+      debugPrint('ℹ️ Could not drop a read chat notification: $error');
+    }
+    return;
+  }
+  await rememberAlertedMessageSequence(message.data);
+
   if (kDebugMode) {
     debugPrint(
       '🔔 Background notification received; native FCM presentation retained '
@@ -35,6 +55,159 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // notification from this isolate would display the same message twice and
   // cannot apply the foreground conversation gate. Conversation state is
   // refreshed from the authoritative store when the app resumes.
+}
+
+/// What this installation tells `push-notification` it is.
+String fcmDeviceType() {
+  if (kIsWeb) return 'web';
+  return switch (defaultTargetPlatform) {
+    TargetPlatform.android => 'android',
+    TargetPlatform.iOS => 'ios',
+    _ => defaultTargetPlatform.name.toLowerCase(),
+  };
+}
+
+/// The conversation named by a «read elsewhere» push, or null.
+///
+/// Viaja como `read_conversation_id` y nunca como `conversation_id`: la app
+/// publicada antes del 2026-10-08 anuncia como mensaje nuevo cualquier aviso
+/// con `conversation_id`.
+String? conversationReadSignalId(Map<String, dynamic> data) {
+  if (data['kind']?.toString() != 'conversation_read') return null;
+  final id = data['read_conversation_id']?.toString().trim();
+  return id == null || id.isEmpty ? null : id;
+}
+
+const String _alertedSequencePrefix = 'chat.alerted_sequence.';
+
+/// Marker reads and writes run one after another in this isolate, so a read
+/// signal handled while a message alert is being recorded sees the record.
+Future<void> _alertedSequenceTail = Future<void>.value();
+
+Future<T> _serialAlertedSequence<T>(Future<T> Function() operation) {
+  final result = _alertedSequenceTail.then((_) => operation());
+  _alertedSequenceTail = result.then<void>((_) {}, onError: (_) {});
+  return result;
+}
+
+/// Records the newest message this device alerted for its conversation.
+///
+/// Una señal de leído puede llegar DESPUÉS del aviso de un mensaje que entró
+/// tras esa lectura (revisión cruzada, 2026-10-08): sin esta marca la señal
+/// borraba también el aviso del mensaje nuevo, que nadie había leído. Corre en
+/// el proceso de segundo plano y en el principal, por eso relee el disco.
+Future<void> rememberAlertedMessageSequence(Map<String, dynamic> data) =>
+    _serialAlertedSequence(() => _rememberAlertedMessageSequence(data));
+
+Future<void> _rememberAlertedMessageSequence(Map<String, dynamic> data) async {
+  final conversationId = data['conversation_id']?.toString().trim();
+  final sequence = int.tryParse(data['message_sequence']?.toString() ?? '');
+  if (conversationId == null || conversationId.isEmpty || sequence == null) {
+    return;
+  }
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    final key = '$_alertedSequencePrefix$conversationId';
+    final current = prefs.getInt(key);
+    if (current == null || sequence > current) {
+      await prefs.setInt(key, sequence);
+    }
+  } catch (error) {
+    debugPrint('ℹ️ Could not record an alerted message: $error');
+  }
+}
+
+/// Whether a read signal reads through every alert this device showed for
+/// its conversation; when it does, the record is cleared.
+///
+/// Un aviso sin secuencia (servidor anterior a la v149 de `push-notification`)
+/// no deja marca y la señal lo borra como antes: la función se desplegó antes
+/// que esta app, así que toda app que corre este código recibe secuencias.
+Future<bool> readSignalCoversAlerts(Map<String, dynamic> data) =>
+    _serialAlertedSequence(() => _readSignalCoversAlerts(data));
+
+Future<bool> _readSignalCoversAlerts(Map<String, dynamic> data) async {
+  final conversationId = conversationReadSignalId(data);
+  if (conversationId == null) return false;
+  final readThrough =
+      int.tryParse(data['read_through_sequence']?.toString() ?? '');
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
+    final key = '$_alertedSequencePrefix$conversationId';
+    final alerted = prefs.getInt(key);
+    if (alerted != null && (readThrough == null || readThrough < alerted)) {
+      return false;
+    }
+    await prefs.remove(key);
+  } catch (error) {
+    debugPrint('ℹ️ Could not compare a read signal: $error');
+  }
+  return true;
+}
+
+/// Drops every notification this device shows for [conversationId].
+///
+/// Android guarda dos clases: la que el sistema pinta desde FCM con la app
+/// cerrada (id 0 y la conversación como etiqueta) y la que la app pinta al
+/// frente (id = hash de la conversación, misma etiqueta). El escritorio usa
+/// sólo el hash.
+Future<void> dismissConversationNotificationsWith(
+  FlutterLocalNotificationsPlugin plugin,
+  String conversationId,
+) async {
+  if (kIsWeb) return;
+  if (defaultTargetPlatform == TargetPlatform.android) {
+    await plugin.cancel(0, tag: conversationId);
+    await plugin.cancel(conversationId.hashCode, tag: conversationId);
+    return;
+  }
+  await plugin.cancel(conversationId.hashCode);
+}
+
+/// What a chat notification says about a message row.
+///
+/// Una foto con texto decía sólo «Imagen adjunta» y escondía lo que el
+/// proveedor escribió («confírmame si es eso entonces…», 2026-10-08).
+String notificationBodyForMessage(Map<String, dynamic> row) {
+  String clean(Object? value) =>
+      (value?.toString() ?? '').replaceAll(RegExp(r'\s+'), ' ').trim();
+  final type = clean(row['type']);
+  final content = clean(row['content']);
+  final metadata = row['metadata'] is Map
+      ? Map<String, dynamic>.from(row['metadata'] as Map)
+      : const <String, dynamic>{};
+  final caption = clean(metadata['caption']);
+  final filename = clean(metadata['filename'] ?? metadata['file_name']);
+  final contentType = clean(metadata['content_type'] ?? metadata['mime_type']);
+  final isGenericMediaText = content.isEmpty ||
+      const {
+        'Imagen enviada',
+        'Imagen adjunta',
+        'Archivo adjunto',
+        'Archivo enviado',
+      }.contains(content);
+  if (type == 'image') {
+    final text = caption.isNotEmpty
+        ? caption
+        : isGenericMediaText
+            ? ''
+            : content;
+    return text.isEmpty ? '📷 Foto' : '📷 $text';
+  }
+  if (type == 'file') {
+    if (contentType.startsWith('audio/')) return '🎤 Audio';
+    final text = caption.isNotEmpty
+        ? caption
+        : filename.isNotEmpty
+            ? filename
+            : isGenericMediaText
+                ? 'Archivo'
+                : content;
+    return '📄 $text';
+  }
+  return content.isEmpty ? 'Mensaje nuevo' : content;
 }
 
 enum NotificationCategory {
@@ -1177,7 +1350,14 @@ class NotificationService {
     );
 
     debugPrint('🔔 [NotificationService] Initializing...');
-    await _localNotifications.initialize(initializationSettings);
+    await _localNotifications.initialize(
+      initializationSettings,
+      // Una notificación que la app misma mostró (app al frente en el
+      // teléfono, o escritorio) no abría nada al tocarla: el chat se buscaba
+      // a mano en la bandeja.
+      onDidReceiveNotificationResponse: _handleLocalNotificationResponse,
+    );
+    unawaited(_consumeLocalNotificationLaunch());
     _isInitialized = true;
     debugPrint('✅ [NotificationService] Local notifications initialized');
 
@@ -1315,6 +1495,19 @@ class NotificationService {
           debugPrint('🔔 Foreground notification received');
         }
 
+        final readConversationId = conversationReadSignalId(message.data);
+        if (readConversationId != null) {
+          // Señal silenciosa: se borra la notificación y nada más; la bandeja
+          // ya se entera del leído por su canal en vivo.
+          unawaited(() async {
+            if (await readSignalCoversAlerts(message.data)) {
+              await dismissConversationNotifications(readConversationId);
+            }
+          }());
+          return;
+        }
+        unawaited(rememberAlertedMessageSequence(message.data));
+
         // Handle both notification+data and data-only messages
         final hasNotification = message.notification != null;
         final hasData = message.data.isNotEmpty;
@@ -1360,6 +1553,47 @@ class NotificationService {
     }
   }
 
+  void _handleLocalNotificationResponse(NotificationResponse response) {
+    final route = response.payload?.trim();
+    if (route == null || route.isEmpty || !route.startsWith('/')) return;
+    _deliverNotificationTap(route);
+  }
+
+  Future<void> _consumeLocalNotificationLaunch() async {
+    try {
+      final details =
+          await _localNotifications.getNotificationAppLaunchDetails();
+      final response = details?.notificationResponse;
+      if (details?.didNotificationLaunchApp == true && response != null) {
+        _handleLocalNotificationResponse(response);
+      }
+    } catch (error) {
+      debugPrint('ℹ️ Notification launch details unavailable: $error');
+    }
+  }
+
+  /// A tap waits here until a workspace takes it.
+  ///
+  /// El stream es broadcast: un toque que abre la app en frío llegaba antes de
+  /// que el espacio de trabajo existiera para escucharlo y se perdía.
+  String? _pendingTapRoute;
+
+  /// The route of a notification tap that nobody has handled yet.
+  String? takePendingNotificationTap() {
+    final route = _pendingTapRoute;
+    _pendingTapRoute = null;
+    return route;
+  }
+
+  void _deliverNotificationTap(String route) {
+    if (_navigationStreamController.hasListener) {
+      _pendingTapRoute = null;
+      _navigationStreamController.add(route);
+    } else {
+      _pendingTapRoute = route;
+    }
+  }
+
   /// Handle navigation when user taps a notification
   void _handleNotificationTap(RemoteMessage message) {
     // Prevent duplicate handling of the same notification
@@ -1380,7 +1614,7 @@ class NotificationService {
     final route = message.data['route']?.toString();
     if (route != null && route.isNotEmpty) {
       debugPrint('🔔 Navigating to notification route: $route');
-      _navigationStreamController.add(route);
+      _deliverNotificationTap(_withInboxHint(route, message.data));
       return;
     }
 
@@ -1388,12 +1622,30 @@ class NotificationService {
     if (conversationId != null && conversationId.toString().isNotEmpty) {
       debugPrint('🔔 Navigating to chat: $conversationId');
       // Emit to stream for main.dart to handle navigation
-      _navigationStreamController.add('/chat?conversation=$conversationId');
+      _deliverNotificationTap(
+        _withInboxHint(
+          '/chat?conversation=$conversationId',
+          message.data,
+        ),
+      );
     } else {
       // Fallback: just go to chat list
       debugPrint('🔔 No conversation_id, navigating to chat list');
-      _navigationStreamController.add('/chat');
+      _deliverNotificationTap('/chat');
     }
+  }
+
+  /// Carries the server's word on which inbox the thread belongs to, so a
+  /// cold start opens Proveedores for a supplier before the list has loaded.
+  String _withInboxHint(String route, Map<String, dynamic> data) {
+    final counterparty = data['counterparty_type']?.toString().trim();
+    if (counterparty == null || counterparty.isEmpty) return route;
+    final uri = Uri.tryParse(route);
+    if (uri == null || uri.path != '/chat') return route;
+    return uri.replace(queryParameters: {
+      ...uri.queryParameters,
+      'counterparty': counterparty,
+    }).toString();
   }
 
   /// Request web notification permission - MUST be called from user gesture (click/tap)
@@ -1594,7 +1846,8 @@ class NotificationService {
           .from('messages')
           .select(
             'id, conversation_id, sender_id, tenant_id, content, type, '
-            'metadata, created_at',
+            'metadata, created_at, message_direction, message_sequence, '
+            'conversation:conversations(type, title)',
           )
           .eq('id', messageId)
           .maybeSingle();
@@ -1605,16 +1858,42 @@ class NotificationService {
     if (newMessage == null) return;
     final currentUserId = _supabase.auth.currentUser?.id;
     if (currentUserId == null || currentUserId != expectedUserId) return;
-    final senderId = newMessage['sender_id'];
+    final senderId = newMessage['sender_id']?.toString();
     // Only incoming messages are presented; our own sends stay silent.
     if (senderId == currentUserId) return;
+    final conversation = newMessage.remove('conversation');
+    final conversationType =
+        conversation is Map ? conversation['type']?.toString() : null;
+    final conversationTitle =
+        conversation is Map ? conversation['title']?.toString() : null;
+    // Con clientes y proveedores todo el equipo es Viñabike: lo que escribe
+    // un compañero sale de la misma casa y no se anuncia como si llegara
+    // (2026-10-08, «genera como una dinámica de grupo»).
+    if (conversationType == 'support' &&
+        !await _isCustomerSideMessage(newMessage, currentUserId)) {
+      return;
+    }
 
-    final content = newMessage['content'] ?? 'New Image';
+    final metadata = newMessage['metadata'];
+    final contactName = metadata is Map
+        ? (metadata['contact_name'] ?? metadata['contact_label'])
+            ?.toString()
+            .trim()
+        : null;
+    final title = contactName?.isNotEmpty == true
+        ? contactName!
+        : conversationTitle?.trim().isNotEmpty == true
+            ? conversationTitle!.trim()
+            : 'Mensaje nuevo';
+    final body = notificationBodyForMessage(newMessage);
+    final conversationId = newMessage['conversation_id']?.toString();
+    newMessage['sender_name'] = title;
+    newMessage['body'] = body;
+    if (conversationId != null && conversationId.isNotEmpty) {
+      newMessage['route'] = '/chat?conversation=$conversationId';
+    }
     final incomingMessage = RemoteMessage(
-      notification: RemoteNotification(
-        title: 'New Message',
-        body: content,
-      ),
+      notification: RemoteNotification(title: title, body: body),
       data: newMessage,
     );
 
@@ -1624,13 +1903,43 @@ class NotificationService {
     if (!hasForegroundPresentationOwner &&
         notificationsEnabledFor(NotificationCategory.message) &&
         shouldPresentForegroundMessage(incomingMessage)) {
+      // Lo avisado aquí también lo respeta la reconciliación de leídos.
+      await rememberAlertedMessageSequence(newMessage);
       playNotificationSound(category: NotificationCategory.message);
       _triggerVibration();
       showLocalNotification(
-        'New Message',
-        content,
+        title,
+        body,
+        notificationId: conversationId?.hashCode,
         category: NotificationCategory.message,
+        payload: conversationId == null
+            ? null
+            : '/chat?conversation=$conversationId',
       );
+    }
+  }
+
+  /// Whether a support-conversation row was written by the customer or
+  /// supplier side, not by someone at Viñabike.
+  Future<bool> _isCustomerSideMessage(
+    Map<String, dynamic> row,
+    String currentUserId,
+  ) async {
+    final direction = row['message_direction']?.toString();
+    if (direction == 'inbound') return true;
+    if (direction == 'outbound') return false;
+    final senderId = row['sender_id']?.toString();
+    if (senderId == null || senderId.isEmpty) return true;
+    if (senderId == currentUserId) return false;
+    final tenantId = _notificationScopeTenantId;
+    if (tenantId == null) return true;
+    try {
+      final employee = await _employeeDirectory
+          .findByUserId(senderId, authorityTenantId: tenantId)
+          .timeout(const Duration(seconds: 2));
+      return employee == null;
+    } catch (_) {
+      return true;
     }
   }
 
@@ -1649,14 +1958,15 @@ class NotificationService {
         debugPrint(
             '✅ Desktop message notification realtime active for tenant $_desktopMessagesTenantId');
         break;
+      // El hub vuelve a unir el tema solo y RealtimeHealth revive el socket.
+      // Desarmar y rearmar aquí también competía con ellos por el mismo canal
+      // (2026-10-08).
       case TenantBroadcastStatus.degraded:
         debugPrint(
             '⚠️ Desktop message notification realtime issue: ${_describeDesktopRealtimeIssue(error)}');
-        _scheduleDesktopMessageRealtimeReconnect('channel error');
         break;
       case TenantBroadcastStatus.closed:
         debugPrint('ℹ️ Desktop message notification realtime closed');
-        _scheduleDesktopMessageRealtimeReconnect('channel closed');
         break;
     }
   }
@@ -1726,6 +2036,62 @@ class NotificationService {
     _desktopMessagesAuthUserId = null;
     if (channel != null) {
       await channel.cancel();
+    }
+  }
+
+  /// Drops this device's notifications for a conversation that was read —
+  /// here or on any other device of the team.
+  /// Drops the alerts of chats the team already read.
+  ///
+  /// La señal de leído es un aviso de FCM sin reintento: si no llega a un
+  /// equipo, su notificación quedaba pegada aunque todos hubieran leído el
+  /// chat (revisión cruzada, 2026-10-08). Al abrir la app y al volver al
+  /// frente, la bandeja recién leída manda el cursor de cada chat leído y aquí
+  /// se compara con lo que este equipo avisó, igual que la señal.
+  Future<void> dropAlertsForReadConversations(
+    Map<String, int> readThroughByConversation,
+  ) async {
+    if (kIsWeb || readThroughByConversation.isEmpty) return;
+    try {
+      final active = await _localNotifications.getActiveNotifications();
+      if (active.isEmpty) return;
+      final byHash = {
+        for (final id in readThroughByConversation.keys) id.hashCode: id,
+      };
+      final targets = <String>{};
+      for (final alert in active) {
+        final tag = alert.tag;
+        if (tag != null && readThroughByConversation.containsKey(tag)) {
+          targets.add(tag);
+          continue;
+        }
+        final byId = byHash[alert.id];
+        if (byId != null) targets.add(byId);
+      }
+      for (final conversationId in targets) {
+        final covered = await readSignalCoversAlerts({
+          'kind': 'conversation_read',
+          'read_conversation_id': conversationId,
+          'read_through_sequence':
+              '${readThroughByConversation[conversationId]}',
+        });
+        if (covered) await dismissConversationNotifications(conversationId);
+      }
+    } catch (error) {
+      debugPrint('ℹ️ Could not reconcile read chat notifications: $error');
+    }
+  }
+
+  Future<void> dismissConversationNotifications(String conversationId) async {
+    _activeConversations.remove(conversationId);
+    if (kIsWeb || !_isInitialized) return;
+    try {
+      await dismissConversationNotificationsWith(
+        _localNotifications,
+        conversationId,
+      );
+    } catch (error) {
+      debugPrint('ℹ️ Could not drop chat notification: $error');
     }
   }
 
@@ -1906,6 +2272,9 @@ class NotificationService {
             'Chat', // Title: Group Name or Sender Name
         messages.last.text, // Body: Last message text
         details,
+        payload: conversationId == 'general'
+            ? '/chat'
+            : '/chat?conversation=$conversationId',
       );
       debugPrint('✅ Messaging notification updated for $conversationId');
     } catch (e) {
@@ -1919,6 +2288,7 @@ class NotificationService {
     String body, {
     int? notificationId,
     NotificationCategory category = NotificationCategory.general,
+    String? payload,
   }) async {
     if (!notificationsEnabledFor(category)) return;
     if (kIsWeb) return;
@@ -1941,6 +2311,7 @@ class NotificationService {
         title,
         body,
         notificationDetails,
+        payload: payload,
       );
     } catch (e) {
       debugPrint('❌ Error: $e');
@@ -1955,6 +2326,10 @@ class NotificationService {
       await _supabase.from('user_fcm_tokens').upsert({
         'user_id': userId,
         'fcm_token': token,
+        // La señal de leído sólo va a apps que la entienden: un navegador
+        // no puede recibir un aviso silencioso sin mostrar algo, y la app
+        // publicada antes del 2026-10-08 no manda este campo.
+        'device_type': fcmDeviceType(),
         'updated_at': DateTime.now().toIso8601String(),
       }, onConflict: 'user_id, fcm_token');
 

@@ -866,6 +866,17 @@ absent from the repository. And a deploy through the guarded wrapper is not
 finished until its migration file is pushed: production must never be ahead
 of `origin`.
 
+**El Mac también pierde el pooler, y vuelve solo (2026-10-08).** En una ronda
+de mensajería `query.sh production` se quedó colgado sin error durante cerca de
+una hora: el pooler de `sa-east-1` no contestaba desde la red del Mac, con la
+credencial y la CLI en orden. No es un problema de sesión: las lecturas
+siguieron por el conector MCP (con las reglas de arriba) y la migración esperó.
+Al volver la red, el `--verify` falló antes de aplicar como debía y el despliegue
+salió entero por `deploy_migration.sh`. Una escritura no se adelanta por el
+conector por esta causa: se espera y se reintenta el wrapper. Y en zsh de este
+Mac no existe `timeout`; un `timeout 60 query.sh …` no corre nada y no imprime
+nada, que se lee igual que el cuelgue.
+
 ## Credentials
 
 **Formato de resultados (2026-09-15).** `query.sh --format json` envuelve la

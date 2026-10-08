@@ -378,7 +378,8 @@ class MessagingService {
       _fetchContextHintsForConversations(List<dynamic> rawConversations) async {
     if (rawConversations.isEmpty) return {};
 
-    final tenantId = await TenantService().getTenantId();
+    // The tenant boundary is the RPC's (the caller's staff tenant), not a
+    // client-side id.
     final conversationRows = <String, Map<String, dynamic>>{};
     final contextTypeByConversation = <String, String?>{};
     final contextIdByConversation = <String, String?>{};
@@ -916,6 +917,7 @@ class MessagingService {
             _text(supplier == null ? null : supplier['sales_rep_phone']) ??
                 _text(supplier == null ? null : supplier['phone']) ??
                 phoneByConversation[conversationId],
+        whatsAppPhone: phoneByConversation[conversationId],
         contactPersonName:
             (linkedContact == null ? null : _text(linkedContact['name'])) ??
                 (supplier == null
@@ -1299,6 +1301,7 @@ class MessagingService {
         json['last_message_external_status'] = lastMessage['external_status'];
         json['last_message_is_mine'] =
             lastMessage['sender_id']?.toString() == userId;
+        json['last_message_sender_id'] = lastMessage['sender_id'];
       }
       final createdBy = json['created_by'];
       if (conversationId != null &&

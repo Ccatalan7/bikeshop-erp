@@ -175,7 +175,7 @@ class _ConversationTileState extends State<ConversationTile> {
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        if (conv.lastMessageIsMine) ...[
+                        if (_lastMessageIsFromBusiness(conv)) ...[
                           _buildDeliveryIcon(conv),
                           const SizedBox(width: 4),
                         ],
@@ -677,8 +677,15 @@ class _ConversationTileState extends State<ConversationTile> {
           ? 'Página compartida del ERP'
           : 'Página compartida: $title';
     } else {
+      final content = conv.lastMessageContent?.trim() ?? '';
+      final caption = metadata['caption']?.toString().trim() ?? '';
       preview = switch (conv.lastMessageType) {
-        'image' => 'Foto',
+        // Una foto con texto muestra el texto: es lo que el contacto dijo.
+        'image' => caption.isNotEmpty
+            ? caption
+            : content.isNotEmpty && !_genericMediaTexts.contains(content)
+                ? content
+                : 'Foto',
         'file' => metadata['filename']?.toString().trim().isNotEmpty == true
             ? 'Archivo: ${metadata['filename']}'
             : 'Archivo adjunto',
@@ -700,8 +707,35 @@ class _ConversationTileState extends State<ConversationTile> {
     if (conv.lastMessageIsMine && preview.isNotEmpty) {
       return 'Tú: $preview';
     }
+    if (preview.isNotEmpty && _lastMessageIsFromBusiness(conv)) {
+      final senderId = conv.lastMessageSenderId;
+      final name = senderId == null
+          ? null
+          : context.read<ChatProvider>().tenantUserDisplayName(senderId);
+      final first = name?.trim().split(RegExp(r'\s+')).first;
+      return '${first?.isNotEmpty == true ? first : 'Viñabike'}: $preview';
+    }
     return preview;
   }
+
+  /// La última línea la escribió Viñabike —yo o un compañero—: lleva sus
+  /// checks y su firma, no se lee como si la hubiera escrito el contacto.
+  bool _lastMessageIsFromBusiness(Conversation conv) {
+    if (conv.lastMessageIsMine) return true;
+    if (!conv.isSupport || conv.lastMessageType == 'system') return false;
+    final direction = conv.lastMessageDirection;
+    if (direction == 'outbound') return true;
+    if (direction == 'inbound') return false;
+    final senderId = conv.lastMessageSenderId;
+    return senderId != null &&
+        context.read<ChatProvider>().isTenantStaffUser(senderId);
+  }
+
+  static const Set<String> _genericMediaTexts = {
+    'Imagen enviada',
+    'Imagen adjunta',
+    'Foto',
+  };
 
   String _initialsFor(String title) {
     final trimmed = title.trim();

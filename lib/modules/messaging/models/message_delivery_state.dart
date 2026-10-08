@@ -164,15 +164,58 @@ class MessageDeliveryState {
                     : null);
   }
 
+  /// What Meta's error codes mean for the person who sent the message.
+  ///
+  /// El webhook guarda el error de Meta en `whatsapp_status_payload.errors` y
+  /// la burbuja sólo decía «no pudo entregar este mensaje». El 2026-10-08 dos
+  /// mensajes a MKR fallaron con 131026: ese número no tenía WhatsApp, y el
+  /// dueño lo descubrió creando otro chat con el número correcto.
+  static String? whatsAppErrorExplanation(int? code) => switch (code) {
+        131026 => 'el número no tiene WhatsApp o no recibe mensajes de '
+            'empresas. Revisa el número del contacto.',
+        131047 => 'pasaron más de 24 horas desde su último mensaje; hace '
+            'falta una plantilla.',
+        131049 => 'Meta lo retuvo para no saturar al contacto con mensajes '
+            'de empresas. Inténtalo más tarde.',
+        131050 => 'el contacto pidió no recibir mensajes de marketing.',
+        131051 => 'WhatsApp no admite ese tipo de mensaje.',
+        131052 || 131053 => 'el archivo no se pudo subir a WhatsApp.',
+        131021 => 'no se puede enviar al mismo número del negocio.',
+        131048 => 'Meta limitó los envíos de este número por calidad.',
+        130429 || 131056 => 'se enviaron demasiados mensajes seguidos; '
+            'espera un momento.',
+        _ => null,
+      };
+
   static String _failureMessage(
     Map<String, dynamic> metadata, {
     String? providerLabel,
   }) {
+    final provider = providerLabel ?? 'El proveedor';
+    final statusPayload = metadata['whatsapp_status_payload'];
+    final errors = statusPayload is Map ? statusPayload['errors'] : null;
+    final firstError =
+        errors is List && errors.isNotEmpty && errors.first is Map
+            ? errors.first as Map
+            : null;
+    final code = switch (firstError?['code']) {
+      int value => value,
+      num value => value.toInt(),
+      final value when value != null => int.tryParse(value.toString()),
+      _ => null,
+    };
+    final explained = whatsAppErrorExplanation(code);
+    if (explained != null) return '$provider no lo entregó: $explained';
     final raw = metadata['external_error_message'] ??
         metadata['error_message'] ??
-        metadata['error'];
+        metadata['error'] ??
+        (firstError == null
+            ? null
+            : (firstError['error_data'] is Map
+                    ? (firstError['error_data'] as Map)['details']
+                    : null) ??
+                firstError['message']);
     final detail = raw?.toString().trim();
-    final provider = providerLabel ?? 'El proveedor';
     if (detail == null || detail.isEmpty) {
       return '$provider no pudo entregar este mensaje.';
     }

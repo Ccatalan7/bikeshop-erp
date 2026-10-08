@@ -1,0 +1,128 @@
+{
+  "schema_version": 1,
+  "id": "whatsapp-same-on-every-device",
+  "source": "ai",
+  "scope": "release",
+  "platforms": [
+    "macos",
+    "android"
+  ],
+  "module": "messaging",
+  "title": "WhatsApp al día en todos los equipos",
+  "summary": "Los mensajes llegan al escritorio aunque se haya cortado la conexión, la notificación abre el chat y todo el equipo escribe como Viñabike, con sus mensajes a la derecha.",
+  "items": [
+    "Tocar una notificación o compartir un archivo desde el teléfono abre ese chat directo, sin pasar por la bandeja.",
+    "Lo que escribe un compañero va a la derecha como «Viñabike · nombre», con sus checks; leer en un equipo quita el aviso en los demás.",
+    "El escritorio recupera los mensajes perdidos tras un corte; un envío con mala señal se reintenta solo y, si WhatsApp lo rechaza, dice por qué."
+  ],
+  "evidence": [
+    {
+      "path": "lib/modules/messaging/models/conversation.dart",
+      "sha256": "a6355da59db64d0b9fddbb545e62a49f437eb81941c8c0e3270bc01d8dff9849"
+    },
+    {
+      "path": "lib/modules/messaging/models/conversation_context_hint.dart",
+      "sha256": "063e25a10f1d71ef04274ec017b40b4a16ffa7e15fd087cf0d6c5c91fcc349ed"
+    },
+    {
+      "path": "lib/modules/messaging/models/message_delivery_state.dart",
+      "sha256": "8e7d45df943f26a38a89f3e11d9035a1db5cee7afc9a036b0a19a8623a19d733"
+    },
+    {
+      "path": "lib/modules/messaging/providers/chat_provider.dart",
+      "sha256": "4ad544522fcf36b6dbda5a37e40deba846d35ae864313bb453be8b79e47a7cf7"
+    },
+    {
+      "path": "lib/modules/messaging/services/messaging_service.dart",
+      "sha256": "9486004b7461f45b20897ac7237bf21185b037874c4f3bf4b59ad2d237a59493"
+    },
+    {
+      "path": "lib/modules/messaging/utils/message_receipt_projection.dart",
+      "sha256": "e280070f080d6f0d320d7f64404e42098a74d7c22751ddaf430a5677af17f2b9"
+    },
+    {
+      "path": "lib/modules/messaging/utils/message_side.dart",
+      "sha256": "fad957cac68c0339efe382494064d6ad840423f8094f2ec8b1c72260f602f559"
+    },
+    {
+      "path": "lib/modules/messaging/widgets/chat_window.dart",
+      "sha256": "94ddb55791ebe3811cb64602f377512dad1266bdd74562b02fed663768f064e8"
+    },
+    {
+      "path": "lib/modules/messaging/widgets/conversation_tile.dart",
+      "sha256": "a42c8392bba9b62ba4b21e5745a0639047d293a19debd5a5ca9a1565c1fa4c71"
+    },
+    {
+      "path": "lib/modules/messaging/widgets/entity_chat_sidebar.dart",
+      "sha256": "3dee4878e4e6172e26540901a1ee4bd350b4d2f551b8050fd17b1b61aa6cf48d"
+    },
+    {
+      "path": "lib/main.dart",
+      "sha256": "90a8e6c5dcbd7f8b714b91783ae91c35cb1faba34733ea2b8a75a4556a1a73e1"
+    },
+    {
+      "path": "lib/shared/services/notification_service.dart",
+      "sha256": "b37535116debce95b7e0feeee17747a6acb4c07a68fadd6b3b1d4e9eee7e5c58"
+    },
+    {
+      "path": "lib/shared/services/realtime_health.dart",
+      "sha256": "280ec1c08e7e5ed43f32158cfd06b0f1d628729b85e53be51b46f9ea533cb9d7"
+    },
+    {
+      "path": "lib/shared/services/tenant_broadcast_channel.dart",
+      "sha256": "535b1b3d5c0732367156e514e1a85279f571070b192737d26e26d6dcc2b83a70"
+    },
+    {
+      "path": "lib/shared/services/whatsapp_pending_send_store.dart",
+      "sha256": "ee3b16a1255e7f013db8524f2d03b8167334ff457aa0adfc822f71ff82c808a5"
+    },
+    {
+      "path": "lib/shared/services/whatsapp_service.dart",
+      "sha256": "0a9fafc013f4d87d02a44f8f301a2845bd618e2765c56bdb04e27709eaf48c10"
+    },
+    {
+      "path": "lib/shared/widgets/compact_messages_host.dart",
+      "sha256": "3eb669551a67da3c6224433851ef6f7da5c1a4d51aae0fd91a8cf7cbf516735e"
+    },
+    {
+      "path": "lib/shared/widgets/compact_sheet_parts.dart",
+      "sha256": "f896858f57109c2147665841589c21656c942f1fe104d5ff5d6db7cfdfba0529"
+    },
+    {
+      "path": "lib/shared/widgets/conversation_inbox_host.dart",
+      "sha256": "fa2d9b9b802bcec78a3d6ecd3ee95adee55d5c8a16e7af4c8b074595678a866e"
+    },
+    {
+      "path": "lib/shared/widgets/main_layout.dart",
+      "sha256": "f4fae271b38af3b55aa1844c00174dda6b26360c8d5b1613ba4ff85dcc50e69f"
+    },
+    {
+      "path": "lib/shared/widgets/quick_messages_panel.dart",
+      "sha256": "99b8fba910d4110fc5121fa1cac2f15208fd3694fbf1c857c44fdbf1aa9355b0"
+    },
+    {
+      "path": "lib/shared/widgets/quick_supplier_messages_panel.dart",
+      "sha256": "ed674c9c895c9ab94921cefac09b57034e0a0f98c3432899bf889e0ce8485718"
+    },
+    {
+      "path": "lib/shared/widgets/right_toolbar.dart",
+      "sha256": "0c0457171c028f717bc1953b1943d46fa3e3c100444e456b0c4693254a5d5a1d"
+    },
+    {
+      "path": "supabase/functions/push-notification/index.ts",
+      "sha256": "c83f42282cc19852bb8e5a0b99272ddf08209ee864adf023f2d42f975265b185"
+    },
+    {
+      "path": "supabase/functions/push-notification/recipient_policy.ts",
+      "sha256": "e83d81584b5f71375007940dd11752e77eda173d5a88291b146415be69acbd23"
+    },
+    {
+      "path": "supabase/migrations/20261008160000_conversation_read_signal.sql",
+      "sha256": "cdfd2fa2688840eeb9aa0150fcb21c66583c973e901f73161eeb6bba474038fa"
+    },
+    {
+      "path": "supabase/migrations/verify_conversation_read_signal.sql",
+      "sha256": "f4944818a2716a3552b9283f1366c7f373f2974b177bcbe698240872c153a032"
+    }
+  ]
+}

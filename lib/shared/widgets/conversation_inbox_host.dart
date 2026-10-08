@@ -71,6 +71,14 @@ mixin ConversationInboxHost<T extends StatefulWidget> on State<T> {
   RightToolbarService? toolbarService;
   ErpAuthorityScopeKey? _scope;
 
+  /// A requested conversation (notification, share, restored session) that is
+  /// not in the loaded list yet. While it is pending the panel shows that it
+  /// is opening it instead of falling back to the inbox.
+  String? _awaitingConversationId;
+
+  bool isAwaitingConversation(String? conversationId) =>
+      conversationId != null && conversationId == _awaitingConversationId;
+
   /// Una carga del panel sólo puede publicar para el usuario y tenant que la
   /// iniciaron, aunque la sesión cambie mientras espera datos.
   ErpAuthorityScopeKey? get inboxAuthorityScope => _currentScope();
@@ -210,6 +218,25 @@ mixin ConversationInboxHost<T extends StatefulWidget> on State<T> {
     context
         .read<ChatProvider>()
         .setActiveConversation(requested.conversationId);
+    _awaitConversation(requested.conversationId);
+  }
+
+  /// Keeps [conversationId] selected until the inbox lists it.
+  ///
+  /// Una app abierta en frío por una notificación todavía no cargó la bandeja,
+  /// y un hilo nuevo puede llegar antes que la lista que lo trae: devolver a
+  /// la bandeja ahí es exactamente «me lleva al inbox y no al mensaje».
+  void _awaitConversation(String conversationId) {
+    final provider = context.read<ChatProvider>();
+    if (provider.conversations.any((c) => c.id == conversationId)) return;
+    _awaitingConversationId = conversationId;
+    unawaited(
+      provider.ensureConversationListed(conversationId).then((_) {
+        if (!mounted || _awaitingConversationId != conversationId) return;
+        // Si no apareció, el build devuelve a la bandeja como siempre.
+        setState(() => _awaitingConversationId = null);
+      }),
+    );
   }
 
   // --- Sesión --------------------------------------------------------------
@@ -260,7 +287,7 @@ mixin ConversationInboxHost<T extends StatefulWidget> on State<T> {
     if (conversationId == null || !mounted) return;
     final provider = context.read<ChatProvider>();
     final exists = provider.conversations.any((c) => c.id == conversationId);
-    if (!exists) {
+    if (!exists && provider.conversations.isNotEmpty) {
       setState(() {
         _setSelectedConversation(null);
         panelActiveConversationId = null;
@@ -269,6 +296,9 @@ mixin ConversationInboxHost<T extends StatefulWidget> on State<T> {
     }
     provider.setActiveConversation(conversationId);
     panelActiveConversationId = conversationId;
+    // Con la bandeja todavía vacía no hay cómo saber si el hilo sigue
+    // existiendo: se espera la lista en vez de soltarlo.
+    if (!exists) _awaitConversation(conversationId);
   }
 
   // --- Buscador y alcance --------------------------------------------------
@@ -322,6 +352,31 @@ mixin ConversationInboxHost<T extends StatefulWidget> on State<T> {
     }
   }
 
+  /// Lo que dice la bandeja mientras espera un hilo pedido que todavía no
+  /// llegó en la lista.
+  Widget buildAwaitingConversation() {
+    final theme = Theme.of(context);
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(
+            width: 28,
+            height: 28,
+            child: CircularProgressIndicator(strokeWidth: 2.5),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'Abriendo el chat…',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void openConversationInPanel(String conversationId) {
     setState(() {
       _setSelectedConversation(conversationId);
@@ -332,6 +387,9 @@ mixin ConversationInboxHost<T extends StatefulWidget> on State<T> {
 
   void returnToInbox(String conversationId) {
     final shouldClearActive = panelActiveConversationId == conversationId;
+    if (_awaitingConversationId == conversationId) {
+      _awaitingConversationId = null;
+    }
     setState(() {
       _setSelectedConversation(null);
       selectedThreadRootMessageId = null;

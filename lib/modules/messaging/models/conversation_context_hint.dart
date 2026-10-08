@@ -21,6 +21,12 @@ class ConversationContextHint {
   final String? supplierImageUrl;
   final String? supplierPhone;
 
+  /// The number this WhatsApp thread actually talks to (its binding). A
+  /// supplier whose phone changed keeps the old thread with the old number:
+  /// showing the supplier's current phone on it made two chats look like
+  /// duplicates of the same number (MKR, 2026-10-08).
+  final String? whatsAppPhone;
+
   /// La persona detrás de un hilo de proveedor (vendedor registrado o nombre
   /// de perfil de WhatsApp), nunca la empresa.
   final String? contactPersonName;
@@ -63,6 +69,7 @@ class ConversationContextHint {
     this.supplierName,
     this.supplierImageUrl,
     this.supplierPhone,
+    this.whatsAppPhone,
     this.contactPersonName,
     this.contactPersonId,
     this.contactPersonRole,
@@ -107,6 +114,7 @@ class ConversationContextHint {
       supplierName: json['supplier_name']?.toString(),
       supplierImageUrl: json['supplier_image_url']?.toString(),
       supplierPhone: json['supplier_phone']?.toString(),
+      whatsAppPhone: json['whatsapp_phone']?.toString(),
       contactPersonName: json['contact_person_name']?.toString(),
       contactPersonId: json['contact_person_id']?.toString(),
       contactPersonRole: json['contact_person_role']?.toString(),
@@ -151,6 +159,7 @@ class ConversationContextHint {
       if (supplierImageUrl != null)
         'supplier_image_url': supplierImageUrl,
       if (supplierPhone != null) 'supplier_phone': supplierPhone,
+      if (whatsAppPhone != null) 'whatsapp_phone': whatsAppPhone,
       if (contactPersonName != null) 'contact_person_name': contactPersonName,
       if (contactPersonId != null) 'contact_person_id': contactPersonId,
       if (contactPersonRole != null) 'contact_person_role': contactPersonRole,

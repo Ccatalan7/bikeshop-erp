@@ -230,15 +230,20 @@ class _QuickSupplierMessagesPanelState extends State<QuickSupplierMessagesPanel>
     // descartaba el chat restaurado antes de poder mostrarlo.
     if (selectedConversationId != null &&
         selectedConversation == null &&
-        provider.conversations.isNotEmpty) {
+        provider.conversations.isNotEmpty &&
+        !isAwaitingConversation(selectedConversationId)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || selectedConversationId == null) return;
         returnToInbox(selectedConversationId!);
       });
     }
 
+    final awaiting = selectedConversation == null &&
+        isAwaitingConversation(selectedConversationId);
     // Se anuncia lo que se DIBUJA, no lo que se pretendía abrir.
-    announceConversationVisibility(selectedConversation != null);
+    announceConversationVisibility(selectedConversation != null || awaiting);
+
+    if (awaiting) return buildAwaitingConversation();
 
     if (selectedConversation != null) {
       return _buildConversationView(selectedConversation);
@@ -271,6 +276,9 @@ class _QuickSupplierMessagesPanelState extends State<QuickSupplierMessagesPanel>
     return ChatWindow(
       conversation: conversation,
       compact: true,
+      // «Atrás» del sistema vuelve a la bandeja, como en WhatsApp; antes
+      // cerraba la pantalla de mensajes entera.
+      onSystemBack: () => returnToInbox(conversation.id),
       headerLeading: IconButton(
         key: const ValueKey('quick-suppliers-back-to-inbox'),
         icon: const Icon(Icons.arrow_back),
@@ -1210,7 +1218,10 @@ class _QuickSupplierMessagesPanelState extends State<QuickSupplierMessagesPanel>
           conversation.contextHint?.contactPersonIsActive == false) {
         continue;
       }
-      final phone = conversation.contextHint?.supplierPhone ??
+      // El número del hilo, no el que hoy tiene la ficha: un chat viejo con
+      // otro número se ve como lo que es.
+      final phone = conversation.contextHint?.whatsAppPhone ??
+          conversation.contextHint?.supplierPhone ??
           conversation.contextHint?.phone ??
           '';
       if (!_hasWhatsAppPhone(phone)) continue;
@@ -1488,6 +1499,10 @@ class _SupplierConversationIndex {
         _bySupplierId.putIfAbsent(supplierId, () => conversation);
       }
 
+      final threadPhone = conversation.contextHint?.whatsAppPhone;
+      for (final candidate in phoneCandidates(threadPhone)) {
+        _byThreadPhoneCandidate.putIfAbsent(candidate, () => conversation);
+      }
       final phone = conversation.contextHint?.supplierPhone ??
           conversation.contextHint?.phone;
       for (final candidate in phoneCandidates(phone)) {
@@ -1496,10 +1511,19 @@ class _SupplierConversationIndex {
     }
   }
 
+  /// Threads keyed by the number they actually talk to.
+  final Map<String, Conversation> _byThreadPhoneCandidate = {};
+
+  /// The supplier's chat is the thread with its CURRENT number when there is
+  /// one; a thread with an old number stays its own row.
   Conversation? find({
     required String supplierId,
     required Set<String> phoneCandidates,
   }) {
+    for (final candidate in phoneCandidates) {
+      final byThreadPhone = _byThreadPhoneCandidate[candidate];
+      if (byThreadPhone != null) return byThreadPhone;
+    }
     final direct = _bySupplierId[supplierId];
     if (direct != null) return direct;
     for (final candidate in phoneCandidates) {

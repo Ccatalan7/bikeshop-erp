@@ -227,6 +227,59 @@ _supabase.auth.onAuthStateChange.listen((data) {
 NotificationService().init();  // No await - runs in background
 ```
 
+#### 1.5 Leído en uno, leído en todos (2026-10-08)
+
+Con clientes y proveedores el leído es del equipo
+(`conversations.staff_last_read_message_sequence`). Cuando ese cursor avanza,
+`trg_conversations_read_signal` (migración `20261008160000`) llama a
+`push-notification` con `{type: 'READ', table: 'conversations'}` y la función
+manda a los dispositivos del equipo un aviso sólo de datos
+(`kind: conversation_read`, `read_conversation_id`, `read_through_sequence`)
+con prioridad **normal**: un aviso de prioridad alta que no muestra nada hace
+que FCM baje la prioridad de la app, y eso retrasaría los avisos de mensajes
+reales.
+
+**Un aviso nuevo lo recibe primero la app vieja.** La función se despliega
+antes que la app, así que cada forma nueva de aviso llega a teléfonos con la
+versión publicada. La primera versión de la señal llevaba `conversation_id`, y
+la app publicada trata todo aviso de datos con esa llave como mensaje: entre
+las 16:05 y las 16:28 del 2026-10-08 (Chile) cada lectura pudo mostrar
+«Nuevo mensaje recibido» en un teléfono con la app abierta (4 señales salieron
+así). Ahora la señal no lleva `conversation_id` (con eso la app publicada sólo
+relee su bandeja) y además sólo va a tokens con `device_type` `android` o
+`ios`, que únicamente guarda la app nueva al registrar su token: ni una app
+vieja ni un navegador —que debe mostrar algo por cada aviso push, o Chrome
+pone «Este sitio se actualizó en segundo plano»— la reciben. Antes de
+desplegar una forma nueva de aviso se lee qué hace con ella el `onMessage`, el
+`_handleChatPush` del shell y `applyIncomingNotification` de la versión
+publicada (`git show <commit publicado>:…`).
+
+**La carrera que hay que respetar.** La señal puede llegar después del aviso
+de un mensaje que entró tras esa lectura. Dos defensas, y las dos hacen falta:
+
+- La función usa el cursor que vio el disparador (no el actual) y no manda nada
+  si después de él hay un mensaje del lado del cliente o proveedor.
+- Cada aviso de mensaje lleva `message_sequence`; la app guarda el mayor que
+  avisó por chat (`rememberAlertedMessageSequence`) y la señal sólo borra si
+  lo alcanza (`readSignalCoversAlerts`). La secuencia es global, del mismo
+  espacio que el cursor.
+
+FCM no reintenta esa señal; por eso la bandeja, al abrir la app y al volver al
+frente, quita los avisos de los chats que el equipo ya leyó con la misma
+comparación (`dropAlertsForReadConversations`). El escritorio no registra FCM:
+sus avisos son locales (id = hash de la conversación) y también guardan su
+secuencia antes de mostrarse.
+
+**Tokens muertos.** El 2026-10-08 `user_fcm_tokens` tenía 68 tokens de 3
+personas y cada aviso llegaba a 4: el resto eran instalaciones viejas que FCM
+contesta con 404 `UNREGISTERED`. Desde la v152 la función borra el token
+cuando FCM da ese código exacto, y sólo entonces.
+
+Tocar una notificación en el teléfono abre la **única** pantalla de Mensajes
+(`CompactMessagesHost`) con ese chat encima; si la app arrancó en frío, el
+toque se guarda hasta que hay quien lo atienda (`takePendingNotificationTap`) y
+la bandeja espera el hilo («Abriendo el chat…») en vez de soltarlo.
+
 ---
 
 ## Problems Encountered & Solutions

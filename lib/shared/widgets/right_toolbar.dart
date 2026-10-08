@@ -17,6 +17,7 @@ import '../services/right_toolbar_service.dart';
 import '../services/workspace_manager.dart';
 import '../themes/vinabike_theme_roles.dart';
 import 'calculator_panel.dart';
+import 'compact_messages_host.dart';
 import 'notifications_panel.dart';
 import 'query_performance_gauge.dart';
 import 'quick_bike_finder_panel.dart';
@@ -382,6 +383,19 @@ class _RightToolbarState extends State<RightToolbar> {
 
     if (widget.presentation == RightToolbarPresentation.compactWorkspace) {
       if (activeTool == null || !activeTool.toolbarPresentation.opensPanel) {
+        return const SizedBox.shrink();
+      }
+      if (CompactMessagesHost.isMessagingTool(activeTool)) {
+        // En el teléfono las bandejas de mensajes viven en UNA ruta propia
+        // (CompactMessagesHost), no en esta capa: dos anfitriones dejaban el
+        // chat pedido por una notificación debajo de la bandeja del otro.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          final current = context.read<RightToolbarService>().activeTool;
+          if (CompactMessagesHost.isMessagingTool(current)) {
+            CompactMessagesHost.ensureOpen(context);
+          }
+        });
         return const SizedBox.shrink();
       }
       return _buildCompactWorkspace(activeTool);

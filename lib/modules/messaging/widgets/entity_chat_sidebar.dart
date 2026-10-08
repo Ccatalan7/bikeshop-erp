@@ -873,6 +873,7 @@ class _EntityChatSidebarState extends State<EntityChatSidebar> {
       lastMessageType: conversation.lastMessageType,
       lastMessageMetadata: conversation.lastMessageMetadata,
       lastMessageIsMine: conversation.lastMessageIsMine,
+      lastMessageSenderId: conversation.lastMessageSenderId,
       lastMessageDirection: conversation.lastMessageDirection,
       lastMessageExternalStatus: conversation.lastMessageExternalStatus,
       unreadCount: unreadCount,

@@ -110,6 +110,7 @@ import 'package:flutter_web_plugins/url_strategy.dart';
 import 'shared/services/remote_scanner_service.dart';
 import 'shared/services/barcode_scanner_service.dart';
 import 'shared/widgets/scanner_bridge_scope.dart';
+import 'shared/widgets/compact_messages_host.dart';
 import 'shared/widgets/right_toolbar.dart';
 import 'shared/widgets/query_performance_gauge.dart';
 import 'shared/widgets/global_search/global_search_shortcut.dart';
@@ -1947,8 +1948,11 @@ class _WorkspaceShellState extends State<_WorkspaceShell> {
 
           if (compact) {
             final toolbar = RightToolbar.compactWorkspace(key: _toolbarKey);
-            final hasCompactTool =
-                activeTool != null && activeTool != ToolbarTool.newJob;
+            // Las bandejas de mensajes no usan esta capa en el teléfono:
+            // tienen su propia ruta (CompactMessagesHost).
+            final hasCompactTool = activeTool != null &&
+                activeTool != ToolbarTool.newJob &&
+                !CompactMessagesHost.isMessagingTool(activeTool);
             return WorkspaceSystemInsetBoundary(
               compact: true,
               child: Stack(
@@ -2088,25 +2092,34 @@ class _WorkspaceRouterViewState extends State<_WorkspaceRouterView>
     // Listen for notification taps to navigate to specific chats
     // Only handle if this is the active workspace
     _notificationTapSubscription =
-        NotificationService().onNotificationTap.listen((route) {
-      if (!mounted) return;
-      final workspaceManager =
-          Provider.of<WorkspaceManager>(context, listen: false);
-      final myIndex = workspaceManager.workspaces.indexOf(widget.workspace);
-
-      // Only navigate if this workspace is the active one
-      if (myIndex == workspaceManager.activeIndex) {
-        debugPrint(
-            '🔔 [WorkspaceRouterView] Notification tap → navigating to: $route');
-        try {
-          if (_openChatNotificationInToolbar(route)) return;
-          _router.go(route);
-        } catch (e) {
-          debugPrint(
-              '❌ [WorkspaceRouterView] Notification navigation error: $e');
-        }
-      }
+        NotificationService().onNotificationTap.listen(_handleNotificationTap);
+    // Un toque que abrió la app en frío llegó antes que este oyente.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_isActiveWorkspace()) return;
+      final pending = NotificationService().takePendingNotificationTap();
+      if (pending != null) _handleNotificationTap(pending);
     });
+  }
+
+  bool _isActiveWorkspace() {
+    final workspaceManager =
+        Provider.of<WorkspaceManager>(context, listen: false);
+    final myIndex = workspaceManager.workspaces.indexOf(widget.workspace);
+    return myIndex == workspaceManager.activeIndex;
+  }
+
+  void _handleNotificationTap(String route) {
+    if (!mounted) return;
+    // Only navigate if this workspace is the active one
+    if (!_isActiveWorkspace()) return;
+    debugPrint(
+        '🔔 [WorkspaceRouterView] Notification tap → navigating to: $route');
+    try {
+      if (_openChatNotificationInToolbar(route)) return;
+      _router.go(route);
+    } catch (e) {
+      debugPrint('❌ [WorkspaceRouterView] Notification navigation error: $e');
+    }
   }
 
   /// Una notificación de mensaje abre la bandeja del rail derecho, no el módulo
@@ -2128,21 +2141,26 @@ class _WorkspaceRouterViewState extends State<_WorkspaceRouterView>
     if (conversationId == null || conversationId.isEmpty) {
       // Sin hilo, la notificación sólo dice «tienes mensajes».
       toolbar.openTool(ToolbarTool.messages);
+      CompactMessagesHost.ensureOpen(context);
       return true;
     }
 
     // Proveedores y clientes son dos bandejas: se abre la que le corresponde.
-    // Si el hilo aún no está cargado se cae a Clientes, que es la general, y la
-    // bandeja lo resuelve cuando llegan las conversaciones.
+    // Con la lista cargada lo dice la conversación; si todavía no llegó (la
+    // app arrancó en frío por la notificación) lo dice el servidor en el
+    // aviso, y si tampoco, se cae a Clientes y la bandeja espera el hilo.
     final chat = Provider.of<ChatProvider>(context, listen: false);
     final index = chat.conversations.indexWhere((c) => c.id == conversationId);
-    final isSupplier =
-        index != -1 && chat.conversations[index].isSupplierConversation;
+    final isSupplier = index != -1
+        ? chat.conversations[index].isSupplierConversation
+        : uri.queryParameters['counterparty'] == 'supplier';
 
     toolbar.openConversation(
       tool: isSupplier ? ToolbarTool.supplierMessages : ToolbarTool.messages,
       conversationId: conversationId,
     );
+    // En el teléfono el chat va en su pantalla; en escritorio, en el rail.
+    CompactMessagesHost.ensureOpen(context);
     return true;
   }
 

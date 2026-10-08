@@ -485,6 +485,37 @@ no una prueba. Ahora la lectura en curso se guarda y se devuelve la misma
 `PaymentMethodService` y `PaymentTerminalProfileService` (2026-10-03): quien
 los consuma con `await` tiene que contar con que pueden volver antes de leer.
 
+### Un oyente de estado que toca canales mata el socket de Realtime (2026-10-08)
+
+`RealtimeClient` (2.7.0 y también 2.13.0) recorre su lista de canales para
+avisarles que el socket se cerró y **después** programa la reconexión. Si un
+callback de `subscribe(...)` quita o crea un canal en ese mismo instante —la
+bandeja de chats caía a `postgres_changes` al primer `channelError`—, el SDK
+lanza «Concurrent modification during iteration», la reconexión nunca se
+programa y `connect()` sale sin hacer nada porque el socket muerto sigue
+asignado. Desde ahí todo `subscribe` vence: en el Mac del dueño fueron 3 201
+reintentos fallidos, los registros del servidor decían «Tenant has no
+connected users» con dos apps abiertas y la foto de un proveedor llegó sólo al
+teléfono. Tres reglas:
+
+- Un callback de estado o de evento del SDK nunca toca canales en el mismo
+  turno: `TenantBroadcastHub` entrega estados y eventos con `Timer.run`.
+- Un socket que puede quedar así necesita vigilante: `RealtimeHealth` mira cada
+  15 s y al volver la app al frente; si hay canales y el socket no está abierto
+  ni abriéndose, marca los canales en error, suelta el socket y vuelve a unir
+  los temas (sólo API pública del SDK).
+- Broadcast no repite lo que se mandó mientras nadie escuchaba: todo
+  `subscribed` que sigue a otro estado, el socket revivido y la vuelta al frente
+  releen la bandeja y el hilo abierto (`ChatProvider.resyncAfterRealtimeGap`),
+  más una relectura de seguridad cada 90 s con la app al frente. Un
+  `channelError` de red no justifica cambiar de transporte: sólo un join
+  rechazado de entrada (`isRefusedRealtimeJoin`).
+
+Diagnóstico rápido: `realtime_logs` del proyecto (conector de Supabase o
+dashboard) dice cuándo no había nadie conectado; el log de la sesión de debug
+(`.tmp/native-session/run.log`) muestra el `RealtimeCloseEvent(code: 1006)` y
+la traza del SDK.
+
 ## 9. Regresiones mínimas por consumidor
 
 1. Respuesta A empieza, B empieza, A termina última: sólo B publica.

@@ -209,3 +209,23 @@ fila embebida: 735–900 ms de servidor) y las fichas de contexto ~4 s
   5 916 → 1 819 ms acumulados; `loadConversations:applied` 5 925 → 1 823 ms,
   con las mismas 25 fichas resueltas. Una recarga por realtime queda en
   ~1,1 s. pgTAP `inbox_list_and_context_rows` 12/12.
+
+## El cliente reintenta la aceptación hasta que la base contesta (2026-10-08)
+
+Con mala señal el teléfono mostraba el reloj y, si la respuesta de
+`enqueue_whatsapp_message_v1` no llegaba, marcaba el mensaje «resultado
+incierto» y lo abandonaba: no se reintentaba y ningún otro dispositivo podía
+saber que existía. El dueño: «¿cómo podría saber otro usuario que hay un
+mensaje pendiente de envío?». La aceptación es idempotente por la llave del
+cliente (misma llave y mismo cuerpo devuelven la misma fila), así que repetirla
+es seguro. `WhatsAppService._enqueueDurably` guarda el cuerpo en
+`WhatsAppPendingSendStore` (SharedPreferences, por usuario y taller, 12 h),
+repite la petición con espera creciente hasta 30 s —cada intento con tope de
+20 s— y sólo una respuesta de la base (aceptado o rechazado) lo termina. La
+burbuja conserva el reloj mientras tanto. Si la app se cierra, `ChatProvider`
+lo retoma al abrir la sesión y en cada vuelta de Realtime; un rechazo vuelve
+al operador como mensaje preparado en su chat. Desde que la base lo acepta, el
+mensaje (`queued`) aparece con su reloj en todos los dispositivos, a la derecha
+y firmado «Viñabike · Nombre». Esto no toca la regla del worker: un POST a Meta
+con resultado incierto sigue sin repetirse.
+
