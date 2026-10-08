@@ -22,11 +22,16 @@ enum PublicCommerceEligibilityIssue {
   invalidPrice('invalid_price'),
   missingImage('missing_image'),
   missingBrand('missing_brand'),
-  missingProductIdentifiers('missing_product_identifiers');
+  missingProductIdentifiers('missing_product_identifiers', advisory: true);
 
-  const PublicCommerceEligibilityIssue(this.code);
+  const PublicCommerceEligibilityIssue(this.code, {this.advisory = false});
 
   final String code;
+
+  /// Google reports it as limited performance, not as a disapproval: the
+  /// product still enters Merchant without identifiers (2026-10-08; until
+  /// then a product without GTIN or manufacturer MPN was left out).
+  final bool advisory;
 }
 
 /// One factual projection for every public commerce consumer.
@@ -223,7 +228,7 @@ class PublicCommerceProductProjection {
   final String googleProductCategory;
   final List<PublicCommerceEligibilityIssue> merchantIssues;
 
-  bool get merchantEligible => merchantIssues.isEmpty;
+  bool get merchantEligible => merchantIssues.every((issue) => issue.advisory);
 
   String get formattedPrice =>
       price % 1 == 0 ? price.toStringAsFixed(0) : price.toStringAsFixed(2);

@@ -1,7 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { hasSupportedEcommerceTaxRate } from "../_shared/ecommerce_tax.ts";
-import { projectPublicCommerceProduct } from "../_shared/google_merchant_feed.ts";
+import {
+  isAdvisoryMerchantIssue,
+  projectPublicCommerceProduct,
+} from "../_shared/google_merchant_feed.ts";
 import {
   mergeCanonicalAvailableQuantities,
   resolveAvailableProductQuantity,
@@ -1192,13 +1195,18 @@ async function getMerchantFeedEligibility(offerId: string, tenantId: string) {
     missing_brand:
       "El producto necesita una marca de fabricante verificable; origen, marketplace o Genérico no sirven como marca.",
     missing_product_identifiers:
-      "El producto necesita un GTIN válido o la combinación de marca y MPN del fabricante.",
+      "Sin GTIN ni MPN del fabricante: Google lo muestra con rendimiento limitado.",
   };
+  const issueMessage = (issue: string) =>
+    issueMessages[issue] || `El producto no cumple la regla Merchant: ${issue}.`;
   reasons.push(
-    ...commerce.merchant_issues.map((issue) =>
-      issueMessages[issue] || `El producto no cumple la regla Merchant: ${issue}.`
-    ),
+    ...commerce.merchant_issues
+      .filter((issue) => !isAdvisoryMerchantIssue(issue))
+      .map(issueMessage),
   );
+  const warnings = commerce.merchant_issues
+    .filter(isAdvisoryMerchantIssue)
+    .map(issueMessage);
 
   const currency = commerce.currency;
   if (currency !== "CLP") {
@@ -1212,6 +1220,7 @@ async function getMerchantFeedEligibility(offerId: string, tenantId: string) {
     known: true,
     eligible: reasons.length === 0,
     reasons,
+    warnings,
     product: {
       id: data.id,
       name: commerce.title,

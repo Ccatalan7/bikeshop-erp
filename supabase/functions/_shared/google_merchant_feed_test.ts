@@ -1,6 +1,7 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   filterMerchantProductsByCheckoutTax,
+  isAdvisoryMerchantIssue,
   isVerifiableMerchantBrand,
   projectPublicCommerceProduct,
   resolveMerchantAvailability,
@@ -207,7 +208,7 @@ Deno.test("out of stock remains a valid Merchant availability", () => {
   assertEquals(projection.merchant_issues, []);
 });
 
-Deno.test("brand alone does not replace GTIN or manufacturer MPN", () => {
+Deno.test("without GTIN or manufacturer MPN the product still enters Merchant", () => {
   const projection = projectPublicCommerceProduct({
     id: "product-brand-only",
     name: "Cámara 29",
@@ -219,6 +220,10 @@ Deno.test("brand alone does not replace GTIN or manufacturer MPN", () => {
     brand: "RBX",
   });
 
-  assertEquals(projection.merchant_eligible, false);
+  // Google shows it with limited performance; the SKU is never sent as an
+  // MPN to fill the gap.
+  assertEquals(projection.merchant_eligible, true);
+  assertEquals(projection.mpn, "");
   assertEquals(projection.merchant_issues, ["missing_product_identifiers"]);
+  assertEquals(isAdvisoryMerchantIssue("missing_brand"), false);
 });

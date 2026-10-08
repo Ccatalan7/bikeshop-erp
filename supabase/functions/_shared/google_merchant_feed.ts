@@ -135,9 +135,21 @@ export function projectPublicCommerceProduct(
     category_id: categoryId,
     category_path: categoryPath,
     google_product_category: googleProductCategory,
-    merchant_eligible: merchantIssues.length === 0,
+    merchant_eligible: merchantIssues.every(isAdvisoryMerchantIssue),
     merchant_issues: merchantIssues,
   };
+}
+
+/**
+ * An issue Google reports as limited performance, not as a disapproval: a
+ * product without a GTIN or a manufacturer MPN still shows in Shopping, and
+ * the feed omits the identifiers instead of guessing them or asserting
+ * `identifier_exists=false`. Until 2026-10-08 it blocked the product, which
+ * left 1 of 534 sellable products in the feed (deployed for the first time
+ * that day; the previous feed sent them).
+ */
+export function isAdvisoryMerchantIssue(issue: string): boolean {
+  return issue === "missing_product_identifiers";
 }
 
 /**

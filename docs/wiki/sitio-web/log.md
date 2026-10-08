@@ -568,6 +568,16 @@ Operaciones: **ingesta**, **consulta archivada**, **revisión** (lint),
   actualizado el carrusel pone sus flechas a los costados desde 600 px (antes
   640): la línea naranja de tableta se corrió 8 unidades por eso.
 
+## 2026-10-08 — feed de Merchant al día y marcas del fabricante
+
+- `google-merchant-feed` seguía en la versión del 21-jul; la regla del 24-jul
+  que exigía GTIN o MPN, al desplegarse, dejó el feed en 1 producto. Ahora la
+  falta de identificadores es aviso (Google: rendimiento limitado) y el feed
+  vuelve a 65, sin «Aliexpress» ni «Andes Industrial» como marca.
+- 139 productos reciben la marca del fabricante que ya decía su nombre.
+- Pendiente para cuando se levante la suspensión: 359 productos listos y 65
+  marcados para Merchant.
+
 ## 2026-10-08 — contenido de catálogo, marcas y fichas de servicio
 
 - El dueño pidió todo lo que lleve más clientes («todo lo relacionado a eso

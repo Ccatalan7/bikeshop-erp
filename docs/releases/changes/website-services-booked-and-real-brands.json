@@ -10,9 +10,8 @@
   "title": "Servicios que se agendan y marcas reales",
   "summary": "La ficha de un servicio del taller se agenda por WhatsApp y dice dónde se hace, y la tienda ya no muestra «Aliexpress», «Genérico» ni un distribuidor como marca de un producto.",
   "items": [
-    "La ficha de un servicio muestra «Agendar por WhatsApp» y «Se hace en el taller», sin stock, carrito ni despacho, y Google la lee como servicio.",
-    "«Aliexpress», «Genérico», «Taiwan», «China» y «Andes Industrial» ya no salen como marca en tarjetas, fichas, filtros ni datos para Google.",
-    "Las fichas de servicio entran al mapa del sitio que lee Google."
+    "La ficha de un servicio muestra «Agendar por WhatsApp» y «Se hace en el taller», sin carrito ni despacho, y Google la encuentra como servicio.",
+    "«Aliexpress», «Genérico», «Taiwan», «China» y «Andes Industrial» ya no salen como marca en tarjetas, fichas, filtros ni datos para Google."
   ],
   "evidence": [
     {
@@ -21,7 +20,7 @@
     },
     {
       "path": "packages/vinabike_public_core/lib/public_store/models/public_commerce_product_projection.dart",
-      "sha256": "e78afb5a2fb21ebbf531dfe1d9a2f2d199a54559761542f49eff68534eae6e88"
+      "sha256": "95cf5e9122bac2a9754ccfa0c8241c9e5ab37cfd7334662f6d25fbd476bbd986"
     },
     {
       "path": "packages/vinabike_public_core/lib/public_store/models/public_catalog_facets.dart",
@@ -57,7 +56,7 @@
     },
     {
       "path": "supabase/functions/_shared/google_merchant_feed.ts",
-      "sha256": "8348b721283e7b5c5c2bbafc68a73587ee2e8e2d16efb6cf77aae3e3ac78c7ca"
+      "sha256": "2059849e55f419b7655f336853e2549cb5fd460693bd4fb605504dca41e7459b"
     }
   ]
 }

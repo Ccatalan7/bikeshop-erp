@@ -392,7 +392,8 @@ void main() {
       expect(projection.merchantIssues, isEmpty);
     });
 
-    test('brand alone does not replace GTIN or manufacturer MPN', () {
+    test('without GTIN or manufacturer MPN the product still enters Merchant',
+        () {
       final projection = PublicCommerceProductProjection.fromJson(
         {
           'id': 'product-brand-only',
@@ -406,7 +407,10 @@ void main() {
         },
       );
 
-      expect(projection.merchantEligible, isFalse);
+      // Google shows it with limited performance; the SKU is never sent as
+      // an MPN to fill the gap.
+      expect(projection.merchantEligible, isTrue);
+      expect(projection.mpn, isEmpty);
       expect(
         projection.merchantIssues,
         [PublicCommerceEligibilityIssue.missingProductIdentifiers],

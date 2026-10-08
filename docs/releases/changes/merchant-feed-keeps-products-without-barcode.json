@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "source": "ai",
+  "module": "website",
+  "id": "merchant-feed-keeps-products-without-barcode",
+  "scope": "release",
+  "platforms": [
+    "web",
+    "macos",
+    "android"
+  ],
+  "title": "Google Shopping no descarta productos sin código de barras",
+  "summary": "Un producto con marca, foto, precio y stock entra al feed de Google aunque no tenga código de barras ni número de parte del fabricante; Google lo muestra con alcance limitado en vez de quedar fuera.",
+  "items": [
+    "Un producto sin código de barras sigue en el feed de Google, sin inventar uno; la ficha lo muestra como aviso, no como exclusión."
+  ],
+  "evidence": [
+    {
+      "path": "supabase/functions/_shared/google_merchant_feed.ts",
+      "sha256": "2059849e55f419b7655f336853e2549cb5fd460693bd4fb605504dca41e7459b"
+    },
+    {
+      "path": "supabase/functions/google-product-diagnostics/index.ts",
+      "sha256": "8e98f850ea001aea3c43303ed0f9d3ada8861ac6959104aa6b4b66854cd713c3"
+    },
+    {
+      "path": "packages/vinabike_public_core/lib/public_store/models/public_commerce_product_projection.dart",
+      "sha256": "95cf5e9122bac2a9754ccfa0c8241c9e5ab37cfd7334662f6d25fbd476bbd986"
+    },
+    {
+      "path": "lib/modules/inventory/pages/product_form_page.dart",
+      "sha256": "8c887f0c17105da9efba65299601f034aeefa2d9ba62d3d829f16687bef4869e"
+    }
+  ]
+}

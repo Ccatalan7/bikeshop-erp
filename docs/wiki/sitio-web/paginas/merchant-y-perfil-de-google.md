@@ -4,7 +4,7 @@ resumen: por qué la cuenta de Merchant está suspendida, qué mira Google para 
 fuentes: [merchant-center, consolas-google, repositorio]
 archivos: [supabase/functions/google-merchant-feed/index.ts, supabase/functions/_shared/google_merchant_feed.ts, supabase/functions/google-business-reviews/index.ts, supabase/functions/google-public-data-refresh/index.ts, lib/modules/website/services/google_business_service.dart]
 tablas: [products, website_settings]
-revisado: 2026-10-04
+revisado: 2026-10-08
 ---
 
 # Google Merchant Center y perfil de Google
@@ -60,6 +60,25 @@ clasificación tributaria no entra. Campos propios de Merchant por producto:
 `website_google_product_category`. Desde el 20-jul-2026 se usa la Merchant API
 `[Repo: ONLINE_ORDER_OPERATIONS.md]`. Pocos productos tienen código de barras (5
 de 1.635 con EAN), lo que limita la calidad del feed.
+
+- **Sin código de barras no es motivo para quedar fuera** (2026-10-08). Google
+  marca la falta de GTIN o MPN como «rendimiento limitado», no como rechazo
+  `[MC]`; el feed omite el identificador (nunca usa el SKU de la tienda ni
+  declara `identifier_exists=false`) y el diagnóstico de la ficha lo muestra
+  como aviso. La regla escrita el 24-jul-2026 lo excluía, pero nunca se había
+  desplegado: la función seguía en la versión del 21-jul. Al desplegarla el
+  2026-10-08 el feed cayó de 65 productos a 1 y se corrigió en el acto
+  (`isAdvisoryMerchantIssue`) `[Prod 2026-10-08]`.
+- **Quién entra lo decide el interruptor `is_google_merchant`** de cada
+  producto, no la regla: 65 marcados y 359 listos (en stock, foto, precio, IVA
+  y marca real) el 2026-10-08 `[Prod]`. Marcar los demás vale la pena recién
+  cuando se levante la suspensión.
+- **La marca es la del fabricante.** El 2026-10-08 se asignó la marca escrita
+  en el nombre a 139 productos que tenían el proveedor, el origen o nada
+  (Shimano, KMC, Kenda, Mavic, Continental, Rockbros…; 39 marcas nuevas del
+  tenant). No se asignó cuando la marca del nombre es compatibilidad («para
+  Shimano», postizas «para Trek»), distribuidor (Bettabikes, Garozzo) o dudosa
+  (Vision, Avid de AliExpress, Camelbak que el nombre web ya no dice) `[Prod]`.
 
 ## Ficha de Google (Business Profile) y reseñas
 

@@ -11818,6 +11818,12 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
             .where((reason) => reason.isNotEmpty)
             .toList(growable: false)
         : const <String>[];
+    final feedWarnings = feedEligibility?['warnings'] is List
+        ? (feedEligibility!['warnings'] as List)
+            .map((warning) => warning.toString().trim())
+            .where((warning) => warning.isNotEmpty)
+            .toList(growable: false)
+        : const <String>[];
     final status = _firstNonEmptyText([
       _diagnosticsStatusLabel(data?['status']),
       data?['verdict']?.toString(),
@@ -11839,6 +11845,7 @@ Responde ÚNICAMENTE con el texto final de la descripción, nada más.
       if (feedReasons.isNotEmpty) feedReasons.join(' '),
     ]);
     final details = <String>[
+      ...feedWarnings,
       if (_firstNonEmptyText([data?['googleCanonical']?.toString()]).isNotEmpty)
         'Canónica Google: ${data?['googleCanonical']}',
       if (_firstNonEmptyText([data?['lastCrawlTime']?.toString()]).isNotEmpty)
